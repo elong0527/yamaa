@@ -1,21 +1,29 @@
 """The dependency lanes must select floors without changing release inputs."""
 
 import json
+import os
+import re
 import subprocess
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from packaging.requirements import Requirement
 
+from tools.ci import dependency_graphs
 from tools.ci.dependency_graphs import (
+    LOCKS,
+    NOTICES,
     assert_msrv,
     minimum_cargo,
     minimum_python,
     pin_manifest,
     prepare,
+    run_graph,
 )
+from tools.packaging import generate_third_party_notices as notice_generator
 from tools.paths import ROOT
 
 # Floors by interpreter in python/pyproject.toml. lxml's floor is the same on
@@ -209,16 +217,117 @@ class DependencyGraphsTests(unittest.TestCase):
     def test_msrv_rejects_newer_packages_even_after_resolver_fallback(self):
         metadata = {
             "packages": [
-                {"name": "allowed", "version": "1.0", "rust_version": "1.90"},
-                {"name": "unspecified", "version": "1.0", "rust_version": None},
+                {
+                    "name": "allowed",
+                    "version": "1.0",
+                    "rust_version": "1.82",
+                    "edition": "2021",
+                },
+                {
+                    "name": "unspecified",
+                    "version": "1.0",
+                    "rust_version": None,
+                    "edition": "2018",
+                },
             ]
         }
-        assert_msrv(metadata, "1.90.0")
-        metadata["packages"].append(
-            {"name": "too-new", "version": "2.0", "rust_version": "1.91.0"}
+        assert_msrv(metadata, "1.82.0")
+        for package, needed in (
+            ({"rust_version": "1.83.0", "edition": "2021"}, "1.83.0"),
+            # Edition 2024 needs Rust 1.85, declared rust-version or not.
+            ({"rust_version": None, "edition": "2024"}, "1.85"),
+        ):
+            newer = {"name": "too-new", "version": "2.0", **package}
+            with (
+                self.subTest(package=package),
+                self.assertRaisesRegex(ValueError, rf"too-new 2\.0 \(Rust {needed}\)"),
+            ):
+                assert_msrv({"packages": [*metadata["packages"], newer]}, "1.82")
+
+    def lane_commands(self, source, destination, effect=None):
+        """Run a newest lane with each command recorded instead of run."""
+        commands = []
+
+        def run(arguments, cwd=None, **_):
+            commands.append((tuple(arguments), cwd))
+            if effect is not None:
+                effect(arguments)
+            return subprocess.CompletedProcess(arguments, 0)
+
+        def check_output(arguments, cwd=None, text=False, **_):
+            commands.append((tuple(arguments), cwd))
+            if arguments[:2] == ["cargo", "metadata"]:
+                return json.dumps({"packages": []}).encode()
+            return "" if text else b""
+
+        with (
+            mock.patch.object(dependency_graphs, "prepare", return_value="1.82"),
+            mock.patch.object(dependency_graphs.shutil, "which", return_value="x"),
+            mock.patch.object(dependency_graphs.subprocess, "run", run),
+            mock.patch.object(
+                dependency_graphs.subprocess, "check_output", check_output
+            ),
+        ):
+            run_graph(source, destination, "newest", "3.12")
+        return commands
+
+    def test_lane_regenerates_its_notices_before_it_builds_or_stages(self):
+        """Notice checks in a lane cover the graph that the lane resolved."""
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "graph"
+            destination.mkdir()
+            commands = self.lane_commands(ROOT, destination)
+        python = str(
+            destination
+            / "python/.venv"
+            / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         )
-        with self.assertRaisesRegex(ValueError, "too-new 2.0"):
-            assert_msrv(json.loads(json.dumps(metadata)), "1.90")
+        install = ("uv", "pip", "install", "--python", python, "--no-deps")
+
+        def step(*prefix):
+            """The position of the one command that starts with prefix."""
+            [index] = [
+                index
+                for index, (arguments, _) in enumerate(commands)
+                if arguments[: len(prefix)] == prefix
+            ]
+            return index
+
+        # The copy's own tools write the copy's notices from the resolved lock,
+        # before the extension and the R package are built from that graph.
+        generate = (python, "-m", "tools.packaging.generate_third_party_notices")
+        notices = step(*generate)
+        self.assertEqual(commands[notices], ((*generate, "--write"), destination))
+        for earlier in (("cargo", "generate-lockfile"), (*install, "--editable")):
+            self.assertLess(step(*earlier), notices)
+        for later in (
+            (*install, "--no-build-isolation"),
+            (python, "-m", "tools.commands.python_tests"),
+            (python, "-m", "tools.commands.r_tests"),
+        ):
+            self.assertLess(notices, step(*later))
+
+    def test_lane_refuses_to_change_the_checkout_notices(self):
+        self.assertEqual(
+            NOTICES,
+            tuple(
+                (directory / notice_generator.NOTICES).relative_to(ROOT).as_posix()
+                for directory in (notice_generator.PYTHON, notice_generator.R_INST)
+            ),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            source, destination = Path(temporary) / "source", Path(temporary) / "graph"
+            for path in LOCKS + NOTICES:
+                (source / path).parent.mkdir(parents=True, exist_ok=True)
+                (source / path).write_text("canonical\n")
+            destination.mkdir()
+
+            def write_checkout_notices(arguments):
+                if "--write" in arguments:
+                    (source / NOTICES[1]).write_text("lane\n")
+
+            with self.assertRaisesRegex(RuntimeError, re.escape(NOTICES[1])):
+                self.lane_commands(source, destination, write_checkout_notices)
 
 
 if __name__ == "__main__":

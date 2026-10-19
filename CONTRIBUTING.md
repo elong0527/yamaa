@@ -278,14 +278,19 @@ declared lower bound and each Python runtime/test dependency to its floor.
 Vendored crates and exact policy pins remain in force. Transitive Cargo
 dependencies use the newest Rust-1.82-compatible selection, rather than claiming
 support for every historical transitive release. The newest lane starts without
-a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy;
-both lanes reject metadata declaring a higher MSRV. Python resolves independently
-for each interpreter. Each lane builds its own extension and runs workspace Rust,
-Python package/installed-host and strict R source-package checks. CI retains the
-resolved Cargo lock, Python requirements and Cargo metadata for reproduction.
-Neither lane updates the source checkout's locks. Release builds and source
-archives continue to use the canonical unchanged locks; these compatibility
-lanes supplement [native qualification](rust/qualification/README.md).
+a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy.
+Both lanes reject a graph that holds a package, for any target, whose
+rust-version or edition needs a newer Rust than 1.82. Python resolves
+independently for each interpreter. Each lane regenerates its copy's license
+notices from the graph it resolved, so the staging check that every bundled
+crate has a notice covers that graph. It then builds its own extension and runs
+workspace Rust, Python package/installed-host and strict R source-package
+checks. CI retains the resolved Cargo lock, Python requirements and Cargo
+metadata for reproduction. Neither lane updates the source checkout's locks or
+notices. Release builds and source archives continue to use the canonical
+unchanged locks, and the repository check keeps the committed notices equal to
+those generated from the canonical lock; these compatibility lanes supplement
+[native qualification](rust/qualification/README.md).
 
 Before every merge into `main` or a `release/X.Y.Z` branch, run a fresh
 read-only review check with an authenticated GitHub CLI, supplying the exact

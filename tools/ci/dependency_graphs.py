@@ -12,9 +12,14 @@ from pathlib import Path
 
 from packaging.requirements import Requirement
 
+from tools.packaging.check_minimum_rust import needs, release
 from tools.paths import ROOT
 
 LOCKS = ("rust/Cargo.lock", "python/uv.lock")
+# The package notices that tools/packaging/generate_third_party_notices.py
+# writes from the canonical Cargo lock. A lane regenerates its copy's notices
+# for the graph it resolved and never writes the checkout's.
+NOTICES = ("python/LICENSE-THIRD-PARTY.txt", "R/yamaa/inst/LICENSE-THIRD-PARTY.txt")
 IGNORED = {
     ".git",
     ".venv",
@@ -159,14 +164,15 @@ def prepare(source, destination, graph):
 
 
 def assert_msrv(metadata, msrv):
-    def version(value):
-        return tuple(map(int, (value.split(".") + ["0", "0"])[:3]))
+    """Reject a resolved package that needs a newer Rust than the workspace.
 
+    A package needs its declared rust-version, or its edition's first Rust when
+    that is newer, on any target: a source package vendors every locked crate.
+    """
     incompatible = [
-        f"{package['name']} {package['version']} (Rust {package['rust_version']})"
+        f"{package['name']} {package['version']} (Rust {needs(package)})"
         for package in metadata["packages"]
-        if package.get("rust_version")
-        and version(package["rust_version"]) > version(msrv)
+        if release(needs(package)) > release(msrv)
     ]
     if incompatible:
         raise ValueError(f"Graph exceeds Rust {msrv}: {', '.join(incompatible)}")
@@ -184,7 +190,7 @@ def run_graph(source, destination, graph, python, prepare_only=False):
                 "Install the development prerequisites before testing a graph: "
                 + ", ".join(missing)
             )
-    originals = {lock: (source / lock).read_bytes() for lock in LOCKS}
+    originals = {path: (source / path).read_bytes() for path in LOCKS + NOTICES}
     try:
         msrv = prepare(source, destination, graph)
         if prepare_only:
@@ -200,7 +206,14 @@ def run_graph(source, destination, graph, python, prepare_only=False):
         run("cargo", "generate-lockfile", cwd=rust)
         metadata = json.loads(
             subprocess.check_output(
-                ["cargo", "metadata", "--locked", "--format-version", "1"],
+                [
+                    "cargo",
+                    "metadata",
+                    "--locked",
+                    "--all-features",
+                    "--format-version",
+                    "1",
+                ],
                 cwd=rust,
                 env=environment,
             )
@@ -235,10 +248,18 @@ def run_graph(source, destination, graph, python, prepare_only=False):
             "--python",
             interpreter,
             "--no-deps",
-            "--no-build-isolation",
-            "--config-setting",
-            "build-args=--profile=dev",
-            str(destination / "python"),
+            "--editable",
+            str(destination),
+            str(destination / "rust/tests/project-programs/python"),
+        )
+        # The committed notices describe the canonical Cargo lock, which this
+        # copy replaced. Regenerate them from the graph that the lane resolved,
+        # with the copy's own tools, so that the extension, the staged R package
+        # and every notice check below cover the crates that the lane builds.
+        # The repository check still compares the committed notices with the
+        # canonical lock.
+        run(
+            interpreter, "-m", "tools.packaging.generate_third_party_notices", "--write"
         )
         run(
             "uv",
@@ -247,9 +268,10 @@ def run_graph(source, destination, graph, python, prepare_only=False):
             "--python",
             interpreter,
             "--no-deps",
-            "--editable",
-            str(destination),
-            str(destination / "rust/tests/project-programs/python"),
+            "--no-build-isolation",
+            "--config-setting",
+            "build-args=--profile=dev",
+            str(destination / "python"),
         )
         (destination / "python-installed.txt").write_text(
             subprocess.check_output(
@@ -286,9 +308,11 @@ def run_graph(source, destination, graph, python, prepare_only=False):
         run(interpreter, "-m", "tools.commands.python_tests")
         run(interpreter, "-m", "tools.commands.r_tests")
     finally:
-        for lock, original in originals.items():
-            if (source / lock).read_bytes() != original:
-                raise RuntimeError(f"Dependency graph changed the source lock: {lock}")
+        for path, original in originals.items():
+            if (source / path).read_bytes() != original:
+                raise RuntimeError(
+                    f"Dependency graph changed the source checkout: {path}"
+                )
 
 
 def main():
