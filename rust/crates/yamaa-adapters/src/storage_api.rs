@@ -32,9 +32,7 @@
 //! metadata decoder asserts that INT96 statistics hold exactly 12 bytes, so a
 //! malformed footer or page header can panic inside the Parquet crate. Each
 //! native Parquet or Arrow call on admitted input runs through
-//! `contain_decode`, which also keeps the panic it contains off stderr. The
-//! Arrow IPC snapshot decoder (`ipc_table`) converts its schema through the
-//! same contained `ipc_schema`.
+//! `contain_decode`, which also keeps the panic it contains off stderr.
 //!
 //! 57's footer decoder numbers row groups with an `i16` ordinal and refuses a
 //! footer that lists more than `FOOTER_ROW_GROUPS` (later releases use `i32`),

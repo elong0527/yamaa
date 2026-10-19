@@ -92,8 +92,12 @@ fn sequence(value: Option<Value<'_>>) -> Result<Sequence<'_>, Error> {
 }
 // Borrowed compact nodes do not allocate, but integer claims within each
 // SchemaElement can cause later allocations. The general reader
-// reserves num_children slots before discovering a truncated schema tree.
-// Returns the primitive leaves, the schema's physical columns.
+// reserves num_children slots before discovering a truncated schema tree,
+// and keeps each open group's slots while it reads the group's children.
+// Admission therefore holds the claims of all open groups together to the
+// elements left in the list, so that those reservations stay within the
+// schema's length. Returns the primitive leaves, the schema's physical
+// columns.
 fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
     let mut leaves = 0;
     // Every element without children but the message root: a primitive leaf
@@ -104,6 +108,9 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
     // `COLUMNS * SEMANTIC_DEPTH + 1` elements.
     let mut childless = 0;
     let mut remaining_children = Vec::new();
+    // The sum of `remaining_children`: the children that open groups claim
+    // and that later elements must supply.
+    let mut claimed = 0;
     for (index, element) in schema.into_iter().enumerate() {
         let element = element?;
         while remaining_children.last() == Some(&0) {
@@ -111,6 +118,7 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
         }
         if let Some(remaining) = remaining_children.last_mut() {
             *remaining -= 1;
+            claimed -= 1;
         }
         // Flat Thrift metadata can describe a deeply recursive schema tree.
         // Admit its depth independently of the compact parser's own depth.
@@ -130,11 +138,16 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
             }
         }
         if let Some(children) = children {
-            if children > schema.len() - index - 1 {
+            // Each claimed child is a later element of its own, so this claim
+            // must fit in the elements left beside the open groups' claims.
+            // Those claims never exceed the elements left, as checked at the
+            // previous element, so the subtraction cannot wrap.
+            if children > schema.len() - index - 1 - claimed {
                 return Err(Error::Malformed);
             }
             if children != 0 {
                 remaining_children.push(children);
+                claimed += children;
             }
         }
     }
@@ -568,24 +581,27 @@ mod tests {
         }
     }
 
+    /// Admit a flat schema list whose elements claim `children` children each:
+    /// the root, then groups, and an INT64 primitive for each zero after it.
+    fn admit_children(children: &[i64]) -> Result<usize, Error> {
+        let mut bytes = vec![0x19, 0xfc]; // field 1: extended struct list
+        unsigned(&mut bytes, children.len() as u64);
+        for (index, &children) in children.iter().enumerate() {
+            if index != 0 && children == 0 {
+                bytes.extend([0x15, 4, 0x45]); // INT64 primitive; field 5
+            } else {
+                bytes.push(0x55); // SchemaElement field 5: i32 num_children
+            }
+            unsigned(&mut bytes, ((children << 1) ^ (children >> 63)) as u64);
+            bytes.push(0);
+        }
+        bytes.push(0);
+        let (root, _) = compact::parse(&bytes)?;
+        admit_schema(sequence(root.field(1)?)?)
+    }
+
     #[test]
     fn schema_integer_claims_and_flattened_tree_recursion_are_checked() {
-        fn admit_children(children: &[i64]) -> Result<usize, Error> {
-            let mut bytes = vec![0x19, 0xfc]; // field 1: extended struct list
-            unsigned(&mut bytes, children.len() as u64);
-            for (index, &children) in children.iter().enumerate() {
-                if index != 0 && children == 0 {
-                    bytes.extend([0x15, 4, 0x45]); // INT64 primitive; field 5
-                } else {
-                    bytes.push(0x55); // SchemaElement field 5: i32 num_children
-                }
-                unsigned(&mut bytes, ((children << 1) ^ (children >> 63)) as u64);
-                bytes.push(0);
-            }
-            bytes.push(0);
-            let (root, _) = compact::parse(&bytes)?;
-            admit_schema(sequence(root.field(1)?)?)
-        }
         assert!(matches!(
             admit_children(&[i32::MAX.into()]),
             Err(Error::Malformed)
@@ -599,6 +615,31 @@ mod tests {
         let mut flat = vec![100];
         flat.extend([0; 100]);
         assert_eq!(admit_children(&flat).unwrap(), 100);
+    }
+
+    #[test]
+    fn open_groups_together_claim_no_more_children_than_elements_are_left() {
+        // The native decoder reserves a group's claimed children before it
+        // reads them and keeps the reservation while the group is open. Here
+        // every claim fits in the elements after it on its own, but not
+        // beside the claims of the groups above it.
+        //
+        // A root of three children, a group of one primitive and two
+        // primitives, and a root of two groups of one primitive each: the
+        // claims fill each list exactly.
+        assert_eq!(admit_children(&[3, 1, 0, 0, 0]).unwrap(), 3);
+        assert_eq!(admit_children(&[2, 1, 0, 1, 0]).unwrap(), 2);
+        // The group claims two of the three elements left, while the root
+        // still claims two more children: four children, three elements.
+        assert!(matches!(
+            admit_children(&[3, 2, 0, 0, 0]),
+            Err(Error::Malformed)
+        ));
+        // Each group of this path claims every element after it, so together
+        // they would reserve some 8,000 slots for a list of 128 elements.
+        let depth = yamaa_core::limits::Limits::SEMANTIC_DEPTH as i64;
+        let chain: Vec<i64> = (0..depth).rev().collect();
+        assert!(matches!(admit_children(&chain), Err(Error::Malformed)));
     }
 
     #[test]

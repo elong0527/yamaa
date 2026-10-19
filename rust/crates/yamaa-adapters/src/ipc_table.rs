@@ -1,18 +1,13 @@
-//! Copied IPC streams for installed hosts. No files, callbacks or fallback.
-use crate::arrow_table::{date_array, datetime_array, physical_schema, ArrowTable};
+//! Sanitized Arrow batches, and IPC streams of them, rebuilt from checked
+//! tables. No files, callbacks or fallback.
+use crate::arrow_table::{date_array, datetime_array, physical_schema};
 use arrow_array::{ArrayRef, Float64Array, Int64Array, RecordBatch, RecordBatchOptions};
-use arrow_ipc::{reader::StreamReader, writer::StreamWriter, MessageHeader, MetadataVersion};
-use arrow_schema::DataType;
+use arrow_ipc::writer::StreamWriter;
 use serde::Serialize;
-use std::{
-    fmt,
-    io::{Cursor, Write},
-    panic::{catch_unwind, AssertUnwindSafe},
-    sync::Arc,
-};
+use std::{fmt, io::Write, sync::Arc};
 use yamaa_core::{dataset::Dataset, limits::Limits};
 use yamaa_core::{
-    table::{Column, TableAccess, TableSchema, ValueRef},
+    table::{TableAccess, ValueRef},
     value::ColumnType,
 };
 
@@ -26,7 +21,6 @@ pub enum TableError {
     Representation {
         representation: &'static str,
     },
-    InvalidStream,
     InvalidTable,
     OutputIo,
     Internal,
@@ -37,7 +31,6 @@ impl fmt::Display for TableError {
         f.write_str(match self {
             Self::Limit { .. } => "table geometry exceeds fixed limit",
             Self::Representation { representation } => representation,
-            Self::InvalidStream => "invalid or unsupported table IPC stream",
             Self::InvalidTable => "invalid table schema or value",
             Self::OutputIo => "table IPC output write failed",
             Self::Internal => "internal table codec failure",
@@ -47,13 +40,6 @@ impl fmt::Display for TableError {
 impl std::error::Error for TableError {}
 type Error = TableError;
 
-/// Contain codec panics while preserving ordinary stream failures.
-fn boundary<T>(
-    run: impl FnOnce() -> Result<T, Error> + std::panic::UnwindSafe,
-) -> Result<T, Error> {
-    catch_unwind(run).map_err(|_| Error::Internal)?
-}
-
 fn shape_error(error: yamaa_core::limits::LimitExceeded) -> Error {
     Error::Limit {
         resource: error.resource,
@@ -61,92 +47,6 @@ fn shape_error(error: yamaa_core::limits::LimitExceeded) -> Error {
         required: error.actual,
     }
 }
-
-/// Return a sanitized stream with exact schema/rows/chunks and no hidden null payloads.
-pub fn table_round_trip(input: &[u8]) -> Result<Vec<u8>, Error> {
-    boundary(|| {
-        let table = decode(input)?;
-        let mut output = Vec::new();
-        let mut writer = StreamWriter::try_new(&mut output, &physical_schema(table.schema()))
-            .map_err(|_| Error::OutputIo)?;
-        let mut start = 0;
-        for batch in table.batches() {
-            let clean = sanitized_batch(&table, start, batch.num_rows()).map_err(batch_error)?;
-            writer.write(&clean).map_err(|_| Error::OutputIo)?;
-            start += batch.num_rows();
-        }
-        writer.finish().map_err(|_| Error::OutputIo)?;
-        Ok(output)
-    })
-}
-
-fn decode(input: &[u8]) -> Result<ArrowTable, Error> {
-    let shape = preflight(input)?;
-    let batches =
-        SnapshotBatches::new(input, shape.schema.clone())?.collect::<Result<Vec<_>, _>>()?;
-    ArrowTable::try_new(shape.schema, batches).map_err(|_| Error::InvalidTable)
-}
-
-/// Decode only after complete framing, schema and fixed geometry validation.
-pub fn decode_snapshot(input: &[u8]) -> Result<ArrowTable, Error> {
-    boundary(|| decode(input))
-}
-
-/// Decode one normalized, checked batch at a time after whole-stream framing
-/// admission. Consumers must exhaust the iterator to validate all values.
-/// The input bytes stay borrowed; previously yielded batches need not be retained.
-pub fn snapshot_batches(input: &[u8]) -> Result<SnapshotBatches<'_>, Error> {
-    boundary(|| {
-        let shape = preflight(input)?;
-        SnapshotBatches::new(input, shape.schema)
-    })
-}
-
-pub struct SnapshotBatches<'a> {
-    reader: StreamReader<Cursor<&'a [u8]>>,
-    schema: TableSchema,
-    finished: bool,
-}
-
-impl<'a> SnapshotBatches<'a> {
-    fn new(input: &'a [u8], schema: TableSchema) -> Result<Self, Error> {
-        Ok(Self {
-            reader: StreamReader::try_new(Cursor::new(input), None)
-                .map_err(|_| Error::InvalidStream)?,
-            schema,
-            finished: false,
-        })
-    }
-
-    pub fn schema(&self) -> &TableSchema {
-        &self.schema
-    }
-}
-
-impl Iterator for SnapshotBatches<'_> {
-    type Item = Result<RecordBatch, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.finished {
-            return None;
-        }
-        let next = catch_unwind(AssertUnwindSafe(|| {
-            self.reader.next().map(|batch| {
-                let batch = batch.map_err(|_| Error::InvalidStream)?;
-                let table = ArrowTable::try_new(self.schema.clone(), vec![batch])
-                    .map_err(|_| Error::InvalidTable)?;
-                Ok(table.batches()[0].clone())
-            })
-        }))
-        .unwrap_or(Some(Err(Error::Internal)));
-        if next.is_none() || next.as_ref().is_some_and(Result::is_err) {
-            self.finished = true;
-        }
-        next
-    }
-}
-
-impl std::iter::FusedIterator for SnapshotBatches<'_> {}
 
 /// Export only a checked owned dataset; this is not a generic untrusted table API.
 /// The caller's execution policy has already bounded retained cell/text payloads.
@@ -267,197 +167,6 @@ pub fn serialize_json(value: &impl Serialize) -> Result<String, Error> {
     serde_json::to_string(value).map_err(|_| Error::Internal)
 }
 
-/// Take bytes only after checked remaining-length validation; no declared-size allocation.
-fn take<'a>(input: &mut &'a [u8], length: usize) -> Result<&'a [u8], Error> {
-    let value = input.get(..length).ok_or(Error::InvalidStream)?;
-    *input = &input[length..];
-    Ok(value)
-}
-
-/// Read a little-endian IPC framing length without unchecked offsets.
-fn word(input: &mut &[u8]) -> Result<u32, Error> {
-    Ok(u32::from_le_bytes(
-        take(input, 4)?
-            .try_into()
-            .map_err(|_| Error::InvalidStream)?,
-    ))
-}
-
-/// Validate canonical schema shape before Arrow's schema conversion can recurse.
-fn schema_from_message(schema: arrow_ipc::Schema<'_>) -> Result<TableSchema, Error> {
-    if schema.endianness() != arrow_ipc::Endianness::Little
-        || schema.custom_metadata().is_some_and(|m| !m.is_empty())
-    {
-        return Err(Error::InvalidTable);
-    }
-    let fields = schema.fields().ok_or(Error::InvalidTable)?;
-    Limits::columns(fields.len()).map_err(shape_error)?;
-    for field in fields {
-        check_field(field, true)?;
-    }
-    let converted = crate::storage_api::ipc_schema(schema).map_err(|_| Error::InvalidTable)?;
-    let mut columns = Vec::new();
-    for field in converted.fields() {
-        let kind = match field.data_type() {
-            DataType::Utf8 => ColumnType::Str,
-            DataType::Int64 => ColumnType::Int,
-            DataType::Float64 => ColumnType::Float,
-            DataType::Struct(children) if children.len() == 2 => match children[0].data_type() {
-                DataType::Date32 => ColumnType::Date,
-                DataType::Timestamp(arrow_schema::TimeUnit::Second, None) => ColumnType::DateTime,
-                _ => return Err(Error::InvalidTable),
-            },
-            _ => return Err(Error::InvalidTable),
-        };
-        columns.push(Column {
-            name: field.name().clone(),
-            kind,
-        });
-    }
-    let logical = TableSchema::new(columns).map_err(|_| Error::InvalidTable)?;
-    if physical_schema(&logical).as_ref() != &converted {
-        return Err(Error::InvalidTable);
-    }
-    Ok(logical)
-}
-
-/// Permit only scalar fields and one temporal struct level; dictionaries and
-/// extension metadata never reach Arrow conversion/decoding.
-fn check_field(field: arrow_ipc::Field<'_>, top: bool) -> Result<(), Error> {
-    if field.dictionary().is_some() || field.custom_metadata().is_some_and(|m| !m.is_empty()) {
-        return Err(Error::InvalidTable);
-    }
-    let children = field.children();
-    if top && field.type_type() == arrow_ipc::Type::Struct_ {
-        let children = children.ok_or(Error::InvalidTable)?;
-        if children.len() != 2 {
-            return Err(Error::InvalidTable);
-        }
-        for child in children {
-            check_field(child, false)?;
-        }
-    } else {
-        if children.is_some_and(|c| !c.is_empty()) {
-            return Err(Error::InvalidTable);
-        }
-        if !matches!(
-            field.type_type(),
-            arrow_ipc::Type::Utf8
-                | arrow_ipc::Type::Int
-                | arrow_ipc::Type::FloatingPoint
-                | arrow_ipc::Type::Date
-                | arrow_ipc::Type::Timestamp
-        ) {
-            return Err(Error::InvalidTable);
-        }
-    }
-    Ok(())
-}
-
-/// Check all message/body lengths and declared work before a decoder allocation.
-/// Only little-endian uncompressed V5 streams with explicit EOS are accepted.
-pub(crate) struct SnapshotShape {
-    pub schema: TableSchema,
-}
-
-pub(crate) fn preflight(mut input: &[u8]) -> Result<SnapshotShape, Error> {
-    let mut schema: Option<TableSchema> = None;
-    let mut batches = 0_usize;
-    let mut rows = 0_usize;
-    loop {
-        let mut length = word(&mut input)?;
-        if length == u32::MAX {
-            length = word(&mut input)?;
-        }
-        if length == 0 {
-            if !input.is_empty() {
-                return Err(Error::InvalidStream);
-            }
-            let schema = schema.ok_or(Error::InvalidStream)?;
-            return Ok(SnapshotShape { schema });
-        }
-        let length = usize::try_from(length).map_err(|_| Error::InvalidStream)?;
-        let metadata = take(&mut input, length)?;
-        let message = arrow_ipc::root_as_message(metadata).map_err(|_| Error::InvalidStream)?;
-        if message.version() != MetadataVersion::V5
-            || message.custom_metadata().is_some_and(|m| !m.is_empty())
-        {
-            return Err(Error::InvalidStream);
-        }
-        let body = usize::try_from(message.bodyLength()).map_err(|_| Error::InvalidStream)?;
-        take(&mut input, body)?;
-        match message.header_type() {
-            MessageHeader::Schema if schema.is_none() && batches == 0 && body == 0 => {
-                schema = Some(schema_from_message(
-                    message.header_as_schema().ok_or(Error::InvalidStream)?,
-                )?);
-            }
-            MessageHeader::RecordBatch if schema.is_some() => {
-                let batch = message
-                    .header_as_record_batch()
-                    .ok_or(Error::InvalidStream)?;
-                if batch.compression().is_some()
-                    || batch.variadicBufferCounts().is_some_and(|v| !v.is_empty())
-                {
-                    return Err(Error::InvalidStream);
-                }
-                let count = usize::try_from(batch.length()).map_err(|_| Error::InvalidStream)?;
-                rows = rows.checked_add(count).ok_or(Error::Limit {
-                    resource: "table_rows",
-                    limit: Limits::TABLE_ROWS,
-                    required: None,
-                })?;
-                batches += 1;
-                let schema = schema.as_ref().expect("schema present");
-                Limits::table(rows, schema.columns().len()).map_err(shape_error)?;
-                let expected_nodes: usize = schema
-                    .columns()
-                    .iter()
-                    .map(|c| {
-                        if matches!(c.kind, ColumnType::Date | ColumnType::DateTime) {
-                            3
-                        } else {
-                            1
-                        }
-                    })
-                    .sum();
-                let expected_buffers: usize = schema
-                    .columns()
-                    .iter()
-                    .map(|c| match c.kind {
-                        ColumnType::Str => 3,
-                        ColumnType::Date | ColumnType::DateTime => 5,
-                        _ => 2,
-                    })
-                    .sum();
-                let nodes = batch.nodes().ok_or(Error::InvalidStream)?;
-                let buffers = batch.buffers().ok_or(Error::InvalidStream)?;
-                if nodes.len() != expected_nodes || buffers.len() != expected_buffers {
-                    return Err(Error::InvalidStream);
-                }
-                for node in nodes {
-                    if node.length() != batch.length()
-                        || node.null_count() < 0
-                        || node.null_count() > node.length()
-                    {
-                        return Err(Error::InvalidStream);
-                    }
-                }
-                for buffer in buffers {
-                    let offset =
-                        usize::try_from(buffer.offset()).map_err(|_| Error::InvalidStream)?;
-                    let length =
-                        usize::try_from(buffer.length()).map_err(|_| Error::InvalidStream)?;
-                    if offset.checked_add(length).ok_or(Error::InvalidStream)? > body {
-                        return Err(Error::InvalidStream);
-                    }
-                }
-            }
-            _ => return Err(Error::InvalidStream),
-        }
-    }
-}
-
 fn batch_error(error: arrow_schema::ArrowError) -> Error {
     match error {
         arrow_schema::ArrowError::CastError(message)
@@ -520,4 +229,77 @@ pub(crate) fn sanitized_batch<T: TableAccess<Error = std::convert::Infallible>>(
         arrays,
         &RecordBatchOptions::new().with_row_count(Some(rows)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::arrow_table::ArrowTable;
+    use arrow_array::{Array, Date32Array, StringArray, StructArray, UInt8Array};
+    use arrow_buffer::{Buffer, NullBuffer, OffsetBuffer, ScalarBuffer};
+    use arrow_schema::DataType;
+    use yamaa_core::table::{Column, TableSchema};
+
+    /// A null cell keeps no hidden bytes in the exported stream: not the
+    /// scalar or the text under its validity bit, nor a temporal child.
+    #[test]
+    fn exported_batches_erase_payloads_hidden_under_nulls() {
+        let schema = TableSchema::new(vec![
+            Column {
+                name: "I".into(),
+                kind: ColumnType::Int,
+            },
+            Column {
+                name: "S".into(),
+                kind: ColumnType::Str,
+            },
+            Column {
+                name: "D".into(),
+                kind: ColumnType::Date,
+            },
+        ])
+        .unwrap();
+        let nulls = || Some(NullBuffer::from(vec![false, true]));
+        let hidden = Int64Array::new(ScalarBuffer::from(vec![424242, 7]), nulls());
+        let strings = StringArray::new(
+            OffsetBuffer::new(ScalarBuffer::from(vec![0, 6, 8])),
+            Buffer::from(b"SECRETok".as_slice()),
+            nulls(),
+        );
+        let physical = physical_schema(&schema);
+        let DataType::Struct(fields) = physical.field(2).data_type() else {
+            panic!("a date is a struct column");
+        };
+        let dates = StructArray::try_new(
+            fields.clone(),
+            vec![
+                Arc::new(Date32Array::from(vec![i32::MIN, 0])),
+                Arc::new(UInt8Array::from(vec![255, 2])),
+            ],
+            nulls(),
+        )
+        .unwrap();
+        let batch = RecordBatch::try_new(
+            physical,
+            vec![Arc::new(hidden), Arc::new(strings), Arc::new(dates)],
+        )
+        .unwrap();
+        let table = ArrowTable::try_new(schema, vec![batch]).unwrap();
+        let output = encode_table_projection(&table, None).unwrap();
+        assert!(!output.windows(6).any(|bytes| bytes == b"SECRET"));
+        let batch = arrow_ipc::reader::StreamReader::try_new(output.as_slice(), None)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        let integers = batch.column(0).as_any().downcast_ref::<Int64Array>();
+        assert_eq!(integers.unwrap().values().as_ref(), [0, 7]);
+        let date = batch.column(2).as_any().downcast_ref::<StructArray>();
+        let date = date.unwrap();
+        assert!(date.is_null(0));
+        let days = date.column(0).as_any().downcast_ref::<Date32Array>();
+        assert_eq!(days.unwrap().value(0), 0);
+        let precision = date.column(1).as_any().downcast_ref::<UInt8Array>();
+        assert_eq!(precision.unwrap().value(0), 0);
+    }
 }

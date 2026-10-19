@@ -430,7 +430,6 @@ impl TableError {
         let code = match error {
             Ipc::Limit { .. } => "limit",
             Ipc::Representation { .. } => "representation",
-            Ipc::InvalidStream => "invalid_stream",
             Ipc::InvalidTable => "invalid_table",
             Ipc::OutputIo => "output_io",
             Ipc::Internal => "internal",
@@ -622,7 +621,6 @@ mod tests {
                 },
                 "representation",
             ),
-            (Ipc::InvalidStream, "invalid_stream"),
             (Ipc::InvalidTable, "invalid_table"),
             (Ipc::OutputIo, "output_io"),
             (Ipc::Internal, "internal"),
