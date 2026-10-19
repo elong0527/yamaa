@@ -75,9 +75,6 @@ tooling = [
   "markdown-it-py==4.0.0",
   "mdurl==0.1.2",
 ]
-# Harbor runs the agent evaluations in evaluations/harbor/. Install it with
-# `uv sync --project python --group harbor`; the package never imports it.
-harbor = ["harbor==0.23.0"]
 
 [tool.maturin]
 locked = true

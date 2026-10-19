@@ -404,8 +404,10 @@ R_LIBS="$PWD/library" R_LIBS_USER="$PWD/library" _R_CHECK_DEPENDS_ONLY_=true \
 ```
 
 Documentation deployment and Harbor evaluations have separate workflows.
-Harbor owns its task-build, oracle and changed-input checks; see its
-[guide](evaluations/harbor/README.md). A prose change does not need a solver run.
+Harbor owns its task-build, oracle and changed-input checks, and its own
+Python project and lock under `evaluations/harbor/`, apart from the package
+lock; see its [guide](evaluations/harbor/README.md). A prose change does not
+need a solver run.
 
 Keep current architecture and supported behavior in repository docs. Put release
 status, run links, artifact identities and remaining failures in issues and PRs;

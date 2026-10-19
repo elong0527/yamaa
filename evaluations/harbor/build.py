@@ -29,9 +29,9 @@ Each language is its own dataset (`yamaa/yamaa-sdtm-adam-r`,
 independently, and so is each tier (`yamaa/yamaa-sdtm-adam-brief-r`). Tasks never name a model or provider; the job files do, so
 one build runs against any provider. Run from the repository root:
 
-    uv run --project python --group harbor python -m evaluations.harbor.build \\
+    uv run --project evaluations/harbor python -m evaluations.harbor.build \\
         --model opencode-go/muse-spark-1.3-contributor --variant low high
-    uv run --project python --group harbor python -m evaluations.harbor.run \\
+    uv run --project evaluations/harbor python -m evaluations.harbor.run \\
         -c ~/.cache/yamaa-harbor/configs/muse-spark-1.3-contributor-r-low.json
 
 Pass `--language r`, `--language python` or `--language opensas` to build one track, and
