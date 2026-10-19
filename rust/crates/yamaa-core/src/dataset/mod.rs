@@ -563,11 +563,13 @@ pub enum VerificationSeverity {
     Error,
     Warning,
 }
+/// The spelling of each [`VerificationSeverity`], in declaration order.
+pub const SEVERITIES: [&str; 2] = ["error", "warning"];
 impl VerificationSeverity {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Error => "error",
-            Self::Warning => "warning",
+            Self::Error => SEVERITIES[0],
+            Self::Warning => SEVERITIES[1],
         }
     }
 }

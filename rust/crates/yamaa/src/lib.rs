@@ -59,7 +59,10 @@ mod internal;
 
 pub use api::{Failure, Plans, ProjectRun, Run, Submission};
 pub use cancel::CancellationToken;
-pub use diagnostic::{ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan};
+pub use diagnostic::{
+    ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan, ISSUE_COLUMNS,
+    PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
+};
 pub use engine::{
     AttemptFailure, Build, DefineArtifact, DefineBuild, DefineRequest, Engine, EngineOptions,
     Request, ResolvedSpecification, SaveOutcome, SourceBytes,

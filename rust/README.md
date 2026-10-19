@@ -10,9 +10,9 @@ The [contributor guide](../CONTRIBUTING.md) owns crate boundaries, locked builds
 and local verification commands. The
 [release guide](../docs/release.md) owns supported platforms, approved decisions
 and migration notes. The [shared host interface](interface/README.md) owns
-`interface/bindings.yaml`, the one input from which both hosts' registrations
-and declarations are generated; `make check-repository` and the native
-qualification lane compare the generated files with it. Current rule checks and
+`interface/bindings.yaml`, the one input from which both hosts' registrations,
+declarations and public layers are generated; `make check-repository` and the
+native qualification lane compare the generated files with it. Current rule checks and
 schema-owner controls are described in the [contributor guide](../CONTRIBUTING.md#develop-and-verify).
 [Installed package checks](qualification/README.md) compare actual Python and R
 results with authored expected data. The workflow recipes in

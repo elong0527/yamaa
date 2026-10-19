@@ -16,6 +16,50 @@ use std::collections::BTreeMap;
 
 use crate::table::Table;
 
+// The host tables' columns and the closed vocabularies of their values.
+// rust/interface/bindings.yaml declares each of these constants, and its
+// generator refuses a column or value that the declaration lacks.
+
+/// The columns of the issues table that [`Report::table`] builds, in order.
+pub const ISSUE_COLUMNS: [&str; 7] = [
+    "phase",
+    "condition",
+    "requirement",
+    "spec_paths",
+    "context",
+    "source_span",
+    "operand_route",
+];
+
+/// Every phase an issue names, in run order: the phases of the registered
+/// conditions.
+pub const PHASES: [&str; 12] = [
+    "validation",
+    "planning",
+    "ingest",
+    "row_construction",
+    "join",
+    "mapping",
+    "impute",
+    "derivation",
+    "convert",
+    "verification",
+    "output",
+    "engine",
+];
+
+/// The columns of the run report, in order.
+pub const REPORT_COLUMNS: &[&str] = yamaa_core::run_report::COLUMNS;
+
+/// Values of the run report's `KIND` column, in report order.
+pub const REPORT_KINDS: [&str; 6] = yamaa_core::run_report::KINDS;
+
+/// Values of the run report's `OUTCOME` column.
+pub const REPORT_OUTCOMES: [&str; 4] = yamaa_core::run_report::OUTCOMES;
+
+/// Values of the run report's `SEVERITY` column: the severity of a check.
+pub const SEVERITIES: [&str; 2] = yamaa_core::dataset::SEVERITIES;
+
 /// Diagnostic severity. Every portable issue row carries error severity today.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -249,15 +293,22 @@ impl Report {
             }
         }
         let list = |item: DataType| DataType::List(Arc::new(Field::new("item", item, true)));
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("phase", DataType::Utf8, true),
-            Field::new("condition", DataType::Utf8, true),
-            Field::new("requirement", DataType::Utf8, true),
-            Field::new("spec_paths", list(DataType::Utf8), true),
-            Field::new("context", DataType::Utf8, true),
-            Field::new("source_span", list(DataType::Int64), true),
-            Field::new("operand_route", list(DataType::Utf8), true),
-        ]));
+        let types: [DataType; ISSUE_COLUMNS.len()] = [
+            DataType::Utf8,
+            DataType::Utf8,
+            DataType::Utf8,
+            list(DataType::Utf8),
+            DataType::Utf8,
+            list(DataType::Int64),
+            list(DataType::Utf8),
+        ];
+        let schema = Arc::new(Schema::new(
+            ISSUE_COLUMNS
+                .into_iter()
+                .zip(types)
+                .map(|(name, kind)| Field::new(name, kind, true))
+                .collect::<Vec<_>>(),
+        ));
         let batch = arrow_array::RecordBatch::try_new(
             schema.clone(),
             vec![
@@ -450,6 +501,19 @@ mod tests {
         assert_eq!((span.value(0), span.value(1)), (3, 9));
         assert!(list(6).is_null(0));
         assert!(!list(6).is_null(1));
+    }
+
+    #[test]
+    fn phases_are_the_phases_of_the_registered_conditions() {
+        let registered = yamaa_core::diagnostic::CONDITIONS
+            .iter()
+            .map(|code| code.definition().phase)
+            .collect::<std::collections::BTreeSet<_>>();
+        let declared = PHASES
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(declared.len(), PHASES.len(), "a phase is listed twice");
+        assert_eq!(registered, declared);
     }
 
     #[test]

@@ -1,0 +1,51 @@
+"""Handwritten support for the public module, which is generated.
+
+`yamaa/__init__.py` is generated from rust/interface/bindings.yaml by
+tools/packaging/generate_bindings.py: its classes and functions delegate each
+operation to `yamaa._native`. What it does not write lives here: the Polars
+table conversion, path conversion, the pickling of lazy objects and the
+package version.
+"""
+
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _distribution_version
+from os import fspath as _fspath
+
+import polars as _pl
+
+from yamaa import _native
+
+__all__ = ["__version__", "_fspath", "_Lazy", "_optional_table", "_pl", "_table"]
+
+
+def _table(table) -> _pl.DataFrame:
+    """A native table as a Polars DataFrame."""
+    return _pl.DataFrame(table)
+
+
+def _optional_table(table) -> _pl.DataFrame | None:
+    """A native table, or None, as a Polars DataFrame or None."""
+    return None if table is None else _pl.DataFrame(table)
+
+
+class _Lazy:
+    """A lazy object's native plans holder stays in its process: a copy, a
+    pickle or another process starts with an empty one and compiles again."""
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["_plans"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._plans = _native._plans()
+
+
+try:
+    __version__ = _distribution_version("yamaa")
+except _PackageNotFoundError:
+    # A vendored copy carries no distribution metadata. The compiled core
+    # version names the same release in its Cargo spelling, which differs
+    # only for a release candidate: Cargo 1.0.0-rc.1 is Python 1.0.0rc1.
+    __version__ = _native._CORE_VERSION.replace("-rc.", "rc")

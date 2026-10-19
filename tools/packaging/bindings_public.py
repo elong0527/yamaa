@@ -1,0 +1,1193 @@
+"""The `public` section of the host interface and the host layers it generates.
+
+``rust/interface/bindings.yaml`` (format 2) declares each host's user-facing
+surface under ``public``: the module functions, the result and lazy classes
+with their members, the refusal error and the type tokens. From it
+``tools/packaging/generate_bindings.py`` writes, through this module:
+
+- ``python/src/yamaa/__init__.py``, the public module: ``__all__``, the error
+  class and its native mapping, and the delegating classes and functions;
+- ``R/yamaa/R/public-bindings.R``: R's exported functions, the constructors of
+  its result and lazy objects, its S3 methods and private accessors;
+- ``R/yamaa/NAMESPACE``;
+- the ``public`` lines of the normalized manifest.
+
+Generated code only delegates. The handwritten rest stays where it was:
+Python's Polars table conversion, path conversion, lazy-object pickling and
+version lookup in ``python/src/yamaa/_support.py``; R's reply and argument
+conversions, host-function capabilities, interrupt rethrow and locked-object
+helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
+
+Delegation is declared, never written as code. A class ``holds`` an ordered
+set of values, each named by what it fills: ``handle``, the native handle the
+object wraps; the name of one of its ``field`` members; or the name of a
+native argument, which the value fills in the object's native calls. A class
+that holds neither a handle nor a field is lazy: it holds paths, and it keeps
+a plans handle when a native call it makes takes ``plans``. A member or a
+function ``calls`` an operation of the ``operations`` table, and each native
+argument of that operation's Python and R exports is bound by name: to the
+member's own arguments, to a held value, to the plans handle, or in R to the
+host's ``version`` and ``capabilities``. A member that returns a class makes
+it from the call's result and the values it holds. README.md lists the member
+kinds and these rules.
+"""
+
+import re
+
+_PY_WIDTH = 88
+_R_WIDTH = 100
+
+_PUBLIC_KEYS = {"python", "types", "functions", "classes", "errors"}
+# Python annotation of each type token in generated code; None leaves the
+# argument unannotated.
+_PY_ANNOTATION = {
+    "path": None,
+    "text": "str",
+    "optional_text": "str | None",
+    "count": "int",
+    "flag": "bool",
+    "names": "list[str]",
+    "tree": "dict",
+    "table": "_pl.DataFrame",
+    "optional_table": "_pl.DataFrame | None",
+    "nothing": "None",
+}
+_ARGUMENT_TOKENS = {"path", "text", "optional_text", "count", "flag"}
+_DEFAULTS = {
+    "optional_text": {"None"},
+    "flag": {"false", "true"},
+    "count": None,  # a nonnegative integer
+}
+# Handwritten conversions the generated code calls.
+_PY_RESULT = {"table": "_table", "optional_table": "_optional_table"}
+_PY_ARGUMENT = {"path": "_fspath"}
+_R_ARGUMENT = {"path": ".text", "text": ".text", "optional_text": ".optional_text"}
+_NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
+_PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
+_R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
+_KINDS = {"property", "method", "field", "index", "protocol", "private"}
+_PROTOCOLS = {"__contains__", "__iter__"}
+_MEMBER_KEYS = {
+    "name",
+    "kind",
+    "args",
+    "keyword_only",
+    "returns",
+    "table",
+    "raises",
+    "calls",
+    "python",
+    "r",
+    "doc",
+}
+_NAME = re.compile(r"[a-z][a-z0-9_]*")
+_CLASS = re.compile(r"[A-Z][A-Za-z0-9]*")
+_R_NAME = re.compile(r"[a-z][a-z0-9_.]*")
+
+
+class _Call:
+    """A call expression, kept as a tree so it can be wrapped like a formatter."""
+
+    def __init__(self, function, arguments=()):
+        self.function = function
+        self.arguments = list(arguments)
+
+    def __str__(self):
+        return f"{self.function}({', '.join(map(str, self.arguments))})"
+
+
+def _snake(name):
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def _keys(entry, what, required, optional=()):
+    if not isinstance(entry, dict):
+        raise ValueError(f"{what} must be a mapping")
+    missing = set(required) - set(entry)
+    if missing:
+        raise ValueError(f"{what} is missing {sorted(missing)}")
+    unknown = set(entry) - set(required) - set(optional)
+    if unknown:
+        raise ValueError(f"{what} has unknown keys {sorted(unknown)}")
+    return entry
+
+
+def _doc(text, what):
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError(f"{what} must be nonempty text")
+    if '"""' in text or "\\" in text or text.endswith('"') or text != text.strip():
+        raise ValueError(f"{what} cannot be written as a docstring")
+    return text
+
+
+def _argument(spec, what):
+    """Split `token` or `token = literal` and check the default."""
+    if not isinstance(spec, str):
+        raise ValueError(f"{what} must be text")
+    token, separator, default = spec.partition(" = ")
+    if token not in _ARGUMENT_TOKENS:
+        raise ValueError(f"{what} has an unsupported argument type: {token!r}")
+    if not separator:
+        return token, None
+    allowed = _DEFAULTS.get(token, set())
+    if allowed is None:
+        if not default.isdigit():
+            raise ValueError(f"{what} default must be a nonnegative integer")
+    elif default not in allowed:
+        raise ValueError(f"{what} has an unsupported default: {default!r}")
+    return token, default
+
+
+class Public:
+    """The validated public section, with the native exports it delegates to."""
+
+    def __init__(self, definition):
+        self.definition = definition
+        public = _keys(definition["public"], "public", _PUBLIC_KEYS)
+        self.public = public
+        self.classes = public["classes"]
+        self.functions = public["functions"]
+        self.errors = public["errors"]
+        self.operations = definition["operations"]
+        exports = definition["python"]["exports"]
+        self.py_functions = {
+            export["name"]: export for export in exports if export["kind"] == "function"
+        }
+        self.py_classes = {
+            export["name"]: {method["name"]: method for method in export["methods"]}
+            for export in exports
+            if export["kind"] == "class"
+        }
+        self.py_exceptions = [
+            export["name"] for export in exports if export["kind"] == "exception"
+        ]
+        self.r_functions = {
+            function["name"]: function
+            for group in definition["r"]["groups"]
+            for function in group["functions"]
+        }
+        self.package = definition["r"]["module"]
+        self._validate()
+
+    # --- Validation --------------------------------------------------------------
+
+    def _validate(self):
+        python = _keys(self.public["python"], "public.python", {"version", "doc"})
+        if python["version"] != "__version__":
+            raise ValueError("public.python.version must be __version__")
+        _doc(python["doc"], "public.python.doc")
+        types = self.public["types"]
+        if not isinstance(types, dict) or not types:
+            raise ValueError("public.types must be a nonempty mapping")
+        for token, projection in types.items():
+            if token not in _PY_ANNOTATION:
+                raise ValueError(f"public.types declares an unknown token: {token!r}")
+            entry = _keys(projection, f"public.types.{token}", {"python", "r"})
+            for host, text in entry.items():
+                if not isinstance(text, str) or not text.strip():
+                    raise ValueError(f"public.types.{token}.{host} must be text")
+        self._validate_errors()
+        if not isinstance(self.classes, dict) or not self.classes:
+            raise ValueError("public.classes must be a nonempty mapping")
+        defined = set()
+        for name, cls in self.classes.items():
+            self._validate_class(name, cls, defined)
+            defined.add(name)
+        if not isinstance(self.functions, list) or not self.functions:
+            raise ValueError("public.functions must be a nonempty list")
+        names = set()
+        for function in self.functions:
+            self._validate_function(function)
+            if function["name"] in names:
+                raise ValueError(f"public.functions names {function['name']} twice")
+            names.add(function["name"])
+        r_names = [function["r"] for function in self.functions]
+        if len(r_names) != len(set(r_names)):
+            raise ValueError("public.functions repeat an R name")
+        # Binding every native argument happens while rendering, so render
+        # once here: a declaration that cannot delegate fails as it loads.
+        self.render_python([])
+        self.render_r([])
+
+    def _token(self, token, what):
+        if token not in self.public["types"]:
+            raise ValueError(f"{what} uses an undeclared type token: {token!r}")
+        return token
+
+    def _returns(self, value, what, defined):
+        if value in self.classes:
+            if value not in defined:
+                raise ValueError(f"{what} returns {value}, which is defined later")
+            return value
+        return self._token(value, what)
+
+    def _validate_errors(self):
+        if not isinstance(self.errors, dict) or set(self.errors) != {"refusal"}:
+            raise ValueError("public.errors must declare exactly the refusal")
+        error = _keys(
+            self.errors["refusal"],
+            "public.errors.refusal",
+            {"python", "r"},
+            {"table", "doc"},
+        )
+        python = _keys(
+            error["python"],
+            "public.errors.refusal.python",
+            {"class", "base", "attributes"},
+        )
+        if not re.fullmatch(r"yamaa\.[A-Z][A-Za-z]*", str(python["class"])):
+            raise ValueError("public.errors.refusal.python.class must be yamaa.<Name>")
+        if python["base"] != "Exception":
+            raise ValueError("the refusal must derive from Exception")
+        attributes = python["attributes"]
+        if not isinstance(attributes, dict) or not attributes:
+            raise ValueError(
+                "the refusal's Python attributes must be a nonempty mapping"
+            )
+        for attribute, token in attributes.items():
+            if not _NAME.fullmatch(attribute):
+                raise ValueError(f"invalid refusal attribute: {attribute!r}")
+            self._token(token, f"public.errors.refusal.python.{attribute}")
+            if _PY_ANNOTATION[token] in {None, "None"}:
+                raise ValueError(f"the refusal's {attribute} needs a value type")
+        r = _keys(error["r"], "public.errors.refusal.r", {"class", "fields"})
+        classes = r["class"]
+        if (
+            not isinstance(classes, list)
+            or not all(isinstance(name, str) for name in classes)
+            or classes[-2:] != ["error", "condition"]
+        ):
+            raise ValueError("the R refusal must be an error condition")
+        if not isinstance(r["fields"], dict) or not r["fields"]:
+            raise ValueError("the R refusal's fields must be a nonempty mapping")
+        for field, kind in r["fields"].items():
+            if not _NAME.fullmatch(field) or (
+                kind != "NULL" and kind not in self.public["types"]
+            ):
+                raise ValueError(f"invalid R refusal field: {field}: {kind}")
+        if "table" in error and error["table"] not in self.definition["tables"]:
+            raise ValueError("the refusal names an undeclared table")
+        if "doc" in error:
+            _doc(error["doc"], "public.errors.refusal.doc")
+        if len(self.py_exceptions) != 1:
+            raise ValueError("the refusal needs exactly one native Python exception")
+
+    def _validate_signature(self, entry, what):
+        args = entry.get("args", {})
+        if not isinstance(args, dict):
+            raise ValueError(f"{what}.args must be a mapping")
+        defaults = False
+        for argument, spec in args.items():
+            if not _NAME.fullmatch(argument):
+                raise ValueError(f"{what} has an invalid argument name: {argument!r}")
+            token, default = _argument(spec, f"{what}.{argument}")
+            self._token(token, f"{what}.{argument}")
+            if default is None and defaults:
+                raise ValueError(
+                    f"{what}.{argument} without a default follows one with"
+                )
+            defaults = defaults or default is not None
+        keyword = entry.get("keyword_only", [])
+        names = list(args)
+        if (
+            not isinstance(keyword, list)
+            or keyword != names[len(names) - len(keyword) :]
+        ):
+            raise ValueError(f"{what}.keyword_only must name its trailing arguments")
+
+    def _validate_result(self, entry, what, defined):
+        returns = self._returns(entry["returns"], what, defined)
+        if "table" in entry:
+            if returns not in {"table", "optional_table"}:
+                raise ValueError(f"{what} names a table but returns {returns}")
+            if entry["table"] not in self.definition["tables"]:
+                raise ValueError(
+                    f"{what} names an undeclared table: {entry['table']!r}"
+                )
+        if "raises" in entry and entry["raises"] not in self.errors:
+            raise ValueError(f"{what} raises an undeclared error: {entry['raises']!r}")
+        if "doc" in entry:
+            _doc(entry["doc"], f"{what}.doc")
+        if "calls" in entry and entry["calls"] not in self.operations:
+            raise ValueError(f"{what} calls an unknown operation: {entry['calls']!r}")
+
+    def _validate_function(self, function):
+        what = f"public.functions[{function.get('name')!r}]"
+        _keys(
+            function,
+            what,
+            {"name", "python", "r", "returns"},
+            {"args", "keyword_only", "table", "raises", "calls", "doc"},
+        )
+        name = function["name"]
+        if not isinstance(name, str) or not _NAME.fullmatch(name):
+            raise ValueError(f"invalid public function name: {name!r}")
+        if function["python"] != f"yamaa.{name}":
+            raise ValueError(f"{what}.python must be yamaa.{name}")
+        if not isinstance(function["r"], str) or not _R_NAME.fullmatch(function["r"]):
+            raise ValueError(f"{what}.r must be an R function name")
+        self._validate_signature(function, what)
+        self._validate_result(function, what, set(self.classes))
+        if "calls" not in function and function["returns"] not in self.classes:
+            raise ValueError(f"{what} calls nothing, so it must return a class")
+        if "calls" in function:
+            self._python_target(function["calls"], None, what)
+
+    def _validate_class(self, name, cls, defined):
+        what = f"public.classes.{name}"
+        _keys(cls, what, {"python", "r", "holds", "members"}, {"doc", "interrupt"})
+        if not _CLASS.fullmatch(name) or cls["python"] != f"yamaa.{name}":
+            raise ValueError(f"{what}.python must be yamaa.{name}")
+        if not isinstance(cls["r"], str) or not re.fullmatch(
+            r"yamaa_[a-z_]+", cls["r"]
+        ):
+            raise ValueError(f"{what}.r must be an S3 class yamaa_<name>")
+        if "doc" in cls:
+            _doc(cls["doc"], f"{what}.doc")
+        holds = cls["holds"]
+        if not isinstance(holds, dict) or not holds:
+            raise ValueError(f"{what}.holds must be a nonempty mapping")
+        for hold, role in holds.items():
+            if not _NAME.fullmatch(hold) or not isinstance(role, str):
+                raise ValueError(f"{what}.holds has an invalid entry: {hold}: {role}")
+        roles = list(holds.values())
+        if len(roles) != len(set(roles)):
+            raise ValueError(f"{what}.holds repeats a role")
+        if "handle" in roles and roles[0] != "handle":
+            raise ValueError(f"{what}.holds must hold its handle first")
+        members = cls["members"]
+        if not isinstance(members, list) or not members:
+            raise ValueError(f"{what}.members must be a nonempty list")
+        names = set()
+        for member in members:
+            mwhat = (
+                f"{what}.{member.get('name') if isinstance(member, dict) else member}"
+            )
+            _keys(member, mwhat, {"name", "kind"}, _MEMBER_KEYS)
+            if not isinstance(member["name"], str) or not _NAME.fullmatch(
+                member["name"]
+            ):
+                raise ValueError(f"invalid member name in {what}: {member['name']!r}")
+            if member["name"] in names:
+                raise ValueError(f"{what} declares {member['name']} twice")
+            names.add(member["name"])
+        fields = {m["name"] for m in members if m["kind"] == "field"}
+        if {role for role in roles if role in fields} != fields:
+            raise ValueError(f"{what}.holds must fill each field")
+        for member in members:
+            self._validate_member(
+                name, cls, member, f"{what}.{member['name']}", defined
+            )
+        if "interrupt" in cls:
+            if "handle" not in roles:
+                raise ValueError(f"{what}.interrupt needs a handle")
+            if cls["interrupt"] not in self.definition["host_only"]["r"]:
+                raise ValueError(f"{what}.interrupt must be an R host-only export")
+        if self.kind(name) == "handle":
+            native = {
+                self._python_target(m["calls"], name, what)[1]
+                for m in members
+                if "calls" in m
+            }
+            if len(native) != 1:
+                raise ValueError(f"{what} members must call one native class: {native}")
+
+    def _validate_member(self, class_name, cls, member, what, defined):
+        kind = member["kind"]
+        if kind not in _KINDS:
+            raise ValueError(f"{what} has an unknown kind: {kind!r}")
+        self._validate_signature(member, what)
+        spelled = {key for key in ("python", "r") if key in member}
+        if kind == "protocol":
+            if member.get("python") not in _PROTOCOLS or set(member) - {
+                "name",
+                "kind",
+                "python",
+                "doc",
+            }:
+                raise ValueError(
+                    f"{what} must be a Python protocol: {sorted(_PROTOCOLS)}"
+                )
+            if "names" not in {m["name"] for m in cls["members"]}:
+                raise ValueError(f"{what} needs a names member")
+            if "doc" in member:
+                _doc(member["doc"], f"{what}.doc")
+            return
+        if "returns" not in member:
+            raise ValueError(f"{what} must declare what it returns")
+        self._validate_result(member, what, defined)
+        if kind == "index":
+            if member.get("python") != "__getitem__" or member.get("r") != "[[":
+                raise ValueError(f"{what} must be spelled __getitem__ and [[")
+            if (
+                len(member.get("args", {})) != 1
+                or member["returns"] not in self.classes
+            ):
+                raise ValueError(f"{what} takes one key and returns a class")
+            if member.get("raises") != "refusal" or "calls" not in member:
+                raise ValueError(f"{what} must call the refusal for an absent key")
+            if "names" not in {m["name"] for m in cls["members"]}:
+                raise ValueError(f"{what} needs a names member")
+        elif spelled:
+            raise ValueError(f"{what} spells a host name, which only index does")
+        if kind in {"index", "private"} and "handle" not in cls["holds"].values():
+            raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
+        if kind == "field":
+            if "calls" in member or member.get("args"):
+                raise ValueError(f"{what} is held, so it calls nothing")
+        elif "calls" not in member:
+            raise ValueError(f"{what} must name the operation it calls")
+        if kind == "property" and member.get("args"):
+            raise ValueError(f"{what} is a property and takes no arguments")
+        if "calls" in member:
+            self._python_target(member["calls"], class_name, what)
+
+    # --- Classes and native targets ------------------------------------------------
+
+    def holds(self, name):
+        return list(self.classes[name]["holds"].items())
+
+    def kind(self, name):
+        roles = set(self.classes[name]["holds"].values())
+        if "handle" in roles:
+            return "handle"
+        fields = {
+            m["name"] for m in self.classes[name]["members"] if m["kind"] == "field"
+        }
+        return "value" if roles & fields else "lazy"
+
+    def _handle(self, name):
+        for hold, role in self.holds(name):
+            if role == "handle":
+                return hold
+        return None
+
+    def _operation(self, operation, what):
+        hosts = self.operations[operation]
+        if len(hosts["python"]) != 1 or len(hosts["r"]) != 1:
+            raise ValueError(
+                f"{what} calls {operation}, which needs one export per host"
+            )
+        return hosts["python"][0], hosts["r"][0]
+
+    def _python_target(self, operation, class_name, what):
+        """('method', native class, declaration) or ('function', None, declaration)."""
+        reference, _ = self._operation(operation, what)
+        handle = class_name is not None and self.kind(class_name) == "handle"
+        if "." in reference:
+            owner, _, method = reference.partition(".")
+            if not handle:
+                raise ValueError(f"{what} calls {reference} without holding a handle")
+            if method not in self.py_classes.get(owner, {}):
+                raise ValueError(f"{what} calls {reference}, which is not a method")
+            return "method", owner, self.py_classes[owner][method]
+        if handle:
+            raise ValueError(f"{what} holds a handle but calls {reference}")
+        if reference not in self.py_functions:
+            raise ValueError(f"{what} calls {reference}, which is not a function")
+        return "function", None, self.py_functions[reference]
+
+    def _native_class(self, name):
+        for member in self.classes[name]["members"]:
+            if "calls" in member:
+                return self._python_target(member["calls"], name, name)[1]
+        return None
+
+    def plans(self, name):
+        """Whether a lazy class keeps a plans handle for its native calls."""
+        if self.kind(name) != "lazy":
+            return False
+        for member in self.classes[name]["members"]:
+            if "calls" in member:
+                _, _, target = self._python_target(member["calls"], name, name)
+                if "plans" in target["args"]:
+                    return True
+        return False
+
+    def _plans_exports(self):
+        python, r = self._operation("plans", "the plans holder")
+        if self.py_functions[python]["args"] or len(self.r_functions[r]["args"]) != 1:
+            raise ValueError("the plans operation has unexpected native arguments")
+        return python, r
+
+    # --- Python ------------------------------------------------------------------
+
+    def _py_argument(self, name, token):
+        helper = _PY_ARGUMENT.get(token)
+        return _Call(helper, [name]) if helper else name
+
+    def _py_context(self, role, hold, class_name, args):
+        """The Python value that fills `role` (or `hold`) in this context."""
+        if role == "handle":
+            if class_name is None or self.kind(class_name) != "handle":
+                return None
+            return f"self._{self._handle(class_name)}"
+        for key in (hold, role):
+            if key in args:
+                return key
+        if class_name is not None:
+            for name, filled in self.holds(class_name):
+                if filled == role and role != "handle":
+                    return f"self._{name}"
+        return None
+
+    def _py_call(self, entry, class_name, what):
+        kind, owner, target = self._python_target(entry["calls"], class_name, what)
+        args = {
+            name: _argument(spec, what)[0]
+            for name, spec in entry.get("args", {}).items()
+        }
+        if kind == "method":
+            callable_ = f"self._{self._handle(class_name)}.{target['name']}"
+        else:
+            callable_ = f"_native.{target['name']}"
+        values, used = [], set()
+        for native in target["args"]:
+            if native in args:
+                values.append(self._py_argument(native, args[native]))
+                used.add(native)
+                continue
+            found = None
+            if class_name is not None:
+                for hold, role in self.holds(class_name):
+                    if role == native:
+                        found = f"self._{hold}"
+            if (
+                found is None
+                and native == "plans"
+                and class_name
+                and self.plans(class_name)
+            ):
+                found = "self._plans"
+            if found is None:
+                raise ValueError(f"{what}: nothing fills the Python argument {native}")
+            values.append(found)
+        if set(args) - used:
+            raise ValueError(
+                f"{what}: {sorted(set(args) - used)} fill no Python argument"
+            )
+        if entry.get("raises"):
+            return _Call("_call", [callable_, *values]), target
+        return _Call(callable_, values), target
+
+    def _py_construct(self, target, first, class_name, args, what):
+        self._same_native(target, first, class_name, what)
+        values = []
+        for index, (hold, role) in enumerate(self.holds(target)):
+            if index == 0 and first is not None:
+                values.append(first)
+                continue
+            values.append(self._py_context(role, hold, class_name, args))
+            if values[-1] is None and (self.kind(target) != "lazy" or index == 0):
+                raise ValueError(f"{what}: nothing makes {target}'s {hold}")
+        # A lazy object's later paths default to None; only trailing ones may.
+        while values and values[-1] is None:
+            values.pop()
+        if None in values:
+            raise ValueError(f"{what}: {target} would skip a held value")
+        return _Call(target, values)
+
+    def _same_native(self, target, first, class_name, what):
+        """A handle passed on from the caller must be the class's native type."""
+        if first is not None or self.kind(target) != "handle":
+            return
+        if class_name is None or self.kind(class_name) != "handle":
+            raise ValueError(f"{what}: nothing passes {target} a handle")
+        if self._native_class(target) != self._native_class(class_name):
+            raise ValueError(f"{what}: {class_name} cannot pass its handle to {target}")
+
+    def _py_result(self, entry, call, native, class_name, what):
+        returns = entry["returns"]
+        args = dict(entry.get("args", {}))
+        if returns in self.classes:
+            if self.kind(returns) == "handle" and native[
+                "returns"
+            ] != self._native_class(returns):
+                raise ValueError(f"{what} returns {native['returns']}, not {returns}")
+            return self._py_construct(returns, call, class_name, args, what)
+        helper = _PY_RESULT.get(returns)
+        return _Call(helper, [call]) if helper else call
+
+    def _py_signature(self, entry, first=None):
+        parts = [first] if first else []
+        keyword = entry.get("keyword_only", [])
+        for name, spec in entry.get("args", {}).items():
+            token, default = _argument(spec, name)
+            if keyword and name == keyword[0]:
+                parts.append("*")
+            annotation = _PY_ANNOTATION[token]
+            part = f"{name}: {annotation}" if annotation else name
+            if default is not None:
+                literal = _PY_DEFAULT.get(default, default)
+                part += f" = {literal}" if annotation else f"={literal}"
+            parts.append(part)
+        return ", ".join(parts)
+
+    def _py_annotation(self, returns):
+        return returns if returns in self.classes else _PY_ANNOTATION[returns]
+
+    def _py_init(self, name):
+        kind = self.kind(name)
+        members = {m["name"]: m for m in self.classes[name]["members"]}
+        params, body = [], []
+        for index, (hold, role) in enumerate(self.holds(name)):
+            if kind == "lazy" and index > 0:
+                params.append(f"{hold}=None")
+            elif kind == "handle" and role != "handle":
+                params.append(f"{hold}: {self._held_annotation(name, role)}")
+            else:
+                params.append(hold)
+            if role in members and members[role]["kind"] == "field":
+                helper = _PY_RESULT.get(members[role]["returns"])
+                value = f"{helper}({hold})" if helper else hold
+                body.append(f"self.{role} = {value}")
+            elif kind == "lazy" and index == 0:
+                body.append(f"self._{hold} = _fspath({hold})")
+            else:
+                body.append(f"self._{hold} = {hold}")
+        if self.plans(name):
+            python, _ = self._plans_exports()
+            body.append(f"self._plans = _native.{python}()")
+        lines = _py_def("__init__", ", ".join(["self", *params]), None, "    ")
+        return lines + [f"        {line}" for line in body]
+
+    def _held_annotation(self, name, role):
+        for member in self.classes[name]["members"]:
+            if "calls" in member:
+                _, _, target = self._python_target(member["calls"], name, name)
+                if role in target["args"]:
+                    native = target["args"][role]
+                    if native not in _NATIVE_PY:
+                        break
+                    return _NATIVE_PY[native]
+        raise ValueError(f"public.classes.{name}: no native argument types {role}")
+
+    def _names_call(self, name):
+        member = next(m for m in self.classes[name]["members"] if m["name"] == "names")
+        call, _ = self._py_call(member, name, f"public.classes.{name}.names")
+        return call
+
+    def _py_member(self, name, member):
+        what = f"public.classes.{name}.{member['name']}"
+        doc = [f'        """{member["doc"]}"""'] if "doc" in member else []
+        kind = member["kind"]
+        if kind == "protocol":
+            names = str(self._names_call(name))
+            if member["python"] == "__contains__":
+                header = _py_def("__contains__", "self, name: object", "bool", "    ")
+                return header + doc + [f"        return name in {names}"]
+            return (
+                _py_def("__iter__", "self", None, "    ")
+                + doc
+                + [f"        return iter({names})"]
+            )
+        if kind == "index":
+            (key,) = member["args"]
+            refusal, _ = self._py_call(member, name, what)
+            made = self._py_construct(
+                member["returns"], None, name, member["args"], what
+            )
+            signature = self._py_signature(member, "self")
+            header = _py_def("__getitem__", signature, member["returns"], "    ")
+            return (
+                header
+                + doc
+                + [
+                    f"        if {key} not in {self._names_call(name)}:",
+                    f"            {refusal}  # raises the engine's refusal",
+                    *_py_lines(made, "        ", "return "),
+                ]
+            )
+        call, native = self._py_call(member, name, what)
+        result = self._py_result(member, call, native, name, what)
+        annotation = self._py_annotation(member["returns"])
+        header = _py_def(
+            member["name"], self._py_signature(member, "self"), annotation, "    "
+        )
+        if kind == "property":
+            header = ["    @property", *header]
+        if member["returns"] == "nothing":
+            body = _py_lines(result, "        ")
+        else:
+            body = _py_lines(result, "        ", "return ")
+        return header + doc + body
+
+    def _py_class(self, name):
+        cls = self.classes[name]
+        base = "(_Lazy)" if self.plans(name) else ""
+        lines = [f"class {name}{base}:"]
+        if "doc" in cls:
+            lines += [f'    """{cls["doc"]}"""', ""]
+        lines += self._py_init(name)
+        for member in cls["members"]:
+            if member["kind"] in {"field", "private"}:
+                continue
+            lines += ["", *self._py_member(name, member)]
+        return lines
+
+    def _py_function(self, function):
+        what = f"public.functions.{function['name']}"
+        args = dict(function.get("args", {}))
+        if "calls" in function:
+            call, native = self._py_call(function, None, what)
+            result = self._py_result(function, call, native, None, what)
+        else:
+            result = self._py_construct(function["returns"], None, None, args, what)
+        header = _py_def(
+            function["name"],
+            self._py_signature(function),
+            self._py_annotation(function["returns"]),
+            "",
+        )
+        doc = [f'    """{function["doc"]}"""'] if "doc" in function else []
+        return header + doc + _py_lines(result, "    ", "return ")
+
+    def python_names(self):
+        refusal = self.errors["refusal"]["python"]["class"].removeprefix("yamaa.")
+        names = [refusal, self.public["python"]["version"]]
+        return sorted(names + [function["name"] for function in self.functions])
+
+    def render_python(self, header):
+        error = self.errors["refusal"]
+        refusal = error["python"]["class"].removeprefix("yamaa.")
+        attributes = error["python"]["attributes"]
+        body = [f"class {refusal}({error['python']['base']}):"]
+        if "doc" in error:
+            body += [f'    """{error["doc"]}"""', ""]
+        signature = ", ".join(
+            ["self", "message: str"]
+            + [f"{name}: {_PY_ANNOTATION[token]}" for name, token in attributes.items()]
+        )
+        body += _py_def("__init__", signature, None, "    ")
+        body.append("        super().__init__(message)")
+        body += [f"        self.{name} = {name}" for name in attributes]
+        mapped = []
+        for name, token in attributes.items():
+            value = f'getattr(error, "{name}")'
+            helper = _PY_RESULT.get(token)
+            mapped.append(_Call(helper, [value]) if helper else value)
+        body += [
+            "",
+            "",
+            "def _call(function, *args):",
+            "    try:",
+            "        return function(*args)",
+            f"    except _native.{self.py_exceptions[0]} as error:",
+            "        # The binding sets the refusal's attributes on the native",
+            "        # exception, so they are read as dynamic attributes.",
+            *_py_lines(
+                _Call(refusal, ["str(error)", *mapped]),
+                "        ",
+                "raise ",
+                " from None",
+            ),
+        ]
+        for name in self.classes:
+            body += ["", "", *self._py_class(name)]
+        for function in self.functions:
+            body += ["", "", *self._py_function(function)]
+        text = "\n".join(body)
+        # Import exactly the handwritten helpers the generated code uses.
+        helpers = [
+            name
+            for name in ("_fspath", "_Lazy", "_optional_table", "_pl", "_table")
+            if re.search(rf"(?<![\w.]){name}\b", text)
+        ]
+        imported = ", ".join(["__version__", *helpers])
+        doc = self.public["python"]["doc"].split("\n")
+        names = ", ".join(f'"{name}"' for name in self.python_names())
+        lines = [
+            *header,
+            f'"""{doc[0]}',
+            *doc[1:],
+            '"""',
+            "",
+            "from yamaa import _native",
+            f"from yamaa._support import {imported}",
+            "",
+            f"__all__ = [{names}]",
+            "",
+            "",
+            text,
+        ]
+        return "\n".join(lines) + "\n"
+
+    # --- R -------------------------------------------------------------------------
+
+    def _r_argument(self, name, token):
+        helper = _R_ARGUMENT.get(token)
+        return _Call(helper, [name, f'"{name}"']) if helper else name
+
+    def _r_call(self, entry, class_name, what, *, handle=None, converted=()):
+        """The R native call of `entry` and whether it takes the plans handle."""
+        _, reference = self._operation(entry["calls"], what)
+        target = self.r_functions[reference]
+        args = {
+            name: _argument(spec, what)[0]
+            for name, spec in entry.get("args", {}).items()
+        }
+        values, used, plans = [], set(), False
+        for native in target["args"]:
+            if native == "handle" and handle:
+                values.append(handle)
+            elif native == "version":
+                values.append(_Call(".version"))
+            elif native == "capabilities":
+                values.append(_Call(".capabilities"))
+            elif native == "plans" and class_name and self.plans(class_name):
+                values.append("plans")
+                plans = True
+            elif native in args:
+                used.add(native)
+                if native in converted:
+                    values.append(native)
+                else:
+                    values.append(self._r_argument(native, args[native]))
+            else:
+                held = [
+                    hold
+                    for hold, role in (self.holds(class_name) if class_name else [])
+                    if role == native
+                ]
+                if not held:
+                    raise ValueError(f"{what}: nothing fills the R argument {native}")
+                values.append(held[0])
+        if set(args) - used:
+            raise ValueError(f"{what}: {sorted(set(args) - used)} fill no R argument")
+        return _Call(".reply", [_Call(f".native_{reference}", values)]), plans
+
+    def _r_context(self, role, hold, class_name, args, handle, converted):
+        if role == "handle":
+            return handle
+        for key in (hold, role):
+            if key in args:
+                if key in converted:
+                    return key
+                return self._r_argument(key, _argument(args[key], key)[0])
+        if class_name is not None:
+            for name, filled in self.holds(class_name):
+                if filled == role and role != "handle":
+                    return name
+        return None
+
+    def _r_construct(
+        self, target, first, class_name, args, what, handle=None, converted=()
+    ):
+        values = []
+        for index, (hold, role) in enumerate(self.holds(target)):
+            if index == 0 and first is not None:
+                if self.kind(target) == "lazy":
+                    first = _Call(".text", [first, f'"{hold}"'])
+                values.append(first)
+                continue
+            found = self._r_context(role, hold, class_name, args, handle, converted)
+            if found is None:
+                if self.kind(target) == "lazy" and index > 0:
+                    values.append("NULL")
+                    continue
+                raise ValueError(f"{what}: nothing makes {target}'s {hold}")
+            values.append(found)
+        return _Call(f".{_snake(target)}", values)
+
+    def _r_result(self, entry, call, class_name, what, handle=None):
+        returns = entry["returns"]
+        if returns in self.classes:
+            return self._r_construct(
+                returns, call, class_name, entry.get("args", {}), what, handle
+            )
+        if returns == "nothing":
+            return _Call("invisible", [call])
+        return call
+
+    def _r_signature(self, entry):
+        parts = []
+        for name, spec in entry.get("args", {}).items():
+            _, default = _argument(spec, name)
+            parts.append(
+                name
+                if default is None
+                else f"{name} = {_R_DEFAULT.get(default, default)}"
+            )
+        return ", ".join(parts)
+
+    def _r_constructor(self, name):
+        cls = self.classes[name]
+        holds = [hold for hold, _ in self.holds(name)]
+        handle = self._handle(name)
+        lines = [f".{_snake(name)} <- function({', '.join(holds)}) {{"]
+        lines += [f"  force({hold})" for hold in holds]
+        if "interrupt" in cls:
+            lines.append(f"  .rethrow_interrupt(.native_{cls['interrupt']}({handle}))")
+        if self.plans(name):
+            lines.append("  plans <- NULL")
+        lines.append("  object <- new.env(parent = emptyenv())")
+        kinds = {member["kind"] for member in cls["members"]}
+        if handle and kinds & {"index", "private"}:
+            lines.append(f"  object$.handle <- {handle}")
+        for member in cls["members"]:
+            lines += self._r_member(name, member, handle)
+        lines += [f'  .object(object, "{cls["r"]}")', "}"]
+        return lines
+
+    def _r_member(self, name, member, handle):
+        what = f"public.classes.{name}.{member['name']}"
+        kind = member["kind"]
+        if kind == "field":
+            held = next(h for h, role in self.holds(name) if role == member["name"])
+            return [f"  object${member['name']} <- {held}"]
+        if kind not in {"property", "method"}:
+            return []
+        call, plans = self._r_call(member, name, what, handle=handle)
+        result = self._r_result(member, call, name, what, handle)
+        if kind == "property":
+            prefix = f'  .read_only(object, "{member["name"]}", '
+            return _r_closure(prefix, "", result, "  ", ")")
+        prefix = f"  object${member['name']} <- "
+        signature = self._r_signature(member)
+        if plans:
+            _, refresh = self._plans_exports()
+            return [
+                *_r_header(prefix, signature),
+                f"    plans <<- .reply(.native_{refresh}(plans))",
+                *_r_lines(result, "    "),
+                "  }",
+            ]
+        return _r_closure(prefix, signature, result, "  ")
+
+    def _r_extras(self, name):
+        """S3 methods and private accessors that reach an object's handle."""
+        cls = self.classes[name]
+        lines = []
+        for member in cls["members"]:
+            what = f"public.classes.{name}.{member['name']}"
+            if member["kind"] == "index":
+                (key,) = member["args"]
+                refusal, _ = self._r_call(
+                    member, name, what, handle="native", converted={key}
+                )
+                made = self._r_construct(
+                    member["returns"], None, name, member["args"], what, "native", {key}
+                )
+                names_member = next(m for m in cls["members"] if m["name"] == "names")
+                names, _ = self._r_call(names_member, name, what, handle="native")
+                token = _argument(member["args"][key], key)[0]
+                helper = _R_ARGUMENT.get(token)
+                converted = f'{helper}(i, "{key}")' if helper else "i"
+                lines += [
+                    "",
+                    f"`{member['r']}.{cls['r']}` <- function(x, i, ...) {{",
+                    '  native <- get(".handle", envir = x, inherits = FALSE)',
+                    f"  {key} <- {converted}",
+                    f"  if (!i %in% {names}) {{",
+                    f"    {refusal} # raises the engine's refusal",
+                    "  }",
+                    *_r_lines(made, "  "),
+                    "}",
+                ]
+            elif member["kind"] == "private":
+                owner = _snake(name)
+                call, _ = self._r_call(member, name, what, handle="native")
+                signature = ", ".join(filter(None, [owner, self._r_signature(member)]))
+                lines += [
+                    "",
+                    f".{owner}_{member['name']} <- function({signature}) {{",
+                    f'  native <- get(".handle", envir = {owner}, inherits = FALSE)',
+                    *_r_lines(call, "  "),
+                    "}",
+                ]
+        return lines
+
+    def _r_function(self, function):
+        what = f"public.functions.{function['name']}"
+        args = dict(function.get("args", {}))
+        if "calls" in function:
+            call, _ = self._r_call(function, None, what)
+            result = self._r_result(function, call, None, what)
+        else:
+            result = self._r_construct(function["returns"], None, None, args, what)
+        return _r_closure(
+            f"{function['r']} <- ", self._r_signature(function), result, ""
+        )
+
+    def render_r(self, header):
+        lines = list(header)
+        for name in self.classes:
+            lines += ["", *self._r_constructor(name), *self._r_extras(name)]
+        for function in self.functions:
+            lines += ["", *self._r_function(function)]
+        return "\n".join(lines) + "\n"
+
+    def render_namespace(self, header):
+        lines = [*header, f"useDynLib({self.package}, .registration = TRUE)"]
+        lines += [f"export({function['r']})" for function in self.functions]
+        for cls in self.classes.values():
+            for member in cls["members"]:
+                if member["kind"] == "index":
+                    lines.append(f'S3method("{member["r"]}", {cls["r"]})')
+        return "\n".join(lines) + "\n"
+
+    # --- Manifest ----------------------------------------------------------------
+
+    def _result_facts(self, entry):
+        facts = [f"returns {entry['returns']}"]
+        if "table" in entry:
+            facts.append(f"table {entry['table']}")
+        if "raises" in entry:
+            facts.append(f"raises {entry['raises']}")
+        return facts
+
+    def _argument_lines(self, prefix, entry):
+        keyword = set(entry.get("keyword_only", []))
+        lines = []
+        for index, (name, spec) in enumerate(entry.get("args", {}).items()):
+            facts = f"{name}: {spec}" + ("; keyword-only" if name in keyword else "")
+            lines.append(f"{prefix}.args[{index}]: {facts}")
+        return lines
+
+    def manifest_lines(self):
+        """The frozen elements of the public surface, one per line."""
+        lines = []
+        for token, projection in self.public["types"].items():
+            lines.append(
+                f"public.types.{token}: python {projection['python']}; r {projection['r']}"
+            )
+        for function in self.functions:
+            prefix = f"public.functions.{function['name']}"
+            facts = [f"python {function['python']}", f"r {function['r']}"]
+            lines.append(f"{prefix}: {'; '.join(facts + self._result_facts(function))}")
+            lines += self._argument_lines(prefix, function)
+        for name, cls in self.classes.items():
+            prefix = f"public.classes.{name}"
+            lines.append(f"{prefix}: python {cls['python']}; r {cls['r']}")
+            for member in cls["members"]:
+                if member["kind"] == "private":
+                    continue
+                facts = [member["kind"]]
+                facts += [
+                    f"{host} {member[host]}"
+                    for host in ("python", "r")
+                    if host in member
+                ]
+                if "returns" in member:
+                    facts += self._result_facts(member)
+                lines.append(f"{prefix}.{member['name']}: {'; '.join(facts)}")
+                lines += self._argument_lines(f"{prefix}.{member['name']}", member)
+        error = self.errors["refusal"]
+        python, r = error["python"], error["r"]
+        attributes = ", ".join(
+            f"{name}: {token}" for name, token in python["attributes"].items()
+        )
+        fields = ", ".join(f"{name}: {kind}" for name, kind in r["fields"].items())
+        lines.append(
+            f"public.errors.refusal: python {python['class']}({python['base']}) with "
+            f"{attributes}; r {', '.join(r['class'])} with {fields}"
+        )
+        lines += [f"public.python.exports.{name}" for name in self.python_names()]
+        lines += [f"public.r.exports.{function['r']}" for function in self.functions]
+        for cls in self.classes.values():
+            for member in cls["members"]:
+                if member["kind"] == "index":
+                    lines.append(f"public.r.s3methods.{cls['r']}.{member['r']}")
+        return lines
+
+
+# --- Formatting ----------------------------------------------------------------------
+
+
+def _py_def(name, params, returns, indent):
+    """A `def` line laid out as ruff format lays it out."""
+    tail = f" -> {returns}:" if returns else ":"
+    single = f"{indent}def {name}({params}){tail}"
+    if len(single) <= _PY_WIDTH:
+        return [single]
+    inner = indent + "    "
+    if len(inner + params) <= _PY_WIDTH:
+        return [f"{indent}def {name}(", inner + params, f"{indent}){tail}"]
+    return [
+        f"{indent}def {name}(",
+        *(f"{inner}{part}," for part in params.split(", ")),
+        f"{indent}){tail}",
+    ]
+
+
+def _py_lines(expression, indent, prefix="", suffix=""):
+    """`prefix + expression + suffix`, split at brackets as ruff format splits."""
+    flat = f"{indent}{prefix}{expression}{suffix}"
+    if (
+        len(flat) <= _PY_WIDTH
+        or not isinstance(expression, _Call)
+        or not expression.arguments
+    ):
+        return [flat]
+    inner = indent + "    "
+    lines = [f"{indent}{prefix}{expression.function}("]
+    arguments = expression.arguments
+    joined = ", ".join(map(str, arguments))
+    if len(arguments) == 1:
+        lines += _py_lines(arguments[0], inner)
+    elif len(inner + joined) <= _PY_WIDTH:
+        lines.append(inner + joined)
+    else:
+        for argument in arguments:
+            lines += _py_lines(argument, inner, suffix=",")
+    lines.append(f"{indent}){suffix}")
+    return lines
+
+
+def _r_lines(expression, indent, prefix="", suffix=""):
+    """`prefix + expression + suffix`, hugging single-argument calls when long."""
+    flat = f"{indent}{prefix}{expression}{suffix}"
+    if len(flat) <= _R_WIDTH or not isinstance(expression, _Call):
+        return [flat]
+    head, closers, node = "", "", expression
+    while len(node.arguments) == 1 and isinstance(node.arguments[0], _Call):
+        head += f"{node.function}("
+        closers += ")"
+        node = node.arguments[0]
+    if not node.arguments:
+        return [flat]
+    head += f"{node.function}("
+    closers += ")"
+    inner = indent + "  "
+    joined = ", ".join(map(str, node.arguments))
+    lines = [f"{indent}{prefix}{head}"]
+    if len(inner + joined) <= _R_WIDTH:
+        lines.append(inner + joined)
+    else:
+        last = len(node.arguments) - 1
+        for index, argument in enumerate(node.arguments):
+            lines += _r_lines(argument, inner, suffix="" if index == last else ",")
+    lines.append(f"{indent}{closers}{suffix}")
+    return lines
+
+
+def _r_closure(prefix, params, expression, indent, suffix=""):
+    """`prefix` and `function(params)`, then the body: one line, or a block."""
+    single = f"{prefix}function({params}) {expression}{suffix}"
+    if len(single) <= _R_WIDTH:
+        return [single]
+    return [
+        *_r_header(prefix, params),
+        *_r_lines(expression, indent + "  "),
+        f"{indent}}}{suffix}",
+    ]
+
+
+def _r_header(prefix, params):
+    """`prefix` and `function(params) {`, with the parameters filled to the width."""
+    opening = f"{prefix}function("
+    if len(f"{opening}{params}) {{") <= _R_WIDTH or not params:
+        return [f"{opening}{params}) {{"]
+    align = " " * len(opening)
+    parts = params.split(", ")
+    lines, current, fresh = [], opening, True
+    for index, part in enumerate(parts):
+        piece = part + (") {" if index == len(parts) - 1 else ",")
+        candidate = current + ("" if fresh else " ") + piece
+        if len(candidate) > _R_WIDTH and not fresh:
+            lines.append(current)
+            current = align + piece
+        else:
+            current = candidate
+        fresh = False
+    return [*lines, current]

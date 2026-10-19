@@ -6,7 +6,7 @@
 //! and hands plain rows back to `assemble` here, then calls `verify` before any
 //! byte of the report is written.
 use crate::{
-    dataset::VerificationSeverity,
+    dataset::{VerificationSeverity, SEVERITIES},
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
     table::{CellError, Column as TableColumn, TableAccess, TableSchema, ValueRef},
@@ -40,6 +40,16 @@ pub const COLUMNS: &[&str] = &[
 const COUNT: usize = 10;
 const TOTAL: usize = 11;
 
+/// Values of the KIND column, in report order.
+pub const KINDS: [&str; 6] = ["run", "input", "rows", "handler", "column", "check"];
+
+/// Values of the OUTCOME column: a run row's two, then a check row's two.
+pub const OUTCOMES: [&str; 4] = [SUCCEEDED, FAILED, HELD, VIOLATED];
+const SUCCEEDED: &str = "succeeded";
+const FAILED: &str = "failed";
+const HELD: &str = "held";
+const VIOLATED: &str = "violated";
+
 /// Row kinds in report order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
@@ -53,12 +63,12 @@ pub enum Kind {
 impl Kind {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Run => "run",
-            Self::Input => "input",
-            Self::Rows => "rows",
-            Self::Handler => "handler",
-            Self::Column => "column",
-            Self::Check => "check",
+            Self::Run => KINDS[0],
+            Self::Input => KINDS[1],
+            Self::Rows => KINDS[2],
+            Self::Handler => KINDS[3],
+            Self::Column => KINDS[4],
+            Self::Check => KINDS[5],
         }
     }
 }
@@ -385,8 +395,8 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
     rows.try_reserve_exact(row_count(facts))
         .map_err(|_| Error::InvalidRecord)?;
     let (outcome, condition, output_rows) = match &facts.run {
-        Run::Succeeded { rows } => ("succeeded", None, Some(*rows)),
-        Run::Failed { condition } => ("failed", Some(condition.as_str()), None),
+        Run::Succeeded { rows } => (SUCCEEDED, None, Some(*rows)),
+        Run::Failed { condition } => (FAILED, Some(condition.as_str()), None),
     };
     rows.push(row(
         artifact,
@@ -492,13 +502,13 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
     for check in &facts.checks {
         let (outcome, condition, failed, keys, details) = match &check.failure {
             Some(failure) => (
-                "violated",
+                VIOLATED,
                 Some(failure.condition.as_str()),
                 failure.count,
                 PreparedCell::Keys(failure.keys.clone()),
                 failure.details.clone(),
             ),
-            None => ("held", None, 0, PreparedCell::Missing, BTreeMap::new()),
+            None => (HELD, None, 0, PreparedCell::Missing, BTreeMap::new()),
         };
         rows.push(row(
             artifact,
@@ -656,22 +666,22 @@ pub fn verify(report: &Report, facts: &Facts) -> Result<(), Error> {
         require((kind == Kind::Check) == severity.is_some())?;
         require(kind == Kind::Check || id.is_none())?;
         require(matches!(kind, Kind::Handler | Kind::Check) || target.is_none() && rule.is_none())?;
-        require(keys.is_none() || outcome == Some("violated"))?;
+        require(keys.is_none() || outcome == Some(VIOLATED))?;
         match kind {
             Kind::Run => {
                 require(total.is_none())?;
                 match outcome {
-                    Some("succeeded") => require(condition.is_none() && count.is_some())?,
-                    Some("failed") => require(condition.is_some() && count.is_none())?,
+                    Some(SUCCEEDED) => require(condition.is_none() && count.is_some())?,
+                    Some(FAILED) => require(condition.is_some() && count.is_none())?,
                     _ => return Err(Error::InvalidRecord),
                 }
             }
             Kind::Check => {
                 require(rule.is_some() && total.is_some())?;
-                require(matches!(severity, Some("error" | "warning")))?;
+                require(severity.is_some_and(|severity| SEVERITIES.contains(&severity)))?;
                 match outcome {
-                    Some("held") => require(condition.is_none() && count == Some(0))?,
-                    Some("violated") => require(
+                    Some(HELD) => require(condition.is_none() && count == Some(0))?,
+                    Some(VIOLATED) => require(
                         condition.is_some()
                             && count.is_some_and(|count| count > 0)
                             && keys.is_some(),
