@@ -178,11 +178,13 @@ plan. Record its timings on an issue, never in the repository.
 The ordinary CI workflow runs the same check targets listed above for each PR,
 every two hours on main, and on each push to a `release/**` branch. Merges to
 main do not start workflows other than the documentation site deployment; main
-is checked on those schedules instead. While the newest main run of CI, the
-nightly fuzz run or the documentation deployment fails, the `Main health`
-workflow keeps a `main-red` issue open for it and closes the issue when a later
-main run succeeds. A PR that changes `.github/` also runs actionlint over every
-workflow.
+is checked on those schedules instead. While the newest main run of CI or the
+documentation deployment fails, the `Main health` workflow keeps a `main-red`
+issue open for it and closes the issue when a later main run succeeds. A
+failing fuzz run on main opens such an issue, or comments on the open one, and
+a person closes it: a later green run does not show that the crash is fixed,
+because the next run may not find the same input again. A PR that changes
+`.github/` also runs actionlint over every workflow.
 Keep workflow-specific setup in CI and reusable check logic in `tools/`.
 Pin external actions to complete commit IDs with exact release comments.
 

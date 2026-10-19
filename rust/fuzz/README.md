@@ -81,3 +81,6 @@ The `Fuzz` workflow runs, for three minutes each, the targets whose readers a
 pull request changes, as `python -m tools.ci.fuzz select` lists them. The
 nightly schedule and a dispatch run every target for thirty minutes, or for the
 dispatched time. A failing job uploads the reproducing input as an artifact.
+A failing run on main opens a `main-red` issue, or comments on the open one,
+and a person closes it once the crash is fixed: a later green run may simply
+not find the same input again.
