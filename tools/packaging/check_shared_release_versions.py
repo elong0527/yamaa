@@ -21,6 +21,10 @@ SELECTED_PEOPLE = [
     ("Jingwei Xiong", None),
 ]
 COLLECTIVE_HOLDER = "yamaa contributors"
+# The R DESCRIPTION alone also credits the authors of the Rust crates that the
+# R source package bundles, as CRAN's Repository Policy asks; the staged
+# package's inst/AUTHORS lists them.
+BUNDLED_CRATE_AUTHORS = ("The authors of the bundled Rust crates", None, {"ctb"})
 
 
 def _people(entries):
@@ -101,9 +105,10 @@ def _r_string(value):
 def _r_person(arguments):
     """Build one (name, email-or-None, roles) triple from person() arguments.
 
-    Positional arguments map to given, family, middle in order; email and
-    role must be named. Any argument the parser cannot account for returns
-    None."""
+    Positional arguments map to given, family, middle in order; email, role
+    and comment must be named, and a comment must be one string. A person
+    with a given name alone is a collective entry. Any argument the parser
+    cannot account for returns None."""
     fields = {}
     positional = ("given", "family", "middle")
     for index, argument in enumerate(arguments):
@@ -114,7 +119,14 @@ def _r_person(arguments):
             key, raw = positional[index], argument
         else:
             return None
-        if key in fields or key not in ("given", "family", "middle", "email", "role"):
+        if key in fields or key not in (
+            "given",
+            "family",
+            "middle",
+            "email",
+            "role",
+            "comment",
+        ):
             return None
         if key == "role":
             raw = raw.strip()
@@ -137,7 +149,7 @@ def _r_person(arguments):
                 return None
             fields[key] = value
     given, family = fields.get("given"), fields.get("family")
-    if given is None or family is None:
+    if given is None or (family is None and "middle" in fields):
         return None
     name = " ".join(part for part in (given, fields.get("middle"), family) if part)
     return (name, fields.get("email"), fields.get("role", set()))
@@ -229,7 +241,7 @@ def author_violations(root):
         expected = [
             (name, email, {"aut", "cre"} if index == 0 else {"ctb"})
             for index, (name, email) in enumerate(SELECTED_PEOPLE)
-        ]
+        ] + [BUNDLED_CRATE_AUTHORS]
         if _r_people(description) != expected:
             errors.append(
                 "R/yamaa/DESCRIPTION: author list differs from the selected author list"

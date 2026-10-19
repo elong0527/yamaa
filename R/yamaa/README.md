@@ -45,14 +45,14 @@ The package is distributed as a source tarball attached to each
 install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 ```
 
-Installation compiles the Rust engine, so it needs R 4.6.1, Rust 1.90 or later
-with Cargo, a C compiler and GNU make. Under rustup, the archive's
-`rust-toolchain.toml` selects the release toolchain, Rust 1.99.1, in rustup's
-minimal profile without Clippy or rustfmt. On Windows,
-also install Rtools45 and the `x86_64-pc-windows-gnu` target on that
-toolchain: `rustup toolchain install 1.99.1 --target x86_64-pc-windows-gnu`. A
-target added to another toolchain is not used. Cargo downloads the locked Rust
-dependencies that are not already in its cache. The
+Installation compiles the Rust engine, so it needs R 4.4.0 or later, a C
+compiler, and Cargo and rustc 1.90 or later, from [rustup](https://rustup.rs/)
+or from system packages that are that recent. The build uses your default
+Rust toolchain, and rustup installs none. On
+Windows, also install Rtools45 and the `x86_64-pc-windows-gnu` target:
+`rustup target add x86_64-pc-windows-gnu`. The archive carries the locked
+Rust crates, so installation needs no network; it compiles with two jobs and
+writes nothing outside its build directory and the temporary directory. The
 [release guidance](../../docs/release.md#supported-platforms) lists the
 supported platforms.
 

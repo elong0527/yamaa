@@ -144,14 +144,37 @@ class CoherentRelease(unittest.TestCase):
     def test_r_author_appended_with_named_arguments_is_refused(self):
         self.change(
             "R/yamaa/DESCRIPTION",
-            'person("Jingwei", "Xiong", role = "ctb"))',
+            'person("Jingwei", "Xiong", role = "ctb"),',
             'person("Jingwei", "Xiong", role = "ctb"),\n'
-            '    person(given = "Another", family = "Contributor", role = "ctb"))',
+            '    person(given = "Another", family = "Contributor", role = "ctb"),',
         )
         self.assertIn(
             "R/yamaa/DESCRIPTION: author list differs from the selected author list",
             checker.violations(self.root),
         )
+
+    def test_r_bundled_crate_authors_must_stay_credited(self):
+        # CRAN's policy asks the R package to credit the authors of the Rust
+        # code it bundles; inst/AUTHORS, staged with the package, names them.
+        entry = (
+            'person("The authors of the bundled Rust crates", role = "ctb",\n'
+            '           comment = "listed in inst/AUTHORS")'
+        )
+        for replacement in (
+            "",
+            entry.replace('role = "ctb"', 'role = c("ctb", "cph")'),
+            entry.replace("bundled Rust crates", "vendored crates"),
+            entry.replace('"listed in inst/AUTHORS"', 'c(file = "inst/AUTHORS")'),
+        ):
+            with self.subTest(replacement=replacement):
+                self.setUp()
+                old = ",\n    " + entry if not replacement else entry
+                self.change("R/yamaa/DESCRIPTION", old, replacement)
+                self.assertIn(
+                    "R/yamaa/DESCRIPTION: author list differs from the selected"
+                    " author list",
+                    checker.violations(self.root),
+                )
 
     def test_cargo_author_drift_is_refused(self):
         self.change("rust/Cargo.toml", '"Peng Zhang",', '"P. Zhang",')
