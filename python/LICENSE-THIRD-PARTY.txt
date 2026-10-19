@@ -19,8 +19,8 @@ another source.
 Where a crate offers a choice of licenses, yamaa relies on the first license
 in this order that the crate offers and whose text the crate ships: MIT,
 Apache-2.0, BSD-3-Clause, Unicode-3.0, Apache-2.0 WITH LLVM-exception,
-CC0-1.0. Each entry names the license relied on. Texts that only grant an
-alternative license are not reproduced; the crate's general license,
+CC0-1.0, Zlib. Each entry names the license relied on. Texts that only grant
+an alternative license are not reproduced; the crate's general license,
 copyright, NOTICE and AUTHORS files are.
 
 Texts are reproduced verbatim, with LF line endings and a final newline.
@@ -83,42 +83,37 @@ Crate: arraydeque 0.5.1
     Relied on: MIT
     Texts: [7] LICENSE
 
-Crate: arrow-array 57.3.0
+Crate: arrow-array 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
 
-Crate: arrow-buffer 57.3.0
+Crate: arrow-buffer 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
 
-Crate: arrow-cast 57.3.0
+Crate: arrow-cast 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
 
-Crate: arrow-data 57.3.0
+Crate: arrow-data 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
 
-Crate: arrow-ipc 57.3.0
+Crate: arrow-ipc 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
 
-Crate: arrow-ord 57.3.0
+Crate: arrow-schema 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
 
-Crate: arrow-schema 57.3.0
-    License: Apache-2.0
-    Relied on: Apache-2.0
-    Texts: [8] LICENSE.txt, [9] NOTICE.txt
-
-Crate: arrow-select 57.3.0
+Crate: arrow-select 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
@@ -278,22 +273,17 @@ Crate: getrandom 0.3.4
     Relied on: MIT
     Texts: [31] LICENSE-MIT
 
-Crate: getrandom 0.4.3
+Crate: half 2.7.1
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [32] LICENSE-MIT
 
-Crate: half 2.7.1
-    License: MIT OR Apache-2.0
-    Relied on: MIT
-    Texts: [33] LICENSE-MIT
-
-Crate: hashbrown 0.16.1
+Crate: hashbrown 0.15.5
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [20] LICENSE-MIT
 
-Crate: hashbrown 0.17.1
+Crate: hashbrown 0.16.1
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [20] LICENSE-MIT
@@ -301,34 +291,39 @@ Crate: hashbrown 0.17.1
 Crate: heck 0.5.0
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [34] LICENSE-MIT
+    Texts: [33] LICENSE-MIT
 
 Crate: iana-time-zone 0.1.65
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [35] LICENSE-MIT
+    Texts: [34] LICENSE-MIT
 
 Crate: iana-time-zone-haiku 0.1.2
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [35] LICENSE-MIT
+    Texts: [34] LICENSE-MIT
 
-Crate: indexmap 2.14.2
+Crate: indexmap 2.13.1
     License: Apache-2.0 OR MIT
     Relied on: MIT
-    Texts: [36] LICENSE-MIT
+    Texts: [35] LICENSE-MIT
+
+Crate: indoc 2.0.8
+    License: MIT OR Apache-2.0
+    Relied on: MIT
+    Texts: [1] LICENSE-MIT
 
 Crate: integer-encoding 3.0.4
     License: MIT
     Relied on: MIT
-    Texts: [37] LICENSE
+    Texts: [36] LICENSE
 
 Crate: itoa 1.0.18
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [1] LICENSE-MIT
 
-Crate: jobserver 0.1.35
+Crate: jobserver 0.1.34
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [18] LICENSE-MIT
@@ -346,17 +341,17 @@ Crate: lazy_static 1.5.1
 Crate: lexical-core 1.0.6
     License: MIT/Apache-2.0
     Relied on: MIT
-    Texts: [1] LICENSE-MIT, [38] LICENSE.md
+    Texts: [1] LICENSE-MIT, [37] LICENSE.md
 
 Crate: lexical-parse-float 1.0.6
     License: MIT/Apache-2.0
     Relied on: MIT
-    Texts: [1] LICENSE-MIT, [38] LICENSE.md
+    Texts: [1] LICENSE-MIT, [37] LICENSE.md
 
 Crate: lexical-parse-integer 1.0.6
     License: MIT/Apache-2.0
     Relied on: MIT
-    Texts: [1] LICENSE-MIT, [38] LICENSE.md
+    Texts: [1] LICENSE-MIT, [37] LICENSE.md
 
 Crate: lexical-util 1.0.7
     License: MIT/Apache-2.0
@@ -366,52 +361,62 @@ Crate: lexical-util 1.0.7
 Crate: lexical-write-float 1.0.6
     License: MIT/Apache-2.0
     Relied on: MIT
-    Texts: [1] LICENSE-MIT, [38] LICENSE.md
+    Texts: [1] LICENSE-MIT, [37] LICENSE.md
 
 Crate: lexical-write-integer 1.0.6
     License: MIT/Apache-2.0
     Relied on: MIT
-    Texts: [1] LICENSE-MIT, [38] LICENSE.md
+    Texts: [1] LICENSE-MIT, [37] LICENSE.md
 
 Crate: libc 0.2.191
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [39] LICENSE-MIT
+    Texts: [38] LICENSE-MIT
 
 Crate: libm 0.2.16
     License: MIT
     Relied on: MIT
-    Texts: [40] LICENSE.txt
+    Texts: [39] LICENSE.txt
 
 Crate: linux-raw-sys 0.12.1
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
     Relied on: MIT
-    Texts: [41] COPYRIGHT, [1] LICENSE-MIT
+    Texts: [40] COPYRIGHT, [1] LICENSE-MIT
 
 Crate: log 0.4.34
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [14] LICENSE-MIT
 
-Crate: lz4_flex 0.12.2
+Crate: lz4_flex 0.11.6
     License: MIT
     Relied on: MIT
-    Texts: [42] LICENSE
+    Texts: [41] LICENSE
 
 Crate: lz4_flex 0.13.1
     License: MIT
     Relied on: MIT
-    Texts: [42] LICENSE
+    Texts: [41] LICENSE
 
 Crate: memchr 2.8.3
     License: Unlicense OR MIT
     Relied on: MIT
     Texts: [3] COPYING, [4] LICENSE-MIT
 
+Crate: memoffset 0.9.1
+    License: MIT
+    Relied on: MIT
+    Texts: [42] LICENSE
+
 Crate: miniz_oxide 0.9.1
     License: MIT OR Zlib OR Apache-2.0
     Relied on: MIT
     Texts: [43] LICENSE, [44] LICENSE-MIT.md
+
+Crate: num 0.4.3
+    License: MIT OR Apache-2.0
+    Relied on: MIT
+    Texts: [14] LICENSE-MIT
 
 Crate: num-bigint 0.4.8
     License: MIT OR Apache-2.0
@@ -433,6 +438,16 @@ Crate: num-integer 0.1.47
     Relied on: MIT
     Texts: [14] LICENSE-MIT
 
+Crate: num-iter 0.1.46
+    License: MIT OR Apache-2.0
+    Relied on: MIT
+    Texts: [14] LICENSE-MIT
+
+Crate: num-rational 0.4.2
+    License: MIT OR Apache-2.0
+    Relied on: MIT
+    Texts: [14] LICENSE-MIT
+
 Crate: num-traits 0.2.19
     License: MIT OR Apache-2.0
     Relied on: MIT
@@ -448,7 +463,7 @@ Crate: ordered-float 2.10.1
     Relied on: MIT
     Texts: [45] LICENSE-MIT
 
-Crate: parquet 57.3.0
+Crate: parquet 55.2.0
     License: Apache-2.0
     Relied on: Apache-2.0
     Texts: [8] LICENSE.txt, [9] NOTICE.txt
@@ -478,32 +493,32 @@ Crate: proc-macro2 1.0.107
     Relied on: MIT
     Texts: [1] LICENSE-MIT
 
-Crate: pyo3 0.30.1
+Crate: pyo3 0.27.2
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [46] LICENSE-MIT
 
-Crate: pyo3-build-config 0.30.1
+Crate: pyo3-build-config 0.27.2
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [46] LICENSE-MIT
 
-Crate: pyo3-ffi 0.30.1
+Crate: pyo3-ffi 0.27.2
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [46] LICENSE-MIT
 
-Crate: pyo3-macros 0.30.1
+Crate: pyo3-macros 0.27.2
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [46] LICENSE-MIT
 
-Crate: pyo3-macros-backend 0.30.1
+Crate: pyo3-macros-backend 0.27.2
     License: MIT OR Apache-2.0
     Relied on: MIT
     Texts: [46] LICENSE-MIT
 
-Crate: quick-xml 0.42.0
+Crate: quick-xml 0.41.0
     License: MIT
     Relied on: MIT
     Texts: [47] LICENSE-MIT.md
@@ -517,11 +532,6 @@ Crate: r-efi 5.3.0
     License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
     Relied on: MIT
     Texts: [48] AUTHORS
-
-Crate: r-efi 6.0.0
-    License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-    Relied on: MIT
-    Texts: [49] AUTHORS
 
 Crate: readonly 0.2.14
     License: MIT OR Apache-2.0
@@ -546,12 +556,12 @@ Crate: regex-syntax 0.8.11
 Crate: rustc_version 0.4.1
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [50] LICENSE-MIT
+    Texts: [49] LICENSE-MIT
 
 Crate: rustix 1.1.5
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
     Relied on: MIT
-    Texts: [51] COPYRIGHT, [1] LICENSE-MIT
+    Texts: [50] COPYRIGHT, [1] LICENSE-MIT
 
 Crate: rustversion 1.0.23
     License: MIT OR Apache-2.0
@@ -561,7 +571,7 @@ Crate: rustversion 1.0.23
 Crate: ryu 1.0.23
     License: Apache-2.0 OR BSL-1.0
     Relied on: Apache-2.0
-    Texts: [52] LICENSE-APACHE
+    Texts: [51] LICENSE-APACHE
 
 Crate: semver 1.0.28
     License: MIT OR Apache-2.0
@@ -593,30 +603,30 @@ Crate: serde_json 1.0.154
     Relied on: MIT
     Texts: [1] LICENSE-MIT
 
-Crate: serde_spanned 1.1.2
+Crate: serde_spanned 1.0.4
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [53] LICENSE-MIT
+    Texts: [52] LICENSE-MIT
 
 Crate: shlex 2.0.1
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [54] LICENSE-MIT
+    Texts: [53] LICENSE-MIT
 
 Crate: simd-adler32 0.3.10
     License: MIT
     Relied on: MIT
-    Texts: [55] LICENSE.md
+    Texts: [54] LICENSE.md
 
 Crate: slab 0.4.12
     License: MIT
     Relied on: MIT
-    Texts: [56] LICENSE
+    Texts: [55] LICENSE
 
 Crate: snap 1.1.2
     License: BSD-3-Clause
     Relied on: BSD-3-Clause
-    Texts: [57] COPYING
+    Texts: [56] COPYING
 
 Crate: syn 2.0.119
     License: MIT OR Apache-2.0
@@ -631,7 +641,7 @@ Crate: syn 3.0.9
 Crate: target-lexicon 0.13.5
     License: Apache-2.0 WITH LLVM-exception
     Relied on: Apache-2.0 WITH LLVM-exception
-    Texts: [58] LICENSE
+    Texts: [57] LICENSE
 
 Crate: thiserror 2.0.21
     License: MIT OR Apache-2.0
@@ -651,52 +661,57 @@ Crate: thrift 0.17.0
 Crate: tiny-keccak 2.0.2
     License: CC0-1.0
     Relied on: CC0-1.0
-    Texts: [59] LICENSE
+    Texts: [58] LICENSE
 
-Crate: toml 1.1.8+spec-1.1.0
+Crate: toml 1.0.7+spec-1.1.0
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [53] LICENSE-MIT
+    Texts: [52] LICENSE-MIT
 
-Crate: toml_datetime 1.1.2+spec-1.1.0
+Crate: toml_datetime 1.0.1+spec-1.1.0
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [53] LICENSE-MIT
+    Texts: [52] LICENSE-MIT
 
-Crate: toml_parser 1.1.5+spec-1.1.0
+Crate: toml_parser 1.0.10+spec-1.1.0
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [53] LICENSE-MIT
+    Texts: [52] LICENSE-MIT
 
-Crate: toml_writer 1.1.3+spec-1.1.0
+Crate: toml_writer 1.0.7+spec-1.1.0
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [53] LICENSE-MIT
+    Texts: [52] LICENSE-MIT
 
 Crate: twox-hash 2.1.5
     License: MIT
     Relied on: MIT
-    Texts: [60] LICENSE.txt
+    Texts: [59] LICENSE.txt
 
 Crate: unicode-ident 1.0.27
     License: (MIT OR Apache-2.0) AND Unicode-3.0
     Relied on: MIT AND Unicode-3.0
-    Texts: [1] LICENSE-MIT, [61] LICENSE-UNICODE
+    Texts: [1] LICENSE-MIT, [60] LICENSE-UNICODE
+
+Crate: unindent 0.2.4
+    License: MIT OR Apache-2.0
+    Relied on: MIT
+    Texts: [1] LICENSE-MIT
 
 Crate: version_check 0.9.5
     License: MIT/Apache-2.0
     Relied on: MIT
-    Texts: [62] LICENSE-MIT
+    Texts: [61] LICENSE-MIT
 
 Crate: wasi 0.11.1+wasi-snapshot-preview1
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
     Relied on: MIT
     Texts: [1] LICENSE-MIT
 
-Crate: wasip2 1.0.4+wasi-0.2.12
+Crate: wasip2 1.0.1+wasi-0.2.4
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
     Relied on: MIT
-    Texts: [1] LICENSE-MIT
+    Texts: [26] canonical MIT text; the crate package ships none
 
 Crate: wasm-bindgen 0.2.129
     License: MIT OR Apache-2.0
@@ -721,44 +736,44 @@ Crate: wasm-bindgen-shared 0.2.129
 Crate: windows-core 0.62.2
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: windows-implement 0.60.2
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: windows-interface 0.59.3
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: windows-link 0.2.1
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: windows-result 0.4.1
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: windows-strings 0.5.1
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: windows-sys 0.61.2
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [63] license-mit
+    Texts: [62] license-mit
 
 Crate: winnow 1.0.4
     License: MIT
     Relied on: MIT
-    Texts: [64] LICENSE-MIT
+    Texts: [63] LICENSE-MIT
 
-Crate: wit-bindgen 0.57.1
+Crate: wit-bindgen 0.46.0
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
     Relied on: MIT
     Texts: [1] LICENSE-MIT
@@ -767,18 +782,23 @@ Crate: yamaa-saphyr-parser 0.2.1
     Source: rust/vendor/saphyr-parser
     License: MIT OR Apache-2.0
     Relied on: MIT
-    Texts: [65] LICENSE, [66] LICENSES/ChenYuheng-MIT,
-        [67] LICENSES/Ethiraric-MIT
+    Texts: [64] LICENSE, [65] LICENSES/ChenYuheng-MIT,
+        [66] LICENSES/Ethiraric-MIT
 
 Crate: zerocopy 0.8.63
     License: BSD-2-Clause OR Apache-2.0 OR MIT
     Relied on: MIT
-    Texts: [68] LICENSE-MIT
+    Texts: [67] LICENSE-MIT
 
 Crate: zerocopy-derive 0.8.63
     License: BSD-2-Clause OR Apache-2.0 OR MIT
     Relied on: MIT
-    Texts: [68] LICENSE-MIT
+    Texts: [67] LICENSE-MIT
+
+Crate: zlib-rs 0.6.8
+    License: Zlib
+    Relied on: Zlib
+    Texts: [68] LICENSE
 
 Crate: zmij 1.0.23
     License: MIT
@@ -862,27 +882,27 @@ Crate: aho-corasick 1.1.4
 
 Crate: anstream 1.0.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: anstyle 1.0.14
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: anstyle-parse 1.0.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: anstyle-query 1.1.5
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: anstyle-wincon 3.0.11
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: anyhow 1.0.102
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: autocfg 1.5.0
     License: Apache-2.0 OR MIT
@@ -906,23 +926,23 @@ Crate: cfg-if 1.0.4
 
 Crate: clap 4.6.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: clap_builder 4.6.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: clap_derive 4.6.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: clap_lex 1.1.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: colorchoice 1.0.5
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: crossbeam-deque 0.8.6
     License: MIT OR Apache-2.0
@@ -962,15 +982,15 @@ Crate: either 1.15.0
 
 Crate: env_filter 1.0.1
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: env_logger 0.10.2
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: env_logger 0.11.10
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: equivalent 1.0.2
     License: Apache-2.0 OR MIT
@@ -1010,11 +1030,11 @@ Crate: getrandom 0.3.4
 
 Crate: getrandom 0.4.2
     License: MIT OR Apache-2.0
-    Texts: [86] LICENSE-APACHE, [32] LICENSE-MIT
+    Texts: [86] LICENSE-APACHE, [87] LICENSE-MIT
 
 Crate: gimli 0.34.0
     License: MIT OR Apache-2.0
-    Texts: [79] LICENSE-APACHE, [34] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [33] LICENSE-MIT
 
 Crate: hashbrown 0.12.3
     License: MIT OR Apache-2.0
@@ -1034,7 +1054,7 @@ Crate: hashbrown 0.17.1
 
 Crate: heck 0.5.0
     License: MIT OR Apache-2.0
-    Texts: [79] LICENSE-APACHE, [34] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [33] LICENSE-MIT
 
 Crate: hermit-abi 0.5.2
     License: MIT OR Apache-2.0
@@ -1042,7 +1062,7 @@ Crate: hermit-abi 0.5.2
 
 Crate: humantime 2.3.0
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [87] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [88] LICENSE-MIT
 
 Crate: id-arena 2.3.0
     License: MIT/Apache-2.0
@@ -1050,23 +1070,23 @@ Crate: id-arena 2.3.0
 
 Crate: ident_case 1.0.1
     License: MIT/Apache-2.0
-    Texts: [33] LICENSE
+    Texts: [32] LICENSE
 
 Crate: indexmap 1.9.3
     License: Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [36] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [35] LICENSE-MIT
 
 Crate: indexmap 2.13.1
     License: Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [36] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [35] LICENSE-MIT
 
 Crate: is-terminal 0.4.17
     License: MIT
-    Texts: [1] LICENSE-MIT, [88] LICENSE-MIT-atty
+    Texts: [1] LICENSE-MIT, [89] LICENSE-MIT-atty
 
 Crate: is_terminal_polyfill 1.70.2
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: itertools 0.15.0
     License: MIT OR Apache-2.0
@@ -1074,7 +1094,7 @@ Crate: itertools 0.15.0
 
 Crate: itoa 1.0.18
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: leb128fmt 0.1.0
     License: MIT OR Apache-2.0
@@ -1082,20 +1102,20 @@ Crate: leb128fmt 0.1.0
 
 Crate: libc 0.2.184
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [39] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [38] LICENSE-MIT
 
 Crate: libc 0.2.189
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [39] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [38] LICENSE-MIT
 
 Crate: linked-hash-map 0.5.6
     License: MIT/Apache-2.0
-    Texts: [89] LICENSE-APACHE, [34] LICENSE-MIT
+    Texts: [90] LICENSE-APACHE, [33] LICENSE-MIT
 
 Crate: linux-raw-sys 0.12.1
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [41] COPYRIGHT, [79] LICENSE-APACHE,
-        [58] LICENSE-Apache-2.0_WITH_LLVM-exception, [1] LICENSE-MIT
+    Texts: [40] COPYRIGHT, [79] LICENSE-APACHE,
+        [57] LICENSE-Apache-2.0_WITH_LLVM-exception, [1] LICENSE-MIT
 
 Crate: log 0.4.29
     License: MIT OR Apache-2.0
@@ -1107,7 +1127,7 @@ Crate: memchr 2.8.0
 
 Crate: moto-rt 0.16.4
     License: MIT OR Apache-2.0
-    Texts: [90] LICENSE-APACHE, [91] LICENSE-MIT
+    Texts: [91] LICENSE-APACHE, [92] LICENSE-MIT
 
 Crate: once_cell 1.21.4
     License: MIT OR Apache-2.0
@@ -1115,23 +1135,23 @@ Crate: once_cell 1.21.4
 
 Crate: once_cell_polyfill 1.70.2
     License: MIT OR Apache-2.0
-    Texts: [78] LICENSE-APACHE, [53] LICENSE-MIT
+    Texts: [78] LICENSE-APACHE, [52] LICENSE-MIT
 
 Crate: ppv-lite86 0.2.21
     License: MIT OR Apache-2.0
-    Texts: [92] LICENSE-APACHE, [93] LICENSE-MIT
+    Texts: [93] LICENSE-APACHE, [94] LICENSE-MIT
 
 Crate: pretty_env_logger 0.5.0
     License: MIT/Apache-2.0
-    Texts: [79] LICENSE-APACHE, [94] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [95] LICENSE-MIT
 
 Crate: prettyplease 0.2.37
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: proc-macro2 1.0.106
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: quick-xml 0.33.0
     License: MIT
@@ -1147,7 +1167,7 @@ Crate: quickcheck 1.1.0
 
 Crate: quote 1.0.45
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: r-efi 5.3.0
     License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
@@ -1155,47 +1175,47 @@ Crate: r-efi 5.3.0
 
 Crate: r-efi 6.0.0
     License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-    Texts: [49] AUTHORS
+    Texts: [96] AUTHORS
 
 Crate: r-efi-alloc 2.1.0
     License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
-    Texts: [95] AUTHORS
+    Texts: [97] AUTHORS
 
 Crate: rand 0.9.4
     License: MIT OR Apache-2.0
-    Texts: [96] COPYRIGHT, [97] LICENSE-APACHE, [98] LICENSE-MIT
+    Texts: [98] COPYRIGHT, [99] LICENSE-APACHE, [100] LICENSE-MIT
 
 Crate: rand 0.9.5
     License: MIT OR Apache-2.0
-    Texts: [96] COPYRIGHT, [97] LICENSE-APACHE, [98] LICENSE-MIT
+    Texts: [98] COPYRIGHT, [99] LICENSE-APACHE, [100] LICENSE-MIT
 
 Crate: rand 0.10.1
     License: MIT OR Apache-2.0
-    Texts: [96] COPYRIGHT, [97] LICENSE-APACHE, [98] LICENSE-MIT
+    Texts: [98] COPYRIGHT, [99] LICENSE-APACHE, [100] LICENSE-MIT
 
 Crate: rand_chacha 0.9.0
     License: MIT OR Apache-2.0
-    Texts: [96] COPYRIGHT, [97] LICENSE-APACHE, [98] LICENSE-MIT
+    Texts: [98] COPYRIGHT, [99] LICENSE-APACHE, [100] LICENSE-MIT
 
 Crate: rand_core 0.9.5
     License: MIT OR Apache-2.0
-    Texts: [96] COPYRIGHT, [99] LICENSE-APACHE, [98] LICENSE-MIT
+    Texts: [98] COPYRIGHT, [101] LICENSE-APACHE, [100] LICENSE-MIT
 
 Crate: rand_core 0.10.0
     License: MIT OR Apache-2.0
-    Texts: [100] COPYRIGHT, [99] LICENSE-APACHE, [101] LICENSE-MIT
+    Texts: [102] COPYRIGHT, [101] LICENSE-APACHE, [103] LICENSE-MIT
 
 Crate: rand_xorshift 0.4.0
     License: MIT OR Apache-2.0
-    Texts: [96] COPYRIGHT, [97] LICENSE-APACHE, [98] LICENSE-MIT
+    Texts: [98] COPYRIGHT, [99] LICENSE-APACHE, [100] LICENSE-MIT
 
 Crate: rayon 1.11.0
     License: MIT OR Apache-2.0
-    Texts: [79] LICENSE-APACHE, [102] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [104] LICENSE-MIT
 
 Crate: rayon-core 1.13.0
     License: MIT OR Apache-2.0
-    Texts: [79] LICENSE-APACHE, [102] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [104] LICENSE-MIT
 
 Crate: regex 1.12.3
     License: MIT OR Apache-2.0
@@ -1215,44 +1235,44 @@ Crate: rustc-demangle 0.1.28
 
 Crate: rustc-literal-escaper 0.0.8
     License: Apache-2.0 OR MIT
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: rustix 1.1.4
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [51] COPYRIGHT, [79] LICENSE-APACHE,
-        [58] LICENSE-Apache-2.0_WITH_LLVM-exception, [1] LICENSE-MIT
+    Texts: [50] COPYRIGHT, [79] LICENSE-APACHE,
+        [57] LICENSE-Apache-2.0_WITH_LLVM-exception, [1] LICENSE-MIT
 
 Crate: ryu 1.0.23
     License: Apache-2.0 OR BSL-1.0
-    Texts: [52] LICENSE-APACHE, [103] LICENSE-BOOST
+    Texts: [51] LICENSE-APACHE, [105] LICENSE-BOOST
 
 Crate: same-file 1.0.6
     License: Unlicense/MIT
-    Texts: [104] LICENSE-MIT, [77] UNLICENSE
+    Texts: [106] LICENSE-MIT, [77] UNLICENSE
 
 Crate: semver 1.0.28
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: serde 1.0.228
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: serde-xml-rs 0.8.2
     License: MIT
-    Texts: [105] LICENSE
+    Texts: [107] LICENSE
 
 Crate: serde_core 1.0.228
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: serde_derive 1.0.228
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: serde_json 1.0.149
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: serde_with 3.18.0
     License: MIT OR Apache-2.0
@@ -1268,23 +1288,23 @@ Crate: serde_yaml 0.8.26
 
 Crate: shlex 1.3.0
     License: MIT OR Apache-2.0
-    Texts: [106] LICENSE-APACHE, [54] LICENSE-MIT
+    Texts: [108] LICENSE-APACHE, [53] LICENSE-MIT
 
 Crate: strsim 0.11.1
     License: MIT
-    Texts: [107] LICENSE
+    Texts: [109] LICENSE
 
 Crate: syn 2.0.117
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: syscalls 0.6.18
     License: BSD-2-Clause
-    Texts: [108] LICENSE
+    Texts: [110] LICENSE
 
 Crate: tempfile 3.27.0
     License: MIT OR Apache-2.0
-    Texts: [79] LICENSE-APACHE, [109] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [111] LICENSE-MIT
 
 Crate: termcolor 1.4.1
     License: Unlicense OR MIT
@@ -1292,27 +1312,27 @@ Crate: termcolor 1.4.1
 
 Crate: thiserror 2.0.18
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: thiserror-impl 2.0.18
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: unicode-ident 1.0.24
     License: (MIT OR Apache-2.0) AND Unicode-3.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT, [61] LICENSE-UNICODE
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT, [60] LICENSE-UNICODE
 
 Crate: unicode-xid 0.2.6
     License: MIT OR Apache-2.0
-    Texts: [110] COPYRIGHT, [79] LICENSE-APACHE, [34] LICENSE-MIT
+    Texts: [112] COPYRIGHT, [79] LICENSE-APACHE, [33] LICENSE-MIT
 
 Crate: unwinding 0.2.10
     License: MIT OR Apache-2.0
-    Texts: [52] LICENSE-APACHE, [1] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [1] LICENSE-MIT
 
 Crate: utf8parse 0.2.2
     License: Apache-2.0 OR MIT
-    Texts: [52] LICENSE-APACHE, [111] LICENSE-MIT
+    Texts: [51] LICENSE-APACHE, [113] LICENSE-MIT
 
 Crate: vex-sdk 0.27.1
     License: MIT
@@ -1332,7 +1352,7 @@ Crate: wasip2 1.0.2+wasi-0.2.9
 
 Crate: wasip2 1.0.4+wasi-0.2.12
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wasip3 0.4.0+wasi-0.3.0-rc-2026-01-06
@@ -1341,7 +1361,7 @@ Crate: wasip3 0.4.0+wasi-0.3.0-rc-2026-01-06
 
 Crate: wasip3 0.7.0+wasi-0.3.0
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wasm-encoder 0.244.0
@@ -1366,39 +1386,39 @@ Crate: wasmprinter 0.235.0
 
 Crate: winapi-util 0.1.11
     License: Unlicense OR MIT
-    Texts: [104] LICENSE-MIT, [77] UNLICENSE
+    Texts: [106] LICENSE-MIT, [77] UNLICENSE
 
 Crate: windows-link 0.2.1
     License: MIT OR Apache-2.0
-    Texts: [112] license-apache-2.0, [63] license-mit
+    Texts: [114] license-apache-2.0, [62] license-mit
 
 Crate: windows-sys 0.61.2
     License: MIT OR Apache-2.0
-    Texts: [112] license-apache-2.0, [63] license-mit
+    Texts: [114] license-apache-2.0, [62] license-mit
 
 Crate: wit-bindgen 0.51.0
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wit-bindgen 0.57.1
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wit-bindgen-core 0.51.0
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wit-bindgen-rust 0.51.0
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wit-bindgen-rust-macro 0.51.0
     License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-    Texts: [79] LICENSE-APACHE, [58] LICENSE-Apache-2.0_WITH_LLVM-exception,
+    Texts: [79] LICENSE-APACHE, [57] LICENSE-Apache-2.0_WITH_LLVM-exception,
         [1] LICENSE-MIT
 
 Crate: wit-component 0.244.0
@@ -1411,19 +1431,19 @@ Crate: wit-parser 0.244.0
 
 Crate: xml 1.2.1
     License: MIT
-    Texts: [113] LICENSE
+    Texts: [115] LICENSE
 
 Crate: yaml-rust 0.4.5
     License: MIT/Apache-2.0
-    Texts: [79] LICENSE-APACHE, [66] LICENSE-MIT
+    Texts: [79] LICENSE-APACHE, [65] LICENSE-MIT
 
 Crate: zerocopy 0.8.48
     License: BSD-2-Clause OR Apache-2.0 OR MIT
-    Texts: [114] LICENSE-APACHE, [115] LICENSE-BSD, [68] LICENSE-MIT
+    Texts: [116] LICENSE-APACHE, [117] LICENSE-BSD, [67] LICENSE-MIT
 
 Crate: zerocopy-derive 0.8.48
     License: BSD-2-Clause OR Apache-2.0 OR MIT
-    Texts: [114] LICENSE-APACHE, [115] LICENSE-BSD, [68] LICENSE-MIT
+    Texts: [116] LICENSE-APACHE, [117] LICENSE-BSD, [67] LICENSE-MIT
 
 Crate: zmij 1.0.21
     License: MIT
@@ -1433,9 +1453,9 @@ Texts
 -----
 
 ==============================================================================
-[1] Shipped by: adler2 2.0.1 (LICENSE-MIT), itoa 1.0.18 (LICENSE-MIT),
-    lazy_static 1.5.1 (LICENSE-MIT), lexical-core 1.0.6 (LICENSE-MIT),
-    lexical-parse-float 1.0.6 (LICENSE-MIT),
+[1] Shipped by: adler2 2.0.1 (LICENSE-MIT), indoc 2.0.8 (LICENSE-MIT),
+    itoa 1.0.18 (LICENSE-MIT), lazy_static 1.5.1 (LICENSE-MIT),
+    lexical-core 1.0.6 (LICENSE-MIT), lexical-parse-float 1.0.6 (LICENSE-MIT),
     lexical-parse-integer 1.0.6 (LICENSE-MIT),
     lexical-util 1.0.7 (LICENSE-MIT), lexical-write-float 1.0.6 (LICENSE-MIT),
     lexical-write-integer 1.0.6 (LICENSE-MIT),
@@ -1449,21 +1469,22 @@ Texts
     serde_derive 1.0.229 (LICENSE-MIT), serde_json 1.0.154 (LICENSE-MIT),
     syn 2.0.119 (LICENSE-MIT), syn 3.0.9 (LICENSE-MIT),
     thiserror 2.0.21 (LICENSE-MIT), thiserror-impl 2.0.21 (LICENSE-MIT),
-    unicode-ident 1.0.27 (LICENSE-MIT),
+    unicode-ident 1.0.27 (LICENSE-MIT), unindent 0.2.4 (LICENSE-MIT),
     wasi 0.11.1+wasi-snapshot-preview1 (LICENSE-MIT),
-    wasip2 1.0.4+wasi-0.2.12 (LICENSE-MIT), wit-bindgen 0.57.1 (LICENSE-MIT),
-    zmij 1.0.23 (LICENSE-MIT), anyhow 1.0.102 (LICENSE-MIT),
-    fastrand 2.4.1 (LICENSE-MIT), hermit-abi 0.5.2 (LICENSE-MIT),
-    is-terminal 0.4.17 (LICENSE-MIT), leb128fmt 0.1.0 (LICENSE-MIT),
-    prettyplease 0.2.37 (LICENSE-MIT), proc-macro2 1.0.106 (LICENSE-MIT),
-    quote 1.0.45 (LICENSE-MIT), rustc-literal-escaper 0.0.8 (LICENSE-MIT),
-    rustix 1.1.4 (LICENSE-MIT), serde 1.0.228 (LICENSE-MIT),
-    serde_core 1.0.228 (LICENSE-MIT), serde_derive 1.0.228 (LICENSE-MIT),
-    serde_json 1.0.149 (LICENSE-MIT), serde_yaml 0.8.26 (LICENSE-MIT),
-    syn 2.0.117 (LICENSE-MIT), thiserror 2.0.18 (LICENSE-MIT),
-    thiserror-impl 2.0.18 (LICENSE-MIT), unicode-ident 1.0.24 (LICENSE-MIT),
-    unwinding 0.2.10 (LICENSE-MIT), wasip3 0.7.0+wasi-0.3.0 (LICENSE-MIT),
-    wit-bindgen 0.51.0 (LICENSE-MIT), wit-bindgen-core 0.51.0 (LICENSE-MIT),
+    wit-bindgen 0.46.0 (LICENSE-MIT), zmij 1.0.23 (LICENSE-MIT),
+    anyhow 1.0.102 (LICENSE-MIT), fastrand 2.4.1 (LICENSE-MIT),
+    hermit-abi 0.5.2 (LICENSE-MIT), is-terminal 0.4.17 (LICENSE-MIT),
+    leb128fmt 0.1.0 (LICENSE-MIT), prettyplease 0.2.37 (LICENSE-MIT),
+    proc-macro2 1.0.106 (LICENSE-MIT), quote 1.0.45 (LICENSE-MIT),
+    rustc-literal-escaper 0.0.8 (LICENSE-MIT), rustix 1.1.4 (LICENSE-MIT),
+    serde 1.0.228 (LICENSE-MIT), serde_core 1.0.228 (LICENSE-MIT),
+    serde_derive 1.0.228 (LICENSE-MIT), serde_json 1.0.149 (LICENSE-MIT),
+    serde_yaml 0.8.26 (LICENSE-MIT), syn 2.0.117 (LICENSE-MIT),
+    thiserror 2.0.18 (LICENSE-MIT), thiserror-impl 2.0.18 (LICENSE-MIT),
+    unicode-ident 1.0.24 (LICENSE-MIT), unwinding 0.2.10 (LICENSE-MIT),
+    wasip2 1.0.4+wasi-0.2.12 (LICENSE-MIT),
+    wasip3 0.7.0+wasi-0.3.0 (LICENSE-MIT), wit-bindgen 0.51.0 (LICENSE-MIT),
+    wit-bindgen 0.57.1 (LICENSE-MIT), wit-bindgen-core 0.51.0 (LICENSE-MIT),
     wit-bindgen-rust 0.51.0 (LICENSE-MIT),
     wit-bindgen-rust-macro 0.51.0 (LICENSE-MIT), zmij 1.0.21 (LICENSE-MIT)
 ==============================================================================
@@ -1632,11 +1653,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[8] Shipped by: arrow-array 57.3.0 (LICENSE.txt),
-    arrow-buffer 57.3.0 (LICENSE.txt), arrow-cast 57.3.0 (LICENSE.txt),
-    arrow-data 57.3.0 (LICENSE.txt), arrow-ipc 57.3.0 (LICENSE.txt),
-    arrow-ord 57.3.0 (LICENSE.txt), arrow-schema 57.3.0 (LICENSE.txt),
-    arrow-select 57.3.0 (LICENSE.txt), parquet 57.3.0 (LICENSE.txt)
+[8] Shipped by: arrow-array 55.2.0 (LICENSE.txt),
+    arrow-buffer 55.2.0 (LICENSE.txt), arrow-cast 55.2.0 (LICENSE.txt),
+    arrow-data 55.2.0 (LICENSE.txt), arrow-ipc 55.2.0 (LICENSE.txt),
+    arrow-schema 55.2.0 (LICENSE.txt), arrow-select 55.2.0 (LICENSE.txt),
+    parquet 55.2.0 (LICENSE.txt)
 ==============================================================================
 
 
@@ -1843,11 +1864,11 @@ SOFTWARE.
    limitations under the License.
 
 ==============================================================================
-[9] Shipped by: arrow-array 57.3.0 (NOTICE.txt),
-    arrow-buffer 57.3.0 (NOTICE.txt), arrow-cast 57.3.0 (NOTICE.txt),
-    arrow-data 57.3.0 (NOTICE.txt), arrow-ipc 57.3.0 (NOTICE.txt),
-    arrow-ord 57.3.0 (NOTICE.txt), arrow-schema 57.3.0 (NOTICE.txt),
-    arrow-select 57.3.0 (NOTICE.txt), parquet 57.3.0 (NOTICE.txt)
+[9] Shipped by: arrow-array 55.2.0 (NOTICE.txt),
+    arrow-buffer 55.2.0 (NOTICE.txt), arrow-cast 55.2.0 (NOTICE.txt),
+    arrow-data 55.2.0 (NOTICE.txt), arrow-ipc 55.2.0 (NOTICE.txt),
+    arrow-schema 55.2.0 (NOTICE.txt), arrow-select 55.2.0 (NOTICE.txt),
+    parquet 55.2.0 (NOTICE.txt)
 ==============================================================================
 
 Apache Arrow
@@ -2045,13 +2066,15 @@ THE SOFTWARE.
 
 ==============================================================================
 [14] Shipped by: bitflags 2.13.2 (LICENSE-MIT), log 0.4.34 (LICENSE-MIT),
-    num-bigint 0.4.8 (LICENSE-MIT), num-bigint 0.5.1 (LICENSE-MIT),
-    num-complex 0.4.6 (LICENSE-MIT), num-integer 0.1.47 (LICENSE-MIT),
-    num-traits 0.2.19 (LICENSE-MIT), regex 1.13.1 (LICENSE-MIT),
-    regex-automata 0.4.18 (LICENSE-MIT), regex-syntax 0.8.11 (LICENSE-MIT),
-    bitflags 2.11.0 (LICENSE-MIT), getopts 0.2.24 (LICENSE-MIT),
-    log 0.4.29 (LICENSE-MIT), regex 1.12.3 (LICENSE-MIT),
-    regex-automata 0.4.14 (LICENSE-MIT), regex-syntax 0.8.10 (LICENSE-MIT)
+    num 0.4.3 (LICENSE-MIT), num-bigint 0.4.8 (LICENSE-MIT),
+    num-bigint 0.5.1 (LICENSE-MIT), num-complex 0.4.6 (LICENSE-MIT),
+    num-integer 0.1.47 (LICENSE-MIT), num-iter 0.1.46 (LICENSE-MIT),
+    num-rational 0.4.2 (LICENSE-MIT), num-traits 0.2.19 (LICENSE-MIT),
+    regex 1.13.1 (LICENSE-MIT), regex-automata 0.4.18 (LICENSE-MIT),
+    regex-syntax 0.8.11 (LICENSE-MIT), bitflags 2.11.0 (LICENSE-MIT),
+    getopts 0.2.24 (LICENSE-MIT), log 0.4.29 (LICENSE-MIT),
+    regex 1.12.3 (LICENSE-MIT), regex-automata 0.4.14 (LICENSE-MIT),
+    regex-syntax 0.8.10 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2014 The Rust Project Developers
@@ -2166,7 +2189,7 @@ DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
 [18] Shipped by: cc 1.8.0 (LICENSE-MIT), cfg-if 1.0.5 (LICENSE-MIT),
-    find-msvc-tools 0.1.14 (LICENSE-MIT), jobserver 0.1.35 (LICENSE-MIT),
+    find-msvc-tools 0.1.14 (LICENSE-MIT), jobserver 0.1.34 (LICENSE-MIT),
     js-sys 0.3.106 (LICENSE-MIT), pkg-config 0.3.34 (LICENSE-MIT),
     wasm-bindgen 0.2.129 (LICENSE-MIT),
     wasm-bindgen-macro 0.2.129 (LICENSE-MIT),
@@ -2450,9 +2473,9 @@ limitations under the License.
 
 ==============================================================================
 [20] Shipped by: const-random 0.1.18 (LICENSE-MIT),
-    const-random-macro 0.1.16 (LICENSE-MIT), hashbrown 0.16.1 (LICENSE-MIT),
-    hashbrown 0.17.1 (LICENSE-MIT), hashbrown 0.12.3 (LICENSE-MIT),
-    hashbrown 0.15.5 (LICENSE-MIT)
+    const-random-macro 0.1.16 (LICENSE-MIT), hashbrown 0.15.5 (LICENSE-MIT),
+    hashbrown 0.16.1 (LICENSE-MIT), hashbrown 0.12.3 (LICENSE-MIT),
+    hashbrown 0.17.1 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2016 Amanieu d'Antras
@@ -2626,7 +2649,8 @@ DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
 [26] Canonical MIT text from the SPDX License List 3.29.0, for:
-    extendr-api 0.9.0, extendr-ffi 0.9.0, extendr-macros 0.9.0
+    extendr-api 0.9.0, extendr-ffi 0.9.0, extendr-macros 0.9.0,
+    wasip2 1.0.1+wasi-0.2.4
 ==============================================================================
 
 MIT License
@@ -2852,38 +2876,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[32] Shipped by: getrandom 0.4.3 (LICENSE-MIT), getrandom 0.4.2 (LICENSE-MIT)
-==============================================================================
-
-Copyright (c) 2018-2026 The rust-random Project Developers
-Copyright (c) 2014 The Rust Project Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-==============================================================================
-[33] Shipped by: half 2.7.1 (LICENSE-MIT), ident_case 1.0.1 (LICENSE)
+[32] Shipped by: half 2.7.1 (LICENSE-MIT), ident_case 1.0.1 (LICENSE)
 ==============================================================================
 
 MIT License
@@ -2907,7 +2900,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[34] Shipped by: heck 0.5.0 (LICENSE-MIT), gimli 0.34.0 (LICENSE-MIT),
+[33] Shipped by: heck 0.5.0 (LICENSE-MIT), gimli 0.34.0 (LICENSE-MIT),
     linked-hash-map 0.5.6 (LICENSE-MIT), unicode-xid 0.2.6 (LICENSE-MIT)
 ==============================================================================
 
@@ -2938,7 +2931,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[35] Shipped by: iana-time-zone 0.1.65 (LICENSE-MIT),
+[34] Shipped by: iana-time-zone 0.1.65 (LICENSE-MIT),
     iana-time-zone-haiku 0.1.2 (LICENSE-MIT)
 ==============================================================================
 
@@ -2969,8 +2962,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[36] Shipped by: indexmap 2.14.2 (LICENSE-MIT), indexmap 1.9.3 (LICENSE-MIT),
-    indexmap 2.13.1 (LICENSE-MIT)
+[35] Shipped by: indexmap 2.13.1 (LICENSE-MIT), indexmap 1.9.3 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2016--2017
@@ -3000,7 +2992,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[37] Shipped by: integer-encoding 3.0.4 (LICENSE)
+[36] Shipped by: integer-encoding 3.0.4 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -3028,7 +3020,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 ==============================================================================
-[38] Shipped by: lexical-core 1.0.6 (LICENSE.md),
+[37] Shipped by: lexical-core 1.0.6 (LICENSE.md),
     lexical-parse-float 1.0.6 (LICENSE.md),
     lexical-parse-integer 1.0.6 (LICENSE.md),
     lexical-write-float 1.0.6 (LICENSE.md),
@@ -3374,7 +3366,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[39] Shipped by: libc 0.2.191 (LICENSE-MIT), libc 0.2.184 (LICENSE-MIT),
+[38] Shipped by: libc 0.2.191 (LICENSE-MIT), libc 0.2.184 (LICENSE-MIT),
     libc 0.2.189 (LICENSE-MIT)
 ==============================================================================
 
@@ -3405,7 +3397,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[40] Shipped by: libm 0.2.16 (LICENSE.txt)
+[39] Shipped by: libm 0.2.16 (LICENSE.txt)
 ==============================================================================
 
 rust-lang/libm as a whole is available for use under the MIT license:
@@ -3668,7 +3660,7 @@ have been licensed under extremely permissive terms.
 Copyright notices are retained in src/* files where relevant.
 
 ==============================================================================
-[41] Shipped by: linux-raw-sys 0.12.1 (COPYRIGHT)
+[40] Shipped by: linux-raw-sys 0.12.1 (COPYRIGHT)
 ==============================================================================
 
 Short version for non-lawyers:
@@ -3702,7 +3694,7 @@ is licensed under:
 at your option.
 
 ==============================================================================
-[42] Shipped by: lz4_flex 0.12.2 (LICENSE), lz4_flex 0.13.1 (LICENSE)
+[41] Shipped by: lz4_flex 0.11.6 (LICENSE), lz4_flex 0.13.1 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -3725,6 +3717,30 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+==============================================================================
+[42] Shipped by: memoffset 0.9.1 (LICENSE)
+==============================================================================
+
+Copyright (c) 2017 Gilad Naaman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ==============================================================================
 [43] Shipped by: miniz_oxide 0.9.1 (LICENSE)
@@ -3816,9 +3832,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[46] Shipped by: pyo3 0.30.1 (LICENSE-MIT),
-    pyo3-build-config 0.30.1 (LICENSE-MIT), pyo3-ffi 0.30.1 (LICENSE-MIT),
-    pyo3-macros 0.30.1 (LICENSE-MIT), pyo3-macros-backend 0.30.1 (LICENSE-MIT)
+[46] Shipped by: pyo3 0.27.2 (LICENSE-MIT),
+    pyo3-build-config 0.27.2 (LICENSE-MIT), pyo3-ffi 0.27.2 (LICENSE-MIT),
+    pyo3-macros 0.27.2 (LICENSE-MIT), pyo3-macros-backend 0.27.2 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2023-present PyO3 Project and Contributors.  https://github.com/PyO3
@@ -3848,7 +3864,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[47] Shipped by: quick-xml 0.42.0 (LICENSE-MIT.md),
+[47] Shipped by: quick-xml 0.41.0 (LICENSE-MIT.md),
     quick-xml 0.33.0 (LICENSE-MIT.md), quick-xml 0.37.5 (LICENSE-MIT.md)
 ==============================================================================
 
@@ -3956,87 +3972,7 @@ AUTHORS: (ordered alphabetically)
         Trevor Gross <tmgross@umich.edu>
 
 ==============================================================================
-[49] Shipped by: r-efi 6.0.0 (AUTHORS)
-==============================================================================
-
-LICENSE:
-        This project is triple-licensed under the MIT License, the Apache
-        License, Version 2.0, and the GNU Lesser General Public License,
-        Version 2.1+.
-
-AUTHORS-MIT:
-        Permission is hereby granted, free of charge, to any person obtaining a
-        copy of this software and associated documentation files (the
-        "Software"), to deal in the Software without restriction, including
-        without limitation the rights to use, copy, modify, merge, publish,
-        distribute, sublicense, and/or sell copies of the Software, and to
-        permit persons to whom the Software is furnished to do so, subject to
-        the following conditions:
-
-        The above copyright notice and this permission notice shall be included
-        in all copies or substantial portions of the Software.
-
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-        OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-        IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-        CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-        TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-        SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-AUTHORS-ASL:
-        Licensed under the Apache License, Version 2.0 (the "License");
-        you may not use this file except in compliance with the License.
-        You may obtain a copy of the License at
-
-                http://www.apache.org/licenses/LICENSE-2.0
-
-        Unless required by applicable law or agreed to in writing, software
-        distributed under the License is distributed on an "AS IS" BASIS,
-        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-        See the License for the specific language governing permissions and
-        limitations under the License.
-
-AUTHORS-LGPL:
-        This program is free software; you can redistribute it and/or modify it
-        under the terms of the GNU Lesser General Public License as published
-        by the Free Software Foundation; either version 2.1 of the License, or
-        (at your option) any later version.
-
-        This program is distributed in the hope that it will be useful, but
-        WITHOUT ANY WARRANTY; without even the implied warranty of
-        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-        Lesser General Public License for more details.
-
-        You should have received a copy of the GNU Lesser General Public License
-        along with this program; If not, see <http://www.gnu.org/licenses/>.
-
-COPYRIGHT: (ordered alphabetically)
-        Copyright (C) 2017-2023 Red Hat, Inc.
-        Copyright (C) 2019-2023 Microsoft Corporation
-        Copyright (C) 2022-2023 David Rheinsberg
-
-AUTHORS: (ordered alphabetically)
-        Alan Egerton <eggyal@gmail.com>
-        Alex James <theracermaster@gmail.com>
-        Ayush Singh <ayushsingh1325@gmail.com>
-        Boris-Chengbiao Zhou <bobo1239@web.de>
-        Bret Barkelew <bret@corthon.com>
-        Christopher Zurcher <christopher.zurcher@microsoft.com>
-        David Rheinsberg <david@readahead.eu>
-        Dmitry Mostovenko <trueberserker@gmail.com>
-        Hiroki Tokunaga <tokusan441@gmail.com>
-        Joe Richey <joerichey@google.com>
-        John Schock <joschock@microsoft.com>
-        Michael Kubacki <michael.kubacki@microsoft.com>
-        Oliver Smith-Denny <osde@microsoft.com>
-        Richard Wiedenhöft <richard@wiedenhoeft.xyz>
-        Rob Bradford <robert.bradford@intel.com>, <rbradford@rivosinc.com>
-        Tom Gundersen <teg@jklm.no>
-        Trevor Gross <tmgross@umich.edu>
-
-==============================================================================
-[50] Shipped by: rustc_version 0.4.1 (LICENSE-MIT)
+[49] Shipped by: rustc_version 0.4.1 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2016 The Rust Project Developers
@@ -4066,7 +4002,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[51] Shipped by: rustix 1.1.5 (COPYRIGHT), rustix 1.1.4 (COPYRIGHT)
+[50] Shipped by: rustix 1.1.5 (COPYRIGHT), rustix 1.1.4 (COPYRIGHT)
 ==============================================================================
 
 Short version for non-lawyers:
@@ -4100,7 +4036,7 @@ is licensed under:
 at your option.
 
 ==============================================================================
-[52] Shipped by: ryu 1.0.23 (LICENSE-APACHE), anyhow 1.0.102 (LICENSE-APACHE),
+[51] Shipped by: ryu 1.0.23 (LICENSE-APACHE), anyhow 1.0.102 (LICENSE-APACHE),
     itoa 1.0.18 (LICENSE-APACHE), libc 0.2.184 (LICENSE-APACHE),
     libc 0.2.189 (LICENSE-APACHE), prettyplease 0.2.37 (LICENSE-APACHE),
     proc-macro2 1.0.106 (LICENSE-APACHE), quote 1.0.45 (LICENSE-APACHE),
@@ -4292,11 +4228,11 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 
 ==============================================================================
-[53] Shipped by: serde_spanned 1.1.2 (LICENSE-MIT),
-    toml 1.1.8+spec-1.1.0 (LICENSE-MIT),
-    toml_datetime 1.1.2+spec-1.1.0 (LICENSE-MIT),
-    toml_parser 1.1.5+spec-1.1.0 (LICENSE-MIT),
-    toml_writer 1.1.3+spec-1.1.0 (LICENSE-MIT), anstream 1.0.0 (LICENSE-MIT),
+[52] Shipped by: serde_spanned 1.0.4 (LICENSE-MIT),
+    toml 1.0.7+spec-1.1.0 (LICENSE-MIT),
+    toml_datetime 1.0.1+spec-1.1.0 (LICENSE-MIT),
+    toml_parser 1.0.10+spec-1.1.0 (LICENSE-MIT),
+    toml_writer 1.0.7+spec-1.1.0 (LICENSE-MIT), anstream 1.0.0 (LICENSE-MIT),
     anstyle 1.0.14 (LICENSE-MIT), anstyle-parse 1.0.0 (LICENSE-MIT),
     anstyle-query 1.1.5 (LICENSE-MIT), anstyle-wincon 3.0.11 (LICENSE-MIT),
     clap 4.6.0 (LICENSE-MIT), clap_builder 4.6.0 (LICENSE-MIT),
@@ -4328,7 +4264,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[54] Shipped by: shlex 2.0.1 (LICENSE-MIT), shlex 1.3.0 (LICENSE-MIT)
+[53] Shipped by: shlex 2.0.1 (LICENSE-MIT), shlex 1.3.0 (LICENSE-MIT)
 ==============================================================================
 
 The MIT License (MIT)
@@ -4354,7 +4290,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[55] Shipped by: simd-adler32 0.3.10 (LICENSE.md)
+[54] Shipped by: simd-adler32 0.3.10 (LICENSE.md)
 ==============================================================================
 
 MIT License
@@ -4380,7 +4316,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[56] Shipped by: slab 0.4.12 (LICENSE)
+[55] Shipped by: slab 0.4.12 (LICENSE)
 ==============================================================================
 
 Copyright (c) 2019 Carl Lerche
@@ -4410,7 +4346,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[57] Shipped by: snap 1.1.2 (COPYING)
+[56] Shipped by: snap 1.1.2 (COPYING)
 ==============================================================================
 
 Copyright 2011, The Snappy-Rust Authors. All rights reserved.
@@ -4442,7 +4378,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[58] Shipped by: target-lexicon 0.13.5 (LICENSE),
+[57] Shipped by: target-lexicon 0.13.5 (LICENSE),
     linux-raw-sys 0.12.1 (LICENSE-Apache-2.0_WITH_LLVM-exception),
     rustix 1.1.4 (LICENSE-Apache-2.0_WITH_LLVM-exception),
     wasip2 1.0.4+wasi-0.2.12 (LICENSE-Apache-2.0_WITH_LLVM-exception),
@@ -4676,7 +4612,7 @@ Software.
 
 
 ==============================================================================
-[59] Shipped by: tiny-keccak 2.0.2 (LICENSE)
+[58] Shipped by: tiny-keccak 2.0.2 (LICENSE)
 ==============================================================================
 
 Creative Commons Legal Code
@@ -4802,7 +4738,7 @@ express Statement of Purpose.
     this CC0 or use of the Work.
 
 ==============================================================================
-[60] Shipped by: twox-hash 2.1.5 (LICENSE.txt)
+[59] Shipped by: twox-hash 2.1.5 (LICENSE.txt)
 ==============================================================================
 
 The MIT License (MIT)
@@ -4828,7 +4764,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[61] Shipped by: unicode-ident 1.0.27 (LICENSE-UNICODE),
+[60] Shipped by: unicode-ident 1.0.27 (LICENSE-UNICODE),
     unicode-ident 1.0.24 (LICENSE-UNICODE)
 ==============================================================================
 
@@ -4873,7 +4809,7 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 
 ==============================================================================
-[62] Shipped by: version_check 0.9.5 (LICENSE-MIT)
+[61] Shipped by: version_check 0.9.5 (LICENSE-MIT)
 ==============================================================================
 
 The MIT License (MIT)
@@ -4897,7 +4833,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[63] Shipped by: windows-core 0.62.2 (license-mit),
+[62] Shipped by: windows-core 0.62.2 (license-mit),
     windows-implement 0.60.2 (license-mit),
     windows-interface 0.59.3 (license-mit), windows-link 0.2.1 (license-mit),
     windows-result 0.4.1 (license-mit), windows-strings 0.5.1 (license-mit),
@@ -4927,7 +4863,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     SOFTWARE
 
 ==============================================================================
-[64] Shipped by: winnow 1.0.4 (LICENSE-MIT)
+[63] Shipped by: winnow 1.0.4 (LICENSE-MIT)
 ==============================================================================
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -4950,7 +4886,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[65] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSE)
+[64] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSE)
 ==============================================================================
 
 Code up to and including commit `da52a68615f2ecdd6b7e4567019f280c433c1521` is licensed by Chen Yuheng under either of:
@@ -4964,7 +4900,7 @@ Code modifications starting with commit `1d71a23b151dcc12b289d0f06d8207dd9c76421
 Redistributions of this Work must include licenses of both Chen Yuheng and Ethiraric.
 
 ==============================================================================
-[66] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/ChenYuheng-MIT),
+[65] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/ChenYuheng-MIT),
     yaml-rust 0.4.5 (LICENSE-MIT)
 ==============================================================================
 
@@ -4991,7 +4927,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[67] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/Ethiraric-MIT)
+[66] Shipped by: yamaa-saphyr-parser 0.2.1 (LICENSES/Ethiraric-MIT)
 ==============================================================================
 
 The MIT License (MIT)
@@ -5017,7 +4953,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[68] Shipped by: zerocopy 0.8.63 (LICENSE-MIT),
+[67] Shipped by: zerocopy 0.8.63 (LICENSE-MIT),
     zerocopy-derive 0.8.63 (LICENSE-MIT), zerocopy 0.8.48 (LICENSE-MIT),
     zerocopy-derive 0.8.48 (LICENSE-MIT)
 ==============================================================================
@@ -5048,6 +4984,30 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+
+==============================================================================
+[68] Shipped by: zlib-rs 0.6.8 (LICENSE)
+==============================================================================
+
+(C) 2024 Trifecta Tech Foundation 
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
 
 ==============================================================================
 [69] Shipped by: zstd 0.13.3 (LICENSE)
@@ -6359,7 +6319,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[87] Shipped by: humantime 2.3.0 (LICENSE-MIT)
+[87] Shipped by: getrandom 0.4.2 (LICENSE-MIT)
+==============================================================================
+
+Copyright (c) 2018-2026 The rust-random Project Developers
+Copyright (c) 2014 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+==============================================================================
+[88] Shipped by: humantime 2.3.0 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2016 The humantime Developers
@@ -6390,7 +6381,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[88] Shipped by: is-terminal 0.4.17 (LICENSE-MIT-atty)
+[89] Shipped by: is-terminal 0.4.17 (LICENSE-MIT-atty)
 ==============================================================================
 
 Portions of this project are derived from atty, which bears the following
@@ -6418,7 +6409,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[89] Shipped by: linked-hash-map 0.5.6 (LICENSE-APACHE)
+[90] Shipped by: linked-hash-map 0.5.6 (LICENSE-APACHE)
 ==============================================================================
 
                               Apache License
@@ -6624,7 +6615,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[90] Shipped by: moto-rt 0.16.4 (LICENSE-APACHE)
+[91] Shipped by: moto-rt 0.16.4 (LICENSE-APACHE)
 ==============================================================================
 
                               Apache License
@@ -6830,7 +6821,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[91] Shipped by: moto-rt 0.16.4 (LICENSE-MIT)
+[92] Shipped by: moto-rt 0.16.4 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2023 The Motor OS Project Developers
@@ -6860,7 +6851,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[92] Shipped by: ppv-lite86 0.2.21 (LICENSE-APACHE)
+[93] Shipped by: ppv-lite86 0.2.21 (LICENSE-APACHE)
 ==============================================================================
 
                               Apache License
@@ -7066,7 +7057,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[93] Shipped by: ppv-lite86 0.2.21 (LICENSE-MIT)
+[94] Shipped by: ppv-lite86 0.2.21 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2019 The CryptoCorrosion Contributors
@@ -7096,7 +7087,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[94] Shipped by: pretty_env_logger 0.5.0 (LICENSE-MIT)
+[95] Shipped by: pretty_env_logger 0.5.0 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2017 Sean McArthur
@@ -7121,7 +7112,87 @@ THE SOFTWARE.
 
 
 ==============================================================================
-[95] Shipped by: r-efi-alloc 2.1.0 (AUTHORS)
+[96] Shipped by: r-efi 6.0.0 (AUTHORS)
+==============================================================================
+
+LICENSE:
+        This project is triple-licensed under the MIT License, the Apache
+        License, Version 2.0, and the GNU Lesser General Public License,
+        Version 2.1+.
+
+AUTHORS-MIT:
+        Permission is hereby granted, free of charge, to any person obtaining a
+        copy of this software and associated documentation files (the
+        "Software"), to deal in the Software without restriction, including
+        without limitation the rights to use, copy, modify, merge, publish,
+        distribute, sublicense, and/or sell copies of the Software, and to
+        permit persons to whom the Software is furnished to do so, subject to
+        the following conditions:
+
+        The above copyright notice and this permission notice shall be included
+        in all copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+        OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+        IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+        CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+        TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+        SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+AUTHORS-ASL:
+        Licensed under the Apache License, Version 2.0 (the "License");
+        you may not use this file except in compliance with the License.
+        You may obtain a copy of the License at
+
+                http://www.apache.org/licenses/LICENSE-2.0
+
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+
+AUTHORS-LGPL:
+        This program is free software; you can redistribute it and/or modify it
+        under the terms of the GNU Lesser General Public License as published
+        by the Free Software Foundation; either version 2.1 of the License, or
+        (at your option) any later version.
+
+        This program is distributed in the hope that it will be useful, but
+        WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+        Lesser General Public License for more details.
+
+        You should have received a copy of the GNU Lesser General Public License
+        along with this program; If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT: (ordered alphabetically)
+        Copyright (C) 2017-2023 Red Hat, Inc.
+        Copyright (C) 2019-2023 Microsoft Corporation
+        Copyright (C) 2022-2023 David Rheinsberg
+
+AUTHORS: (ordered alphabetically)
+        Alan Egerton <eggyal@gmail.com>
+        Alex James <theracermaster@gmail.com>
+        Ayush Singh <ayushsingh1325@gmail.com>
+        Boris-Chengbiao Zhou <bobo1239@web.de>
+        Bret Barkelew <bret@corthon.com>
+        Christopher Zurcher <christopher.zurcher@microsoft.com>
+        David Rheinsberg <david@readahead.eu>
+        Dmitry Mostovenko <trueberserker@gmail.com>
+        Hiroki Tokunaga <tokusan441@gmail.com>
+        Joe Richey <joerichey@google.com>
+        John Schock <joschock@microsoft.com>
+        Michael Kubacki <michael.kubacki@microsoft.com>
+        Oliver Smith-Denny <osde@microsoft.com>
+        Richard Wiedenhöft <richard@wiedenhoeft.xyz>
+        Rob Bradford <robert.bradford@intel.com>, <rbradford@rivosinc.com>
+        Tom Gundersen <teg@jklm.no>
+        Trevor Gross <tmgross@umich.edu>
+
+==============================================================================
+[97] Shipped by: r-efi-alloc 2.1.0 (AUTHORS)
 ==============================================================================
 
 LICENSE:
@@ -7188,7 +7259,7 @@ AUTHORS: (ordered alphabetically)
         Trevor Gross <tmgross@umich.edu>
 
 ==============================================================================
-[96] Shipped by: rand 0.9.4 (COPYRIGHT), rand 0.9.5 (COPYRIGHT),
+[98] Shipped by: rand 0.9.4 (COPYRIGHT), rand 0.9.5 (COPYRIGHT),
     rand 0.10.1 (COPYRIGHT), rand_chacha 0.9.0 (COPYRIGHT),
     rand_core 0.9.5 (COPYRIGHT), rand_xorshift 0.4.0 (COPYRIGHT)
 ==============================================================================
@@ -7207,7 +7278,7 @@ The Rand project includes code from the Rust project
 published under these same licenses.
 
 ==============================================================================
-[97] Shipped by: rand 0.9.4 (LICENSE-APACHE), rand 0.9.5 (LICENSE-APACHE),
+[99] Shipped by: rand 0.9.4 (LICENSE-APACHE), rand 0.9.5 (LICENSE-APACHE),
     rand 0.10.1 (LICENSE-APACHE), rand_chacha 0.9.0 (LICENSE-APACHE),
     rand_xorshift 0.4.0 (LICENSE-APACHE)
 ==============================================================================
@@ -7390,7 +7461,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 
 ==============================================================================
-[98] Shipped by: rand 0.9.4 (LICENSE-MIT), rand 0.9.5 (LICENSE-MIT),
+[100] Shipped by: rand 0.9.4 (LICENSE-MIT), rand 0.9.5 (LICENSE-MIT),
     rand 0.10.1 (LICENSE-MIT), rand_chacha 0.9.0 (LICENSE-MIT),
     rand_core 0.9.5 (LICENSE-MIT), rand_xorshift 0.4.0 (LICENSE-MIT)
 ==============================================================================
@@ -7423,7 +7494,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[99] Shipped by: rand_core 0.9.5 (LICENSE-APACHE),
+[101] Shipped by: rand_core 0.9.5 (LICENSE-APACHE),
     rand_core 0.10.0 (LICENSE-APACHE)
 ==============================================================================
 
@@ -7616,7 +7687,7 @@ APPENDIX: How to apply the Apache License to your work.
    identification within third-party archives.
 
 ==============================================================================
-[100] Shipped by: rand_core 0.10.0 (COPYRIGHT)
+[102] Shipped by: rand_core 0.10.0 (COPYRIGHT)
 ==============================================================================
 
 Copyrights in the Rand project are retained by their contributors. No
@@ -7630,7 +7701,7 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
 
 ==============================================================================
-[101] Shipped by: rand_core 0.10.0 (LICENSE-MIT)
+[103] Shipped by: rand_core 0.10.0 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2018-2026 The Rand Project Developers
@@ -7660,7 +7731,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[102] Shipped by: rayon 1.11.0 (LICENSE-MIT), rayon-core 1.13.0 (LICENSE-MIT)
+[104] Shipped by: rayon 1.11.0 (LICENSE-MIT), rayon-core 1.13.0 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2010 The Rust Project Developers
@@ -7690,7 +7761,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[103] Shipped by: ryu 1.0.23 (LICENSE-BOOST)
+[105] Shipped by: ryu 1.0.23 (LICENSE-BOOST)
 ==============================================================================
 
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -7718,7 +7789,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[104] Shipped by: same-file 1.0.6 (LICENSE-MIT),
+[106] Shipped by: same-file 1.0.6 (LICENSE-MIT),
     winapi-util 0.1.11 (LICENSE-MIT)
 ==============================================================================
 
@@ -7745,7 +7816,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ==============================================================================
-[105] Shipped by: serde-xml-rs 0.8.2 (LICENSE)
+[107] Shipped by: serde-xml-rs 0.8.2 (LICENSE)
 ==============================================================================
 
 MIT License
@@ -7771,7 +7842,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[106] Shipped by: shlex 1.3.0 (LICENSE-APACHE)
+[108] Shipped by: shlex 1.3.0 (LICENSE-APACHE)
 ==============================================================================
 
 Copyright 2015 Nicholas Allegra (comex).
@@ -7789,7 +7860,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ==============================================================================
-[107] Shipped by: strsim 0.11.1 (LICENSE)
+[109] Shipped by: strsim 0.11.1 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -7817,7 +7888,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[108] Shipped by: syscalls 0.6.18 (LICENSE)
+[110] Shipped by: syscalls 0.6.18 (LICENSE)
 ==============================================================================
 
 The below Copyright and License apply uniformly to all files in this
@@ -7856,7 +7927,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
-[109] Shipped by: tempfile 3.27.0 (LICENSE-MIT)
+[111] Shipped by: tempfile 3.27.0 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2015 Steven Allen
@@ -7886,7 +7957,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[110] Shipped by: unicode-xid 0.2.6 (COPYRIGHT)
+[112] Shipped by: unicode-xid 0.2.6 (COPYRIGHT)
 ==============================================================================
 
 Licensed under the Apache License, Version 2.0
@@ -7898,7 +7969,7 @@ notice may not be copied, modified, or distributed except
 according to those terms.
 
 ==============================================================================
-[111] Shipped by: utf8parse 0.2.2 (LICENSE-MIT)
+[113] Shipped by: utf8parse 0.2.2 (LICENSE-MIT)
 ==============================================================================
 
 Copyright (c) 2016 Joe Wilm
@@ -7928,7 +7999,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-[112] Shipped by: windows-link 0.2.1 (license-apache-2.0),
+[114] Shipped by: windows-link 0.2.1 (license-apache-2.0),
     windows-sys 0.61.2 (license-apache-2.0)
 ==============================================================================
 
@@ -8135,7 +8206,7 @@ DEALINGS IN THE SOFTWARE.
    limitations under the License.
 
 ==============================================================================
-[113] Shipped by: xml 1.2.1 (LICENSE)
+[115] Shipped by: xml 1.2.1 (LICENSE)
 ==============================================================================
 
 The MIT License (MIT)
@@ -8161,7 +8232,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ==============================================================================
-[114] Shipped by: zerocopy 0.8.48 (LICENSE-APACHE),
+[116] Shipped by: zerocopy 0.8.48 (LICENSE-APACHE),
     zerocopy-derive 0.8.48 (LICENSE-APACHE)
 ==============================================================================
 
@@ -8369,7 +8440,7 @@ SOFTWARE.
 
 
 ==============================================================================
-[115] Shipped by: zerocopy 0.8.48 (LICENSE-BSD),
+[117] Shipped by: zerocopy 0.8.48 (LICENSE-BSD),
     zerocopy-derive 0.8.48 (LICENSE-BSD)
 ==============================================================================
 

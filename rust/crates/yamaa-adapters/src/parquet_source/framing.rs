@@ -65,8 +65,6 @@ pub(super) enum Payload {
 #[derive(Debug)]
 pub(super) struct Framing<'a> {
     pub metadata: &'a [u8],
-    /// How many row groups the footer lists.
-    pub row_groups: usize,
     pub pages: Vec<Page<'a>>,
     /// Each page header's byte range in the held file and the end of the
     /// page's body, in page order.
@@ -158,9 +156,7 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
 /// Refuse a footer that lists more row groups than the row limit allows rows,
 /// counting the row groups that hold no rows. Every other row group holds at
 /// least one row, so a table within the limit needs no more, and writers
-/// write a row group without rows only for an empty table. The native
-/// decoder reads a list longer than one footer numbers in slices
-/// (`row_groups`).
+/// write a row group without rows only for an empty table.
 fn admit_row_groups(count: usize) -> Result<(), Error> {
     // No columns: only the row bound applies to the count.
     Ok(yamaa_core::limits::Limits::table(count, 0)?)
@@ -199,7 +195,6 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     }
     let mut result = Framing {
         metadata,
-        row_groups: groups.len(),
         pages: Vec::new(),
         headers: Vec::new(),
     };

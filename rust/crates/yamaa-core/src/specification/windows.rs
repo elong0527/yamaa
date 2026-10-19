@@ -721,10 +721,7 @@ impl Declaration {
                 .filter
                 .as_ref()
                 .is_some_and(|(_, filter)| match filter {
-                    Ok(plan) => plan
-                        .identifiers()
-                        .into_iter()
-                        .any(|name| kind(name).is_none()),
+                    Ok(plan) => plan.identifiers().any(|name| kind(name).is_none()),
                     Err(_) => true,
                 })
         {

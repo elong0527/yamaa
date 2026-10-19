@@ -18,6 +18,7 @@ LINT_PATHS = [
 CHECKS = (
     "tools.packaging.check_shared_release_versions",
     "tools.packaging.generate_third_party_notices",
+    "tools.packaging.check_minimum_rust",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
     "tools.packaging.generate_facade_api",

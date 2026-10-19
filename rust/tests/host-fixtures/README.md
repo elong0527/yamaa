@@ -78,7 +78,7 @@ yamaa.Error / yamaa_error message carries.
 
 `parquet-containment` pairs the installed Python and R containment suites.
 Both files were authored field by field. In the first, the column chunk of an
-INT96 column holds a 13-byte `min_value` statistic, which parquet 57.3.0's
+INT96 column holds a 13-byte `min_value` statistic, which parquet 55.2.0's
 metadata decoder asserts is 12 bytes long. The engine contains that panic as
 one `source_parquet_invalid` issue, and the adapters' reader test checks that
 these bytes still reach the panic. The second file holds the INT64 values 1

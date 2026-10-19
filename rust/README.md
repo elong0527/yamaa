@@ -81,12 +81,12 @@ Arrow/Parquet release-specific operations live in the adapter's
 `storage_api` module: fallible IPC schema conversion, C stream import,
 row-group reader construction, logical timestamp/integer construction, and
 logical-type inspection. The canonical lock and manifests select exactly
-57.3.0; using another release requires adapting this boundary and qualifying
-that dependency graph. Keep malformed-schema rejection and the closed output
+55.2.0, the newest release that builds with the minimum Rust; using another
+release requires adapting this boundary and qualifying that dependency graph. Keep malformed-schema rejection and the closed output
 profile when adapting the boundary.
 ## Arrow host handoff
 
-The Python bridge uses Arrow-rs 57.3.0 C Data/Stream callbacks and PyArrow
+The Python bridge uses Arrow-rs 55.2.0 C Data/Stream callbacks and PyArrow
 >=23.0.1. The R binding instead copies each table into plain R vectors in Rust,
 so no Arrow stream crosses the R boundary. An exported stream owns a reader
 with an independent cursor and shared immutable Arrow array references. Each
@@ -499,9 +499,12 @@ today: the stable codes (`yaml_reader_unavailable`,
   with `cargo public-api`) and checked in CI (#2734): a surface change
   without a regenerated, reviewed inventory in the same change fails the
   check. There is deliberately still no inventory for adapters or core.
-- The minimum Rust version is the workspace `rust-version` (1.90 today). CI
-  checks and lints the workspace with that release; the repository's other
-  builds use the pinned toolchain in `rust/rust-toolchain.toml`.
+- The minimum Rust version is the workspace `rust-version` (1.82 today, the
+  release CRAN's two-year-old cargo rule allows on any submission date). CI
+  checks and lints the workspace with that release and builds the R source
+  package with it, `make quick` fails when a locked dependency needs a newer
+  one, and the repository's other builds use the pinned toolchain in
+  `rust/rust-toolchain.toml`.
 - Rustdoc carries a runnable example for each operation, and one example
   program runs a specification entirely from memory (#2735).
 

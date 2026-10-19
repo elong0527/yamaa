@@ -67,8 +67,6 @@ fn type_name(kind: &DataType, name: &str, ordered: bool) -> String {
         DataType::Time32(time) => format!("time32[{}]", unit(time)),
         DataType::Time64(time) => format!("time64[{}]", unit(time)),
         DataType::Duration(time) => format!("duration[{}]", unit(time)),
-        DataType::Decimal32(p, s) => format!("decimal32({p}, {s})"),
-        DataType::Decimal64(p, s) => format!("decimal64({p}, {s})"),
         DataType::Decimal128(p, s) => format!("decimal128({p}, {s})"),
         DataType::Decimal256(p, s) => format!("decimal256({p}, {s})"),
         DataType::List(child) => format!("list<{}>", field_name(child)),

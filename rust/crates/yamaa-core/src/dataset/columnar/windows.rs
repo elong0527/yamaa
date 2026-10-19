@@ -219,7 +219,8 @@ pub(super) fn direct<E>(
 }
 
 /// A window read inside another expression: its run is built when a row
-/// first reaches it.
+/// first reaches it. Building takes the whole run, so no map entry is held.
+#[allow(clippy::map_entry)]
 pub(super) fn value<E>(
     run: &mut Run<'_, '_, E>,
     cx: &Cx<'_, E>,

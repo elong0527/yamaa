@@ -665,8 +665,8 @@ mod width_tests {
         let mut bytes = Vec::new();
         let mut writer = ArrowWriter::try_new(&mut bytes, schema, Some(properties)).unwrap();
         // One row per write still yields one row group per row; a single
-        // 5,000-row write makes the 57 writer recurse once per group it
-        // splits out and overflows the test thread.
+        // 5,000-row write makes the writer recurse once per group it splits
+        // out and overflows the test thread.
         for row in 0..batch.num_rows() {
             writer.write(&batch.slice(row, 1)).unwrap();
         }

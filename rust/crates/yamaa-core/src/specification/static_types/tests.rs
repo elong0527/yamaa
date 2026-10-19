@@ -308,10 +308,8 @@ fn repeated_type_findings_keep_the_complete_ordered_context() {
         .collect::<Vec<_>>();
     while terms.len() > 1 {
         terms = terms
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|[left, right]| format!("({left} + {right})"))
+            .chunks_exact(2)
+            .map(|pair| format!("({} + {})", pair[0], pair[1]))
             .collect();
     }
     let expression = terms.pop().unwrap();

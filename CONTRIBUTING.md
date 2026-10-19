@@ -40,7 +40,20 @@ design, declaration input, version negotiation and lifetime contract. Public
 diagnostic/result records are imported from their shared adapter owner.
 
 Use the Rust toolchain selected by `rust/rust-toolchain.toml` and the unchanged
-canonical `rust/Cargo.lock`. Host source packages carry that workspace and lock.
+canonical `rust/Cargo.lock`. The workspace `rust-version` in `rust/Cargo.toml`
+is the oldest Rust that builds the engine; the R and Python source packages
+build with the caller's toolchain. The workspace keeps Cargo's resolver 2,
+which that Rust reads and which ignores each crate's `rust-version`, so update
+the lock with Cargo's MSRV-aware fallback:
+
+```sh
+CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update -p <crate>
+```
+
+`make check-repository` fails when a locked package that a supported target
+compiles needs a newer Rust than the workspace declares, or when any locked
+package uses an edition that Rust does not read
+(`tools.packaging.check_minimum_rust`). Host source packages carry that workspace and lock.
 They carry the toolchain file too, so it names only what a build needs; add
 Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
 from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
@@ -181,9 +194,9 @@ PRs and the main schedule run four development jobs: repository checks
 (including lint), the Rust workspace, and the Python and R hosts on Linux.
 These four checks are required to merge into main.
 
-The `Release compatibility` workflow checks the minimum Rust toolchain,
-minimal format builds, Python 3.15 and minimum Python saved artifact readers
-on each `release/**` push and on dispatch. CI's R job checks minimum R saved
+The `Release compatibility` workflow checks the minimum Rust toolchain, the R
+source package built with it, minimal format builds, Python 3.15 and minimum
+Python saved artifact readers on each `release/**` push and on dispatch. CI's R job checks minimum R saved
 artifact readers on those same release events. The `R-CMD-check` workflow
 checks macOS, Windows and R-devel packages on release pushes and dispatch.
 Dependency graphs and advisories, native qualification, Harbor and coverage
@@ -202,15 +215,17 @@ Clippy over the targets, so a change that breaks one fails on its PR. The
 commit its input as a text regression beside the targets.
 
 The `Release compatibility` workflow's `rust (minimum toolchain)` job checks
-and lints the workspace with its declared `rust-version`, Rust 1.90.0, instead
-of the pinned toolchain that every other job uses, because embedders build the
-facade with their own toolchains.
+and lints the workspace with its declared `rust-version`, Rust 1.82.0, instead
+of the pinned toolchain that every other job uses, because embedders and the
+source packages build with their own toolchains. Rust 1.82.0 was released on
+2024-10-17, so it meets CRAN's request to test with a cargo at least two years
+old on any submission date.
 Run it locally from `rust/`, with R installed:
 
 ```sh
-rustup toolchain install 1.90.0 --profile minimal --component clippy
-RUSTFLAGS='-D warnings' cargo +1.90.0 check --locked --workspace --all-targets --all-features
-RUSTFLAGS='-D warnings' cargo +1.90.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
+rustup toolchain install 1.82.0 --profile minimal --component clippy
+RUSTFLAGS='-D warnings' cargo +1.82.0 check --locked --workspace --all-targets --all-features
+RUSTFLAGS='-D warnings' cargo +1.82.0 clippy --locked --workspace --all-targets --all-features -- -D warnings
 ```
 
 The same job builds the facade from the outside workspace in
@@ -221,7 +236,7 @@ reviewed versions:
 
 ```sh
 cp rust/Cargo.lock rust/tests/embedder/Cargo.lock
-RUSTFLAGS='-D warnings' cargo +1.90.0 test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
+RUSTFLAGS='-D warnings' cargo +1.82.0 test --manifest-path rust/tests/embedder/Cargo.toml --target-dir rust/target
 ```
 
 It also builds the facade with no optional formats and with YAML + Parquet.
@@ -231,7 +246,18 @@ dependency isolation once. Ordinary workspace tests cover all default formats.
 Run both minimal builds from the repository root with the minimum toolchain:
 
 ```sh
-RUSTUP_TOOLCHAIN=1.90.0 python -m tools.ci.format_features
+RUSTUP_TOOLCHAIN=1.82.0 python -m tools.ci.format_features
+```
+
+The workflow's `r (minimum toolchain)` job stages the R source package with the
+pinned toolchain, which vendors the crates, then builds and checks it with
+`R CMD check` while Cargo and rustc are Rust 1.82.0, and confirms from the
+installation log that the build used them. Repeat it from the repository root:
+
+```sh
+python -m tools.staging.stage_r_package /tmp/yamaa-r-minimum/yamaa
+cd /tmp/yamaa-r-minimum && R CMD build --no-manual yamaa
+RUSTUP_TOOLCHAIN=1.82.0 R CMD check --no-manual yamaa_*.tar.gz
 ```
 
 `.github/workflows/dependency-graphs.yml` checks both locks against the
@@ -248,7 +274,7 @@ Use `--graph newest` for the upper lane. The destination must be new and outside
 the checkout. The minimum lane pins each workspace registry dependency to its
 declared lower bound and each Python runtime/test dependency to its floor.
 Vendored crates and exact policy pins remain in force. Transitive Cargo
-dependencies use the newest Rust-1.90-compatible selection, rather than claiming
+dependencies use the newest Rust-1.82-compatible selection, rather than claiming
 support for every historical transitive release. The newest lane starts without
 a Cargo lock and resolves all declared ranges with Cargo's MSRV fallback policy;
 both lanes reject metadata declaring a higher MSRV. Python resolves independently

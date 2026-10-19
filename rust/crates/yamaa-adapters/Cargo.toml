@@ -20,7 +20,8 @@ odm = ["dep:quick-xml", "dep:flate2"]
 
 [dependencies]
 yamaa-core = { path = "../yamaa-core" }
-toml = { version = ">=0.9.8, <2", default-features = false, features = ["parse", "std", "serde"] }
+# toml 1.1 needs Rust 1.85; the workspace builds from 1.82.
+toml = { version = ">=0.9.8, <1.1", default-features = false, features = ["parse", "std", "serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["raw_value"] }
 # Source parsing stays at the adapter boundary; the core accepts owned documents.
@@ -31,14 +32,16 @@ serde_json = { version = "1.0.145", features = ["raw_value"] }
 yamaa-saphyr-parser = { version = "=0.2.1", path = "../../vendor/saphyr-parser", default-features = false, optional = true }
 num-bigint = { version = "0.5.1", default-features = false, optional = true }
 
-arrow-array = { version = "=57.3.0", default-features = false, features = ["ffi"] }
-arrow-schema = { version = "=57.3.0", default-features = false }
-arrow-buffer = { version = "=57.3.0", default-features = false }
-arrow-ipc = { version = "=57.3.0", default-features = false }
+# Arrow and Parquet 55.2.0 are the newest releases that build with Rust 1.82;
+# 56 needs 1.84 and 57 needs 1.85.
+arrow-array = { version = "=55.2.0", default-features = false, features = ["ffi"] }
+arrow-schema = { version = "=55.2.0", default-features = false }
+arrow-buffer = { version = "=55.2.0", default-features = false }
+arrow-ipc = { version = "=55.2.0", default-features = false }
 flatbuffers = { version = "=25.12.19", default-features = false }
-# Parquet 57 spells its rust flate2 backend feature `flate2-rust_backened`;
-# 57.3.0 has no `flate2-rust_backend` alias.
-parquet = { version = "=57.3.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2-rust_backened", "lz4", "zstd"], optional = true }
+# Parquet 55 has one `flate2` feature, and it selects flate2's zlib-rs
+# backend, which flate2 prefers to the rust_backend (miniz_oxide) named below.
+parquet = { version = "=55.2.0", default-features = false, features = ["arrow", "snap", "brotli", "flate2", "lz4", "zstd"], optional = true }
 # Direct page admission bounds decompression before the general source reader.
 # These storage dependencies stay at the adapter boundary.
 bytes = { version = "1.12.1", optional = true }
@@ -50,7 +53,8 @@ zstd = { version = "0.14.0", default-features = false, optional = true }
 snap = { version = "1.1.2", optional = true }
 # ODM XML tokenizing only; the adapter adds namespace, reference and
 # well-formedness checks. Default features off: no encoding_rs or serde.
-quick-xml = { version = "0.42.0", default-features = false, optional = true }
+# 0.42 needs Rust 1.86.
+quick-xml = { version = "0.41.0", default-features = false, optional = true }
 
 # Safe descriptor-relative filesystem IO for the native R resource transport.
 [target.'cfg(unix)'.dependencies]

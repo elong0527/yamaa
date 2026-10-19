@@ -1251,16 +1251,13 @@ mod table {
                 (Type::INT32, Some(LogicalType::Date)),
                 (
                     Type::INT64,
-                    timestamp.get_fields()[0]
-                        .get_basic_info()
-                        .logical_type_ref()
-                        .cloned(),
+                    timestamp.get_fields()[0].get_basic_info().logical_type(),
                 ),
             ];
             for (i, (physical, logical)) in expected.into_iter().enumerate() {
                 let field = schema.column(i);
                 assert_eq!(field.physical_type(), physical);
-                assert_eq!(field.logical_type_ref(), logical.as_ref());
+                assert_eq!(field.logical_type(), logical);
                 assert_eq!(
                     field.self_type().get_basic_info().repetition(),
                     Repetition::OPTIONAL
@@ -2187,9 +2184,9 @@ mod table {
         }
 
         mod row_groups {
-            //! More row groups than parquet 57.3.0 decodes from one footer
-            //! (#2940), one record per row group, as pyarrow and Polars write
-            //! them with `row_group_size=1`. The parquet crate's writer refuses
+            //! More row groups than an `i16` ordinal numbers (#2940), one
+            //! record per row group, as pyarrow and Polars write them with
+            //! `row_group_size=1`. The parquet crate's writer refuses
             //! a 32,769th row group, so these files are authored here one
             //! Compact Protocol field at a time. Expected cells are the values
             //! the test writes, never read back from a candidate reader.

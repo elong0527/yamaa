@@ -4,8 +4,8 @@
 [package]
 name = "yamaa-saphyr-parser"
 version = "0.2.1"
-edition = "2024"
-rust-version = "1.85.0"
+edition = "2021"
+rust-version = "1.82.0"
 authors = ["Ethiraric <ethiraric@gmail.com>", "David Aguilar <davvid@gmail.com>", "Yuheng Chen <yuhengchen@sensetime.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/saphyr-rs/saphyr"
