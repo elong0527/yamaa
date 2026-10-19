@@ -453,7 +453,9 @@ in both hosts and reports a parser refusal as `yamaa.Error` in Python or a
 | Semantic expression and context nesting depth | 128 |
 
 A MiB is 1,048,576 bytes; a GiB is 1,073,741,824 bytes. File readers check the
-encoded size before retaining bytes and check growth during reading. Writers
+encoded size before retaining bytes and check growth during reading. A
+compressed SAS dataset is also refused when the bytes its records decompress
+to, its live records times its row length, exceed the source file limit. Writers
 check the saved file size before extending it. Table admission checks rows,
 columns and their product before constructing or growing the corresponding
 geometry. A regular expression is refused when it compiles, never while it

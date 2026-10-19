@@ -32,7 +32,8 @@ metadata pages, unsupported compression signature
 rejection, transport physical type/offset and partial-row validation, transport
 version 8 observation count admission, overlapping RDC back-reference
 propagation, accounting for records deleted in place, row length consistency
-once columns are submitted, bounded work for moved-record references, column
+once columns are submitted, bounded work for moved-record references,
+admission of the bytes that decompression writes, column
 subheader length checks, and exact IBM numeric precision facts used by
 narrowing. The row text scratch buffer is
 sized from the validated submitted columns rather than from every column
@@ -80,10 +81,15 @@ Rust checks the fixed source-byte and table-shape boundaries from the shared
 table-sized metadata allocation. Allocation arithmetic and source page/header
 extents are checked. A SAS page count with its high bit set is malformed:
 upstream reads it into a signed field, where it passes the upper bound and
-overflows the check that the pages fill the file. Compressed SAS row buffers are allocated only after
-physical scalar widths and offsets pass, when columns are submitted for a
-compressed row or, if uncompressed rows came first, at the first compressed
-row. The buffer records its length. Once columns are submitted, a row-size
+overflows the check that the pages fill the file. Only live records are
+decompressed: a compressed record after them is not read, in RDC as in RLE
+(upstream decompresses each RDC record it reaches). Each decompresses to the
+row length, and a two-byte RLE command writes up to 4,112 bytes, so the live
+records times the row length are admitted as source bytes, through the
+bridge's `yamaa_readstat_admit_bytes`, before a record is decompressed. The
+compressed SAS row buffer is allocated after that admission, at the first
+record decompressed, so after columns are submitted and their physical scalar
+widths and offsets pass. The buffer records its length. Once columns are submitted, a row-size
 subheader may repeat the row length but not change it, and each decompressor
 refuses a row length that its buffer does not hold. Columns are submitted only
 once every declared column has attributes and a name: a column without

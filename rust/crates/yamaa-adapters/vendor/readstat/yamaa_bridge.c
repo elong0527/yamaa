@@ -10,7 +10,7 @@
 #else
 #define YAMAA_THREAD_LOCAL _Thread_local
 #endif
-static YAMAA_THREAD_LOCAL size_t rows_limit, columns_limit, cells_limit;
+static YAMAA_THREAD_LOCAL size_t rows_limit, columns_limit, cells_limit, bytes_limit;
 static YAMAA_THREAD_LOCAL int limit_hit, number_exact, refusal_resource, refusal_known;
 static YAMAA_THREAD_LOCAL int deleted_records_hit;
 static YAMAA_THREAD_LOCAL size_t refusal_limit, refusal_actual;
@@ -35,6 +35,12 @@ int yamaa_readstat_admit(size_t rows, size_t columns) {
     if (columns > columns_limit) return refuse(2, columns_limit, columns, 1);
     if (columns && rows > cells_limit / columns)
         return refuse(3, cells_limit, rows * columns, rows <= SIZE_MAX / columns);
+    return 1;
+}
+/* Bytes that decompressing SAS records writes count as source bytes. */
+int yamaa_readstat_admit_bytes(uint64_t bytes) {
+    if (bytes > bytes_limit)
+        return refuse(4, bytes_limit, (size_t)bytes, bytes <= SIZE_MAX);
     return 1;
 }
 /* SAS records deleted in place that disagree with their count; classify the stop. */
@@ -114,12 +120,13 @@ static int value_handler(int row, readstat_variable_t *variable,
         readstat_value_is_missing(value, variable), ctx->xport ? number_exact : 1, ctx->user);
 }
 int yamaa_readstat_parse(const unsigned char *bytes, size_t length, int xport,
-        size_t rows, size_t columns, size_t cells,
+        size_t rows, size_t columns, size_t cells, size_t source_bytes,
         yamaa_metadata metadata, yamaa_variable variable, yamaa_value value,
         void *user, int *resource, size_t *limit, size_t *actual, int *known) {
     yamaa_ctx ctx = { .bytes = bytes, .length = length, .metadata = metadata,
         .variable = variable, .value = value, .user = user, .xport = xport };
     rows_limit = rows; columns_limit = columns; cells_limit = cells;
+    bytes_limit = source_bytes;
     limit_hit = 0; deleted_records_hit = 0;
     readstat_parser_t *parser = readstat_parser_init();
     if (!parser) return -6;
