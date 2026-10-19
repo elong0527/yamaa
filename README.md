@@ -5,7 +5,7 @@
 [![R CMD check](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/elong0527/yamaa/actions/workflows/R-CMD-check.yaml?query=branch%3Amain+event%3Aworkflow_dispatch)
 [![Coverage](https://codecov.io/gh/elong0527/yamaa/graph/badge.svg)](https://codecov.io/gh/elong0527/yamaa)
 [![PyPI version](https://img.shields.io/pypi/v/yamaa)](https://pypi.org/project/yamaa/)
-[![rustc](https://img.shields.io/badge/rustc-1.90%2B-orange?logo=rust)](https://www.rust-lang.org)
+[![rustc](https://img.shields.io/badge/rustc-1.82%2B-orange?logo=rust)](https://www.rust-lang.org)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
@@ -120,7 +120,7 @@ run$output
 run$save()             # write adsl.csv
 ```
 
-Source installation requires R 4.4.0 or later, Rust 1.90 or later with Cargo, and platform build tools; it needs no network.
+Source installation requires R 4.4.0 or later, Rust 1.82 or later with Cargo, and platform build tools; it needs no network.
 To build a checkout candidate, follow
 [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
 The **Release checks** badge shows the latest release package checks on `main`:
