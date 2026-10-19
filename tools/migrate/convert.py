@@ -255,6 +255,9 @@ class Converter:
                     f"the YAML null at {where} could not be removed; rewrite it by hand",
                 )
                 continue
+            if target is not None:
+                # The clear entry and the removal land together or not at all.
+                edits = [*edits, self._clear_entry([*moved, ("entry", target)])]
             if not self.edits.add(*edits):
                 continue
             entry = self.entry_of(visit)
@@ -279,7 +282,6 @@ class Converter:
                     "comment",
                     f"comment moved to the clear entry {target}; reword it: {comment}",
                 )
-            self._write_clear([*moved, ("entry", target)])
             return
 
     def _removal_root(self, visit, parents):
@@ -403,8 +405,8 @@ class Converter:
             return None, []
         return [Edit(a, b, "")], []
 
-    def _write_clear(self, lines):
-        """Write clear entries into the root `clear` list, after `parent` (P-CLR-1)."""
+    def _clear_entry(self, lines):
+        """The edit writing clear entries into the root `clear` list, after `parent` (P-CLR-1)."""
         text = self.text
         style = self.sequence_style()
         indent = " " * style
@@ -428,7 +430,7 @@ class Converter:
             content = text.newline.join(["clear:", *body]) + text.newline
         if at == len(text.text) and not text.text.endswith(("\n", "\r")):
             content = text.newline + content
-        self.edits.add(Edit(at, at, content))
+        return Edit(at, at, content)
 
     # -- pass 2: rewrites ------------------------------------------------------
 
