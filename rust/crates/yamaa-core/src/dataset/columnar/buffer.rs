@@ -7,6 +7,7 @@ use crate::{
     temporal::{Date, DateTime},
     value::{FiniteFloat, Value},
 };
+use std::collections::TryReserveError;
 
 /// A growable bit vector.
 #[derive(Clone, Debug, Default)]
@@ -16,6 +17,16 @@ pub(super) struct Bits {
 }
 
 impl Bits {
+    /// Room for `additional` more bits.
+    pub(super) fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
+        let words = self
+            .len
+            .saturating_add(additional)
+            .div_ceil(64)
+            .saturating_sub(self.words.len());
+        self.words.try_reserve(words)
+    }
+
     pub(super) fn new(len: usize, value: bool) -> Self {
         let fill = if value { u64::MAX } else { 0 };
         let mut bits = Self {
@@ -97,6 +108,12 @@ pub(super) struct Strings {
 }
 
 impl Strings {
+    /// Room for `additional` more rows; their text grows the arena as it
+    /// arrives.
+    fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
+        self.spans.try_reserve(additional)
+    }
+
     fn get(&self, index: usize) -> &str {
         let (start, end) = self.spans[index];
         &self.bytes[start..end]
@@ -153,6 +170,39 @@ impl Default for Values {
 impl Values {
     pub(super) fn missing(len: usize) -> Self {
         Self::Missing(len)
+    }
+
+    /// Room for `additional` more rows: a missing buffer holds only its
+    /// length.
+    pub(super) fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
+        match self {
+            Self::Missing(_) => Ok(()),
+            Self::Int(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
+            Self::Float(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
+            Self::Bool(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
+            Self::Date(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
+            Self::DateTime(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
+            Self::Str(values, valid) => {
+                values.try_reserve(additional)?;
+                valid.try_reserve(additional)
+            }
+            Self::Mixed(values) => values.try_reserve(additional),
+        }
     }
 
     /// The same value on every row.

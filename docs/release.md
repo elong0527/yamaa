@@ -296,17 +296,17 @@ the downloads.
 
 The GitHub release uses the workflow's GitHub token. Once it exists, the
 workflow's `pypi` job uploads the release's Python packages to PyPI: the
-wheels and the source archive, the same bytes, handed over from the publishing
-job and never rebuilt. The R source package stays a GitHub release asset. The
-upload uses PyPI trusted publishing, so the repository stores no PyPI
-credential: the job runs in the `pypi` environment with only the
-`id-token: write` permission, and `pypa/gh-action-pypi-publish` exchanges its
-OpenID Connect token for a short-lived upload token. The trusted publisher of
-the `yamaa` project on PyPI names the repository `elong0527/yamaa`, the
-workflow `release.yml` and the environment `pypi`; configuring it is an owner
-action (#3063, #3030 D47). If the upload fails after the GitHub release
-exists, fix the cause and re-run the failed `pypi` job: it uploads the same
-files and skips those already on PyPI.
+wheels and the source archive, the same bytes, which the publishing job hands
+over before it creates the GitHub release and which are never rebuilt. The R
+source package stays a GitHub release asset. The upload uses PyPI trusted
+publishing, so the repository stores no PyPI credential: the job runs in the
+`pypi` environment with only the `id-token: write` permission, and
+`pypa/gh-action-pypi-publish` exchanges its OpenID Connect token for a
+short-lived upload token. The trusted publisher of the `yamaa` project on PyPI
+names the repository `elong0527/yamaa`, the workflow `release.yml` and the
+environment `pypi`; configuring it is an owner action (#3063, #3030 D47). If
+the upload fails after the GitHub release exists, fix the cause and re-run the
+failed `pypi` job: it uploads the same files and skips those already on PyPI.
 
 A final release is installed with `pip install yamaa`. A candidate's version,
 X.Y.ZrcN, is a PyPI pre-release, which a bare `pip install yamaa` does not
