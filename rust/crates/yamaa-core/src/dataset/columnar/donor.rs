@@ -7,7 +7,7 @@
 use super::frame::{Frame, Identity};
 use super::index::Index;
 use super::relations::{self, Site};
-use super::{Cx, Fail, Footprint, Run, Table};
+use super::{reserved, Cx, Fail, Footprint, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{RegionId, RelationId};
 use crate::dataset::{Intermediate, IntermediateDerivations, IntermediateSource};
@@ -268,6 +268,7 @@ fn build<E>(
             &all
         }
     };
+    reserved(frame.try_reserve(stored.len(), stored.len()))?;
     for (position, &source_row) in stored.iter().enumerate() {
         // A record's member is its position in the donor's input; only a
         // compact build moves it from the source row.

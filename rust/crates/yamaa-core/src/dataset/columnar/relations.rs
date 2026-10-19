@@ -324,7 +324,8 @@ fn keeps<E>(
 /// Every donor record a filter that reads only the donor records keeps.
 fn eligibility<E>(table: Table<'_, E>, item: &Intermediate) -> Result<Vec<usize>, Fail<E>> {
     check_deferred_filter_types(item)?;
-    let mut eligible = Vec::with_capacity(table.row_count());
+    let mut eligible = Vec::new();
+    super::reserved(eligible.try_reserve_exact(table.row_count()))?;
     for source_row in 0..table.row_count() {
         if let Some(filter) = item.filter.as_ref().filter(|filter| !filter.correlated()) {
             if !keeps(table, filter, source_row)? {
@@ -731,10 +732,14 @@ fn prepare_rows<E>(
         return Ok(());
     }
     let width = derived.current.len();
-    let mut current = Vec::with_capacity(pending.len() * width);
-    let mut keys = Vec::with_capacity(pending.len());
-    let mut records = Vec::with_capacity(pending.len());
-    let mut spans = Vec::with_capacity(pending.len());
+    let mut current = Vec::new();
+    super::reserved(current.try_reserve_exact(pending.len().saturating_mul(width)))?;
+    let mut keys = Vec::new();
+    super::reserved(keys.try_reserve_exact(pending.len()))?;
+    let mut records = Vec::new();
+    super::reserved(records.try_reserve(pending.len()))?;
+    let mut spans = Vec::new();
+    super::reserved(spans.try_reserve_exact(pending.len()))?;
     for &(row, _) in &pending {
         current.extend(donor::current_fields(
             run,
@@ -750,7 +755,8 @@ fn prepare_rows<E>(
         spans.push((start, records.len() - start));
         keys.push(row_keys);
     }
-    let mut per_record = Vec::with_capacity(records.len() * width);
+    let mut per_record = Vec::new();
+    super::reserved(per_record.try_reserve_exact(records.len().saturating_mul(width)))?;
     for (&(_, rows), values) in spans.iter().zip(current.chunks(width)) {
         for _ in 0..rows {
             per_record.extend_from_slice(values);
@@ -891,13 +897,15 @@ fn resolve_choice<E>(
                 }
                 let kept = keeps(table, filter, source_row)?;
                 if reusable {
-                    let rows = table.row_count();
-                    let narrowed = run
-                        .relations
-                        .named(relation)
+                    let named = run.relations.named(relation);
+                    if named.narrowed.is_none() {
+                        named.narrowed = Some(super::filled(table.row_count(), None)?);
+                    }
+                    if let Some(slot) = named
                         .narrowed
-                        .get_or_insert_with(|| vec![None; rows]);
-                    if let Some(slot) = narrowed.get_mut(source_row) {
+                        .as_mut()
+                        .and_then(|narrowed| narrowed.get_mut(source_row))
+                    {
                         *slot = Some(kept);
                     }
                 }

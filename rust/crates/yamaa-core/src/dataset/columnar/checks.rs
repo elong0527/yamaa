@@ -763,7 +763,8 @@ fn row_count_check<'a, E>(
         .as_ref()
         .map(|_| exprs.next().expect("a when node"));
     let rows = frame.rows();
-    let mut admitted = Vec::with_capacity(rows);
+    let mut admitted = Vec::new();
+    super::reserved(admitted.try_reserve_exact(rows))?;
     for row in 0..rows {
         admitted.push(match (&count.filter, filter_expr) {
             (Some(filter), Some(expr)) => {
@@ -774,7 +775,8 @@ fn row_count_check<'a, E>(
             _ => true,
         });
     }
-    let mut bound = Vec::with_capacity(rows);
+    let mut bound = Vec::new();
+    super::reserved(bound.try_reserve_exact(rows))?;
     for row in 0..rows {
         bound.push(match (&count.when, when_expr) {
             (Some(when), Some(expr)) => {
@@ -844,6 +846,7 @@ pub(super) fn partition(
         super::group::partition(frame.rows(), columns.len(), |row, position| {
             frame.get(row, columns[position])
         })
+        .map_err(|_| crate::table_grouping::GroupingError::Allocation)?
         .into_vecs(),
     )
 }

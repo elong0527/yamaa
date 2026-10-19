@@ -60,6 +60,20 @@ use handlers::{HandlerMark, Handlers};
 
 type Fail<E> = Box<ExecutionError<E>>;
 
+/// A refused reservation fails the run as `ExecutionError::Allocation`, as
+/// today's executor's reservations do, instead of aborting the process.
+fn reserved<T, E>(reservation: Result<T, std::collections::TryReserveError>) -> Result<T, Fail<E>> {
+    reservation.map_err(|_| Box::new(ExecutionError::Allocation))
+}
+
+/// `len` copies of `value`, reserved before they are written.
+fn filled<T: Clone, E>(len: usize, value: T) -> Result<Vec<T>, Fail<E>> {
+    let mut filled = Vec::new();
+    reserved(filled.try_reserve_exact(len))?;
+    filled.resize(len, value);
+    Ok(filled)
+}
+
 /// A table one read addresses.
 enum Table<'a, E> {
     /// A source port.
@@ -457,7 +471,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         self.complete_columns(&mut frame, &secondary, records)?;
         checks::verify_output(self, &frame, &secondary, records, observer)?;
         let order = checks::output_order(self.plan, &frame);
-        let rows = order.iter().map(|&row| frame.row_values(row)).collect();
+        let mut rows = Vec::new();
+        reserved(rows.try_reserve_exact(order.len()))?;
+        rows.extend(order.iter().map(|&row| frame.row_values(row)));
         Ok(Execution {
             dataset: Dataset::from_rows(plan.region(region).output.clone(), rows),
             verifications: std::mem::take(records),
@@ -577,6 +593,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         *next_identity = next_identity
             .checked_add(groups.len())
             .ok_or_else(|| Box::new(ExecutionError::Capacity))?;
+        reserved(frame.try_reserve(groups.len(), groups.iter().map(Vec::len).sum()))?;
         let prewindow: Vec<BindingId> = plan
             .row_bindings(template)
             .filter(|&binding| plan.binding(binding).stage == Stage::Prewindow)

@@ -184,9 +184,14 @@ fn build<E>(run: &mut Run<'_, '_, E>, cx: &Cx<'_, E>, expr: ExprId) -> Result<Wi
         super::group::partition(len, window.group_by.len(), |position, key| {
             scope.get(cx, position, window.group_by[key])
         })
+        .map_err(|_| {
+            Box::new(ExecutionError::OutputGrouping(
+                crate::table_grouping::GroupingError::Allocation,
+            ))
+        })?
         .into_vecs()
     };
-    let mut group_for_row = vec![0; len];
+    let mut group_for_row = super::filled(len, 0)?;
     for (group, members) in groups.iter().enumerate() {
         for &position in members {
             group_for_row[position] = group;
