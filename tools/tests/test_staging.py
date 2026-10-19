@@ -4,6 +4,7 @@ import contextlib
 import csv
 import io
 import json
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -12,6 +13,7 @@ from unittest import mock
 
 from tools.staging import stage_r_package as staging
 from tools.staging import stage_specification_inputs as specification
+from tools.staging import vendor_crates
 
 
 class StagingTests(unittest.TestCase):
@@ -86,6 +88,46 @@ class StagingTests(unittest.TestCase):
             self.assertEqual(
                 (embedded / "Cargo.lock").read_bytes(),
                 (staging.WORKSPACE / "Cargo.lock").read_bytes(),
+            )
+            # The package builds offline from the locked crates.io crates, and
+            # carries the script that bundled them and their authors' names.
+            lock = tomllib.loads((embedded / "Cargo.lock").read_text(encoding="utf-8"))
+            registry = {
+                (package["name"], package["version"])
+                for package in lock["package"]
+                if package.get("source", "").startswith("registry+")
+            }
+            unpacked = Path(directory) / "unpacked"
+            with tarfile.open(destination / staging.VENDOR_ARCHIVE, "r:xz") as archive:
+                members = archive.getmembers()
+                self.assertTrue(all(m.isfile() or m.isdir() for m in members))
+                archive.extractall(unpacked, filter="data")
+            crates = sorted((unpacked / vendor_crates.DIRECTORY).iterdir())
+            self.assertEqual(
+                {crate.name for crate in crates},
+                {f"{name}-{version}" for name, version in registry},
+            )
+            for crate in crates:
+                self.assertTrue((crate / ".cargo-checksum.json").is_file())
+                for path in crate.rglob("*"):
+                    if path.is_file():
+                        self.assertFalse(vendor_crates.is_binary(path), path)
+            self.assertEqual(
+                (destination / staging.VENDOR_CONFIG).read_text(encoding="utf-8"),
+                vendor_crates.CONFIG,
+            )
+            self.assertEqual(
+                (destination / staging.VENDOR_SCRIPT).read_bytes(),
+                Path(vendor_crates.__file__).read_bytes(),
+            )
+            authors = (destination / staging.AUTHORS).read_text(encoding="utf-8")
+            self.assertEqual(
+                {
+                    tuple(line.removeprefix("Crate: ").split(" "))
+                    for line in authors.splitlines()
+                    if line.startswith("Crate: ")
+                },
+                registry | {("yamaa-saphyr-parser", "0.2.1")},
             )
             original = destination / "inst/specification-original"
             for module in (original / "schema").glob("*.yaml"):
