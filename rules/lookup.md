@@ -792,7 +792,7 @@ selection index at that boundary.
 
 <a id="lookup-15"></a>
 
-### LOOKUP-15. Intermediate derivations add per-record fields to the donor records before matching
+### LOOKUP-15. Intermediate derivations add per-record fields to the donor records
 
 An intermediate may declare `derivations:`, a map of names to derivations in
 the expression language of row-template `derivations:`, evaluated in
@@ -800,10 +800,9 @@ declaration order over the dataset's stored fields and the derivations
 declared before each one. A typed entry converts each result to its declared
 type before anything later reads it, and an untyped entry keeps its raw
 result, its field taking the expression's result type
-([EXPR-14](expressions.md#expr-14)). The derived values augment the donor
-records before matching, `filter`, `order_by` selection and `columns`
-projection, and behave there like stored fields; derivations that read the
-current input record augment only the records that match, as below.
+([EXPR-14](expressions.md#expr-14)). The derived values augment donor records
+for matching, `filter`, `order_by` selection and `columns` projection, and
+behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
 Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_matched_derivations.rs`.
