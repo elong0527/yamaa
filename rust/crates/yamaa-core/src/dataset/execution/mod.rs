@@ -101,6 +101,7 @@ impl Dataset {
         &self.rows
     }
     /// Complete owned rows in their final order.
+    #[cfg(any(test, feature = "executor-comparison"))]
     pub(crate) fn from_rows(schema: TableSchema, rows: Vec<Vec<Value>>) -> Self {
         Self { schema, rows }
     }
@@ -1339,7 +1340,7 @@ impl DatasetPlan {
         handlers: &mut HandlerCounter,
         intermediate_run: &mut intermediates::Run,
         primary: &row_drivers::Driver<'_, T>,
-        candidates: &mut Vec<Candidate>,
+        candidates: &mut [Candidate],
         records: &mut Vec<CheckRecord>,
     ) -> Result<(), Box<ExecutionError<T::Error>>> {
         intermediate_run.begin_columns(self)?;
@@ -1355,53 +1356,109 @@ impl DatasetPlan {
         }
         let mut next_column = 0;
         self.check_columns(candidates, &completed, &mut next_column, records)?;
-        for assignment in self.columns() {
-            let mut nested_windows = windows::Cache::default();
-            let mut numbers =
-                windows::Evaluation::new(assignment, candidates, self, table, handlers)?;
-            for row in 0..candidates.len() {
-                if candidates[row].completed[assignment.column] {
-                    continue;
-                }
-                let number = if let Some(run) = &mut numbers {
-                    Some(run.value(row, candidates, table, assignment, self)?)
-                } else {
-                    None
-                };
-                let candidate = &candidates[row];
-                let value = if let Some(value) = number {
-                    finish(value, assignment, candidate, self, row, handlers)?
-                } else {
-                    evaluate(
-                        table,
-                        assignment,
-                        candidate,
-                        self,
-                        row,
-                        &mut EvaluationState {
-                            primary,
-                            functions,
-                            secondary,
-                            self_rows: candidates,
-                            handlers,
-                            intermediates: &mut *intermediate_run,
-                            output_rows: candidates,
-                            aggregate_row: None,
-                            output_offset: 0,
-                            windows: &mut nested_windows,
-                        },
-                    )?
-                };
-                let candidate = &mut candidates[row];
-                candidate.values[assignment.column] = value;
-                candidate.completed[assignment.column] = true;
+        // A column's bindings are adjacent; its step runs each of them in
+        // turn, over the rows of its own templates (#2829).
+        let mut bindings = self.column_bindings();
+        while let Some(first) = bindings.first() {
+            let column = first.assignment.column;
+            let count = bindings
+                .iter()
+                .take_while(|binding| binding.assignment.column == column)
+                .count();
+            for binding in &bindings[..count] {
+                self.complete_binding(
+                    binding,
+                    table,
+                    secondary,
+                    functions,
+                    handlers,
+                    intermediate_run,
+                    primary,
+                    candidates,
+                )?;
             }
-            completed[assignment.column] = true;
+            bindings = &bindings[count..];
+            completed[column] = true;
             self.check_columns(candidates, &completed, &mut next_column, records)?;
         }
         // A selector hidden by an empty input or a lazy branch must still report
         // its known filter-type refusal before a successful result can publish.
         intermediates::check_unobserved_filter_types(self)?;
+        Ok(())
+    }
+
+    /// Complete one column binding over the incomplete rows of its templates,
+    /// in row order. A row reads the driver port of the binding's scope: its
+    /// own template's driver, so a driver read addresses the record that built
+    /// the row (LOOKUP-1), or the primary for a whole-dataset binding.
+    #[allow(clippy::too_many_arguments)]
+    fn complete_binding<T: TableAccess + ?Sized>(
+        &self,
+        binding: &ColumnBinding,
+        table: &T,
+        secondary: &[&dyn TableAccess<Error = T::Error>],
+        functions: &mut dyn FunctionPort<Error = T::Error>,
+        handlers: &mut HandlerCounter,
+        intermediate_run: &mut intermediates::Run,
+        primary: &row_drivers::Driver<'_, T>,
+        candidates: &mut [Candidate],
+    ) -> Result<(), Box<ExecutionError<T::Error>>> {
+        let assignment = &binding.assignment;
+        let port = |template: Option<usize>| {
+            let source = match binding.scope {
+                ColumnScope::Dataset => 0,
+                ColumnScope::Template => template
+                    .and_then(|template| self.templates().get(template))
+                    .map_or(0, |template| template.mode.source_index()),
+            };
+            row_drivers::Driver::new(table, secondary, source)
+        };
+        // A column-level window spans every row: it is prepared once, over
+        // every candidate, before any row is completed.
+        let windowed = port(binding.templates.first().copied());
+        let mut nested_windows = windows::Cache::default();
+        let mut numbers =
+            windows::Evaluation::new(assignment, candidates, self, &windowed, handlers)?;
+        for row in 0..candidates.len() {
+            if candidates[row].completed[assignment.column]
+                || !binding.serves(candidates[row].template)
+            {
+                continue;
+            }
+            let driver = port(candidates[row].template);
+            let number = if let Some(run) = &mut numbers {
+                Some(run.value(row, candidates, &driver, assignment, self)?)
+            } else {
+                None
+            };
+            let candidate = &candidates[row];
+            let value = if let Some(value) = number {
+                finish(value, assignment, candidate, self, row, handlers)?
+            } else {
+                evaluate(
+                    &driver,
+                    assignment,
+                    candidate,
+                    self,
+                    row,
+                    &mut EvaluationState {
+                        primary,
+                        functions,
+                        secondary,
+                        self_rows: candidates,
+                        handlers,
+                        intermediates: &mut *intermediate_run,
+                        output_rows: candidates,
+                        aggregate_row: None,
+                        output_offset: 0,
+                        windows: &mut nested_windows,
+                    },
+                )?
+            };
+            let candidate = &mut candidates[row];
+            candidate.values[assignment.column] = value;
+            candidate.completed[assignment.column] = true;
+        }
         Ok(())
     }
 

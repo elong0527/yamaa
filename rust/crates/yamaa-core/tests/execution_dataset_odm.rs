@@ -600,12 +600,14 @@ mod execution {
             let admitted =
                 deferred_plan(&source, 0, RowMode::Records, deferred_read(0, None)).unwrap();
             let mut templates = admitted.templates().to_vec();
-            templates[0].assignments.push(admitted.columns()[1].clone());
+            templates[0]
+                .assignments
+                .push(admitted.column_bindings()[1].assignment.clone());
             let result = DatasetPlan::new(
                 source.schema.clone(),
                 admitted.output().clone(),
                 templates,
-                vec![admitted.columns()[0].clone()],
+                vec![admitted.column_bindings()[0].assignment.clone()],
                 admitted.keys().to_vec(),
                 vec![],
             );

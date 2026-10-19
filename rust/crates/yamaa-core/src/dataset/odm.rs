@@ -74,9 +74,14 @@ impl BoundOdm {
     pub fn read(&self) -> &OdmRead {
         &self.0
     }
+    /// Defer a column-phase read to the scope of each row's template. The
+    /// read was bound against one binding's catalog, whose own dataset is the
+    /// driver that binding reads through: `port`, the primary input at 0 or
+    /// one past a secondary input's position (#2829).
     pub(crate) fn defer(
         &mut self,
         contexts: std::sync::Arc<[OdmTemplateScope]>,
+        port: usize,
     ) -> Result<(), PlanError> {
         if self.0.source.is_none()
             || self.0.phase != AggregatePhase::Derivation
@@ -86,6 +91,12 @@ impl BoundOdm {
         }
         if !valid_templates(&contexts) {
             return Err(PlanError::InvalidSource);
+        }
+        if self.0.source == Some(AggregateSource::Primary) {
+            self.0.source = Some(match port.checked_sub(1) {
+                Some(index) => AggregateSource::Secondary(index),
+                None => AggregateSource::Primary,
+            });
         }
         self.0.scope = OdmScope::Templates(contexts);
         Ok(())
@@ -260,7 +271,7 @@ mod tests {
             driver: 0,
             groups: Some(vec![odm_source::HIERARCHY[0]]),
         };
-        bound.defer(vec![context.clone()].into()).unwrap();
+        bound.defer(vec![context.clone()].into(), 0).unwrap();
         for invalid in [
             vec![],
             vec![OdmTemplateScope {
@@ -272,7 +283,10 @@ mod tests {
                 ..context.clone()
             }],
         ] {
-            assert_eq!(bound.defer(invalid.into()), Err(PlanError::InvalidSource));
+            assert_eq!(
+                bound.defer(invalid.into(), 0),
+                Err(PlanError::InvalidSource)
+            );
             assert_eq!(
                 bound.read().scope,
                 OdmScope::Templates(vec![context.clone()].into())

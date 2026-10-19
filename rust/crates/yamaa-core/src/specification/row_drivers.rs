@@ -134,19 +134,18 @@ pub(super) fn select<'a>(
         .ok_or(BindError::Internal)
 }
 
-/// Whether a column completed only for rows the named intermediate `driver`
-/// builds reads a field of it that the column phase cannot address. That
-/// phase reads a driver record from the input behind the first row template's
-/// driver (`primary`), at the position of the record that built the row. An
-/// intermediate over another input, or a field it derives, has no record
-/// there, and a column holding a qualified aggregate keeps the whole-dataset
-/// scope in which the intermediate is no driver. Preparation refuses such a
-/// read before any data is read, so `check` and `domain` report it alike.
+/// Whether a column completed for rows the named intermediate `driver` builds
+/// reads a field of it that the column phase cannot address. That phase reads
+/// each row's driver record from the input the intermediate reads, at the
+/// position of the record that built the row (#2829). A field the
+/// intermediate derives has no record there, and a column holding a qualified
+/// aggregate keeps the whole-dataset scope in which the intermediate is no
+/// driver. Preparation refuses such a read before any data is read, so
+/// `check` and `domain` report it alike.
 pub(super) fn unaddressable(
     d: &Document,
     declaration: usize,
     driver: &str,
-    primary: &str,
     aggregate: bool,
     project: Option<&functions::Prepared>,
     templates: &str_template::Prepared,
@@ -200,7 +199,6 @@ pub(super) fn unaddressable(
     else {
         return Ok(false);
     };
-    let over_primary = text(d, field(d, item, "dataset")?)? == primary;
     let derived = match d
         .field(item, "derivations")
         .filter(|&id| !matches!(d.nodes()[id], N::Null))
@@ -218,7 +216,7 @@ pub(super) fn unaddressable(
     bounds(d, value, &mut names, 0)?;
     Ok(names.iter().any(|name| {
         name.split_once('.').is_some_and(|(owner, field)| {
-            owner == driver && (aggregate || !over_primary || derived.contains(&field))
+            owner == driver && (aggregate || derived.contains(&field))
         })
     }))
 }

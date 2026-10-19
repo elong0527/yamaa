@@ -76,12 +76,7 @@ fn reference(
             template: template(id),
         },
         Step::Column(id) => S::Column {
-            assignment: plan.column(id).assignment.ok_or_else(|| {
-                ResolutionError::Unsupported(format!(
-                    "column step without a declaration: {}",
-                    plan.column(id).name
-                ))
-            })? as usize,
+            column: (id.0 - entry.columns.start) as usize,
         },
         Step::Checks(id) => {
             let check = plan.check(id);

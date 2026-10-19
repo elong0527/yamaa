@@ -2202,13 +2202,11 @@ mod project {
             .unwrap();
             assert_eq!(prepared.called_functions(), [0, 1]);
             let plan = prepared.bind(&source()).unwrap();
-            assert_eq!(
-                plan.columns().iter().map(|a| a.column).collect::<Vec<_>>(),
-                [1, 2]
-            );
-            for (assignment, slot, column) in
-                [(&plan.columns()[0], 1, 0), (&plan.columns()[1], 0, 1)]
-            {
+            assert_eq!(plan.columns().map(|a| a.column).collect::<Vec<_>>(), [1, 2]);
+            for (assignment, slot, column) in [
+                (&plan.column_bindings()[0].assignment, 1, 0),
+                (&plan.column_bindings()[1].assignment, 0, 1),
+            ] {
                 let Expression::ProjectFunction(bound) = &assignment.expression else {
                     panic!("versionless function expression")
                 };
@@ -2337,7 +2335,9 @@ mod project {
             let prepared =
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::ProjectFunction(bound) = &plan.columns()[0].expression else {
+            let Expression::ProjectFunction(bound) =
+                &plan.column_bindings()[0].assignment.expression
+            else {
                 panic!("function")
             };
             assert_eq!(

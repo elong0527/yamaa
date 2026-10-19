@@ -796,9 +796,10 @@ mod relations {
                 column_plan(1, bound_intermediate_flag()),
                 Err(PlanError::InvalidIntermediate)
             );
-            // PR #2030 Minor, adjudicated with #2430: column-phase Reduce/Count read
-            // the primary table with the secondary driver's row indices, so they
-            // are current record reads in `RecordReadScope::All` as well.
+            // A column binding reads each row through its own template's
+            // driver port (#2829): column-phase Reduce/Count reduce the
+            // secondary driver's own group records, never the primary table
+            // at the secondary driver's row indices.
             let grouped_column_plan = |expression: Expression| {
                 DatasetPlan::new_with_intermediates(
                     SourceSchemas {
@@ -838,10 +839,8 @@ mod relations {
                     text: "COUNT(x.V)".into(),
                 },
             ] {
-                assert_eq!(
-                    grouped_column_plan(expression),
-                    Err(PlanError::InvalidKeyMode)
-                );
+                let plan = grouped_column_plan(expression);
+                assert!(plan.is_ok(), "{plan:?}");
             }
         }
     }
@@ -1668,9 +1667,9 @@ mod relations {
                         }
                     ));
                 }
-                assert_eq!(plan.columns().len(), 1);
+                assert_eq!(plan.column_bindings().len(), 1);
                 assert!(matches!(
-                    plan.columns()[0].expression,
+                    plan.column_bindings()[0].assignment.expression,
                     Expression::Intermediate {
                         index: 0,
                         column: 1
@@ -2124,15 +2123,21 @@ mod relations {
             )))
         }
         #[test]
-        fn hidden_raw_reads_remain_refused_after_keyed_or_secondary_row_construction() {
+        fn hidden_raw_reads_are_refused_after_keyed_row_construction_only() {
+            // A key-grain column reads no raw driver record. A secondary
+            // driver's column binding reads the record that built the row
+            // through that driver's own port (#2829).
             let source = schema(&["ID"]);
             let output = schema(&["ID", "VALUE"]);
-            for mode in [
-                RowMode::Keys,
-                RowMode::Driver {
-                    source: 1,
-                    mode: Box::new(RowMode::Records),
-                },
+            for (mode, admitted) in [
+                (RowMode::Keys, false),
+                (
+                    RowMode::Driver {
+                        source: 1,
+                        mode: Box::new(RowMode::Records),
+                    },
+                    true,
+                ),
             ] {
                 let result = DatasetPlan::new_with_sources(
                     source.clone(),
@@ -2150,7 +2155,11 @@ mod relations {
                     vec![0],
                     vec![],
                 );
-                assert_eq!(result, Err(PlanError::InvalidKeyMode));
+                if admitted {
+                    assert!(result.is_ok(), "{result:?}");
+                } else {
+                    assert_eq!(result, Err(PlanError::InvalidKeyMode));
+                }
             }
         }
         #[test]
