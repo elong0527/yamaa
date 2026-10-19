@@ -7,9 +7,17 @@ import sys
 from pathlib import Path
 
 PLATFORMS = ("ubuntu-24.04", "macos-15", "windows-latest")
+# The Python wheels are also built and qualified for Linux aarch64 (#3030 D49).
+PYTHON_PLATFORMS = (*PLATFORMS, "ubuntu-24.04-arm")
 PYTHONS = ("3.12", "3.13", "3.14", "3.15")
 FORMS = ("wheel", "source")
 R_PLATFORMS = PLATFORMS
+# Linux aarch64 has no R lane yet, so the complete reports of its Python lanes
+# are compared beside the R reports of Linux x86_64.
+R_EVIDENCE = {"ubuntu-24.04-arm": "ubuntu-24.04"}
+# Each Linux wheel is also installed and qualified on glibc 2.28, the oldest
+# glibc that its manylinux_2_28 tag admits.
+GLIBC_PLATFORMS = ("ubuntu-24.04", "ubuntu-24.04-arm")
 BUILD_PYTHON = "3.14"
 # The host whose Python and R source archives a release publishes. Every
 # source lane, on every platform, installs those same archives.
@@ -18,19 +26,26 @@ SOURCE_PLATFORM = "ubuntu-24.04"
 
 def coverage():
     return {
-        "build": {
+        "rust": {
             "include": [
                 {"os": platform, "python": BUILD_PYTHON} for platform in PLATFORMS
+            ]
+        },
+        "build": {
+            "include": [
+                {"os": platform, "python": BUILD_PYTHON}
+                for platform in PYTHON_PLATFORMS
             ]
         },
         "qualify": {
             "include": [
                 {"os": platform, "python": version, "form": form}
                 for platform, version, form in itertools.product(
-                    PLATFORMS, PYTHONS, FORMS
+                    PYTHON_PLATFORMS, PYTHONS, FORMS
                 )
             ]
         },
+        "glibc": {"os": list(GLIBC_PLATFORMS)},
         "r": {"os": list(R_PLATFORMS)},
     }
 
@@ -39,7 +54,8 @@ def compare_cohorts(matrix, root, revision):
     # The pinned download action flattens a single match, including a pattern.
     python_artifacts = len(matrix["include"])
     r_artifacts = len(
-        {row["os"] for row in matrix["include"] if row["os"] in R_PLATFORMS}
+        {R_EVIDENCE.get(row["os"], row["os"]) for row in matrix["include"]}
+        & set(R_PLATFORMS)
     )
     downloaded = Path("cohort-input")
     for combination in matrix["include"]:
@@ -54,11 +70,12 @@ def compare_cohorts(matrix, root, revision):
         python_evidence = python_directory / form
         output = Path("public-cohort") / platform / version / form
         r_evidence = []
-        if platform in R_PLATFORMS:
+        r_platform = R_EVIDENCE.get(platform, platform)
+        if r_platform in R_PLATFORMS:
             r_directory = (
                 downloaded
                 if r_artifacts == 1
-                else downloaded / f"native-r-qualification-{platform}"
+                else downloaded / f"native-r-qualification-{r_platform}"
             )
             r_evidence = [
                 "--r-evidence",
