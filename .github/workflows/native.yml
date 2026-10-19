@@ -623,6 +623,14 @@ jobs:
         run: cargo clippy --locked --target x86_64-pc-windows-gnu -p yamaa-r -- -D warnings
       - name: Install the shared grammar and benchmark metadata codecs
         run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+      # The package check runs R CMD check --as-cran; with checkbashisms and
+      # aspell it also checks the configure scripts and DESCRIPTION's
+      # spelling, as CRAN's checks do.
+      - name: Install the programs that CRAN's checks use
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
       # Every lane installs the Linux-built archive that a release publishes,
       # not one built on its own host.
       - name: Download the published R source archive

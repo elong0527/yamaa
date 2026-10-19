@@ -1,5 +1,5 @@
 Package: yamaa
-Title: Clinical Data Specifications with the Shared Rust Engine
+Title: Clinical Data Specifications with the Shared 'Rust' Engine
 Version: 0.5.0
 Authors@R: c(
     person("Yilong", "Zhang", email = "elong0527@gmail.com", role = c("aut", "cre")),
@@ -7,20 +7,26 @@ Authors@R: c(
     person("Peng", "Zhang", role = "ctb"),
     person("Bingjun", "Wang", role = "ctb"),
     person("Jingwei", "Xiong", role = "ctb"),
-    person("The authors of the bundled Rust crates", role = "ctb",
-           comment = "listed in inst/AUTHORS"))
+    person("The authors of the bundled Rust crates", role = c("ctb", "cph"),
+           comment = "listed in inst/AUTHORS"),
+    person("Evan Miller and the ReadStat authors", role = c("ctb", "cph"),
+           comment = "bundled ReadStat C sources, inst/LICENSE-READSTAT.txt"))
 Description: Builds clinical data specifications, checks declarations, and
-    renders submission metadata through the shared Rust engine. Returns owned
-    data frames of plain R values and structured diagnostics, with explicit
-    publication of retained outputs.
+    renders submission metadata through the shared 'Rust' engine. Returns
+    owned data frames of plain R values and structured diagnostics, with
+    explicit publication of retained outputs. The specification language is
+    documented at <https://elong0527.github.io/yamaa/>.
 License: MIT + file LICENSE
-Copyright: The yamaa contributors, and for the bundled and linked
-    third-party code, including the Rust crates that inst/AUTHORS lists, the
-    holders named in inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
-    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt.
+Copyright: The yamaa contributors; for the bundled and linked third-party
+    code and data, the holders that inst/AUTHORS lists and that
+    inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
+    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt name; and for the SAS
+    test files in inst/host-fixtures/sas, those that the license files beside
+    them name.
 Encoding: UTF-8
 Depends: R (>= 4.4.0)
 Imports: utils
 Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
-SystemRequirements: Cargo (Rust's package manager), rustc (>= 1.82.0)
+SystemRequirements: Cargo (Rust's package manager) (>= 1.82.0),
+    rustc (>= 1.82.0)
 NeedsCompilation: yes

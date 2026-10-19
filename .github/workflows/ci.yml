@@ -69,6 +69,13 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           r: check
+      # `make test-r` runs R CMD check --as-cran; with checkbashisms and aspell
+      # it also checks the configure scripts and DESCRIPTION's spelling, as
+      # CRAN's checks do.
+      - name: Install the programs that CRAN's checks use
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
       - name: Install the minimum supported R saved artifact readers
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: Rscript --vanilla tools/ci/install_minimum_r_readers.R

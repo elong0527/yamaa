@@ -2,9 +2,11 @@
 
 The package builds offline: src/rust/vendor.tar.xz carries the crates.io crates
 that the unchanged Cargo.lock selects, written by tools/vendor_crates.py, which
-the package carries too, and src/Makevars points Cargo at them through
-src/rust/vendor-config.toml. inst/AUTHORS names every bundled crate's authors
-and license, as CRAN's Repository Policy asks.
+the package carries too, and the Makevars that configure writes point Cargo at
+them through src/rust/vendor-config.toml. configure reads the minimum Cargo and
+rustc from the rust-version of the copied workspace manifest. inst/AUTHORS
+names every bundled crate's authors and license, as CRAN's Repository Policy
+asks.
 """
 
 import argparse
@@ -133,7 +135,7 @@ def vendor_rust(destination: Path):
         vendor_crates.write_archive(directory, destination / VENDOR_ARCHIVE)
     (destination / VENDOR_CONFIG).write_text(vendor_crates.CONFIG, encoding="utf-8")
     script = destination / VENDOR_SCRIPT
-    script.parent.mkdir()
+    script.parent.mkdir(exist_ok=True)
     shutil.copyfile(vendor_crates.__file__, script)
     return crates
 

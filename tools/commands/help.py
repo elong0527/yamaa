@@ -15,8 +15,10 @@ HELP = """yamaa repository commands (run from the repository root)
   test-rust         cargo test --locked --workspace, including both host bindings.
                     Needs the selected Python interpreter and R 4.6.1.
   test-python       Package/tools tests and standalone public-host suites outside checkout.
-  test-r            Build/install a standalone R archive and require R CMD check OK.
-                    Needs R 4.6.1, Rust, GNU make and the package's Suggests installed.
+  test-r            Build/install a standalone R archive and run R CMD check --as-cran;
+                    only the notes that R/yamaa/cran-comments.md explains may remain.
+                    Needs R 4.6.1, Rust, make and the package's Suggests installed;
+                    with checkbashisms and aspell it also checks configure and spelling.
   check-equivalence Executor equivalence gate: both hosts built from the checkout for
                     public benchmark conformance, installed Python suites, R CMD check.
                     Needs what test-python and test-r need. Not part of CI.

@@ -250,14 +250,16 @@ RUSTUP_TOOLCHAIN=1.82.0 python -m tools.ci.format_features
 ```
 
 The workflow's `r (minimum toolchain)` job stages the R source package with the
-pinned toolchain, which vendors the crates, then builds and checks it with
-`R CMD check` while Cargo and rustc are Rust 1.82.0, and confirms from the
-installation log that the build used them. Repeat it from the repository root:
+pinned toolchain, which vendors the crates, then builds it and checks it with
+`tools/commands/check_r.py` (below) while Cargo and rustc are Rust 1.82.0, and
+confirms from the installation log that the build used them. Repeat it from
+the repository root, with `R_LIBS` naming a library that holds the package's
+Suggests:
 
 ```sh
 python -m tools.staging.stage_r_package /tmp/yamaa-r-minimum/yamaa
 cd /tmp/yamaa-r-minimum && R CMD build --no-manual yamaa
-RUSTUP_TOOLCHAIN=1.82.0 R CMD check --no-manual yamaa_*.tar.gz
+RUSTUP_TOOLCHAIN=1.82.0 python -m tools.commands.check_r --archive yamaa_*.tar.gz --work-dir check
 ```
 
 `.github/workflows/dependency-graphs.yml` checks both locks against the
@@ -354,12 +356,28 @@ installs the supported Python wheel/source and R source combinations on
 dispatch or on a `qualification/issue-*` push. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
 and portable math. Passing ordinary CI does not qualify a release. The final
-merged revision needs complete native evidence, including strict R package
-checks with `Status: OK`. A release tag publishes the native run that its
+merged revision needs complete native evidence, including the R package
+checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
 before tagging, runs the same selection against the latest successful main run
 without publishing;
 see [publication](docs/release.md#publication).
+
+Every R package check, in CI's `r` job (`make test-r`), native
+qualification, the `R-CMD-check` workflow and the `r (minimum toolchain)` job,
+runs `R CMD check --as-cran` through `tools/commands/check_r.py`, with the
+settings of CRAN's own checks that `--as-cran` leaves off. It fails on any NOTE, WARNING or ERROR that
+`R/yamaa/cran-comments.md` does not explain: its `EXPECTED_NOTES` lists the
+explained notes with the lines each may print, and a test keeps that list
+equal to the notes that the file's "R CMD check results" section names. To
+accept a new note, explain it there and add it to `EXPECTED_NOTES` in the same
+pull request; a warning or an error is never accepted. Remote checks (CRAN's
+package index, URLs and the clock) stay off unless the caller sets
+`_R_CHECK_CRAN_INCOMING_REMOTE_` or `_R_CHECK_SYSTEM_CLOCK_`. The Linux jobs
+have `checkbashisms`, and those of CI, native qualification and R-CMD-check
+also `aspell`, so the check covers the configure scripts and the spelling of
+`DESCRIPTION` as CRAN's does; elsewhere R warns that it lacks
+`checkbashisms`, and that one warning passes.
 
 Documentation deployment and Harbor evaluations have separate workflows.
 Harbor owns its task-build, oracle and changed-input checks; see its

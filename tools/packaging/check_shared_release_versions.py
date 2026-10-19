@@ -22,10 +22,14 @@ SELECTED_PEOPLE = [
     ("Jingwei Xiong", None),
 ]
 COLLECTIVE_HOLDER = "yamaa contributors"
-# The R DESCRIPTION alone also credits the authors of the Rust crates that the
-# R source package bundles, as CRAN's Repository Policy asks; the staged
-# package's inst/AUTHORS lists them.
-BUNDLED_CRATE_AUTHORS = ("The authors of the bundled Rust crates", None, {"ctb"})
+# The R DESCRIPTION alone also credits the authors of the third-party code that
+# the R source package bundles, as contributors and copyright holders, as
+# CRAN's Repository Policy asks: the Rust crates, which the staged package's
+# inst/AUTHORS lists, and the ReadStat C sources.
+BUNDLED_AUTHORS = [
+    ("The authors of the bundled Rust crates", None, {"ctb", "cph"}),
+    ("Evan Miller and the ReadStat authors", None, {"ctb", "cph"}),
+]
 
 
 def _people(entries):
@@ -242,7 +246,7 @@ def author_violations(root):
         expected = [
             (name, email, {"aut", "cre"} if index == 0 else {"ctb"})
             for index, (name, email) in enumerate(SELECTED_PEOPLE)
-        ] + [BUNDLED_CRATE_AUTHORS]
+        ] + BUNDLED_AUTHORS
         if _r_people(description) != expected:
             errors.append(
                 "R/yamaa/DESCRIPTION: author list differs from the selected author list"
