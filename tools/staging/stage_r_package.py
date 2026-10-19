@@ -1,15 +1,40 @@
-"""Stage a standalone R source package without maintaining duplicate Rust code."""
+"""Stage a standalone R source package without maintaining duplicate Rust code.
+
+The package builds offline: src/rust/vendor.tar.xz carries the crates.io crates
+that the unchanged Cargo.lock selects, written by tools/vendor_crates.py, which
+the package carries too, and src/Makevars points Cargo at them through
+src/rust/vendor-config.toml. inst/AUTHORS names every bundled crate's authors
+and license, as CRAN's Repository Policy asks.
+"""
 
 import argparse
 import fnmatch
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 from tools.conformance import supplemental_inventory as inventory
+from tools.packaging import generate_third_party_notices as notices
 from tools.paths import ROOT, WORKSPACE
+from tools.staging import vendor_crates
 
 REPOSITORY = ROOT
+VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
+VENDOR_CONFIG = "src/rust/vendor-config.toml"
+VENDOR_SCRIPT = "tools/vendor_crates.py"
+AUTHORS = "inst/AUTHORS"
+AUTHORS_PREAMBLE = (
+    "The yamaa R source package bundles the Rust crates below. The crates.io "
+    f"crates that src/rust/Cargo.lock selects are in {VENDOR_ARCHIVE}, as "
+    "`cargo vendor` writes them, apart from the prebuilt binaries an entry "
+    f"names as left out; {VENDOR_SCRIPT} wrote the archive. The other crates "
+    "are in the directory their entry names. Each crate keeps its own license "
+    "and copyright files beside its sources, and LICENSE-THIRD-PARTY.txt "
+    "reproduces those texts for every crate.",
+    "Each entry gives the authors, license and repository that the crate's "
+    "manifest declares. The yamaa authors are in DESCRIPTION.",
+)
 # Staged test inputs the installed R package leaves out, as paths under inst/
 # in .gitignore form: "*" stays within one name, a final "/**" covers a whole
 # directory, and a later "!" pattern keeps a file an earlier one left out. The
@@ -96,6 +121,75 @@ def leave_out_unread_inputs(resources: Path, patterns=UNREAD_BY_R_SUITES) -> Non
             directory.rmdir()
 
 
+def vendor_rust(destination: Path):
+    """Bundle the locked crates.io crates and the script that bundles them.
+
+    Returns (name, version, left-out paths) for each vendored crate.
+    """
+    rust = destination / "src/rust"
+    with tempfile.TemporaryDirectory(prefix="yamaa-r-vendor-") as scratch:
+        directory = Path(scratch) / vendor_crates.DIRECTORY
+        crates = vendor_crates.vendor(rust, directory)
+        vendor_crates.write_archive(directory, destination / VENDOR_ARCHIVE)
+    (destination / VENDOR_CONFIG).write_text(vendor_crates.CONFIG, encoding="utf-8")
+    script = destination / VENDOR_SCRIPT
+    script.parent.mkdir()
+    shutil.copyfile(vendor_crates.__file__, script)
+    return crates
+
+
+def authors_text(metadata, crates, listed):
+    """Name the authors and license of every Rust crate the package bundles.
+
+    `crates` are the vendored crates and `listed` the (name, version) pairs
+    that LICENSE-THIRD-PARTY.txt covers. The vendored crates must be exactly
+    the locked crates.io crates, and every bundled crate needs a notice entry.
+    """
+    members = set(metadata["workspace_members"])
+    bundled = [
+        package
+        for package in metadata["packages"]
+        if package["id"] not in members
+        and package["source"] in (notices.CRATES_IO, None)
+    ]
+    bundled.sort(
+        key=lambda package: (package["name"], notices.version_key(package["version"]))
+    )
+    vendored = {(name, version): left_out for name, version, left_out in crates}
+    registry = {
+        (package["name"], package["version"])
+        for package in bundled
+        if package["source"] == notices.CRATES_IO
+    }
+    if set(vendored) != registry:
+        name, version = sorted(set(vendored) ^ registry)[0]
+        raise ValueError(
+            f"{name} {version}: the vendored crates differ from the locked "
+            "crates.io crates"
+        )
+    title = "Rust crates in the yamaa R source package"
+    lines = [title, "=" * len(title), ""]
+    for paragraph in AUTHORS_PREAMBLE:
+        lines += notices.paragraph(paragraph)
+    for package in bundled:
+        label = (package["name"], package["version"])
+        if label not in listed:
+            raise ValueError(f"{' '.join(label)}: LICENSE-THIRD-PARTY.txt has no entry")
+        lines.append(f"Crate: {' '.join(label)}")
+        if package["source"] is None:
+            lines.append(f"    Directory: src/{notices.source_label(package)}")
+        if package["authors"]:
+            lines += notices.wrapped("Authors:", package["authors"], indent="    ")
+        else:
+            lines.append("    Authors: none declared")
+        lines.append(f"    License: {package['license'] or 'none declared'}")
+        lines.append(f"    Repository: {package['repository'] or 'none declared'}")
+        if vendored.get(label):
+            lines += notices.wrapped("Left out:", vendored[label], indent="    ")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def stage(destination: Path):
     """Copy shared sources and independent installed-test truth into a new archive tree."""
     # A source package must never generate its own dependency resolution.
@@ -122,6 +216,7 @@ def stage(destination: Path):
         target = destination / "src" / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original, target)
+    crates = vendor_rust(destination)
     resources = destination / "inst"
     resources.mkdir(exist_ok=True)
     from tools.staging import stage_specification_inputs as helper
@@ -161,6 +256,12 @@ def stage(destination: Path):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPOSITORY / name, target)
     leave_out_unread_inputs(resources)
+    listed = notices.committed_entries(
+        (resources / notices.NOTICES).read_text(encoding="utf-8")
+    )
+    (destination / AUTHORS).write_text(
+        authors_text(notices.locked_metadata(), crates, listed), encoding="utf-8"
+    )
     print(destination)
 
 

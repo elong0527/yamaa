@@ -39,23 +39,32 @@ class ToolchainTest(unittest.TestCase):
 
     def test_the_declaration_names_only_what_a_source_build_needs(self):
         # Both source packages carry rust-toolchain.toml unchanged, and rustup
-        # installs every component it lists during an R source installation.
+        # installs every component it lists for a build inside their bundled
+        # workspace.
         self.assertEqual(
             toolchain.declaration(),
             {"channel": toolchain.channel(), "profile": "minimal"},
         )
 
     def test_the_r_package_states_the_rust_its_build_uses(self):
-        # Under rustup the R build runs Cargo inside the bundled workspace, so
-        # the pinned channel compiles it; other builds need the rust-version.
+        # The R build runs Cargo outside the bundled workspace, so it compiles
+        # with the caller's toolchain, which must meet the rust-version; the
+        # field uses the wording of CRAN's guidance for packages using Rust.
         description = (ROOT / "R/yamaa/DESCRIPTION").read_text(encoding="utf-8")
         field = re.search(
             r"^SystemRequirements:(.*(?:\n[ \t].*)*)", description, re.MULTILINE
         )
         self.assertIsNotNone(field)
-        requirements = " ".join(field.group(1).split())
-        self.assertIn(f"rustc {toolchain.channel()} ", requirements)
-        self.assertIn(f"rustc >= {toolchain.minimum()})", requirements)
+        self.assertEqual(
+            " ".join(field.group(1).split()),
+            f"Cargo (Rust's package manager), rustc (>= {toolchain.minimum()})",
+        )
+        for name in ("Makevars", "Makevars.win"):
+            makevars = (ROOT / "R/yamaa/src" / name).read_text(encoding="utf-8")
+            minor = toolchain.minimum().split(".")[1]
+            with self.subTest(makevars=name):
+                self.assertIn(f'[ "$$2" -ge {minor} ]', makevars)
+                self.assertIn(f"rustc {toolchain.minimum()[:-2]} or later", makevars)
 
     def test_repository_checks_install_their_lint_and_format_components(self):
         install = ["rustup", "toolchain", "install", "1.99.1", "--profile", "minimal"]

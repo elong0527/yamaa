@@ -5,13 +5,18 @@
 # 1. The R package is not standalone in this repository: R/yamaa only
 #    becomes a buildable source package after the shared Rust crates are
 #    staged into it, so the staged tree is what gets built and checked.
-# 2. DESCRIPTION requires R >= 4.6.1 and a Rust toolchain (Cargo and
-#    rustc 1.99.1), so dplyr's oldrel-* matrix entries cannot run here;
-#    the matrix keeps release on all three operating systems plus devel
-#    on Ubuntu, and installs the pinned Rust toolchain before checking.
+# 2. DESCRIPTION requires R >= 4.4.0 and a Rust toolchain (Cargo and
+#    rustc 1.90 or later); the matrix keeps release on all three operating
+#    systems plus devel and the 4.4 floor on Ubuntu, and installs the
+#    pinned Rust toolchain before checking.
 # 3. Platform checks are release lanes, not development checks: they run
 #    on each release branch push and on dispatch. CI's `r` job runs the
 #    same strict check on Ubuntu for every pull request.
+#
+# The offline-install jobs build the source package once and install it
+# with the network disabled, as CRAN's policy for packages that use Rust
+# requires: in a container without a network on Linux, and behind a proxy
+# that refuses connections on macOS and Windows.
 
 on:
   push:
@@ -47,6 +52,7 @@ jobs:
           - {os: windows-latest, r: release}
           - {os: ubuntu-24.04, r: devel, http-user-agent: release}
           - {os: ubuntu-24.04, r: release}
+          - {os: ubuntu-24.04, r: '4.4'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -134,3 +140,125 @@ jobs:
           build_args: '"--no-manual"'
           upload-snapshots: true
           upload-results: true
+
+  source-package:
+    name: source package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+
+      # Staging vendors the locked crates with Cargo.
+      - name: Install the pinned Rust toolchain
+        run: python -m tools.ci.toolchain --install
+
+      - name: Install the shared grammar fixture codec and PyYAML
+        run: python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3
+
+      - name: Stage and build the source package
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m tools.staging.stage_r_package "${RUNNER_TEMP}/offline-stage/yamaa"
+          R CMD build --no-build-vignettes --no-manual offline-stage/yamaa
+          ls -l yamaa_*.tar.gz
+
+      - name: Preserve the source package
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: r-offline-source-package
+          path: ${{ runner.temp }}/yamaa_*.tar.gz
+          if-no-files-found: error
+
+  offline-install:
+    name: offline install (${{ matrix.os }})
+    needs: source-package
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 40 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          python -m tools.ci.toolchain --install
+          if [ "${{ runner.os }}" = Windows ]; then
+            rustup target add x86_64-pc-windows-gnu
+          fi
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        if: runner.os != 'Linux'
+        with:
+          r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+
+      - name: Download the source package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: r-offline-source-package
+          path: ${{ runner.temp }}/offline
+
+      # The container has no network and a read-only root, and HOME must stay
+      # empty, so the installation writes only below the library and TMPDIR.
+      # The runner's Rust toolchain is mounted read-only.
+      - name: Install in a container without a network
+        if: runner.os == 'Linux'
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          mkdir -p library home tmp
+          cp "${GITHUB_WORKSPACE}/tools/ci/check_r_offline_install.R" .
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            --volume "${PWD}:/work" --volume "$(rustc --print sysroot):/opt/rust:ro" \
+            --env PATH=/opt/rust/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            --env HOME=/work/home --env TMPDIR=/work/tmp \
+            docker.io/rocker/r-ver:4.6.1 sh -c '
+              set -e
+              R CMD INSTALL --library=/work/library /work/yamaa_*.tar.gz
+              Rscript --vanilla /work/check_r_offline_install.R /work/library
+              test -z "$(ls -A /work/home)"'
+
+      - name: Install behind a proxy that refuses connections
+        if: runner.os != 'Linux'
+        working-directory: ${{ runner.temp }}/offline
+        # Environment names are case-insensitive on Windows; libcurl reads
+        # only the lowercase http_proxy.
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          mkdir -p library
+          Rscript --vanilla -e 'install.packages(Sys.glob("yamaa_*.tar.gz"), repos = NULL, type = "source", lib = "library")' \
+            -e 'stopifnot("yamaa" %in% rownames(installed.packages(lib.loc = "library")))'
+          Rscript --vanilla "${GITHUB_WORKSPACE}/tools/ci/check_r_offline_install.R" library

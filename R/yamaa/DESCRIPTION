@@ -6,20 +6,21 @@ Authors@R: c(
     person("Ming-Chun", "Chen", role = "ctb"),
     person("Peng", "Zhang", role = "ctb"),
     person("Bingjun", "Wang", role = "ctb"),
-    person("Jingwei", "Xiong", role = "ctb"))
+    person("Jingwei", "Xiong", role = "ctb"),
+    person("The authors of the bundled Rust crates", role = "ctb",
+           comment = "listed in inst/AUTHORS"))
 Description: Builds clinical data specifications, checks declarations, and
     renders submission metadata through the shared Rust engine. Returns owned
     data frames of plain R values and structured diagnostics, with explicit
     publication of retained outputs.
 License: MIT + file LICENSE
-Copyright: The yamaa contributors, and the holders named in
-    inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
-    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt for the bundled and
-    linked third-party code.
+Copyright: The yamaa contributors, and for the bundled and linked
+    third-party code, including the Rust crates that inst/AUTHORS lists, the
+    holders named in inst/LICENSE-THIRD-PARTY.txt, inst/LICENSE-READSTAT.txt,
+    inst/LICENSE-UNICODE.txt and inst/LICENSE-YAML.txt.
 Encoding: UTF-8
-Depends: R (>= 4.6.1)
+Depends: R (>= 4.4.0)
 Imports: utils
 Suggests: arrow (>= 23.0.1), jsonlite (>= 2.0.0)
-SystemRequirements: Cargo and rustc 1.99.1 (rustup selects it from the
-    bundled rust-toolchain.toml; without rustup, rustc >= 1.90.0), GNU make
+SystemRequirements: Cargo (Rust's package manager), rustc (>= 1.90.0)
 NeedsCompilation: yes
