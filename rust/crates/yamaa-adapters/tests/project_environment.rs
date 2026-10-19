@@ -3102,6 +3102,124 @@ functions:
             }
         }
 
+        /// Callbacks keep their logical row order where a call evaluates in a
+        /// row template's window stage, before its post-window filter drops
+        /// rows, and in the column phase of the key grain (REQ-0685). Under
+        /// the equivalence gate's attempt comparison, both executors replay
+        /// these calls and must make them in this order.
+        #[test]
+        fn callbacks_keep_row_order_in_window_stages_post_window_filters_and_the_key_grain() {
+            struct Unordered {
+                trace: Trace,
+                reads: usize,
+            }
+            impl SpecificationSourcePort for Unordered {
+                fn resource_failure(
+                    &self,
+                    _error: &Self::Error,
+                ) -> Option<yamaa_core::resource::ResourceFailure> {
+                    None
+                }
+                type Error = std::convert::Infallible;
+                fn inspect(&mut self, _: &SourceDeclaration) -> Result<(), Self::Error> {
+                    self.trace.borrow_mut().push("inspect");
+                    Ok(())
+                }
+                fn capture_reads(&self) -> usize {
+                    self.reads
+                }
+                fn capture(
+                    &mut self,
+                    _: &SourceDeclaration,
+                    origin: &mut Option<yamaa_core::specification_run::SourceOrigin>,
+                ) -> Result<Arc<[u8]>, Self::Error> {
+                    *origin = Some(yamaa_core::specification_run::SourceOrigin::Resource);
+                    self.reads += 1;
+                    self.trace.borrow_mut().push("capture");
+                    // Stored out of key order, so row order and key order differ.
+                    Ok(Arc::from(b"ID,N\n3,30\n1,10\n2,20\n".as_slice()))
+                }
+            }
+            let head = "schema_version: '1.0'\ndomain: TEST\ninput:\n  SRC: {path: a.csv, types: {ID: int, N: int}}\nbase: SRC\nkeys: [ID]\n";
+            // A row template whose window stage calls `id` on each row's rank
+            // by N. `TEMPLATE` is the template's grain and filter, and `N`
+            // the derivation of N.
+            let windowed = "columns:\n  - {name: ID, type: int}\n  - {name: N, type: int}\n  - {name: SEQ, type: int}\n  - {name: VALUE, type: int}\nrows:\n  - id: records\n    dataset: SRC\nTEMPLATE    derivations:\n      ID: SRC.ID\n      N: VALUE_OF_N\n      SEQ: {row_number: {window: {order_by: [N]}}}\n      VALUE: {function: {name: id, args: {x: SEQ}}}\noutput: {path: output.csv, columns: [ID, N, SEQ, VALUE]}\n";
+            let row = |id: i64, sequence: i64| {
+                vec![
+                    Value::Int(id),
+                    Value::Int(id * 10),
+                    Value::Int(sequence),
+                    Value::Int(sequence),
+                ]
+            };
+            let cases = [
+                // The window stage calls `id` for each row in row order, the
+                // rows of IDs 3, 1 and 2 ranking 3, 1 and 2 by N; rows keep
+                // their stored order.
+                (
+                    format!(
+                        "{head}{}",
+                        windowed
+                            .replace("TEMPLATE", "")
+                            .replace("VALUE_OF_N", "SRC.N")
+                    ),
+                    vec![row(3, 3), row(1, 1), row(2, 2)],
+                    vec![3, 1, 2],
+                ),
+                // A grouped template's filter that reads the rank is applied
+                // after the window stage, which has made every call by then;
+                // it drops ID 3.
+                (
+                    format!(
+                        "{head}{}",
+                        windowed
+                            .replace(
+                                "TEMPLATE",
+                                "    group_by: [SRC.ID]\n    filter: \"SEQ <= 2\"\n"
+                            )
+                            .replace("VALUE_OF_N", "{aggregate: \"SUM(SRC.N)\"}")
+                    ),
+                    vec![row(1, 1), row(2, 2)],
+                    vec![3, 1, 2],
+                ),
+                // Without row templates, the key grain calls `id` for each key
+                // in the order its first record is stored.
+                (
+                    format!("{head}columns:\n  - {{name: ID, type: int, derivation: SRC.ID}}\n  - {{name: VALUE, type: int, derivation: {{function: {{name: id, args: {{x: SRC.N}}}}}}}}\noutput: {{path: output.csv, columns: [ID, VALUE]}}\n"),
+                    vec![
+                        vec![Value::Int(3), Value::Int(30)],
+                        vec![Value::Int(1), Value::Int(10)],
+                        vec![Value::Int(2), Value::Int(20)],
+                    ],
+                    vec![30, 10, 20],
+                ),
+            ];
+            for (raw, expected, calls) in cases {
+                let document = schemas::domain_schema()
+                    .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
+                    .unwrap();
+                let run = PreparedRun::prepare(document, environment())
+                    .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
+                let (mut activation, _) = ports();
+                let mut study = Unordered {
+                    trace: Rc::clone(&activation.trace),
+                    reads: 0,
+                };
+                let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
+                let entered = attempt
+                    .dataset
+                    .result
+                    .unwrap_or_else(|error| panic!("{error:?}"));
+                let result = entered.result.unwrap_or_else(|error| panic!("{error:?}"));
+                assert_eq!(result.dataset.rows(), expected.as_slice(), "{raw}");
+                // Activation's two case calls come first.
+                let mut values = vec![7, i64::MIN];
+                values.extend(calls);
+                assert_eq!(activation.values, values, "{raw}");
+            }
+        }
+
         #[test]
         fn intermediate_derive_callbacks_activate_before_data_and_receive_donor_or_prior_values() {
             for grouped_rows in [false, true] {
