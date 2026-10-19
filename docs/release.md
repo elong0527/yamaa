@@ -320,14 +320,15 @@ candidates pass `R CMD check --as-cran` on R-devel, win-builder and the macOS
 builder, and `R/yamaa/cran-comments.md` records the results and explains every
 remaining note. A release reaches its channels in this order:
 
-1. The coordinated tag `yamaa-v<version>`, pushed as [Publication](#publication)
+1. The final release tag `yamaa-vX.Y.Z`, pushed as [Publication](#publication)
    describes.
 2. The GitHub release that `release.yml` creates from the tag's qualified
    native run.
 3. The Python packages on PyPI.
-4. The R source tarball on CRAN: the `yamaa_<version>.tar.gz` asset of that
+4. The R source tarball on CRAN: the `yamaa_X.Y.Z.tar.gz` asset of that final
    GitHub release, unchanged, submitted through CRAN's web form by the
-   maintainer that `DESCRIPTION` names.
+   maintainer that `DESCRIPTION` names. A candidate's R tarball carries the
+   same version (#3030 D53) and is never submitted.
 
 CRAN is not pre-empted: 1.0.0 is submitted whatever its tarball size and
 build time, and only if CRAN refuses the full engine on size or build time
