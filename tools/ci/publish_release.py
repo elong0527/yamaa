@@ -4,10 +4,17 @@ import argparse
 import subprocess
 from pathlib import Path
 
+from tools.ci import release_assets
+from tools.packaging import release_identity
 from tools.paths import ROOT
 
 
 def publish(root, destination, tag, repository):
+    """Create the GitHub release of `tag` from the files the selector chose.
+
+    The files must be exactly the declared release assets of the release the
+    tree prepares. A release candidate is created as a pre-release.
+    """
     revision = (destination / "source-revision.txt").read_text().strip()
     subprocess.run(
         [
@@ -27,9 +34,16 @@ def publish(root, destination, tag, repository):
     ).strip()
     if current != revision:
         raise ValueError("remote tag no longer names the qualified source revision")
-    assets = (destination / "asset-paths.txt").read_text().splitlines()
-    if len(assets) != 5 or not all(Path(path).is_file() for path in assets):
-        raise ValueError("publication requires the five selected package assets")
+    identity = release_identity.read(root)
+    if tag != identity.tag:
+        raise ValueError(f"{tag} does not name the prepared release {identity.tag}")
+    assets = [
+        Path(line)
+        for line in (destination / "asset-paths.txt").read_text().splitlines()
+    ]
+    if not all(path.is_file() for path in assets):
+        raise ValueError("a selected release asset is missing")
+    release_assets.match(assets, release_assets.declared(), identity)
     subprocess.run(
         [
             "gh",
@@ -40,10 +54,11 @@ def publish(root, destination, tag, repository):
             repository,
             "--verify-tag",
             "--title",
-            f"yamaa {tag.removeprefix('yamaa-v')}",
+            f"yamaa {identity.cargo}",
             "--notes-file",
             str(destination / "release-notes.md"),
-            *assets,
+            *(["--prerelease"] if identity.candidate is not None else []),
+            *map(str, assets),
         ],
         cwd=root,
         check=True,

@@ -240,6 +240,8 @@ try:
     __version__ = _distribution_version("yamaa")
 except _PackageNotFoundError:
     # A vendored copy carries no distribution metadata. The compiled core
-    # version is the same release: the shared-release check keeps the
-    # Python, R and Rust versions equal.
-    from yamaa._native import _CORE_VERSION as __version__
+    # version names the same release in its Cargo spelling, which differs
+    # only for a release candidate: Cargo 1.0.0-rc.1 is Python 1.0.0rc1.
+    from yamaa._native import _CORE_VERSION
+
+    __version__ = _CORE_VERSION.replace("-rc.", "rc")

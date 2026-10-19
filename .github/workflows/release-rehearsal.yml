@@ -59,3 +59,19 @@ jobs:
           python -m tools.ci.select_release_artifacts \
             --repository "${GITHUB_REPOSITORY}" --run-id "${RUN_ID}" \
             --destination "${RUNNER_TEMP}/rehearsed-release"
+      # The assets and the body a release tag at this commit would publish,
+      # for review before the tag is pushed.
+      - name: Show the assets and release body
+        run: |
+          selected="${RUNNER_TEMP}/rehearsed-release"
+          {
+            echo "## Release assets"
+            echo
+            while read -r path; do
+              echo "- \`$(basename "$path")\`"
+            done < "${selected}/asset-paths.txt"
+            echo
+            echo "## Release body"
+            echo
+            cat "${selected}/release-notes.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
