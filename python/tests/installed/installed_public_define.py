@@ -501,6 +501,32 @@ class PublicDefine(unittest.TestCase):
                         ),
                         ["partialDatetime"],
                     )
+                    # Each column's role, whether it is mandatory, and its
+                    # origin: type, source and document references. EPOCH is
+                    # a permissible timing variable the sponsor derives from
+                    # the subject's elements.
+                    for name, role, mandatory, origin, documents in (
+                        ("EPOCH", "Timing", "No", ("Derived", "Sponsor"), []),
+                    ):
+                        reference = f"//o:ItemRef[@ItemOID='IT.VS.{name}']"
+                        self.assertEqual(
+                            xml.xpath(reference + "/@Role", namespaces=NS), [role]
+                        )
+                        self.assertEqual(
+                            xml.xpath(reference + "/@Mandatory", namespaces=NS),
+                            [mandatory],
+                        )
+                        declared = xml.xpath(
+                            f"//o:ItemDef[@Name='{name}']/d:Origin", namespaces=NS
+                        )
+                        self.assertEqual(
+                            [(o.get("Type"), o.get("Source")) for o in declared],
+                            [origin],
+                        )
+                        self.assertEqual(
+                            declared[0].xpath("d:DocumentRef/@leafID", namespaces=NS),
+                            documents,
+                        )
 
     def test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes(
         self,

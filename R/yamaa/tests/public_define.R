@@ -204,7 +204,19 @@ for (case in list(
   for (i in seq_along(items)) stopifnot(grepl(paste0('OID="IT.', case$id, '.', case$columns[[i]], '" Name="', case$columns[[i]], '"'), items[[i]], fixed = TRUE))
   if (case$id == "AE") stopifnot(grepl('Dictionary="MedDRA" Version="26.1"', xml, fixed = TRUE), grepl('OID="MT.AE.AEDECOD"', xml, fixed = TRUE),
     grepl('ItemOID="IT.AE.AEDECOD" OrderNumber="6" Mandatory="Yes" Role="Synonym Qualifier"', xml, fixed = TRUE))
-  else stopifnot(grepl('Name="VSDTC" DataType="partialDatetime"', xml, fixed = TRUE), grepl('CodedValue="FOLLOW-UP"', xml, fixed = TRUE))
+  else {
+    # A column's ItemDef, its lines trimmed and joined.
+    item <- function(column) {
+      begin <- grep(paste0('<ItemDef OID="IT.VS.', column, '"'), lines, fixed = TRUE)
+      end <- begin - 1L + match("</ItemDef>", trimws(lines[begin:length(lines)]))
+      paste(trimws(lines[begin:end]), collapse = "")
+    }
+    # EPOCH is a permissible timing variable the sponsor derives from the
+    # subject's elements.
+    stopifnot(grepl('Name="VSDTC" DataType="partialDatetime"', xml, fixed = TRUE), grepl('CodedValue="FOLLOW-UP"', xml, fixed = TRUE),
+      grepl('<ItemRef ItemOID="IT.VS.EPOCH" OrderNumber="8" Mandatory="No" Role="Timing" MethodOID="MT.VS.EPOCH"/>', xml, fixed = TRUE),
+      grepl('<def:Origin Type="Derived" Source="Sponsor"/>', item("EPOCH"), fixed = TRUE))
+  }
   unlink(root, recursive = TRUE)
 }
 

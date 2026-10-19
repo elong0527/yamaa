@@ -1088,6 +1088,14 @@ mod file {
                     assert!(xml.contains(
                         "<ItemRef ItemOID=\"IT.AE.AEDECOD\" OrderNumber=\"6\" Mandatory=\"Yes\" Role=\"Synonym Qualifier\""
                     ));
+                } else {
+                    // EPOCH is a permissible timing variable the sponsor
+                    // derives from the subject's elements.
+                    assert!(xml.contains(
+                        "<ItemRef ItemOID=\"IT.VS.EPOCH\" OrderNumber=\"8\" Mandatory=\"No\" Role=\"Timing\" MethodOID=\"MT.VS.EPOCH\"/>"
+                    ));
+                    assert!(item(xml, "IT.VS.EPOCH")
+                        .contains("<def:Origin Type=\"Derived\" Source=\"Sponsor\"/>"));
                 }
                 assert!(!temp
                     .0
