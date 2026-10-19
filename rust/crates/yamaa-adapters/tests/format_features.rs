@@ -33,18 +33,17 @@ fn csv_and_arrow_remain_available_without_physical_readers() {
         yamaa_adapters::csv_artifact::render(&table, &[0, 1], None).unwrap(),
         b"ID,TEXT\n1,alpha\n2,beta\n"
     );
-    let mut bytes = Vec::new();
-    {
-        let mut writer =
-            arrow_ipc::writer::StreamWriter::try_new(&mut bytes, &table.batches()[0].schema())
-                .unwrap();
-        for batch in table.batches() {
-            writer.write(batch).unwrap();
-        }
-        writer.finish().unwrap();
-    }
-    let restored = yamaa_adapters::ipc_table::decode_snapshot(&bytes).unwrap();
-    assert_eq!(restored.cell(0, 1).unwrap(), ValueRef::Str("alpha"));
+    // The public Arrow table and its IPC stream need no physical reader.
+    let public = yamaa_adapters::public_table::PublicTable::from_snapshot(&table).unwrap();
+    let bytes = public.ipc().unwrap();
+    let restored = arrow_ipc::reader::StreamReader::try_new(bytes.as_slice(), None)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    let text = restored.column(1).as_any();
+    let text = text.downcast_ref::<arrow_array::StringArray>().unwrap();
+    assert_eq!(text.value(0), "alpha");
 }
 
 #[test]

@@ -1029,8 +1029,7 @@ mod file {
             )
             .unwrap();
             assert!(result.issues().is_empty());
-            let table =
-                yamaa_adapters::ipc_table::decode_snapshot(result.output().unwrap()).unwrap();
+            let table = crate::support::ipc_snapshot::decode(result.output().unwrap());
             assert_eq!(
                 table.schema(),
                 &crate::support::table_schema(&[("ID", ColumnType::Int)])
@@ -2109,9 +2108,9 @@ mod file {
             fs::write(study.0.join("entry/dict.yaml"), b"A: changed\n").unwrap();
             let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
             assert!(response.table.is_some());
-            let outcome: Value = yamaa_adapters::json_wire::decode(
-                &ipc_snapshot::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
-            )
+            let outcome: Value = yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(
+                response.table.as_ref().unwrap(),
+            ))
             .unwrap();
             assert_eq!(
                 outcome["rows"],
@@ -2139,9 +2138,9 @@ mod file {
             assert_eq!(dictionary.bytes, b"A: declared-parent\n");
             assert!(dictionary.identity.ends_with("/parent/dict.yaml"));
             let response = prepared.run().execute_csv(b"ID,CODE\n1,A\n").unwrap();
-            let outcome: Value = yamaa_adapters::json_wire::decode(
-                &ipc_snapshot::table_snapshot(response.table.as_ref().unwrap()).unwrap(),
-            )
+            let outcome: Value = yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(
+                response.table.as_ref().unwrap(),
+            ))
             .unwrap();
             assert_eq!(
                 outcome["rows"],

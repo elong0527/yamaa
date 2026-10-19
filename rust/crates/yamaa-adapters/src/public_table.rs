@@ -88,10 +88,6 @@ impl PublicTable {
         self.rows
     }
 
-    pub fn decode(input: &[u8]) -> Result<Self, Error> {
-        Self::from_snapshot(&ipc_table::decode_snapshot(input)?)
-    }
-
     /// Primitive buffers are shared with the snapshot. Temporal values project
     /// the existing child buffer and the parent validity bitmap, retaining the
     /// established public epoch representation without leaking precision fields.
