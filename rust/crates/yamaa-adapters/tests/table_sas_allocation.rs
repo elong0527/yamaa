@@ -16,7 +16,8 @@ mod table {
         };
 
         /// Set in the child process that reads the files under a bounded
-        /// address space.
+        /// address space. Only Linux starts one.
+        #[cfg(target_os = "linux")]
         const CHILD: &str = "YAMAA_SAS_ALLOCATION_CHILD";
 
         /// One record of `X` and `T` on a mix page, whose column-attributes
@@ -69,14 +70,12 @@ mod table {
             // slot (found by fuzzing, #2928). Under memory overcommit such a
             // request can succeed untouched, so a plain read cannot tell.
             read_every_layout();
-            if std::env::var_os(CHILD).is_some() {
-                return;
-            }
             // On Linux a child process reads the files again with its address
             // space bounded to 2 GiB. A request that large fails there, so a
-            // reader that made it would stop with an internal error.
+            // reader that made it would stop with an internal error. The child
+            // only reads.
             #[cfg(target_os = "linux")]
-            {
+            if std::env::var_os(CHILD).is_none() {
                 let test = concat!(
                     module_path!(),
                     "::a_column_attribute_slot_beyond_the_columns_sizes_no_row_buffer"
