@@ -488,3 +488,78 @@ pub(super) fn validate_context_read(
     }
     validate_read(item, column, primary, sources, available, output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::expression::{compile, Context};
+    use crate::value::Value;
+
+    fn assignment(expression: Expression) -> Assignment {
+        Assignment {
+            column: 0,
+            expression,
+            path: "intermediates[0].derivations.D".into(),
+        }
+    }
+
+    fn window() -> Expression {
+        Expression::Window(Window {
+            kind: WindowKind::RowNumber,
+            group_by: Vec::new(),
+            order_by: Vec::new(),
+            filter: None,
+        })
+    }
+
+    /// An aggregate whose one derive binding evaluates `derivation`.
+    fn aggregate(derivation: Expression) -> Expression {
+        let bound = BoundAggregate::new(
+            compile(
+                "COUNT(D.*)",
+                Context::Aggregate,
+                "intermediates[0].derivations.N.aggregate.expr",
+            )
+            .unwrap(),
+            AggregateRelation::CurrentGroup,
+            Vec::new(),
+            None,
+            AggregatePhase::Derivation,
+            None,
+            "intermediates[0].derivations.N.aggregate",
+        )
+        .unwrap()
+        .with_record_operations(
+            None,
+            vec![AggregateDerivation {
+                assignment: assignment(derivation),
+                kind: ColumnType::Int,
+                handler: None,
+                path: "intermediates[0].derivations.N.aggregate.derive.D".into(),
+            }],
+            None,
+        );
+        Expression::Aggregate(Box::new(bound))
+    }
+
+    /// A window anywhere among the derivations keeps every donor record
+    /// augmented (LOOKUP-15): directly, in a case branch, or in an
+    /// aggregate's derive binding, which preparation refuses but a
+    /// hand-built plan can hold.
+    #[test]
+    fn a_window_is_found_wherever_a_derivation_nests_it() {
+        let literal = || Expression::Literal(Value::Int(1));
+        assert!(contains_window(&window()));
+        assert!(!contains_window(&literal()));
+        let case = |then: Expression| {
+            Expression::Case(vec![CaseBranch {
+                when: None,
+                assignment: Box::new(assignment(then)),
+            }])
+        };
+        assert!(contains_window(&case(window())));
+        assert!(!contains_window(&case(literal())));
+        assert!(contains_window(&aggregate(window())));
+        assert!(!contains_window(&aggregate(literal())));
+    }
+}
