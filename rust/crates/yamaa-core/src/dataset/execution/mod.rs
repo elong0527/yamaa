@@ -314,14 +314,20 @@ impl DatasetPlan {
     ) -> ExecutionAttempt<T::Error> {
         match self.resolve() {
             Ok(resolved) => resolved.execute(&Borrowed(table), secondary, functions, observer),
-            // Binding resolves every plan it accepts, so only a plan built
-            // around the compiler fails here.
-            Err(_) => ExecutionAttempt {
-                result: Err(Box::new(ExecutionError::SchemaMismatch)),
-                handler_counts: Vec::new(),
-                retained_verifications: Vec::new(),
-                template_rows: Vec::new(),
-            },
+            // Binding resolves every plan it accepts, so a failure here is a
+            // compiler or resolver defect: loud in debug builds, refused as
+            // a schema mismatch otherwise.
+            Err(error) => {
+                if cfg!(debug_assertions) {
+                    panic!("an unresolvable plan reached execution: {error}");
+                }
+                ExecutionAttempt {
+                    result: Err(Box::new(ExecutionError::SchemaMismatch)),
+                    handler_counts: Vec::new(),
+                    retained_verifications: Vec::new(),
+                    template_rows: Vec::new(),
+                }
+            }
         }
     }
 }
