@@ -105,7 +105,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         reached.insert(finding.code);
     }
     let dependencies = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&[
-        yamaa_core::schema::InheritanceDependencyIssue::Unknown {
+        yamaa_core::resolution::Issue::Unknown {
             column: "VALUE".into(),
             dependency: "MISSING".into(),
         },

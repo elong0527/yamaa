@@ -21,7 +21,7 @@ pub enum Error {
     },
     Bundle(BundleError),
     Normalize(NormalizationError),
-    Dependencies(yamaa_core::schema::InheritanceDependencyError),
+    Dependencies(yamaa_core::resolution::Error),
     Validation(ValidationError),
     Findings(Box<CapturedFindings>),
     /// This entry point cannot silently treat an inherited layer as standalone.
@@ -281,9 +281,7 @@ impl CapturedSchema {
                 });
             }
             Err(StandaloneError::Validation(error)) => return Err(Error::Validation(error)),
-            Err(StandaloneError::Dependencies(failure)) => {
-                return Err(standalone_dependency_error(self, source, *failure));
-            }
+            Err(StandaloneError::Dependencies(error)) => return Err(Error::Dependencies(*error)),
             Err(StandaloneError::Model(findings)) => {
                 return Err(Error::Findings(Box::new(CapturedFindings {
                     schema: Arc::clone(self),
@@ -416,36 +414,13 @@ fn standalone_dispatch_error(
             error => Error::Normalize(error),
         },
         Failure::Validation(error) => Error::Validation(error),
-        Failure::Dependencies(failure) => standalone_dependency_error(schema, source, *failure),
+        Failure::Dependencies(error) => Error::Dependencies(*error),
         Failure::Model(findings) => Error::Findings(Box::new(CapturedFindings {
             schema: Arc::clone(schema),
             source,
             document: None,
             findings,
         })),
-    }
-}
-
-/// Pruning findings resolve against the retained pruning-pass arena, exactly as
-/// in the inheritance lifecycle; every other dependency failure stays typed.
-fn standalone_dependency_error(
-    schema: &Arc<CapturedSchema>,
-    source: Source,
-    failure: yamaa_core::standalone_preparation::DependencyFailureContext,
-) -> Error {
-    use yamaa_core::schema::{InheritanceDependencyError, InheritanceReferenceError};
-    let yamaa_core::standalone_preparation::DependencyFailureContext { error, input } = failure;
-    match error {
-        InheritanceDependencyError::Normalization(NormalizationError::Invalid(findings))
-        | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
-            NormalizationError::Invalid(findings),
-        )) => Error::Findings(Box::new(CapturedFindings {
-            schema: Arc::clone(schema),
-            source,
-            document: input,
-            findings,
-        })),
-        error => Error::Dependencies(error),
     }
 }
 

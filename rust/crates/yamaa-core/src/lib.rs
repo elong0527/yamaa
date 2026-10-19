@@ -126,6 +126,8 @@ pub mod project_domain;
 
 pub mod inheritance_preparation;
 
+pub mod resolution;
+
 pub mod build;
 
 pub mod table_grouping;

@@ -21,7 +21,6 @@ mod compiler_limits;
 pub use compiler_limits::CompilerLimit;
 mod binding_diagnostics;
 mod intermediate_admission;
-pub(crate) use intermediate_admission::is_rename_only;
 mod intermediate_derivations;
 mod intermediate_range;
 mod intermediates;

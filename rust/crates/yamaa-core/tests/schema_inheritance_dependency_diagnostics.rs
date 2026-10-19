@@ -4,20 +4,18 @@ mod support;
 mod schema {
     mod inheritance_dependency_diagnostics {
         use yamaa_core::json::Value as JsonValue;
-        use yamaa_core::{
-            diagnostic::inheritance_dependency_diagnostics,
-            schema::InheritanceDependencyIssue as Issue,
-        };
+        use yamaa_core::{diagnostic::inheritance_dependency_diagnostics, resolution::Issue};
 
         #[test]
-        fn complete_ordered_facts_keep_dependency_cycles_distinct_from_traversal_loops() {
+        fn complete_ordered_facts_name_each_cycle_by_its_closed_loop() {
+            // One detector names the closed loop for layered and single-file
+            // specs alike (#2844, decision 1).
             let issues = [
                 Issue::Unknown {
                     column: "VALUE\0é".into(),
                     dependency: "MISSING🙂".into(),
                 },
                 Issue::Cycle {
-                    columns: vec!["DOWNSTREAM".into(), "A".into(), "B".into()],
                     cycle: vec!["A".into(), "B".into(), "A".into()],
                     paths: vec![
                         "columns.A.derivation.compute".into(),
@@ -42,7 +40,7 @@ mod schema {
             assert_eq!(
                 findings[1].context["cycle"],
                 JsonValue::Array(
-                    ["DOWNSTREAM", "A", "B"]
+                    ["A", "B", "A"]
                         .into_iter()
                         .map(|name| JsonValue::String(name.into()))
                         .collect()
@@ -98,15 +96,14 @@ mod schema {
         }
 
         #[test]
-        fn all_empty_sequence_members_remain_in_the_retained_order() {
+        fn all_empty_cycle_members_remain_in_the_retained_order() {
             let issues = [Issue::Cycle {
-                columns: vec![String::new(); 1000],
-                cycle: vec![String::new(); 2],
-                paths: vec![String::new()],
+                cycle: vec![String::new(); 1000],
+                paths: vec![String::new(); 999],
             }];
             let projected = inheritance_dependency_diagnostics(&issues);
             assert_eq!(projected.len(), 1);
-            assert_eq!(projected[0].spec_paths, [""]);
+            assert_eq!(projected[0].spec_paths, vec![String::new(); 999]);
             assert_eq!(
                 projected[0].context["cycle"],
                 JsonValue::Array(vec![JsonValue::String(String::new()); 1000])

@@ -1,9 +1,10 @@
 //! Inheritance application lifecycle over captured documents and explicit path authority.
 use crate::inheritance::{self, InheritanceSourcePort, Layer, Source};
+use crate::resolution::{self, Failure, Order};
 use crate::schema::{
-    Document, DocumentError, DocumentNode as N, InheritanceDependencyError, LayerCompositionError,
-    LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin,
-    SchemaSource, SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
+    Document, DocumentError, DocumentNode as N, LayerCompositionError, LayerNodeOrigin,
+    LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin, SchemaSource,
+    SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
 };
 
 /// The host respells paths using captured canonical file identities, without reopening them.
@@ -31,7 +32,7 @@ pub enum Error<E> {
     #[error("inheritance preparation normalize: {0:?}")]
     Normalize(Box<FailureContext<NormalizationError>>),
     #[error("inheritance preparation dependencies: {0:?}")]
-    Dependencies(Box<FailureContext<InheritanceDependencyError>>),
+    Dependencies(Box<resolution::Error>),
     #[error("inheritance preparation validation: {0:?}")]
     Validation(ValidationError),
     #[error("inheritance preparation model: {0:?}")]
@@ -49,36 +50,11 @@ pub struct FailureContext<E> {
 }
 fn normalization_context(
     error: NormalizationError,
-    input: &Document,
+    input: Document,
     provenance: &[LayerProvenance],
     layers: &[Layer],
 ) -> Box<FailureContext<NormalizationError>> {
-    let retained = matches!(&error, NormalizationError::Invalid(_)).then(|| input.clone());
-    Box::new(FailureContext {
-        error,
-        input: retained,
-        provenance: provenance.to_vec(),
-        sources: layers
-            .iter()
-            .map(|layer| layer.source.identity.clone())
-            .collect(),
-    })
-}
-fn dependency_context(
-    error: InheritanceDependencyError,
-    input: &Document,
-    provenance: &[LayerProvenance],
-    layers: &[Layer],
-) -> Box<FailureContext<InheritanceDependencyError>> {
-    use crate::schema::InheritanceReferenceError;
-    let retained = matches!(
-        &error,
-        InheritanceDependencyError::Normalization(NormalizationError::Invalid(_))
-            | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
-                NormalizationError::Invalid(_)
-            ))
-    )
-    .then(|| input.clone());
+    let retained = matches!(&error, NormalizationError::Invalid(_)).then_some(input);
     Box::new(FailureContext {
         error,
         input: retained,
@@ -177,7 +153,7 @@ fn rebase<P: PathPort>(
     Ok(())
 }
 
-/// Traverse once, compose, expand non-strictly, prune, then normalize and admit the final model.
+/// Traverse once, compose, then resolve the composition in dependency order.
 /// No table reads, function activation or output publication occur during this lifecycle.
 pub fn prepare<P: PathPort>(
     schema: &SchemaStructure,
@@ -237,82 +213,29 @@ pub fn prepare<P: PathPort>(
             }
         })
         .collect::<Vec<_>>();
-    let expanded = schema
-        .expand_named_windows(&composed.document, false)
-        .map_err(|error| {
-            Error::Normalize(normalization_context(
-                error,
-                &composed.document,
-                &composed.provenance,
-                &layers,
-            ))
-        })?;
-    let expanded_origins = expanded
-        .origins
-        .iter()
-        .map(|&node| composed_origins[node])
-        .collect::<Vec<_>>();
-    let pruned = schema
-        .resolve_inheritance_dependencies(&expanded.document)
-        .map_err(|error| {
-            Error::Dependencies(dependency_context(
-                error,
-                &expanded.document,
-                &composed.provenance,
-                &layers,
-            ))
-        })?;
-    let pruned_origins = pruned
-        .origins
-        .iter()
-        .map(|&origin| LayerNodeOrigin::through(origin, &expanded_origins))
-        .collect::<Vec<_>>();
-    let normalized = schema
-        .normalize_resolved_document(&pruned.document)
-        .map_err(|error| {
-            Error::Normalize(normalization_context(
-                error,
-                &pruned.document,
-                &composed.provenance,
-                &layers,
-            ))
-        })?;
-    let normalized_origins = normalized
-        .origins
-        .iter()
-        .map(|&origin| LayerNodeOrigin::through(origin, &pruned_origins))
-        .collect::<Vec<_>>();
-    let expanded = schema
-        .expand_named_windows(&normalized.document, true)
-        .map_err(|error| {
-            Error::Normalize(normalization_context(
-                error,
-                &normalized.document,
-                &composed.provenance,
-                &layers,
-            ))
-        })?;
-    let original_origins = expanded
-        .origins
-        .iter()
-        .map(|&node| normalized_origins[node])
-        .collect();
-    let origins = expanded
-        .origins
-        .iter()
-        .map(|&id| normalized.origins[id])
-        .collect();
-    let model = SpecificationDocument::admit(expanded.document)
-        .map_err(Error::Validation)?
-        .map_err(Error::Model)?;
+    let provenance = composed.provenance;
+    let resolved = resolution::resolve(
+        schema,
+        composed.document,
+        &composed_origins,
+        Order::Dependencies,
+    )
+    .map_err(|failure| match failure {
+        Failure::Normalize { error, input } => {
+            Error::Normalize(normalization_context(error, input, &provenance, &layers))
+        }
+        Failure::Prune(error) => Error::Dependencies(Box::new(error)),
+        Failure::Validation(error) => Error::Validation(error),
+        Failure::Model(findings) => Error::Model(findings),
+    })?;
     Ok(PreparedInheritance {
-        model,
+        model: resolved.model,
         layers,
-        provenance: composed.provenance,
-        normalization_input: pruned.document,
-        origins,
-        original_origins,
-        windows: expanded.references,
+        provenance,
+        normalization_input: resolved.pruned,
+        origins: resolved.origins,
+        original_origins: resolved.traced,
+        windows: resolved.windows,
     })
 }
 
@@ -348,15 +271,6 @@ pub fn diagnostic_origins<E>(error: &Error<E>) -> Vec<(&str, &str)> {
     match error {
         Error::Normalize(context) => match &context.error {
             NormalizationError::Invalid(findings) => origins(context, findings),
-            _ => Vec::new(),
-        },
-        Error::Dependencies(context) => match &context.error {
-            InheritanceDependencyError::Normalization(NormalizationError::Invalid(findings))
-            | InheritanceDependencyError::Reference(
-                crate::schema::InheritanceReferenceError::Normalization(
-                    NormalizationError::Invalid(findings),
-                ),
-            ) => origins(context, findings),
             _ => Vec::new(),
         },
         _ => Vec::new(),
