@@ -5,7 +5,8 @@ name: Publish qualified release
 # pre-release. The selector refuses any other tag, and any tag other than the
 # one that tools/packaging/release.toml names, before anything is downloaded.
 # Once the GitHub release exists, the pypi job uploads its Python packages,
-# the same bytes, to PyPI; a candidate's version makes it a PyPI pre-release.
+# the same selected bytes, to PyPI; a candidate's version makes it a PyPI
+# pre-release.
 on:
   push:
     tags: ['yamaa-v*']
@@ -45,18 +46,19 @@ jobs:
           python -m tools.ci.select_release_artifacts \
             --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
             --destination "${RUNNER_TEMP}/qualified-release"
+      # Handed over before the GitHub release exists: a failed upload leaves no
+      # release behind, so the workflow can simply run again.
+      - name: Hand the selected Python packages to the PyPI upload
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: pypi-packages
+          path: ${{ runner.temp }}/qualified-release/pypi-packages
+          if-no-files-found: error
       - name: Publish qualified assets without rebuilding
         run: |
           python -m tools.ci.publish_release \
             --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
-            --destination "${RUNNER_TEMP}/qualified-release" \
-            --pypi-packages "${RUNNER_TEMP}/pypi-packages"
-      - name: Hand the published Python packages to the PyPI upload
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
-        with:
-          name: pypi-packages
-          path: ${{ runner.temp }}/pypi-packages
-          if-no-files-found: error
+            --destination "${RUNNER_TEMP}/qualified-release"
 
   pypi:
     needs: publish
