@@ -1,6 +1,6 @@
 //! Fixed ODM item reads bound to an admitted original input and authored row scope.
 use super::*;
-use crate::{bound_expression::BoundPredicate, odm_source, value::ColumnType};
+use crate::{bound_expression::BoundPredicate, odm_source};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OdmScope {
@@ -101,77 +101,6 @@ impl BoundOdm {
         self.0.scope = OdmScope::Templates(contexts);
         Ok(())
     }
-    pub(super) fn validate(
-        &self,
-        source: &TableSchema,
-        secondary: &[SecondarySource],
-        mode: &RowMode,
-    ) -> Result<(), PlanError> {
-        let source = match self.0.source {
-            None | Some(AggregateSource::Primary) => source,
-            Some(AggregateSource::Secondary(index)) => {
-                &secondary.get(index).ok_or(PlanError::InvalidSource)?.schema
-            }
-        };
-        if source.columns().len() != odm_source::FIELDS.len()
-            || source.columns().iter().enumerate().any(|(index, column)| {
-                column.name != odm_source::FIELDS[index] || column.kind != ColumnType::Str
-            })
-        {
-            return Err(PlanError::InvalidSource);
-        }
-        match (&self.0.scope, mode.local_mode()) {
-            (OdmScope::Keys, RowMode::Keys) | (OdmScope::Records, RowMode::Records) => (),
-            (OdmScope::Templates(_), RowMode::Records | RowMode::Groups(_)) => (),
-            (OdmScope::Groups(fields), RowMode::Groups(groups))
-                if fields.iter().enumerate().all(|(index, field)| {
-                    odm_source::HIERARCHY.contains(field)
-                        && groups.contains(field)
-                        && !fields[..index].contains(field)
-                }) => {}
-            _ => return Err(PlanError::InvalidSource),
-        }
-        if let Some(filter) = &self.0.filter {
-            filter
-                .validate(source.columns().len(), &[], false)
-                .map_err(PlanError::Filter)?;
-        }
-        Ok(())
-    }
-}
-
-pub(super) fn validate_template(
-    expression: &Expression,
-    template: &RowTemplate,
-    index: usize,
-    count: usize,
-) -> Result<(), PlanError> {
-    visit(expression, &mut |bound| {
-        let source = match bound.read().source {
-            None | Some(AggregateSource::Primary) => 0,
-            Some(AggregateSource::Secondary(index)) => {
-                index.checked_add(1).ok_or(PlanError::InvalidSource)?
-            }
-        };
-        if source != template.mode.source_index() {
-            return Err(PlanError::InvalidSource);
-        }
-        if let OdmScope::Templates(contexts) = &bound.read().scope {
-            let context = contexts.get(index).ok_or(PlanError::InvalidSource)?;
-            if contexts.len() != count || context.driver != template.mode.source_index() {
-                return Err(PlanError::InvalidSource);
-            }
-            match (&context.groups, template.mode.local_mode()) {
-                (None, RowMode::Records) => (),
-                (Some(fields), RowMode::Groups(groups))
-                    if fields.iter().copied().eq(odm_source::HIERARCHY
-                        .into_iter()
-                        .filter(|field| groups.contains(field))) => {}
-                _ => return Err(PlanError::InvalidSource),
-            }
-        }
-        Ok(())
-    })
 }
 
 macro_rules! walk {
@@ -209,27 +138,13 @@ macro_rules! walk {
                 }
             }
             Expression::Literal(_) | Expression::Flag(_) | Expression::Compute(_)
-            | Expression::Function(_) | Expression::ProjectFunction(_) | Expression::Window(_) | Expression::ContextWindow(_)
-            | Expression::Source(_) | Expression::SourceLookup { .. } | Expression::Lookup(_)
-            | Expression::RowLookup(_) | Expression::Intermediate { .. } | Expression::Collect { .. }
-            | Expression::Column(_) | Expression::Reduce { .. } | Expression::Count { .. }
-            | Expression::Aggregate(_) | Expression::Joined(_) | Expression::JoinedSource { .. } => (),
+            | Expression::ProjectFunction(_) | Expression::Window(_) | Expression::ContextWindow(_)
+            | Expression::Source(_) | Expression::SourceLookup { .. }
+            | Expression::Intermediate { .. } | Expression::Collect { .. }
+            | Expression::Column(_) | Expression::Aggregate(_) | Expression::Joined(_) | Expression::JoinedSource { .. } => (),
         }
         Ok(())
     }};
-}
-pub(crate) fn visit(
-    expression: &Expression,
-    visitor: &mut impl FnMut(&BoundOdm) -> Result<(), PlanError>,
-) -> Result<(), PlanError> {
-    visit_at(expression, visitor, 0)
-}
-fn visit_at(
-    expression: &Expression,
-    visitor: &mut impl FnMut(&BoundOdm) -> Result<(), PlanError>,
-    depth: usize,
-) -> Result<(), PlanError> {
-    walk!(expression, visitor, visit_at, sources, depth)
 }
 pub(crate) fn visit_mut(
     expression: &mut Expression,
@@ -321,13 +236,6 @@ mod tests {
             }]);
         }
         let mut effects = 0;
-        assert_eq!(
-            visit(&expression, &mut |_| {
-                effects += 1;
-                Ok(())
-            }),
-            Err(PlanError::InvalidColumns)
-        );
         assert_eq!(
             visit_mut(&mut expression, &mut |_| {
                 effects += 1;

@@ -21,71 +21,6 @@ pub struct CurrentField {
     pub read: CurrentRead,
     pub identifier: String,
 }
-impl CurrentField {
-    pub(super) fn validate(
-        &self,
-        primary: &TableSchema,
-        secondary: &[SecondarySource],
-        output: &TableSchema,
-        items: &[Intermediate],
-        item_index: usize,
-    ) -> Result<(), PlanError> {
-        if self.identifier.is_empty() {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        match self.read {
-            CurrentRead::Record { source, column } => {
-                let schema = if source == 0 {
-                    primary
-                } else {
-                    &secondary
-                        .get(source - 1)
-                        .ok_or(PlanError::InvalidIntermediate)?
-                        .schema
-                };
-                if column >= schema.columns().len() {
-                    return Err(PlanError::InvalidIntermediate);
-                }
-            }
-            CurrentRead::Output(column) if column >= output.columns().len() => {
-                return Err(PlanError::InvalidIntermediate)
-            }
-            CurrentRead::Intermediate { index, column }
-                if index >= item_index
-                    || !items.get(index).is_some_and(|item| {
-                        item.admits_column(column)
-                            && item
-                                .source_schema(secondary)
-                                .is_some_and(|schema| column < schema.columns().len())
-                    }) =>
-            {
-                return Err(PlanError::InvalidIntermediate);
-            }
-            _ => (),
-        }
-        Ok(())
-    }
-    pub(super) fn validate_context(
-        &self,
-        source: usize,
-        mode: &RowMode,
-        available: &[bool],
-    ) -> Result<(), PlanError> {
-        match self.read {
-            CurrentRead::Record { source: driver, .. } if driver != source => {
-                return Err(PlanError::InvalidIntermediate)
-            }
-            CurrentRead::Record { column, .. } if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(&column)) => {
-                return Err(PlanError::NonGroupSource)
-            }
-            CurrentRead::Output(column) if !available.get(column).copied().unwrap_or(false) => {
-                return Err(PlanError::UnavailableColumn)
-            }
-            _ => (),
-        }
-        Ok(())
-    }
-}
 
 /// Source bindings read donors. Column bindings index the current field metadata.
 #[derive(Clone, Debug, PartialEq)]
@@ -160,35 +95,6 @@ impl RelationPredicate {
     pub fn correlated(&self) -> bool {
         !self.current.is_empty()
     }
-    pub(super) fn validate(
-        &self,
-        donor_width: usize,
-        primary: &TableSchema,
-        secondary: &[SecondarySource],
-        output: &TableSchema,
-        items: &[Intermediate],
-        item_index: usize,
-    ) -> Result<(), PlanError> {
-        self.predicate
-            .validate(donor_width, &vec![true; self.current.len()], false)
-            .map_err(PlanError::Filter)?;
-        for field in &self.current {
-            field.validate(primary, secondary, output, items, item_index)?;
-        }
-        // From<BoundPredicate> only admits donor-only predicates.
-        for binding in self.bindings() {
-            if let Read::Column(index) = binding.read {
-                if self
-                    .current
-                    .get(index)
-                    .is_none_or(|field| field.identifier != binding.name)
-                {
-                    return Err(PlanError::Filter(BindingError::UnavailableColumn));
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 /// Visit every named selection, including lazy and nested alternatives.
@@ -230,13 +136,6 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         Expression::Flag(flag) => {
             for binding in flag.bindings() {
                 if let FlagRead::Read(value) = &binding.read {
-                    read(value);
-                }
-            }
-        }
-        Expression::Function(function) => {
-            for argument in function.arguments() {
-                if let FunctionInput::Read(value) = &argument.input {
                     read(value);
                 }
             }
@@ -286,12 +185,8 @@ pub(crate) fn visit(expression: &Expression, visitor: &mut impl FnMut(usize)) {
         | Expression::Window(_)
         | Expression::ContextWindow(_)
         | Expression::Source(_)
-        | Expression::Lookup(_)
-        | Expression::RowLookup(_)
         | Expression::Collect { .. }
-        | Expression::Column(_)
-        | Expression::Reduce { .. }
-        | Expression::Count { .. } => (),
+        | Expression::Column(_) => (),
     }
 }
 /// Visit the range of every lookup the current row evaluates directly, a
@@ -340,7 +235,6 @@ pub(crate) fn visit_ranges(expression: &Expression, visitor: &mut impl FnMut(&Re
         Expression::Intermediate { .. }
         | Expression::Compute(_)
         | Expression::Flag(_)
-        | Expression::Function(_)
         | Expression::ProjectFunction(_)
         | Expression::Joined(_)
         | Expression::Odm(_)
@@ -348,93 +242,7 @@ pub(crate) fn visit_ranges(expression: &Expression, visitor: &mut impl FnMut(&Re
         | Expression::Window(_)
         | Expression::ContextWindow(_)
         | Expression::Source(_)
-        | Expression::Lookup(_)
-        | Expression::RowLookup(_)
         | Expression::Collect { .. }
-        | Expression::Column(_)
-        | Expression::Reduce { .. }
-        | Expression::Count { .. } => (),
+        | Expression::Column(_) => (),
     }
-}
-pub(super) fn validate_reads(
-    expression: &Expression,
-    items: &[Intermediate],
-    source: usize,
-    mode: &RowMode,
-    available: &[bool],
-) -> Result<(), PlanError> {
-    let mut result = Ok(());
-    visit(expression, &mut |index| {
-        if result.is_ok() {
-            result = validate_named_read(index, items, source, mode, available, 0);
-        }
-    });
-    // A range value reads the record of this row's own driver, never another
-    // input at the driver's record positions (LOOKUP-9).
-    visit_ranges(expression, &mut |range| {
-        if result.is_ok()
-            && matches!(range.current().read, CurrentRead::Record { source: driver, .. }
-                if driver != source)
-        {
-            result = Err(PlanError::InvalidSource);
-        }
-    });
-    result
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn validate_named_read(
-    index: usize,
-    items: &[Intermediate],
-    source: usize,
-    mode: &RowMode,
-    available: &[bool],
-    depth: usize,
-) -> Result<(), PlanError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PlanError::InvalidIntermediate);
-    }
-    let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
-    for key in &item.keys {
-        for read in key.value.reads() {
-            if let MatchRead::SecondaryRecord {
-                source: owner,
-                column,
-                ..
-            } = read
-            {
-                if owner + 1 != source {
-                    return Err(PlanError::InvalidIntermediate);
-                }
-                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-            if let MatchRead::Record { column, .. } = read {
-                if source != 0 {
-                    return Err(PlanError::InvalidIntermediate);
-                }
-                if matches!(mode.local_mode(), RowMode::Groups(keys) if !keys.contains(column)) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-        }
-    }
-    for field in item.current_fields() {
-        field.validate_context(source, mode, available)?;
-        if let CurrentRead::Intermediate {
-            index: child,
-            column: _,
-        } = field.read
-        {
-            if child >= index {
-                return Err(PlanError::InvalidIntermediate);
-            }
-            if items[child].keys.iter().flat_map(|key| key.value.reads()).any(|read| matches!(read, MatchRead::Output { column, .. } if !available.get(*column).copied().unwrap_or(false))) {
-                    return Err(PlanError::InvalidLookup);
-                }
-            validate_named_read(child, items, source, mode, available, depth + 1)?;
-        }
-    }
-    Ok(())
 }

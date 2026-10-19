@@ -14,10 +14,7 @@ mod table {
         use yamaa_adapters::arrow_table::{
             date_array, datetime_array, physical_schema, ArrowTable, TableError,
         };
-        use yamaa_core::table_reduction::{reduce_column, TableReductionError};
         use yamaa_core::{
-            numeric::{ArithmeticErrorKind, Number},
-            reduction::{NumericReducer, ReductionError},
             table::{CellError, TableAccess, TableSchema, ValueRef},
             temporal::{Date, DateTime, Precision as DP, Precision as TP},
             value::ColumnType as CT,
@@ -453,44 +450,6 @@ mod table {
                     ..
                 })
             ));
-        }
-
-        #[test]
-        /// Run the engine consumer across chunks, preserving rounding and overflow order.
-        fn actual_engine_reductions_cross_chunks_without_partial_sums() {
-            let schema = logical_schema(&[("A", CT::Float)]);
-            let chunks = vec![
-                batch(
-                    &schema,
-                    vec![Arc::new(Float64Array::from(vec![Some(1e16)]))],
-                ),
-                batch(
-                    &schema,
-                    vec![Arc::new(Float64Array::from(vec![
-                        Some(1.0),
-                        None,
-                        Some(-1e16),
-                        Some(1.0),
-                    ]))],
-                ),
-            ];
-            let table = ArrowTable::try_new(schema, chunks).unwrap();
-            assert_eq!(
-                reduce_column(&table, 0, &[0, 1, 2, 3, 4], NumericReducer::Sum, "SUM(A)"),
-                Ok(Number::float(1.0))
-            );
-            assert_eq!(
-                reduce_column(&table, 0, &[0, 1, 2, 3, 4], NumericReducer::Mean, "MEAN(A)"),
-                Ok(Number::float(0.25))
-            );
-            let schema = logical_schema(&[("A", CT::Int)]);
-            let chunks = [i64::MAX, 1, -1]
-                .map(|value| batch(&schema, vec![Arc::new(Int64Array::from(vec![value]))]));
-            let table = ArrowTable::try_new(schema, chunks.into()).unwrap();
-            let result = reduce_column(&table, 0, &[0, 1, 2], NumericReducer::Sum, "SUM(A)");
-            assert!(
-                matches!(result,Err(TableReductionError::Reduction(ReductionError::Arithmetic { argument:1,error })) if error.kind == ArithmeticErrorKind::IntegerOverflow { value:i64::MAX as i128+1 })
-            );
         }
 
         #[test]

@@ -40,11 +40,11 @@ mod tests;
 mod verify;
 
 use super::{
-    AggregateRowContext, BoundAggregate, BoundFunction, BoundNumeric, BoundOdm,
-    BoundProjectFunction, Check, ContextWindow, DatasetPlan, Flag, Imputation, Intermediate,
-    IntermediateUnique, JoinAbsence, JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange,
-    Rounding, RowLookup, SourceSelection, StringCase, StringExtract, StringPad, StringReplace,
-    StringTemplate, Temporal, VerificationSeverity, Window,
+    AggregateRowContext, BoundAggregate, BoundNumeric, BoundOdm, BoundProjectFunction, Check,
+    ContextWindow, DatasetPlan, Flag, Imputation, Intermediate, IntermediateUnique, JoinAbsence,
+    JoinedRead, Keep, Lookup, OdmTemplateScope, RelationRange, Rounding, SourceSelection,
+    StringCase, StringExtract, StringPad, StringReplace, StringTemplate, Temporal,
+    VerificationSeverity, Window,
 };
 use crate::bound_expression::BoundPredicate;
 use crate::conversion::LiteralHandler;
@@ -319,14 +319,6 @@ pub enum Op {
         identifier: String,
         selection: Option<SourceSelection>,
     },
-    Reduce {
-        identifier: Option<String>,
-        reducer: crate::reduction::NumericReducer,
-        text: String,
-    },
-    Count {
-        text: String,
-    },
     /// Reads follow the bindings in order.
     Compute(BoundNumeric),
     /// Reads follow the bindings in order.
@@ -367,8 +359,6 @@ pub enum Op {
         sources: Vec<String>,
     },
     /// Reads follow the read and collected arguments in order.
-    Function(BoundFunction),
-    /// Reads follow the read and collected arguments in order.
     ProjectFunction(BoundProjectFunction),
     /// A window and the column of the assignment that reads it.
     Window {
@@ -397,8 +387,6 @@ pub enum Op {
         selection: Option<SourceSelection>,
         absence: Option<JoinAbsence>,
     },
-    Lookup(Lookup),
-    RowLookup(RowLookup),
     /// Operands are the expression keys, then one wrapper per derivation.
     Aggregate(Box<BoundAggregate>),
     Odm(Box<BoundOdm>),
@@ -421,8 +409,6 @@ impl Op {
                 | (K::Source, Op::Read | Op::MatchOperand { .. })
                 | (K::Column, Op::Read)
                 | (K::Collect, Op::Collect { .. })
-                | (K::Reduce, Op::Reduce { .. })
-                | (K::Count, Op::Count { .. })
                 | (K::Compute, Op::Compute(_))
                 | (K::Flag, Op::Flag(_))
                 | (K::Case, Op::Case)
@@ -439,7 +425,6 @@ impl Op {
                 | (K::StrPad, Op::StrPad(_))
                 | (K::SourceBinding, Op::SourceBinding { .. })
                 | (K::FirstAvailable, Op::FirstAvailable { .. })
-                | (K::Function, Op::Function(_))
                 | (K::ProjectFunction, Op::ProjectFunction(_))
                 | (K::Window(_), Op::Window { .. })
                 | (K::ContextWindow(_), Op::ContextWindow { .. })
@@ -447,8 +432,6 @@ impl Op {
                 | (K::Joined(_), Op::Joined(_))
                 | (K::JoinedSource(_), Op::JoinedSource { .. })
                 | (K::SourceLookup(_), Op::SourceLookup { .. })
-                | (K::Lookup(_), Op::Lookup(_))
-                | (K::RowLookup(_), Op::RowLookup(_))
                 | (K::Aggregate(_), Op::Aggregate(_))
                 | (K::Odm(_), Op::Odm(_))
                 | (K::Derivation, Op::Derivation { .. })
@@ -463,8 +446,6 @@ pub enum ExprKind {
     Source,
     Column,
     Collect,
-    Reduce,
-    Count,
     Compute,
     Flag,
     Case,
@@ -482,7 +463,6 @@ pub enum ExprKind {
     StrPad,
     SourceBinding,
     FirstAvailable,
-    Function,
     ProjectFunction,
     Window(WindowId),
     ContextWindow(WindowId),
@@ -490,8 +470,6 @@ pub enum ExprKind {
     Joined(RelationId),
     JoinedSource(RelationId),
     SourceLookup(RelationId),
-    Lookup(RelationId),
-    RowLookup(RelationId),
     Aggregate(RelationId),
     Odm(RelationId),
     /// One aggregate derivation and its conversion handler.
@@ -758,13 +736,7 @@ pub struct HandlerSite {
 pub struct FunctionSlot {
     pub expr: ExprId,
     pub slot: usize,
-    pub signature: FunctionSignature,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum FunctionSignature {
-    Host(crate::function_signature::InvocationPlan),
-    Project(crate::function_signature::ProjectInvocationPlan),
+    pub signature: crate::function_signature::ProjectInvocationPlan,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

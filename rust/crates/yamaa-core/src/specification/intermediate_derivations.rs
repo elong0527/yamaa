@@ -677,8 +677,7 @@ pub(super) fn bind(
             .chain(result_kinds)
             .collect(),
     )
-    .and_then(|plan| plan.with_conversion_handlers(handlers))
-    .map_err(BindError::InvalidPlan)?;
+    .with_conversion_handlers(handlers);
     *pending_schema = None;
     Ok(Some(IntermediateDerivations {
         plan: std::sync::Arc::new(plan),

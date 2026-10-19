@@ -77,40 +77,6 @@ pub struct RowCount {
     pub when: Option<crate::bound_expression::BoundPredicate>,
 }
 impl RowCount {
-    pub(crate) fn validate(&self, width: usize) -> Result<(), super::PlanError> {
-        use super::PlanError;
-        if [self.min_fraction, self.max_fraction]
-            .into_iter()
-            .flatten()
-            .any(|n| !n.is_finite() || !(0.0..=1.0).contains(&n))
-            || (self.min.is_none()
-                && self.max.is_none()
-                && self.min_fraction.is_none()
-                && self.max_fraction.is_none())
-            || self
-                .min
-                .as_ref()
-                .zip(self.max.as_ref())
-                .is_some_and(|(a, b)| a > b)
-            || self
-                .min_fraction
-                .zip(self.max_fraction)
-                .is_some_and(|(a, b)| a > b)
-        {
-            return Err(PlanError::InvalidBounds);
-        }
-        if let Some(groups) = &self.group_by {
-            if groups.is_empty()
-                || groups
-                    .iter()
-                    .enumerate()
-                    .any(|(i, &c)| c >= width || groups[..i].contains(&c))
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-        }
-        Ok(())
-    }
     pub fn accepts(&self, count: usize, total: usize) -> bool {
         let fraction = if total == 0 {
             0.0

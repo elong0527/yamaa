@@ -31,47 +31,6 @@ impl MatchExpression {
             windowed,
         })
     }
-    pub(super) fn validate(
-        &self,
-        primary: &TableSchema,
-        secondary: &[SecondarySource],
-        output: &TableSchema,
-        available: &[bool],
-    ) -> Result<(), PlanError> {
-        if contains_window(&self.assignment.expression, 0)? != self.windowed
-            || self.reads.len() != self.schema.columns().len()
-        {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        for (read, field) in self.reads.iter().zip(self.schema.columns()) {
-            if read.identifier() != field.name
-                || read.kind(primary, secondary, output, available)? != field.kind
-            {
-                return Err(PlanError::InvalidIntermediate);
-            }
-        }
-        if self.assignment.column != output.columns().len() {
-            return Err(PlanError::InvalidIntermediate);
-        }
-        let mut slots = if self.windowed {
-            available.to_vec()
-        } else {
-            vec![false; available.len()]
-        };
-        validate_assignment_at(
-            &self.assignment,
-            &mut slots,
-            if self.windowed { primary } else { &self.schema },
-            primary,
-            secondary,
-            &[],
-            output,
-            &RowMode::Records,
-            0,
-            false,
-            true,
-        )
-    }
 }
 
 fn slot(reads: &[MatchRead], read: &Read) -> Result<usize, PlanError> {

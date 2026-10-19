@@ -135,66 +135,6 @@ pub(super) fn join<E>(
                     true,
                 )?
             }
-            Op::Lookup(lookup) => {
-                let keys: Vec<(usize, Value)> = lookup
-                    .keys
-                    .iter()
-                    .map(|key| (key.source_column, cx.frame.value(row, key.output_column)))
-                    .collect();
-                matching(
-                    run,
-                    cx,
-                    owner,
-                    Donor {
-                        table: cx.secondary[lookup.source],
-                        source: lookup.source,
-                        name: None,
-                    },
-                    lookup.column,
-                    &keys,
-                    row,
-                    None,
-                    None,
-                    None,
-                    JoinSite::Uncounted(&node.path),
-                    false,
-                )?
-            }
-            Op::RowLookup(lookup) => {
-                let source_row = cx.frame.members(row)[0];
-                let mut keys = Vec::with_capacity(lookup.keys.len());
-                for key in &lookup.keys {
-                    let value = cx
-                        .table
-                        .get(source_row, key.driver_column)
-                        .map_err(|error| {
-                            Box::new(ExecutionError::Cell {
-                                path: node.path.to_string(),
-                                source_row,
-                                error,
-                            })
-                        })?;
-                    keys.push((key.source_column, owned(value)));
-                }
-                matching(
-                    run,
-                    cx,
-                    owner,
-                    Donor {
-                        table: cx.secondary[lookup.source],
-                        source: lookup.source,
-                        name: None,
-                    },
-                    lookup.column,
-                    &keys,
-                    row,
-                    None,
-                    None,
-                    None,
-                    JoinSite::Uncounted(&node.path),
-                    false,
-                )?
-            }
             _ => unreachable!("a join node holds its read"),
         };
         values.push_value(value);

@@ -682,27 +682,6 @@ impl<'p> Builder<'p> {
                 let selected = selection.is_some();
                 self.site(&mut node, selected, site, H::MultipleMatches);
             }
-            E::Reduce {
-                column,
-                identifier,
-                reducer,
-                text,
-            } => {
-                node.kind = ExprKind::Reduce;
-                node.op = Op::Reduce {
-                    identifier: identifier.clone(),
-                    reducer: *reducer,
-                    text: text.clone(),
-                };
-                node.reads.push(self.source_read(cx, fields, *column)?);
-            }
-            E::Count { column, text } => {
-                node.kind = ExprKind::Count;
-                node.op = Op::Count { text: text.clone() };
-                if let Some(column) = column {
-                    node.reads.push(self.source_read(cx, fields, *column)?);
-                }
-            }
             E::Compute(numeric) => {
                 node.kind = ExprKind::Compute;
                 node.op = Op::Compute(numeric.clone());
@@ -945,51 +924,6 @@ impl<'p> Builder<'p> {
                     self.absent(cx, &mut node, absence, input);
                 }
             }
-            E::Lookup(lookup) => {
-                let keys = lookup
-                    .keys
-                    .iter()
-                    .map(|key| {
-                        Ok((
-                            key.source_column,
-                            Read::Column(cx.column(key.output_column)?),
-                        ))
-                    })
-                    .collect::<Result<Vec<_>, ResolutionError>>()?;
-                let relation = self.join(
-                    cx,
-                    path,
-                    cx.source(lookup.source + 1)?,
-                    keys,
-                    None,
-                    None,
-                    None,
-                )?;
-                node.kind = ExprKind::Lookup(relation);
-                node.op = Op::Lookup(lookup.clone());
-                node.reads
-                    .push(Read::Relation(relation, field(lookup.column)?));
-            }
-            E::RowLookup(lookup) => {
-                let keys = lookup
-                    .keys
-                    .iter()
-                    .map(|key| Ok((key.source_column, Read::Field(field(key.driver_column)?))))
-                    .collect::<Result<Vec<_>, ResolutionError>>()?;
-                let relation = self.join(
-                    cx,
-                    path,
-                    cx.source(lookup.source + 1)?,
-                    keys,
-                    None,
-                    None,
-                    None,
-                )?;
-                node.kind = ExprKind::RowLookup(relation);
-                node.op = Op::RowLookup(lookup.clone());
-                node.reads
-                    .push(Read::Relation(relation, field(lookup.column)?));
-            }
             E::Joined(read) => {
                 let relation = self.joined(cx, path, read, None, None, None)?;
                 node.kind = ExprKind::Joined(relation);
@@ -1043,21 +977,12 @@ impl<'p> Builder<'p> {
             }
             E::Aggregate(bound) => self.aggregate(cx, &mut node, bound)?,
             E::Odm(bound) => self.odm(cx, &mut node, bound)?,
-            E::Function(function) => {
-                node.kind = ExprKind::Function;
-                node.op = Op::Function(function.clone());
-                self.arguments(cx, &mut node, function.arguments(), fields, path)?;
-                self.joined_operands(cx, &mut node, path, argument_reads(function.arguments()));
-                let signature = FunctionSignature::Host(function.signature().clone());
-                call = Some((function.slot(), signature));
-            }
             E::ProjectFunction(function) => {
                 node.kind = ExprKind::ProjectFunction;
                 node.op = Op::ProjectFunction(function.clone());
                 self.arguments(cx, &mut node, function.arguments(), fields, path)?;
                 self.joined_operands(cx, &mut node, path, argument_reads(function.arguments()));
-                let signature = FunctionSignature::Project(function.signature().clone());
-                call = Some((function.slot(), signature));
+                call = Some((function.slot(), function.signature().clone()));
             }
             E::Window(payload) => {
                 let window = self.window(cx, path, payload, &[])?;

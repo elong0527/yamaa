@@ -1,19 +1,13 @@
-//! Dataset admission and execution over explicit source and function ports.
+//! Bound dataset plans and their execution over explicit source and function
+//! ports.
 pub use crate::bound_expression::BoundNumeric;
 use crate::bound_expression::Read;
 use crate::{
     bound_expression::{BindingError, BoundPredicate},
-    reduction::NumericReducer,
     table::TableSchema,
     value::Value,
 };
 use std::{collections::BTreeMap, vec};
-mod compiler;
-pub use compiler::{
-    compile_dataset, validate_window_form, AssignmentDeclaration, CompiledDataset,
-    DatasetCompileError, DatasetCompiler, DatasetDeclaration, DatasetMetadata,
-    ExpressionDeclaration, TemplateDeclaration, WindowDeclarationKind,
-};
 mod conversion;
 pub use conversion::ConversionHandler;
 mod count;
@@ -21,7 +15,7 @@ pub use count::{CountBoundError, RowCount, RowCountBound};
 mod flags;
 pub use flags::{flag_condition_diagnostic, Flag, FlagBinding, FlagError, FlagRead};
 mod functions;
-pub use functions::{BoundFunction, BoundProjectFunction, FunctionArgument, FunctionInput};
+pub use functions::{BoundProjectFunction, FunctionArgument, FunctionInput};
 mod aggregate;
 pub use aggregate::{
     AggregateBinding, AggregateBindingError, AggregateDerivation, AggregatePhase,
@@ -50,7 +44,6 @@ mod match_values;
 pub use match_expression::MatchExpression;
 pub use match_values::{ContextualMatch, IntermediateKey, MatchRead, MatchValue};
 mod joined;
-mod lookup;
 pub use joined::JoinedRead;
 mod rounding;
 pub use rounding::{InvalidDigits, Rounding};
@@ -170,8 +163,6 @@ pub enum Expression {
         operands: Vec<Assignment>,
         operation: Temporal,
     },
-    /// Explicit prebound host invocation; never discovered or activated during execution.
-    Function(BoundFunction),
     /// Versionless package invocation, activated before any study read.
     ProjectFunction(BoundProjectFunction),
     /// Windows over completed output rows in their column or row-template context.
@@ -180,11 +171,6 @@ pub enum Expression {
     /// First present raw operand in authored order, followed by one output conversion.
     FirstAvailable(std::boxed::Box<FirstAvailable>),
     Source(usize),
-    /// Read one record from a secondary source on completed output match values.
-    Lookup(Lookup),
-    /// Equality against raw driver fields, never unfinished outputs.
-    /// Runs in its owning assignment's phase; see [`RowLookup`].
-    RowLookup(RowLookup),
     /// Read a field from the run-local cached named record selection.
     Intermediate {
         index: usize,
@@ -198,19 +184,6 @@ pub enum Expression {
         selection: Option<SourceSelection>,
     },
     Column(usize),
-    Reduce {
-        /// Authored operand identity when supplied by the specification compiler.
-        /// Typed plans without an authored name use the bound source field name.
-        identifier: Option<String>,
-        column: usize,
-        reducer: NumericReducer,
-        text: String,
-    },
-    /// Count grouped records (None) or present field values (Some), without coercion.
-    Count {
-        column: Option<usize>,
-        text: String,
-    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -283,28 +256,6 @@ pub struct Lookup {
     pub source: usize,
     pub column: usize,
     pub keys: Vec<MatchKey>,
-}
-
-/// Equality pairs compare a secondary field with a raw driver field.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RowMatchKey {
-    pub source_column: usize,
-    pub driver_column: usize,
-}
-
-/// Secondary read on raw record fields or available grouping fields.
-///
-/// A template assignment runs before that template's filter, so a duplicate
-/// match fails even if the filter would discard the candidate. A whole-column
-/// assignment runs after filtering and only reads retained candidates. Both
-/// phases use the candidate's original driver membership, not its output keys.
-/// Key-grain plans reject this expression in either phase. The normalized Python
-/// frontend currently admits this expression only in template assignments.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RowLookup {
-    pub source: usize,
-    pub column: usize,
-    pub keys: Vec<RowMatchKey>,
 }
 
 /// One completed-value assignment, with original specification provenance.
@@ -630,51 +581,20 @@ pub struct ColumnVerifications {
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PlanError {
-    #[error("dataset no templates")]
-    NoTemplates,
     #[error("dataset invalid columns")]
     InvalidColumns,
-    #[error("dataset empty path")]
-    EmptyPath,
     #[error("dataset invalid source")]
     InvalidSource,
-    #[error("dataset unavailable column")]
-    UnavailableColumn,
-    #[error("dataset duplicate assignment")]
-    DuplicateAssignment,
-    #[error("dataset incomplete row")]
-    IncompleteRow,
-    #[error("dataset non group source")]
-    NonGroupSource,
-    #[error("dataset ungrouped reduction")]
-    UngroupedReduction,
-    #[error("dataset invalid bounds")]
-    InvalidBounds,
-    #[error("dataset duplicate verification path")]
-    DuplicateVerificationPath,
-    #[error("dataset filter: {0:?}")]
-    Filter(BindingError),
-    #[error("dataset predicate: {0:?}")]
-    Predicate(BindingError),
-    #[error("dataset invalid key mode")]
-    InvalidKeyMode,
     #[error("dataset invalid window")]
     InvalidWindow,
-    #[error("dataset invalid source order")]
-    InvalidSourceOrder,
-    #[error("dataset invalid output order")]
-    InvalidOutputOrder,
-    #[error("dataset invalid lookup")]
-    InvalidLookup,
     #[error("dataset invalid intermediate")]
     InvalidIntermediate,
-    #[error("dataset invalid conversion handler")]
-    InvalidConversionHandler,
     #[error("dataset invalid function")]
     InvalidFunction,
 }
 
-/// Admitted immutable plan: all references and phase dependencies are checked once.
+/// An immutable bound plan. The specification compiler checks every reference
+/// and phase dependency before it builds one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DatasetPlan {
     source: TableSchema,
@@ -695,570 +615,21 @@ pub struct DatasetPlan {
     /// Inputs whose every implicit join must find a record (LOOKUP-24).
     required_matches: std::collections::BTreeSet<String>,
 }
-
-/// Validate nonempty, unique, bound column lists without reading table cells.
-fn validate_columns(columns: &[usize], width: usize) -> Result<(), PlanError> {
-    if columns.is_empty()
-        || columns
-            .iter()
-            .enumerate()
-            .any(|(position, column)| *column >= width || columns[..position].contains(column))
-    {
-        return Err(PlanError::InvalidColumns);
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn validate_function_intermediates(
-    arguments: &[FunctionArgument],
-    source: &TableSchema,
-    secondary: &[SecondarySource],
-    items: &[Intermediate],
-    available: &[bool],
-    output: &TableSchema,
-    mode: &RowMode,
-) -> Result<(), PlanError> {
-    for argument in arguments {
-        if let FunctionInput::Read(Read::Intermediate { index, column }) = argument.input {
-            let item = items.get(index).ok_or(PlanError::InvalidIntermediate)?;
-            if item.selection.is_none() {
-                return Err(PlanError::InvalidIntermediate);
-            }
-            intermediates::validate_context_read(
-                item, column, source, secondary, available, output, mode,
-            )?;
-        }
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn validate_assignment(
-    assignment: &Assignment,
-    available: &mut [bool],
-    source: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    mode: &RowMode,
-    record_derivation: bool,
-) -> Result<(), PlanError> {
-    validate_assignment_at(
-        assignment,
-        available,
-        source,
-        source,
-        secondary,
-        intermediates,
-        output,
-        mode,
-        0,
-        record_derivation,
-        false,
-    )
-}
-/// Donor reads and named current-row reads use separate admitted schemas.
-#[allow(clippy::too_many_arguments)]
-fn validate_record_assignment(
-    assignment: &Assignment,
-    available: &mut [bool],
-    donor: &TableSchema,
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-) -> Result<(), PlanError> {
-    validate_assignment_at(
-        assignment,
-        available,
-        donor,
-        primary,
-        secondary,
-        intermediates,
-        output,
-        &RowMode::Records,
-        0,
-        false,
-        false,
-    )
-}
-/// The augmented primary stores completed fields in output coordinates and
-/// appends immutable correlated operands after them. A raw source binding cannot
-/// use a later output coordinate just because the merged source schema contains it.
-fn validate_donor_reads(
-    expression: &Expression,
-    available: &[bool],
-    intermediates: &[Intermediate],
-) -> Result<(), PlanError> {
-    let column = |column: usize| {
-        if column < available.len() && !available[column] {
-            Err(PlanError::UnavailableColumn)
-        } else {
-            Ok(())
-        }
-    };
-    let read = |read: &Read| match read {
-        Read::Source(index) => column(*index),
-        Read::Intermediate { index, .. } => {
-            let item = intermediates
-                .get(*index)
-                .ok_or(PlanError::InvalidIntermediate)?;
-            for key in &item.keys {
-                for read in key.value.reads() {
-                    if let MatchRead::Record { column: index, .. } = read {
-                        column(*index)?;
-                    }
-                }
-            }
-            for field in item.current_fields() {
-                if let CurrentRead::Record {
-                    source: 0,
-                    column: index,
-                } = field.read
-                {
-                    column(index)?;
-                }
-            }
-            Ok(())
-        }
-        _ => Ok(()),
-    };
-    match expression {
-        Expression::Source(index)
-        | Expression::Collect { column: index, .. }
-        | Expression::Reduce { column: index, .. } => column(*index)?,
-        Expression::Count {
-            column: Some(index),
-            ..
-        } => column(*index)?,
-        Expression::Intermediate { index, column } => read(&Read::Intermediate {
-            index: *index,
-            column: *column,
-        })?,
-        Expression::Compute(expression) => {
-            for binding in expression.bindings() {
-                read(&binding.read)?;
-            }
-        }
-        Expression::Flag(flag) => {
-            for binding in flag.bindings() {
-                match &binding.read {
-                    FlagRead::Read(value) => read(value)?,
-                    FlagRead::Collect { column: index, .. } => column(*index)?,
-                }
-            }
-        }
-        Expression::Function(function) => {
-            for argument in function.arguments() {
-                if let FunctionInput::Read(value) = &argument.input {
-                    read(value)?;
-                }
-            }
-        }
-        Expression::ProjectFunction(function) => {
-            for argument in function.arguments() {
-                if let FunctionInput::Read(value) = &argument.input {
-                    read(value)?;
-                }
-            }
-        }
-        Expression::Case(branches) => {
-            for branch in branches {
-                if let Some(predicate) = &branch.when {
-                    for binding in predicate.bindings() {
-                        read(&binding.read)?;
-                    }
-                }
-            }
-        }
-        Expression::ContextWindow(window) => {
-            for (_, index) in &window.sources {
-                column(*index)?;
-            }
-        }
-        Expression::FirstAvailable(selection) => {
-            for operand in selection.sources() {
-                match &operand.read {
-                    SelectionRead::Source(index) | SelectionRead::Collect { column: index, .. } => {
-                        column(*index)?
-                    }
-                    _ => (),
-                }
-            }
-        }
-        Expression::RowLookup(lookup) => {
-            for key in &lookup.keys {
-                column(key.driver_column)?;
-            }
-        }
-        Expression::Aggregate(aggregate)
-            if matches!(aggregate.relation(), AggregateRelation::CurrentGroup) =>
-        {
-            for binding in aggregate.bindings() {
-                column(binding.column)?;
-            }
-        }
-        _ => (),
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn validate_assignment_at(
-    assignment: &Assignment,
-    available: &mut [bool],
-    source: &TableSchema,
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    mode: &RowMode,
-    depth: usize,
-    record_derivation: bool,
-    destination_free: bool,
-) -> Result<(), PlanError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PlanError::InvalidColumns);
-    }
-    if assignment.path.is_empty() {
-        return Err(PlanError::EmptyPath);
-    }
-    if !destination_free {
-        if assignment.column >= available.len() {
-            return Err(PlanError::InvalidColumns);
-        }
-        if available[assignment.column] {
-            return Err(PlanError::DuplicateAssignment);
-        }
-    }
-    if record_derivation {
-        validate_donor_reads(&assignment.expression, available, intermediates)?;
-    }
-    if !validate_operand_assignment(
-        assignment,
-        available,
-        source,
-        primary,
-        secondary,
-        intermediates,
-        output,
-        mode,
-        depth,
-        record_derivation,
-        destination_free,
-    )? && !validate_branching_assignment(
-        assignment,
-        available,
-        source,
-        primary,
-        secondary,
-        intermediates,
-        output,
-        mode,
-        depth,
-        record_derivation,
-        destination_free,
-    )? {
-        validate_direct_assignment(
-            assignment,
-            available,
-            source,
-            primary,
-            secondary,
-            intermediates,
-            output,
-            mode,
-        )?;
-    }
-    match &assignment.expression {
-        Expression::Compute(numeric) => {
-            for binding in numeric.bindings() {
-                if let Read::Joined(read) = &binding.read {
-                    read.validate(source, secondary, output, available, mode)?;
-                }
-            }
-        }
-        Expression::Flag(flag) => {
-            for binding in flag.bindings() {
-                if let FlagRead::Read(Read::Joined(read)) = &binding.read {
-                    read.validate(source, secondary, output, available, mode)?;
-                }
-            }
-        }
-        Expression::Case(branches) => {
-            for branch in branches {
-                if let Some(when) = &branch.when {
-                    for binding in when.bindings() {
-                        if let Read::Joined(read) = &binding.read {
-                            read.validate(source, secondary, output, available, mode)?;
-                        }
-                    }
-                }
-            }
-        }
-        _ => (),
-    }
-    if !destination_free {
-        available[assignment.column] = true;
-    }
-    Ok(())
-}
-
-// Recursively preserve key-phase authority through selected case branches.
-fn key_expression(expression: &Expression) -> bool {
-    match expression {
-        Expression::Literal(_)
-        | Expression::Source(_)
-        | Expression::Column(_)
-        | Expression::Collect { .. }
-        | Expression::SourceLookup { .. }
-        | Expression::Intermediate { .. } => true,
-        Expression::SourceBinding { source, .. } => key_expression(&source.expression),
-        Expression::FirstAvailable(selection) => {
-            selection.sources().iter().all(|source| match &source.read {
-                SelectionRead::Expression(assignment) => key_expression(&assignment.expression),
-                SelectionRead::Column(_)
-                | SelectionRead::Source(_)
-                | SelectionRead::Collect { .. } => true,
-            })
-        }
-        Expression::Extreme { operands, .. } => operands
-            .iter()
-            .all(|source| key_expression(&source.expression)),
-        Expression::StrCase { source, .. }
-        | Expression::StrPad { source, .. }
-        | Expression::StrExtract { source, .. }
-        | Expression::StrReplace { source, .. }
-        | Expression::MappingCut { source, .. }
-        | Expression::Round { source, .. } => key_expression(&source.expression),
-        Expression::StrTemplate { operands, .. }
-        | Expression::Temporal { operands, .. }
-        | Expression::Imputation { operands, .. } => operands
-            .iter()
-            .all(|source| key_expression(&source.expression)),
-        // A key is computed from one base record (COLUMN-7): a formula, flag,
-        // case condition or project function reads that record, the keys
-        // completed before it, or a named intermediate's selection for it.
-        Expression::Flag(flag) => flag.key_expression(),
-        Expression::Compute(_) => true,
-        Expression::Case(branches) => branches.iter().all(|branch| {
-            branch
-                .when
-                .as_ref()
-                .is_none_or(|when| when.collected().is_empty())
-                && key_expression(&branch.assignment.expression)
-        }),
-        Expression::ProjectFunction(function) => function
-            .arguments()
-            .iter()
-            .all(|argument| !matches!(argument.input, FunctionInput::Collect { .. })),
-        _ => false,
-    }
-}
-/// Which record reads `current_record_read` counts: every raw read of the
-/// driver record for a key-grain column, or only reads that match a
-/// selector against the primary record for a template another input drives.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum RecordReadScope {
-    Driver,
-    PrimaryMatching,
-}
-fn function_record_read(
-    arguments: &[FunctionArgument],
-    intermediates: &[Intermediate],
-    scope: RecordReadScope,
-) -> bool {
-    arguments.iter().any(|argument| match argument.input {
-        FunctionInput::Read(Read::Source(_)) => scope != RecordReadScope::PrimaryMatching,
-        FunctionInput::Read(Read::Joined(ref read)) => {
-            scope != RecordReadScope::PrimaryMatching && read.record_keys.is_some()
-        }
-        FunctionInput::Read(Read::Intermediate { index, column }) => current_record_read(
-            &Expression::Intermediate { index, column },
-            intermediates,
-            scope,
-        ),
-        _ => false,
-    })
-}
-/// One bound read inside a Compute/Flag arm, judged by the same rules the
-/// fixed Function/Case arms apply: raw and record-keyed joined reads count
-/// outside `PrimaryMatching`, and an intermediate binding recurses into the
-/// intermediate it names instead of being invisible to the guard.
-fn bound_record_read(read: &Read, intermediates: &[Intermediate], scope: RecordReadScope) -> bool {
-    match read {
-        Read::Source(_) => scope != RecordReadScope::PrimaryMatching,
-        Read::Joined(read) => {
-            scope != RecordReadScope::PrimaryMatching && read.record_keys.is_some()
-        }
-        Read::Intermediate { index, column } => current_record_read(
-            &Expression::Intermediate {
-                index: *index,
-                column: *column,
-            },
-            intermediates,
-            scope,
-        ),
-        Read::Column(_) => false,
-    }
-}
-fn current_record_read(
-    expression: &Expression,
-    intermediates: &[Intermediate],
-    scope: RecordReadScope,
-) -> bool {
-    let include_raw = scope != RecordReadScope::PrimaryMatching;
-    match expression {
-        Expression::Odm(odm) => {
-            include_raw && !matches!(odm.read().scope, OdmScope::Keys | OdmScope::Templates(_))
-        }
-        Expression::Aggregate(aggregate) => match aggregate.relation() {
-            AggregateRelation::CurrentGroup => include_raw,
-            AggregateRelation::Matched { keys, .. } => {
-                scope != RecordReadScope::Driver
-                    && (keys
-                        .iter()
-                        .flat_map(|key| key.value.reads())
-                        .any(|read| matches!(read, MatchRead::Record { .. }))
-                        || aggregate.range().is_some_and(|range| {
-                            matches!(range.current().read, CurrentRead::Record { .. })
-                        })
-                        || aggregate.derivations().iter().any(|binding| {
-                            current_record_read(
-                                &binding.assignment.expression,
-                                intermediates,
-                                RecordReadScope::PrimaryMatching,
-                            )
-                        }))
-            }
-            AggregateRelation::Output { .. } => false,
-        },
-        Expression::Joined(read) | Expression::JoinedSource { read, .. } => {
-            include_raw && read.record_keys.is_some()
-        }
-        Expression::Source(_) | Expression::RowLookup(_) => include_raw,
-        // A key-grain collection is valid in the primary implicit form.
-        Expression::Collect { .. } => false,
-        Expression::Intermediate { index, .. } => {
-            scope != RecordReadScope::Driver
-                && intermediates.get(*index).is_some_and(|item| {
-                    item.keys
-                        .iter()
-                        .flat_map(|key| key.value.reads())
-                        .any(|read| matches!(read, MatchRead::Record { .. }))
-                        // Like a secondary key read, a current field on a
-                        // secondary port reads that input's own records, in
-                        // either phase; `validate_reads` admits only the port
-                        // of the template whose row reads it.
-                        || item.current_fields().any(|field| {
-                            matches!(field.read, CurrentRead::Record { source: 0, .. })
-                        })
-                })
-        }
-        Expression::SourceBinding { source, .. } => {
-            current_record_read(&source.expression, intermediates, scope)
-        }
-        Expression::FirstAvailable(selection) => {
-            selection.sources().iter().any(|source| match &source.read {
-                SelectionRead::Source(_) => include_raw,
-                SelectionRead::Expression(source) => {
-                    current_record_read(&source.expression, intermediates, scope)
-                }
-                SelectionRead::Column(_) | SelectionRead::Collect { .. } => false,
-            })
-        }
-        Expression::Extreme { operands, .. } => operands
-            .iter()
-            .any(|source| current_record_read(&source.expression, intermediates, scope)),
-        Expression::StrCase { source, .. }
-        | Expression::StrPad { source, .. }
-        | Expression::StrExtract { source, .. }
-        | Expression::StrReplace { source, .. }
-        | Expression::MappingCut { source, .. }
-        | Expression::Round { source, .. } => {
-            current_record_read(&source.expression, intermediates, scope)
-        }
-        Expression::StrTemplate { operands, .. }
-        | Expression::Temporal { operands, .. }
-        | Expression::Imputation { operands, .. } => operands
-            .iter()
-            .any(|source| current_record_read(&source.expression, intermediates, scope)),
-        Expression::Compute(expression) => expression
-            .bindings()
-            .iter()
-            .any(|binding| bound_record_read(&binding.read, intermediates, scope)),
-        Expression::Flag(flag) => flag.bindings().iter().any(|binding| match &binding.read {
-            FlagRead::Read(read) => bound_record_read(read, intermediates, scope),
-            // A flag collection is a key-grain read like `Expression::Collect`.
-            FlagRead::Collect { .. } => false,
-        }),
-        // A reduction reads the driver records the row was built from.
-        Expression::Reduce { .. } | Expression::Count { .. } => include_raw,
-        Expression::Function(function) => {
-            function_record_read(function.arguments(), intermediates, scope)
-        }
-        Expression::ProjectFunction(function) => {
-            function_record_read(function.arguments(), intermediates, scope)
-        }
-        Expression::Case(branches) => branches.iter().any(|branch| {
-            branch.when.as_ref().is_some_and(|predicate| {
-                predicate
-                    .bindings()
-                    .iter()
-                    .any(|binding| match binding.read {
-                        Read::Source(_) => !predicate.collects(&binding.name) && include_raw,
-                        Read::Intermediate { index, column } => current_record_read(
-                            &Expression::Intermediate { index, column },
-                            intermediates,
-                            scope,
-                        ),
-                        Read::Joined(ref read) => include_raw && read.record_keys.is_some(),
-                        Read::Column(_) => false,
-                    })
-            }) || current_record_read(&branch.assignment.expression, intermediates, scope)
-        }),
-        _ => false,
-    }
-}
 impl DatasetPlan {
-    /// Admit the complete single-source plan before any source data is accessed.
-    /// Each template completes its own row-phase columns. Remaining assignments
-    /// execute a whole column at a time, in supplied resolved declaration order,
-    /// completing the rows whose template did not derive them up front.
-    pub fn new(
+    /// A single-source plan whose column bindings serve every template.
+    #[cfg(test)]
+    pub(crate) fn new(
         source: TableSchema,
         output: TableSchema,
         templates: Vec<RowTemplate>,
         columns: Vec<Assignment>,
         keys: Vec<usize>,
         verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
-        Self::new_with_sources(
-            source,
-            Vec::new(),
-            output,
-            templates,
-            columns,
-            keys,
-            verifications,
-        )
-    }
-
-    /// Admit additional source schemas before accepting any snapshots or lookup reads.
-    pub fn new_with_sources(
-        source: TableSchema,
-        secondary: Vec<SecondarySource>,
-        output: TableSchema,
-        templates: Vec<RowTemplate>,
-        columns: Vec<Assignment>,
-        keys: Vec<usize>,
-        verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
+    ) -> Self {
         Self::new_with_intermediates(
             SourceSchemas {
                 primary: source,
-                secondary,
+                secondary: Vec::new(),
             },
             Vec::new(),
             output,
@@ -1269,8 +640,8 @@ impl DatasetPlan {
         )
     }
 
-    /// Bind named selections and all read dependencies before accessing snapshots.
-    pub fn new_with_intermediates(
+    /// A plan whose column-phase assignments each serve every template.
+    pub(crate) fn new_with_intermediates(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
         output: TableSchema,
@@ -1278,7 +649,7 @@ impl DatasetPlan {
         columns: Vec<Assignment>,
         keys: Vec<usize>,
         verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
+    ) -> Self {
         let columns = columns
             .into_iter()
             .map(|assignment| ColumnBinding::every_template(assignment, &templates))
@@ -1293,9 +664,13 @@ impl DatasetPlan {
             verifications,
         )
     }
-    /// Admit column-phase bindings that each complete the rows of their own
-    /// row templates (#2829), before accessing snapshots.
-    pub fn new_with_bindings(
+
+    /// Each template completes its own row-phase columns; the column-phase
+    /// bindings complete the rest, each for its own templates (#2829). Only
+    /// the specification compiler builds a plan, after it found nothing, so
+    /// construction checks nothing: the compiler's findings are the only
+    /// validation (#2843).
+    pub(crate) fn new_with_bindings(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
         output: TableSchema,
@@ -1303,8 +678,13 @@ impl DatasetPlan {
         columns: Vec<ColumnBinding>,
         keys: Vec<usize>,
         verifications: Vec<Verification>,
-    ) -> Result<Self, PlanError> {
-        Self::new_implementation(
+    ) -> Self {
+        let output_kinds = output
+            .columns()
+            .iter()
+            .map(|column| Some(column.kind))
+            .collect();
+        Self::assemble(
             sources,
             intermediates,
             output,
@@ -1312,12 +692,12 @@ impl DatasetPlan {
             columns,
             keys,
             verifications,
-            true,
-            None,
+            output_kinds,
         )
     }
-    /// Donor evaluation has no publication key gate; all expression and metadata
-    /// admission is shared with the dataset compiler. Only that compiler creates it.
+
+    /// A donor plan has no publication key gate, and a derived column of its
+    /// output may have no declared type.
     pub(crate) fn new_donor(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
@@ -1325,12 +705,12 @@ impl DatasetPlan {
         templates: Vec<RowTemplate>,
         columns: Vec<Assignment>,
         output_kinds: Vec<Option<crate::value::ColumnType>>,
-    ) -> Result<Self, PlanError> {
+    ) -> Self {
         let columns = columns
             .into_iter()
             .map(|assignment| ColumnBinding::every_template(assignment, &templates))
             .collect();
-        Self::new_implementation(
+        Self::assemble(
             sources,
             intermediates,
             output,
@@ -1338,12 +718,12 @@ impl DatasetPlan {
             columns,
             Vec::new(),
             Vec::new(),
-            false,
-            Some(output_kinds),
+            output_kinds,
         )
     }
+
     #[allow(clippy::too_many_arguments)]
-    fn new_implementation(
+    fn assemble(
         sources: SourceSchemas,
         intermediates: Vec<Intermediate>,
         output: TableSchema,
@@ -1351,287 +731,11 @@ impl DatasetPlan {
         columns: Vec<ColumnBinding>,
         keys: Vec<usize>,
         verifications: Vec<Verification>,
-        publication: bool,
-        output_kinds: Option<Vec<Option<crate::value::ColumnType>>>,
-    ) -> Result<Self, PlanError> {
-        let SourceSchemas {
-            primary: source,
-            secondary,
-        } = sources;
-        let output_kinds = output_kinds.unwrap_or_else(|| {
-            output
-                .columns()
-                .iter()
-                .map(|column| Some(column.kind))
-                .collect()
-        });
-        if output_kinds.len() != output.columns().len()
-            || output_kinds
-                .iter()
-                .zip(output.columns())
-                .any(|(kind, column)| kind.is_some_and(|kind| kind != column.kind))
-        {
-            return Err(PlanError::InvalidColumns);
-        }
-        if !publication && !source.columns().starts_with(output.columns()) {
-            return Err(PlanError::InvalidSource);
-        }
-        let primary_kind = |column: usize| {
-            if !publication && column < output_kinds.len() {
-                output_kinds[column]
-            } else {
-                source.columns().get(column).map(|column| column.kind)
-            }
-        };
-        let output_kind = |column: usize| output_kinds.get(column).copied().flatten();
-        intermediates::validate(
-            &intermediates,
-            &secondary,
-            &source,
-            &primary_kind,
-            &output,
-            &output_kind,
-            &templates,
-        )?;
-        for (index, relation) in secondary.iter().enumerate() {
-            if relation.name.is_empty()
-                || secondary[..index]
-                    .iter()
-                    .any(|other| other.name == relation.name)
-            {
-                return Err(PlanError::InvalidLookup);
-            }
-        }
-        if templates.is_empty() {
-            return Err(PlanError::NoTemplates);
-        }
-        self_relations::validate(&intermediates, &templates)?;
-        let width = output.columns().len();
-        if publication {
-            validate_columns(&keys, width)?;
-        }
-        for (template_index, template) in templates.iter().enumerate() {
-            let (template_source, mode) =
-                template.mode.context(&source, &secondary, &intermediates)?;
-            let keyed = matches!(mode, RowMode::Keys);
-            if keyed && templates.len() != 1 {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let RowMode::Groups(keys) = mode {
-                validate_columns(keys, template_source.columns().len())?;
-            }
-            let mut available = vec![false; width];
-            for assignment in &template.assignments {
-                odm::visit(&assignment.expression, &mut |bound| {
-                    if bound.read().source.is_some() {
-                        Err(PlanError::InvalidSource)
-                    } else {
-                        Ok(())
-                    }
-                })?;
-                relation_predicates::validate_reads(
-                    &assignment.expression,
-                    &intermediates,
-                    template.mode.source_index(),
-                    &template.mode,
-                    &available,
-                )?;
-                // A selector compiled against the primary record cannot borrow a
-                // different driver's record coordinates. Output match values are shared.
-                if template.mode.source_index() != 0
-                    && current_record_read(
-                        &assignment.expression,
-                        &intermediates,
-                        RecordReadScope::PrimaryMatching,
-                    )
-                {
-                    return Err(PlanError::InvalidIntermediate);
-                }
-                if keyed
-                    && (!keys.contains(&assignment.column)
-                        || !key_expression(&assignment.expression))
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                joined::validate_sources(&assignment.expression, &source, &secondary)?;
-                validate_assignment(
-                    assignment,
-                    &mut available,
-                    template_source,
-                    &secondary,
-                    &intermediates,
-                    &output,
-                    mode,
-                    false,
-                )?;
-            }
-            if keyed && keys.iter().any(|&column| !available[column]) {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let Some(filter) = &template.filter {
-                let deferred = window_stages(&template.assignments, width, &intermediates);
-                if !matches!(mode, RowMode::Groups(_))
-                    && filter.bindings().iter().any(|binding| {
-                        read_requires_window(&binding.read, &deferred, &intermediates)
-                    })
-                {
-                    return Err(PlanError::Filter(BindingError::UnavailableColumn));
-                }
-                if filter.bindings().iter().any(|binding| {
-                    matches!(binding.read, Read::Intermediate { .. } | Read::Joined(_))
-                }) {
-                    filter
-                        .validate_contextual(template_source.columns().len(), &available)
-                        .map_err(PlanError::Filter)?;
-                    for binding in filter.bindings() {
-                        if let Read::Joined(read) = &binding.read {
-                            joined::validate_source(read, &source, &secondary)?;
-                            read.validate(template_source, &secondary, &output, &available, mode)?;
-                            if read.record_keys.is_none()
-                                && read.keys.iter().any(|key| {
-                                    deferred.get(key.output_column).copied().unwrap_or(true)
-                                })
-                            {
-                                return Err(PlanError::Filter(BindingError::UnavailableColumn));
-                            }
-                        }
-                        if let Read::Intermediate { index, column } = binding.read {
-                            let item = intermediates
-                                .get(index)
-                                .ok_or(PlanError::InvalidIntermediate)?;
-                            intermediates::validate_context_read(
-                                item,
-                                column,
-                                template_source,
-                                &secondary,
-                                &available,
-                                &output,
-                                mode,
-                            )?;
-                            for field in item.current_fields() {
-                                field.validate_context(
-                                    template.mode.source_index(),
-                                    mode,
-                                    &available,
-                                )?;
-                            }
-                            let mut later = false;
-                            visit_output_dependencies(
-                                index,
-                                |index| intermediates.get(index),
-                                |column| {
-                                    later |= deferred.get(column).copied().unwrap_or(true);
-                                },
-                            )?;
-                            if later {
-                                return Err(PlanError::Filter(BindingError::UnavailableColumn));
-                            }
-                        }
-                    }
-                } else {
-                    filter
-                        .validate(
-                            template_source.columns().len(),
-                            if keyed { &[] } else { &available },
-                            matches!(mode, RowMode::Groups(_)),
-                        )
-                        .map_err(PlanError::Filter)?;
-                }
-            }
-            // Row-phase columns are tracked per template: one template may
-            // derive a default up front while another completes it
-            // column-phase. Each template plus the column bindings that serve
-            // it must cover every output column exactly once.
-            for binding in &columns {
-                if !binding.templates.contains(&template_index) {
-                    continue;
-                }
-                let assignment = &binding.assignment;
-                odm::validate_template(
-                    &assignment.expression,
-                    template,
-                    template_index,
-                    templates.len(),
-                )?;
-                relation_predicates::validate_reads(
-                    &assignment.expression,
-                    &intermediates,
-                    template.mode.source_index(),
-                    &template.mode,
-                    &available,
-                )?;
-                if keyed
-                    && current_record_read(
-                        &assignment.expression,
-                        &intermediates,
-                        RecordReadScope::Driver,
-                    )
-                {
-                    return Err(PlanError::InvalidKeyMode);
-                }
-                joined::validate_sources(&assignment.expression, &source, &secondary)?;
-                // A driver read addresses the port the binding reads through:
-                // the row's own driver, or the primary for the whole dataset.
-                let port = match (binding.scope, template.mode.source_index()) {
-                    (ColumnScope::Template, index @ 1..) => {
-                        &secondary
-                            .get(index - 1)
-                            .ok_or(PlanError::InvalidSource)?
-                            .schema
-                    }
-                    _ => &source,
-                };
-                validate_assignment(
-                    assignment,
-                    &mut available,
-                    port,
-                    &secondary,
-                    &intermediates,
-                    &output,
-                    mode,
-                    !publication,
-                )?;
-            }
-            if available.contains(&false) {
-                return Err(PlanError::IncompleteRow);
-            }
-        }
-        // Each binding lists the templates it serves once, in order, and a
-        // column's bindings are adjacent: its step runs them one after another.
-        for (index, binding) in columns.iter().enumerate() {
-            let listed = binding
-                .templates
-                .iter()
-                .enumerate()
-                .all(|(position, &template)| {
-                    template < templates.len()
-                        && position
-                            .checked_sub(1)
-                            .is_none_or(|prior| binding.templates[prior] < template)
-                });
-            let column = binding.assignment.column;
-            let adjacent = index
-                .checked_sub(1)
-                .is_none_or(|prior| columns[prior].assignment.column == column)
-                || !columns[..index]
-                    .iter()
-                    .any(|prior| prior.assignment.column == column);
-            if !listed || !adjacent {
-                return Err(PlanError::InvalidColumns);
-            }
-        }
-        validate_plan_verifications(
-            &verifications,
-            &source,
-            &secondary,
-            &intermediates,
-            &output,
-            &templates,
-            width,
-        )?;
-        Ok(Self {
-            source,
-            secondary,
+        output_kinds: Vec<Option<crate::value::ColumnType>>,
+    ) -> Self {
+        Self {
+            source: sources.primary,
+            secondary: sources.secondary,
             intermediates,
             output,
             output_kinds,
@@ -1646,23 +750,15 @@ impl DatasetPlan {
             conversion_sites: BTreeMap::new(),
             output_order: Vec::new(),
             required_matches: Default::default(),
-        })
+        }
     }
 }
 
 impl DatasetPlan {
-    /// Admit bound presentation terms separately from derivation and window order.
-    pub fn with_output_order(mut self, terms: Vec<OrderTerm>) -> Result<Self, PlanError> {
-        if terms.iter().enumerate().any(|(position, term)| {
-            term.column >= self.output.columns().len()
-                || terms[..position]
-                    .iter()
-                    .any(|other| other.column == term.column)
-        }) {
-            return Err(PlanError::InvalidOutputOrder);
-        }
+    /// Presentation terms, separate from derivation and window order.
+    pub(crate) fn with_output_order(mut self, terms: Vec<OrderTerm>) -> Self {
         self.output_order = terms;
-        Ok(self)
+        self
     }
     /// Presentation occurs only after all keys and verifications succeed.
     pub fn output_order(&self) -> &[OrderTerm] {
@@ -1671,7 +767,10 @@ impl DatasetPlan {
     /// Name the inputs declaring `require_match: true`: a read through an
     /// implicit join to one of them that finds no record fails, unless the
     /// read declares its own `absent` answer (LOOKUP-24).
-    pub fn with_required_matches(mut self, inputs: impl IntoIterator<Item = String>) -> Self {
+    pub(crate) fn with_required_matches(
+        mut self,
+        inputs: impl IntoIterator<Item = String>,
+    ) -> Self {
         self.required_matches = inputs.into_iter().collect();
         self
     }
@@ -1683,26 +782,11 @@ impl DatasetPlan {
     pub(crate) fn required_matches(&self) -> &std::collections::BTreeSet<String> {
         &self.required_matches
     }
-    /// Severity belongs to admitted check declarations, never host issue rows.
-    pub fn with_warning_verifications(mut self, paths: Vec<String>) -> Result<Self, PlanError> {
-        let checks: std::collections::BTreeSet<_> = self
-            .verifications
-            .iter()
-            .chain(
-                self.column_verifications
-                    .iter()
-                    .flat_map(|group| &group.checks),
-            )
-            .map(|check| check.path.as_str())
-            .collect();
-        let mut warnings = std::collections::BTreeSet::new();
-        for path in paths {
-            if !checks.contains(path.as_str()) || !warnings.insert(path) {
-                return Err(PlanError::InvalidColumns);
-            }
-        }
-        self.warning_verifications = warnings;
-        Ok(self)
+    /// The checks declared at warning severity, by path; every other check
+    /// is an error.
+    pub(crate) fn with_warning_verifications(mut self, paths: Vec<String>) -> Self {
+        self.warning_verifications = paths.into_iter().collect();
+        self
     }
     pub fn verification_severity(&self, path: &str) -> VerificationSeverity {
         if self.warning_verifications.contains(path) {
@@ -1711,107 +795,10 @@ impl DatasetPlan {
             VerificationSeverity::Error
         }
     }
-    /// Admit ordered column checks before any snapshot or value access.
-    pub fn with_column_verifications(
-        mut self,
-        groups: Vec<ColumnVerifications>,
-    ) -> Result<Self, PlanError> {
-        let mut paths = std::collections::BTreeSet::new();
-        for (index, group) in groups.iter().enumerate() {
-            if group.column >= self.output.columns().len()
-                || groups[..index]
-                    .iter()
-                    .any(|previous| previous.column >= group.column)
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-            for verification in &group.checks {
-                if verification.path.is_empty() {
-                    return Err(PlanError::EmptyPath);
-                }
-                if !paths.insert(&verification.path)
-                    || self
-                        .verifications
-                        .iter()
-                        .any(|check| check.path == verification.path)
-                {
-                    return Err(PlanError::DuplicateVerificationPath);
-                }
-                if !matches!(
-                    verification.check,
-                    Check::NotMissing
-                        | Check::Mandatory(_)
-                        | Check::DataType { .. }
-                        | Check::AllowedValues(_)
-                        | Check::Codelist { .. }
-                        | Check::ValueCodelists { .. }
-                        | Check::Inventory { .. }
-                        | Check::ValueMaxLength { .. }
-                        | Check::ValueEntries(_)
-                        | Check::ValueEntryMatch { .. }
-                        | Check::Range { .. }
-                        | Check::MaxLength(_)
-                        | Check::WideMaxLength(_)
-                        | Check::Matches(_)
-                        | Check::InvalidDeclaration { .. }
-                        | Check::InvalidDiagnostic(_)
-                ) {
-                    return Err(PlanError::InvalidColumns);
-                }
-                crate::dataset_checks::validate(
-                    &verification.check,
-                    self.output.columns()[group.column].kind,
-                )?;
-                // A value-level check selects rows by where clauses over
-                // other completed `str` columns, each term listing values.
-                let clauses = verification.check.clauses();
-                if clauses.iter().any(|clause| {
-                    clause.terms.is_empty()
-                        || clause.terms.iter().any(|(column, values)| {
-                            *column == group.column
-                                || values.is_empty()
-                                || self.output.columns().get(*column).is_none_or(|column| {
-                                    column.kind != crate::value::ColumnType::Str
-                                })
-                        })
-                }) {
-                    return Err(PlanError::InvalidColumns);
-                }
-                let scoped = match &verification.check {
-                    Check::Mandatory(Some(scope))
-                    | Check::DataType {
-                        scope: Some(scope), ..
-                    }
-                    | Check::ValueMaxLength { scope, .. } => !scope.clauses.is_empty(),
-                    Check::ValueCodelists {
-                        overrides,
-                        bindings,
-                    } => {
-                        !overrides.is_empty()
-                            && bindings.iter().filter(|binding| binding.default).count() <= 1
-                            && bindings.iter().all(|binding| {
-                                binding
-                                    .clauses
-                                    .iter()
-                                    .all(|clause| overrides.contains(clause))
-                            })
-                    }
-                    Check::ValueEntries(entries) => {
-                        !entries.is_empty()
-                            && entries.iter().enumerate().all(|(index, (id, _))| {
-                                !id.is_empty()
-                                    && !entries[..index].iter().any(|(prior, _)| prior == id)
-                            })
-                    }
-                    _ => true,
-                };
-                if !scoped {
-                    return Err(PlanError::InvalidColumns);
-                }
-            }
-        }
+    /// Column checks, in declared column order.
+    pub(crate) fn with_column_verifications(mut self, groups: Vec<ColumnVerifications>) -> Self {
         self.column_verifications = groups;
-        Ok(self)
+        self
     }
 
     /// Borrow checks in declared column order, independently of dependency order.
@@ -1874,737 +861,9 @@ impl DatasetPlan {
 
 #[cfg(test)]
 mod admission_boundaries;
-#[cfg(test)]
-mod donor_admission_tests;
-
-mod verification_predicates;
 
 mod execution;
 pub use execution::{
     CheckRecord, CodelistObservation, Dataset, Execution, ExecutionAttempt, ExecutionError,
     ExecutionEvent, ExecutionPhase, Resource, RowCountObservation, RowIdentity, TemplateRows,
 };
-
-/// Validate expressions built from nested operand assignments:
-/// rounding, imputation, unary transforms, extremes and templates.
-#[allow(clippy::too_many_arguments)]
-fn validate_operand_assignment(
-    assignment: &Assignment,
-    available: &mut [bool],
-    source: &TableSchema,
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    mode: &RowMode,
-    depth: usize,
-    record_derivation: bool,
-    destination_free: bool,
-) -> Result<bool, PlanError> {
-    match &assignment.expression {
-        Expression::Round {
-            source: operand,
-            rounding,
-        } => {
-            if rounding.source().is_empty() || rounding.path().is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-            if operand.column != assignment.column {
-                return Err(PlanError::InvalidColumns);
-            }
-            validate_assignment_at(
-                operand,
-                available,
-                source,
-                primary,
-                secondary,
-                intermediates,
-                output,
-                mode,
-                depth + 1,
-                record_derivation,
-                destination_free,
-            )?;
-            if !destination_free {
-                available[assignment.column] = false;
-            }
-        }
-        Expression::Imputation {
-            operands,
-            operation,
-        } => {
-            if operands.len() != operation.operands().count() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::MappingCut {
-            source: operand, ..
-        }
-        | Expression::StrCase {
-            source: operand, ..
-        }
-        | Expression::StrPad {
-            source: operand, ..
-        }
-        | Expression::StrExtract {
-            source: operand, ..
-        }
-        | Expression::StrReplace {
-            source: operand, ..
-        } => {
-            if operand.column != assignment.column {
-                return Err(PlanError::InvalidColumns);
-            }
-            validate_assignment_at(
-                operand,
-                available,
-                source,
-                primary,
-                secondary,
-                intermediates,
-                output,
-                mode,
-                depth + 1,
-                record_derivation,
-                destination_free,
-            )?;
-            if !destination_free {
-                available[assignment.column] = false;
-            }
-        }
-        Expression::Extreme { operands, .. } => {
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::StrTemplate {
-            operands,
-            operation,
-        } => {
-            if operands.len() != operation.identifiers().len() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        Expression::Temporal {
-            operands,
-            operation,
-        } => {
-            if operands.len() != operation.sources().len() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for operand in operands {
-                if operand.column != assignment.column {
-                    return Err(PlanError::InvalidColumns);
-                }
-                validate_assignment_at(
-                    operand,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        _ => return Ok(false),
-    }
-    Ok(true)
-}
-
-/// Validate expressions that select among nested assignments:
-/// case branches, first-available selections and source bindings.
-#[allow(clippy::too_many_arguments)]
-fn validate_branching_assignment(
-    assignment: &Assignment,
-    available: &mut [bool],
-    source: &TableSchema,
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    mode: &RowMode,
-    depth: usize,
-    record_derivation: bool,
-    destination_free: bool,
-) -> Result<bool, PlanError> {
-    match &assignment.expression {
-        Expression::Case(branches) => {
-            if branches.is_empty() || branches[0].when.is_none() {
-                return Err(PlanError::InvalidColumns);
-            }
-            for (index, branch) in branches.iter().enumerate() {
-                if branch.assignment.column != assignment.column
-                    || branch.when.is_none() && index + 1 != branches.len()
-                {
-                    return Err(PlanError::InvalidColumns);
-                }
-                if let Some(when) = &branch.when {
-                    if !when.collected().is_empty()
-                        && !matches!(mode, RowMode::Keys | RowMode::Records)
-                    {
-                        return Err(PlanError::InvalidKeyMode);
-                    }
-                    if let RowMode::Groups(keys) = mode {
-                        if when.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
-                            return Err(PlanError::NonGroupSource);
-                        }
-                    }
-                    when.validate_contextual(source.columns().len(), available)
-                        .map_err(PlanError::Filter)?;
-                    for binding in when.bindings() {
-                        if let Read::Intermediate { index, column } = binding.read {
-                            let item = intermediates
-                                .get(index)
-                                .ok_or(PlanError::InvalidIntermediate)?;
-                            intermediates::validate_context_read(
-                                item, column, primary, secondary, available, output, mode,
-                            )?;
-                        }
-                    }
-                }
-                validate_assignment_at(
-                    &branch.assignment,
-                    available,
-                    source,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    mode,
-                    depth + 1,
-                    record_derivation,
-                    destination_free,
-                )?;
-                if !destination_free {
-                    available[assignment.column] = false;
-                }
-            }
-        }
-        // REQ-0211/0213 convert one derived value at execution, including
-        // literals. Eager conversion would invent failures for empty templates
-        // and move runtime conversion conditions into the planning phase.
-        Expression::FirstAvailable(selection) => {
-            selection.validate(source, available, mode)?;
-            for operand in selection.sources() {
-                if let SelectionRead::Expression(operand) = &operand.read {
-                    if operand.column != assignment.column {
-                        return Err(PlanError::InvalidColumns);
-                    }
-                    validate_assignment_at(
-                        operand,
-                        available,
-                        source,
-                        primary,
-                        secondary,
-                        intermediates,
-                        output,
-                        mode,
-                        depth + 1,
-                        record_derivation,
-                        destination_free,
-                    )?;
-                    if !destination_free {
-                        available[assignment.column] = false;
-                    }
-                }
-            }
-        }
-        Expression::SourceBinding {
-            source: operand,
-            path,
-            variable,
-            absent,
-            variable_absent,
-            ..
-        } => {
-            if operand.column != assignment.column
-                || path.is_empty()
-                || variable.is_empty()
-                || (*variable_absent && absent.is_none())
-            {
-                return Err(PlanError::InvalidColumns);
-            }
-            validate_assignment_at(
-                operand,
-                available,
-                source,
-                primary,
-                secondary,
-                intermediates,
-                output,
-                mode,
-                depth + 1,
-                record_derivation,
-                destination_free,
-            )?;
-            if !destination_free {
-                available[assignment.column] = false;
-            }
-        }
-        _ => return Ok(false),
-    }
-    Ok(true)
-}
-
-/// An implicit join's range (LOOKUP-9): admitted like any lookup's range, and
-/// a grouped row reads only a group key of its driver's record.
-#[allow(clippy::too_many_arguments)]
-fn validate_join_range(
-    range: &RelationRange,
-    donor: &TableSchema,
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    available: &[bool],
-    mode: &RowMode,
-) -> Result<(), PlanError> {
-    range.validate_lookup(
-        donor,
-        &|column| donor.columns().get(column).map(|field| field.kind.into()),
-        primary,
-        secondary,
-        intermediates,
-        output,
-        available,
-    )?;
-    if let (CurrentRead::Record { column, .. }, RowMode::Groups(keys)) =
-        (range.current().read, mode.local_mode())
-    {
-        if !keys.contains(&column) {
-            return Err(PlanError::NonGroupSource);
-        }
-    }
-    if let CurrentRead::Intermediate { index, column } = range.current().read {
-        let item = intermediates
-            .get(index)
-            .ok_or(PlanError::InvalidIntermediate)?;
-        intermediates::validate_context_read(
-            item, column, primary, secondary, available, output, mode,
-        )?;
-    }
-    Ok(())
-}
-
-/// Validate expressions admitted directly against the schemas,
-/// without nested assignment recursion.
-#[allow(clippy::too_many_arguments)]
-fn validate_direct_assignment(
-    assignment: &Assignment,
-    available: &mut [bool],
-    source: &TableSchema,
-    primary: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    mode: &RowMode,
-) -> Result<(), PlanError> {
-    match &assignment.expression {
-        Expression::Joined(read) => read.validate(source, secondary, output, available, mode)?,
-        Expression::JoinedSource {
-            read,
-            range,
-            filter,
-            selection,
-            absence,
-        } => {
-            read.validate(source, secondary, output, available, mode)?;
-            if absence
-                .as_ref()
-                .is_some_and(|absence| absence.path.is_empty())
-            {
-                return Err(PlanError::EmptyPath);
-            }
-            if let Some(range) = range {
-                validate_join_range(
-                    range,
-                    &read.schema,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    available,
-                    mode,
-                )?;
-            }
-            let width = read.schema.columns().len();
-            if let Some(filter) = filter {
-                filter
-                    .validate(width, &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if selection.as_ref().is_some_and(|s| {
-                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
-            }) {
-                return Err(PlanError::InvalidSourceOrder);
-            }
-        }
-        Expression::Literal(_) => {}
-        Expression::Flag(flag) => {
-            flag.validate(source, available, secondary, intermediates, output, mode)?
-        }
-        Expression::Compute(expression) => {
-            for binding in expression.bindings() {
-                if let crate::bound_expression::Read::Intermediate { index, column } = binding.read
-                {
-                    let item = intermediates
-                        .get(index)
-                        .ok_or(PlanError::InvalidIntermediate)?;
-                    intermediates::validate_context_read(
-                        item, column, primary, secondary, available, output, mode,
-                    )?;
-                }
-            }
-            if let RowMode::Groups(keys) = mode {
-                if expression.bindings().iter().any(|binding| matches!(binding.read, Read::Source(column) if !keys.contains(&column))) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-            expression
-                .validate(source.columns().len(), available, false)
-                .map_err(|error| match error {
-                    crate::bound_expression::ScopeError::GroupedSource => PlanError::NonGroupSource,
-                    crate::bound_expression::ScopeError::InvalidSource => PlanError::InvalidSource,
-                    crate::bound_expression::ScopeError::UnavailableColumn => {
-                        PlanError::UnavailableColumn
-                    }
-                })?;
-        }
-        Expression::Function(function) => {
-            function.validate(source, secondary, output, available, mode)?;
-            validate_function_intermediates(
-                function.arguments(),
-                primary,
-                secondary,
-                intermediates,
-                available,
-                output,
-                mode,
-            )?;
-        }
-        Expression::ProjectFunction(function) => {
-            function.validate(source, secondary, output, available, mode)?;
-            validate_function_intermediates(
-                function.arguments(),
-                primary,
-                secondary,
-                intermediates,
-                available,
-                output,
-                mode,
-            )?;
-        }
-        Expression::SourceLookup {
-            lookup: bound,
-            range,
-            filter,
-            selection,
-            absence,
-        } => {
-            // Implicit source joins use completed output keys in every row
-            // mode. Their ownership and availability are admitted below; they
-            // do not borrow a raw record from the enclosing driver.
-            lookup::validate_source(bound, secondary, available, output)?;
-            if absence
-                .as_ref()
-                .is_some_and(|absence| absence.path.is_empty())
-            {
-                return Err(PlanError::EmptyPath);
-            }
-            if let Some(range) = range {
-                validate_join_range(
-                    range,
-                    &secondary[bound.source].schema,
-                    primary,
-                    secondary,
-                    intermediates,
-                    output,
-                    available,
-                    mode,
-                )?;
-            }
-            let width = secondary[bound.source].schema.columns().len();
-            if let Some(filter) = filter {
-                filter
-                    .validate(width, &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if selection.as_ref().is_some_and(|s| {
-                s.order_by.is_empty() || s.order_by.iter().any(|term| term.column >= width)
-            }) {
-                return Err(PlanError::InvalidSourceOrder);
-            }
-        }
-        Expression::Intermediate { index, column } => {
-            let item = intermediates
-                .get(*index)
-                .ok_or(PlanError::InvalidIntermediate)?;
-            intermediates::validate_context_read(
-                item, *column, primary, secondary, available, output, mode,
-            )?;
-        }
-        Expression::RowLookup(lookup) => lookup::validate_row(lookup, source, secondary, mode)?,
-        Expression::Lookup(lookup) => {
-            if !matches!(mode, RowMode::Keys) {
-                return Err(PlanError::InvalidLookup);
-            }
-            lookup::validate(lookup, secondary, available, output)?;
-        }
-        Expression::ContextWindow(window) => {
-            window.validate(available, output, source, mode)?;
-        }
-        Expression::Window(window) => {
-            window.validate(available, output)?;
-        }
-        Expression::Column(column) => {
-            if !available.get(*column).copied().unwrap_or(false) {
-                return Err(PlanError::UnavailableColumn);
-            }
-        }
-        Expression::Source(column) => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if let RowMode::Groups(keys) = mode {
-                if !keys.contains(column) {
-                    return Err(PlanError::NonGroupSource);
-                }
-            }
-        }
-        Expression::Collect {
-            column,
-            identifier,
-            filter,
-            selection,
-        } => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            let scalar_records = matches!(mode, RowMode::Records)
-                || matches!(mode, RowMode::Groups(keys) if keys.contains(column));
-            if (!matches!(mode, RowMode::Keys) && !scalar_records) || identifier.is_empty() {
-                return Err(PlanError::InvalidKeyMode);
-            }
-            if let Some(filter) = filter {
-                filter
-                    .validate(source.columns().len(), &[], false)
-                    .map_err(PlanError::Filter)?;
-            }
-            if let Some(selection) = selection {
-                if selection.order_by.is_empty()
-                    || selection
-                        .order_by
-                        .iter()
-                        .any(|term| term.column >= source.columns().len())
-                {
-                    return Err(PlanError::InvalidSourceOrder);
-                }
-            }
-        }
-        Expression::Aggregate(aggregate) => {
-            aggregate.validate(source, secondary, intermediates, output, available, mode)?;
-        }
-        Expression::Odm(odm) => odm.validate(source, secondary, mode)?,
-        Expression::Count { column, text } => {
-            if column.is_some_and(|column| column >= source.columns().len()) {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Groups(_)) {
-                return Err(PlanError::UngroupedReduction);
-            }
-            if text.is_empty() {
-                return Err(PlanError::EmptyPath);
-            }
-        }
-        Expression::Reduce {
-            column,
-            text,
-            identifier,
-            ..
-        } => {
-            if *column >= source.columns().len() {
-                return Err(PlanError::InvalidSource);
-            }
-            if !matches!(mode, RowMode::Groups(_)) {
-                return Err(PlanError::UngroupedReduction);
-            }
-            if text.is_empty() || identifier.as_ref().is_some_and(String::is_empty) {
-                return Err(PlanError::EmptyPath);
-            }
-        }
-        _ => (),
-    }
-    Ok(())
-}
-
-/// Validate the declared verifications of one admitted plan,
-/// rejecting empty or duplicate paths and malformed checks.
-#[allow(clippy::too_many_arguments)]
-fn validate_plan_verifications(
-    verifications: &[Verification],
-    source: &TableSchema,
-    secondary: &[SecondarySource],
-    intermediates: &[Intermediate],
-    output: &TableSchema,
-    templates: &[RowTemplate],
-    width: usize,
-) -> Result<(), PlanError> {
-    for (position, verification) in verifications.iter().enumerate() {
-        if verification.path.is_empty() {
-            return Err(PlanError::EmptyPath);
-        }
-        if verifications[..position]
-            .iter()
-            .any(|previous| previous.path == verification.path)
-        {
-            return Err(PlanError::DuplicateVerificationPath);
-        }
-        match &verification.check {
-            Check::NotMissing
-            | Check::Mandatory(_)
-            | Check::DataType { .. }
-            | Check::AllowedValues(_)
-            | Check::Codelist { .. }
-            | Check::ValueCodelists { .. }
-            | Check::Inventory { .. }
-            | Check::ValueMaxLength { .. }
-            | Check::ValueEntries(_)
-            | Check::ValueEntryMatch { .. }
-            | Check::Range { .. }
-            | Check::MaxLength(_)
-            | Check::WideMaxLength(_)
-            | Check::Matches(_) => return Err(PlanError::InvalidColumns),
-            Check::InvalidDiagnostic(_) => {}
-            Check::InvalidDeclaration { .. } => {}
-            Check::PredicateDeclaration(predicate) => verification_predicates::validate(
-                predicate,
-                source,
-                secondary,
-                intermediates,
-                output,
-                templates,
-            )?,
-            Check::Assert { when, require } => {
-                for predicate in when.iter().chain([require]) {
-                    verification_predicates::validate(
-                        predicate,
-                        source,
-                        secondary,
-                        intermediates,
-                        output,
-                        templates,
-                    )?;
-                }
-            }
-            Check::Unique(columns) => {
-                // Unlike row.group_by, unique.columns permits repeated names.
-                if columns.is_empty() || columns.iter().any(|&column| column >= width) {
-                    return Err(PlanError::InvalidColumns);
-                }
-            }
-            Check::AllOrNone(columns) => {
-                if columns.iter().any(|&column| column >= width)
-                    || !columns.iter().any(|column| columns.first() != Some(column))
-                {
-                    return Err(PlanError::InvalidColumns);
-                }
-            }
-            Check::RowCount { min, max } => {
-                if (min.is_none() && max.is_none())
-                    || matches!((min, max), (Some(a), Some(b)) if a > b)
-                {
-                    return Err(PlanError::InvalidBounds);
-                }
-            }
-            Check::ScopedRowCount(check) => {
-                check.validate(width)?;
-                for predicate in check.filter.iter().chain(&check.when) {
-                    verification_predicates::validate(
-                        predicate,
-                        source,
-                        secondary,
-                        intermediates,
-                        output,
-                        templates,
-                    )?;
-                }
-            }
-            Check::WideRowCount { min, max } => {
-                if (min.is_none() && max.is_none())
-                    || matches!((min, max), (Some(a), Some(b)) if a > b)
-                {
-                    return Err(PlanError::InvalidBounds);
-                }
-            }
-        }
-    }
-    Ok(())
-}

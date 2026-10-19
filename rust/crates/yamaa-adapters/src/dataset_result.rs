@@ -188,24 +188,19 @@ type FailedChecks = (
 );
 fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<FailedChecks>), Error> {
     use yamaa_core::verification_diagnostics::Phase;
-    match error {
-        ExecutionError::Function { .. } => Err(Error::FunctionBinding),
-        other => {
-            // Encode before moving the ledger; no host error is cloned or inspected.
-            let outcome = semantic_failure(&other, true)?;
-            let records = match other {
-                ExecutionError::KeyFailures(records) => Some((Phase::Output, records)),
-                ExecutionError::VerificationFailures(records)
-                | ExecutionError::VerificationDiagnostic { records, .. }
-                | ExecutionError::VerificationDeclaration { records, .. }
-                | ExecutionError::VerificationPredicate { records, .. } => {
-                    Some((Phase::Verification, records))
-                }
-                _ => None,
-            };
-            Ok((outcome, records))
+    // Encode before moving the ledger; no host error is cloned or inspected.
+    let outcome = semantic_failure(&error, true)?;
+    let records = match error {
+        ExecutionError::KeyFailures(records) => Some((Phase::Output, records)),
+        ExecutionError::VerificationFailures(records)
+        | ExecutionError::VerificationDiagnostic { records, .. }
+        | ExecutionError::VerificationDeclaration { records, .. }
+        | ExecutionError::VerificationPredicate { records, .. } => {
+            Some((Phase::Verification, records))
         }
-    }
+        _ => None,
+    };
+    Ok((outcome, records))
 }
 
 /// Read core-owned semantic facts without cloning or classifying any host payload.
@@ -213,7 +208,6 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<Fail
 fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Result<Outcome, Error> {
     let encode_records = native_records;
     Ok(match error {
-        ExecutionError::Function { .. } => return Err(Error::UnsupportedOutcome),
         ExecutionError::FunctionBinding { .. } => return Err(Error::FunctionBinding),
         // Project failures use the owned application report with original host payloads.
         ExecutionError::ProjectFunction { .. } => return Err(Error::UnsupportedOutcome),

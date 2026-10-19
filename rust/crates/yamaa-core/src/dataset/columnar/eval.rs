@@ -24,17 +24,13 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let plan = self.plan;
         let node = plan.expr(expr);
         match node.kind {
-            ExprKind::Function | ExprKind::ProjectFunction => {
-                super::functions::evaluate(self, cx, expr, rows)
-            }
+            ExprKind::ProjectFunction => super::functions::evaluate(self, cx, expr, rows),
             ExprKind::Window(_) | ExprKind::ContextWindow(_) => {
                 super::windows::value(self, cx, expr, rows)
             }
-            ExprKind::Joined(_)
-            | ExprKind::JoinedSource(_)
-            | ExprKind::SourceLookup(_)
-            | ExprKind::Lookup(_)
-            | ExprKind::RowLookup(_) => super::relations::join(self, cx, expr, rows),
+            ExprKind::Joined(_) | ExprKind::JoinedSource(_) | ExprKind::SourceLookup(_) => {
+                super::relations::join(self, cx, expr, rows)
+            }
             ExprKind::Intermediate(_) => super::relations::read(self, cx, expr, rows, true),
             ExprKind::Aggregate(_) => super::relations::aggregate(self, cx, expr, rows),
             ExprKind::Odm(_) => super::relations::odm(self, cx, expr, rows),
@@ -60,8 +56,6 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             ExprKind::Column => self.column_read(cx, expr, rows),
             ExprKind::Source => self.field_read(cx, expr, rows),
             ExprKind::Collect => super::scalar::collect(self, cx, expr, rows),
-            ExprKind::Count => super::scalar::count(self, cx, expr, rows),
-            ExprKind::Reduce => super::scalar::reduce(self, cx, expr, rows),
             ExprKind::Predicate | ExprKind::Derivation => {
                 unreachable!("predicates and derivations are evaluated by their owners")
             }
