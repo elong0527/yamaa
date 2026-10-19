@@ -395,6 +395,24 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertEqual([path[2] for path in paths], files)
                 self.assertEqual({path[0] for path in paths}, {directory})
 
+    def test_every_cran_job_refuses_connections_only_while_it_checks(self):
+        # The installs before the check reach package mirrors; the package
+        # build and check alone run behind the refusing proxy. Environment
+        # names are case-insensitive on Windows.
+        proxy = {"http_proxy", "https_proxy", "all_proxy", "no_proxy"}
+        jobs = [name for name in self.jobs if name.startswith("native-cran ")]
+        self.assertTrue(jobs)
+        for job in jobs:
+            with self.subTest(job=job):
+                inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
+                self.assertFalse(proxy & inherited)
+                for step in self.jobs[job]["definitions"]:
+                    names = {name.lower() for name in step.get("env", {})}
+                    checks = (
+                        step.get("name") == "Check the R source package as CRAN does"
+                    )
+                    self.assertEqual(proxy & names, proxy if checks else set())
+
 
 if __name__ == "__main__":
     unittest.main()
