@@ -430,15 +430,41 @@ mod numeric {
         }
 
         #[test]
-        fn contextual_case_collection_cannot_borrow_a_foreign_drivers_same_width_coordinates() {
+        fn contextual_case_collection_reads_its_own_drivers_records() {
+            // A column binding reads each row through its own template's
+            // driver port (#2829), so a collection never borrows the
+            // primary's coordinates: the primary and ALT have the same width
+            // but different values at the row's record.
             use yamaa_core::{
                 dataset::{
-                    Assignment, CaseBranch, DatasetPlan, Expression, PlanError, RowMode,
-                    RowTemplate, SecondarySource,
+                    Assignment, CaseBranch, DatasetPlan, Expression, RowMode, RowTemplate,
+                    SecondarySource,
                 },
-                table::{Column, TableSchema},
+                function_invocation::NoFunctions,
+                table::{CellError, Column, TableAccess, TableSchema, ValueRef},
                 value::ColumnType,
             };
+            struct Rows(TableSchema, Vec<Vec<Value>>);
+            impl TableAccess for Rows {
+                type Error = std::convert::Infallible;
+                fn schema(&self) -> &TableSchema {
+                    &self.0
+                }
+                fn row_count(&self) -> usize {
+                    self.1.len()
+                }
+                fn cell(
+                    &self,
+                    row: usize,
+                    column: usize,
+                ) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+                    self.1
+                        .get(row)
+                        .and_then(|values| values.get(column))
+                        .map(ValueRef::from)
+                        .ok_or(CellError::OutOfBounds { row, column })
+                }
+            }
             let schema = TableSchema::new(vec![
                 Column {
                     name: "ID".into(),
@@ -450,8 +476,8 @@ mod numeric {
                 },
             ])
             .unwrap();
-            let original = predicate(
-                "columns.V.case[0].when",
+            let original = BoundPredicate::new(
+                compile("A = 9", Context::Predicate, "columns.V.case[0].when").unwrap(),
                 vec![binding("A", Read::Source(1))],
             )
             .unwrap();
@@ -461,13 +487,13 @@ mod numeric {
                 vec!["A".into()],
             )
             .unwrap();
-            let result = DatasetPlan::new_with_sources(
+            let plan = DatasetPlan::new_with_sources(
                 schema.clone(),
                 vec![SecondarySource {
                     name: "ALT".into(),
                     schema: schema.clone(),
                 }],
-                schema,
+                schema.clone(),
                 vec![RowTemplate {
                     mode: RowMode::Driver {
                         source: 1,
@@ -494,8 +520,18 @@ mod numeric {
                 }],
                 vec![0],
                 vec![],
+            )
+            .unwrap();
+            let primary = Rows(schema.clone(), vec![vec![Value::Int(1), Value::Int(5)]]);
+            let alt = Rows(schema, vec![vec![Value::Int(1), Value::Int(9)]]);
+            let execution = plan
+                .execute(&primary, &[&alt], &mut NoFunctions::new(), None)
+                .result
+                .unwrap();
+            assert_eq!(
+                execution.dataset.rows(),
+                &[vec![Value::Int(1), Value::Int(7)]]
             );
-            assert_eq!(result.unwrap_err(), PlanError::InvalidKeyMode);
         }
     }
     mod compute_evaluation {

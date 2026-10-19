@@ -2070,7 +2070,7 @@ S1,002,2024-06
                 match name {
                     "negative-zero-division" | "negative-integer-overflow" => {
                         let Expression::Compute(numeric) =
-                            &plan.columns().last().unwrap().expression
+                            &plan.column_bindings().last().unwrap().assignment.expression
                         else {
                             panic!("numeric derivation")
                         };
@@ -2141,7 +2141,6 @@ S1,002,2024-06
                     "schema-window-functions" => {
                         let kinds = plan
                             .columns()
-                            .iter()
                             .filter_map(|assignment| match &assignment.expression {
                                 Expression::Window(window) => Some(window.kind),
                                 _ => None,

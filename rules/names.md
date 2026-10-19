@@ -90,7 +90,7 @@ is scalar only when the exact variable appears in the enclosing
 source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
-Evidence: `schema-rows-group-scope`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-adapters/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
+Evidence: `schema-rows-group-scope`, `schema-column-default-own-record`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-adapters/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-adapters/tests/execution_column_driver_bindings.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
 Replaces: REQ-0085, REQ-0086, REQ-0087, REQ-0107.
 
 The driver is an input dataset or an eligible named intermediate under
@@ -105,6 +105,17 @@ every row template, grouped or not, to have that driver
 ([WINDOW-11](windows.md#window-11)). A grouped row reduces non-key variables
 with an aggregate expression, as [Expressions](expressions.md) and
 [Formulas](formulas.md) define.
+
+The current row template of a column-level derivation is the one that built
+the row. A derivation that completes the rows of row templates over several
+drivers therefore reads, on each row, the driver record that built that row,
+and joins any other input dataset on the output keys it carries
+([LOOKUP-1](lookup.md#lookup-1)): the same qualified name reads a record on
+the rows its driver built and joins on the rows another driver built. A
+derivation holding a qualified aggregate ([LOOKUP-18](lookup.md#lookup-18))
+binds once for all of those rows instead: unless every row template has the
+first row template's driver, it joins every input dataset, whichever driver
+built the row.
 
 <a id="name-5"></a>
 

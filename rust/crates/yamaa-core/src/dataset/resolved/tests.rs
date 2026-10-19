@@ -960,3 +960,224 @@ fn every_node_carries_its_operation_and_every_relation_check_its_declaration() {
     assert_eq!(named.identifier, "L");
     assert_eq!(resolved.region(RegionId::DATASET).secondary[0].name, "LKP");
 }
+
+/// Rows of int values, read through the executor's ports.
+struct Rows(TableSchema, Vec<Vec<i64>>);
+impl TableAccess for Rows {
+    type Error = std::convert::Infallible;
+    fn schema(&self) -> &TableSchema {
+        &self.0
+    }
+    fn row_count(&self) -> usize {
+        self.1.len()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Self::Error>> {
+        self.1
+            .get(row)
+            .and_then(|values| values.get(column))
+            .map(|&value| ValueRef::Int(value))
+            .ok_or(CellError::OutOfBounds { row, column })
+    }
+}
+
+/// Three templates, told apart by T: the first over the primary input derives
+/// V itself, the second over SEC and the third over the primary leave V to
+/// `columns`.
+fn driver_bindings_plan(
+    columns: Vec<crate::dataset::ColumnBinding>,
+) -> Result<DatasetPlan, crate::dataset::PlanError> {
+    let template = |mode: RowMode, tag: i64| RowTemplate {
+        mode,
+        assignments: std::iter::once(assign(0, Expression::Source(0)))
+            .chain((tag == 0).then(|| assign(1, Expression::Literal(Value::Int(0)))))
+            .chain([assign(2, Expression::Literal(Value::Int(tag)))])
+            .collect(),
+        filter: None,
+    };
+    DatasetPlan::new_with_bindings(
+        SourceSchemas {
+            primary: ints(&["ID", "A"]),
+            secondary: vec![SecondarySource {
+                name: "SEC".into(),
+                schema: ints(&["ID", "B", "C"]),
+            }],
+        },
+        Vec::new(),
+        ints(&["ID", "V", "T"]),
+        vec![
+            template(RowMode::Records, 0),
+            template(
+                RowMode::Driver {
+                    source: 1,
+                    mode: Box::new(RowMode::Records),
+                },
+                1,
+            ),
+            template(RowMode::Records, 2),
+        ],
+        columns,
+        vec![0, 2],
+        vec![],
+    )
+}
+
+fn binding(
+    expression: Expression,
+    templates: Vec<usize>,
+    scope: crate::dataset::ColumnScope,
+) -> crate::dataset::ColumnBinding {
+    crate::dataset::ColumnBinding {
+        assignment: assign(1, expression),
+        templates,
+        scope,
+    }
+}
+
+#[test]
+fn a_column_bound_per_driver_reads_each_rows_own_record() {
+    use crate::dataset::ColumnScope::Template;
+    // V is bound once for SEC, reading its second field, and once for the
+    // primary, reading its second field: the same position in two inputs.
+    let plan = driver_bindings_plan(vec![
+        binding(Expression::Source(1), vec![1], Template),
+        binding(Expression::Source(1), vec![2], Template),
+    ])
+    .unwrap();
+    let resolved = plan.resolve().unwrap();
+    let value = ColumnId(1);
+    assert_eq!(resolved.column(value).phase, ColumnPhase::Mixed);
+    let bindings: Vec<_> = resolved.column_bindings(value).collect();
+    assert_eq!(bindings.len(), 2);
+    let (secondary, primary) = (resolved.binding(bindings[0]), resolved.binding(bindings[1]));
+    assert_eq!(secondary.templates, [TemplateId(1)]);
+    assert_eq!(secondary.driver.source, SourceId(1));
+    assert_eq!(primary.templates, [TemplateId(2)]);
+    assert_eq!(primary.driver.source, SourceId(0));
+    // Each binding of the bound plan is its own expression.
+    assert_ne!(secondary.expr, primary.expr);
+    assert_eq!(secondary.origin, BindingOrigin::Column { assignment: 0 });
+    assert_eq!(primary.origin, BindingOrigin::Column { assignment: 1 });
+    assert_eq!(resolved.cell(TemplateId(1), value), Some(bindings[0]));
+    assert_eq!(resolved.cell(TemplateId(2), value), Some(bindings[1]));
+    // One column step runs both bindings.
+    let columns: Vec<_> = steps(&resolved, RegionId::DATASET)
+        .into_iter()
+        .filter(|step| matches!(step, Step::Column(_)))
+        .collect();
+    assert_eq!(columns, [Step::Column(value)]);
+    // The primary rows build the first and third templates; SEC's build the
+    // second. Each row reads its own driver's record.
+    let primary_rows = Rows(ints(&["ID", "A"]), vec![vec![1, 10], vec![2, 20]]);
+    let secondary_rows = Rows(ints(&["ID", "B", "C"]), vec![vec![3, 30, 300]]);
+    let attempt = plan.execute(
+        &primary_rows,
+        &[&secondary_rows],
+        &mut crate::function_invocation::NoFunctions::new(),
+        None,
+    );
+    let rows = attempt.result.unwrap().dataset.rows().to_vec();
+    let int = |values: [i64; 3]| values.map(Value::Int).to_vec();
+    assert_eq!(
+        rows,
+        [
+            int([1, 0, 0]),
+            int([2, 0, 0]),
+            int([3, 30, 1]),
+            int([1, 10, 2]),
+            int([2, 20, 2])
+        ]
+    );
+}
+
+#[test]
+fn a_whole_dataset_binding_reads_through_the_primary_port() {
+    use crate::dataset::ColumnScope::Dataset;
+    let plan = driver_bindings_plan(vec![binding(
+        Expression::Literal(Value::Int(9)),
+        vec![1, 2],
+        Dataset,
+    )])
+    .unwrap();
+    let resolved = plan.resolve().unwrap();
+    let bindings: Vec<_> = resolved.column_bindings(ColumnId(1)).collect();
+    // Both templates share the primary port, so they share one binding.
+    assert_eq!(bindings.len(), 1);
+    let bound = resolved.binding(bindings[0]);
+    assert_eq!(bound.templates, [TemplateId(1), TemplateId(2)]);
+    assert_eq!(bound.driver.source, SourceId(0));
+    assert_eq!(bound.driver.named, None);
+}
+
+#[test]
+fn column_bindings_register_their_sites_one_binding_after_another() {
+    use crate::dataset::ColumnScope::Template;
+    // The SEC binding answers an absent variable; the primary binding counts
+    // a missing `first_available`. Each binding's sites register in turn,
+    // whatever their kinds.
+    let source = Expression::SourceBinding {
+        source: Box::new(assign(1, Expression::Source(1))),
+        absent: Some(Value::Int(0)),
+        variable_absent: false,
+        selection_declared: false,
+        variable: "SEC.B".into(),
+        path: "columns.V.derivation.source".into(),
+    };
+    let first_available = Expression::FirstAvailable(Box::new(FirstAvailable::new(
+        "columns.V.derivation.first_available".into(),
+        vec![SelectionSource {
+            path: "columns.V.derivation.first_available.sources[0]".into(),
+            read: SelectionRead::Source(1),
+        }],
+        Value::Missing,
+    )));
+    let plan = driver_bindings_plan(vec![
+        binding(source, vec![1], Template),
+        binding(first_available, vec![2], Template),
+    ])
+    .unwrap();
+    let resolved = plan.resolve().unwrap();
+    let sites: Vec<_> = resolved
+        .handlers()
+        .iter()
+        .map(|site| (&*site.path, site.kind))
+        .collect();
+    assert_eq!(
+        sites,
+        [
+            ("columns.V.derivation.source.absent", HandlerKind::Absent),
+            (
+                "columns.V.derivation.first_available.missing",
+                HandlerKind::Missing
+            ),
+        ]
+    );
+}
+
+#[test]
+fn column_bindings_serve_each_template_that_leaves_the_column_once() {
+    use crate::dataset::{ColumnScope::Template, PlanError};
+    let literal = |templates| binding(Expression::Literal(Value::Int(1)), templates, Template);
+    // A template served twice, or one that derives the column itself.
+    assert_eq!(
+        driver_bindings_plan(vec![literal(vec![1, 2]), literal(vec![2])]),
+        Err(PlanError::DuplicateAssignment)
+    );
+    assert_eq!(
+        driver_bindings_plan(vec![literal(vec![0, 1, 2])]),
+        Err(PlanError::DuplicateAssignment)
+    );
+    // A template left unserved.
+    assert_eq!(
+        driver_bindings_plan(vec![literal(vec![1])]),
+        Err(PlanError::IncompleteRow)
+    );
+    // Templates listed out of order or outside the plan.
+    assert_eq!(
+        driver_bindings_plan(vec![literal(vec![2, 1])]),
+        Err(PlanError::InvalidColumns)
+    );
+    assert_eq!(
+        driver_bindings_plan(vec![literal(vec![1, 2, 3])]),
+        Err(PlanError::InvalidColumns)
+    );
+}

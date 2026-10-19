@@ -201,10 +201,9 @@ pub struct ColumnNode {
     /// Untyped donor results have no declared type.
     pub kind: Option<ColumnType>,
     pub phase: ColumnPhase,
-    /// The column-phase bindings of this column, in template order.
+    /// The column-phase bindings of this column: each column binding of the
+    /// bound plan in turn, its templates split by driver context.
     column_bindings: Range<u32>,
-    /// The column-phase declaration's position in the bound plan.
-    assignment: Option<u32>,
 }
 
 /// Which phase completes a column, decided from the templates' row bindings (#2754).
@@ -294,7 +293,7 @@ pub enum Stage {
 pub enum BindingOrigin {
     /// Assignment `assignment` of the region's template `template`.
     Template { template: u32, assignment: u32 },
-    /// Assignment `assignment` of the region's column phase.
+    /// Column binding `assignment` of the region's column phase.
     Column { assignment: u32 },
 }
 
@@ -1000,7 +999,9 @@ impl ResolvedPlan {
     pub fn row_bindings(&self, id: TemplateId) -> impl Iterator<Item = BindingId> {
         range(&self.template(id).row_bindings).map(|index| BindingId(index as u32))
     }
-    /// A column's column-phase bindings, in template order.
+    /// A column's column-phase bindings, in the order its step runs them:
+    /// each column binding of the bound plan in turn, in the order of the
+    /// first template each serves (#2829).
     pub fn column_bindings(&self, id: ColumnId) -> impl Iterator<Item = BindingId> {
         range(&self.column(id).column_bindings).map(|index| BindingId(index as u32))
     }

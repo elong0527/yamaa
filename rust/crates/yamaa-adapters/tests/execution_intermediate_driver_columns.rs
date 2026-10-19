@@ -4,8 +4,10 @@
 //! template does: the driver qualifier reads the record that built the row,
 //! another input is an implicit join on the output keys (REQ-0111), and a
 //! named lookup selects through its key, while a qualified aggregate still
-//! reduces its declared input (REQ-0467). A driver read the column phase
-//! cannot address is refused before any data is read, by `check` and `domain`
+//! reduces its declared input (REQ-0467). The column phase reads each row
+//! through its own template's driver port (#2829), so an intermediate over
+//! any input is addressable; a field it derives, or a driver read beside an
+//! aggregate, is refused before any data is read, by `check` and `domain`
 //! alike.
 use std::{
     fs,
@@ -507,8 +509,14 @@ fn driver_over_another_input_completes_reads_it_can_address() {
 }
 
 #[test]
-fn driver_over_another_input_refuses_its_record_read() {
-    Fixture::new(&secondary("SER.AETERM")).refused("columns.R.derivation.source");
+fn driver_over_another_input_reads_the_record_that_built_the_row() {
+    // The column phase reads each row through its own template's driver
+    // port (#2829): the serious event in AE, not the DM record at the same
+    // position.
+    Fixture::new(&secondary("SER.AETERM")).saved(
+        "USUBJID,AESEQ,SRC,R\nS1,0,DM,OWN\nS2,0,DM,OWN\n\
+         S1,1,SER,HEADACHE\nS2,1,SER,RASH\nS1,3,SER,DIZZINESS\n",
+    );
 }
 
 #[test]

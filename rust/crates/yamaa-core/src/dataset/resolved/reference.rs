@@ -19,7 +19,7 @@ pub enum ReferenceStep {
     Window { template: usize, assignment: usize },
     PostwindowFilter { template: usize },
     PublishSelf { template: usize },
-    Column { assignment: usize },
+    Column { column: usize },
     ColumnCheck { column: usize, check: usize },
     DatasetCheck { verification: usize },
     UnobservedFilterTypes,
@@ -97,9 +97,9 @@ pub(crate) fn reference_order(plan: &DatasetPlan) -> Vec<ReferenceStep> {
     }
     let mut next = 0;
     check_columns(plan, &completed, &mut next, &mut steps);
-    for (assignment, column) in plan.columns().iter().enumerate() {
-        steps.push(S::Column { assignment });
-        completed[column.column] = true;
+    for column in column_steps(plan) {
+        steps.push(S::Column { column });
+        completed[column] = true;
         check_columns(plan, &completed, &mut next, &mut steps);
     }
     steps.push(S::UnobservedFilterTypes);
@@ -168,8 +168,21 @@ pub(crate) fn donor_reference_order(plan: &DatasetPlan, stored: usize) -> Vec<Re
             }
         }
     }
-    for assignment in 0..plan.columns().len() {
-        steps.push(S::Column { assignment });
-    }
+    steps.extend(column_steps(plan).map(|column| S::Column { column }));
     steps
+}
+
+/// One column step per column, in column order: `complete_columns` runs a
+/// column's adjacent bindings in one step.
+fn column_steps(plan: &DatasetPlan) -> impl Iterator<Item = usize> + '_ {
+    let bindings = plan.column_bindings();
+    bindings
+        .iter()
+        .enumerate()
+        .filter(move |(index, binding)| {
+            index
+                .checked_sub(1)
+                .is_none_or(|prior| bindings[prior].assignment.column != binding.assignment.column)
+        })
+        .map(|(_, binding)| binding.assignment.column)
 }

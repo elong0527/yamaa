@@ -113,7 +113,7 @@ mod project {
             .unwrap();
             assert_eq!(prepared.called_functions(), [1]);
             let plan = prepared.bind(&source()).unwrap();
-            assert!(plan.columns().is_empty());
+            assert!(plan.column_bindings().is_empty());
             assert_eq!(
                 plan.templates()[0]
                     .assignments
@@ -460,11 +460,10 @@ mod project {
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
             assert_eq!(plan.templates()[0].assignments.len(), 1);
-            assert_eq!(
-                plan.columns().iter().map(|a| a.column).collect::<Vec<_>>(),
-                [1, 2]
-            );
-            let Expression::ProjectFunction(bound) = &plan.columns()[1].expression else {
+            assert_eq!(plan.columns().map(|a| a.column).collect::<Vec<_>>(), [1, 2]);
+            let Expression::ProjectFunction(bound) =
+                &plan.column_bindings()[1].assignment.expression
+            else {
                 panic!("column call")
             };
             assert_eq!(
@@ -550,7 +549,7 @@ mod project {
             let prepared =
                 PreparedSpecification::prepare_with_project(&spec, &[function("id")]).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            assert!(plan.columns().is_empty());
+            assert!(plan.column_bindings().is_empty());
             assert_eq!(
                 plan.templates()[0]
                     .assignments
@@ -590,7 +589,7 @@ mod project {
                     .collect::<Vec<_>>(),
                 [0, 2]
             );
-            assert_eq!(plan.columns()[0].column, 1);
+            assert_eq!(plan.column_bindings()[0].assignment.column, 1);
         }
 
         #[test]
@@ -729,7 +728,7 @@ mod project {
                     }
                     let prepared = prepared.unwrap();
                     let plan = prepared.bind(&source()).unwrap();
-                    assert!(plan.columns().is_empty());
+                    assert!(plan.column_bindings().is_empty());
                     assert_eq!(
                         plan.templates()[0]
                             .assignments
@@ -859,7 +858,7 @@ mod project {
             .unwrap();
             assert_eq!(prepared.called_functions(), [0, 1]);
             let plan = prepared.bind(&source()).unwrap();
-            assert!(plan.columns().is_empty());
+            assert!(plan.column_bindings().is_empty());
             assert_eq!(
                 plan.templates()[0]
                     .assignments
