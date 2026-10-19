@@ -203,9 +203,15 @@ fn a_check_reads_only_metadata_through_the_resolver() {
     let case = Case::new("sdtm-dm-metadata", &[]);
     let engine = case.engine();
     let token = CancellationToken::new();
-    assert_eq!(engine.spec_check("spec.yaml", None, &token).rows(), 0);
+    assert_eq!(
+        engine.spec_check("spec.yaml", None, &token).unwrap().rows(),
+        0
+    );
     assert_eq!(case.accesses(), set(&SPEC));
-    assert_eq!(engine.project_check("project.yaml", &token).rows(), 0);
+    assert_eq!(
+        engine.project_check("project.yaml", &token).unwrap().rows(),
+        0
+    );
     assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
     assert_eq!(
         engine.project_spec("project.yaml", "DM").unwrap(),
