@@ -354,6 +354,42 @@ mod execution {
             );
             assert!(!fixture.0.join("out.csv").exists());
         }
+
+        /// A column `odm` read takes the ODM scope of the row template that
+        /// built each row, also when that template's driver is an ODM input
+        /// other than the base: the anchor record's item group occurrence
+        /// answers, read alone or in a case after the row's window (NAME-10,
+        /// NAME-11).
+        #[test]
+        fn column_odm_reads_take_the_scope_of_an_odm_driver_other_than_the_base() {
+            for value in [
+                "{odm: SRC.IT.TEST.OID}",
+                "{case: [{when: 'SEQ > 0', then: {odm: SRC.IT.TEST.OID}}]}",
+            ] {
+                let fixture = Fixture::new(
+                    &format!(
+                        "schema_version: '1.0'\ndomain: OUT\nkeys: [ID, SEQ]\nbase: BASE\n\
+                         input: {{BASE: base.csv, SRC: odm.csv}}\n\
+                         output: {{path: out.csv, columns: [ID, SEQ, VAL]}}\n\
+                         columns:\n\
+                         \x20 - {{name: ID, type: str}}\n\
+                         \x20 - {{name: SEQ, type: int, derivation: {{row_number: {{window: {{order_by: [ID]}}}}}}}}\n\
+                         \x20 - {{name: VAL, type: str, derivation: {value}}}\n\
+                         rows:\n\
+                         \x20 - id: occurrence\n\
+                         \x20   dataset: SRC\n\
+                         \x20   filter: \"SRC.ItemOID = 'IT.ANCHOR'\"\n\
+                         \x20   derivations: {{ID: {{literal: one}}}}\n"
+                    ),
+                    &format!(
+                        "{HEADER}\nS,M,P,E,,F,,G,,IT.ANCHOR,anchor\nS,M,P,E,,F,,G,,IT.TEST.OID,Y\n"
+                    ),
+                );
+                // The base drives no row template.
+                fs::write(fixture.0.join("base.csv"), "ordinary\nunused\n").unwrap();
+                fixture.saved("ID,SEQ,VAL\none,1,Y\n");
+            }
+        }
     }
     mod row_count_lookups {
         //! Original row-count verification lookups and declaration ordering.
@@ -613,6 +649,21 @@ mod execution {
                 b"ID,I,D,R,TEXT\na,3,,,\nb,0,,,\nc,1,,,\nd,2,,,\n",
             );
             assert_eq!(saved(&f),b"ID,SECTION,VALUE,SEQ,DOUBLE,NEXT\na,one,3,3,6,\nc,one,1,1,2,4\nd,one,2,2,4,6\na,two,3,2,4,\nd,two,2,1,2,4\n");
+        }
+        /// A first_available source reads the window column its row template
+        /// completes for every row first (WINDOW-3, EXPR-9).
+        #[test]
+        fn first_available_reads_the_completed_template_window() {
+            let columns = "  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: PICK, type: int}\n";
+            let rows = "  - id: one\n    derivations:\n      SECTION: {literal: one}\n      VALUE: SRC.I\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      PICK: {first_available: {sources: [SEQ], missing: 99}}\n";
+            let f = bespoke(
+                &specification(columns, rows, "[ID, SECTION, VALUE, SEQ, PICK]"),
+                b"ID,I,D,R,TEXT\na,3,,,\nb,1,,,\nc,2,,,\n",
+            );
+            assert_eq!(
+                saved(&f),
+                b"ID,SECTION,VALUE,SEQ,PICK\na,one,3,3,3\nb,one,1,1,1\nc,one,2,2,2\n"
+            );
         }
         #[test]
         fn grouped_row_case_reads_group_keys_and_converted_reductions() {

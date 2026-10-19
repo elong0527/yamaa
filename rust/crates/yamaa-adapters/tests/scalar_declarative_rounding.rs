@@ -1121,6 +1121,19 @@ columns:
             .unwrap();
             let mut result = fixture.run();
             assert!(result.issues().is_empty(), "{:?}", result.issues());
+            // Paired bounds report their crossings at `not_after` (TIME-9): only
+            // row 7's bounds both lie inside March and cross. A lone upper bound
+            // cannot cross and registers no such path.
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.END.derivation.impute.missing","handler":"missing","count":1},
+                    {"spec_path":"columns.END.derivation.impute.invalid","handler":"invalid","count":0},
+                    {"spec_path":"columns.BOTH.derivation.impute.missing","handler":"missing","count":1},
+                    {"spec_path":"columns.BOTH.derivation.impute.invalid","handler":"invalid","count":0},
+                    {"spec_path":"columns.BOTH.derivation.impute.not_after","handler":"crossed_bounds","count":1}
+                ])
+            );
             assert!(result.save().unwrap());
             assert_eq!(
                 fs::read(fixture.0.join("output.csv")).unwrap(),
@@ -1199,6 +1212,186 @@ intermediates:
                     "spec_paths": ["intermediates[0].key.M.impute.not_after"],
                     "context": {"operation": "not_after"},
                 }])
+            );
+        }
+        /// A complete source needs no completion, so `not_before` never moves it
+        /// (TIME-9). A missing source gives missing, counted at `missing`, and
+        /// invalid text takes the declared `invalid` literal, counted at
+        /// `invalid` (TIME-13, COLUMN-14).
+        #[test]
+        fn complete_sources_ignore_the_bound_and_recovered_values_are_counted() {
+            let fixture = Fixture::new("schema-birth-date");
+            fs::write(
+                fixture.0.join("spec.yaml"),
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {REF: date}}}
+output: {path: output.csv, columns: [ID, DATE]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: DATE
+    type: date
+    derivation:
+      impute:
+        type: date
+        source: SRC.TEXT
+        month: 6
+        day: first
+        not_before: SRC.REF
+        invalid: {literal: null}
+"#,
+            )
+            .unwrap();
+            fs::write(
+                fixture.0.join("input.csv"),
+                b"ID,TEXT,REF\n1,2024-02-01,2024-02-20\n2,,2024-02-20\n3,invalid,2024-02-20\n",
+            )
+            .unwrap();
+            let mut result = fixture.run();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.DATE.derivation.impute.missing","handler":"missing","count":1},
+                    {"spec_path":"columns.DATE.derivation.impute.invalid","handler":"invalid","count":1}
+                ])
+            );
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("output.csv")).unwrap(),
+                b"ID,DATE\n1,2024-02-01\n2,\n3,\n"
+            );
+        }
+        /// A completion that is no calendar date fails on the `impute` stage with
+        /// the current record's keys (TIME-10). `invalid` answers only text that
+        /// is not collected date text (TIME-13), so it neither answers that
+        /// failure nor counts it.
+        #[test]
+        fn runtime_impute_failure_retains_current_key_and_is_not_answered_by_invalid_handler() {
+            let fixture = Fixture::new("negative-impute-bad-day");
+            let specification = fixture.0.join("spec.yaml");
+            let unchanged = fs::read_to_string(&specification).unwrap();
+            let handled = unchanged.replace(
+                "        day: 31\n",
+                "        day: 31\n        invalid: {literal: null}\n",
+            );
+            assert_ne!(handled, unchanged);
+            fs::write(&specification, handled).unwrap();
+            let result = fixture.run();
+            assert!(result.output().is_none());
+            assert_eq!(
+                result
+                    .issues()
+                    .iter()
+                    .map(|issue| yamaa_adapters::json!({
+                        "phase": issue.phase,
+                        "condition": issue.condition,
+                        "requirement": issue.requirement,
+                        "spec_paths": issue.spec_paths,
+                        "context": issue.context.clone(),
+                    }))
+                    .collect::<Vec<_>>(),
+                [golden(&fixture)]
+            );
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.AENDT.derivation.impute.missing","handler":"missing","count":0},
+                    {"spec_path":"columns.AENDT.derivation.impute.invalid","handler":"invalid","count":0}
+                ])
+            );
+        }
+        /// `fallback` answers a missing source with its whole value, counted at
+        /// `fallback`; a present source is completed instead and counts nothing
+        /// there (TIME-13, COLUMN-14).
+        #[test]
+        fn a_fallback_answers_only_a_missing_source_and_is_counted() {
+            for (row, expected, fired) in [
+                ("1,,2024-02-20", "1,2024-02-20", 1),
+                ("1,2024-03,2024-02-20", "1,2024-03-01", 0),
+            ] {
+                let fixture = Fixture::new("schema-birth-date");
+                fs::write(
+                    fixture.0.join("spec.yaml"),
+                    r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {REF: date}}}
+output: {path: output.csv, columns: [ID, DATE]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: DATE
+    type: date
+    derivation:
+      impute:
+        type: date
+        source: SRC.TEXT
+        month: 6
+        day: first
+        fallback: SRC.REF
+"#,
+                )
+                .unwrap();
+                fs::write(fixture.0.join("input.csv"), format!("ID,TEXT,REF\n{row}\n")).unwrap();
+                let mut result = fixture.run();
+                assert!(result.issues().is_empty(), "{row}: {:?}", result.issues());
+                assert_eq!(
+                    result.observations()["handler_counts"],
+                    yamaa_adapters::json!([
+                        {"spec_path":"columns.DATE.derivation.impute.fallback","handler":"missing","count":fired}
+                    ]),
+                    "{row}"
+                );
+                assert!(result.save().unwrap());
+                assert_eq!(
+                    fs::read_to_string(fixture.0.join("output.csv")).unwrap(),
+                    format!("ID,DATE\n{expected}\n")
+                );
+            }
+        }
+        /// A declared `invalid` literal answers invalid text (TIME-13) and, like
+        /// any derived value, converts to the column's declared type (COLUMN-8),
+        /// where minute text names second zero (VALUE-15). The answer is counted
+        /// at `invalid` (COLUMN-14).
+        #[test]
+        fn recovered_datetime_literal_is_converted_and_its_handler_is_counted() {
+            let fixture = Fixture::new("schema-birth-date");
+            fs::write(
+                fixture.0.join("spec.yaml"),
+                r#"schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: input.csv}
+output: {path: output.csv, columns: [ID, DTM]}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - name: DTM
+    type: datetime
+    derivation:
+      impute:
+        type: datetime
+        source: SRC.TEXT
+        minimum_source_precision: day
+        time: first
+        invalid: '2024-02-29T12:13'
+"#,
+            )
+            .unwrap();
+            fs::write(fixture.0.join("input.csv"), b"ID,TEXT\n1,bad\n").unwrap();
+            let mut result = fixture.run();
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([
+                    {"spec_path":"columns.DTM.derivation.impute.missing","handler":"missing","count":0},
+                    {"spec_path":"columns.DTM.derivation.impute.invalid","handler":"invalid","count":1}
+                ])
+            );
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("output.csv")).unwrap(),
+                b"ID,DTM\n1,2024-02-29T12:13:00\n"
             );
         }
     }
@@ -1985,6 +2178,70 @@ columns:
             };
             assert_eq!(issues.len(), 1);
             assert_eq!(issue_json(&issues[0]), golden(&fixture));
+        }
+        /// A positive width beyond any representable length is admitted
+        /// (TEXT-2). A missing source yields missing without needing it, while
+        /// padding a present value, even the empty string, cannot be allocated
+        /// and refuses the whole run. `str_pad` declares no handler, so the
+        /// successful run counts none.
+        #[test]
+        fn missing_skips_unrepresentable_positive_width_but_present_refuses_whole_output() {
+            let width = "9".repeat(81);
+            let attempt = |text: &str| {
+                let fixture = Fixture::new("negative-str-pad-width");
+                fs::write(
+                    fixture.0.join("spec.yaml"),
+                    format!(
+                        "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: input.csv}}\noutput: {{path: output.csv, columns: [ID, TEXT, RESULT]}}\ncolumns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: TEXT, type: str, derivation: {{literal: {text}}}}}\n  - {{name: RESULT, type: str, derivation: {{str_pad: {{source: TEXT, width: {width}}}}}}}\n"
+                    ),
+                )
+                .unwrap();
+                fs::write(fixture.0.join("input.csv"), "ID\nrow1\n").unwrap();
+                let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                let result = file_application::domain(
+                    yamaa_core::project_function::Language::Python,
+                    Request {
+                        specification: &specification,
+                        environment: None,
+                    },
+                    Identity {
+                        runtime: "test",
+                        runtime_version: "test",
+                        engine_version: yamaa_core::VERSION,
+                        example: "test",
+                        specification: &specification,
+                        base_directory: ".",
+                    },
+                );
+                (fixture, result)
+            };
+            let (fixture, result) = attempt("null");
+            let mut result = result.unwrap_or_else(|issues| panic!("preparation {issues:?}"));
+            assert!(result.issues().is_empty(), "{:?}", result.issues());
+            assert_eq!(
+                result.observations()["handler_counts"],
+                yamaa_adapters::json!([])
+            );
+            assert!(result.save().unwrap());
+            assert_eq!(
+                fs::read(fixture.0.join("output.csv")).unwrap(),
+                b"ID,TEXT,RESULT\nrow1,,\n"
+            );
+            let (fixture, result) = attempt("''");
+            let Err(issues) = result else {
+                panic!("a present value cannot be padded to the width")
+            };
+            assert_eq!(
+                issues.iter().map(issue_json).collect::<Vec<_>>(),
+                [yamaa_adapters::json!({
+                    "phase": "engine",
+                    "condition": "engine_rejected",
+                    "requirement": null,
+                    "spec_paths": [],
+                    "context": {"stage": "build", "code": "result_projection"},
+                })]
+            );
+            assert!(!fixture.0.join("output.csv").exists());
         }
     }
     mod declarative_text_template {

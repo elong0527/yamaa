@@ -574,6 +574,52 @@ mod project {
                 assert!(!study.0.join("input.csv").exists());
             }
         }
+        /// A float codelist's items compare with the column's values exactly
+        /// (VALUE-19): 9007199254740992.0 equals no item, although it is the
+        /// float nearest the item 9007199254740993, while 0 equals the item
+        /// -0.0 and 1.0 the item 1. Missing values pass (CT-7).
+        #[test]
+        fn float_codelist_items_compare_exactly_and_missing_values_pass() {
+            const SPEC: &str = "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {ID: int, CODE: float}}}\noutput: {path: output.csv, columns: [ID, CODE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: CODE, type: float, derivation: SRC.CODE, submission: {origin: {type: Collected}, codelist: CODES}}\n";
+            const PROJECT: &str = "schema_version: '1.0'\ncodelists:\n  - codelists:\n      - {id: CODES, name: Codes, data_type: float, items: [{value: 9007199254740993}, {value: -0.0}, {value: 1}]}\n";
+            let study = Study::new();
+            fs::write(study.0.join("spec.yaml"), SPEC).unwrap();
+            fs::write(study.0.join("project.yaml"), PROJECT).unwrap();
+            let path = study.0.join("spec.yaml");
+            let path = path.to_str().unwrap();
+            let project = study.0.join("project.yaml");
+            let project = project.to_str().unwrap();
+            fs::write(
+                study.0.join("input.csv"),
+                "ID,CODE\n1,9007199254740992\n2,0\n3,1\n4,\n",
+            )
+            .unwrap();
+            let mut run = project_domain(path, project);
+            let issues = run.issues();
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (
+                    issues[0].phase.as_str(),
+                    issues[0].condition.as_str(),
+                    issues[0].requirement.as_deref()
+                ),
+                ("verification", "allowed_values_failed", Some("REQ-0957"))
+            );
+            assert_eq!(issues[0].spec_paths, ["columns.CODE.submission.codelist"]);
+            assert_eq!(
+                issues[0].context,
+                yamaa_adapters::json!({"column": "CODE", "codelist": "CODES", "failure_count": 1, "keys": [{"ID": 1}], "values": [9007199254740992.0]})
+            );
+            assert!(run.save().is_err());
+            fs::write(study.0.join("input.csv"), "ID,CODE\n2,0\n3,1\n4,\n").unwrap();
+            let mut run = project_domain(path, project);
+            assert!(run.issues().is_empty(), "{:?}", run.issues());
+            assert!(run.save().unwrap());
+            assert_eq!(
+                fs::read_to_string(study.0.join("output.csv")).unwrap(),
+                "ID,CODE\n2,0\n3,1\n4,\n"
+            );
+        }
 
         struct NoActivation;
         impl yamaa_core::project_activation::ActivationPort for NoActivation {
