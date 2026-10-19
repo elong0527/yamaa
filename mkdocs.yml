@@ -108,6 +108,7 @@ nav:
       - Rules at a glance: reference/rules-summary.md
       - Requirement index: reference/requirements.md
       - Schema fields: reference/schema-fields.md
+      - Schema fields (1.0): reference/schema-fields-v1.md
       - Codelists and terminology: articles/terminology.md
   - Benchmark: benchmark/index.md
   - Engine:

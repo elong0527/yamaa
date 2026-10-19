@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "yamaa 1.0 codelists file",
+  "description": "One file of the 1.0 codelists type. Each field carries its kind as x-yamaa-kind and its schema-notation type as x-yamaa-type. Generated from yaml/v1/ by tools/packaging/generate_json_schema.py.",
+  "$ref": "#/$defs/codelist_file_class",
+  "$defs": {
+    "codelist_class": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name column bindings refer to this codelist by (CT-1).",
+          "x-yamaa-kind": "identifier",
+          "x-yamaa-type": "identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the codelist, unique within the document.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "data_type": {
+          "type": "string",
+          "enum": [
+            "text",
+            "integer",
+            "float"
+          ],
+          "default": "text",
+          "description": "Type of the coded values.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "extensible": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the published list admits sponsor items marked extended (CT-6).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Published concept identifier of the codelist itself.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "format_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Transport format name carried for a reader.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_item_class"
+          },
+          "description": "Coded values this codelist admits, the whole value set of a bound column, in the order the document presents them (CT-7).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[codelist_item_class]"
+        },
+        "external": {
+          "$ref": "#/$defs/external_codelist_class",
+          "description": "Dictionary this codelist defers to instead of listing values.",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "external_codelist_class"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "codelist_file_class": {
+      "type": "object",
+      "properties": {
+        "yamaa": {
+          "$ref": "#/$defs/language_version",
+          "description": "Oldest language version this codelist file needs, always quoted (SCHEMA-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "language_version"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "codelists"
+          ],
+          "description": "File type of a codelist file, which holds the codelists of one source (CT-1).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "standard": {
+          "$ref": "#/$defs/terminology_standard_class",
+          "description": "Published terminology the source's codelists are drawn from; a source without one is sponsor-defined (CT-2).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "terminology_standard_class"
+        },
+        "codelists": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codelist_class"
+          },
+          "description": "Codelists this source declares (CT-1).",
+          "x-yamaa-kind": "structure",
+          "x-yamaa-type": "list[codelist_class]"
+        }
+      },
+      "required": [
+        "yamaa",
+        "type",
+        "codelists"
+      ],
+      "additionalProperties": false
+    },
+    "codelist_item_class": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/literal_value",
+          "description": "The coded value itself.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "literal_value"
+        },
+        "decode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text the coded value stands for.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "rank": {
+          "type": "integer",
+          "description": "Ordering significance of this value relative to the others.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "int"
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Published concept identifier of this value.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "extended": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the sponsor added this value to an extensible published list (CT-6).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "external_codelist_class": {
+      "type": "object",
+      "properties": {
+        "dictionary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the external dictionary.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of that dictionary.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "href": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Location the dictionary is published at.",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "dictionary",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "description": "Single-token identifier; the field's own description states which naming list it belongs to, such as a declared dataset, a declared column, a document or a function (SPEC-2)."
+    },
+    "language_version": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ],
+      "description": "Language version a file declares in `yamaa`, the oldest that admits every field it writes (SCHEMA-2)."
+    },
+    "literal_value": {
+      "type": [
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "null"
+      ],
+      "description": "Scalar constant in which YAML null is the missing value; a non-finite float becomes missing (VALUE-4)."
+    },
+    "terminology_standard_class": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the published terminology (CT-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "publishing_set": {
+          "type": "string",
+          "enum": [
+            "ADaM",
+            "CDASH",
+            "DEFINE-XML",
+            "SDTM",
+            "SEND"
+          ],
+          "description": "Publishing set of the published terminology (CT-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the published terminology (CT-2).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "str"
+        }
+      },
+      "required": [
+        "name",
+        "publishing_set",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

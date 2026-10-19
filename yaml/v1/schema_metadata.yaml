@@ -1,0 +1,307 @@
+version: "1.0"
+
+# See SUB-1.
+
+submission_dataset_class:
+    - has_no_data:
+        type: bool
+        default: false
+        description: Whether the submitted dataset has no data, carried for submission composition only (SUB-4).
+    - label:
+        type: str
+        required: true
+        min_length: 1
+        description: Description of the dataset as a whole, distinct from the domain it derives.
+    - class:
+        type: dataset_class_name
+        required: true
+        description: General observation class of the dataset.
+    - subclass:
+        type: dataset_subclass_name
+        required: false
+        description: Observation subclass, declared when the standard defines one for the dataset.
+    - structure:
+        type: str
+        required: true
+        min_length: 1
+        description: Level of detail one record represents, stated in prose.
+    - repeating:
+        type: bool
+        required: true
+        description: Whether the dataset may carry more than one record per subject or pool.
+    - reference_data:
+        type: bool
+        default: false
+        description: Whether the dataset carries reference data rather than subject data.
+    - domain:
+        type: identifier
+        required: false
+        description: Domain the dataset belongs to; defaults to the specification's domain.
+    - standard:
+        type: standard_reference
+        required: false
+        description: Name of the composing section's standard that binds the dataset; the section's first standard when omitted (DEFINE-6, DEFINE-8).
+    - comment:
+        type: submission_comment
+        required: false
+        description: Sponsor comment carried with the dataset definition.
+
+submission_column_class:
+    - fields_from: submission_metadata_fields
+    - value_level:
+        type: "list[submission_value_class]"
+        required: false
+        description: Value-level entries, each overriding the column's metadata on the rows its where clause selects (SUB-12).
+
+submission_value_class:
+    - id:
+        type: identifier
+        required: true
+        description: Identifier of the entry, unique within the column, naming its value-level definitions (SUB-12, DEFINE-9).
+    - where:
+        type: "dict[identifier, where_condition]"
+        required: true
+        description: Declared str output columns and the values that select the entry's rows; a row is selected when every listed column meets its condition (SUB-12).
+    - label:
+        type: str
+        required: false
+        min_length: 1
+        description: Description of the value-level definition; the column's label when omitted (DEFINE-27).
+    - fields_from: submission_metadata_fields
+
+where_condition:
+    type: ["list[where_value]", where_comparison_class]
+    kind: value
+    description: Values that select a row by its where column, which equals the one value or any of several, unless a comparator states another comparison (SUB-12).
+
+where_comparison_class:
+    - comparator:
+        type: str
+        required: false
+        values: [NE, NOTIN]
+        description: Comparison of the listed values, NE for a column unequal to one value and NOTIN for a column equal to none of them (SUB-12).
+    - values:
+        type: "list[where_value]"
+        required: true
+        description: Values the comparison reads (SUB-12).
+
+where_value:
+    type: str
+    min_length: 1
+    description: One value a where clause selects rows by (SUB-12).
+
+submission_role_fields:
+    - core:
+        type: core_designation
+        required: false
+        description: Standard core designation, declared and derived by model (SUB-10).
+    - mandatory:
+        type: bool
+        required: false
+        description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
+    - role:
+        type: str
+        required: false
+        min_length: 1
+        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+
+submission_metadata_fields:
+    - fields_from: submission_role_fields
+    - data_type:
+        type: define_data_type
+        required: false
+        description: Submission data type, defaulted from the declared column type (SUB-6).
+    - length:
+        type: int
+        required: false
+        description: Maximum expected value length, derived from a max_length verification and bound to the constraint that enforces it (SUB-8).
+    - significant_digits:
+        type: int
+        required: false
+        description: Digits after the decimal point; required with a float submission data type.
+    - display_format:
+        type: str
+        required: false
+        min_length: 1
+        description: Presentation format carried for a reader; it never changes a computed value.
+    - codelist:
+        type: identifier
+        required: false
+        description: Codelist whose values this column carries (CT-1).
+    - inventory_vocabulary:
+        type: bool
+        required: false
+        description: Whether every non-missing value must name a dataset any submission section of the project file declares (CT-11).
+    - origins:
+        type: "list[submission_origin_class]"
+        required: false
+        description: Declared provenance of the value, one entry per origin, which the derivation may refute (SUB-14, SUB-19).
+    - method:
+        type: submission_method
+        required: false
+        description: Algorithm producing the value, required for a derived origin (SUB-18).
+    - comment:
+        type: submission_comment
+        required: false
+        description: Sponsor comment carried with the column definition.
+
+# See SUB-20.
+
+submission_origin_class:
+    - type:
+        type: origin_type
+        required: true
+        description: How the value originated.
+    - source:
+        type: origin_source
+        required: false
+        description: Party responsible for the value, admitted and derived by model (SUB-15).
+    - description:
+        type: str
+        required: false
+        min_length: 1
+        description: Explanatory text, required where the origin is incomplete without it; a Predecessor names the column it copies (SUB-16).
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents evidencing the origin; a value collected from a person names its annotated case report form page under Submission (SUB-17).
+
+submission_method_class:
+    - name:
+        type: str
+        required: false
+        min_length: 1
+        description: Name of the algorithm; Define-XML derives one when it is omitted (DEFINE-21).
+    - type:
+        type: method_type
+        default: Computation
+        description: Kind of algorithm the method describes.
+    - description:
+        type: str
+        required: true
+        min_length: 1
+        description: Statement of the algorithm in prose.
+    - expression:
+        type: formal_expression_class
+        required: false
+        description: Machine-readable code the method is also stated in.
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents carrying the full algorithm.
+
+submission_comment_class:
+    - text:
+        type: str
+        required: true
+        min_length: 1
+        description: Text of the comment.
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents the comment refers to.
+
+formal_expression_class:
+    - context:
+        type: str
+        required: true
+        min_length: 1
+        description: Language the code is written in, named for a reader that evaluates it.
+    - code:
+        type: str
+        required: true
+        min_length: 1
+        description: The code itself; nothing in this language parses or executes it.
+
+document_reference_class:
+    - document:
+        type: identifier
+        required: true
+        description: Supporting document this reference names.
+    - pages:
+        type: page_reference_class
+        required: false
+        description: Place within the document the reference points at.
+
+page_reference_class:
+    - type:
+        type: str
+        required: true
+        values: [PhysicalRef, NamedDestination]
+        description: Whether refs are physical page numbers or named destinations.
+    - refs:
+        type: str
+        required: true
+        min_length: 1
+        description: Space-separated page numbers or destination names.
+    - title:
+        type: str
+        required: false
+        min_length: 1
+        description: Label a reader sees in place of the raw reference.
+
+submission_comment:
+    type: [str, submission_comment_class]
+    kind: value
+    description: Comment text, or text with the documents it refers to.
+
+submission_method:
+    type: [str, submission_method_class]
+    kind: value
+    description: Algorithm stated in prose, or with its name, code, and documents.
+
+document_reference:
+    type: [identifier, document_reference_class]
+    kind: identifier
+    description: Document identifier, or an identifier with the place it points at.
+
+standard_reference:
+    type: str
+    min_length: 1
+    kind: identifier
+    description: Name of one implementation guide among the standards of the section that composes the dataset (DEFINE-8).
+
+core_designation:
+    type: str
+    values: [Req, Exp, Perm, Cond]
+    description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by model (SUB-10).
+
+origin_type:
+    type: str
+    values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
+        Protocol]
+    description: Define-XML 2.1 origin type.
+
+origin_source:
+    type: str
+    values: [Investigator, Sponsor, Subject, Vendor]
+    description: Define-XML 2.1 origin source.
+
+method_type:
+    type: str
+    values: [Computation, Imputation]
+    description: Kind of algorithm a method describes.
+
+define_data_type:
+    type: str
+    values: [text, integer, float, date, datetime, time, partialDate,
+        partialTime, partialDatetime, incompleteDate, incompleteTime,
+        incompleteDatetime, durationDatetime, intervalDatetime, URI]
+    description: Submission data type a column is represented by, within the closed set its declared column type admits (SUB-6).
+
+dataset_class_name:
+    type: str
+    values: [ADAM OTHER, BASIC DATA STRUCTURE, DEVICE LEVEL ANALYSIS DATASET,
+        EVENTS, FINDINGS, FINDINGS ABOUT, INTERVENTIONS,
+        MEDICAL DEVICE BASIC DATA STRUCTURE,
+        MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, OCCURRENCE DATA STRUCTURE,
+        REFERENCE DATA STRUCTURE, RELATIONSHIP, SPECIAL PURPOSE,
+        STUDY REFERENCE, SUBJECT LEVEL ANALYSIS DATASET, TRIAL DESIGN]
+    description: General observation class, in the exact case Define-XML 2.1 publishes.
+
+dataset_subclass_name:
+    type: str
+    values: [ADVERSE EVENT, MEDICAL DEVICE TIME-TO-EVENT,
+        NON-COMPARTMENTAL ANALYSIS, POPULATION PHARMACOKINETIC ANALYSIS,
+        TIME-TO-EVENT]
+    description: Observation subclass, in the exact case Define-XML 2.1 publishes.
