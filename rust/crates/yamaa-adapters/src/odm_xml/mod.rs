@@ -45,8 +45,8 @@ mod source;
 #[cfg(feature = "odm")]
 mod xml;
 
-use crate::{ipc_table::TableError, public_table::PublicTable};
-use std::path::Path;
+use crate::{host_resources::Resolver, ipc_table::TableError, public_table::PublicTable};
+use std::{path::Path, sync::Arc};
 use yamaa_core::odm_items::Options;
 
 /// Adapter failures around the core-owned read refusals.
@@ -67,9 +67,22 @@ impl From<yamaa_core::odm_items::Error> for Error {
 }
 
 /// Read every clinical item of one ODM file into the clinical-item table.
+/// The file is a caller path, captured once through the local file resolver:
+/// its parent is selected and the file must be a regular file, never a link.
 #[cfg(feature = "odm")]
 pub fn read(path: &Path, options: &Options) -> Result<PublicTable, Error> {
     source::read(path, options)
+}
+
+/// Read every clinical item of the ODM source a caller's resolver serves
+/// under `source`, captured once as an input.
+#[cfg(feature = "odm")]
+pub fn read_with_resolver(
+    resolver: Arc<dyn Resolver>,
+    source: &str,
+    options: &Options,
+) -> Result<PublicTable, Error> {
+    source::read_with_resolver(resolver, source, options)
 }
 
 /// A refusal raised inside a byte source while the XML tokenizer pulls from
@@ -135,5 +148,16 @@ impl std::error::Error for Fault {}
 /// ODM XML input is unavailable when the `odm` feature is disabled.
 #[cfg(not(feature = "odm"))]
 pub fn read(_path: &Path, _options: &Options) -> Result<PublicTable, Error> {
+    Err(Error::Unavailable)
+}
+
+/// ODM XML input is unavailable when the `odm` feature is disabled; the
+/// resolver is not asked for anything.
+#[cfg(not(feature = "odm"))]
+pub fn read_with_resolver(
+    _resolver: Arc<dyn Resolver>,
+    _source: &str,
+    _options: &Options,
+) -> Result<PublicTable, Error> {
     Err(Error::Unavailable)
 }

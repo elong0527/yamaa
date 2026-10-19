@@ -883,7 +883,7 @@ mod inventory_rejection_tests {
     #[test]
     fn plain_selection_keeps_inventory_failure_in_the_preparation_stage() {
         let error = || Error::Inventory(yamaa_core::submission_inventory::MetadataError::Shape);
-        let base = crate::file_resources::caller_path(&std::env::current_dir().unwrap()).unwrap();
+        let base = crate::file_resolver::caller_path(&std::env::current_dir().unwrap()).unwrap();
         let rejected = crate::file_workflow::SelectionError::Plain(Box::new(RejectedPlain {
             error: error(),
             entry: "spec.yaml".into(),

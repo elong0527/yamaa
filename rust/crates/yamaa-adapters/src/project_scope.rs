@@ -141,14 +141,20 @@ fn listing_failure(listing: &str, written: &str, error: &ResourceError) -> Vec<I
 
 impl Project {
     /// Capture the project file and read every listed specification's name,
-    /// links and output files. A project file that cannot be captured fails
-    /// with the findings a check of a specification with it reports.
-    pub fn read(project: &str, host: Language) -> Result<Self, Vec<Issue>> {
+    /// links and output files, all through `resolver`: the caller's, or the
+    /// local file resolver without one. A project file that cannot be
+    /// captured fails with the findings a check of a specification with it
+    /// reports.
+    pub fn read(
+        project: &str,
+        host: Language,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Result<Self, Vec<Issue>> {
         let crate::file_workflow::CapturedProject {
             mut resources,
             environment,
             schema,
-        } = crate::file_workflow::capture_project(project, host)
+        } = crate::file_workflow::capture_project(project, host, resolver)
             .map_err(|error| crate::project_application::workflow_rejection(&error))?;
         let root = environment.root();
         let identity = root.source().identity.clone();

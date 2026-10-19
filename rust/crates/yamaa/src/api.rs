@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use yamaa_adapters::issue_rows::Issue;
-use yamaa_adapters::project_scope::{identify, Project};
+use yamaa_adapters::project_scope::identify;
 use yamaa_core::project_environment::Submission as Section;
 
 use crate::cancel::CancellationToken;
@@ -543,7 +543,7 @@ impl Submission {
 impl Engine {
     /// Path of the listed specification whose `domain` is `name`.
     pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure> {
-        let read = Project::read(project, self.shared().language).map_err(|issues| {
+        let read = crate::internal::read_project(self.shared(), project).map_err(|issues| {
             Failure::from_issues("cannot read the project; see issues", &issues)
         })?;
         let duplicates = read.duplicates();
@@ -582,7 +582,7 @@ impl Engine {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let read = match Project::read(project, self.shared().language) {
+        let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => return Ok(Report::from_issues(&issues).table()),
         };
@@ -637,7 +637,7 @@ impl Engine {
             return Err(Error::Cancelled);
         }
         let section = self::section(section)?;
-        let read = match Project::read(project, self.shared().language) {
+        let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => return Ok(ProjectRun::refused(issues)),
         };
@@ -720,7 +720,7 @@ impl Engine {
             return Err(Error::Cancelled);
         }
         let selected = self::section(section)?;
-        let read = match Project::read(project, self.shared().language) {
+        let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => {
                 return Ok(Submission {

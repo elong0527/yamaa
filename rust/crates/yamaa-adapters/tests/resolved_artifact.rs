@@ -36,7 +36,7 @@ impl Study {
         fs::write(file, text).unwrap();
     }
     fn resolve(&self, path: &str) -> ResolvedArtifact {
-        resolved_artifact::resolve(&self.path(path), None, Language::Python).unwrap()
+        resolved_artifact::resolve(&self.path(path), None, Language::Python, None).unwrap()
     }
 }
 impl Drop for Study {
@@ -238,10 +238,13 @@ fn absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches() {
     assert_eq!(input.location, Location::Local { path: parent });
     // A missing linked specification still fails original metadata preparation.
     study.write("study/missing.yaml", CONSUMER);
-    assert!(
-        resolved_artifact::resolve(&study.path("study/missing.yaml"), None, Language::Python)
-            .is_err()
-    );
+    assert!(resolved_artifact::resolve(
+        &study.path("study/missing.yaml"),
+        None,
+        Language::Python,
+        None
+    )
+    .is_err());
 }
 
 #[test]
@@ -301,7 +304,7 @@ fn named_dictionaries_and_mapping_order_are_retained_without_changing_the_compil
     };
     assert_eq!(artifact, direct.resolved_specification().unwrap());
     fs::remove_file(study.0.join("dict.yaml")).unwrap();
-    assert!(resolved_artifact::resolve(&path, None, Language::Python).is_err());
+    assert!(resolved_artifact::resolve(&path, None, Language::Python, None).is_err());
     assert!(ResolvedArtifact::from_json(&artifact.to_json().unwrap()).is_ok());
 }
 

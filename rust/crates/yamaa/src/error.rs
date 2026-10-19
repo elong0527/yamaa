@@ -9,6 +9,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::diagnostic::Report;
+use crate::resolver::ResourceKind;
 
 /// One public error type at the operation boundary.
 #[non_exhaustive]
@@ -106,30 +107,54 @@ impl ResolverFailure {
         Self::from_adapter_code(code)
     }
 
+    /// Report that the requested name reaches an entry of `kind` instead of
+    /// a regular file; its code is the kind's name. The engine judges the
+    /// name from this report as [`ResourceKind`] describes.
+    pub fn from_kind(kind: ResourceKind) -> Self {
+        Self::from_adapter(yamaa_adapters::host_resources::Failure::from(
+            kind.into_core(),
+        ))
+    }
+
+    /// The kind this failure reports, when it reports one: a kind failure,
+    /// or `missing`.
+    pub fn kind(&self) -> Option<ResourceKind> {
+        yamaa_adapters::host_resources::Failure::from_name(self.code)
+            .resource_kind()
+            .map(ResourceKind::from_core)
+    }
+
     pub(crate) fn from_adapter_code(code: &str) -> Self {
-        let (code, message) = match code {
-            "missing" => ("missing", "resolver reports the resource as missing"),
-            "changed" => ("changed", "resolver reports the resource as changed"),
-            "cancelled" => ("cancelled", "resolver reports cancellation"),
-            "publication" => ("publication", "resolver reports a publication failure"),
-            "cleanup" => ("cleanup", "resolver reports a cleanup failure"),
-            _ => ("rejected", "resolver rejects the request"),
-        };
-        Self {
-            code,
-            message: message.to_owned(),
-        }
+        Self::from_adapter(yamaa_adapters::host_resources::Failure::from_name(code))
     }
 
     pub(crate) fn from_adapter(failure: yamaa_adapters::host_resources::Failure) -> Self {
-        use yamaa_adapters::host_resources::Failure;
+        use yamaa_adapters::host_resources::{Failure, ResourceKind as Kind};
         let (code, message) = match failure {
-            Failure::Missing => ("missing", "resolver reports the resource as missing"),
+            Failure::Missing | Failure::Kind(Kind::Missing) => {
+                ("missing", "resolver reports the resource as missing")
+            }
             Failure::Changed => ("changed", "resolver reports the resource as changed"),
             Failure::Cancelled => ("cancelled", "resolver reports cancellation"),
-            Failure::Rejected => ("rejected", "resolver rejects the request"),
             Failure::Publication => ("publication", "resolver reports a publication failure"),
             Failure::Cleanup => ("cleanup", "resolver reports a cleanup failure"),
+            Failure::Unreadable => ("unreadable", "resolver reports the resource as unreadable"),
+            Failure::Kind(kind) => (
+                kind.name(),
+                match kind {
+                    Kind::File => "resolver reports a file where a directory is required",
+                    Kind::Directory => "resolver reports a directory",
+                    Kind::SymbolicLink => "resolver reports a symbolic link",
+                    Kind::Junction => "resolver reports a junction",
+                    Kind::ReparsePoint => "resolver reports a reparse point",
+                    Kind::Other | Kind::Missing => {
+                        "resolver reports an entry that is not a regular file"
+                    }
+                },
+            ),
+            Failure::Rejected | Failure::Limit(_) | Failure::Path(_) => {
+                ("rejected", "resolver rejects the request")
+            }
         };
         Self {
             code,
@@ -516,11 +541,39 @@ mod tests {
             (Failure::Rejected, "rejected"),
             (Failure::Publication, "publication"),
             (Failure::Cleanup, "cleanup"),
+            (Failure::Unreadable, "unreadable"),
+            (Failure::Limit(Some(9)), "rejected"),
         ] {
             let converted = ResolverFailure::from_adapter(failure);
             assert_eq!(converted.code(), code);
             assert!(!converted.message().is_empty());
+            assert_eq!(ResolverFailure::from_code(code), converted);
         }
+    }
+
+    #[test]
+    fn resolver_kind_failures_round_trip_through_their_codes() {
+        for kind in [
+            ResourceKind::File,
+            ResourceKind::Directory,
+            ResourceKind::SymbolicLink,
+            ResourceKind::Junction,
+            ResourceKind::ReparsePoint,
+            ResourceKind::Other,
+            ResourceKind::Missing,
+        ] {
+            let failure = ResolverFailure::from_kind(kind);
+            assert_eq!(failure.code(), kind.name());
+            assert_eq!(failure.kind(), Some(kind));
+            assert_eq!(ResolverFailure::from_code(kind.name()), failure);
+            assert!(!failure.message().is_empty());
+        }
+        assert_eq!(
+            ResolverFailure::from_code("missing").kind(),
+            Some(ResourceKind::Missing)
+        );
+        assert_eq!(ResolverFailure::from_code("changed").kind(), None);
+        assert_eq!(ResolverFailure::from_code("link").code(), "rejected");
     }
 
     #[test]

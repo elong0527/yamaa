@@ -46,13 +46,19 @@ pub enum Kind {
 #[derive(Debug)]
 pub struct Status {
     pub identity: Identity,
+    /// [`Kind::Symlink`] stands for every reparse point; `reparse_tag` says
+    /// which one.
     pub kind: Kind,
+    /// The reparse tag of a reparse point, and 0 for any other entry.
+    pub reparse_tag: u32,
 }
 #[derive(Debug)]
 pub struct Directory(File);
 
 impl Directory {
     /// Caller-selected absolute root; descendants are opened only by this held handle.
+    /// A local drive or a network share (D15), reached directly or through a
+    /// mapped drive; device and other verbatim namespaces are refused.
     pub fn open(path: &Path) -> io::Result<Self> {
         if !path.is_absolute() {
             return Err(io::Error::new(
@@ -60,21 +66,22 @@ impl Directory {
                 "root must be absolute",
             ));
         }
-        // FILE_ID_INFO identifies local volume/file pairs on this computer.
-        // Remote/device namespaces need separate qualification and identity scoping.
         let Some(std::path::Component::Prefix(prefix)) = path.components().next() else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "root must name a local drive",
+                "root must name a drive or a network share",
             ));
         };
         if !matches!(
             prefix.kind(),
-            std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_)
+            std::path::Prefix::Disk(_)
+                | std::path::Prefix::VerbatimDisk(_)
+                | std::path::Prefix::UNC(..)
+                | std::path::Prefix::VerbatimUNC(..)
         ) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "remote or device roots are not qualified",
+                "device roots are not qualified",
             ));
         }
         let file = OpenOptions::new()
@@ -245,7 +252,8 @@ pub fn status(file: &File) -> io::Result<Status> {
     }
     // SAFETY: File owns this valid, live handle; GetFileType retains no reference.
     let disk = unsafe { GetFileType(file.as_raw_handle()) } == FILE_TYPE_DISK;
-    let kind = if attrs.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+    let reparse = attrs.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    let kind = if reparse {
         Kind::Symlink
     } else if !disk {
         Kind::Other
@@ -260,6 +268,7 @@ pub fn status(file: &File) -> io::Result<Status> {
             file: id.FileId.Identifier,
         },
         kind,
+        reparse_tag: if reparse { attrs.ReparseTag } else { 0 },
     })
 }
 fn require_kind(file: &File, required: Kind) -> io::Result<()> {
@@ -650,12 +659,14 @@ mod tests {
         }
     }
     #[test]
-    fn remote_device_and_relative_roots_are_refused_before_native_open() {
+    fn device_and_relative_roots_are_refused_before_native_open() {
         for path in [
             "relative",
-            "//server/share",
-            "//?/UNC/server/share",
+            r"\relative-to-the-current-drive",
+            "C:relative",
             "//./pipe/name",
+            r"\\.\PhysicalDrive0",
+            r"\\?\Volume{b75e2c83-0000-0000-0000-602f00000000}\",
         ] {
             assert_eq!(
                 Directory::open(Path::new(path)).unwrap_err().kind(),

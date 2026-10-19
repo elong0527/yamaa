@@ -104,12 +104,18 @@ consulted, and a malformed path fails validation. A written path is ASCII
 under [Values](../values.md), like every other repository-authored
 value.
 
-Evidence: `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-adapters/src/file_metadata.rs::absolute_spelling_covers_both_root_forms_lexically`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::parent_and_absolute_local_paths_build_and_save_held_bytes`.
+Evidence: `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-adapters/src/file_metadata.rs::absolute_spelling_covers_both_root_forms_lexically`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::parent_and_absolute_local_paths_build_and_save_held_bytes`, `rust/crates/yamaa-adapters/src/file_resolver.rs::rooted_spellings_split_into_one_root_and_their_segments_on_every_host`, `rust/crates/yamaa-adapters/tests/network_shares.rs::a_specification_on_a_network_share_builds_and_saves_through_the_share`.
 Replaces: REQ-0773, REQ-0774, REQ-0779.
 
 An absolute local path may name any location permitted by the operating system
 and the caller's sandbox. yamaa does not require that location to lie under a
 project root or data root. This rule adds no URI or network resource protocol.
+
+The paths a caller passes, the entry and the project file, may name a Windows
+network share (`\\server\share\study\spec.yaml`) or a mapped drive. A declared
+path keeps the written forms above and never names a share itself; a relative
+path, or a drive path that the operating system maps to a share, resolves on
+that share.
 
 <a id="file-5"></a>
 
@@ -156,16 +162,23 @@ that reaches a directory, FIFO, socket, device or any other non-regular file
 is rejected.
 
 Fails: `resource_path_missing`, `resource_path_not_regular_file`.
-Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`.
+Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_the_kind_of_the_entry_that_stops_them`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`.
 Replaces: REQ-0781, REQ-0782, REQ-0784, REQ-0785.
 
 The caller's entry parent, and the parent of the project file the caller
 passes, are each canonicalized and opened once; aliases the caller used for a
 selected directory retain the same authority. A declaration outside those
-parents is walked from its filesystem root. The anchor is an IO
+parents is walked from its filesystem root: `/`, a drive or a Windows network
+share. The anchor is an IO
 consistency mechanism, not an application containment policy or fallback
 search location. The same resolution and traversal rules apply on every
 supported platform.
+
+The resolver that serves a name, the local file resolver unless the caller
+supplies another, reports the kind of entry the name reaches: a regular file,
+or the first entry that stops it. The engine raises this rule's and
+[FILE-8](#file-8)'s conditions from that report alone, so every resolver can
+report a missing name, a directory or another entry.
 
 The canonical resolved identity agrees with the directory descriptor and
 component witnesses the walk accepted. The check fails closed on an
@@ -183,11 +196,16 @@ declared paths do not select exempt directories. A path outside those parents
 retains the no-link check on every component below its filesystem root.
 
 Fails: `resource_path_symlink`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`.
 Replaces: REQ-0783.
 
 Each walk verifies the retained directory and file entries, and a name
 substitution cannot redirect a read or publication silently.
+
+A Windows junction or any other reparse point is a symbolic link for this
+rule, on a local drive and on a network share alike. Whatever resolver serves
+a name reports which kind of link it reached, and the engine refuses each from
+that report.
 
 ## One snapshot per file
 
@@ -209,6 +227,10 @@ Several dataset identifiers may resolve to one physical file. The declarations
 remain distinct, each with its own identifier and its own
 [Inputs](../inputs.md) field types, but they share the one
 snapshot, and no two of them observe different bytes.
+
+A file's numeric identity, such as its inode, is not a key: two hard links to
+one file are two canonical paths and so two snapshots, each verified at its
+own path.
 
 <a id="file-10"></a>
 

@@ -713,6 +713,7 @@ mod file {
                     Some(created),
                     "0.3.0",
                     Language::Python,
+                    None,
                 )
             }
         }
@@ -1019,6 +1020,7 @@ mod file {
                         Some("2026-09-11T00:00:00"),
                         "0.3.0",
                         host,
+                        None,
                     );
                     let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
                 "phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement,
@@ -1232,6 +1234,7 @@ mod file {
                 None,
                 "0.3.0",
                 Language::Python,
+                None,
             );
             assert!(run.issues().iter().any(|i| i.spec_paths == ["standard"]));
         }
@@ -1572,6 +1575,7 @@ mod file {
                     Some("2026-09-11T00:00:00"),
                     "0.3.0",
                     Language::Python,
+                    None,
                 )
             };
             let temp = Temp::fixture("sdtm-dm-metadata", false);
@@ -1630,6 +1634,7 @@ mod file {
                 Some("2026-09-30T00:00:00"),
                 "0.3.0",
                 Language::Python,
+                None,
             );
             (temp, run)
         }

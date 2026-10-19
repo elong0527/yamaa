@@ -41,10 +41,7 @@ fn explicit_reference_reuses_held_bytes_across_aliases_and_refuses_changes() {
         "object:version-2",
         Arc::from(&b"A\n7\n"[..]),
     );
-    assert_eq!(
-        resources.capture("one.csv"),
-        Err(Error::Host(Failure::Changed))
-    );
+    assert_eq!(resources.capture("one.csv"), Err(Error::Changed));
     assert_eq!(one.as_ref(), b"A\n7\n");
     let mut fresh_attempt = Resources::with_resolver(backend, "spec.yaml");
     assert!(fresh_attempt.capture("one.csv").unwrap().1);
@@ -54,10 +51,7 @@ fn explicit_reference_reuses_held_bytes_across_aliases_and_refuses_changes() {
 fn absent_and_cancelled_resources_remain_explicit_without_captures() {
     let backend = Arc::new(MemoryResolver::default());
     let resources = Resources::with_resolver(backend.clone(), "spec.yaml");
-    assert_eq!(
-        resources.inspect("missing.csv"),
-        Err(Error::Host(Failure::Missing))
-    );
+    assert_eq!(resources.inspect("missing.csv"), Err(Error::Missing));
     backend.cancel();
     assert_eq!(
         resources.inspect("missing.csv"),
@@ -109,10 +103,7 @@ fn frame_freshness_compares_signed_zero_and_collected_temporal_precision() {
         let mut resources = Resources::with_resolver(backend.clone(), "spec.yaml");
         assert!(resources.capture("raw.csv").unwrap().1);
         backend.insert_frame("/", "raw.csv", "warehouse:version-1", changed);
-        assert_eq!(
-            resources.capture("raw.csv"),
-            Err(Error::Host(Failure::Changed))
-        );
+        assert_eq!(resources.capture("raw.csv"), Err(Error::Changed));
     }
 }
 
@@ -186,6 +177,7 @@ fn abort_removes_only_the_staging_token_not_the_target() {
             written: "out.csv",
             reference: Some("memory:/out.csv"),
             bytes: Some(bytes),
+            limit: None,
         })
     };
     let token = stage(b"ID\n7\n").unwrap().reference;
@@ -202,6 +194,7 @@ fn abort_removes_only_the_staging_token_not_the_target() {
             written: "out.csv",
             reference: Some("memory:/out.csv"),
             bytes: None,
+            limit: None,
         })
         .unwrap();
     assert_eq!(backend.staged_count(), 2);
@@ -213,6 +206,7 @@ fn abort_removes_only_the_staging_token_not_the_target() {
             written: "out.csv",
             reference: Some(&token),
             bytes: None,
+            limit: None,
         })
         .unwrap();
     assert_eq!(backend.staged_count(), 1);
@@ -224,6 +218,7 @@ fn abort_removes_only_the_staging_token_not_the_target() {
             written: "out.csv",
             reference: Some(&second),
             bytes: None,
+            limit: None,
         })
         .unwrap();
     assert_eq!(backend.staged_count(), 0);

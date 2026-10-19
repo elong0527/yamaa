@@ -28,7 +28,7 @@ fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_bot
                 Failure::Metadata(metadata),
                 Failure::Diagnostic(diagnostics),
             ] {
-                let mut result = Define::prepare("", "sdtm", None, "0.4.0", host);
+                let mut result = Define::prepare("", "sdtm", None, "0.4.0", host, None);
                 result.refuse(failure);
                 assert_eq!(result.issues().len(), Limits::FINDINGS);
                 for (index, issue) in result.issues().iter().enumerate() {
@@ -55,7 +55,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     fs::create_dir(&directory).unwrap();
     let directory = crate::canonical_path::canonicalize(&directory).unwrap();
     fs::write(directory.join("dm.csv"), b"ID\n1\n").unwrap();
-    let text = file_resources::caller_path(&directory).unwrap();
+    let text = crate::file_resolver::caller_path(&directory).unwrap();
     let mut resources = Resources::new(&text, &text, &[]).unwrap();
     let original = resources.capture("dm.csv").unwrap().0;
     fs::write(directory.join("dm.csv"), b"ID\n2\n").unwrap();
@@ -120,10 +120,11 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         };
         fs::write(directory.join("spec.yaml"), &spec).unwrap();
         let environment_written =
-            file_resources::caller_path(&directory.join("project.yaml")).unwrap();
+            crate::file_resolver::caller_path(&directory.join("project.yaml")).unwrap();
         let mut ports = NativePorts {
             after_publish: None,
             resources: None,
+            resolver: None,
             host: Language::Python,
             environment: None,
             environment_written: String::new(),
@@ -207,6 +208,7 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
         Some("2026-09-11T00:00:00"),
         "0.3.0",
         Language::Python,
+        None,
     );
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     let held = result.artifacts().next().unwrap().1.to_vec();
@@ -275,8 +277,8 @@ fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding()
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed),
             ));
-            let missing = file_resources::caller_path(&missing).unwrap();
-            let mut result = Define::prepare(&missing, "sdtm", None, "0.4.0", host);
+            let missing = crate::file_resolver::caller_path(&missing).unwrap();
+            let mut result = Define::prepare(&missing, "sdtm", None, "0.4.0", host, None);
             let failure = if diagnostic {
                 Failure::Diagnostic(
                     (0..10_001)

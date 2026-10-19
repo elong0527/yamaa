@@ -141,8 +141,24 @@ pub struct CapturedProject {
 
 /// Capture a project file with the path policy, schemas and environment
 /// admission that a specification build applies to the same project file.
-pub fn capture_project(project: &str, host: Language) -> Result<CapturedProject, Error> {
-    let request = configure(project, Some(project))?;
+/// A caller's resolver serves the project file and everything it declares
+/// under the names it is given; without one, the local file resolver reads
+/// the caller path.
+pub fn capture_project(
+    project: &str,
+    host: Language,
+    resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+) -> Result<CapturedProject, Error> {
+    let request = match resolver {
+        Some(resolver) => Configured {
+            resources: Resources::with_resolver(resolver, project),
+            entry: project.to_owned(),
+            environment: Some(project.to_owned()),
+            specification_schema: crate::shipped_schema::capture().map_err(Error::Schema)?,
+            project_schemas: crate::shipped_schema::capture_project().map_err(Error::Schema)?,
+        },
+        None => configure(project, Some(project))?,
+    };
     let (resources, environment) = capture_environment(
         request.resources,
         &request.entry,

@@ -47,15 +47,20 @@ pub struct Define {
 #[derive(Debug)]
 pub struct SaveError;
 impl Define {
+    /// Compose `standard`'s submission from the project file `environment`,
+    /// reading it and everything it declares through `resolver`: the
+    /// caller's, or the local file resolver without one.
     pub fn prepare(
         environment: &str,
         standard: &str,
         created: Option<&str>,
         installed: &str,
         host: Language,
+        resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
     ) -> Self {
         let mut ports = NativePorts {
             resources: None,
+            resolver,
             host,
             environment: None,
             environment_written: String::new(),
@@ -145,6 +150,9 @@ type AfterPublish = Box<dyn FnMut(&str)>;
 
 struct NativePorts {
     resources: Option<Resources>,
+    /// The caller's resolver, which serves the project file under the name
+    /// it is given; the local file resolver reads a caller path without one.
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
     host: Language,
     environment: Option<std::sync::Arc<OwnedEnvironment>>,
     environment_written: String,
@@ -204,8 +212,15 @@ impl Ports for NativePorts {
             .map(|duration| duration.as_secs())
     }
     fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
-        let (resources, entry) = file_configuration::resources(written)
-            .map_err(|error| Failure::Project(project_application::Error::Configuration(error)))?;
+        let (resources, entry) = match &self.resolver {
+            Some(resolver) => (
+                Resources::with_resolver(std::sync::Arc::clone(resolver), written),
+                written.to_owned(),
+            ),
+            None => file_configuration::resources(written).map_err(|error| {
+                Failure::Project(project_application::Error::Configuration(error))
+            })?,
+        };
         self.resources = Some(resources);
         self.environment_written = written.into();
         let schema = crate::shipped_schema::capture_project()

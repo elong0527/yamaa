@@ -1,0 +1,335 @@
+//! Every use case reads only through the engine's resolver (#3147). A
+//! counting resolver serves one benchmark case from memory under the logical
+//! root `/`, names that exist nowhere on disk, keeps what a save publishes,
+//! and records every request. Each use case succeeds and reproduces the
+//! case's authored files, so it read nothing else; the record shows exactly
+//! what it read and wrote.
+#![cfg(feature = "yaml")]
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
+use yamaa::{
+    Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
+    FunctionIdentity, HostLanguage, LockContext, MemoryResolver, OdmOptions, ProjectFunctions,
+    ResolverFailure, ResolverOperation, ResolverReply, ResolverRequest, ResourceResolver, Scalar,
+    Signature,
+};
+
+const CREATED: &str = "2026-09-11T00:00:00";
+
+/// One request as the resolver saw it: its operation and the location it
+/// names, the declaring identity's directory joined with the written path.
+type Access = (&'static str, String);
+
+struct Counting {
+    files: BTreeMap<String, Arc<[u8]>>,
+    published: MemoryResolver,
+    log: Mutex<Vec<Access>>,
+}
+
+/// The lexical location `written` names from `declaring`.
+fn location(declaring: &str, written: &str) -> String {
+    let mut parts = if written.starts_with('/') {
+        Vec::new()
+    } else {
+        declaring.rsplit_once('/').map_or(Vec::new(), |(base, _)| {
+            base.split('/').filter(|s| !s.is_empty()).collect()
+        })
+    };
+    for part in written.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            name => parts.push(name),
+        }
+    }
+    format!("/{}", parts.join("/"))
+}
+
+impl ResourceResolver for Counting {
+    fn request(&self, request: ResolverRequest<'_>) -> Result<ResolverReply, ResolverFailure> {
+        let named = match request.operation {
+            ResolverOperation::Stage | ResolverOperation::Commit | ResolverOperation::Abort => {
+                request.reference.unwrap_or_default().to_owned()
+            }
+            _ => location(request.declaring, request.written),
+        };
+        self.log
+            .lock()
+            .unwrap()
+            .push((request.operation.name(), named.clone()));
+        match request.operation {
+            ResolverOperation::Inspect | ResolverOperation::Capture => {
+                let bytes = self
+                    .files
+                    .get(&named)
+                    .ok_or_else(|| ResolverFailure::from_code("missing"))?;
+                let reference = format!("case:{named}");
+                if request.reference.is_some_and(|held| held != reference) {
+                    return Err(ResolverFailure::from_code("changed"));
+                }
+                let bytes =
+                    (request.operation == ResolverOperation::Capture).then(|| Arc::clone(bytes));
+                Ok(ResolverReply::new(reference, bytes, None))
+            }
+            _ => self.published.request(request),
+        }
+    }
+}
+
+struct Case {
+    directory: PathBuf,
+    resolver: Arc<Counting>,
+}
+
+impl Case {
+    /// Serve a benchmark case's authored files, and `extra` under their
+    /// own names, from memory. The expected directory is truth and is not
+    /// served.
+    fn new(name: &str, extra: &[(&str, &[u8])]) -> Self {
+        let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../benchmarks")
+            .join(name);
+        let mut files = BTreeMap::new();
+        let mut pending = vec![(String::new(), directory.clone())];
+        while let Some((prefix, path)) = pending.pop() {
+            for entry in std::fs::read_dir(&path).unwrap().flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let written = format!("{prefix}/{name}");
+                if entry.file_type().unwrap().is_dir() {
+                    if written != "/expected" {
+                        pending.push((written, entry.path()));
+                    }
+                } else {
+                    files.insert(written, Arc::from(std::fs::read(entry.path()).unwrap()));
+                }
+            }
+        }
+        for (name, bytes) in extra {
+            files.insert((*name).to_owned(), Arc::from(*bytes));
+        }
+        Self {
+            directory,
+            resolver: Arc::new(Counting {
+                files,
+                published: MemoryResolver::new(),
+                log: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    fn engine(&self) -> Engine {
+        Engine::new(
+            EngineOptions::new(HostLanguage::Python, "resolver-test".into(), "0".into())
+                .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>)
+                .with_functions(Arc::new(NoFunctions)),
+        )
+    }
+
+    fn expected(&self, name: &str) -> Vec<u8> {
+        std::fs::read(self.directory.join("expected").join(name)).unwrap()
+    }
+
+    fn published(&self, location: &str) -> Vec<u8> {
+        self.resolver
+            .published
+            .published(&format!("memory:{location}"))
+            .unwrap_or_else(|| panic!("nothing was published at {location}"))
+            .to_vec()
+    }
+
+    /// Every distinct operation and location the resolver was asked for
+    /// since the last call, with the record cleared.
+    fn accesses(&self) -> BTreeSet<Access> {
+        std::mem::take(&mut *self.resolver.log.lock().unwrap())
+            .into_iter()
+            .map(|(operation, named)| {
+                // A staging token names its target after its sequence.
+                let named = match named.split_once(":memory:") {
+                    Some(_) => named
+                        .rsplit_once("memory:")
+                        .map(|(_, target)| target.to_owned())
+                        .unwrap(),
+                    None => named.trim_start_matches("memory:").to_owned(),
+                };
+                (operation, named)
+            })
+            .collect()
+    }
+}
+
+struct NoFunctions;
+impl ProjectFunctions for NoFunctions {
+    fn verify_lock(
+        &self,
+        _: &LockContext<'_>,
+        _: &[FunctionIdentity],
+    ) -> Result<(), FunctionError> {
+        Ok(())
+    }
+    fn bind(&self, _: &FunctionIdentity, _: &Signature) -> Result<FunctionHandle, FunctionError> {
+        unreachable!("the case calls no project function")
+    }
+    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
+        unreachable!("the case calls no project function")
+    }
+}
+
+fn set(accesses: &[(&'static str, &str)]) -> BTreeSet<Access> {
+    accesses
+        .iter()
+        .map(|(operation, named)| (*operation, (*named).to_owned()))
+        .collect()
+}
+
+const SPEC: [(&str, &str); 2] = [("inspect", "/spec.yaml"), ("capture", "/spec.yaml")];
+const PROJECT: [(&str, &str); 2] = [("inspect", "/project.yaml"), ("capture", "/project.yaml")];
+const INPUT: [(&str, &str); 2] = [
+    ("inspect", "/input/dm_raw.csv"),
+    ("capture", "/input/dm_raw.csv"),
+];
+const SAVE_DM: [(&str, &str); 3] = [
+    ("target", "/dm.csv"),
+    ("stage", "/dm.csv"),
+    ("commit", "/dm.csv"),
+];
+
+#[test]
+fn a_check_reads_only_metadata_through_the_resolver() {
+    let case = Case::new("sdtm-dm-metadata", &[]);
+    let engine = case.engine();
+    let token = CancellationToken::new();
+    assert_eq!(engine.spec_check("spec.yaml", None, &token).rows(), 0);
+    assert_eq!(case.accesses(), set(&SPEC));
+    assert_eq!(engine.project_check("project.yaml", &token).rows(), 0);
+    assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
+    assert_eq!(
+        engine.project_spec("project.yaml", "DM").unwrap(),
+        "/spec.yaml"
+    );
+    assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
+}
+
+#[test]
+fn a_run_reads_and_saves_only_through_the_resolver() {
+    let case = Case::new("sdtm-dm-metadata", &[]);
+    let token = CancellationToken::new();
+    let mut run = case.engine().spec_run("spec.yaml", None, &token).unwrap();
+    assert_eq!(run.issues().rows(), 0);
+    assert_eq!(
+        case.accesses(),
+        set(&[&SPEC[..], &INPUT, &[("target", "/dm.csv")]].concat())
+    );
+    run.save().unwrap();
+    assert_eq!(case.accesses(), set(&SAVE_DM));
+    assert_eq!(case.published("/dm.csv"), case.expected("dm.csv"));
+}
+
+#[test]
+fn a_project_run_reads_and_saves_only_through_the_resolver() {
+    let case = Case::new("sdtm-dm-metadata", &[]);
+    let token = CancellationToken::new();
+    let mut runs = case
+        .engine()
+        .project_run("project.yaml", None, &token)
+        .unwrap();
+    assert_eq!(runs.issues().rows(), 0);
+    assert_eq!(runs.names(), ["DM"]);
+    assert_eq!(
+        case.accesses(),
+        set(&[&PROJECT[..], &SPEC, &INPUT, &[("target", "/dm.csv")]].concat())
+    );
+    runs.save().unwrap();
+    assert_eq!(case.accesses(), set(&SAVE_DM));
+    assert_eq!(case.published("/dm.csv"), case.expected("dm.csv"));
+}
+
+#[test]
+fn a_submission_reads_and_saves_only_through_the_resolver() {
+    let dm = Case::new("sdtm-dm-metadata", &[]).expected("dm.csv");
+    // The saved dataset a submission reads, as a run would have published it.
+    let case = Case::new("sdtm-dm-metadata", &[("/dm.csv", &dm)]);
+    let token = CancellationToken::new();
+    let mut submission = case
+        .engine()
+        .project_submission("project.yaml", Some("sdtm"), Some(CREATED), "0.4.0", &token)
+        .unwrap();
+    assert_eq!(submission.issues().rows(), 0);
+    assert_eq!(
+        case.accesses(),
+        set(&[
+            &PROJECT[..],
+            &SPEC,
+            &[
+                ("capture", "/dm.csv"),
+                ("target", "/define.xml"),
+                ("target", "/dm.json"),
+            ],
+        ]
+        .concat())
+    );
+    submission.save().unwrap();
+    assert_eq!(
+        case.accesses(),
+        set(&[
+            ("target", "/dm.json"),
+            ("stage", "/dm.json"),
+            ("commit", "/dm.json"),
+            ("target", "/define.xml"),
+            ("stage", "/define.xml"),
+            ("commit", "/define.xml"),
+        ])
+    );
+    assert_eq!(case.published("/define.xml"), case.expected("define.xml"));
+    assert_eq!(case.published("/dm.json"), case.expected("dm.json"));
+}
+
+#[test]
+fn resolve_reads_only_the_specification_through_the_resolver() {
+    let case = Case::new("sdtm-dm-metadata", &[]);
+    let resolved = case.engine().spec_resolve("spec.yaml", None).unwrap();
+    assert_eq!(case.accesses(), set(&SPEC));
+    let yamaa::ContextValue::Map(fields) = resolved else {
+        panic!("resolved facts are an object");
+    };
+    assert_eq!(
+        fields.get("entry"),
+        Some(&yamaa::ContextValue::Text("/spec.yaml".into()))
+    );
+}
+
+#[test]
+fn read_odm_captures_its_source_once_through_the_resolver() {
+    const ODM: &[u8] = br#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">
+  <ClinicalData StudyOID="S" MetaDataVersionOID="M">
+    <SubjectData SubjectKey="01"><StudyEventData StudyEventOID="E">
+      <FormData FormOID="F"><ItemGroupData ItemGroupOID="G">
+        <ItemData ItemOID="AGE" Value="42"/>
+      </ItemGroupData></FormData>
+    </StudyEventData></SubjectData>
+  </ClinicalData>
+</ODM>"#;
+    let case = Case::new("sdtm-dm-metadata", &[("/odm/items.xml", ODM)]);
+    let result = case.engine().read_odm("odm/items.xml", &OdmOptions::new());
+    if cfg!(feature = "odm") {
+        assert_eq!(result.unwrap().rows(), 1);
+        assert_eq!(case.accesses(), set(&[("capture", "/odm/items.xml")]));
+        let Err(yamaa::Error::Odm(refusal)) =
+            case.engine().read_odm("odm/absent.xml", &OdmOptions::new())
+        else {
+            panic!("a source the resolver lacks is not found");
+        };
+        assert_eq!(refusal.code(), "not_found");
+        assert_eq!(case.accesses(), set(&[("capture", "/odm/absent.xml")]));
+    } else {
+        assert!(matches!(
+            result,
+            Err(yamaa::Error::Unavailable { feature: "odm" })
+        ));
+        assert_eq!(case.accesses(), BTreeSet::new());
+    }
+}

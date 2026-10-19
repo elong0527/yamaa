@@ -1340,7 +1340,9 @@ mod file {
         }
 
         #[test]
-        fn hard_link_aliases_share_a_snapshot_and_every_accepted_alias_is_verified() {
+        fn hard_link_aliases_are_separate_snapshots_each_verified_at_its_own_path() {
+            // A snapshot's key is the canonical path the walk reached, never
+            // a numeric file identity: each hard link is its own snapshot.
             let study = Study::new();
             let first = study.path("project/spec/a");
             let second = study.path("additional/b");
@@ -1349,11 +1351,13 @@ mod file {
             let mut resources = study.resources();
             let (a, _) = resources.capture("a").unwrap();
             let (b, created) = resources.capture("b").unwrap();
-            assert!(!created && std::sync::Arc::ptr_eq(&a, &b));
+            assert!(created && !std::sync::Arc::ptr_eq(&a, &b));
+            assert_eq!(a.as_ref(), b.as_ref());
             fs::remove_file(&first).unwrap();
             fs::write(&first, b"changed!").unwrap();
-            assert_eq!(resources.capture("b"), Err(Error::Changed));
-            assert_eq!(resources.capture_reads(), 1);
+            assert_eq!(resources.capture("a"), Err(Error::Changed));
+            assert_eq!(resources.capture("b").unwrap(), (b, false));
+            assert_eq!(resources.capture_reads(), 2);
         }
 
         #[cfg(unix)]

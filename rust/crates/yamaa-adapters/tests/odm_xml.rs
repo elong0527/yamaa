@@ -1669,6 +1669,46 @@ mod inputs {
         );
     }
 
+    /// The file is a caller path read through the local file resolver: a
+    /// link in its place is refused like a directory (FILE-8).
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_source_is_not_found() {
+        let scratch = Scratch::new("linked");
+        let target = scratch.write("odm13.xml", ODM_13);
+        let link = scratch.path().join("linked.xml");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        refused(
+            read_with(&link, &Options::default()),
+            "not_found",
+            "linked.xml",
+        );
+        assert_eq!(read_with(&target, &Options::default()).unwrap().rows(), 3);
+    }
+
+    /// A caller's resolver serves the source under its own name; what it
+    /// reports instead of a regular file is not found.
+    #[test]
+    fn a_resolver_serves_the_source_once_under_its_name() {
+        use std::sync::Arc;
+        use yamaa_adapters::host_resources::{MemoryResolver, ResourceKind};
+        let resolver = Arc::new(MemoryResolver::default());
+        resolver.insert("/", "edc/odm.xml", "odm:1", Arc::from(ODM_13.as_bytes()));
+        resolver.insert_kind("/", "edc/folder.xml", ResourceKind::Directory);
+        let read = |source: &str| match odm_xml::read_with_resolver(
+            resolver.clone(),
+            source,
+            &Options::default(),
+        ) {
+            Ok(table) => Ok(table),
+            Err(Error::Read(error)) => Err(error),
+            Err(error) => panic!("unexpected adapter failure: {error:?}"),
+        };
+        assert_eq!(read("edc/odm.xml").unwrap().rows(), 3);
+        refused(read("edc/folder.xml"), "not_found", "edc/folder.xml");
+        refused(read("edc/absent.xml"), "not_found", "edc/absent.xml");
+    }
+
     #[test]
     fn plain_xml_refuses_archive_member_and_oversized_files() {
         let options = Options {
