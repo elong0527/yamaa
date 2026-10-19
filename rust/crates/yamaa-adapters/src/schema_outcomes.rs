@@ -83,33 +83,12 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
     })
 }
 /// Dependency discovery never turns a resource refusal into a missing edge.
-pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Result<Value, Error> {
-    use yamaa_core::expression::{CompileError, Resource};
-    use InheritanceDependencyError as E;
-    use InheritanceReferenceError as R;
-    /// An expression field's own boundary, or its regular-expression literal's.
-    fn syntax_limit(field: &str, error: &CompileError) -> Option<Value> {
-        let CompileError::Limit {
-            resource,
-            limit: maximum,
-            ..
-        } = error
-        else {
-            return None;
-        };
-        Some(match resource {
-            Resource::Depth => limit(&format!("inheritance_{field}"), "semantic_depth", *maximum),
-            Resource::Regex(resource) => limit(
-                &format!("inheritance_{field}_regex"),
-                regex_resource(*resource),
-                *maximum,
-            ),
-        })
-    }
+pub(crate) fn inheritance_dependencies(
+    error: yamaa_core::resolution::Error,
+) -> Result<Value, Error> {
+    use yamaa_core::expression::{CompileError, Context, Resource};
+    use yamaa_core::resolution::Error as E;
     Ok(match error {
-        E::Normalization(error) | E::Reference(R::Normalization(error)) => {
-            return normalization(error)
-        }
         E::Invalid(issues) => {
             let findings = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues);
             let translated = findings
@@ -118,15 +97,33 @@ pub(crate) fn inheritance_dependencies(error: InheritanceDependencyError) -> Res
                 .collect::<Vec<_>>();
             json!({"status":"invalid","diagnostics":translated})
         }
-        E::Reference(R::Numeric(error)) => {
-            syntax_limit("numeric", &error).ok_or(Error::Internal)?
+        // An expression field's own boundary, or its regular-expression literal's.
+        E::Limit {
+            context,
+            error:
+                CompileError::Limit {
+                    resource,
+                    limit: maximum,
+                    ..
+                },
+        } => {
+            let field = match context {
+                Context::Compute => "numeric",
+                Context::Aggregate => "aggregate",
+                Context::Predicate => "predicate",
+            };
+            match resource {
+                Resource::Depth => {
+                    limit(&format!("inheritance_{field}"), "semantic_depth", maximum)
+                }
+                Resource::Regex(resource) => limit(
+                    &format!("inheritance_{field}_regex"),
+                    regex_resource(resource),
+                    maximum,
+                ),
+            }
         }
-        E::Reference(R::Aggregate(error)) => {
-            syntax_limit("aggregate", &error).ok_or(Error::Internal)?
-        }
-        // Grammar failures deliberately contribute no edges, then survive for final validation.
-        E::Reference(R::Predicate(error)) => {
-            syntax_limit("predicate", &error).ok_or(Error::Internal)?
-        }
+        E::Limit { .. } => return Err(Error::Internal),
+        E::Document(error) => return normalization(NormalizationError::Document(error)),
     })
 }

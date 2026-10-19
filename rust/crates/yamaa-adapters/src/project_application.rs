@@ -397,13 +397,9 @@ fn inheritance_issues<'a>(
     use crate::specification_source::{Error as S, InheritanceError as I};
     use crate::yaml_decode::DecodeFailure;
     use yamaa_core::{
-        dictionary_preparation::Cause,
-        inheritance::Error as G,
-        inheritance_preparation::Error as E,
-        schema::{
-            InheritanceDependencyError as D, InheritanceReferenceError as R,
-            NormalizationError as N,
-        },
+        dictionary_preparation::Cause, inheritance::Error as G,
+        inheritance_preparation::Error as E, resolution::Error as D,
+        schema::NormalizationError as N,
     };
     let supported = match cause {
         I::Entry(S::Findings(_)) => true,
@@ -437,12 +433,7 @@ fn inheritance_issues<'a>(
             E::Normalize(failure) => matches!(&failure.error, N::Invalid(_)),
             E::Model(_) => true,
             E::Composition(failure) => matches!(&failure.error, N::Invalid(_)),
-            E::Dependencies(failure) => matches!(
-                &failure.error,
-                D::Normalization(N::Invalid(_))
-                    | D::Reference(R::Normalization(N::Invalid(_)))
-                    | D::Invalid(_)
-            ),
+            E::Dependencies(error) => matches!(error, D::Invalid(_)),
             _ => false,
         },
         _ => false,

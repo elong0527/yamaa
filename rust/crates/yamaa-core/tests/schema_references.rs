@@ -625,6 +625,17 @@ mod schema {
             else {
                 panic!("expected completed dependency findings")
             };
+            let issues = issues
+                .into_iter()
+                .map(|issue| match issue {
+                    I::Unknown { column, dependency } => {
+                        yamaa_core::resolution::Issue::Unknown { column, dependency }
+                    }
+                    I::Cycle { cycle, paths, .. } => {
+                        yamaa_core::resolution::Issue::Cycle { cycle, paths }
+                    }
+                })
+                .collect::<Vec<_>>();
             let diagnostics = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues);
             assert_eq!(diagnostics.len(), 2);
             assert_eq!(diagnostics[0].spec_paths, ["columns.X.derivation"]);

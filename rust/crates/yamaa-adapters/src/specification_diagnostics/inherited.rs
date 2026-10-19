@@ -6,10 +6,7 @@ use crate::{
     specification_source::{InheritanceError, SourceFailure},
 };
 use yamaa_core::json::Value;
-use yamaa_core::schema::{
-    Document, InheritanceDependencyError, InheritanceReferenceError, NormalizationError,
-    SchemaStructure,
-};
+use yamaa_core::schema::{Document, NormalizationError, SchemaStructure};
 use yamaa_core::{inheritance as graph, inheritance_preparation::Error as E};
 
 fn source<E>(error: SourceFailure<E>) -> Result<String, E> {
@@ -227,16 +224,10 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
         E::Validation(error) => {
             errors::validation(*error).unwrap_or_else(|_| rejected("validation_policy"))
         }
-        E::Dependencies(failure) => match &failure.error {
-            InheritanceDependencyError::Normalization(error)
-            | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
-                error,
-            )) => normalized(schema, failure.input.as_ref(), error.clone(), &[]),
-            error => literal(
-                errors::inheritance_dependencies(error.clone())
-                    .unwrap_or_else(|_| rejected("dependency_policy")),
-            ),
-        },
+        E::Dependencies(error) => literal(
+            errors::inheritance_dependencies(error.clone())
+                .unwrap_or_else(|_| rejected("dependency_policy")),
+        ),
         E::Model(findings) => normalized(
             schema,
             None,
@@ -299,16 +290,10 @@ pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
         E::Validation(error) => {
             errors::validation(error).unwrap_or_else(|_| rejected("validation_policy"))
         }
-        E::Dependencies(failure) => match failure.error {
-            InheritanceDependencyError::Normalization(error)
-            | InheritanceDependencyError::Reference(InheritanceReferenceError::Normalization(
-                error,
-            )) => normalized(schema, failure.input.as_ref(), error, &[]),
-            error => literal(
-                errors::inheritance_dependencies(error)
-                    .unwrap_or_else(|_| rejected("dependency_policy")),
-            ),
-        },
+        E::Dependencies(error) => literal(
+            errors::inheritance_dependencies(error)
+                .unwrap_or_else(|_| rejected("dependency_policy")),
+        ),
         E::Model(findings) => normalized(schema, None, NormalizationError::Invalid(findings), &[]),
         E::Composition(error) => {
             normalized(schema, error.context_document.as_ref(), error.error, &[])
