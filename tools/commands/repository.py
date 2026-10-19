@@ -21,6 +21,7 @@ CHECKS = (
     "tools.packaging.check_minimum_rust",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
+    "tools.packaging.generate_json_schema",
     "tools.packaging.generate_facade_api",
     "tools.packaging.generate_bindings",
     "tools.validation.validate_repository",

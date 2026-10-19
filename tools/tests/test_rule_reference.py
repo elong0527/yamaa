@@ -1,5 +1,6 @@
 """Generated reference pages render rule cards, requirements and schema fields."""
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -218,11 +219,57 @@ class RuleReferenceTests(unittest.TestCase):
         pages = generated(ROOT)
         self.assertEqual(
             sorted(path.name for path in pages),
-            ["requirements.md", "rules-summary.md", "schema-fields.md"],
+            [
+                "requirements.md",
+                "rules-summary.md",
+                "schema-fields-v1.md",
+                "schema-fields.md",
+            ],
         )
         summary = pages[ROOT / "rules/reference/rules-summary.md"]
         self.assertIn("- [LAYER-14](../inheritance.md#layer-14). ", summary)
         self.assertIn("**P10. Artifacts are reproducible.**", summary)
+
+    def test_each_schema_set_has_its_own_fields_page(self):
+        pages = generated(ROOT)
+        sections = {
+            name: re.findall(
+                r"^## (\S+)$", pages[ROOT / "rules/reference" / name], re.M
+            )
+            for name in ("schema-fields.md", "schema-fields-v1.md")
+        }
+        # The 0.5 page reads only yaml/schema*.yaml, and the 1.0 page yaml/v1/.
+        self.assertEqual(
+            sections["schema-fields.md"],
+            sorted(path.name for path in (ROOT / "yaml").glob("schema*.yaml")),
+        )
+        self.assertEqual(
+            sections["schema-fields-v1.md"],
+            sorted(path.name for path in (ROOT / "yaml/v1").glob("schema*.yaml")),
+        )
+        v1 = pages[ROOT / "rules/reference/schema-fields-v1.md"]
+        self.assertIn("| Field or value type | Type | Kind | Required |", v1)
+        self.assertIn(
+            '| `root_class.clear` | `"list[spec_path]"` | `value` | `false` |', v1
+        )
+        self.assertIn(
+            '| `expressions.mapping.source` | `"filtered_source"` | `name` |', v1
+        )
+        # A registry entry's payload is no field and has no kind.
+        self.assertIn('| `expressions.flag` | `["predicate", "flag_class"]` | -- |', v1)
+
+    def test_a_v1_description_must_cite_rules_that_exist(self):
+        write(
+            self.root,
+            "yaml/v1/schema_spec.yaml",
+            'version: "1.0"\n\nroot_class:\n'
+            "    - yamaa:\n        type: str\n        description: See REQ-9999.\n",
+        )
+        source = "v1/schema_spec.yaml:root_class.yamaa.description"
+        error = f"schema description cites REQ-9999, which names no rule: {source}"
+        with self.assertRaisesRegex(ValueError, error):
+            generated(self.root)
+        self.assertIn(error, check(self.root).errors)
 
 
 if __name__ == "__main__":
