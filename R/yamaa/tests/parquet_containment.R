@@ -4,6 +4,12 @@
 # same process still work. On Windows this runs the GNU build, whose unwinding
 # no Rust test reaches. Python reads the same truth.
 library(yamaa)
+# The truth is JSON, and jsonlite, which reads it, is a suggested package:
+# where it is not installed, the file is skipped.
+if (!requireNamespace("jsonlite", quietly = TRUE)) {
+  message("Skipped parquet_containment.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
+  quit(save = "no")
+}
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)

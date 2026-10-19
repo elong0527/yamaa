@@ -28,6 +28,11 @@ SOURCE_PLATFORM = "ubuntu-24.04"
 # their distribution's Rust.
 CRAN_R_VERSIONS = ("devel", "release", "4.4")
 CRAN_CONTAINERS = ("gcc16",)
+# The same check with none of the package's suggested packages installed,
+# as CRAN's noSuggests check runs it: R-devel on Linux, here with the minimum
+# Rust.
+CRAN_NO_SUGGESTS_PLATFORMS = ("ubuntu-24.04",)
+CRAN_NO_SUGGESTS_R_VERSIONS = ("devel",)
 
 
 def coverage():
@@ -55,6 +60,10 @@ def coverage():
         "r": {"os": list(R_PLATFORMS)},
         "cran": {"os": list(R_PLATFORMS), "r": list(CRAN_R_VERSIONS)},
         "cran_container": {"platform": list(CRAN_CONTAINERS)},
+        "cran_no_suggests": {
+            "os": list(CRAN_NO_SUGGESTS_PLATFORMS),
+            "r": list(CRAN_NO_SUGGESTS_R_VERSIONS),
+        },
     }
 
 

@@ -50,6 +50,11 @@ refuses connections and runs two Cargo jobs.
 - With R-devel, R-release and R 4.4, on Linux, macOS and Windows, Cargo and
   rustc are the workspace's `rust-version`, 1.82: the two-year-old toolchain
   that CRAN's guidance asks a package to be tested with.
+- With R-devel on Linux and none of the package's suggested packages
+  installed, as CRAN's noSuggests check runs: `_R_CHECK_DEPENDS_ONLY_=true`
+  gives the tests only the Depends and Imports, and with
+  `_R_CHECK_FORCE_SUGGESTS_=false` R reports the missing packages instead of
+  stopping. The tests skip, with a message, what needs `arrow` or `jsonlite`.
 - In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as

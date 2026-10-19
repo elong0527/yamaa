@@ -385,6 +385,24 @@ also `aspell`, so the check covers the configure scripts and the spelling of
 `DESCRIPTION` as CRAN's does; elsewhere R warns that it lacks
 `checkbashisms`, and that one warning passes.
 
+The R tests use the package's suggested packages, `arrow` and `jsonlite`,
+only where they are installed, as "Writing R Extensions" asks: a part that
+needs a missing one is skipped with a message. Native qualification's
+`native-cran (ubuntu-24.04, R devel, no Suggests)` job installs neither, as
+CRAN's noSuggests check does. It sets `_R_CHECK_DEPENDS_ONLY_=true`, so the
+tests see only the Depends and Imports, and `_R_CHECK_FORCE_SUGGESTS_=false`,
+so R reports the missing packages instead of stopping. Every other check
+installs them, and R stops there when one is missing. Repeat the job from the
+repository root, with libraries that hold neither package:
+
+```sh
+python -m tools.staging.stage_r_package /tmp/yamaa-r-no-suggests/yamaa
+cd /tmp/yamaa-r-no-suggests && R CMD build --no-manual yamaa && mkdir library
+R_LIBS="$PWD/library" R_LIBS_USER="$PWD/library" _R_CHECK_DEPENDS_ONLY_=true \
+  _R_CHECK_FORCE_SUGGESTS_=false python -m tools.commands.check_r \
+  --archive yamaa_*.tar.gz --work-dir check
+```
+
 Documentation deployment and Harbor evaluations have separate workflows.
 Harbor owns its task-build, oracle and changed-input checks; see its
 [guide](evaluations/harbor/README.md). A prose change does not need a solver run.

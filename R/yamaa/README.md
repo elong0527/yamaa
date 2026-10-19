@@ -88,7 +88,10 @@ that only WebAssembly targets build. `inst/AUTHORS` names every bundled
 crate's authors and license.
 
 The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
-suggested packages used by the regression scripts to inspect saved files.
+suggested packages: the regression scripts read their JSON truth with
+`jsonlite` and inspect saved files with both. As "Writing R Extensions" asks,
+the scripts use them only where they are installed, and skip, with a
+message, the parts that need a missing one.
 `yamaabenchmarks` is not required to build, install, use or check the R
 package. Its packaged project tests use base R callables such as
 `base::identity`, `base::signif` and `base::ifelse`.
@@ -102,7 +105,9 @@ submission, run `R CMD check --as-cran` on the built tarball with current R
 release and R-devel, and validate Windows and macOS as well as Linux. Native
 qualification's `native-cran` jobs do so on every run, for the tarball that a
 release publishes: with R-devel, R-release and R 4.4 on all three platforms
-and Rust 1.82, and in R-hub's Fedora `gcc16` container with Fedora's Rust.
+and Rust 1.82, with R-devel on Linux and none of the suggested packages, as
+CRAN's noSuggests check runs, and in R-hub's Fedora `gcc16` container with
+Fedora's Rust.
 
 The build follows CRAN's
 [Rust guidance](https://cran.r-project.org/web/packages/using_rust.html):

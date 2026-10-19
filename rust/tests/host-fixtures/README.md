@@ -150,6 +150,9 @@ resources, with no checkout fallback.
 
 The R codec uses jsonlite from the package's `Suggests`. The native
 workflow installs it before supplemental R tests; production R does not import
-it. Successful local codec/source checks do not qualify an installed R runtime.
+it. A suggested package may be missing where the package is checked, so each
+R suite skips, with a message, what reads this truth when jsonlite is not
+installed. Successful local codec/source checks do not qualify an installed R
+runtime.
 Release qualification requires the complete Python/R platform matrix, installed
 suites and public conformance on the final revision.
