@@ -6,7 +6,7 @@
 use crate::table::ValueRef;
 use crate::table_grouping::Key;
 use std::collections::hash_map::{DefaultHasher, Entry};
-use std::collections::HashMap;
+use std::collections::{HashMap, TryReserveError};
 use std::hash::{Hash, Hasher};
 
 /// Groups as offsets into one member list.
@@ -59,17 +59,21 @@ pub(super) fn admit(
 }
 
 /// Partition items `0..count`; `value(item, position)` is the item's key
-/// value at a key position, for `width` positions.
+/// value at a key position, for `width` positions. The buffers sized by the
+/// item count are reserved first.
 pub(super) fn partition<'v>(
     count: usize,
     width: usize,
     value: impl Fn(usize, usize) -> ValueRef<'v>,
-) -> Groups {
+) -> Result<Groups, TryReserveError> {
     let mut first: HashMap<u64, usize> = HashMap::new();
     // Groups sharing a hash, chained by group.
     let mut chain: Vec<usize> = Vec::new();
     let mut representative: Vec<usize> = Vec::new();
-    let mut group_of = Vec::with_capacity(count);
+    let mut group_of = Vec::new();
+    group_of.try_reserve_exact(count)?;
+    let mut members = Vec::new();
+    members.try_reserve_exact(count)?;
     let equal = |left: usize, right: usize| {
         (0..width)
             .all(|position| Key::from(value(left, position)) == Key::from(value(right, position)))
@@ -108,7 +112,9 @@ pub(super) fn partition<'v>(
         group_of.push(group);
     }
     let groups = representative.len();
-    let mut offsets = vec![0usize; groups + 1];
+    let mut offsets = Vec::new();
+    offsets.try_reserve_exact(groups + 1)?;
+    offsets.resize(groups + 1, 0usize);
     for &group in &group_of {
         offsets[group + 1] += 1;
     }
@@ -116,12 +122,12 @@ pub(super) fn partition<'v>(
         offsets[group + 1] += offsets[group];
     }
     let mut cursor = offsets.clone();
-    let mut members = vec![0usize; count];
+    members.resize(count, 0usize);
     for (item, &group) in group_of.iter().enumerate() {
         members[cursor[group]] = item;
         cursor[group] += 1;
     }
-    Groups { offsets, members }
+    Ok(Groups { offsets, members })
 }
 
 #[cfg(test)]
@@ -140,7 +146,7 @@ mod tests {
             ValueRef::Float(FiniteFloat::new(0.0).unwrap()),
             ValueRef::Str("2"),
         ];
-        let groups = partition(values.len(), 1, |item, _| values[item]);
+        let groups = partition(values.len(), 1, |item, _| values[item]).unwrap();
         let groups: Vec<Vec<usize>> = groups.into_vecs();
         assert_eq!(groups, vec![vec![0, 3], vec![1, 4], vec![2, 5], vec![6]]);
     }

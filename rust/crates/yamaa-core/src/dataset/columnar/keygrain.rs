@@ -2,7 +2,7 @@
 //! every record, every key derived before any other column, then one
 //! candidate per distinct key with its complete feeding records.
 use super::frame::{Frame, Identity, NO_TEMPLATE};
-use super::{Fail, Footprint, Run, Table};
+use super::{reserved, Fail, Footprint, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{BindingId, RegionId, Step};
 use crate::table::{TableAccess, ValueRef};
@@ -26,7 +26,8 @@ pub(super) fn construct<'a, E>(
     crate::limits::Limits::table(rows, plan.keys().len())
         .map_err(|error| Box::new(ExecutionError::Grouping(GroupingError::Limit(error))))?;
     // Finish the entire source filter before any key conversion can fail.
-    let mut retained = Vec::with_capacity(rows);
+    let mut retained = Vec::new();
+    reserved(retained.try_reserve_exact(rows))?;
     let filter = plan.template(template).filter;
     for row in 0..rows {
         if let Some(filter) = filter {
@@ -49,6 +50,7 @@ pub(super) fn construct<'a, E>(
     }
     // One probe row per source record, so a probe's position is its record.
     let mut probes = Frame::new(frame.width());
+    reserved(probes.try_reserve(rows, rows))?;
     for row in 0..rows {
         probes.push(NO_TEMPLATE, Identity::Probe(row), &[row]);
     }
@@ -92,8 +94,10 @@ pub(super) fn construct<'a, E>(
     // Partition the retained records by their keys, in first-occurrence order.
     let partitions = super::group::partition(retained.len(), keys.len(), |position, key| {
         probes.get(retained[position], keys[key])
-    });
-    let mut groups: Vec<Vec<usize>> = Vec::with_capacity(partitions.len());
+    })
+    .map_err(|_| Box::new(ExecutionError::Grouping(GroupingError::Allocation)))?;
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    reserved(groups.try_reserve_exact(partitions.len()))?;
     for members in partitions.iter() {
         let first = retained[members[0]];
         if keys
@@ -108,6 +112,7 @@ pub(super) fn construct<'a, E>(
     }
     groups.sort_unstable_by_key(|members| members[0]);
     run.check_capacity(region, 0, groups.len())?;
+    reserved(frame.try_reserve(groups.len(), retained.len()))?;
     for members in groups {
         let records: Vec<usize> = members.iter().map(|&member| retained[member]).collect();
         let first = records[0];

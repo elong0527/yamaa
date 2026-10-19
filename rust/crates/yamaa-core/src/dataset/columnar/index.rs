@@ -47,12 +47,15 @@ impl Bucket {
 }
 
 impl Index {
-    fn new(columns: &[usize], rows: usize) -> Self {
-        Self {
+    /// An empty index with room for `rows` keys.
+    fn new<E>(columns: &[usize], rows: usize) -> Result<Self, Fail<E>> {
+        let mut buckets = HashMap::new();
+        super::reserved(buckets.try_reserve(rows))?;
+        Ok(Self {
             columns: columns.to_vec(),
-            buckets: HashMap::with_capacity(rows),
+            buckets,
             probe: std::cell::RefCell::default(),
-        }
+        })
     }
 
     fn insert(&mut self, key: Vec<u8>, row: usize) {
@@ -88,7 +91,7 @@ impl Index {
         rows: impl ExactSizeIterator<Item = usize>,
         mut read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
     ) -> Result<Option<Self>, Fail<E>> {
-        let mut index = Self::new(columns, rows.len());
+        let mut index = Self::new(columns, rows.len())?;
         'rows: for row in rows {
             let mut key = Vec::new();
             for (position, &column) in columns.iter().enumerate() {
@@ -117,7 +120,7 @@ impl Index {
         rows: impl ExactSizeIterator<Item = usize>,
         mut read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
     ) -> Result<Option<Self>, Fail<E>> {
-        let mut index = Self::new(columns, rows.len());
+        let mut index = Self::new(columns, rows.len())?;
         for row in rows {
             let mut key = Vec::new();
             for &column in columns {
@@ -138,7 +141,7 @@ impl Index {
         rows: impl ExactSizeIterator<Item = usize>,
         mut read: impl FnMut(usize, usize) -> Result<ValueRef<'t>, Fail<E>>,
     ) -> Result<Self, Fail<E>> {
-        let mut index = Self::new(columns, rows.len());
+        let mut index = Self::new(columns, rows.len())?;
         for row in rows {
             let mut key = Vec::new();
             for &column in columns {
@@ -257,11 +260,12 @@ impl Ports {
         let Some(port) = port(table) else {
             return evaluate();
         };
-        let rows = table.row_count();
-        let answers = self
-            .filters
-            .entry((expr, port))
-            .or_insert_with(|| vec![None; rows]);
+        let answers = match self.filters.entry((expr, port)) {
+            std::collections::hash_map::Entry::Occupied(answers) => answers.into_mut(),
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(super::filled(table.row_count(), None)?)
+            }
+        };
         if let Some(Some(kept)) = answers.get(row) {
             return Ok(*kept);
         }

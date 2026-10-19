@@ -96,6 +96,24 @@ impl Frame {
         self.columns.len()
     }
 
+    /// Room for `rows` more rows holding `records` more member records.
+    pub(super) fn try_reserve(
+        &mut self,
+        rows: usize,
+        records: usize,
+    ) -> Result<(), std::collections::TryReserveError> {
+        for column in &mut self.columns {
+            column.try_reserve(rows)?;
+        }
+        for completed in &mut self.completed {
+            completed.try_reserve(rows)?;
+        }
+        self.templates.try_reserve(rows)?;
+        self.identities.try_reserve(rows)?;
+        self.offsets.try_reserve(rows)?;
+        self.records.try_reserve(records)
+    }
+
     /// Append one row with every column missing and incomplete.
     pub(super) fn push(&mut self, template: u32, identity: Identity, members: &[usize]) -> usize {
         let row = self.rows();

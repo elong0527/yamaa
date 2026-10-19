@@ -240,13 +240,10 @@ fn select<E>(
                     members.push(source_row);
                     continue;
                 }
-                let rows = donor.row_count();
-                let answers = run
-                    .windows
-                    .outputs
-                    .filters
-                    .entry(range)
-                    .or_insert_with(|| vec![None; rows]);
+                let answers = match run.windows.outputs.filters.entry(range) {
+                    Entry::Occupied(answers) => answers.into_mut(),
+                    Entry::Vacant(slot) => slot.insert(super::filled(donor.row_count(), None)?),
+                };
                 let kept = match answers[source_row] {
                     Some(kept) => kept,
                     None => {
