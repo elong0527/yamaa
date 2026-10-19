@@ -130,7 +130,8 @@ class PublicContract(unittest.TestCase):
         from yamaa import _native
 
         self.assertEqual(
-            yamaa.__all__, ["Error", "__version__", "project", "read_odm", "spec"]
+            yamaa.__all__,
+            ["Error", "__version__", "lint", "project", "read_odm", "spec"],
         )
         self.assertTrue(issubclass(yamaa.Error, Exception))
         for name in REMOVED:
@@ -148,6 +149,7 @@ class PublicContract(unittest.TestCase):
                 "_ProjectRun",
                 "_Run",
                 "_Submission",
+                "_lint",
                 "_plans",
                 "_project_check",
                 "_project_run",
@@ -171,6 +173,7 @@ class PublicContract(unittest.TestCase):
             "spec": yamaa.spec,
             "project": yamaa.project,
             "read_odm": yamaa.read_odm,
+            "lint": yamaa.lint,
             "spec.check": spec.check,
             "spec.resolve": spec.resolve,
             "spec.run": spec.run,

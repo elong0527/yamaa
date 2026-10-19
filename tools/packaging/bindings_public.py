@@ -42,6 +42,7 @@ _PUBLIC_KEYS = {"python", "types", "functions", "classes", "errors"}
 # argument unannotated.
 _PY_ANNOTATION = {
     "path": None,
+    "path_list": None,
     "text": "str",
     "optional_text": "str | None",
     "count": "int",
@@ -52,7 +53,7 @@ _PY_ANNOTATION = {
     "optional_table": "_pl.DataFrame | None",
     "nothing": "None",
 }
-_ARGUMENT_TOKENS = {"path", "text", "optional_text", "count", "flag"}
+_ARGUMENT_TOKENS = {"path", "path_list", "text", "optional_text", "count", "flag"}
 _DEFAULTS = {
     "optional_text": {"None"},
     "flag": {"false", "true"},
@@ -60,8 +61,13 @@ _DEFAULTS = {
 }
 # Handwritten conversions the generated code calls.
 _PY_RESULT = {"table": "_table", "optional_table": "_optional_table"}
-_PY_ARGUMENT = {"path": "_fspath"}
-_R_ARGUMENT = {"path": ".text", "text": ".text", "optional_text": ".optional_text"}
+_PY_ARGUMENT = {"path": "_fspath", "path_list": "_fspaths"}
+_R_ARGUMENT = {
+    "path": ".text",
+    "path_list": ".texts",
+    "text": ".text",
+    "optional_text": ".optional_text",
+}
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
@@ -790,10 +796,27 @@ class Public:
         # Import exactly the handwritten helpers the generated code uses.
         helpers = [
             name
-            for name in ("_fspath", "_Lazy", "_optional_table", "_pl", "_table")
+            for name in (
+                "_fspath",
+                "_fspaths",
+                "_Lazy",
+                "_optional_table",
+                "_pl",
+                "_table",
+            )
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
-        imported = ", ".join(["__version__", *helpers])
+        imported = ["__version__", *helpers]
+        single = f"from yamaa._support import {', '.join(imported)}"
+        if len(single) > _PY_WIDTH:
+            # ruff format splits a long import one name per line.
+            single = "\n".join(
+                [
+                    "from yamaa._support import (",
+                    *(f"    {name}," for name in imported),
+                    ")",
+                ]
+            )
         doc = self.public["python"]["doc"].split("\n")
         names = ", ".join(f'"{name}"' for name in self.python_names())
         lines = [
@@ -803,7 +826,7 @@ class Public:
             '"""',
             "",
             "from yamaa import _native",
-            f"from yamaa._support import {imported}",
+            single,
             "",
             f"__all__ = [{names}]",
             "",

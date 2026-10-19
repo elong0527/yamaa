@@ -28,8 +28,15 @@ REMOVED = (
 
 def test_installed_package_exports_exactly_the_public_api() -> None:
     assert yamaa.__version__ == version("yamaa")
-    assert yamaa.__all__ == ["Error", "__version__", "project", "read_odm", "spec"]
-    for name in ("spec", "project", "read_odm"):
+    assert yamaa.__all__ == [
+        "Error",
+        "__version__",
+        "lint",
+        "project",
+        "read_odm",
+        "spec",
+    ]
+    for name in ("spec", "project", "read_odm", "lint"):
         assert callable(getattr(yamaa, name))
     assert issubclass(yamaa.Error, Exception)
     for name in REMOVED:

@@ -1037,7 +1037,9 @@
         "python/tests/installed/installed_parquet_containment.py",
         "R/yamaa/tests/parquet_containment.R",
         "python/tests/installed/installed_plan_reuse.py",
-        "R/yamaa/tests/plan_reuse.R"
+        "R/yamaa/tests/plan_reuse.R",
+        "python/tests/installed/installed_lint.py",
+        "R/yamaa/tests/lint.R"
       ]
     },
     {

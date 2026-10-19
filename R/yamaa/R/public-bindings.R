@@ -114,3 +114,5 @@ yamaa_read_odm <- function(source, archive_member = NULL, max_archive_members = 
     max_xml_depth
   ))
 }
+
+yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))
