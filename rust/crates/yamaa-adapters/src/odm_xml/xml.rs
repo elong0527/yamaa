@@ -212,16 +212,16 @@ impl<R: Read> Xml<R> {
         }
     }
 
-    /// The source byte offset of the next event.
-    fn position(&self) -> u64 {
-        self.reader.buffer_position() + self.reader.get_ref().bom()
-    }
-
     /// Read the next admitted event.
     pub(super) fn next(&mut self) -> Result<Event<'_>, Error> {
-        let position = self.position();
+        // The tokenizer's offsets leave out the UTF-8 byte order mark that it
+        // skips, which the byte source finds on its first read, so the event's
+        // source offset is known only once the event is read.
+        let start = self.reader.buffer_position();
         self.buf.clear();
-        let token = match self.reader.read_event_into(&mut self.buf) {
+        let read = self.reader.read_event_into(&mut self.buf);
+        let position = start + self.reader.get_ref().bom();
+        let token = match read {
             Ok(token) => token,
             Err(error) => {
                 // quick-xml checks end-tag names and comment hyphens once it

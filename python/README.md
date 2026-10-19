@@ -56,8 +56,8 @@ python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
 The 0.4.0 Linux wheel is `manylinux_2_34` and needs glibc 2.34 or later.
 
 Or install the standalone source archive from the same release. Building it
-uses your default Rust toolchain, which must be Rust 1.82 or later, with Cargo,
-a C compiler and GNU make:
+uses your default Rust toolchain, which must be Rust 1.90 or later for 0.4.0,
+and Rust 1.82 or later from 0.5.0 on, with Cargo, a C compiler and GNU make:
 
 ```bash
 python -m pip install ./yamaa-0.4.0.tar.gz

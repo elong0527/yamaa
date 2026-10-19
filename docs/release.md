@@ -434,9 +434,9 @@ that library. `LICENSE-READSTAT.txt`,
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
 field names these files. The Python License-Expression,
-`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0`, covers the project, the
-crates linked into the wheels and the standard library, which is relied on
-under MIT, with Unicode-3.0 for the Unicode tables in `core`.
+`MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0 AND Zlib`, covers the
+project, the crates linked into the wheels and the standard library, which is
+relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates the crate notices
 from `rust/Cargo.lock` and the standard library section from the toolchain

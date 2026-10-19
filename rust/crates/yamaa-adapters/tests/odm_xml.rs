@@ -1522,6 +1522,16 @@ mod xml_strictness {
             "malformed_xml",
             "invalid UTF-8",
         );
+        // An invalid byte in the first token is reported at its source
+        // offset, past a byte order mark too.
+        for (prefix, at) in [(&[][..], 4), (&[0xEF, 0xBB, 0xBF][..], 7)] {
+            let bytes = [prefix, b"<ODM\xff>"].concat();
+            refused(
+                read_bytes("first.xml", &bytes, &Options::default()),
+                "malformed_xml",
+                &format!("invalid UTF-8 byte sequence at byte {at}"),
+            );
+        }
         let bom = [&[0xEF, 0xBB, 0xBF][..], ODM_13.as_bytes()].concat();
         assert_eq!(
             read_bytes("bom.xml", &bom, &Options::default())
