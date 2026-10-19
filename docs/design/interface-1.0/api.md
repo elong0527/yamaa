@@ -65,13 +65,21 @@ Rules:
    `format()` returns its lines and `print()` writes them with
    `cat(sep = "\n")` and returns the object invisibly; the command line prints
    the same summary.
-2. The first line is `yamaa <kind> of <subject>: <status>, <size>,
-   <n> issue(s)`. The kind is `check`, `run`, `project run`, `submission` or
-   `selftest`. The subject of a run is its dataset name once read, otherwise
-   the path as given; a check or project operation names the path, followed by
-   `, section <s>` when a section was named. The size is `<r> rows x <c>
-   columns`, `no output`, `<k> specifications` or `<d> define.xml and <t>
-   transport files`. Counts are plain integers, singular for 1.
+2. The first line of a run, project run or submission is `yamaa <kind> of
+   <subject>: <status>, <size>, <n> issue(s)`, with the kind `run`,
+   `project run` or `submission`. The subject of a run is its dataset name
+   once read, otherwise the path as given; a project operation names the
+   path, followed by `, section <s>` when a section was named. The size is
+   `<r> rows x <c> columns`, `no output`, `<k> specifications` or `<d>
+   define.xml and <t> transport files`. Counts are plain integers, singular
+   for 1. Three forms differ, because they have no size:
+   - a check reads no data, so it prints `yamaa check of <subject>: <status>,
+     <n> issue(s)`;
+   - a selftest prints `yamaa selftest: <status>, <p> of <c> cases passed`,
+     then `first failure: <case>: <message>` when a case failed, then one
+     line naming the engine, language, host and platform;
+   - a lazy spec or project, which has read nothing, prints `yamaa spec
+     <path>` or `yamaa project <path>`.
 3. With issues, a second line gives the first: `first issue: <location>:
    <message> [<condition>, <rule>]`. The location is `<file>:<line>:<column>`,
    the file relative to the current directory when beneath it and absolute
@@ -146,9 +154,12 @@ the schema of <type>`; the prefix says which call refused, which the first
 message alone does not when a failed run's `save()` refuses with the run's own
 issues.
 
-**What freezes at 1.0.0:** the summary line's labels, order and separators,
-the `first issue:` layout, the member-line layout and the `yamaa.Table:`
-header. Message text and the table preview's cells may improve in any release.
+**What freezes at 1.0.0:** the labels, order and separators of every form
+in rule 2 (the run, project run and submission line, the check line, the
+selftest line with its `first failure:` and information lines, and the lazy
+spec and project line), the `first issue:` layout, the member-line layout and
+the `yamaa.Table:` header. Message text and the table preview's cells may
+improve in any release.
 
 ## `lint()` (D40, P-LINT-2)
 
@@ -438,7 +449,7 @@ reads `bindings.yaml`.
 | `host_only` | Python and R | adds `cli`; `yamaa.Table`'s members are Python-only | no |
 
 The draft declares 7 public functions (4 new: `lint`, `schema`, `info`,
-`selftest`), 9 classes with 61 members (35 new), 8 commands, and natively 55
+`selftest`), 9 classes with 63 members (37 new), 8 commands, and natively 55
 Python exports and methods, 48 R functions and 46 paired operations. A
 consistency check (described on the [method page](method.md)) confirms that
 every native export is paired or host-only, every operation names existing

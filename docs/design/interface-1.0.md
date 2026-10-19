@@ -825,9 +825,11 @@ first issue: adam/adae.yaml:57:9: column ASTDY reads TRTSDT, which is declared a
 
 One summary line, `yamaa <kind> of <subject>: <status>, <size>, <n>
 issue(s)`, then `first issue:` with location, message and
-`[condition, rule]`; a project run lists its members between them. ASCII and
-LF only, no colour, nothing depends on the terminal width. The line layout
-freezes at 1.0.0; message text does not.
+`[condition, rule]`; a project run lists its members between them. A check
+has no size segment, a selftest counts the cases that passed, and a lazy
+spec or project prints its path. ASCII and LF only, no colour, nothing
+depends on the terminal width. Every form's layout freezes at 1.0.0; message
+text does not.
 
 **P-LINT-2. `lint()` columns.** `file`, `line`, `column`, `finding`,
 `spec_path` and `message`. `spec_path` costs nothing, since the checker
@@ -885,10 +887,13 @@ bytes per profile; and the summary-line layout. Messages are not frozen.
 ones (the `yaml/` schemas, `yaml/conditions.yaml`, the bindings file extended
 to the command line and tables, the facade's public API inventory) and three
 recommended ones (the registry's (phase, condition, rule) triples, rule card
-IDs, and the benchmarks present at the tag). It is inactive until
-`yamaa-v1.0.0` exists, needs `fetch-depth: 0` in CI's repository job, and
-has no allowlist. Platform floors such as Python 3.12 and R 4.4 move only in
-minor releases, announced in the release notes.
+IDs, and the benchmarks present at the tag). It enforces nothing until
+`yamaa-v1.0.0` exists; at a new major's `M.0.0` it lists the breaks against
+the previous major for the release notes. It needs `fetch-depth: 0` in CI's
+repository job. Its only exemption is a committed list of reviewed defect
+fixes, each naming the rule it restores and the owner's decision; message
+text never reaches a benchmark. Platform floors such as Python 3.12 and R 4.4
+move only in minor releases, announced in the release notes.
 
 ## Rule contradictions (Phase 0 item 6)
 

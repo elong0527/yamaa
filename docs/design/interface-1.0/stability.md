@@ -72,8 +72,9 @@ publish it.
 > **Enforcement.** `make check-repository` compares the interface manifests
 > with the latest 1.x release tag and refuses a breaking change unless the
 > version starts a new major release. Every benchmark present at that tag
-> keeps its specification, input and expected bytes. Release candidates are
-> not part of the contract: the freeze starts at 1.0.0.
+> keeps its specification, input and expected bytes, except a file that a
+> reviewed defect fix lists in the exception file. Release candidates are not
+> part of the contract: the freeze starts at 1.0.0.
 
 ## The manifests
 
@@ -85,7 +86,7 @@ publish it.
 | 4 | The Rust public API inventory (decided) | `rust/crates/yamaa/public-api.txt` | lines | a removed line; a changed signature shows as a removed line plus an added one |
 | 5 | The registry's diagnostic identities (recommended) | the core registry: 343 (phase, condition, rule) triples after the D28 rewrite | triples | a removed triple: an existing failure would report another condition or rule |
 | 6 | Rule card IDs (recommended) | `rules/**/*.md`: 402 cards | IDs | a removed card; issues cite card IDs, and numbers are never reused |
-| 7 | Benchmarks present at the baseline (recommended) | `benchmarks/`: 424 directories | bytes | any change to a baseline benchmark's specification, input or expected files; README prose may change |
+| 7 | Benchmarks present at the baseline (recommended) | `benchmarks/`: 424 directories | bytes | any change to a baseline benchmark's specification, input or expected files, except a listed defect-fix exception; README prose may change |
 
 Manifests 5 to 7 make checkable what the contract already says: "a
 different condition for an existing failure" (5 and 6) and "every 1.0
@@ -106,12 +107,13 @@ stay internal while the facade's inventory is frozen.
    (`[workspace.package] version` in `rust/Cargo.toml`; the shared-version
    check keeps Python and R in step). Candidate tags are never baselines (D1).
    Today's tags are `yamaa-py-0.1.0` to `yamaa-py-0.3.0` and `yamaa-v0.4.0`,
-   so the check stays inactive until `yamaa-v1.0.0` exists.
-3. **Activation.** At a workspace version `M.0.0` with no tag of major `M`, the
-   check is inactive and says why. At any other version with no tag of its
-   major, it fails and asks for the tags to be fetched, so a shallow clone
-   cannot pass by accident. When the workspace's major is above the
-   baseline's, it lists the breaks for the release notes and passes.
+   so nothing is enforced until `yamaa-v1.0.0` exists.
+3. **A new major.** At a workspace version `M.0.0` with no tag of major `M`,
+   nothing is enforced. When a final tag of an earlier major exists, the check
+   compares against the newest one, lists every break for the release notes,
+   and passes; before 1.0.0 there is none, and it says so. At any other version
+   with no tag of its major, it fails and asks for the tags to be fetched, so a
+   shallow clone cannot pass by accident.
 4. **CI.** The repository job checks out with `fetch-depth: 0`; it uses the
    default depth of 1 today. `release.yml` and `release-rehearsal.yml` already
    fetch everything.
@@ -122,16 +124,24 @@ stay internal while the facade's inventory is frozen.
    Every removed or changed element is classified as breaking or not;
    additions are reported for the release notes.
 7. **Output.** One line per break, `<manifest>: <element>: <what changed>`,
-   and exit status 1 when any break remains and the majors are equal.
+   and exit status 1 when any break remains against a baseline of the
+   workspace's own major.
 8. **Tests.** `tools/tests/test_interface_stability.py` runs each rule against
    synthetic baselines.
 9. **Release checklist.** `docs/release.md` adds a step: the release commit
    passes the check against the previous release.
-10. **No allowlist.** An intentional break is a major release. A defect fix
-    changes behavior, which its new benchmark pins, not a manifest or an
-    existing benchmark. If one ever must change a manifest element or a
-    baseline benchmark, that is an owner decision recorded in the release
-    notes, reviewed like a golden change.
+10. **One narrow exception list.** An intentional break is a major release.
+    Message text never reaches a benchmark: error contracts pin the
+    condition, phase, rule, spec paths and context, and run reports carry no
+    message. A defect fix normally adds a benchmark that pins the corrected
+    bytes and leaves the manifests alone. When a fix must change a manifest
+    element or a baseline benchmark's expected bytes, because the rule shows
+    the old bytes were wrong, the change is listed in a committed exception
+    file (proposed as `tools/validation/interface_exceptions.yaml`): one entry
+    per element or file, naming the rule it restores and the issue that
+    records the owner's decision. The check skips exactly those entries; each
+    entry is reviewed like a golden change and listed in the release notes,
+    and nothing else is exempt.
 
 ## Platform floors
 
