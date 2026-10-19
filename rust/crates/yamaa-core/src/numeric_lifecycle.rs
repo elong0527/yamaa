@@ -88,29 +88,6 @@ impl HandlerCounter {
         &self.counts
     }
 
-    /// Move every nested observation into `target`, including before a donor
-    /// failure. An entry already moved holds zero and is skipped.
-    pub(crate) fn transfer(&mut self, target: &mut Self) -> Result<(), HandlerCountOverflow> {
-        for entry in self.counts.iter_mut().filter(|entry| entry.count != 0) {
-            target.register(&entry.spec_path, entry.handler);
-            let destination = target
-                .counts
-                .iter_mut()
-                .find(|other| other.spec_path == entry.spec_path && other.handler == entry.handler)
-                .expect("registered nested handler");
-            destination.count =
-                destination
-                    .count
-                    .checked_add(entry.count)
-                    .ok_or_else(|| HandlerCountOverflow {
-                        spec_path: entry.spec_path.clone(),
-                        handler: entry.handler,
-                    })?;
-            entry.count = 0;
-        }
-        Ok(())
-    }
-
     /// Count one selected replacement before its conversion; do not retry or overflow.
     pub(crate) fn record(
         &mut self,

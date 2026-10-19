@@ -1,4 +1,4 @@
-//! The schedule: today's evaluation order, built from the resolved graph.
+//! The schedule: the evaluation order, built from the resolved graph.
 //!
 //! The compiler already fixes the order: row bindings in each template's
 //! dependency order, the prewindow/window split, the column phase in the

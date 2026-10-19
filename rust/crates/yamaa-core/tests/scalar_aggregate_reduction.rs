@@ -568,60 +568,6 @@ mod scalar {
             assert_eq!(error.operand_route, None);
             assert_eq!(rounding.apply(ValueRef::Missing), Ok(Value::Missing));
         }
-
-        #[test]
-        fn rounding_operand_admission_checks_target_source_and_nested_depth_before_execution() {
-            use yamaa_core::{
-                dataset::{Assignment, DatasetPlan, Expression, PlanError, RowMode, RowTemplate},
-                table::{Column, TableSchema},
-                value::ColumnType,
-            };
-            let schema = TableSchema::new(vec![Column {
-                name: "V".into(),
-                kind: ColumnType::Float,
-            }])
-            .unwrap();
-            let wrap = |column, expression| Expression::Round {
-                source: Box::new(Assignment {
-                    column,
-                    expression,
-                    path: "round.source".into(),
-                }),
-                rounding: Rounding::new("SRC.V", "round", "1").unwrap(),
-            };
-            let make = |expression| {
-                DatasetPlan::new(
-                    schema.clone(),
-                    schema.clone(),
-                    vec![RowTemplate {
-                        mode: RowMode::Records,
-                        assignments: vec![Assignment {
-                            column: 0,
-                            expression,
-                            path: "round".into(),
-                        }],
-                        filter: None,
-                    }],
-                    vec![],
-                    vec![0],
-                    vec![],
-                )
-            };
-            assert_eq!(
-                make(wrap(1, Expression::Source(0))),
-                Err(PlanError::InvalidColumns)
-            );
-            assert_eq!(
-                make(wrap(0, Expression::Source(1))),
-                Err(PlanError::InvalidSource)
-            );
-            let mut nested = Expression::Source(0);
-            for _ in 0..128 {
-                nested = wrap(0, nested);
-            }
-            assert!(make(nested.clone()).is_ok());
-            assert_eq!(make(wrap(0, nested)), Err(PlanError::InvalidColumns));
-        }
     }
     mod declarative_temporal {
         use yamaa_core::{

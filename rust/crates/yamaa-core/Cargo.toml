@@ -22,12 +22,5 @@ num-bigint = { version = "0.5.1", default-features = false }
 # the same leftmost-first results and no further dependencies.
 regex = { version = "1.13.1", default-features = false, features = ["std", "perf-dfa", "perf-onepass", "perf-backtrack"] }
 
-[features]
-# Test-only: compile the executor selector into `DatasetPlan::execute`
-# (#2841). The equivalence gate and the executor probe enable it; the
-# YAMAA_EXECUTOR environment variable then selects `compare` (both
-# executors, attempts compared) or `resolved`. Unset, today's executor runs.
-executor-comparison = []
-
 [lints]
 workspace = true

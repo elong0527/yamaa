@@ -154,33 +154,35 @@ fatal check past later derivations.
 
 These are implementation seams for subsequent work, not new callable APIs.
 
-1. **Admission to derivation:** `DatasetPlan::execute_inner` admits function
+1. **Admission to derivation:** `ResolvedPlan::execute` admits function
    bindings, schemas and complete source geometry before entering derivation.
    Capture stable source coordinates here; never bind schemas independently
-   from incomplete batches.
-2. **Driver/group construction:** `build_candidates`, `process_template`,
-   `table_grouping::partition` and `key_grain::construct` separate driver
-   membership from value evaluation. A future coordinator can combine memberships
-   here, retaining first occurrences and then scheduling whole logical groups.
-3. **Intermediate boundaries:** `intermediates::Run` holds eligibility, string
-   indexes, choices and materialized relations for one attempt. Keep these
-   attempt-local and use global `SelectionIdentity` values, not batch-local
+   from incomplete batches. Each step of the resolved schedule carries its
+   class from this inventory (`StepInfo::partition`).
+2. **Driver/group construction:** the row stage of each template
+   (`process_template` in `dataset/columnar/mod.rs`), `table_grouping::partition`
+   and `keygrain::construct` separate driver membership from value evaluation.
+   A future coordinator can combine memberships here, retaining first
+   occurrences and then scheduling whole logical groups.
+3. **Intermediate boundaries:** `relations::State` holds narrowed records, key
+   indexes, choices and materialized donors for one attempt. Keep these
+   attempt-local and use global selection identities, not batch-local
    counters. Coordinate complete donor relations and correlated materializations;
    retain lazy reads, `verify`, `publish_self` and `begin_columns` barriers.
-4. **Template/window completion:** `row_windows::complete` and
-   `apply_postwindow_filter` must finish before publishing a template's `SELF`
-   relation or starting a dependent template. `windows::Run` requires complete
-   memberships, order and eligible rows before answers become visible.
-5. **Column completion:** `complete_columns` completes each assignment over
+4. **Template/window completion:** a template's window stage and post-window
+   filter must finish before publishing its `SELF` relation or starting a
+   dependent template. A window run requires complete memberships, order and
+   eligible rows before answers become visible.
+5. **Column completion:** `complete_columns` completes each binding over
    candidates and advances `check_columns` only through the available declared
    prefix. Local scalar evaluation can be divided inside a column, but its
    ordered effects and checks must finish before dependent/later work. Preserve
    the final unobserved-intermediate filter-type check, including empty output.
 6. **Output keys to verification to ordering:** `verify_output` checks all key
-   presence/uniqueness before dataset checks. `verification.rs` owns predicate
-   and scoped-count evaluation; `CheckRecord` retains global observations.
-   `ordering::apply` runs last. This is the final reconciliation barrier before
-   an accepted `Dataset` can leave core.
+   presence/uniqueness before dataset checks, and evaluates the predicate and
+   scoped-count checks; `CheckRecord` retains global observations.
+   `checks::output_order` runs last. This is the final reconciliation barrier
+   before an accepted `Dataset` can leave core.
 7. **Adapter result and Save:** core returns one `ExecutionAttempt`; adapters
    retain success/failure evidence and publish held bytes only through explicit
    Save. Streaming batches must stay provisional until all preceding barriers

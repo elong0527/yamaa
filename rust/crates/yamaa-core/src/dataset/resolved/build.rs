@@ -15,12 +15,7 @@ use crate::dataset::{
 };
 use std::collections::{BTreeMap, VecDeque};
 
-/// The bound plan of every region, for the checks that compare against it.
-pub(super) type RegionPlans<'p> = Vec<&'p DatasetPlan>;
-
-pub(super) fn resolve(
-    plan: &DatasetPlan,
-) -> Result<(ResolvedPlan, RegionPlans<'_>), ResolutionError> {
+pub(super) fn resolve(plan: &DatasetPlan) -> Result<ResolvedPlan, ResolutionError> {
     let mut builder = Builder {
         out: ResolvedPlan {
             regions: Vec::new(),
@@ -57,14 +52,13 @@ pub(super) fn resolve(
     let Builder {
         mut out,
         sites,
-        plans,
         calls,
         ..
     } = builder;
     super::schedule::build(&mut out)?;
     super::registration::build(&mut out, sites, calls)?;
     super::schedule::annotate(&mut out);
-    Ok((out, plans))
+    Ok(out)
 }
 
 /// A node before its operand, read and site lists join the arena.
@@ -110,7 +104,8 @@ impl Sites {
 struct Builder<'p> {
     out: ResolvedPlan,
     sites: Sites,
-    plans: RegionPlans<'p>,
+    /// The bound plan of every region.
+    plans: Vec<&'p DatasetPlan>,
     /// Donor plans already given a region, by identity.
     donors: Vec<(*const DatasetPlan, RegionId)>,
     pending: VecDeque<RegionId>,

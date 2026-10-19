@@ -81,9 +81,6 @@ mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
 pub mod resolved;
 pub use resolved::{ResolutionError, ResolvedPlan};
-// The executor over the resolved plan runs only behind the test-only
-// selector until #2843 swaps it in.
-#[cfg(any(test, feature = "executor-comparison"))]
 mod columnar;
 
 /// Already bound expressions; no host joins or lookup fallback are implicit.

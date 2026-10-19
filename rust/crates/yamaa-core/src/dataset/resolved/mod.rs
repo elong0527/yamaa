@@ -15,23 +15,16 @@
 //! phase is served by a binding with its own [`DriverContext`], and cells with
 //! equal contexts share one binding.
 //!
-//! The [`ResolvedPlan::schedule`] reproduces the order in which today's
-//! executor visits steps. Resolution checks three properties on every bind,
-//! whatever the build profile, and refuses the plan as internal when one
-//! fails, naming the first step that diverges:
-//!
-//! 1. topological validity: every data edge reads a cell that an earlier step
-//!    of the reading cell's template completed;
-//! 2. the handler table holds every handler site, donor sites included, in
-//!    the order of the executor's registration walk;
-//! 3. the schedule equals the structural mirror of the executor's loops.
+//! The [`ResolvedPlan::schedule`] orders every step of a run. Resolution
+//! checks on every bind, whatever the build profile, that each data edge
+//! reads a cell an earlier step of the reading cell's template completed, and
+//! refuses the plan as internal when one does not, naming the step.
 //!
 //! Every node carries its evaluation payload, copied from the bound plan: an
 //! expression node its [`Op`], a named relation its intermediate, a check its
 //! declaration, a region its output schema and inputs. The plan is therefore
-//! self-contained, which the executor over this graph (#2841) and the
-//! compile-once plan handle (#2821) need. The current executor still runs
-//! every plan; nothing here changes an output.
+//! self-contained, which the executor over this graph and the compile-once
+//! plan handle (#2821) need.
 use crate::{
     numeric_lifecycle::HandlerKind,
     table::TableSchema,
@@ -40,14 +33,11 @@ use crate::{
 use std::{ops::Range, sync::Arc};
 
 mod build;
-mod reference;
 mod registration;
 mod schedule;
 #[cfg(test)]
 mod tests;
 mod verify;
-
-pub use reference::ReferenceStep;
 
 use super::{
     AggregateRowContext, BoundAggregate, BoundFunction, BoundNumeric, BoundOdm,
@@ -793,7 +783,7 @@ pub struct StepInfo {
     pub effects: Effects,
 }
 
-/// One step of the schedule, in the order today's executor visits it.
+/// One step of the schedule, in the order a run visits it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Admit,
@@ -835,37 +825,22 @@ pub enum ResolutionError {
     /// The bound plan has a shape resolution does not represent.
     #[error("resolved plan unsupported: {0}")]
     Unsupported(String),
-    /// Check 1: a data edge reads a cell no earlier step completed.
+    /// A data edge reads a cell no earlier step completed.
     #[error("resolved plan reads before completion in region {region} at step {position} ({step:?}): {read}")]
     Topology {
         region: usize,
         position: usize,
-        step: ReferenceStep,
+        step: Step,
         read: String,
-    },
-    /// Check 2: the handler table diverges from the executor's registration walk.
-    #[error("resolved handler sites diverge at position {position}: today {expected:?}, resolved {found:?}")]
-    Handlers {
-        position: usize,
-        expected: Option<(String, HandlerKind)>,
-        found: Option<(String, HandlerKind)>,
-    },
-    /// Check 3: the schedule diverges from today's evaluation order.
-    #[error("resolved schedule diverges in region {region} at step {position}: today {expected:?}, resolved {found:?}")]
-    Schedule {
-        region: usize,
-        position: usize,
-        expected: Option<ReferenceStep>,
-        found: Option<ReferenceStep>,
     },
 }
 
 impl DatasetPlan {
-    /// Compile this bound plan into its resolved graph and run the three
-    /// resolution checks. Binding calls this on every plan it returns.
+    /// Compile this bound plan into its resolved graph and check its
+    /// topology. Binding calls this on every plan it returns.
     pub fn resolve(&self) -> Result<ResolvedPlan, ResolutionError> {
-        let (resolved, plans) = build::resolve(self)?;
-        verify::verify(&resolved, &plans)?;
+        let resolved = build::resolve(self)?;
+        verify::verify(&resolved)?;
         Ok(resolved)
     }
 }

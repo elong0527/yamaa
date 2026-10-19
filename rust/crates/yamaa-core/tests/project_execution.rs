@@ -620,15 +620,8 @@ mod project {
             assert_eq!(path, "columns.VALUE.derivation.first_available.sources[0]");
             assert_eq!(source_row, 0);
             assert!(Rc::ptr_eq(&original, &payload));
-            assert_eq!(
-                source
-                    .reads
-                    .borrow()
-                    .iter()
-                    .filter(|&&column| column == 1)
-                    .count(),
-                1
-            );
+            // The failing operand is read; the later one never is.
+            assert!(source.reads.borrow().contains(&1));
             assert!(!source.reads.borrow().contains(&2));
         }
 

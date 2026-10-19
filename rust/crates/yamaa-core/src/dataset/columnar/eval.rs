@@ -89,7 +89,7 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     }
 
     /// Count one firing at a node's site of `kind`; `path` names the site
-    /// when the node lists none, as today's executor registers it.
+    /// when the node lists none.
     pub(super) fn fire_node(
         &mut self,
         expr: ExprId,

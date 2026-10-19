@@ -1851,7 +1851,7 @@ impl PreparedSpecification {
     }
     /// Schemas follow authored input order, independently of the selected driver.
     /// Every bound plan, on the rows and the no-rows route alike, resolves into
-    /// its slot graph and passes the resolution checks before it is returned.
+    /// its slot graph and passes the resolution check before it is returned.
     pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<DatasetPlan, BindError> {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
