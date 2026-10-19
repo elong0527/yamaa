@@ -356,7 +356,11 @@ def main():
                 spec = yamaa.spec(specification)
             else:
                 name = specification_name(specification)
-                spec = yamaa.project(staged / project).spec(name)
+                try:
+                    spec = yamaa.project(staged / project).spec(name)
+                except yamaa.Error as error:
+                    # A project that fails admission refuses to name its specs.
+                    parser.exit(1, f"{call['specification']}: {error.issues}\n")
             result = spec.run()
             output = result.output
             if output is None:

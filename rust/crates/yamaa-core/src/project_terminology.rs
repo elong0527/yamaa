@@ -124,6 +124,7 @@ pub struct Source {
 pub enum Fault {
     DuplicateId,
     DuplicateName,
+    FormatNamePrefix,
     InvalidShape,
     InvalidValue { item: usize },
     DuplicateValue { item: usize },
@@ -220,6 +221,15 @@ pub fn validate(sources: &[Source]) -> Vec<Finding> {
             }
             if !names.insert(&list.name) {
                 push(Fault::DuplicateName);
+            }
+            // A text codelist's SAS format is a character format (CT-12).
+            if list.data_type == DataType::Text
+                && list
+                    .format_name
+                    .as_ref()
+                    .is_some_and(|name| !name.starts_with('$'))
+            {
+                push(Fault::FormatNamePrefix);
             }
             if list.items.is_some() == list.external.is_some() {
                 push(Fault::InvalidShape);

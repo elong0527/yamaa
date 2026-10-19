@@ -319,6 +319,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         .ok_or(Error::InvalidIndex)?;
     let code = match finding.fault {
         Fault::DuplicateId | Fault::DuplicateName => C::CodelistDuplicateIdentifier,
+        Fault::FormatNamePrefix => C::CodelistFormatNamePrefix,
         Fault::InvalidShape => C::CodelistInvalidShape,
         Fault::InvalidValue { .. } => C::CodelistInvalidValue,
         Fault::DuplicateValue { .. } => C::CodelistDuplicateValue,
@@ -340,6 +341,13 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
             project.append(&mut d, ".name")?;
             project.context(&mut d, "field", "name")?;
             project.context(&mut d, "name", &list.name)?;
+        }
+        // Only a text codelist's format name is checked for its prefix.
+        Fault::FormatNamePrefix => {
+            project.append(&mut d, ".format_name")?;
+            let format = list.format_name.as_deref().ok_or(Error::InvalidIndex)?;
+            project.context(&mut d, "value", format)?;
+            project.context(&mut d, "data_type", "text")?;
         }
         Fault::InvalidShape => {}
         Fault::PartialDecode => project.context(&mut d, "field", "decode")?,

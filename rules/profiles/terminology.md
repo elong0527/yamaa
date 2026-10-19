@@ -52,6 +52,26 @@ document requires an alias, and [CT-6](#ct-6) refuses one on a sponsor-extended
 item, which has no published identifier. A `standard` naming a declared
 standard whose type is not `CT` fails validation.
 
+<a id="ct-12"></a>
+
+### CT-12. A `text` codelist's `format_name` begins with `$`
+
+`format_name` is optional and names the SAS format a reader applies to a
+codelist's coded values; [DEFINE-20](define-xml.md#define-20) writes it as
+`SASFormatName`. A `text` codelist's `format_name` names a character format and
+begins with `$`. A `text` codelist declaring a `format_name` that does not
+begin with `$` fails validation.
+
+Fails: `value_not_permitted`.
+Evidence: `negative-format-name-without-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::text_format_names_begin_with_a_dollar_sign`, `rust/crates/yamaa-core/tests/support/project_environment.rs::format_name_reached`.
+
+A `text` codelist's `format_name` that does not begin with `$` fails with
+`value_not_permitted` at the codelist's `format_name`, reporting the codelist,
+the value and the data type. It is checked wherever the project's codelists
+are validated, in every context and before any data is read, as
+[CT-6](#ct-6)'s checks are: a domain build refuses it although only a
+generated document carries the name.
+
 ## Values
 
 <a id="ct-3"></a>
