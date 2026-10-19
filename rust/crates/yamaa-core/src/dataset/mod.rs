@@ -81,6 +81,7 @@ mod windows;
 pub use windows::{ContextWindow, OrderTerm, Window, WindowKind};
 pub mod resolved;
 pub use resolved::{ResolutionError, ResolvedPlan};
+mod columnar;
 
 /// Already bound expressions; no host joins or lookup fallback are implicit.
 #[derive(Clone, Debug, PartialEq)]

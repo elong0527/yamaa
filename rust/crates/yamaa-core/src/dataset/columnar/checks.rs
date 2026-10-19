@@ -1,0 +1,884 @@
+//! Column checks at their declared prefix, output keys, dataset checks and
+//! presentation order, over the completed frame.
+use super::frame::Frame;
+use super::{Fail, Run, Table};
+use crate::bound_expression::{Binding, BoundPredicate, Read as BoundRead};
+use crate::dataset::execution::{
+    CheckRecord, CodelistObservation, ExecutionError, ExecutionEvent, ExecutionPhase, RowIdentity,
+};
+use crate::dataset::resolved::{CheckId, CheckPayload, CheckScope, RegionId, ResolvedPlan};
+use crate::dataset::{Check, InventoryScope, RowScope, VerificationSeverity, WhereClause};
+use crate::expression::{Condition, ErrorKind, Truth};
+use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
+use crate::value::{ColumnType, Value};
+use std::convert::Infallible;
+
+/// The completed frame as a table of output rows.
+pub(super) struct Completed<'f> {
+    pub frame: &'f Frame,
+    pub schema: &'f TableSchema,
+}
+impl TableAccess for Completed<'_> {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        self.schema
+    }
+    fn row_count(&self) -> usize {
+        self.frame.rows()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+        if row < self.frame.rows() && column < self.frame.width() {
+            Ok(self.frame.get(row, column))
+        } else {
+            Err(CellError::OutOfBounds { row, column })
+        }
+    }
+}
+
+fn selects(clause: &WhereClause, frame: &Frame, row: usize) -> bool {
+    clause.terms.iter().all(
+        |(column, values)| matches!(frame.get(row, *column), ValueRef::Str(value) if values.iter().any(|candidate| candidate == value)),
+    )
+}
+
+fn scope_selects(scope: &RowScope, frame: &Frame, row: usize) -> bool {
+    scope
+        .clauses
+        .iter()
+        .any(|clause| selects(clause, frame, row))
+        == scope.include
+}
+
+fn inventory_selects(scope: &InventoryScope, frame: &Frame, row: usize) -> bool {
+    scope
+        .overrides
+        .iter()
+        .find(|(clause, _)| selects(clause, frame, row))
+        .map_or(scope.default, |(_, enabled)| *enabled)
+}
+
+/// The output keys of the dataset region, as frame columns.
+fn key_columns(plan: &ResolvedPlan) -> Vec<usize> {
+    let first = plan
+        .region_columns(RegionId::DATASET)
+        .next()
+        .map_or(0, |column| column.index());
+    plan.keys().iter().map(|key| key.index() - first).collect()
+}
+
+/// A row's output keys once every key is complete.
+fn failure_identity(frame: &Frame, keys: &[usize], row: usize) -> Option<RowIdentity> {
+    if keys.iter().any(|&key| !frame.is_completed(row, key)) {
+        return None;
+    }
+    Some(RowIdentity {
+        position: row,
+        values: keys.iter().map(|&key| frame.value(row, key)).collect(),
+    })
+}
+
+/// Retain original output keys without substituting row-number identity.
+fn identities(
+    frame: &Frame,
+    keys: &[usize],
+    rows: impl IntoIterator<Item = usize>,
+) -> Vec<RowIdentity> {
+    rows.into_iter()
+        .map(|position| RowIdentity {
+            position,
+            values: keys.iter().map(|&key| frame.value(position, key)).collect(),
+        })
+        .collect()
+}
+
+/// Check only the available declared prefix, after every key is complete.
+pub(super) fn check_columns<E>(
+    run: &mut Run<'_, '_, E>,
+    frame: &Frame,
+    completed: &[bool],
+    next: &mut usize,
+    records: &mut Vec<CheckRecord>,
+) -> Result<(), Fail<E>> {
+    let plan = run.plan;
+    let keys = key_columns(plan);
+    if keys.iter().any(|&column| !completed[column]) {
+        return Ok(());
+    }
+    let first = plan
+        .region_columns(RegionId::DATASET)
+        .next()
+        .map_or(0, |column| column.index());
+    while *next < completed.len() && completed[*next] {
+        let group: Vec<CheckId> = plan
+            .checks()
+            .iter()
+            .enumerate()
+            .filter(|(_, check)| matches!(check.scope, CheckScope::Column(column) if column.index() - first == *next))
+            .map(|(index, _)| CheckId::try_from(index).expect("a check slot"))
+            .collect();
+        if !group.is_empty() {
+            // A value-level check reads its completed where columns. A later
+            // where column delays the declared check prefix until its value
+            // is complete; it never silently selects from a partial row.
+            if group.iter().any(|&check| {
+                declared(plan, check)
+                    .clauses()
+                    .iter()
+                    .flat_map(|clause| clause.columns())
+                    .any(|column| !completed[column])
+            }) {
+                return Ok(());
+            }
+            let start = records.len();
+            for &check in &group {
+                column_check(plan, frame, &keys, check, *next, records)?;
+            }
+            if records[start..].iter().any(|record| {
+                record.failed_count != 0
+                    && severity(plan, &record.path) == VerificationSeverity::Error
+            }) {
+                return Err(Box::new(ExecutionError::VerificationFailures(
+                    std::mem::take(records),
+                )));
+            }
+        }
+        *next += 1;
+    }
+    Ok(())
+}
+
+fn declared(plan: &ResolvedPlan, check: CheckId) -> &Check {
+    match &plan.check(check).payload {
+        CheckPayload::Declared(check) => check,
+        _ => unreachable!("a column or dataset check holds its declaration"),
+    }
+}
+
+/// The severity of the check at a path.
+fn severity(plan: &ResolvedPlan, path: &str) -> VerificationSeverity {
+    plan.checks()
+        .iter()
+        .find(|check| &*check.path == path)
+        .map_or(VerificationSeverity::Error, |check| check.severity)
+}
+
+fn column_check<E>(
+    plan: &ResolvedPlan,
+    frame: &Frame,
+    keys: &[usize],
+    check: CheckId,
+    column: usize,
+    records: &mut Vec<CheckRecord>,
+) -> Result<(), Fail<E>> {
+    let node = plan.check(check);
+    let path = node.path.to_string();
+    let rows = frame.rows();
+    match declared(plan, check) {
+        Check::InvalidDiagnostic(diagnostic) => {
+            return Err(Box::new(ExecutionError::VerificationDiagnostic {
+                diagnostic: diagnostic.clone(),
+                records: std::mem::take(records),
+            }));
+        }
+        Check::InvalidDeclaration { code, reason } => {
+            return Err(Box::new(ExecutionError::VerificationDeclaration {
+                path,
+                code: *code,
+                reason: reason.clone(),
+                records: std::mem::take(records),
+            }));
+        }
+        Check::ValueEntries(entries) => {
+            // A row two entries select has two definitions.
+            let mut offending = Vec::new();
+            let mut matched = Vec::new();
+            for row in 0..rows {
+                let ids: Vec<String> = entries
+                    .iter()
+                    .filter(|(_, clause)| selects(clause, frame, row))
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                if ids.len() > 1 {
+                    offending.push(
+                        failure_identity(frame, keys, row)
+                            .expect("all keys are complete before column checks"),
+                    );
+                    matched.push(ids);
+                }
+            }
+            records.push(CheckRecord {
+                path,
+                code: crate::diagnostic::ConditionCode::ValueLevelMultipleMatches,
+                evaluated_count: rows,
+                failed_count: offending.len(),
+                output_rows: rows,
+                offending_rows: offending,
+                codelist: None,
+                inventory: None,
+                row_count: None,
+                entries: Some(matched),
+            });
+        }
+        Check::ValueEntryMatch { clause, .. } => {
+            // The whole artifact is the one unit this check examines.
+            let matched = (0..rows).any(|row| selects(clause, frame, row));
+            records.push(CheckRecord {
+                path,
+                code: crate::diagnostic::ConditionCode::ValueLevelUnmatched,
+                evaluated_count: 1,
+                failed_count: usize::from(!matched),
+                output_rows: rows,
+                offending_rows: Vec::new(),
+                codelist: None,
+                inventory: None,
+                row_count: None,
+                entries: None,
+            });
+        }
+        declared_check @ (Check::NotMissing
+        | Check::Mandatory(_)
+        | Check::DataType { .. }
+        | Check::AllowedValues(_)
+        | Check::Codelist { .. }
+        | Check::ValueCodelists { .. }
+        | Check::Inventory { .. }
+        | Check::ValueMaxLength { .. }
+        | Check::Range { .. }
+        | Check::MaxLength(_)
+        | Check::WideMaxLength(_)
+        | Check::Matches(_)) => {
+            let bindings = match declared_check {
+                Check::ValueCodelists { bindings, .. } => {
+                    bindings.iter().map(Some).collect::<Vec<_>>()
+                }
+                _ => vec![None],
+            };
+            for binding in bindings {
+                let positions: Vec<usize> = (0..rows)
+                    .filter(|&row| match (declared_check, binding) {
+                        (Check::ValueCodelists { overrides, .. }, Some(binding)) => {
+                            binding
+                                .clauses
+                                .iter()
+                                .any(|clause| selects(clause, frame, row))
+                                || binding.default
+                                    && !overrides.iter().any(|clause| selects(clause, frame, row))
+                        }
+                        (
+                            Check::Inventory {
+                                scope: Some(scope), ..
+                            },
+                            _,
+                        ) => inventory_selects(scope, frame, row),
+                        (Check::ValueMaxLength { scope, .. }, _)
+                        | (Check::Mandatory(Some(scope)), _)
+                        | (
+                            Check::DataType {
+                                scope: Some(scope), ..
+                            },
+                            _,
+                        ) => scope_selects(scope, frame, row),
+                        _ => true,
+                    })
+                    .collect();
+                let values: Vec<Value> = positions
+                    .iter()
+                    .map(|&position| frame.value(position, column))
+                    .collect();
+                let offending = if let Some(binding) = binding {
+                    values
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(position, value)| {
+                            (!crate::dataset_checks::codelist_accepts(&binding.values, value))
+                                .then_some(position)
+                        })
+                        .collect()
+                } else if let Check::Matches(pattern) = declared_check {
+                    crate::dataset_checks::matches_offenders(pattern, values.iter())
+                } else {
+                    crate::dataset_checks::column_offenders(declared_check, values.iter())
+                };
+                let offending: Vec<usize> = offending
+                    .into_iter()
+                    .map(|index| positions[index])
+                    .collect();
+                let code = crate::dataset_checks::column_code(declared_check)
+                    .expect("admitted column check");
+                let identifier = binding.map(|binding| binding.id.as_str()).or({
+                    if let Check::Codelist { id, .. } = declared_check {
+                        Some(id.as_str())
+                    } else {
+                        None
+                    }
+                });
+                let codelist = identifier.map(|id| CodelistObservation {
+                    id: id.into(),
+                    values: offending
+                        .iter()
+                        .map(|&position| frame.value(position, column))
+                        .collect(),
+                });
+                let inventory = matches!(declared_check, Check::Inventory { .. }).then(|| {
+                    offending
+                        .iter()
+                        .map(|&position| frame.value(position, column))
+                        .collect()
+                });
+                let offending_rows: Vec<RowIdentity> = offending
+                    .iter()
+                    .map(|&position| {
+                        failure_identity(frame, keys, position)
+                            .expect("all keys are complete before column checks")
+                    })
+                    .collect();
+                records.push(CheckRecord {
+                    path: path.clone(),
+                    code,
+                    evaluated_count: positions.len(),
+                    failed_count: offending_rows.len(),
+                    output_rows: rows,
+                    codelist,
+                    inventory,
+                    row_count: None,
+                    offending_rows,
+                    entries: None,
+                });
+            }
+        }
+        _ => unreachable!("column check vocabulary is admitted in core"),
+    }
+    Ok(())
+}
+
+/// Check output key completeness and uniqueness, then run every declared
+/// dataset check over the completed rows.
+pub(super) fn verify_output<'a, E>(
+    run: &mut Run<'_, 'a, E>,
+    frame: &Frame,
+    secondary: &[Table<'a, E>],
+    records: &mut Vec<CheckRecord>,
+    observer: &mut dyn FnMut(ExecutionEvent),
+) -> Result<(), Fail<E>> {
+    let plan = run.plan;
+    observer(ExecutionEvent::Exit {
+        phase: ExecutionPhase::Derivation,
+        outcome: crate::application_observer::Outcome::Succeeded,
+    });
+    observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
+    let keys = key_columns(plan);
+    let rows = frame.rows();
+    let schema = &plan.region(RegionId::DATASET).output;
+    let dataset = Completed { frame, schema };
+    let mut failures = Vec::new();
+    for (position, &column) in keys.iter().enumerate() {
+        let missing: Vec<usize> = (0..rows)
+            .filter(|&row| matches!(frame.get(row, column), ValueRef::Missing))
+            .collect();
+        if !missing.is_empty() {
+            failures.push(CheckRecord {
+                path: format!("keys[{position}]"),
+                code: crate::diagnostic::ConditionCode::OutputMissingKeyFailed,
+                evaluated_count: rows,
+                failed_count: missing.len(),
+                output_rows: rows,
+                codelist: None,
+                inventory: None,
+                row_count: None,
+                offending_rows: identities(frame, &keys, missing),
+                entries: None,
+            });
+        }
+    }
+    let groups =
+        partition(frame, &keys).map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+    let duplicates: Vec<usize> = groups
+        .iter()
+        .filter(|members| members.len() > 1)
+        .map(|members| members[0])
+        .collect();
+    if !duplicates.is_empty() {
+        failures.push(CheckRecord {
+            path: "keys".into(),
+            code: crate::diagnostic::ConditionCode::OutputDuplicateKeyFailed,
+            evaluated_count: groups.len(),
+            failed_count: duplicates.len(),
+            output_rows: rows,
+            codelist: None,
+            inventory: None,
+            row_count: None,
+            offending_rows: identities(frame, &keys, duplicates),
+            entries: None,
+        });
+    }
+    if !failures.is_empty() {
+        return Err(Box::new(ExecutionError::KeyFailures(failures)));
+    }
+    observer(ExecutionEvent::Exit {
+        phase: ExecutionPhase::OutputKeys,
+        outcome: crate::application_observer::Outcome::Succeeded,
+    });
+    observer(ExecutionEvent::Phase(ExecutionPhase::Verification));
+    let checks: Vec<CheckId> = plan
+        .checks()
+        .iter()
+        .enumerate()
+        .filter(|(_, check)| check.scope == CheckScope::Dataset)
+        .map(|(index, _)| CheckId::try_from(index).expect("a check slot"))
+        .collect();
+    for check in checks {
+        let node = plan.check(check);
+        let path = node.path.to_string();
+        let record = match declared(plan, check) {
+            Check::InvalidDiagnostic(diagnostic) => {
+                return Err(Box::new(ExecutionError::VerificationDiagnostic {
+                    diagnostic: diagnostic.clone(),
+                    records: std::mem::take(records),
+                }));
+            }
+            Check::InvalidDeclaration { code, reason } => {
+                return Err(Box::new(ExecutionError::VerificationDeclaration {
+                    path,
+                    code: *code,
+                    reason: reason.clone(),
+                    records: std::mem::take(records),
+                }));
+            }
+            check_declared @ (Check::Assert { .. } | Check::PredicateDeclaration(_)) => {
+                let (when, require, code) = match check_declared {
+                    Check::Assert { when, require } => (
+                        when.as_ref(),
+                        require,
+                        Some(crate::diagnostic::ConditionCode::VerificationAssertFailed),
+                    ),
+                    Check::PredicateDeclaration(predicate) => (None, predicate, None),
+                    _ => unreachable!("a predicate check"),
+                };
+                for predicate in when.into_iter().chain([require]) {
+                    validate_predicate(plan, predicate, &dataset, records)?;
+                }
+                let Some(code) = code else {
+                    continue;
+                };
+                let predicates = node.predicates.clone();
+                let (when_expr, require_expr) = match predicates.as_slice() {
+                    [when, require] => (Some(*when), *require),
+                    [require] => (None, *require),
+                    _ => unreachable!("an assertion has one or two predicates"),
+                };
+                let mut offending = Vec::new();
+                for row in 0..rows {
+                    let binds = match (when, when_expr) {
+                        (Some(when), Some(expr)) => evaluate_predicate(
+                            run, frame, secondary, &dataset, when, expr, &path, row, records,
+                        )?,
+                        _ => Truth::True,
+                    };
+                    let holds = evaluate_predicate(
+                        run,
+                        frame,
+                        secondary,
+                        &dataset,
+                        require,
+                        require_expr,
+                        &path,
+                        row,
+                        records,
+                    )?;
+                    if binds == Truth::True && holds != Truth::True {
+                        offending.push(row);
+                    }
+                }
+                CheckRecord {
+                    path,
+                    code,
+                    evaluated_count: rows,
+                    failed_count: offending.len(),
+                    output_rows: rows,
+                    codelist: None,
+                    inventory: None,
+                    row_count: None,
+                    offending_rows: identities(frame, &keys, offending),
+                    entries: None,
+                }
+            }
+            Check::Unique(columns) => {
+                // Repeated references do not change tuple equality.
+                let mut distinct = Vec::new();
+                for &column in columns {
+                    if !distinct.contains(&column) {
+                        distinct.push(column);
+                    }
+                }
+                let groups = partition(frame, &distinct)
+                    .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?;
+                let repeated: Vec<&Vec<usize>> =
+                    groups.iter().filter(|members| members.len() > 1).collect();
+                CheckRecord {
+                    path,
+                    code: crate::diagnostic::ConditionCode::VerificationUniqueFailed,
+                    evaluated_count: groups.len(),
+                    failed_count: repeated.len(),
+                    output_rows: rows,
+                    codelist: None,
+                    inventory: None,
+                    row_count: None,
+                    offending_rows: identities(
+                        frame,
+                        &keys,
+                        repeated
+                            .into_iter()
+                            .flat_map(|members| members.iter().copied()),
+                    ),
+                    entries: None,
+                }
+            }
+            Check::AllOrNone(columns) => {
+                let offending: Vec<usize> = (0..rows)
+                    .filter(|&row| {
+                        let missing = matches!(frame.get(row, columns[0]), ValueRef::Missing);
+                        columns.iter().any(|&column| {
+                            matches!(frame.get(row, column), ValueRef::Missing) != missing
+                        })
+                    })
+                    .collect();
+                let offending_rows = identities(frame, &keys, offending);
+                CheckRecord {
+                    path,
+                    code: crate::diagnostic::ConditionCode::VerificationAllOrNoneFailed,
+                    evaluated_count: rows,
+                    failed_count: offending_rows.len(),
+                    output_rows: rows,
+                    codelist: None,
+                    inventory: None,
+                    row_count: None,
+                    offending_rows,
+                    entries: None,
+                }
+            }
+            Check::ScopedRowCount(count) => row_count_check(
+                run, frame, secondary, &dataset, check, count, &path, records,
+            )?,
+            check_declared @ (Check::RowCount { .. } | Check::WideRowCount { .. }) => {
+                let failed = !check_declared.row_count_accepts(rows).unwrap_or(false);
+                CheckRecord {
+                    path,
+                    code: crate::diagnostic::ConditionCode::VerificationRowCountFailed,
+                    evaluated_count: 1,
+                    failed_count: usize::from(failed),
+                    output_rows: rows,
+                    codelist: None,
+                    inventory: None,
+                    row_count: None,
+                    offending_rows: Vec::new(),
+                    entries: None,
+                }
+            }
+            _ => unreachable!("column-only check is rejected at admission"),
+        };
+        records.push(record);
+    }
+    if records.iter().any(|record| {
+        record.failed_count != 0 && severity(plan, &record.path) == VerificationSeverity::Error
+    }) {
+        return Err(Box::new(ExecutionError::VerificationFailures(
+            std::mem::take(records),
+        )));
+    }
+    Ok(())
+}
+
+/// Nonmissing representatives expose invalid declarations even for empty output.
+fn sample(kind: ColumnType) -> Value {
+    use crate::temporal::{Date, DateTime, Precision};
+    match kind {
+        ColumnType::Str => Value::Str("sample".into()),
+        ColumnType::Int => Value::Int(0),
+        ColumnType::Float => Value::float(0.0),
+        ColumnType::Date => Value::Date(Date::new(2000, 1, 1, Precision::Day).expect("a date")),
+        ColumnType::DateTime => Value::DateTime(
+            DateTime::new(
+                Date::new(2000, 1, 1, Precision::Day).expect("a date"),
+                0,
+                0,
+                0,
+                Precision::Second,
+            )
+            .expect("a datetime"),
+        ),
+    }
+}
+
+/// Validate a predicate's types over samples from immutable schemas, even
+/// for an empty output; samples never select donors, run handlers or read
+/// source cells.
+fn validate_predicate<E>(
+    plan: &ResolvedPlan,
+    predicate: &BoundPredicate,
+    dataset: &Completed<'_>,
+    records: &mut Vec<CheckRecord>,
+) -> Result<(), Fail<E>> {
+    let region = plan.region(RegionId::DATASET);
+    let mut samples = Vec::new();
+    let mut bindings = Vec::new();
+    for binding in predicate.bindings() {
+        let kind = match binding.read {
+            BoundRead::Column(column) => Some(region.output.columns()[column].kind),
+            BoundRead::Intermediate { index, column } => {
+                let relation = plan
+                    .named(RegionId::DATASET, index)
+                    .expect("a verification reads a declared intermediate");
+                super::relations::item(plan, relation).source_kind(&region.secondary, column)
+            }
+            _ => unreachable!(
+                "verification admission permits completed columns and declared lookups"
+            ),
+        };
+        bindings.push(Binding {
+            name: binding.name.clone(),
+            read: BoundRead::Column(samples.len()),
+        });
+        samples.push(kind.map_or(Value::Missing, sample));
+    }
+    let sample_predicate = BoundPredicate::new(predicate.plan().clone(), bindings)
+        .expect("admitted verification names");
+    let table = DatasetTable(dataset);
+    match super::predicates::row_truth(
+        &sample_predicate,
+        Table::<Infallible>::Source(&table),
+        0,
+        |column| ValueRef::from(&samples[column]),
+    ) {
+        // Samples expose type faults; an arithmetic failure depends on values.
+        Err(error) if matches!(error.kind, ErrorKind::Condition(Condition::Arithmetic(_))) => {
+            Ok(())
+        }
+        Err(error) => Err(Box::new(ExecutionError::VerificationPredicate {
+            error: *error,
+            records: std::mem::take(records),
+        })),
+        Ok(_) => Ok(()),
+    }
+}
+
+/// The completed rows as an infallible table port.
+struct DatasetTable<'d, 'f>(&'d Completed<'f>);
+impl TableAccess for DatasetTable<'_, '_> {
+    type Error = Infallible;
+    fn schema(&self) -> &TableSchema {
+        self.0.schema()
+    }
+    fn row_count(&self) -> usize {
+        self.0.row_count()
+    }
+    fn cell(&self, row: usize, column: usize) -> Result<ValueRef<'_>, CellError<Infallible>> {
+        self.0.cell(row, column)
+    }
+}
+
+/// One row's truth of a verification predicate: over the completed values,
+/// or through the case evaluator when it reads a lookup.
+#[allow(clippy::too_many_arguments)]
+fn evaluate_predicate<'a, E>(
+    run: &mut Run<'_, 'a, E>,
+    frame: &Frame,
+    secondary: &[Table<'a, E>],
+    dataset: &Completed<'_>,
+    predicate: &BoundPredicate,
+    expr: crate::dataset::resolved::ExprId,
+    path: &str,
+    row: usize,
+    records: &mut Vec<CheckRecord>,
+) -> Result<Truth, Fail<E>> {
+    if !predicate
+        .bindings()
+        .iter()
+        .any(|binding| matches!(binding.read, BoundRead::Intermediate { .. }))
+    {
+        let table = DatasetTable(dataset);
+        return super::predicates::row_truth(
+            predicate,
+            Table::<Infallible>::Source(&table),
+            0,
+            |column| frame.get(row, column),
+        )
+        .map_err(|error| {
+            Box::new(ExecutionError::VerificationPredicate {
+                error: *error,
+                records: std::mem::take(records),
+            })
+        });
+    }
+    let mut cx = run.template_cx(
+        frame,
+        RegionId::DATASET,
+        Table::Source(run.primary),
+        secondary,
+        frame.rows(),
+    );
+    cx.output = 0..frame.rows();
+    super::predicates::verification_truth(run, &cx, expr, path, row).map_err(|error| match *error {
+        ExecutionError::Predicate { source_row, error } => match error.kind {
+            ErrorKind::Condition(condition) => Box::new(ExecutionError::VerificationPredicate {
+                error: crate::expression::EvaluationError {
+                    spec_path: error.spec_path,
+                    expression: error.expression,
+                    route: error.route,
+                    source_span: error.source_span,
+                    kind: ErrorKind::Condition(condition),
+                },
+                records: std::mem::take(records),
+            }),
+            _ => Box::new(ExecutionError::Predicate { source_row, error }),
+        },
+        other => Box::new(other),
+    })
+}
+
+/// Partition all artifact rows before applying predicates; a filtered-empty
+/// group remains visible.
+#[allow(clippy::too_many_arguments)]
+fn row_count_check<'a, E>(
+    run: &mut Run<'_, 'a, E>,
+    frame: &Frame,
+    secondary: &[Table<'a, E>],
+    dataset: &Completed<'_>,
+    check: CheckId,
+    count: &crate::dataset::RowCount,
+    path: &str,
+    records: &mut Vec<CheckRecord>,
+) -> Result<CheckRecord, Fail<E>> {
+    let plan = run.plan;
+    for predicate in count.filter.iter().chain(&count.when) {
+        validate_predicate(plan, predicate, dataset, records)?;
+    }
+    let predicates = plan.check(check).predicates.clone();
+    let mut exprs = predicates.into_iter();
+    let filter_expr = count
+        .filter
+        .as_ref()
+        .map(|_| exprs.next().expect("a filter node"));
+    let when_expr = count
+        .when
+        .as_ref()
+        .map(|_| exprs.next().expect("a when node"));
+    let rows = frame.rows();
+    let mut admitted = Vec::with_capacity(rows);
+    for row in 0..rows {
+        admitted.push(match (&count.filter, filter_expr) {
+            (Some(filter), Some(expr)) => {
+                evaluate_predicate(
+                    run, frame, secondary, dataset, filter, expr, path, row, records,
+                )? == Truth::True
+            }
+            _ => true,
+        });
+    }
+    let mut bound = Vec::with_capacity(rows);
+    for row in 0..rows {
+        bound.push(match (&count.when, when_expr) {
+            (Some(when), Some(expr)) => {
+                evaluate_predicate(
+                    run, frame, secondary, dataset, when, expr, path, row, records,
+                )? == Truth::True
+            }
+            _ => true,
+        });
+    }
+    let groups = if let Some(columns) = &count.group_by {
+        partition(frame, columns)
+            .map_err(|error| Box::new(ExecutionError::OutputGrouping(error)))?
+    } else {
+        vec![(0..rows).collect()]
+    };
+    let mut offenders = Vec::new();
+    let mut counts = Vec::new();
+    let mut denominators = Vec::new();
+    for members in &groups {
+        if count.when.is_some() && !members.iter().any(|&row| bound[row]) {
+            continue;
+        }
+        let admitted_count = members.iter().filter(|&&row| admitted[row]).count();
+        if !count.accepts(admitted_count, members.len()) {
+            let values = count
+                .group_by
+                .iter()
+                .flatten()
+                .map(|&column| frame.value(members[0], column))
+                .collect();
+            offenders.push(RowIdentity {
+                position: members.first().copied().unwrap_or(0),
+                values,
+            });
+            counts.push(admitted_count);
+            denominators.push(members.len());
+        }
+    }
+    Ok(CheckRecord {
+        path: path.into(),
+        code: crate::diagnostic::ConditionCode::VerificationRowCountFailed,
+        evaluated_count: groups.len(),
+        failed_count: offenders.len(),
+        output_rows: rows,
+        offending_rows: offenders,
+        codelist: None,
+        inventory: None,
+        row_count: Some(crate::dataset::execution::RowCountObservation {
+            counts,
+            denominators: (count.min_fraction.is_some() || count.max_fraction.is_some())
+                .then_some(denominators),
+        }),
+        entries: None,
+    })
+}
+
+/// Partition rows by columns in first-occurrence order: missing values
+/// compare equal, text is exact, temporal precision and float zero signs do
+/// not affect equality (REQ-0037/0038/0065).
+pub(super) fn partition(
+    frame: &Frame,
+    columns: &[usize],
+) -> Result<Vec<Vec<usize>>, crate::table_grouping::GroupingError<Infallible>> {
+    super::group::admit(columns, frame.width(), frame.rows())?;
+    Ok(
+        super::group::partition(frame.rows(), columns.len(), |row, position| {
+            frame.get(row, columns[position])
+        })
+        .into_vecs(),
+    )
+}
+
+/// Stable presentation order over completed rows, after all verification.
+pub(super) fn output_order(plan: &ResolvedPlan, frame: &Frame) -> Vec<usize> {
+    let mut rows: Vec<usize> = (0..frame.rows()).collect();
+    let terms = plan.output_order();
+    if terms.is_empty() || rows.len() < 2 {
+        return rows;
+    }
+    let first = plan
+        .region_columns(RegionId::DATASET)
+        .next()
+        .map_or(0, |column| column.index());
+    let terms: Vec<crate::dataset::OrderTerm> = terms
+        .iter()
+        .map(|term| crate::dataset::OrderTerm {
+            column: term.column.index() - first,
+            descending: term.descending,
+            nulls_first: term.nulls_first,
+        })
+        .collect();
+    rows.sort_by(|&left, &right| {
+        for term in &terms {
+            let order = super::relations::compare(
+                frame.get(left, term.column),
+                frame.get(right, term.column),
+                term,
+            );
+            if order != std::cmp::Ordering::Equal {
+                return order;
+            }
+        }
+        left.cmp(&right)
+    });
+    rows
+}
