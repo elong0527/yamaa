@@ -1,7 +1,7 @@
 //! Current dependency resolution precedes donor filtering for authored expressions.
 use super::*;
 
-type KeyValues<E> = Result<Vec<(usize, Value)>, Box<ExecutionError<E>>>;
+pub(super) type KeyValues<E> = Result<Vec<(usize, Value)>, Box<ExecutionError<E>>>;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Request<'a> {
