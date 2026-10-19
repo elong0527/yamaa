@@ -78,10 +78,9 @@ class EquivalenceGateTests(unittest.TestCase):
                 "yamaa-core/executor-comparison",
             ],
         )
-        self.assertEqual(
-            gate.subprocess.call_args_list[0].kwargs["env"]["YAMAA_EXECUTOR"],
-            "compare",
-        )
+        comparison = gate.subprocess.call_args_list[0].kwargs
+        self.assertEqual(comparison["env"]["YAMAA_EXECUTOR"], "compare")
+        self.assertIs(comparison["check"], True)
         self.assertEqual(
             python_runner[:3],
             [
