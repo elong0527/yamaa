@@ -1204,6 +1204,126 @@ mod table {
                 Err(Error::Invalid("malformed"))
             ));
         }
+        /// A compressed dataset whose rows are 4,096 bytes: the field `X`, then
+        /// a gap. It counts `total` live records and stores `rows`, compressed
+        /// with RDC or RLE, in place on its first page, or moved to its second
+        /// page and read through references.
+        fn padded_rows(
+            layout: crate::support::sas7bdat::Layout,
+            rdc: bool,
+            moved: bool,
+            total: u64,
+            rows: &[Vec<u8>],
+        ) -> Vec<u8> {
+            use crate::support::sas7bdat::{
+                rdc as rdc_bytes, rle, Dataset, Kind, Page, Pointer, META,
+            };
+            let mut dataset = Dataset::new(layout, &[("X", Kind::Num, 8)]);
+            dataset.compression = Some(if rdc { *b"SASYZCR2" } else { *b"SASYZCRL" });
+            dataset.row_length = 4096;
+            dataset.page_len = 32768;
+            dataset.total = total;
+            let compress = |row: &[u8]| if rdc { rdc_bytes(row) } else { rle(row) };
+            let mut pointers = dataset.metadata();
+            let mut elsewhere = Vec::new();
+            for (index, row) in rows.iter().enumerate() {
+                if moved {
+                    pointers.push(Pointer::reference(1, index as u64));
+                    elsewhere.push(Pointer::coded(compress(row), 0x06));
+                } else {
+                    pointers.push(Pointer::coded(compress(row), 4));
+                }
+            }
+            let mut pages = vec![Page::new(META, pointers, vec![])];
+            if moved {
+                pages.push(Page::new(META, elsewhere, vec![]));
+            }
+            dataset.file(&pages)
+        }
+        #[test]
+        fn decompressed_records_are_admitted_as_source_bytes_before_any_is_decompressed() {
+            // A compressed record decompresses to the row length, so the live
+            // records times the row length are the bytes that decompression
+            // writes. SAS-6 admits them under the source byte limit before any
+            // record is decompressed. With 4,096-byte rows, 2,621,440 records
+            // are exactly the 10 GiB limit. The record stored here decompresses
+            // to 16 bytes, not 4,096: a file admitted at the limit fails as
+            // malformed when that record is decompressed, and a file that
+            // counts one record more is refused before it is.
+            use crate::support::sas7bdat::Layout;
+            let limit = yamaa_core::limits::Limits::SOURCE_BYTES;
+            let edge = (limit / 4096) as u64;
+            for layout in [Layout::LE32, Layout::LE64, Layout::BE32, Layout::BE64] {
+                let row = |value: f64| {
+                    let mut row = layout.double(value).to_vec();
+                    row.resize(4096, 0);
+                    row
+                };
+                let short = row(9.0)[..16].to_vec();
+                for rdc in [false, true] {
+                    for moved in [false, true] {
+                        let case = format!("{layout:?} rdc {rdc} moved {moved}");
+                        let read = |total, rows: &[Vec<u8>]| {
+                            read_built(&padded_rows(layout, rdc, moved, total, rows))
+                        };
+                        assert!(
+                            matches!(
+                                read(edge, std::slice::from_ref(&short)),
+                                Err(Error::Invalid("malformed"))
+                            ),
+                            "{case}"
+                        );
+                        match read(edge + 1, std::slice::from_ref(&short)) {
+                            Err(Error::Limit {
+                                resource: "source_bytes",
+                                limit: refused,
+                                actual: Some(actual),
+                            }) => assert_eq!((refused, actual), (limit, limit + 4096), "{case}"),
+                            other => panic!("{case}: {:?}", other.map(|table| table.row_count())),
+                        }
+                        // Within the limit the records read. Decompression stops
+                        // at the live records, so the short record after the
+                        // two that the file counts is not decompressed.
+                        let rows = [row(1.5), row(-2.0), short.clone()];
+                        let table =
+                            read(2, &rows).unwrap_or_else(|error| panic!("{case}: {error:?}"));
+                        assert_eq!(cells(&table), [[float(1.5)], [float(-2.0)]], "{case}");
+                    }
+                }
+            }
+        }
+        #[test]
+        fn a_small_file_cannot_decompress_to_more_than_the_source_byte_limit() {
+            // A two-byte RLE command writes up to 4,112 zero bytes, so 255 of
+            // them, 510 stored bytes, make a record of 1,048,560 bytes. A file
+            // of one 6 MiB page then holds 10,241 such records, every record it
+            // counts, and they decompress to 10,738,302,960 bytes, more than
+            // the 10 GiB limit. The reader refuses the file at its first record
+            // instead of writing them.
+            use crate::support::sas7bdat::{Dataset, Kind, Layout, Page, Pointer, META};
+            const ROW: usize = 255 * 4112;
+            let limit = yamaa_core::limits::Limits::SOURCE_BYTES;
+            let records = limit / ROW + 1;
+            let mut dataset = Dataset::new(Layout::LE32, &[("X", Kind::Num, 8)]);
+            dataset.compression = Some(*b"SASYZCRL");
+            dataset.row_length = ROW as u64;
+            dataset.page_len = 6 << 20;
+            dataset.total = records as u64;
+            // Command 7, with length nibble 15 and count byte 0xFF, inserts
+            // 17 + 0xFF + 15 * 256 = 4,112 zero bytes.
+            let record = [0x7F, 0xFF].repeat(255);
+            let mut pointers = dataset.metadata();
+            pointers.extend((0..records).map(|_| Pointer::coded(record.clone(), 4)));
+            let bytes = dataset.file(&[Page::new(META, pointers, vec![])]);
+            match read_built(&bytes) {
+                Err(Error::Limit {
+                    resource: "source_bytes",
+                    limit: refused,
+                    actual: Some(actual),
+                }) => assert_eq!((refused, actual), (limit, records * ROW)),
+                other => panic!("{:?}", other.map(|table| table.row_count())),
+            }
+        }
         /// A compressed dataset whose third record moved to subheader 1 of
         /// page 1, the record stored there by `moved`.
         fn moved_file(
