@@ -367,7 +367,9 @@ mod relations {
         fn compiling_preserves_deferred_arithmetic_and_authored_path() {
             let compiled =
                 compile_dataset(declaration(compute("ID + 1 / 0", "ID", Read::Column(0)))).unwrap();
-            let Expression::Compute(numeric) = &compiled.plan().columns()[0].expression else {
+            let Expression::Compute(numeric) =
+                &compiled.plan().column_bindings()[0].assignment.expression
+            else {
                 panic!("compiled numeric expression")
             };
             assert_eq!(
@@ -379,7 +381,7 @@ mod relations {
             );
             assert_eq!(numeric.expression().spec_path(), "columns.C1.derivation");
             // Division by zero remains execution work; compilation grants a valid plan.
-            assert_eq!(compiled.plan().columns()[0].column, 1);
+            assert_eq!(compiled.plan().column_bindings()[0].assignment.column, 1);
             assert!(compiled.functions().is_empty());
         }
 
@@ -423,7 +425,9 @@ mod relations {
             else {
                 panic!("compiled row function")
             };
-            let Expression::Function(column) = &compiled.plan().columns()[0].expression else {
+            let Expression::Function(column) =
+                &compiled.plan().column_bindings()[0].assignment.expression
+            else {
                 panic!("compiled column function")
             };
             assert_eq!(row.slot(), 0);
@@ -1610,7 +1614,6 @@ mod relations {
             assert_eq!(plan.templates().len(), 16);
             let flags = plan
                 .columns()
-                .iter()
                 .filter_map(|assignment| match &assignment.expression {
                     yamaa_core::dataset::Expression::Flag(flag) => Some(flag),
                     _ => None,
@@ -1640,7 +1643,8 @@ mod relations {
             }])
             .unwrap();
             let plan = prepared.bind(&source).unwrap();
-            let yamaa_core::dataset::Expression::Case(branches) = &plan.columns()[0].expression
+            let yamaa_core::dataset::Expression::Case(branches) =
+                &plan.column_bindings()[0].assignment.expression
             else {
                 panic!("case")
             };

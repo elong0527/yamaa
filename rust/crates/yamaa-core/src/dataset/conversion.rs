@@ -31,7 +31,7 @@ impl DatasetPlan {
                 .templates
                 .iter()
                 .flat_map(|template| &template.assignments)
-                .chain(&self.columns)
+                .chain(self.columns())
                 .filter(|assignment| assignment.path == declaration.assignment_path);
             let first = matches.next().ok_or(PlanError::InvalidConversionHandler)?;
             if matches.any(|assignment| assignment.column != first.column) {

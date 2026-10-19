@@ -113,7 +113,7 @@ order. Composition orders the resolved columns only when a specification
 declares a `parent`; otherwise declaration order is the resolved order.
 
 Fails: `unknown_reference`, `forward_reference`.
-Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`.
+Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-adapters/tests/execution_column_driver_bindings.rs::column_bindings_run_one_driver_after_another`.
 Replaces: REQ-0060, REQ-0070, REQ-0071.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
@@ -121,6 +121,14 @@ these rules apply: a specification that declares no `parent` is a composition
 of one layer and is pruned on the same terms as one that declares a `parent`.
 An unresolved variable or predicate reference fails. A reference to a later
 declared column fails as `forward_reference` and reports both columns.
+
+A column derivation completes the rows of the row templates that leave the
+column to it, each row from the record that built it
+([NAME-4](names.md#name-4)). When those templates have different drivers,
+the column evaluates once for each driver, in the order of the first of those
+templates each drives, each time over that driver's rows in row order. A
+column holding a qualified aggregate ([LOOKUP-18](lookup.md#lookup-18))
+evaluates once, over all of their rows in row order.
 
 <a id="column-6"></a>
 
@@ -410,7 +418,7 @@ zero times is reportable and is not an error. The count for a source's
 `order_by` and `keep` reports only records where more than one match survived
 the filter.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_derivation_handlers_count_each_build_of_the_donor_records`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
 Replaces: REQ-0356, REQ-0361.
 
 A default substitution is counted where the handler it stands for would be:
@@ -441,7 +449,8 @@ Handler rows come in registration order. The dataset's own paths come first:
 the `unconvertible` paths of the output derivations, in declaration order with
 the row templates' before the columns'; then each derivation in the order the
 run evaluates it, the row templates' derivations template by template, then
-the column derivations; then the intermediates' key expressions. Each
+the column derivations, each as often as it evaluates and in that order
+([COLUMN-5](#column-5)); then the intermediates' key expressions. Each
 derivation lists its other paths in expression order: an operation's own paths
 before those of the expressions it reads, which follow in the order the
 operation reads them. An operation lists its own paths as `missing` or

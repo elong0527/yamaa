@@ -344,6 +344,60 @@ pub struct RowTemplate {
     pub filter: Option<BoundPredicate>,
 }
 
+/// One bound column-phase derivation and the row templates whose rows it
+/// completes (#2829). A column whose templates read different drivers has one
+/// binding per driver. A column's bindings are adjacent in
+/// [`DatasetPlan::column_bindings`], in the order of the first template each
+/// serves, and its step runs them in that order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColumnBinding {
+    pub assignment: Assignment,
+    /// The row templates whose rows this binding completes, ascending. A
+    /// template that derives the column itself is never listed.
+    pub templates: Vec<usize>,
+    pub scope: ColumnScope,
+}
+
+/// The records a column binding's driver reads address.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColumnScope {
+    /// Each row's own driver: a driver read addresses the record that built
+    /// the row, through the port of the row's template (LOOKUP-1).
+    Template,
+    /// The whole dataset, through the primary port: the binding reads no
+    /// driver record of a row another input builds, and a qualified aggregate
+    /// reduces its declared input (LOOKUP-18).
+    Dataset,
+}
+
+impl ColumnBinding {
+    /// A whole-column assignment for every template that does not derive the
+    /// column itself, each row read through its own template's port.
+    pub fn every_template(assignment: Assignment, templates: &[RowTemplate]) -> Self {
+        let templates = templates
+            .iter()
+            .enumerate()
+            .filter(|(_, template)| {
+                !template
+                    .assignments
+                    .iter()
+                    .any(|row| row.column == assignment.column)
+            })
+            .map(|(index, _)| index)
+            .collect();
+        Self {
+            assignment,
+            templates,
+            scope: ColumnScope::Template,
+        }
+    }
+    /// Whether this binding completes the rows of `template`. A key-grain
+    /// candidate belongs to the sole key template.
+    pub fn serves(&self, template: Option<usize>) -> bool {
+        self.templates.contains(&template.unwrap_or(0))
+    }
+}
+
 /// Error-severity dataset checks supported by this closed application slice.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Check {
@@ -633,7 +687,7 @@ pub struct DatasetPlan {
     output_kinds: Vec<Option<crate::value::ColumnType>>,
     templates: Vec<RowTemplate>,
     row_contexts: Vec<Option<AggregateRowContext>>,
-    columns: Vec<Assignment>,
+    columns: Vec<ColumnBinding>,
     keys: Vec<usize>,
     verifications: Vec<Verification>,
     column_verifications: Vec<ColumnVerifications>,
@@ -1005,11 +1059,13 @@ fn key_expression(expression: &Expression) -> bool {
         _ => false,
     }
 }
+/// Which record reads `current_record_read` counts: every raw read of the
+/// driver record for a key-grain column, or only reads that match a
+/// selector against the primary record for a template another input drives.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RecordReadScope {
     Driver,
     PrimaryMatching,
-    All,
 }
 fn function_record_read(
     arguments: &[FunctionArgument],
@@ -1085,9 +1141,8 @@ fn current_record_read(
             include_raw && read.record_keys.is_some()
         }
         Expression::Source(_) | Expression::RowLookup(_) => include_raw,
-        // A key-grain collection is valid in the primary implicit form. A
-        // global column shared by foreign drivers cannot borrow its coordinates.
-        Expression::Collect { .. } => scope == RecordReadScope::All,
+        // A key-grain collection is valid in the primary implicit form.
+        Expression::Collect { .. } => false,
         Expression::Intermediate { index, .. } => {
             scope != RecordReadScope::Driver
                 && intermediates.get(*index).is_some_and(|item| {
@@ -1138,12 +1193,10 @@ fn current_record_read(
             .any(|binding| bound_record_read(&binding.read, intermediates, scope)),
         Expression::Flag(flag) => flag.bindings().iter().any(|binding| match &binding.read {
             FlagRead::Read(read) => bound_record_read(read, intermediates, scope),
-            // A flag collection is a key-grain read like `Expression::Collect`:
-            // it counts only in the column phase, never for a driver template.
-            FlagRead::Collect { .. } => scope == RecordReadScope::All,
+            // A flag collection is a key-grain read like `Expression::Collect`.
+            FlagRead::Collect { .. } => false,
         }),
-        // Column-phase reductions read the primary table at the caller's row
-        // indices (PR #2030 Minor, adjudicated with #2430).
+        // A reduction reads the driver records the row was built from.
         Expression::Reduce { .. } | Expression::Count { .. } => include_raw,
         Expression::Function(function) => {
             function_record_read(function.arguments(), intermediates, scope)
@@ -1157,13 +1210,7 @@ fn current_record_read(
                     .bindings()
                     .iter()
                     .any(|binding| match binding.read {
-                        Read::Source(_) => {
-                            if predicate.collects(&binding.name) {
-                                scope == RecordReadScope::All
-                            } else {
-                                include_raw
-                            }
-                        }
+                        Read::Source(_) => !predicate.collects(&binding.name) && include_raw,
                         Read::Intermediate { index, column } => current_record_read(
                             &Expression::Intermediate { index, column },
                             intermediates,
@@ -1235,6 +1282,31 @@ impl DatasetPlan {
         keys: Vec<usize>,
         verifications: Vec<Verification>,
     ) -> Result<Self, PlanError> {
+        let columns = columns
+            .into_iter()
+            .map(|assignment| ColumnBinding::every_template(assignment, &templates))
+            .collect();
+        Self::new_with_bindings(
+            sources,
+            intermediates,
+            output,
+            templates,
+            columns,
+            keys,
+            verifications,
+        )
+    }
+    /// Admit column-phase bindings that each complete the rows of their own
+    /// row templates (#2829), before accessing snapshots.
+    pub fn new_with_bindings(
+        sources: SourceSchemas,
+        intermediates: Vec<Intermediate>,
+        output: TableSchema,
+        templates: Vec<RowTemplate>,
+        columns: Vec<ColumnBinding>,
+        keys: Vec<usize>,
+        verifications: Vec<Verification>,
+    ) -> Result<Self, PlanError> {
         Self::new_implementation(
             sources,
             intermediates,
@@ -1257,6 +1329,10 @@ impl DatasetPlan {
         columns: Vec<Assignment>,
         output_kinds: Vec<Option<crate::value::ColumnType>>,
     ) -> Result<Self, PlanError> {
+        let columns = columns
+            .into_iter()
+            .map(|assignment| ColumnBinding::every_template(assignment, &templates))
+            .collect();
         Self::new_implementation(
             sources,
             intermediates,
@@ -1275,7 +1351,7 @@ impl DatasetPlan {
         intermediates: Vec<Intermediate>,
         output: TableSchema,
         templates: Vec<RowTemplate>,
-        columns: Vec<Assignment>,
+        columns: Vec<ColumnBinding>,
         keys: Vec<usize>,
         verifications: Vec<Verification>,
         publication: bool,
@@ -1467,13 +1543,13 @@ impl DatasetPlan {
             }
             // Row-phase columns are tracked per template: one template may
             // derive a default up front while another completes it
-            // column-phase. Each template plus the shared columns must cover
-            // every output column; the shared columns below skip the templates
-            // that already derived them.
-            for assignment in &columns {
-                if available[assignment.column] {
+            // column-phase. Each template plus the column bindings that serve
+            // it must cover every output column exactly once.
+            for binding in &columns {
+                if !binding.templates.contains(&template_index) {
                     continue;
                 }
+                let assignment = &binding.assignment;
                 odm::validate_template(
                     &assignment.expression,
                     template,
@@ -1487,24 +1563,31 @@ impl DatasetPlan {
                     &template.mode,
                     &available,
                 )?;
-                if (keyed || template.mode.source_index() != 0)
+                if keyed
                     && current_record_read(
                         &assignment.expression,
                         &intermediates,
-                        if keyed {
-                            RecordReadScope::Driver
-                        } else {
-                            RecordReadScope::All
-                        },
+                        RecordReadScope::Driver,
                     )
                 {
                     return Err(PlanError::InvalidKeyMode);
                 }
                 joined::validate_sources(&assignment.expression, &source, &secondary)?;
+                // A driver read addresses the port the binding reads through:
+                // the row's own driver, or the primary for the whole dataset.
+                let port = match (binding.scope, template.mode.source_index()) {
+                    (ColumnScope::Template, index @ 1..) => {
+                        &secondary
+                            .get(index - 1)
+                            .ok_or(PlanError::InvalidSource)?
+                            .schema
+                    }
+                    _ => &source,
+                };
                 validate_assignment(
                     assignment,
                     &mut available,
-                    &source,
+                    port,
                     &secondary,
                     &intermediates,
                     &output,
@@ -1514,6 +1597,30 @@ impl DatasetPlan {
             }
             if available.contains(&false) {
                 return Err(PlanError::IncompleteRow);
+            }
+        }
+        // Each binding lists the templates it serves once, in order, and a
+        // column's bindings are adjacent: its step runs them one after another.
+        for (index, binding) in columns.iter().enumerate() {
+            let listed = binding
+                .templates
+                .iter()
+                .enumerate()
+                .all(|(position, &template)| {
+                    template < templates.len()
+                        && position
+                            .checked_sub(1)
+                            .is_none_or(|prior| binding.templates[prior] < template)
+                });
+            let column = binding.assignment.column;
+            let adjacent = index
+                .checked_sub(1)
+                .is_none_or(|prior| columns[prior].assignment.column == column)
+                || !columns[..index]
+                    .iter()
+                    .any(|prior| prior.assignment.column == column);
+            if !listed || !adjacent {
+                return Err(PlanError::InvalidColumns);
             }
         }
         validate_plan_verifications(
@@ -1738,8 +1845,14 @@ impl DatasetPlan {
     pub fn templates(&self) -> &[RowTemplate] {
         &self.templates
     }
-    /// Borrow admitted columns without exposing mutation.
-    pub fn columns(&self) -> &[Assignment] {
+    /// The admitted column-phase assignments, one per column binding, in
+    /// column order.
+    pub fn columns(&self) -> impl Iterator<Item = &Assignment> + '_ {
+        self.columns.iter().map(|binding| &binding.assignment)
+    }
+    /// Borrow the admitted column bindings, in column order, without exposing
+    /// mutation.
+    pub fn column_bindings(&self) -> &[ColumnBinding] {
         &self.columns
     }
     /// Borrow admitted keys without exposing mutation.

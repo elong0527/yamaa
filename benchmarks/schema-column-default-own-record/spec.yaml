@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: TIMELINE
+keys: [DOMAIN, USUBJID, SEQ]
+input:
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+  AE: {path: input/ae.csv, types: {AESEQ: int, AESTDTC: date}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int, CMSTDTC: date}}
+
+output:
+  path: timeline.csv
+  columns: [DOMAIN, USUBJID, SEQ, TERM, STDT]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: SEQ
+    type: int
+    label: Sequence Number
+
+  - name: TERM
+    type: str
+    label: Reported Term
+
+  # Stated once, and completed for the adverse event and medication rows,
+  # which leave it to this column. Each row reads its own driver's date:
+  # an adverse event row its AESTDTC, a medication row its CMSTDTC. The
+  # other input joins on the output keys it carries, DOMAIN and USUBJID,
+  # so it never matches a row built from another domain.
+  - name: STDT
+    type: date
+    label: Start Date
+    derivation:
+      first_available:
+        sources: [AE.AESTDTC, CM.CMSTDTC]
+
+rows:
+  # The subject row states its own start date.
+  - id: subjects
+    dataset: DM
+    derivations:
+      DOMAIN: DM.DOMAIN
+      USUBJID: DM.USUBJID
+      SEQ: {literal: 1}
+      TERM: {literal: REFERENCE START}
+      STDT: DM.RFSTDTC
+
+  - id: adverse_events
+    dataset: AE
+    derivations:
+      DOMAIN: AE.DOMAIN
+      USUBJID: AE.USUBJID
+      SEQ: AE.AESEQ
+      TERM: AE.AETERM
+
+  - id: medications
+    dataset: CM
+    derivations:
+      DOMAIN: CM.DOMAIN
+      USUBJID: CM.USUBJID
+      SEQ: CM.CMSEQ
+      TERM: CM.CMTRT

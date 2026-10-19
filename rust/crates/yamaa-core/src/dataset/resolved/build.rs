@@ -7,10 +7,11 @@ use super::*;
 use crate::bound_expression::{BoundPredicate, Read as BoundRead};
 use crate::dataset::{
     read_requires_window, window_stages, AggregateRelation, AggregateSource, Assignment,
-    BoundAggregate, BoundOdm, Check, CurrentField, CurrentRead, Expression, FirstAvailable,
-    FlagRead, FunctionArgument, FunctionInput, ImputationKind, IntermediateKey, IntermediateSource,
-    JoinAbsence, JoinedRead, MatchRead, MatchValue, OdmScope, RelationPredicate, RelationRange,
-    RowMode, RowTemplate, SelectionRead, SourceSelection, Window, WindowKind,
+    BoundAggregate, BoundOdm, Check, ColumnBinding, ColumnScope, CurrentField, CurrentRead,
+    Expression, FirstAvailable, FlagRead, FunctionArgument, FunctionInput, ImputationKind,
+    IntermediateKey, IntermediateSource, JoinAbsence, JoinedRead, MatchRead, MatchValue, OdmScope,
+    RelationPredicate, RelationRange, RowMode, RowTemplate, SelectionRead, SourceSelection, Window,
+    WindowKind,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -286,7 +287,6 @@ impl<'p> Builder<'p> {
                 kind: plan.output_kind(index),
                 phase: ColumnPhase::RowOnly,
                 column_bindings: 0..0,
-                assignment: None,
             });
         }
         if let RegionKind::Donor { typed_columns, .. } = &mut self.out.regions[region.index()].kind
@@ -321,9 +321,13 @@ impl<'p> Builder<'p> {
         for (index, template) in plan.templates().iter().enumerate() {
             self.lower_template(&cx, index, template)?;
         }
-        for (position, assignment) in plan.columns().iter().enumerate() {
-            let column = self.lower_column(&cx, position, assignment)?;
-            self.out.regions[region.index()].column_order.push(column);
+        // A column's bindings are adjacent; its one step runs them in turn.
+        for (position, binding) in plan.column_bindings().iter().enumerate() {
+            let column = self.lower_column(&cx, position, binding)?;
+            let order = &mut self.out.regions[region.index()].column_order;
+            if order.last() != Some(&column) {
+                order.push(column);
+            }
         }
         self.fill_cells(&cx, first_binding)?;
         let conversions = plan
@@ -451,31 +455,41 @@ impl<'p> Builder<'p> {
         Ok(cx.plan.conversion_handler(&assignment.path).cloned())
     }
 
-    /// One column-phase declaration, lowered once and bound for every template
-    /// that still needs the column; templates with equal driver contexts share
-    /// one binding (#2829).
+    /// One column binding of the bound plan, lowered once for the templates
+    /// it serves; templates with equal driver contexts share one resolved
+    /// binding (#2829). A binding in the template scope reads each row's own
+    /// driver; one in the whole-dataset scope reads through the primary port.
     fn lower_column(
         &mut self,
         cx: &Cx<'p>,
         position: usize,
-        assignment: &'p Assignment,
+        bound: &'p ColumnBinding,
     ) -> Result<ColumnId, ResolutionError> {
+        let assignment = &bound.assignment;
         let column = cx.column(assignment.column)?;
         let expr = self.lower(cx, assignment, Fields::Driver)?;
         let unconvertible = self.unconvertible(cx, assignment)?;
         let handler = self.handler(cx, assignment)?;
         let odm = deferred_odm(&assignment.expression);
+        let primary = DriverContext {
+            source: cx.source(0)?,
+            named: None,
+            grain: Grain::Records,
+            odm: None,
+        };
         let mut groups: Vec<(DriverContext, Vec<TemplateId>)> = Vec::new();
-        for (index, template) in cx.plan.templates().iter().enumerate() {
-            if template
-                .assignments
-                .iter()
-                .any(|row| row.column == assignment.column)
-            {
-                continue;
-            }
+        for &index in &bound.templates {
             let id = cx.template(index)?;
-            let mut driver = self.out.templates[id.index()].driver.clone();
+            let mut driver = match bound.scope {
+                ColumnScope::Template => self
+                    .out
+                    .templates
+                    .get(id.index())
+                    .ok_or_else(|| unsupported("template outside the plan", index))?
+                    .driver
+                    .clone(),
+                ColumnScope::Dataset => primary.clone(),
+            };
             driver.odm = odm.and_then(|scopes| scopes.get(index).cloned());
             match groups.iter_mut().find(|(known, _)| *known == driver) {
                 Some((_, members)) => members.push(id),
@@ -485,13 +499,7 @@ impl<'p> Builder<'p> {
         if groups.is_empty() {
             // Every template completed the column first. The column step still
             // visits the declaration, and registration still walks it.
-            let driver = DriverContext {
-                source: cx.source(0)?,
-                named: None,
-                grain: Grain::Records,
-                odm: None,
-            };
-            groups.push((driver, Vec::new()));
+            groups.push((primary, Vec::new()));
         }
         let start = self.out.bindings.len();
         for (driver, templates) in groups {
@@ -509,9 +517,14 @@ impl<'p> Builder<'p> {
                 },
             });
         }
+        // A column's bindings are adjacent, so their slots are contiguous.
+        let end = field(self.out.bindings.len())?;
         let node = &mut self.out.columns[column.index()];
-        node.column_bindings = span(start, self.out.bindings.len())?;
-        node.assignment = Some(field(position)?);
+        if node.column_bindings.is_empty() {
+            node.column_bindings = span(start, self.out.bindings.len())?;
+        } else {
+            node.column_bindings.end = end;
+        }
         Ok(column)
     }
 

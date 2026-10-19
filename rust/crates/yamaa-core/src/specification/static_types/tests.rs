@@ -587,7 +587,7 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
             // row defaults under REQ-1260. LATE and ALIAS are therefore derived
             // in every template and available to its completed SELF donors.
             let plan = spec.bind(&schema).unwrap();
-            assert!(plan.columns().is_empty());
+            assert!(plan.column_bindings().is_empty());
             assert_eq!(plan.templates().len(), 2);
             assert_eq!(
                 plan.output()

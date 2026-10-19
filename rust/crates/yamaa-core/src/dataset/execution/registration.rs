@@ -4,11 +4,12 @@
 //! Registration order is report order. The dataset's own paths come first:
 //! every `unconvertible` of its derivations in declared order, then each
 //! derivation in evaluation order (the row templates' derivations, template
-//! by template, then the column phase's), then the intermediates' key
-//! expressions. Then each intermediate with derivations in turn, its paths in
-//! the same order: the `unconvertible` of its typed derivations, then each
-//! derivation in declaration order, then the key expressions of the
-//! intermediates they read, as bound for the donor records. Each derivation
+//! by template, then the column phase's bindings in the order their column
+//! steps run them), then the intermediates' key expressions. Then each
+//! intermediate with derivations in turn, its paths in the same order: the
+//! `unconvertible` of its typed derivations, then each derivation in
+//! declaration order, then the key expressions of the intermediates they
+//! read, as bound for the donor records. Each derivation
 //! lists its paths in expression order: an operation's own paths before those
 //! of the expressions it reads, which follow in the order the operation reads
 //! them. A read of a named intermediate registers its `multiple_matches` and

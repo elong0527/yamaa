@@ -535,7 +535,8 @@ mod schema {
             let prepared =
                 PreparedSpecification::prepare(&case_document("SRC.ID > 0", "1")).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::Case(branches) = &plan.columns()[0].expression else {
+            let Expression::Case(branches) = &plan.column_bindings()[0].assignment.expression
+            else {
                 panic!("ordered case");
             };
             let when = branches[0].when.as_ref().unwrap();
@@ -567,7 +568,8 @@ mod schema {
                 plan.templates()[0].assignments[0].expression,
                 Expression::Source(0)
             );
-            let Expression::Compute(compute) = &plan.columns()[0].expression else {
+            let Expression::Compute(compute) = &plan.column_bindings()[0].assignment.expression
+            else {
                 panic!("compiled numeric declaration")
             };
             assert_eq!(
@@ -575,7 +577,10 @@ mod schema {
                 "columns.VALUE.derivation.compute"
             );
             // Division by zero remains deferred until an application actually executes a row.
-            assert_eq!(plan.columns()[0].path, "columns.VALUE.derivation.compute");
+            assert_eq!(
+                plan.column_bindings()[0].assignment.path,
+                "columns.VALUE.derivation.compute"
+            );
         }
 
         #[test]
@@ -751,7 +756,8 @@ mod schema {
             use yamaa_core::dataset::WindowKind;
             let prepared = PreparedSpecification::prepare(&window_document("ID > 0")).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::Window(window) = &plan.columns()[0].expression else {
+            let Expression::Window(window) = &plan.column_bindings()[0].assignment.expression
+            else {
                 panic!("compiled window")
             };
             assert_eq!(window.kind, WindowKind::RowNumber);
@@ -768,7 +774,9 @@ mod schema {
                 .unwrap()
                 .bind(&source())
                 .unwrap();
-            let Expression::ContextWindow(window) = &qualified.columns()[0].expression else {
+            let Expression::ContextWindow(window) =
+                &qualified.column_bindings()[0].assignment.expression
+            else {
                 panic!("qualified source window");
             };
             assert_eq!(window.sources, vec![("SRC.ID".into(), 0)]);
@@ -793,7 +801,9 @@ mod schema {
                             .unwrap()
                             .bind(&source())
                             .unwrap();
-                        let Expression::Window(window) = &plan.columns()[0].expression else {
+                        let Expression::Window(window) =
+                            &plan.column_bindings()[0].assignment.expression
+                        else {
                             panic!("compiled rank")
                         };
                         assert_eq!(window.kind, kind);
@@ -835,8 +845,14 @@ mod schema {
             ] {
                 let prepared = PreparedSpecification::prepare(&literal_document(node)).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
-                assert_eq!(plan.columns()[0].expression, Expression::Literal(value));
-                assert_eq!(plan.columns()[0].path, "columns.VALUE.derivation.literal");
+                assert_eq!(
+                    plan.column_bindings()[0].assignment.expression,
+                    Expression::Literal(value)
+                );
+                assert_eq!(
+                    plan.column_bindings()[0].assignment.path,
+                    "columns.VALUE.derivation.literal"
+                );
                 assert_eq!(plan.output().columns()[1].kind, ColumnType::Int);
                 assert_eq!(plan.keys(), [0]);
             }
@@ -918,7 +934,7 @@ mod schema {
                     Some(&handlers[0].handler)
                 );
                 assert_eq!(
-                    plan.columns()[0].expression,
+                    plan.column_bindings()[0].assignment.expression,
                     Expression::Literal(Value::Bool(true))
                 );
                 assert_eq!(plan.keys(), [0]);
@@ -1015,7 +1031,10 @@ mod schema {
                     // the single column-phase default.
                     assert!(plan.templates()[1].assignments.is_empty());
                     assert!(plan.templates()[2].assignments.is_empty());
-                    assert_eq!(plan.columns()[1].path, "columns.VALUE.derivation.literal");
+                    assert_eq!(
+                        plan.column_bindings()[1].assignment.path,
+                        "columns.VALUE.derivation.literal"
+                    );
                 }
             }
         }
@@ -1235,7 +1254,7 @@ mod schema {
                     .unwrap();
                 assert_eq!(plan.templates()[0].assignments.len(), 2);
                 assert!(plan.templates()[0].filter.is_some());
-                assert!(plan.columns().is_empty());
+                assert!(plan.column_bindings().is_empty());
             }
         }
 
@@ -1346,7 +1365,8 @@ mod schema {
                 let document = operation_document("case", payload, "input.csv");
                 let prepared = PreparedSpecification::prepare(&document).unwrap();
                 let plan = prepared.bind(&source()).unwrap();
-                let Expression::Case(branches) = &plan.columns()[0].expression else {
+                let Expression::Case(branches) = &plan.column_bindings()[0].assignment.expression
+                else {
                     panic!("nested source operation")
                 };
                 let Expression::SourceBinding {
@@ -1417,7 +1437,9 @@ mod schema {
             );
             let prepared = PreparedSpecification::prepare(&document).unwrap();
             let plan = prepared.bind(&source()).unwrap();
-            let Expression::FirstAvailable(selection) = &plan.columns()[0].expression else {
+            let Expression::FirstAvailable(selection) =
+                &plan.column_bindings()[0].assignment.expression
+            else {
                 panic!("compiled first_available");
             };
             assert_eq!(

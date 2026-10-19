@@ -6,10 +6,11 @@
 //! executor's registration walk (`DatasetPlan::register_handlers`). The
 //! dataset's own sites come first: its conversion handlers, then every site of
 //! each derivation in evaluation order (template assignments, column
-//! assignments, intermediate key expressions). Then each intermediate with
-//! derivations in turn, in the same order: its donor plan's conversion
-//! handlers, every site of each derivation in declaration order, then the key
-//! expressions of the intermediates its derivations read. Each derivation's sites come in expression order: a
+//! bindings in the order their column steps run them, intermediate key
+//! expressions). Then each intermediate with derivations in turn, in the same
+//! order: its donor plan's conversion handlers, every site of each derivation
+//! in declaration order, then the key expressions of the intermediates its
+//! derivations read. Each derivation's sites come in expression order: a
 //! node's own sites, then its operands' in written order. A site registers
 //! once, where the walk first reaches it.
 use super::build::Sites;
@@ -84,8 +85,8 @@ fn registration_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
         }
     }
     for &column in &plan.region(dataset).column_order {
-        if let Some(binding) = plan.column_bindings(column).next() {
-            walk.node(plan.binding(binding).expr);
+        for expr in column_exprs(plan, column) {
+            walk.node(expr);
         }
     }
     walk.keys(dataset);
@@ -100,14 +101,21 @@ fn registration_order(plan: &ResolvedPlan, count: usize) -> Vec<usize> {
                 walk.register(site);
             }
             for &column in &plan.region(donor).column_order {
-                if let Some(binding) = plan.column_bindings(column).next() {
-                    walk.node(plan.binding(binding).expr);
+                for expr in column_exprs(plan, column) {
+                    walk.node(expr);
                 }
             }
             walk.keys(donor);
         }
     }
     walk.order
+}
+
+/// The expressions a column step evaluates, once each, in the order its
+/// bindings run: a column binding of the bound plan is one expression,
+/// however many driver contexts share it.
+fn column_exprs(plan: &ResolvedPlan, column: ColumnId) -> Vec<ExprId> {
+    super::schedule::step_exprs(plan, Step::Column(column))
 }
 
 struct Walk<'a> {
@@ -165,8 +173,8 @@ fn functions(plan: &ResolvedPlan, calls: Vec<Call>) -> Vec<FunctionSlot> {
             }
         }
         for &column in &plan.region(region).column_order {
-            if let Some(binding) = plan.column_bindings(column).next() {
-                admit(plan, plan.binding(binding).expr, &mut found);
+            for expr in column_exprs(plan, column) {
+                admit(plan, expr, &mut found);
             }
         }
         for relation in plan.region_relations(region) {
