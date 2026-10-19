@@ -1,11 +1,12 @@
-"""Require one selected Python/R/Cargo version, one coherent author list
-across the package metadata, and unchanged lock ownership."""
+"""Require the Python/R/Cargo spellings of one release identity, one coherent
+author list across the package metadata, and unchanged lock ownership."""
 
 import argparse
 import re
 import tomllib
 from pathlib import Path
 
+from tools.packaging import release_identity
 from tools.packaging.check_benchmark_sdk_versions import violations as sdk_violations
 from tools.paths import ROOT
 
@@ -293,14 +294,16 @@ def author_violations(root):
 
 
 def violations(root):
-    errors = sdk_violations(root)
-    python = _load_toml(root, "python/pyproject.toml", errors, "python/pyproject.toml")
-    project = python.get("project") if isinstance(python, dict) else None
-    expected = project.get("version") if isinstance(project, dict) else None
-    if not isinstance(expected, str):
-        errors.append("python/pyproject.toml: no selected release version declared")
-        errors += author_violations(root)
-        return errors
+    """List every way the tree's versions, locks and authors disagree.
+
+    Each manifest must carry its own spelling of the one release identity:
+    Python X.Y.Z or X.Y.ZrcN, Cargo X.Y.Z or X.Y.Z-rc.N, and R X.Y.Z.
+    """
+    try:
+        identity = release_identity.read(root)
+    except ValueError as error:
+        return [str(error), *author_violations(root)]
+    errors = sdk_violations(root, identity)
     cargo = _load_toml(root, "rust/Cargo.toml", errors, "rust/Cargo.toml")
     workspace = cargo.get("workspace") if isinstance(cargo, dict) else None
     workspace = workspace if isinstance(workspace, dict) else {}
@@ -310,8 +313,12 @@ def violations(root):
         if isinstance(workspace_package, dict)
         else None
     )
+    expected = identity.cargo
     if workspace_version != expected:
-        errors.append("Cargo workspace version differs from selected Python/R release")
+        errors.append(
+            f"rust/Cargo.toml: workspace version {workspace_version!r} is not "
+            f"{expected!r}, the Cargo version of release {identity}"
+        )
     member_names = []
     members = workspace.get("members")
     if not isinstance(members, list) or not all(
@@ -331,7 +338,8 @@ def violations(root):
         actual = workspace_version if version == {"workspace": True} else version
         if actual != expected:
             errors.append(
-                f"{member}: package version differs from selected shared release"
+                f"{member}: package version differs from the shared Cargo version "
+                f"{expected!r}"
             )
     locked_document = _load_toml(root, "rust/Cargo.lock", errors, "rust/Cargo.lock")
     locked = (
@@ -364,7 +372,7 @@ def violations(root):
     ]
     if (
         len(owners) != 1
-        or owners[0].get("version") != expected
+        or owners[0].get("version") != identity.python
         or owners[0].get("source") != {"editable": "."}
     ):
         errors.append("uv.lock: selected yamaa project/version ownership differs")
@@ -379,9 +387,11 @@ def main():
     errors = violations(args.root)
     if errors:
         raise SystemExit("\n".join(errors))
+    identity = release_identity.read(args.root)
     print(
-        "PASS: selected Python/R/Cargo versions, author lists and package"
-        " lock identities agree"
+        f"PASS: release {identity} (Python {identity.python}, Cargo "
+        f"{identity.cargo}, R {identity.r}), author lists and package lock "
+        "identities agree"
     )
 
 

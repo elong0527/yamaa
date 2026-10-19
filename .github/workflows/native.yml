@@ -234,6 +234,13 @@ jobs:
           name: rust-dependencies-dist-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/rust-dependencies
           if-no-files-found: error
+      # A release artifact holds exactly the assets that
+      # tools/ci/release_assets.py declares in it. A release publishes the
+      # source archive built on Linux, which every source lane installs; the
+      # other hosts build theirs only to check it.
+      - name: Keep only the release assets of this host
+        if: matrix.os != 'ubuntu-24.04'
+        run: rm "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve distributions
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:

@@ -1,0 +1,8 @@
+# The release this tree prepares, written once. `version` is the final
+# release, X.Y.Z; `candidate` is the release-candidate number N, left out for
+# the final release itself. tools/packaging/release_identity.py derives the
+# Python (X.Y.ZrcN), Cargo (X.Y.Z-rc.N) and R (X.Y.Z) versions and the tag
+# (yamaa-vX.Y.Z-rc.N) from these two values, and
+# tools.packaging.check_shared_release_versions requires the package
+# manifests, locks and benchmark R environments to carry them.
+version = "0.5.0"

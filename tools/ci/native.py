@@ -11,6 +11,9 @@ PYTHONS = ("3.12", "3.13", "3.14", "3.15")
 FORMS = ("wheel", "source")
 R_PLATFORMS = PLATFORMS
 BUILD_PYTHON = "3.14"
+# The host whose Python and R source archives a release publishes. Every
+# source lane, on every platform, installs those same archives.
+SOURCE_PLATFORM = "ubuntu-24.04"
 
 
 def coverage():
