@@ -161,7 +161,7 @@ fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Byt
 
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = Arc::new(row_groups::decode(frame.metadata, frame.row_groups)?);
+    let metadata = Arc::new(row_groups::decode(frame.metadata)?);
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
     let columns = metadata.file_metadata().schema_descr().columns();
     // ODM field admission uses metadata alone. Ordinary profile findings keep
@@ -594,7 +594,7 @@ mod tests {
         }
     }
 
-    /// Unknown fields that parquet 57.3.0's skip cannot step over as held,
+    /// Unknown fields that the native decoder's skip cannot step over as held,
     /// beginning with `set`, the header of the first field (a set):
     /// set<bool>{true, false}, map<byte, bool>{-1: true}, a UUID, list<uuid>
     /// and a 129-byte map<bool, i16>, whose binary length takes a padded
@@ -682,7 +682,6 @@ mod tests {
         let presented = [0x1a, 0x01, 0, 0xee];
         let frame = |headers| framing::Framing {
             metadata: &[],
-            row_groups: 0,
             pages: Vec::new(),
             headers,
         };
@@ -810,9 +809,9 @@ mod tests {
     }
 
     /// The installed hosts' `parquet-containment` truth: a file whose INT96
-    /// column chunk has a 13-byte `min_value` statistic, which parquet
-    /// 57.3.0's metadata decoder asserts holds 12 bytes, and a readable file
-    /// holding the INT64 values 1 and 2.
+    /// column chunk has a 13-byte `min_value` statistic, which the metadata
+    /// decoder asserts holds 12 bytes, and a readable file holding the INT64
+    /// values 1 and 2.
     fn host_containment() -> (Vec<u8>, Vec<u8>) {
         let truth =
             crate::json_wire::decode(include_str!("../../../../tests/host-fixtures/cases.json"))

@@ -1,49 +1,50 @@
 //! Arrow/Parquet release-specific API boundary.
 //!
-//! The manifests pin Arrow/Parquet `=57.3.0`. Adapting another release
-//! changes this module, rather than the readers, writer or core type policy.
+//! The manifests pin Arrow/Parquet `=55.2.0`, the newest release that builds
+//! with the workspace's minimum Rust. Adapting another release changes this
+//! module, rather than the readers, writer or core type policy.
 //!
-//! Keep schema conversion fallible: 57 has only `fb_to_schema`, which
+//! Keep schema conversion fallible: 55 has only `fb_to_schema`, which
 //! unwraps the field list and panics on a verified but semantically
 //! malformed schema, so `ipc_schema` refuses the missing field list and
 //! contains any remaining conversion panic.
 //!
-//! The row-group reader construction also lives here: on 57 the constructor
+//! The row-group reader construction also lives here: on 55 the constructor
 //! takes the group's `Option<&[OffsetIndexMetaData]>` sliced from
 //! `ParquetMetaData::offset_index` (later releases take a
 //! `RowGroupPageIndex` instead). Callers must not construct a
 //! `SerializedRowGroupReader` directly.
 //!
-//! Logical timestamp and integer types are struct variants on 57 (later
-//! releases wrap them in tuple variants with constructors), so their
-//! construction and inspection also live here, as does reading a column
-//! descriptor's logical type.
+//! Logical timestamp and integer types are struct variants on 55, with the
+//! time unit a union of empty structs (later releases wrap them in tuple
+//! variants with constructors), so their construction and inspection also
+//! live here, as does reading a column descriptor's logical type, which 55
+//! returns as an owned copy.
 //!
-//! Importing a C stream also lives here (`StreamReader`): 57's
-//! `ArrowArrayStreamReader` rebuilds each batch from its columns alone, so it
-//! refuses a zero-column batch that has rows, and it unwraps the producer's
-//! last-error message, which the C stream interface lets be NULL. 57's import
-//! also keeps buffers where the producer placed them, while the interface only
-//! recommends alignment, so the reader copies any under-aligned buffer before
-//! typed arrays read it (later releases align on import).
+//! Importing a C stream also lives here (`StreamReader`): 55's
+//! `ArrowArrayStreamReader` unwraps the producer's callbacks and its
+//! last-error message, which the C stream interface lets be NULL, and builds
+//! each batch with `RecordBatch::from`, which panics when the producer's
+//! struct array has a null. 55's import also keeps buffers where the producer
+//! placed them, while the interface only recommends alignment, so the reader
+//! copies any under-aligned buffer before typed arrays read it (later
+//! releases align on import).
 //!
-//! 57's thrift decoders unwrap the value of a known boolean field that
-//! carries another wire type (later releases return an error), and its
-//! metadata decoder asserts that INT96 statistics hold exactly 12 bytes, so a
-//! malformed footer or page header can panic inside the Parquet crate. Each
-//! native Parquet or Arrow call on admitted input runs through
-//! `contain_decode`, which also keeps the panic it contains off stderr.
+//! 55 decodes footers and page headers with the readers the Thrift compiler
+//! generated (`parquet::format`). The compact protocol it reads a footer with
+//! indexes eight bytes for a double without checking that they are there, and
+//! its statistics conversion asserts that INT96 statistics hold exactly 12
+//! bytes, for the footer's column chunks and for each data page header, so a
+//! malformed footer or page header can panic inside the Parquet crate. Each native Parquet or
+//! Arrow call on admitted input runs through `contain_decode`, which also
+//! keeps the panic it contains off stderr.
 //!
-//! 57's footer decoder numbers row groups with an `i16` ordinal and refuses a
-//! footer that lists more than `FOOTER_ROW_GROUPS` (later releases use `i32`),
-//! so admission presents a longer row-group list in slices of at most that
-//! many (`parquet_source::row_groups`).
-//!
-//! 57 reads a page type and an encoding only from their known values, which
-//! bound a column chunk's encoding statistics (`ENCODING_STATS`).
+//! 55 converts a page type and an encoding only from their known values
+//! (`parquet::format`), which bound a column chunk's encoding statistics
+//! (`ENCODING_STATS`).
 #[cfg(feature = "parquet")]
 use parquet::{
-    basic::{Encoding, LogicalType, PageType, TimeUnit},
+    basic::{LogicalType, TimeUnit},
     errors::ParquetError,
     file::{
         metadata::{ParquetMetaData, RowGroupMetaData},
@@ -57,6 +58,7 @@ use std::sync::Arc;
 #[cfg(feature = "parquet")]
 use yamaa_core::parquet_source::{Logical, Unit};
 
+#[cfg(feature = "parquet")]
 pub(crate) fn ipc_schema(
     schema: arrow_ipc::Schema<'_>,
 ) -> Result<arrow_schema::Schema, arrow_schema::ArrowError> {
@@ -191,25 +193,23 @@ mod stream {
 /// so the abort keeps its message. A hook installed later replaces the
 /// wrapper. A `panic = "abort"` build cannot contain a panic, so it keeps the
 /// hook it has.
+#[cfg(feature = "parquet")]
 pub(crate) fn contain_decode<T>(decode: impl FnOnce() -> T) -> Option<T> {
     quiet::install();
     let _inside = quiet::Inside::enter();
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(decode)).ok()
 }
 
-/// The most row groups 57's decoder reads from one footer: their ordinals
-/// `0..=i16::MAX`.
-#[cfg(feature = "parquet")]
-pub(crate) const FOOTER_ROW_GROUPS: usize = 1 << 15;
-
-/// The most encoding statistics a column chunk lists in a file that 57's
+/// The most encoding statistics a column chunk lists in a file that 55's
 /// decoder reads. Each entry counts the pages of one page type and encoding,
-/// so a chunk lists each pair at most once, and 57 reads a page type and an
-/// encoding only from their known values.
+/// so a chunk lists each pair at most once, and 55 converts a page type and
+/// an encoding only from their known values.
 #[cfg(feature = "parquet")]
-pub(crate) const ENCODING_STATS: usize = PageType::VARIANTS.len() * Encoding::VARIANTS.len();
+pub(crate) const ENCODING_STATS: usize =
+    parquet::format::PageType::ENUM_VALUES.len() * parquet::format::Encoding::ENUM_VALUES.len();
 
 /// The panic hook wrapper that keeps contained panics silent.
+#[cfg(feature = "parquet")]
 mod quiet {
     use std::{cell::Cell, panic, sync::Once};
 
@@ -306,7 +306,7 @@ pub(crate) fn row_group_reader<'a>(
 pub(crate) fn timestamp_micros(utc: bool) -> LogicalType {
     LogicalType::Timestamp {
         is_adjusted_to_u_t_c: utc,
-        unit: TimeUnit::MICROS,
+        unit: TimeUnit::MICROS(Default::default()),
     }
 }
 
@@ -314,7 +314,7 @@ pub(crate) fn timestamp_micros(utc: bool) -> LogicalType {
 pub(crate) fn timestamp_millis(utc: bool) -> LogicalType {
     LogicalType::Timestamp {
         is_adjusted_to_u_t_c: utc,
-        unit: TimeUnit::MILLIS,
+        unit: TimeUnit::MILLIS(Default::default()),
     }
 }
 
@@ -338,7 +338,7 @@ pub(crate) fn writer_properties_max_rows(
 
 #[cfg(feature = "parquet")]
 pub(crate) fn column_logical(descriptor: &ColumnDescriptor) -> Logical {
-    logical_type(descriptor.logical_type_ref())
+    logical_type(descriptor.logical_type().as_ref())
 }
 
 #[cfg(feature = "parquet")]
@@ -351,12 +351,10 @@ pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
             unit,
             is_adjusted_to_u_t_c,
         }) => Logical::Timestamp {
-            unit: if *unit == TimeUnit::MICROS {
-                Unit::Microsecond
-            } else if *unit == TimeUnit::MILLIS {
-                Unit::Millisecond
-            } else {
-                Unit::Nanosecond
+            unit: match unit {
+                TimeUnit::MICROS(_) => Unit::Microsecond,
+                TimeUnit::MILLIS(_) => Unit::Millisecond,
+                TimeUnit::NANOS(_) => Unit::Nanosecond,
             },
             utc: *is_adjusted_to_u_t_c,
         },
@@ -371,7 +369,7 @@ pub(crate) fn logical_type(logical: Option<&LogicalType>) -> Logical {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parquet"))]
 mod tests {
     use super::{
         contain_decode,

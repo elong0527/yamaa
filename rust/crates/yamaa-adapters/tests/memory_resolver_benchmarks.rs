@@ -1717,7 +1717,7 @@ fn parquet_signature(bytes: &[u8]) -> Result<ParquetSignature, String> {
             (
                 column.name().to_string(),
                 format!("{:?}", column.physical_type()),
-                format!("{:?}", column.logical_type_ref()),
+                format!("{:?}", column.logical_type()),
                 column.max_def_level(),
                 column.max_rep_level(),
             )

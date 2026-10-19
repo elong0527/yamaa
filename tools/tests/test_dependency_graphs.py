@@ -133,7 +133,7 @@ class DependencyGraphsTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary:
             stage = Path(temporary) / "graph"
-            self.assertEqual(prepare(ROOT, stage, "minimum"), "1.90")
+            self.assertEqual(prepare(ROOT, stage, "minimum"), "1.82")
             self.assertTrue((stage / ".git").is_dir())
             self.assertEqual(
                 subprocess.check_output(["git", "-C", str(stage), "rev-parse", "HEAD"]),
@@ -149,7 +149,7 @@ class DependencyGraphsTests(unittest.TestCase):
                 (stage / "rust/crates/yamaa-adapters/Cargo.toml").read_text()
             )["dependencies"]
             self.assertEqual(adapters["toml"]["version"], "=0.9.8")
-            self.assertEqual(adapters["arrow-array"]["version"], "=57.3.0")
+            self.assertEqual(adapters["arrow-array"]["version"], "=55.2.0")
             parser = adapters["yamaa-saphyr-parser"]
             self.assertEqual(parser["version"], "=0.2.1")
             self.assertEqual(parser["path"], "../../vendor/saphyr-parser")
