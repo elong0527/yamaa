@@ -1,5 +1,9 @@
 name: Publish qualified release
 
+# A tag yamaa-vX.Y.Z publishes the final release X.Y.Z; a tag
+# yamaa-vX.Y.Z-rc.N publishes its release candidate N as a GitHub
+# pre-release. The selector refuses any other tag, and any tag other than the
+# one that tools/packaging/release.toml names, before anything is downloaded.
 on:
   push:
     tags: ['yamaa-v*']

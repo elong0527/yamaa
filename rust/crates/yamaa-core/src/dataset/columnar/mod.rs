@@ -43,6 +43,7 @@ mod frame;
 mod functions;
 mod group;
 mod handlers;
+mod index;
 mod joins;
 mod keygrain;
 mod odm;
@@ -73,10 +74,12 @@ enum Table<'a, E> {
         rows: usize,
     },
     /// A donor's input while its derivations run: the donor frame's stored
-    /// and derived fields, then the current row's values.
+    /// and derived fields, then the current row's values: one set for every
+    /// record, or with a `stride`, one set per record.
     Input {
         frame: &'a Frame,
         current: &'a [Value],
+        stride: usize,
         schema: &'a TableSchema,
     },
 }
@@ -122,7 +125,12 @@ impl<'a, E> Table<'a, E> {
                     Err(CellError::OutOfBounds { row, column })
                 }
             }
-            Self::Input { frame, current, .. } => {
+            Self::Input {
+                frame,
+                current,
+                stride,
+                ..
+            } => {
                 if row >= frame.rows() {
                     return Err(CellError::OutOfBounds { row, column });
                 }
@@ -130,7 +138,7 @@ impl<'a, E> Table<'a, E> {
                     Ok(frame.get(row, column))
                 } else {
                     current
-                        .get(column - frame.width())
+                        .get(row * stride + column - frame.width())
                         .map(ValueRef::from)
                         .ok_or(CellError::OutOfBounds { row, column })
                 }
@@ -211,6 +219,11 @@ struct Run<'p, 'a, E> {
     pub relations: relations::State,
     /// Window runs of the unit being evaluated, by window slot.
     pub windows: windows::Runs,
+    /// Whether the unit being evaluated may call the host, so nothing in it
+    /// may be undone and evaluated again.
+    pub calls: bool,
+    /// Key indexes and filter answers over source ports, for every region.
+    pub ports: index::Ports,
 }
 
 /// What a batch unit restores before it replays in row mode.
@@ -228,9 +241,15 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
     }
 
     fn rollback(&mut self, checkpoint: Checkpoint) {
+        self.undo(checkpoint);
+        self.windows = windows::Runs::default();
+    }
+
+    /// Undo the handler counts and relation entries since `checkpoint`,
+    /// keeping the window runs of the unit being evaluated.
+    fn undo(&mut self, checkpoint: Checkpoint) {
         self.handlers.restore(checkpoint.handlers);
         self.relations.restore(checkpoint.relations);
-        self.windows = windows::Runs::default();
     }
 
     /// Count one firing of a handler site.
@@ -283,6 +302,8 @@ impl ResolvedPlan {
             handlers: Handlers::new(self),
             relations: relations::State::new(self, RegionId::DATASET),
             windows: windows::Runs::default(),
+            calls: false,
+            ports: index::Ports::default(),
         };
         let mut records = Vec::new();
         let mut templates = Vec::new();
@@ -708,7 +729,10 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         mut unit: impl FnMut(&mut Self, &mut Frame, bool) -> Result<(), Fail<E>>,
     ) -> Result<(), Fail<E>> {
         if callbacks {
-            return unit(self, frame, true);
+            let outer = std::mem::replace(&mut self.calls, true);
+            let result = unit(self, frame, true);
+            self.calls = outer;
+            return result;
         }
         let checkpoint = self.checkpoint();
         let result = unit(self, frame, false);
@@ -867,10 +891,25 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             let rows: Vec<usize> = (0..frame.rows())
                 .filter(|&row| !frame.is_completed(row, local))
                 .collect();
-            let binding = plan
+            // A column's bindings run in turn, each over the incomplete rows
+            // of its own templates (#2829); a key-grain candidate belongs to
+            // the sole key template.
+            let templates: Vec<TemplateId> = plan.region_templates(region).collect();
+            let bindings: Vec<(BindingId, Vec<usize>)> = plan
                 .column_bindings(column)
-                .next()
-                .expect("a column step has a binding");
+                .map(|binding| {
+                    let serves = &plan.binding(binding).templates;
+                    let served = rows
+                        .iter()
+                        .copied()
+                        .filter(|&row| {
+                            let template = templates[frame.template(row).unwrap_or(0)];
+                            serves.contains(&template)
+                        })
+                        .collect();
+                    (binding, served)
+                })
+                .collect();
             let columns = [local];
             let footprint = Footprint::Cells {
                 columns: &columns,
@@ -878,15 +917,24 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
             };
             self.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
                 run.windows = windows::Runs::default();
-                if row_mode {
-                    run.complete_column(frame, binding, secondary, &[], true)?;
-                    for &row in &rows {
-                        run.complete_column(frame, binding, secondary, &[row], false)?;
+                // Bindings split from one column binding share its expression,
+                // and a column-level window over it is prepared once, through
+                // the first one's driver, as today's executor does.
+                let mut prepared = None;
+                for (binding, served) in &bindings {
+                    let expr = plan.binding(*binding).expr;
+                    let prepare = prepared != Some(expr);
+                    prepared = Some(expr);
+                    if row_mode {
+                        run.complete_column(frame, *binding, secondary, &[], prepare)?;
+                        for &row in served {
+                            run.complete_column(frame, *binding, secondary, &[row], false)?;
+                        }
+                    } else {
+                        run.complete_column(frame, *binding, secondary, served, prepare)?;
                     }
-                    Ok(())
-                } else {
-                    run.complete_column(frame, binding, secondary, &rows, true)
                 }
+                Ok(())
             })?;
             completed[local] = true;
             checks::check_columns(self, frame, &completed, &mut next, records)?;
@@ -897,8 +945,9 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         Ok(())
     }
 
-    /// One column-phase binding over `rows`, against the primary table. The
-    /// first call of a step prepares a direct window over every candidate,
+    /// One column-phase binding over `rows`, through its driver's port: a
+    /// row's own template's driver, or the primary for a whole-dataset
+    /// binding. Its first call prepares a direct window over every candidate,
     /// as today's executor does before its row loop, even for no rows.
     fn complete_column(
         &mut self,
@@ -912,13 +961,8 @@ impl<'p, 'a, E> Run<'p, 'a, E> {
         let bound = plan.binding(binding);
         let region = RegionId::DATASET;
         let values = {
-            let mut cx = self.template_cx(
-                frame,
-                region,
-                Table::Source(self.primary),
-                secondary,
-                frame.rows(),
-            );
+            let table = self.source_table(region, bound.driver.source, secondary);
+            let mut cx = self.template_cx(frame, region, table, secondary, frame.rows());
             cx.output = 0..frame.rows();
             if prepare {
                 windows::prepare(self, &cx, bound.expr)?;

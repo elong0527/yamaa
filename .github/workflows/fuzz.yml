@@ -19,8 +19,10 @@ on:
       - 'rust/crates/yamaa-adapters/src/arrow_temporal.rs'
       - 'rust/crates/yamaa-adapters/src/csv_source.rs'
       - 'rust/crates/yamaa-adapters/src/ipc_table.rs'
+      - 'rust/crates/yamaa-adapters/src/odm_xml/**'
       - 'rust/crates/yamaa-adapters/src/parquet_source/**'
       - 'rust/crates/yamaa-adapters/src/project_source_decoder.rs'
+      - 'rust/crates/yamaa-adapters/src/public_table.rs'
       - 'rust/crates/yamaa-adapters/src/sas_source.rs'
       - 'rust/crates/yamaa-adapters/src/sas_source/**'
       - 'rust/crates/yamaa-adapters/src/shipped_schema/**'
@@ -45,25 +47,32 @@ on:
       - 'rust/crates/yamaa-core/src/inheritance.rs'
       - 'rust/crates/yamaa-core/src/inheritance_capture.rs'
       - 'rust/crates/yamaa-core/src/inheritance_preparation.rs'
+      - 'rust/crates/yamaa-core/src/limits.rs'
+      - 'rust/crates/yamaa-core/src/odm_items.rs'
       - 'rust/crates/yamaa-core/src/odm_source.rs'
       - 'rust/crates/yamaa-core/src/parquet_source.rs'
       - 'rust/crates/yamaa-core/src/schema/**'
       - 'rust/crates/yamaa-core/src/schema_capture.rs'
       - 'rust/crates/yamaa-core/src/specification/**'
+      - 'rust/crates/yamaa-core/src/specification_run.rs'
       - 'rust/crates/yamaa-core/src/standalone_preparation.rs'
       - 'rust/crates/yamaa-core/src/structural_preparation.rs'
       - 'rust/crates/yamaa-core/src/submission_json.rs'
+      - 'rust/crates/yamaa-core/src/table.rs'
       - 'rust/crates/yamaa-core/src/temporal.rs'
       - 'rust/crates/yamaa-core/src/typed_csv.rs'
+      - 'rust/crates/yamaa-core/src/value.rs'
       - 'rust/fuzz/Cargo.toml'
       - 'rust/fuzz/fuzz_targets/csv.rs'
       - 'rust/fuzz/fuzz_targets/dataset_json.rs'
+      - 'rust/fuzz/fuzz_targets/odm_xml.rs'
       - 'rust/fuzz/fuzz_targets/parquet.rs'
       - 'rust/fuzz/fuzz_targets/sas7bdat.rs'
       - 'rust/fuzz/fuzz_targets/specification.rs'
       - 'rust/fuzz/fuzz_targets/xport.rs'
       - 'rust/fuzz/regressions/csv/**'
       - 'rust/fuzz/regressions/dataset_json/**'
+      - 'rust/fuzz/regressions/odm_xml/**'
       - 'rust/fuzz/regressions/parquet/**'
       - 'rust/fuzz/regressions/sas7bdat/**'
       - 'rust/fuzz/regressions/specification/**'
@@ -77,6 +86,10 @@ on:
     inputs:
       seconds:
         description: Seconds to fuzz each target
+        # Every choice leaves the install and build inside the fuzz job's
+        # timeout; tools/tests/test_fuzz.py checks the longest.
+        type: choice
+        options: ['180', '600', '1800', '3600', '5400']
         default: '1800'
 
 permissions:

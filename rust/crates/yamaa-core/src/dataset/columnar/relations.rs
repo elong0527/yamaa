@@ -3,13 +3,16 @@
 //! range value, narrow them by the filter, select one, and answer absence.
 //! One choice per row and intermediate is cached for every read of the row.
 //!
-//! Selection keeps today's semantics: a plain intermediate of at least 128
-//! records is indexed over its full key tuple, every other shape scans its
-//! donor records. #2842 replaces both with the join operator.
+//! The records whose keys equal the match values come from a key index
+//! (#2842) when every key pair can be answered exactly, and otherwise from a
+//! scan that compares every pair on every record; the range, the filter and
+//! the selection then run on those records in stored order. An index over a
+//! SELF relation is dropped at each template barrier (REQ-0136).
 use super::buffer::Values;
-use super::donor::{self, Donor};
+use super::donor::{self, Built, Donor};
 use super::eval::owned;
-use super::frame::{Frame, Identity};
+use super::frame::{Frame, Identity, IdentityMap};
+use super::index::{self, Index};
 use super::{Cx, Fail, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{ExprId, KeyValue, Read, RegionId, RelationId, ResolvedPlan};
@@ -22,12 +25,13 @@ use crate::numeric_lifecycle::HandlerKind;
 use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
 use crate::value::{Value, ValueType};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
-use std::rc::Rc;
 
 pub(super) use super::aggregates::{aggregate, Record};
 pub(super) use super::joins::{join, joined_value, JoinSite};
 pub(super) use super::odm::odm;
+
+/// A row's match values: each key's donor column and the value it must equal.
+pub(super) type MatchValues = Vec<(usize, Value)>;
 
 /// One row's record choice: immutable donor coordinates and whether
 /// several records competed.
@@ -61,9 +65,17 @@ struct Named {
     /// Per record, whether a filter that reads only the donor records keeps
     /// it, decided the first time the record matches (LOOKUP-8).
     narrowed: Option<Vec<Option<bool>>>,
-    index: Option<Option<KeyIndex>>,
-    choices: HashMap<Identity, Choice>,
-    materialized: HashMap<Option<Identity>, Rc<Donor>>,
+    /// The key index over the records the match reads, when they are the
+    /// source's: none for a derived intermediate, whose donor owns it.
+    index: Option<Option<Index>>,
+    /// The key index over the source's stored keys that selects the records
+    /// derivations reading the current record augment (LOOKUP-15).
+    source_index: Option<Option<Index>>,
+    choices: IdentityMap<Identity, Choice>,
+    materialized: IdentityMap<Option<Identity>, Built>,
+    /// Whether derivations reading the current record augment only the
+    /// matched records (LOOKUP-15), decided on first use.
+    matched: Option<bool>,
 }
 
 /// A cache entry a batch unit added, removed if the unit replays.
@@ -103,6 +115,15 @@ impl State {
         &mut self.named[relation.index() - self.first]
     }
 
+    /// Whether a relation's derivations augment only the records its match
+    /// values select (LOOKUP-15).
+    fn derives_matched(&mut self, plan: &ResolvedPlan, relation: RelationId) -> bool {
+        *self
+            .named(relation)
+            .matched
+            .get_or_insert_with(|| item(plan, relation).derives_matched_records())
+    }
+
     pub(super) fn mark(&self) -> Mark {
         Mark(self.journal.len())
     }
@@ -125,7 +146,7 @@ impl State {
         &mut self,
         relation: RelationId,
         key: Option<Identity>,
-    ) -> Option<Rc<Donor>> {
+    ) -> Option<Built> {
         self.named(relation).materialized.get(&key).cloned()
     }
 
@@ -133,7 +154,7 @@ impl State {
         &mut self,
         relation: RelationId,
         key: Option<Identity>,
-        donor: Rc<Donor>,
+        donor: Built,
     ) {
         self.named(relation).materialized.insert(key, donor);
         self.journal.push(Entry::Materialized(relation, key));
@@ -188,6 +209,8 @@ impl State {
             if item.source.is_self() {
                 let named = &mut self.named[index];
                 named.narrowed = None;
+                named.index = None;
+                named.source_index = None;
                 named.choices.clear();
                 named.materialized.clear();
             }
@@ -354,7 +377,7 @@ pub(super) fn driver_groups<E>(
 /// A template's driver relation: the donor records a named driver
 /// materializes and the records its filter keeps.
 pub(super) struct Driver {
-    pub materialized: Option<Rc<Donor>>,
+    pub materialized: Option<Built>,
     pub eligible: Option<Vec<usize>>,
 }
 
@@ -468,6 +491,7 @@ pub(super) fn read<E>(
     let Read::Relation(relation, column) = plan.reads(expr)[0] else {
         unreachable!("an intermediate node reads its relation")
     };
+    prepare_matched(run, cx, Site::node(plan, expr), relation, rows);
     let mut values = Values::missing(0);
     for &row in rows {
         let value = named_value(
@@ -509,22 +533,51 @@ pub(super) fn named_value<E>(
     let plan = run.plan;
     let item = item(plan, relation);
     let identity = cx.frame.identity(row);
-    let prepared = donor::materialize(run, cx, relation, Some(site), Some(row))?;
-    let table = match &prepared {
-        Some(data) => data.table(),
-        None => source_table(item, cx),
-    };
-    let secondary = &plan.region(cx.region).secondary;
-    let name = source_name(item, secondary);
     let cached = run
         .relations
         .named(relation)
         .choices
         .get(&identity)
         .copied();
-    let choice = match cached {
-        Some(choice) => choice,
-        None => resolve_choice(run, cx, site, relation, item, table, name, row, identity)?,
+    let secondary = &plan.region(cx.region).secondary;
+    let name = source_name(item, secondary);
+    let (prepared, choice) = match cached {
+        Some(choice) => (
+            donor::materialize(run, cx, relation, Some(site), Some(row))?,
+            choice,
+        ),
+        // Derivations that read the current record augment only the records
+        // the match values select (LOOKUP-15), so those values resolve first.
+        None if run.relations.derives_matched(plan, relation) => {
+            let (data, choice) =
+                matched_choice(run, cx, site, relation, item, name, row, identity)?;
+            (Some(data), choice)
+        }
+        None => {
+            let prepared = donor::materialize(run, cx, relation, Some(site), Some(row))?;
+            let table = match &prepared {
+                Some(data) => data.table(),
+                None => source_table(item, cx),
+            };
+            let choice = resolve_choice(
+                run,
+                cx,
+                site,
+                relation,
+                item,
+                table,
+                name,
+                row,
+                identity,
+                None,
+                prepared.as_ref().map(Built::donor),
+            )?;
+            (prepared, choice)
+        }
+    };
+    let table = match &prepared {
+        Some(data) => data.table(),
+        None => source_table(item, cx),
     };
     let (value, handler) = match choice {
         Choice::Record { row, multiple } => (
@@ -545,6 +598,185 @@ pub(super) fn named_value<E>(
         )?;
     }
     Ok(value)
+}
+
+/// LOOKUP-15: the choice of a derived intermediate whose derivations read
+/// the current record, over the records its match values select. When the
+/// derivations read only their own record and the current one, the records
+/// are built alone first; a relation in the donor plan reads the other
+/// records too, so it keeps them all. A failure there is undone and the
+/// records built again at their source positions, so the diagnostic names
+/// the source rows; a failure stops the run, so this happens once. A unit
+/// that may call the host builds at source positions from the start: a call
+/// cannot be undone.
+#[allow(clippy::too_many_arguments)]
+fn matched_choice<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    site: Site<'_>,
+    relation: RelationId,
+    item: &Intermediate,
+    name: &str,
+    row: usize,
+    identity: Identity,
+) -> Result<(Built, Choice), Fail<E>> {
+    let plan = run.plan;
+    let donor = plan
+        .relation(relation)
+        .derivations
+        .expect("a derived intermediate has a donor region");
+    if !run.calls && plan.region_relations(donor).next().is_none() {
+        let checkpoint = run.checkpoint();
+        match matched_attempt(run, cx, site, relation, item, name, row, identity, true) {
+            Ok(found) => return Ok(found),
+            Err(_) => run.undo(checkpoint),
+        }
+    }
+    matched_attempt(run, cx, site, relation, item, name, row, identity, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn matched_attempt<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    site: Site<'_>,
+    relation: RelationId,
+    item: &Intermediate,
+    name: &str,
+    row: usize,
+    identity: Identity,
+    compact: bool,
+) -> Result<(Built, Choice), Fail<E>> {
+    let (data, keys) = donor::materialize_matched(run, cx, relation, site, row, compact)?;
+    let choice = resolve_choice(
+        run,
+        cx,
+        site,
+        relation,
+        item,
+        data.table(),
+        name,
+        row,
+        identity,
+        Some(keys),
+        Some(data.donor()),
+    )?;
+    Ok((data, choice))
+}
+
+/// LOOKUP-15 for a read over several rows: the choices of the rows not yet
+/// chosen, resolved together over one donor of every row's matched records.
+/// Each row's current fields, match values and matched records resolve in
+/// row order, every matched record is augmented in one build with its own
+/// row's current values, and then each row selects among its own records.
+/// Any failure undoes all of it and leaves the rows to one-row resolution,
+/// which finds the first failure in row order where the build would find it
+/// column by column. As for one row, only derivations that read nothing but
+/// their record and the current one, in a unit that cannot call the host,
+/// are resolved this way.
+fn prepare_matched<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    site: Site<'_>,
+    relation: RelationId,
+    rows: &[usize],
+) {
+    let plan = run.plan;
+    if rows.len() < 2
+        || run.calls
+        || cx.record.is_some()
+        || !run.relations.derives_matched(plan, relation)
+    {
+        return;
+    }
+    let item = item(plan, relation);
+    let donor = plan
+        .relation(relation)
+        .derivations
+        .expect("a derived intermediate has a donor region");
+    if plan.region_relations(donor).next().is_some() {
+        return;
+    }
+    let checkpoint = run.checkpoint();
+    if prepare_rows(run, cx, site, relation, item, rows).is_err() {
+        run.undo(checkpoint);
+    }
+}
+
+fn prepare_rows<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    site: Site<'_>,
+    relation: RelationId,
+    item: &Intermediate,
+    rows: &[usize],
+) -> Result<(), Fail<E>> {
+    let plan = run.plan;
+    let derived = item
+        .derivations
+        .as_ref()
+        .expect("an intermediate deriving matched records has derivations");
+    let mut seen = std::collections::HashSet::<
+        _,
+        std::hash::BuildHasherDefault<super::frame::IdentityHasher>,
+    >::default();
+    let pending: Vec<(usize, Identity)> = rows
+        .iter()
+        .map(|&row| (row, cx.frame.identity(row)))
+        .filter(|(_, identity)| {
+            !run.relations.named(relation).choices.contains_key(identity) && seen.insert(*identity)
+        })
+        .collect();
+    if pending.len() < 2 {
+        return Ok(());
+    }
+    let width = derived.current.len();
+    let mut current = Vec::with_capacity(pending.len() * width);
+    let mut keys = Vec::with_capacity(pending.len());
+    let mut records = Vec::with_capacity(pending.len());
+    let mut spans = Vec::with_capacity(pending.len());
+    for &(row, _) in &pending {
+        current.extend(donor::current_fields(
+            run,
+            cx,
+            item,
+            derived,
+            Some(site),
+            Some(row),
+        )?);
+        let row_keys = match_values(run, cx, relation, item, row)?;
+        let start = records.len();
+        matched_records(run, cx, relation, item, &row_keys, &mut records)?;
+        spans.push((start, records.len() - start));
+        keys.push(row_keys);
+    }
+    let mut per_record = Vec::with_capacity(records.len() * width);
+    for (&(_, rows), values) in spans.iter().zip(current.chunks(width)) {
+        for _ in 0..rows {
+            per_record.extend_from_slice(values);
+        }
+    }
+    let shared = donor::build_matched(run, cx, relation, &per_record, width, &records)?;
+    let name = source_name(item, &plan.region(cx.region).secondary);
+    for ((&(row, identity), &(start, rows)), row_keys) in pending.iter().zip(&spans).zip(keys) {
+        let built = Built::part(&shared, start, rows);
+        run.relations
+            .insert_materialized(relation, Some(identity), built.clone());
+        resolve_choice(
+            run,
+            cx,
+            site,
+            relation,
+            item,
+            built.table(),
+            name,
+            row,
+            identity,
+            Some(row_keys),
+            None,
+        )?;
+    }
+    Ok(())
 }
 
 /// Retain exact key values separately from output-row identity in join diagnostics.
@@ -575,17 +807,14 @@ fn resolve_choice<E>(
     source_name: &str,
     row: usize,
     identity: Identity,
+    keys: Option<MatchValues>,
+    donor: Option<&Donor>,
 ) -> Result<Choice, Fail<E>> {
     let plan = run.plan;
     let secondary = &plan.region(cx.region).secondary;
-    // Expression match values resolve their current references first.
-    let keys = if item.has_expression_keys() {
-        let current = resolve_operands(run, cx, &item.path, &item.keys, row)?;
-        check_deferred_filter_types(item)?;
-        evaluate_keys(run, cx, relation, &item.keys, &current, row)?
-    } else {
-        check_deferred_filter_types(item)?;
-        ordinary_keys(run, cx, &item.path, &item.keys, row)?
+    let keys = match keys {
+        Some(keys) => keys,
+        None => match_values(run, cx, relation, item, row)?,
     };
     let range_value = match &item.range {
         Some(range) => Some(current_value(
@@ -617,39 +846,13 @@ fn resolve_choice<E>(
     let mut count = 0;
     let mut selected = None;
     if !probe.incomplete() {
-        let use_index = table.row_count() >= MINIMUM_INDEXED_ROWS
-            && !item.keys.is_empty()
-            && !item.has_expression_keys()
-            && !item.source.is_self()
-            && item.range.is_none()
-            && item.derivations.is_none()
-            && item
-                .filter
-                .as_ref()
-                .is_none_or(|filter| !filter.correlated())
-            && keys.iter().all(|(column, expected)| {
-                match (expected.value_type(), item.source_kind(secondary, *column)) {
-                    (Some(expected), Some(kind)) => {
-                        crate::value::comparable_types(expected, kind.into())
-                    }
-                    (Some(_), None) => true,
-                    _ => false,
-                }
-            });
-        let mut indexed = None;
-        if use_index {
-            if run.relations.named(relation).index.is_none() {
-                let built = KeyIndex::build(table, item)?;
-                run.relations.named(relation).index = Some(built);
-            }
-            if let Some(Some(index)) = &run.relations.named(relation).index {
-                indexed = Some(index.matching(&keys).to_vec());
-            }
-        }
+        let indexed = key_bucket(run, relation, item, table, donor, &probe_keys)?;
+        // A bucket's records already equal the match values on every key
+        // pair; the range still holds or not per record.
         let bucket = Probe {
             keys: &[],
             kinds: &[],
-            range: None,
+            range: probe.range,
         };
         let (candidates_rows, probe_used): (Vec<usize>, &Probe<'_>) = match indexed {
             Some(rows) => (rows, &bucket),
@@ -702,34 +905,7 @@ fn resolve_choice<E>(
             },
             run,
         )
-        .map_err(|refusal| match refusal {
-            Refusal::Failed(error) => error,
-            Refusal::Key {
-                index: pair,
-                current,
-                donor,
-            } => {
-                let column = keys[pair].0;
-                let key = item
-                    .keys
-                    .iter()
-                    .find(|key| key.source_column == column)
-                    .expect("resolved key belongs to the admitted selector");
-                Box::new(ExecutionError::ScalarDiagnostic(
-                    crate::diagnostic::lookup::key_type(
-                        &key.path,
-                        crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
-                        &key_source(key, &table.schema().columns()[column].name),
-                        crate::result_type::ResultType::known(current),
-                        crate::result_type::ResultType::known(donor),
-                    ),
-                ))
-            }
-            Refusal::Range(types) => Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
-                item.range.as_ref().map_or("", |range| range.path()),
-                &item.identifier,
-            ))),
-        })?;
+        .map_err(|found| refusal(found, item, table, &keys))?;
         count = found.rows.len();
         selected = found.rows.first().copied();
         if count > 1 {
@@ -773,6 +949,198 @@ fn resolve_choice<E>(
         .journal
         .push(Entry::Choice(relation, identity));
     Ok(choice)
+}
+
+/// The current row's match values: the current references of expression
+/// match values first, then every key.
+pub(super) fn match_values<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    item: &Intermediate,
+    row: usize,
+) -> Result<MatchValues, Fail<E>> {
+    if item.has_expression_keys() {
+        let current = resolve_operands(run, cx, &item.path, &item.keys, row)?;
+        check_deferred_filter_types(item)?;
+        evaluate_keys(run, cx, relation, &item.keys, &current, row)
+    } else {
+        check_deferred_filter_types(item)?;
+        ordinary_keys(run, cx, &item.path, &item.keys, row)
+    }
+}
+
+/// The records of a named intermediate's source whose stored keys equal the
+/// match values, in stored order: from the source's key index when every
+/// pair can be answered exactly, otherwise from a scan that refuses a key
+/// pair whose types cannot compare as the match would, on the same record.
+pub(super) fn matched_records<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    item: &Intermediate,
+    keys: &[(usize, Value)],
+    records: &mut Vec<usize>,
+) -> Result<(), Fail<E>> {
+    let plan = run.plan;
+    let secondary = &plan.region(cx.region).secondary;
+    let table = source_table(item, cx);
+    let probe_keys: Vec<(usize, ValueRef<'_>)> = keys
+        .iter()
+        .map(|(column, value)| (*column, ValueRef::from(value)))
+        .collect();
+    if probe_keys
+        .iter()
+        .any(|(_, value)| matches!(value, ValueRef::Missing))
+    {
+        return Ok(());
+    }
+    let exact = probe_keys.iter().all(|&(column, value)| {
+        index::exact_pair(
+            value,
+            table
+                .schema()
+                .columns()
+                .get(column)
+                .map(|field| field.kind.into()),
+        )
+    });
+    if exact {
+        if run.relations.named(relation).source_index.is_none() {
+            let columns: Vec<usize> = item.keys.iter().map(|key| key.source_column).collect();
+            let kinds = schema_kinds(table, columns.iter().copied());
+            let built = Index::keys(&columns, &kinds, 0..table.row_count(), |row, column| {
+                cell(table, item, row, column)
+            })?;
+            run.relations.named(relation).source_index = Some(built);
+        }
+        if let Some(Some(index)) = &run.relations.named(relation).source_index {
+            records.extend_from_slice(index.matching_pairs(&probe_keys));
+            return Ok(());
+        }
+    }
+    let kinds: Vec<Option<ValueType>> = keys
+        .iter()
+        .map(|(column, _)| item.source_kind(secondary, *column).map(Into::into))
+        .collect();
+    let probe = Probe {
+        keys: &probe_keys,
+        kinds: &kinds,
+        range: None,
+    };
+    let found = candidates(
+        0..table.row_count(),
+        &probe,
+        |source_row, column| cell(table, item, source_row, column),
+        |_, _: &mut ()| Ok(true),
+        &mut (),
+    )
+    .map_err(|found| refusal(found, item, table, keys))?;
+    records.extend(found.rows);
+    Ok(())
+}
+
+/// The finding of a named intermediate's match that stopped before its
+/// candidates were complete.
+fn refusal<E>(
+    refusal: Refusal<E>,
+    item: &Intermediate,
+    table: Table<'_, E>,
+    keys: &[(usize, Value)],
+) -> Fail<E> {
+    match refusal {
+        Refusal::Failed(error) => error,
+        Refusal::Key {
+            index: pair,
+            current,
+            donor,
+        } => {
+            let column = keys[pair].0;
+            let key = item
+                .keys
+                .iter()
+                .find(|key| key.source_column == column)
+                .expect("resolved key belongs to the admitted selector");
+            Box::new(ExecutionError::ScalarDiagnostic(
+                crate::diagnostic::lookup::key_type(
+                    &key.path,
+                    crate::diagnostic::lookup::Owner::Intermediate(&item.identifier),
+                    &key_source(key, &table.schema().columns()[column].name),
+                    crate::result_type::ResultType::known(current),
+                    crate::result_type::ResultType::known(donor),
+                ),
+            ))
+        }
+        Refusal::Range(types) => Box::new(ExecutionError::ScalarDiagnostic(types.diagnostic(
+            item.range.as_ref().map_or("", |range| range.path()),
+            &item.identifier,
+        ))),
+    }
+}
+
+/// The declared types of the donor columns that key pairs compare with.
+fn schema_kinds<E>(
+    table: Table<'_, E>,
+    columns: impl Iterator<Item = usize>,
+) -> Vec<Option<ValueType>> {
+    columns
+        .map(|column| {
+            table
+                .schema()
+                .columns()
+                .get(column)
+                .map(|field| field.kind.into())
+        })
+        .collect()
+}
+
+/// The records whose keys equal the match values, from a key index when
+/// every pair can be answered exactly, or none for the scan to find. An
+/// input, primary or SELF relation's index is the relation's; a derived
+/// relation's records are built once and own theirs. Derivations that read
+/// the current record build records per row, which are scanned.
+fn key_bucket<E>(
+    run: &mut Run<'_, '_, E>,
+    relation: RelationId,
+    item: &Intermediate,
+    table: Table<'_, E>,
+    donor: Option<&Donor>,
+    keys: &[(usize, ValueRef<'_>)],
+) -> Result<Option<Vec<usize>>, Fail<E>> {
+    let schema = table.schema().columns();
+    if item.keys.is_empty()
+        || !keys.iter().all(|&(column, value)| {
+            index::exact_pair(value, schema.get(column).map(|field| field.kind.into()))
+        })
+    {
+        return Ok(None);
+    }
+    let build = || {
+        let columns: Vec<usize> = item.keys.iter().map(|key| key.source_column).collect();
+        let kinds = schema_kinds(table, columns.iter().copied());
+        Index::keys(&columns, &kinds, 0..table.row_count(), |row, column| {
+            cell(table, item, row, column)
+        })
+    };
+    match (&item.derivations, donor) {
+        (None, _) => {
+            if run.relations.named(relation).index.is_none() {
+                let built = build()?;
+                run.relations.named(relation).index = Some(built);
+            }
+            Ok(run
+                .relations
+                .named(relation)
+                .index
+                .as_ref()
+                .and_then(Option::as_ref)
+                .map(|index| index.matching_pairs(keys).to_vec()))
+        }
+        (Some(derived), Some(donor)) if derived.current.is_empty() => Ok(donor
+            .index(build)?
+            .map(|index| index.matching_pairs(keys).to_vec())),
+        _ => Ok(None),
+    }
 }
 
 /// A correlated filter over one donor record and the current row.
@@ -1325,120 +1693,6 @@ pub(super) fn compare(left: ValueRef<'_>, right: ValueRef<'_>, term: &OrderTerm)
                 order
             }
         }
-    }
-}
-
-/// Avoid indexing small relations whose scan is already cheap.
-const MINIMUM_INDEXED_ROWS: usize = 128;
-
-/// An index over the full key tuple of a plain intermediate. Each key
-/// component is encoded canonically, so values that compare equal share one
-/// bucket: integer and float spellings of the same number, both float zero
-/// signs, and temporal values whatever their precision. Buckets keep stored
-/// record order.
-#[derive(Default)]
-struct KeyIndex {
-    columns: Vec<usize>,
-    buckets: BTreeMap<Vec<u8>, Vec<usize>>,
-}
-
-fn encode(key: &mut Vec<u8>, value: ValueRef<'_>) {
-    match value {
-        ValueRef::Missing => key.push(0),
-        ValueRef::Str(value) => {
-            key.push(1);
-            key.extend_from_slice(&(value.len() as u64).to_be_bytes());
-            key.extend_from_slice(value.as_bytes());
-        }
-        ValueRef::Int(value) => encode_int(key, value),
-        ValueRef::Float(value) => {
-            let value = value.get();
-            if value == value.trunc()
-                && (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value)
-            {
-                encode_int(key, value as i64);
-            } else {
-                key.push(3);
-                key.extend_from_slice(&value.to_bits().to_be_bytes());
-            }
-        }
-        ValueRef::Bool(value) => {
-            key.push(4);
-            key.push(u8::from(value));
-        }
-        ValueRef::Date(value) => {
-            let (year, month, day) = value.fields();
-            key.push(5);
-            key.extend_from_slice(&year.to_be_bytes());
-            key.push(month);
-            key.push(day);
-        }
-        ValueRef::DateTime(value) => {
-            let (year, month, day, hour, minute, second) = value.fields();
-            key.push(6);
-            key.extend_from_slice(&year.to_be_bytes());
-            key.push(month);
-            key.push(day);
-            key.push(hour);
-            key.push(minute);
-            key.push(second);
-        }
-    }
-}
-
-fn encode_int(key: &mut Vec<u8>, value: i64) {
-    key.push(2);
-    key.extend_from_slice(&value.to_be_bytes());
-}
-
-impl KeyIndex {
-    /// Build over every record, or none when a donor cell's type does not
-    /// fit its declared column type: the scan owns that shape's refusal.
-    fn build<E>(table: Table<'_, E>, item: &Intermediate) -> Result<Option<Self>, Fail<E>> {
-        let mut index = Self {
-            columns: item.keys.iter().map(|key| key.source_column).collect(),
-            buckets: BTreeMap::new(),
-        };
-        for row in 0..table.row_count() {
-            let mut key = Vec::new();
-            let mut missing = false;
-            for &column in &index.columns {
-                let value = cell(table, item, row, column)?;
-                if matches!(value, ValueRef::Missing) {
-                    missing = true;
-                    break;
-                }
-                if let (Some(kind), Some(actual)) = (
-                    table
-                        .schema()
-                        .columns()
-                        .get(column)
-                        .map(|column| column.kind),
-                    value.value_type(),
-                ) {
-                    if !crate::value::comparable_types(actual, kind.into()) {
-                        return Ok(None);
-                    }
-                }
-                encode(&mut key, value);
-            }
-            if missing {
-                continue;
-            }
-            index.buckets.entry(key).or_default().push(row);
-        }
-        Ok(Some(index))
-    }
-
-    fn matching(&self, keys: &[(usize, Value)]) -> &[usize] {
-        let mut key = Vec::new();
-        for &column in &self.columns {
-            let Some((_, value)) = keys.iter().find(|(bound, _)| *bound == column) else {
-                return &[];
-            };
-            encode(&mut key, ValueRef::from(value));
-        }
-        self.buckets.get(&key).map_or(&[], Vec::as_slice)
     }
 }
 

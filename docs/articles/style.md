@@ -12,6 +12,10 @@ only fixes how it is written.
 
 ## Running the check
 
+Install the optional `style` extra before running the checker. From a source
+checkout, run `python -m pip install './python[style]'`. Development setup with
+`make setup` already includes its dependencies through the `test` extra.
+
 ```bash
 python -m yamaa.style study/adsl.yaml study/adae.yaml
 python -m yamaa.style study/

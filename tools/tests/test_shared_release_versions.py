@@ -3,22 +3,24 @@ ambiguous packaging owners."""
 
 import shutil
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
 
 from tools.packaging import check_shared_release_versions as checker
+from tools.packaging import release_identity
 from tools.paths import ROOT
 
 TOOLS = ROOT / "tools"
-# The selected release version, read from the tree so that a version bump
-# does not have to edit these mutations.
-VERSION = tomllib.loads((ROOT / "python/pyproject.toml").read_text())["project"][
-    "version"
-]
+# The prepared release, read from the tree so that a version bump does not
+# have to edit these mutations.
+IDENTITY = release_identity.read(ROOT)
+VERSION = IDENTITY.cargo
+PYTHON_VERSION = IDENTITY.python
 
 
-class CoherentRelease(unittest.TestCase):
+class ReleaseTree(unittest.TestCase):
+    """A copy of the tree's release metadata, which each test mutates."""
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -26,6 +28,7 @@ class CoherentRelease(unittest.TestCase):
         paths = [
             "LICENSE",
             "mkdocs.yml",
+            release_identity.DECLARATION,
             "python/pyproject.toml",
             "python/uv.lock",
             "R/yamaa/DESCRIPTION",
@@ -52,13 +55,16 @@ class CoherentRelease(unittest.TestCase):
         self.assertIn(old, text)
         path.write_text(text.replace(old, new, 1))
 
+
+class CoherentRelease(ReleaseTree):
     def test_selected_versions_and_real_lock_owners_agree(self):
         self.assertEqual(checker.violations(self.root), [])
 
     def test_stale_cargo_workspace_is_refused(self):
         self.change("rust/Cargo.toml", f'version = "{VERSION}"', 'version = "0.1.0"')
         self.assertIn(
-            "Cargo workspace version differs from selected Python/R release",
+            f"rust/Cargo.toml: workspace version '0.1.0' is not '{VERSION}', the "
+            f"Cargo version of release {IDENTITY}",
             checker.violations(self.root),
         )
 
@@ -69,7 +75,8 @@ class CoherentRelease(unittest.TestCase):
             'version = "0.1.0"',
         )
         self.assertIn(
-            "crates/yamaa-core: package version differs from selected shared release",
+            "crates/yamaa-core: package version differs from the shared Cargo "
+            f"version '{VERSION}'",
             checker.violations(self.root),
         )
 
@@ -87,7 +94,7 @@ class CoherentRelease(unittest.TestCase):
     def test_stale_python_lock_or_wrong_owner_is_refused(self):
         for old, new in (
             (
-                f'name = "yamaa"\nversion = "{VERSION}"',
+                f'name = "yamaa"\nversion = "{PYTHON_VERSION}"',
                 'name = "yamaa"\nversion = "0.3.0"',
             ),
             ('source = { editable = "." }', 'source = { editable = "../foreign" }'),
@@ -236,11 +243,165 @@ class CoherentRelease(unittest.TestCase):
         path = self.root / "python/uv.lock"
         path.write_text(
             path.read_text()
-            + f'\n[[package]]\nname = "yamaa"\nversion = "{VERSION}"\nsource = {{ editable = "." }}\n'
+            + f'\n[[package]]\nname = "yamaa"\nversion = "{PYTHON_VERSION}"\nsource = {{ editable = "." }}\n'
         )
         self.assertIn(
             "uv.lock: selected yamaa project/version ownership differs",
             checker.violations(self.root),
+        )
+
+
+class CandidateRelease(ReleaseTree):
+    """#3030 D53: Python 1.0.0rcN, Cargo 1.0.0-rc.N and R 1.0.0 agree."""
+
+    def setUp(self):
+        super().setUp()
+        self.declare('version = "1.0.0"\ncandidate = 2\n')
+        self.spell(python="1.0.0rc2", cargo="1.0.0-rc.2", r="1.0.0")
+
+    def declare(self, text):
+        (self.root / release_identity.DECLARATION).write_text(text)
+
+    def spell(self, python, cargo, r):
+        """Rewrite every manifest and lock version of the tree."""
+        self.change(
+            "python/pyproject.toml",
+            f'version = "{PYTHON_VERSION}"',
+            f'version = "{python}"',
+        )
+        self.change(
+            "python/uv.lock",
+            f'name = "yamaa"\nversion = "{PYTHON_VERSION}"',
+            f'name = "yamaa"\nversion = "{python}"',
+        )
+        self.change("rust/Cargo.toml", f'version = "{VERSION}"', f'version = "{cargo}"')
+        for name in (
+            "yamaa",
+            "yamaa-adapters",
+            "yamaa-core",
+            "yamaa-python",
+            "yamaa-r",
+        ):
+            self.change(
+                "rust/Cargo.lock",
+                f'name = "{name}"\nversion = "{VERSION}"',
+                f'name = "{name}"\nversion = "{cargo}"',
+            )
+        r_version = IDENTITY.r
+        self.change("R/yamaa/DESCRIPTION", f"Version: {r_version}", f"Version: {r}")
+        for path in self.root.glob("benchmarks/*/r/renv.lock"):
+            path.write_text(
+                path.read_text().replace(
+                    f'"Package": "yamaa",\n      "Version": "{r_version}"',
+                    f'"Package": "yamaa",\n      "Version": "{r}"',
+                )
+            )
+
+    def test_selected_versions_and_real_lock_owners_agree(self):
+        self.assertEqual(checker.violations(self.root), [])
+
+    def test_stale_cargo_workspace_is_refused(self):
+        self.change("rust/Cargo.toml", 'version = "1.0.0-rc.2"', 'version = "0.1.0"')
+        self.assertIn(
+            "rust/Cargo.toml: workspace version '0.1.0' is not '1.0.0-rc.2', the "
+            "Cargo version of release 1.0.0 release candidate 2",
+            checker.violations(self.root),
+        )
+
+    def test_member_cannot_override_the_shared_version(self):
+        self.change(
+            "rust/crates/yamaa-core/Cargo.toml",
+            "version.workspace = true",
+            'version = "1.0.0-rc.1"',
+        )
+        self.assertIn(
+            "crates/yamaa-core: package version differs from the shared Cargo "
+            "version '1.0.0-rc.2'",
+            checker.violations(self.root),
+        )
+
+    def test_stale_cargo_lock_identity_is_refused(self):
+        self.change(
+            "rust/Cargo.lock",
+            'name = "yamaa-core"\nversion = "1.0.0-rc.2"',
+            'name = "yamaa-core"\nversion = "1.0.0-rc.1"',
+        )
+        self.assertIn(
+            "Cargo.lock: yamaa-core version identity is stale or ambiguous",
+            checker.violations(self.root),
+        )
+
+    def test_stale_python_lock_or_wrong_owner_is_refused(self):
+        self.change(
+            "python/uv.lock",
+            'name = "yamaa"\nversion = "1.0.0rc2"',
+            'name = "yamaa"\nversion = "1.0.0"',
+        )
+        self.assertIn(
+            "uv.lock: selected yamaa project/version ownership differs",
+            checker.violations(self.root),
+        )
+
+    def test_ambiguous_python_distribution_is_refused(self):
+        path = self.root / "python/uv.lock"
+        path.write_text(
+            path.read_text()
+            + '\n[[package]]\nname = "yamaa"\nversion = "1.0.0rc2"\nsource = { editable = "." }\n'
+        )
+        self.assertIn(
+            "uv.lock: selected yamaa project/version ownership differs",
+            checker.violations(self.root),
+        )
+
+    def test_exactly_the_candidate_triple_is_accepted(self):
+        for python, cargo, r in [
+            # Another candidate in one format.
+            ("1.0.0rc1", "1.0.0-rc.2", "1.0.0"),
+            ("1.0.0rc2", "1.0.0-rc.1", "1.0.0"),
+            # The final release in one format.
+            ("1.0.0", "1.0.0-rc.2", "1.0.0"),
+            ("1.0.0rc2", "1.0.0", "1.0.0"),
+            # A candidate spelled in R, or another format's spelling.
+            ("1.0.0rc2", "1.0.0-rc.2", "1.0.0rc2"),
+            ("1.0.0rc2", "1.0.0-rc.2", "1.0.0.9002"),
+            ("1.0.0-rc.2", "1.0.0-rc.2", "1.0.0"),
+            ("1.0.0rc2", "1.0.0rc2", "1.0.0"),
+            # Other pre-release kinds.
+            ("1.0.0b2", "1.0.0-beta.2", "1.0.0"),
+        ]:
+            with self.subTest(python=python, cargo=cargo, r=r):
+                # A fresh copy of the tree, declared as candidate 2.
+                super().setUp()
+                self.declare('version = "1.0.0"\ncandidate = 2\n')
+                self.spell(python, cargo, r)
+                self.assertNotEqual(checker.violations(self.root), [])
+
+    def test_a_final_declaration_refuses_the_candidate_spellings(self):
+        self.declare('version = "1.0.0"\n')
+        errors = checker.violations(self.root)
+        self.assertIn(
+            "python/pyproject.toml: version '1.0.0rc2' is not '1.0.0', the Python "
+            "version of release 1.0.0",
+            errors,
+        )
+        self.assertIn(
+            "rust/Cargo.toml: workspace version '1.0.0-rc.2' is not '1.0.0', the "
+            "Cargo version of release 1.0.0",
+            errors,
+        )
+
+    def test_a_missing_declaration_is_reported_with_the_author_checks(self):
+        (self.root / release_identity.DECLARATION).unlink()
+        self.change("LICENSE", "yamaa contributors", "yamaa authors")
+        errors = checker.violations(self.root)
+        self.assertTrue(
+            errors[0].startswith(
+                "tools/packaging/release.toml: unreadable release identity"
+            ),
+            errors,
+        )
+        self.assertIn(
+            "LICENSE: copyright holder is not 'yamaa contributors'", errors[1:]
         )
 
 

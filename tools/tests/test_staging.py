@@ -202,7 +202,24 @@ class StagingTests(unittest.TestCase):
             self.assertFalse((resources / "define-fixtures/schemas").exists())
             self.assertEqual(
                 [path.relative_to(resources) for path in resources.rglob("uv.lock")],
-                [Path("project-original/negative-function-contract/python/uv.lock")],
+                [Path("project-base/negative-function-contract/python/uv.lock")],
+            )
+            projects = resources / "project-base"
+            self.assertFalse((resources / "project-original").exists())
+            for path in projects.rglob("*"):
+                if path.is_file():
+                    self.assertNotIn(b"yamaabenchmarks", path.read_bytes(), str(path))
+            for case in ("negative-function-contract", "base-round"):
+                lock = json.loads((projects / case / "r/renv.lock").read_text())
+                self.assertEqual(set(lock["Packages"]), {"yamaa"})
+            self.assertIn(
+                "base::identity",
+                (
+                    projects / "negative-function-contract/r/environment.yaml"
+                ).read_text(),
+            )
+            self.assertIn(
+                "base::signif", (projects / "base-round/r/environment.yaml").read_text()
             )
             self.assertEqual(list(original.glob("*.json")), [])
             fixtures = staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/sas"

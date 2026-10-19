@@ -298,14 +298,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/tables/expected.json",
-      "family": "tables",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/yaml_transport.json",
       "family": "yaml",
       "level": "compile",

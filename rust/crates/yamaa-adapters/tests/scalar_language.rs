@@ -1185,13 +1185,15 @@ columns:
             // its derivations; then each intermediate in turn, its
             // `unconvertible` first. Every build of the donor records counts.
             // CODED is built once for CAT. NEAREST's DIST reads the current
-            // record, so NEAREST is built once for each of the three rows, and
-            // each build reads CODED for each LAB record, building CODED
-            // again: four builds of CODED. FLAGN converts neither `H` nor `L`
-            // (LAB records 1 and 3), so it answers twice per build; GRADE
-            // answers record 2, which has no FLAG, once per build; and G2
-            // chooses between subject 1's two records twice per build of
-            // NEAREST.
+            // record, so NEAREST is built for each of the three rows and
+            // augments only the LAB records whose ID matches the row's
+            // (LOOKUP-15): subject 1's two records, subject 2's one, and none
+            // for subject 3. The first two builds read CODED for their
+            // records, building CODED again: three builds of CODED. FLAGN
+            // converts neither `H` nor `L` (LAB records 1 and 3), so it
+            // answers twice per build; GRADE answers record 2, which has no
+            // FLAG, once per build; and G2 chooses between subject 1's two
+            // CODED records once for each of subject 1's two LAB records.
             assert_eq!(
                 handler_rows(&study, &result),
                 [
@@ -1200,9 +1202,9 @@ columns:
                     "out.csv,handler,columns.CAT.derivation.source.no_match,no_match,,CAT,LOOKUP-24,,,,1,,,{}",
                     "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,REQ-0127,,,,1,,,{}",
                     "out.csv,handler,columns.NEAR.derivation.source.no_match,no_match,,NEAR,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,intermediates[0].derivations.FLAGN.unconvertible,unconvertible,,,REQ-0013,,,,8,,,{}",
-                    "out.csv,handler,intermediates[0].derivations.GRADE.mapping.missing,missing,,,,,,,4,,,{}",
-                    "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,REQ-0127,,,,6,,,{}",
+                    "out.csv,handler,intermediates[0].derivations.FLAGN.unconvertible,unconvertible,,,REQ-0013,,,,6,,,{}",
+                    "out.csv,handler,intermediates[0].derivations.GRADE.mapping.missing,missing,,,,,,,3,,,{}",
+                    "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,REQ-0127,,,,2,,,{}",
                     "out.csv,handler,intermediates[1].derivations.G2.source.no_match,no_match,,,LOOKUP-24,,,,0,,,{}",
                 ]
             );

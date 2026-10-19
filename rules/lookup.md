@@ -792,7 +792,7 @@ selection index at that boundary.
 
 <a id="lookup-15"></a>
 
-### LOOKUP-15. Intermediate derivations add per-record fields to the donor records before matching
+### LOOKUP-15. Intermediate derivations add per-record fields to the donor records
 
 An intermediate may declare `derivations:`, a map of names to derivations in
 the expression language of row-template `derivations:`, evaluated in
@@ -800,12 +800,12 @@ declaration order over the dataset's stored fields and the derivations
 declared before each one. A typed entry converts each result to its declared
 type before anything later reads it, and an untyped entry keeps its raw
 result, its field taking the expression's result type
-([EXPR-14](expressions.md#expr-14)). The derived values augment each donor
-record before matching, `filter`, `order_by` selection and `columns`
-projection, and behave there like stored fields.
+([EXPR-14](expressions.md#expr-14)). The derived values augment donor records
+for matching, `filter`, `order_by` selection and `columns` projection, and
+behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
-Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`.
+Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_matched_derivations.rs`.
 Replaces: REQ-1185.
 
 Each entry is either an untyped expression, including its
@@ -853,9 +853,15 @@ Derivations that read only donor records are computed once per record for
 each build of the donor records; [COLUMN-14](columns.md#column-14) lists when
 the run builds them, which its handler counts follow. When any derivation
 reads the current input record, the map evaluates for each lookup's current
-record, and its augmented donor records, filters and match indexes are not
-reused for another current record. Every column reading the intermediate still
-shares the same selection ([LOOKUP-12](#lookup-12)).
+record, after that record's match values, and only on the donor records whose
+stored keys equal them, in stored order; the range, the filter and the
+selection see those records. A record that no current record's match values
+select is never augmented, so a derivation cannot fail on it and no handler
+counts it. When a `key` or a `between` bound names a derived field, or a
+derivation uses a window function, the map evaluates on every donor record
+instead. The augmented donor records and their filters are not reused for
+another current record. Every column reading the intermediate still shares
+the same selection ([LOOKUP-12](#lookup-12)).
 
 A derivation may use a window function. The window partitions the donor
 records as augmented by every derivation declared before it, so its

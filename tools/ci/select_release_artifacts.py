@@ -10,15 +10,17 @@ import shutil
 import stat
 import subprocess
 import tarfile
-import tomllib
 import zipfile
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from tools.ci import native
-from tools.packaging import check_package_notices
+from tools.ci import native, release_assets
+from tools.packaging import check_package_notices, release_identity
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
+
+# GitHub refuses a release body longer than this many characters.
+RELEASE_BODY_LIMIT = 125_000
 
 
 def require(condition, message):
@@ -42,27 +44,55 @@ def github_time(value, subject):
     return datetime.fromisoformat(value)
 
 
-def release_version(root, tag):
-    """Return the coordinated version, which `tag` must name unless it is None."""
+def prepared_release(root, tag):
+    """Return the release identity the tree prepares, which `tag` must name.
+
+    A rehearsal passes no tag. A candidate tag on a final release, or a final
+    release tag on a candidate, is refused here, before any request or
+    download.
+    """
     errors = violations(root)
     require(not errors, "incoherent release versions: " + "; ".join(errors))
-    version = tomllib.loads((root / "python/pyproject.toml").read_text())["project"][
-        "version"
-    ]
+    identity = release_identity.read(root)
+    if tag is not None:
+        named = release_identity.from_tag(tag)
+        require(
+            named.candidate is None or identity.candidate is not None,
+            f"{tag} is a candidate tag, but the tree prepares the final release "
+            f"{identity}; its tag is {identity.tag}",
+        )
+        require(
+            named.candidate is not None or identity.candidate is None,
+            f"{tag} is a final release tag, but the tree prepares {identity}; "
+            f"its tag is {identity.tag}",
+        )
+        require(
+            named == identity,
+            f"{tag} names release {named}, but the tree prepares {identity}; "
+            f"its tag is {identity.tag}",
+        )
     require(
-        re.fullmatch(
-            r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", version
-        ),
-        "release requires a coordinated stable Python/R/Cargo version",
+        (root / f"docs/releases/{identity.version}.md").is_file(),
+        "release notes are missing",
     )
-    require(
-        tag is None or tag == f"yamaa-v{version}",
-        "tag must name the coordinated stable Python/R/Cargo version",
-    )
-    require(
-        (root / f"docs/releases/{version}.md").is_file(), "release notes are missing"
-    )
-    return version
+    if identity.candidate is not None:
+        require(
+            (root / candidate_notes(identity)).is_file(),
+            f"candidate notes are missing: {candidate_notes(identity)}",
+        )
+        previous = identity.previous()
+        if previous is not None:
+            require(
+                reaches(root, f"refs/tags/{previous.tag}"),
+                f"{identity} must follow {previous}, but its tag {previous.tag} "
+                "is missing or not an ancestor of this commit",
+            )
+    return identity
+
+
+def candidate_notes(identity):
+    """The committed notes on what changed since the previous candidate."""
+    return f"docs/releases/{identity.cargo}.md"
 
 
 def git(root, *arguments):
@@ -71,8 +101,9 @@ def git(root, *arguments):
     ).strip()
 
 
-def require_main_ancestry(root, revision, subject):
-    require(
+def reaches(root, revision, descendant="HEAD"):
+    """Whether `revision` names a commit that `descendant` contains."""
+    return (
         subprocess.run(
             [
                 "git",
@@ -80,12 +111,20 @@ def require_main_ancestry(root, revision, subject):
                 str(root),
                 "merge-base",
                 "--is-ancestor",
-                revision,
-                "origin/main",
+                f"{revision}^{{commit}}",
+                descendant,
             ],
             check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         ).returncode
-        == 0,
+        == 0
+    )
+
+
+def require_main_ancestry(root, revision, subject):
+    require(
+        reaches(root, revision, "origin/main"),
         f"{subject} must belong to current main ancestry",
     )
 
@@ -191,8 +230,9 @@ def run_coverage(run, repository, revision):
 def required_jobs(coverage):
     """Map each native job a release requires to the steps it must complete.
 
-    These names, and the artifacts in `release_artifacts`, are the only copy:
-    `tools/tests/test_native_workflow.py` checks them against native.yml.
+    These names, and the artifacts that `release_assets` declares, are the
+    only copy: `tools/tests/test_native_workflow.py` checks them against
+    native.yml.
     """
     jobs = {
         "portable-math-exact": (
@@ -215,8 +255,9 @@ def required_jobs(coverage):
             "Report installed Python public benchmark conformance",
             "Qualify the installed package outside checkout",
         )
-    # The Linux host builds the R source archive once; every R lane installs it.
-    jobs[f"native-r-dist ({source_platform(coverage)})"] = ("Build R source package",)
+    # The source platform builds the R source archive once; every R lane
+    # installs it.
+    jobs[f"native-r-dist ({native.SOURCE_PLATFORM})"] = ("Build R source package",)
     for platform in coverage["r"]["os"]:
         jobs[f"native-r ({platform})"] = (
             "Install R outside checkout",
@@ -225,31 +266,6 @@ def required_jobs(coverage):
             "Check R source package outside checkout",
         )
     return jobs
-
-
-def source_platform(coverage):
-    """The Linux platform whose source archives every source lane installs."""
-    linux = [
-        platform for platform in coverage["r"]["os"] if platform.startswith("ubuntu-")
-    ]
-    require(len(linux) == 1, "canonical Linux source platform is ambiguous")
-    return linux[0]
-
-
-def release_artifacts(coverage):
-    """Map each release artifact to the required job that uploads it.
-
-    Also return the Linux platform whose source archives are published.
-    """
-    linux = source_platform(coverage)
-    producers = {
-        f"native-python-{lane['os']}-{lane['python']}": (
-            f"native-dist ({lane['os']}, {lane['python']})"
-        )
-        for lane in coverage["build"]["include"]
-    }
-    producers[f"native-r-{linux}"] = f"native-r-dist ({linux})"
-    return producers, linux
 
 
 def validate_jobs(jobs, coverage, run):
@@ -300,7 +316,7 @@ def select_artifacts(artifacts, coverage, run, repository, jobs):
     and the artifact created while its producer ran is the one that attempt
     qualified.
     """
-    producers, linux = release_artifacts(coverage)
+    producers = release_assets.artifacts(release_assets.declared(coverage))
     selected = []
     for name, producer in producers.items():
         started = github_time(jobs[producer].get("started_at"), producer)
@@ -328,7 +344,7 @@ def select_artifacts(artifacts, coverage, run, repository, jobs):
         len({artifact["id"] for artifact in selected}) == len(selected),
         "artifact IDs are ambiguous",
     )
-    return selected, linux
+    return selected
 
 
 def package_version(payload, version):
@@ -364,85 +380,55 @@ def archive_payloads(path):
         }
 
 
-def downloaded_assets(destination, selected, linux, version, root):
-    assets = []
+def check_package(asset, path, identity, root):
+    """Check one release file's own name, version and notices."""
+    payloads = archive_payloads(path)
+    if asset.kind in {"wheel", "sdist"}:
+        metadata = [
+            payload
+            for name, payload in payloads.items()
+            if name.endswith(("/METADATA", "/PKG-INFO"))
+        ]
+        require(len(metadata) == 1, "Python package metadata is missing or ambiguous")
+        package_version(metadata[0], identity.python)
+    elif asset.kind == "r-source":
+        description = payloads.get("yamaa/DESCRIPTION", b"").decode("utf-8")
+        require(
+            re.findall(r"(?m)^Package: (.+)$", description) == ["yamaa"]
+            and re.findall(r"(?m)^Version: (.+)$", description) == [identity.r],
+            "R DESCRIPTION name/version differs",
+        )
+    else:
+        raise ValueError(f"{asset.title}: no content check for {asset.kind} assets")
+    # Each package carries the project license and every notice at its own
+    # location, unchanged from the checkout.
+    check_package_notices.check_archive(path, root)
+
+
+def downloaded_assets(destination, selected, identity, root, assets):
+    """Return the release files in declaration order, each checked.
+
+    Every downloaded artifact must hold exactly the assets declared in it, so
+    a missing, ambiguous or undeclared file fails the selection.
+    """
+    found = {}
     for artifact in selected:
-        directory = destination / artifact["name"]
-        paths = list(directory.iterdir())
+        paths = sorted((destination / artifact["name"]).iterdir())
         require(
             all(path.is_file() and not path.is_symlink() for path in paths),
             "unexpected artifact member",
         )
-        is_python = artifact["name"].startswith("native-python-")
-        if is_python:
-            wheels = [path for path in paths if path.suffix == ".whl"]
-            sources = [path for path in paths if path.name == f"yamaa-{version}.tar.gz"]
-            require(
-                len(paths) == 2 and len(wheels) == len(sources) == 1,
-                "expected one release wheel and source archive",
-            )
-            wheel = wheels[0]
-            python_tag = "cp" + min(native.PYTHONS).replace(".", "")
-            require(
-                re.fullmatch(
-                    rf"yamaa-{re.escape(version)}-{python_tag}-abi3-[A-Za-z0-9_.]+\.whl",
-                    wheel.name,
-                ),
-                "wheel name/version/ABI differs",
-            )
-            platform_tag = wheel.name.removesuffix(".whl").rsplit("-", 1)[1]
-            if artifact["name"].startswith("native-python-ubuntu-"):
-                pattern = (
-                    r"(?:manylinux(?:_[0-9]+_[0-9]+|1|2010|2014)_x86_64|linux_x86_64)"
-                )
-            elif artifact["name"].startswith("native-python-macos-"):
-                pattern = r"macosx_[0-9]+_[0-9]+_arm64"
-            elif artifact["name"].startswith("native-python-windows-"):
-                pattern = r"win_amd64"
-            else:
-                raise ValueError("unsupported wheel host")
-            require(
-                all(re.fullmatch(pattern, tag) for tag in platform_tag.split(".")),
-                "wheel platform differs from the qualified host",
-            )
-            assets.append(wheel)
-            if artifact["name"] == f"native-python-{linux}-{native.BUILD_PYTHON}":
-                assets.append(sources[0])
-        else:
-            require(
-                len(paths) == 1 and paths[0].name == f"yamaa_{version}.tar.gz",
-                "R source name/version differs",
-            )
-            assets.append(paths[0])
-        for path in paths:
-            payloads = archive_payloads(path)
-            if is_python:
-                metadata = [
-                    payload
-                    for name, payload in payloads.items()
-                    if name.endswith(("/METADATA", "/PKG-INFO"))
-                ]
-                require(
-                    len(metadata) == 1,
-                    "Python package metadata is missing or ambiguous",
-                )
-                package_version(metadata[0], version)
-            else:
-                description = payloads.get("yamaa/DESCRIPTION", b"").decode("utf-8")
-                require(
-                    re.findall(r"(?m)^Package: (.+)$", description) == ["yamaa"]
-                    and re.findall(r"(?m)^Version: (.+)$", description) == [version],
-                    "R DESCRIPTION name/version differs",
-                )
-            # Each package carries the project license and every notice at its
-            # own location, unchanged from the checkout.
-            check_package_notices.check_archive(path, root)
+        declared = [asset for asset in assets if asset.artifact == artifact["name"]]
+        for asset, path in release_assets.match(paths, declared, identity):
+            check_package(asset, path, identity, root)
+            found[asset] = path
+    require(set(found) == set(assets), "release assets are incomplete")
+    published = [found[asset] for asset in assets]
     require(
-        len(assets) == len(native.PLATFORMS) + 2
-        and len({path.name for path in assets}) == len(assets),
-        "release assets are incomplete or ambiguous",
+        len({path.name for path in published}) == len(published),
+        "release asset names are ambiguous",
     )
-    return assets
+    return published
 
 
 def gh_json(*arguments):
@@ -519,7 +505,7 @@ def select_release(root, repository_name, tag, destination, run_id=None):
         re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository_name),
         "invalid release repository",
     )
-    version = release_version(root, tag)
+    identity = prepared_release(root, tag)
     if tag is None:
         require(positive_integer(run_id), "rehearsal run id must be positive")
         revision = checked_out_revision(root)
@@ -559,26 +545,80 @@ def select_release(root, repository_name, tag, destination, run_id=None):
     artifacts = paginated(
         repository_name, f"actions/runs/{run['id']}/artifacts?per_page=100", "artifacts"
     )
-    selected, linux = select_artifacts(artifacts, coverage, run, repository, jobs)
+    selected = select_artifacts(artifacts, coverage, run, repository, jobs)
+    notes = release_notes(root, identity, repository_name, run, selected)
+    require(
+        len(notes) <= RELEASE_BODY_LIMIT,
+        f"the release body has {len(notes):,} characters; GitHub accepts at most "
+        f"{RELEASE_BODY_LIMIT:,}",
+    )
     destination.mkdir(parents=True, exist_ok=False)
     for artifact in selected:
         download_artifact(repository_name, artifact, destination)
-    assets = downloaded_assets(destination, selected, linux, version, root)
+    assets = downloaded_assets(
+        destination, selected, identity, root, release_assets.declared(coverage)
+    )
     (destination / "source-revision.txt").write_text(revision + "\n", encoding="utf-8")
     (destination / "asset-paths.txt").write_text(
         "".join(f"{path.resolve()}\n" for path in assets), encoding="utf-8"
     )
+    (destination / "release-notes.md").write_text(notes, encoding="utf-8")
+    return assets
+
+
+def release_notes(root, identity, repository, run, selected):
+    """Compose the release body from the committed notes and the native run.
+
+    A candidate's body first says that it is a candidate, where feedback goes
+    and what changed since the previous candidate.
+    """
+    notes = (root / f"docs/releases/{identity.version}.md").read_text(encoding="utf-8")
+    notes = notes.rstrip("\n")
+    if identity.candidate is not None:
+        notes = candidate_introduction(root, identity, repository) + "\n\n" + notes
     attempt = f"{run['html_url']}/attempts/{run['run_attempt']}"
-    notes = (root / f"docs/releases/{version}.md").read_text(encoding="utf-8")
     # A section of its own, so the evidence does not read as part of the
     # committed notes' last section.
-    notes = notes.rstrip("\n") + "\n\n## Qualified native artifacts\n\n"
+    notes += "\n\n## Qualified native artifacts\n\n"
     notes += f"Native qualification run: [{attempt}]({attempt}).\n\n"
     notes += "".join(
         f"- `{artifact['name']}` (artifact {artifact['id']})\n" for artifact in selected
     )
-    (destination / "release-notes.md").write_text(notes, encoding="utf-8")
-    return assets
+    return notes
+
+
+def candidate_introduction(root, identity, repository):
+    """Say what a candidate is, where feedback goes and what changed in it."""
+    changes = (root / candidate_notes(identity)).read_text(encoding="utf-8").strip()
+    require(changes, f"candidate notes are empty: {candidate_notes(identity)}")
+    site = f"https://github.com/{repository}"
+    final = identity.version
+    lines = [
+        f"**This is release candidate {identity.candidate} of yamaa {final}, "
+        "published for testing and feedback. It is not the final release.**",
+        "",
+        "- **Feedback.** Report problems and comments in a GitHub issue: "
+        f"{site}/issues/new/choose",
+        f"- **Python.** The Python packages are version `{identity.python}`.",
+        f"- **R.** The R package is version `{identity.r}` in every candidate and "
+        "in the final release, because an R version cannot mark a candidate. R "
+        "does not offer the final release as an update to a candidate, so "
+        f"reinstall the R package when yamaa {final} is released.",
+        "",
+    ]
+    previous = identity.previous()
+    if previous is None:
+        lines += [f"## Release candidate {identity.candidate}", "", changes]
+    else:
+        lines += [
+            f"## Changes since release candidate {previous.candidate}",
+            "",
+            changes,
+            "",
+            f"Every commit since release candidate {previous.candidate}: "
+            f"{site}/compare/{previous.tag}...{identity.tag}",
+        ]
+    return "\n".join(lines)
 
 
 def main():

@@ -1,33 +1,84 @@
 //! Donor materialization: a derived intermediate's records, each stored
-//! field copied and every derivation evaluated in declaration order over all
-//! donor records, on the same units as the dataset. A derivation that reads
-//! the current record rebuilds the donor records for each current row
-//! (LOOKUP-15); every donor handler counts each time they are built.
+//! field copied and every derivation evaluated in declaration order over the
+//! donor records, on the same units as the dataset. Derivations that read
+//! the current record rebuild the donor records for each current row and
+//! augment only the records whose stored keys match it (LOOKUP-15); every
+//! donor handler counts each time the records are built.
 use super::frame::{Frame, Identity};
+use super::index::Index;
 use super::relations::{self, Site};
 use super::{Cx, Fail, Footprint, Run, Table};
 use crate::dataset::execution::ExecutionError;
 use crate::dataset::resolved::{RegionId, RelationId};
-use crate::dataset::{Intermediate, IntermediateSource};
+use crate::dataset::{Intermediate, IntermediateDerivations, IntermediateSource};
 use crate::limits::Limits;
 use crate::table::{TableAccess, TableSchema};
 use crate::value::Value;
+use std::cell::OnceCell;
 use std::rc::Rc;
 
-/// A materialized donor: its completed records.
+/// A materialized donor: its completed records, and the key index over
+/// them once a match builds it.
 pub(super) struct Donor {
     frame: Frame,
     schema: TableSchema,
+    index: OnceCell<Option<Index>>,
+}
+
+/// The records a read selects among: a donor's, or the range of a shared
+/// donor that holds the matched records of several current rows.
+#[derive(Clone)]
+pub(super) struct Built {
+    donor: Rc<Donor>,
+    start: usize,
+    rows: usize,
+}
+
+impl Built {
+    /// Records `start..start + rows` of a shared donor.
+    pub(super) fn part(donor: &Rc<Donor>, start: usize, rows: usize) -> Self {
+        Self {
+            donor: Rc::clone(donor),
+            start,
+            rows,
+        }
+    }
+
+    fn whole(donor: Rc<Donor>) -> Self {
+        let rows = donor.frame.rows();
+        Self {
+            donor,
+            start: 0,
+            rows,
+        }
+    }
+
+    pub(super) fn table<E>(&self) -> Table<'_, E> {
+        Table::Rows {
+            frame: &self.donor.frame,
+            schema: &self.donor.schema,
+            start: self.start,
+            rows: self.rows,
+        }
+    }
+
+    pub(super) fn donor(&self) -> &Donor {
+        &self.donor
+    }
 }
 
 impl Donor {
-    pub(super) fn table<E>(&self) -> Table<'_, E> {
-        Table::Rows {
-            frame: &self.frame,
-            schema: &self.schema,
-            start: 0,
-            rows: self.frame.rows(),
+    /// The key index over the records, built on first use; none when a
+    /// record's key cannot be indexed exactly.
+    pub(super) fn index<E>(
+        &self,
+        build: impl FnOnce() -> Result<Option<Index>, Fail<E>>,
+    ) -> Result<Option<&Index>, Fail<E>> {
+        if self.index.get().is_none() {
+            let built = build()?;
+            let _ = self.index.set(built);
         }
+        Ok(self.index.get().and_then(Option::as_ref))
     }
 }
 
@@ -40,16 +91,12 @@ pub(super) fn materialize<E>(
     relation: RelationId,
     site: Option<Site<'_>>,
     row: Option<usize>,
-) -> Result<Option<Rc<Donor>>, Fail<E>> {
+) -> Result<Option<Built>, Fail<E>> {
     let plan = run.plan;
     let item = relations::item(plan, relation);
     let Some(derived) = &item.derivations else {
         return Ok(None);
     };
-    let region = plan
-        .relation(relation)
-        .derivations
-        .expect("a derived intermediate has a donor region");
     let key = (!derived.current.is_empty()).then(|| match row {
         Some(row) => cx.frame.identity(row),
         None => Identity::Free,
@@ -57,6 +104,60 @@ pub(super) fn materialize<E>(
     if let Some(data) = run.relations.materialized(relation, key) {
         return Ok(Some(data));
     }
+    let current = current_fields(run, cx, item, derived, site, row)?;
+    let data = Built::whole(build(run, cx, relation, &current, 0, Records::All)?);
+    run.relations
+        .insert_materialized(relation, key, data.clone());
+    Ok(Some(data))
+}
+
+/// LOOKUP-15: the donor records that derivations reading the current record
+/// augment for one current row, with the row's match values. The current
+/// fields resolve first, as for every build, then the match values, and only
+/// the records whose stored keys match them are augmented. The others keep
+/// no derived value: no later step of the match reads one.
+///
+/// `compact` builds the matched records alone, at positions of their own;
+/// otherwise every record keeps its source position and only the matched
+/// ones are augmented, so a failure names the source row.
+pub(super) fn materialize_matched<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    site: Site<'_>,
+    row: usize,
+    compact: bool,
+) -> Result<(Built, relations::MatchValues), Fail<E>> {
+    let plan = run.plan;
+    let item = relations::item(plan, relation);
+    let derived = item
+        .derivations
+        .as_ref()
+        .expect("an intermediate deriving matched records has derivations");
+    let current = current_fields(run, cx, item, derived, Some(site), Some(row))?;
+    let keys = relations::match_values(run, cx, relation, item, row)?;
+    let mut matched = Vec::new();
+    relations::matched_records(run, cx, relation, item, &keys, &mut matched)?;
+    let records = if compact {
+        Records::Compact(&matched)
+    } else {
+        Records::Matched(&matched)
+    };
+    let data = Built::whole(build(run, cx, relation, &current, 0, records)?);
+    run.relations
+        .insert_materialized(relation, Some(cx.frame.identity(row)), data.clone());
+    Ok((data, keys))
+}
+
+/// The current record's fields a derived intermediate's derivations read.
+pub(super) fn current_fields<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    item: &Intermediate,
+    derived: &IntermediateDerivations,
+    site: Option<Site<'_>>,
+    row: Option<usize>,
+) -> Result<Vec<Value>, Fail<E>> {
     let mut current = Vec::with_capacity(derived.current.len());
     let reading = Cx {
         table: cx.primary,
@@ -71,6 +172,62 @@ pub(super) fn materialize<E>(
             run, &reading, site, field, site.path, row,
         )?);
     }
+    Ok(current)
+}
+
+/// The donor records a build augments.
+#[derive(Clone, Copy)]
+enum Records<'r> {
+    /// Every record.
+    All,
+    /// Every record at its source position, only these augmented.
+    Matched(&'r [usize]),
+    /// Only these records, at positions of their own.
+    Compact(&'r [usize]),
+}
+
+/// The matched records of several current rows in one compact build, each
+/// record with its own row's current values, `stride` per record.
+pub(super) fn build_matched<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    current: &[Value],
+    stride: usize,
+    records: &[usize],
+) -> Result<Rc<Donor>, Fail<E>> {
+    build(
+        run,
+        cx,
+        relation,
+        current,
+        stride,
+        Records::Compact(records),
+    )
+}
+
+/// A derived intermediate's donor records: their stored fields copied, then
+/// each derivation evaluated in declaration order for the records augmented.
+/// `current` is one set of current values, or one set per record when
+/// `stride` is its width.
+fn build<E>(
+    run: &mut Run<'_, '_, E>,
+    cx: &Cx<'_, E>,
+    relation: RelationId,
+    current: &[Value],
+    stride: usize,
+    records: Records<'_>,
+) -> Result<Rc<Donor>, Fail<E>> {
+    let plan = run.plan;
+    let item = relations::item(plan, relation);
+    let derived = item
+        .derivations
+        .as_ref()
+        .expect("a derived intermediate has derivations");
+    let region = plan
+        .relation(relation)
+        .derivations
+        .expect("a derived intermediate has a donor region");
     let table = match &item.source {
         IntermediateSource::Input(index) => cx.secondary[*index],
         IntermediateSource::Primary { .. } => cx.primary,
@@ -103,8 +260,18 @@ pub(super) fn materialize<E>(
         })
     })?;
     let mut frame = Frame::new(output.columns().len());
-    for source_row in 0..table.row_count() {
-        let row = frame.push(0, Identity::Candidate(source_row), &[source_row]);
+    let all: Vec<usize>;
+    let stored = match records {
+        Records::Compact(rows) => rows,
+        Records::All | Records::Matched(_) => {
+            all = (0..table.row_count()).collect();
+            &all
+        }
+    };
+    for (position, &source_row) in stored.iter().enumerate() {
+        // A record's member is its position in the donor's input; only a
+        // compact build moves it from the source row.
+        let row = frame.push(0, Identity::Candidate(source_row), &[position]);
         for column in 0..derived.stored_columns {
             let value = relations::cell(table, item, source_row, column)?;
             frame.complete(row, column, value);
@@ -123,6 +290,14 @@ pub(super) fn materialize<E>(
                 .map_or(cx.primary, |index| cx.secondary[index])
         })
         .collect();
+    let positions: Vec<usize>;
+    let rows = match records {
+        Records::Matched(rows) => rows,
+        Records::All | Records::Compact(_) => {
+            positions = (0..frame.rows()).collect();
+            &positions
+        }
+    };
     let saved_relations =
         std::mem::replace(&mut run.relations, relations::State::new(plan, region));
     let saved_windows = std::mem::take(&mut run.windows);
@@ -130,7 +305,9 @@ pub(super) fn materialize<E>(
         run,
         region,
         &mut frame,
-        &current,
+        rows,
+        current,
+        stride,
         &input_schema,
         &secondary,
         item,
@@ -139,29 +316,30 @@ pub(super) fn materialize<E>(
     run.windows = saved_windows;
     run.relations = saved_relations;
     result?;
-    let data = Rc::new(Donor {
+    Ok(Rc::new(Donor {
         frame,
         schema: output,
-    });
-    run.relations
-        .insert_materialized(relation, key, Rc::clone(&data));
-    Ok(Some(data))
+        index: OnceCell::new(),
+    }))
 }
 
-/// Evaluate every derivation over every donor record, in declaration order.
+/// Evaluate every derivation over the donor records `rows`, in declaration
+/// order. `current` is one set of current values for every record, or one
+/// set per record when `stride` is its width.
 #[allow(clippy::too_many_arguments)]
 fn derive<E>(
     run: &mut Run<'_, '_, E>,
     region: RegionId,
     frame: &mut Frame,
+    rows: &[usize],
     current: &[Value],
+    stride: usize,
     input_schema: &TableSchema,
     secondary: &[Table<'_, E>],
     item: &Intermediate,
     outer: RegionId,
 ) -> Result<(), Fail<E>> {
     let plan = run.plan;
-    let rows: Vec<usize> = (0..frame.rows()).collect();
     for &column in plan.column_order(region) {
         let binding = plan
             .column_bindings(column)
@@ -172,7 +350,7 @@ fn derive<E>(
         let columns = [local];
         let footprint = Footprint::Cells {
             columns: &columns,
-            rows: &rows,
+            rows,
         };
         run.run_unit(frame, footprint, callbacks, |run, frame, row_mode| {
             run.windows = Default::default();
@@ -185,6 +363,7 @@ fn derive<E>(
                     let input = Table::Input {
                         frame,
                         current,
+                        stride,
                         schema: input_schema,
                     };
                     let cx = Cx {
@@ -215,12 +394,12 @@ fn derive<E>(
             };
             if row_mode {
                 evaluate(run, frame, &[], true)?;
-                for &row in &rows {
+                for &row in rows {
                     evaluate(run, frame, &[row], false)?;
                 }
                 Ok(())
             } else {
-                evaluate(run, frame, &rows, true)
+                evaluate(run, frame, rows, true)
             }
         })?;
     }

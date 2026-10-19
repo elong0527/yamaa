@@ -40,12 +40,14 @@ def test_installed_package_exports_exactly_the_public_api() -> None:
 def test_vendored_package_without_distribution_metadata_uses_core_version() -> None:
     # A vendored copy has the compiled extension but no dist-info, so the
     # metadata lookup raises PackageNotFoundError; importing the package
-    # must fall back to the core version instead of raising.
+    # must fall back to the core version, in its Python spelling, instead
+    # of raising.
     code = textwrap.dedent(
         """
         import importlib.metadata as metadata
 
         real_version = metadata.version
+        installed = real_version("yamaa")
 
 
         def missing(name, *args, **kwargs):
@@ -57,9 +59,8 @@ def test_vendored_package_without_distribution_metadata_uses_core_version() -> N
         metadata.version = missing
 
         import yamaa
-        from yamaa import _native
 
-        assert yamaa.__version__ == _native._CORE_VERSION, yamaa.__version__
+        assert yamaa.__version__ == installed, (yamaa.__version__, installed)
         """
     )
     subprocess.run([sys.executable, "-c", code], check=True)

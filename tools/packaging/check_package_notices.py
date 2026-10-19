@@ -12,27 +12,33 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+from tools.packaging import release_identity
 from tools.paths import ROOT
 
 
 def package_notices(root=ROOT):
-    """Return the coordinated version and the package notice file names."""
+    """Return the release identity and the package notice file names."""
     project = tomllib.loads(
         (root / "python/pyproject.toml").read_text(encoding="utf-8")
     )["project"]
-    return project["version"], tuple(project["license-files"])
+    return release_identity.read(root), tuple(project["license-files"])
 
 
-def notice_members(name, version, notices):
-    """Map each notice to its member in a wheel, Python sdist or R source archive."""
-    if name.startswith(f"yamaa-{version}-") and name.endswith(".whl"):
-        directory = f"yamaa-{version}.dist-info/licenses"
-    elif name == f"yamaa-{version}.tar.gz":
-        directory = f"yamaa-{version}"
-    elif name == f"yamaa_{version}.tar.gz":
+def notice_members(name, identity, notices):
+    """Map each notice to its member in a wheel, Python sdist or R source archive.
+
+    The Python packages carry the Python version and the R source archive the
+    R version, which differ for a release candidate.
+    """
+    python, r = identity.python, identity.r
+    if name.startswith(f"yamaa-{python}-") and name.endswith(".whl"):
+        directory = f"yamaa-{python}.dist-info/licenses"
+    elif name == f"yamaa-{python}.tar.gz":
+        directory = f"yamaa-{python}"
+    elif name == f"yamaa_{r}.tar.gz":
         directory = "yamaa/inst"
     else:
-        raise ValueError(f"{name}: not a yamaa {version} wheel or source archive")
+        raise ValueError(f"{name}: not a yamaa {identity} wheel or source archive")
     return {notice: f"{directory}/{notice}" for notice in notices}
 
 
@@ -57,8 +63,8 @@ def read_members(path, wanted):
 
 def check_archive(path, root=ROOT):
     """Raise ValueError unless the package carries every notice unchanged."""
-    version, notices = package_notices(root)
-    members = notice_members(path.name, version, notices)
+    identity, notices = package_notices(root)
+    members = notice_members(path.name, identity, notices)
     payloads = read_members(path, set(members.values()))
     for notice, member in members.items():
         if payloads.get(member) != (root / "python" / notice).read_bytes():

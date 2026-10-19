@@ -1267,8 +1267,7 @@ mod tests {
             )
             .unwrap();
             assert!(result.issues().is_empty());
-            let public =
-                crate::public_table::PublicTable::decode(result.output().unwrap()).unwrap();
+            let public = result.output_table().unwrap();
             assert_eq!(public.columns().len(), 40);
             assert_eq!(public.rows(), 1);
             let domain = Domain::from_build(result, |field| {

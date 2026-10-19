@@ -3,6 +3,7 @@
 //! with derivations first.
 use super::buffer::Values;
 use super::eval::owned;
+use super::index::{Equality, Index};
 use super::relations::{candidates, Probe, Refusal};
 use super::{Cx, Fail, Run, Table};
 use crate::aggregate_reduction::{reduce_values, AggregateReductionError};
@@ -14,9 +15,10 @@ use crate::expression::{
     AggregateResult, Reducer, Reduction, ReductionOperand, Resolver as ExpressionResolver,
 };
 use crate::table::{CellError, TableAccess, TableSchema, ValueRef};
-use crate::table_grouping::Key;
 use crate::table_reduction::TableReductionError;
 use crate::value::{Selection, Value, ValueType};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 /// Where an aggregate's donor records come from, for port failures.
 #[derive(Clone, Copy)]
@@ -70,6 +72,14 @@ impl<'a, E> Record<'a, E> {
     pub(super) fn table(&self) -> Table<'a, E> {
         self.donor
     }
+}
+
+/// The output rows each output aggregate ranges over, indexed by their group
+/// values, and the answers of its filter per row, by aggregate and range.
+#[derive(Default)]
+pub(super) struct Outputs {
+    groups: HashMap<(ExprId, usize, usize), Index>,
+    filters: HashMap<(ExprId, usize, usize), Vec<Option<bool>>>,
 }
 
 /// The donor records of one aggregate over the current row.
@@ -205,28 +215,57 @@ fn select<E>(
             })
         }
         AggregateRelation::Output { group_by } => {
-            let mut members = Vec::new();
-            let mut first = None;
-            for source_row in 0..donor.row_count() {
-                let mut matches = true;
-                for &column in group_by {
-                    if Key::from(cell(&donor, bound, coordinate, source_row, column)?)
-                        != Key::from(cx.frame.get(row, column))
-                    {
-                        matches = false;
-                        break;
-                    }
+            // The join operator (#2842): the output rows sharing the row's
+            // group values, under grouping equality, from an index over the
+            // rows the aggregate ranges over; the filter then runs on them
+            // in stored order, once per row.
+            let range = (expr, cx.output.start, cx.output.len());
+            let index = match run.windows.outputs.groups.entry(range) {
+                Entry::Occupied(index) => index.into_mut(),
+                Entry::Vacant(slot) => slot.insert(Index::groups(
+                    group_by,
+                    0..donor.row_count(),
+                    |source_row, column| cell(&donor, bound, coordinate, source_row, column),
+                )?),
+            };
+            let matched = index
+                .matching(
+                    group_by.iter().map(|&column| cx.frame.get(row, column)),
+                    Equality::Grouping,
+                )
+                .to_vec();
+            let mut members = Vec::with_capacity(matched.len());
+            for &source_row in &matched {
+                if bound.filter().is_none() {
+                    members.push(source_row);
+                    continue;
                 }
-                if matches {
-                    first.get_or_insert(source_row);
-                    if filter(donor, bound, source_row)? {
-                        members.push(source_row);
+                let rows = donor.row_count();
+                let answers = run
+                    .windows
+                    .outputs
+                    .filters
+                    .entry(range)
+                    .or_insert_with(|| vec![None; rows]);
+                let kept = match answers[source_row] {
+                    Some(kept) => kept,
+                    None => {
+                        let kept = filter(donor, bound, source_row)?;
+                        run.windows
+                            .outputs
+                            .filters
+                            .get_mut(&range)
+                            .expect("answers")[source_row] = Some(kept);
+                        kept
                     }
+                };
+                if kept {
+                    members.push(source_row);
                 }
             }
             Ok(Selected {
                 members,
-                representative: first,
+                representative: matched.first().copied(),
             })
         }
         AggregateRelation::Matched { keys, .. } => {
@@ -274,12 +313,33 @@ fn select<E>(
                     representative: None,
                 });
             }
+            // The join operator (#2842), as for an implicit join.
+            let bucket =
+                super::joins::bucket(run, donor, &probe_keys, &kinds, |source_row, column| {
+                    cell(&donor, bound, coordinate, source_row, column)
+                })?;
+            let indexed = Probe {
+                keys: &[],
+                kinds: &[],
+                range: probe.range,
+            };
+            let (rows, probe) = match &bucket {
+                Some(rows) => (super::joins::Rows::Bucket(rows.iter()), &indexed),
+                None => (super::joins::Rows::Scan(0..donor.row_count()), &probe),
+            };
             let found = candidates(
-                0..donor.row_count(),
-                &probe,
+                rows,
+                probe,
                 |source_row, column| cell(&donor, bound, coordinate, source_row, column),
-                |source_row, _: &mut ()| filter(donor, bound, source_row),
-                &mut (),
+                |source_row, run: &mut Run<'_, '_, E>| {
+                    if bound.filter().is_none() {
+                        return Ok(true);
+                    }
+                    // The filter reads only the record: one answer each.
+                    run.ports
+                        .kept(expr, donor, source_row, || filter(donor, bound, source_row))
+                },
+                run,
             )
             .map_err(|refusal| match refusal {
                 Refusal::Failed(error) => error,
