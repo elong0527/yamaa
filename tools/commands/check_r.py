@@ -209,9 +209,10 @@ def check_environment(environment=None):
     It adds CRAN_SETTINGS. Remote services stay out of it unless the caller
     sets these: CRAN's package index and the URL checks
     (`_R_CHECK_CRAN_INCOMING_REMOTE_`), and the clock check
-    (`_R_CHECK_SYSTEM_CLOCK_`). The flags of R's own build configuration are
-    known, as on CRAN's check machines, so "checking compilation flags used"
-    reports only flags that the package adds.
+    (`_R_CHECK_SYSTEM_CLOCK_`). What the checking machine contributes stays
+    out too: the flags of R's own build configuration are known, as on CRAN's
+    check machines, so "checking compilation flags used" reports only flags
+    that the package adds, and OpenBLAS runs one thread.
     """
     environment = dict(os.environ if environment is None else environment)
     for name, value in CRAN_SETTINGS.items():
@@ -220,6 +221,11 @@ def check_environment(environment=None):
         environment.setdefault("_R_CHECK_CRAN_INCOMING_USE_ASPELL_", "true")
     environment.setdefault("_R_CHECK_CRAN_INCOMING_REMOTE_", "false")
     environment.setdefault("_R_CHECK_SYSTEM_CLOCK_", "false")
+    # The machine's BLAS is not the package's, which calls none: the OpenBLAS
+    # that setup-r installs on Linux runners keeps its threads busy while each
+    # R process starts, and the CPU limits would count them, notably for a
+    # test that starts a second R process.
+    environment.setdefault("OPENBLAS_NUM_THREADS", "1")
     known = [environment.get("_R_CHECK_COMPILATION_FLAGS_KNOWN_", "")]
     for name in ("CC", "CPPFLAGS", "CPICFLAGS", "CFLAGS", "LDFLAGS"):
         known.append(r_config(name, environment))

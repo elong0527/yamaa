@@ -198,6 +198,7 @@ class EnvironmentTests(unittest.TestCase):
             )
             self.assertEqual(environment["_R_CHECK_CRAN_INCOMING_REMOTE_"], "false")
             self.assertEqual(environment["_R_CHECK_SYSTEM_CLOCK_"], "false")
+            self.assertEqual(environment["OPENBLAS_NUM_THREADS"], "1")
             for name, value in check_r.CRAN_SETTINGS.items():
                 self.assertEqual(environment[name], value)
             # A caller may turn the remote checks on.
