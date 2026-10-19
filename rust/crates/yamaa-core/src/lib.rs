@@ -4,6 +4,9 @@
 pub mod application_issue;
 pub mod json;
 
+pub mod ast;
+pub mod front_end;
+
 pub mod aggregate_reduction;
 pub mod bound_expression;
 pub mod column_dependencies;

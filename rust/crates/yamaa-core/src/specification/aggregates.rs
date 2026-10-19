@@ -42,6 +42,13 @@ impl Declaration {
     pub(super) fn path(&self) -> &str {
         &self.path
     }
+    /// Each derive binding's path and its derivation.
+    pub(super) fn derive_entries(&self) -> impl Iterator<Item = (&str, &cases::Branch)> {
+        self.derive
+            .iter()
+            .flatten()
+            .map(|derive| (derive.path.as_str(), &derive.branch))
+    }
     /// Whether the aggregate reduces the constructed output rows: neither its
     /// expression nor a derive binding names a relation (LOOKUP-18).
     pub(super) fn reduces_output(&self) -> bool {
@@ -50,11 +57,6 @@ impl Declaration {
                 !compiled.identifiers().any(|name| name.contains('.'))
                     && compiled.record_relations().next().is_none()
             })
-    }
-    pub(super) fn calls(&self, result: &mut Vec<usize>) {
-        for derive in self.derive.iter().flatten() {
-            derivations::calls(&derive.branch.operation, result);
-        }
     }
     /// VALUE-24 for each derive binding over the types `input` declares, an
     /// earlier binding naming its declared type, as binding checks them.
