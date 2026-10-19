@@ -139,6 +139,19 @@ def python_conformance(work, python, plan, revision):
 
 
 def r_conformance(work, environment, plan, revision):
+    # Only full benchmark qualification needs the authored project programs.
+    subprocess.run(
+        [
+            "R",
+            "CMD",
+            "INSTALL",
+            f"--library={environment['R_LIBS'].split(os.pathsep)[0]}",
+            str(ROOT / "rust/tests/project-programs/r"),
+        ],
+        cwd=work.parent,
+        env=environment,
+        check=True,
+    )
     runner = ROOT / "rust/tests/public_conformance.R"
     subprocess.run(
         [

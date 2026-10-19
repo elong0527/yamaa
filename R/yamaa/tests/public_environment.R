@@ -17,7 +17,7 @@ for (capabilities in list(list(), list(NULL, function(...) NULL, function(...) N
     "invalid project host capabilities" else "invalid lock capability"),
     nrow(reply$error$issues) == 0L)
 }
-root <- system.file("project-original", package = "yamaa", mustWork = TRUE)
+root <- system.file("project-base", package = "yamaa", mustWork = TRUE)
 rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 readtext <- function(path) readLines(path, warn = FALSE)
 observations <- function(run) yamaa:::.run_observations(run)
@@ -148,7 +148,7 @@ qualify_static_check_without_study_inputs <- function() {
   on.exit(unlink(work, recursive = TRUE), add = TRUE)
   # The caller's path may be any UTF-8 text; the project file itself is ASCII.
   study <- file.path(work, "\u00e9tude"); dir.create(study)
-  for (name in fixture_strings(host_truth[["original_case_names"]])) {
+  for (name in "base-round") {
     stopifnot(file.copy(file.path(root, name), study, recursive = TRUE))
     case <- file.path(study, name)
     unlink(file.path(case, "input"), recursive = TRUE)
@@ -167,8 +167,8 @@ qualify_functions_without_packaging_lock <- function() {
   previous <- getwd(); on.exit(setwd(previous))
   work <- tempfile("unlocked-functions-"); dir.create(work)
   on.exit(unlink(work, recursive = TRUE), add = TRUE)
-  stopifnot(file.copy(file.path(root, "adam-adsl-bmi"), work, recursive = TRUE))
-  setwd(file.path(work, "adam-adsl-bmi"))
+  stopifnot(file.copy(file.path(root, "base-round"), work, recursive = TRUE))
+  setwd(file.path(work, "base-round"))
   environment <- "r/environment.yaml"
   writeLines(readtext(environment)[!grepl("^lock:", readtext(environment))], environment)
   unlink("r/renv.lock")
@@ -176,7 +176,7 @@ qualify_functions_without_packaging_lock <- function() {
   project <- yamaa_project("project.yaml")
   stopifnot(length(expected) == 1L, nrow(project$check()$issues) == 0L)
   for (attempt in 1:2) {
-    result <- project$spec("ADSL")$run()
+    result <- project$spec("TEST")$run()
     evidence <- observations(result)
     stopifnot(nrow(result$issues) == 0L, is.data.frame(result$output),
       grepl('"lock":"not_requested"', evidence, fixed = TRUE),
@@ -189,7 +189,7 @@ qualify_functions_without_packaging_lock()
 
 previous <- getwd()
 work <- tempfile("public-environment-"); dir.create(work)
-for (name in fixture_strings(host_truth[["original_case_names"]])) {
+for (name in "base-round") {
   stopifnot(file.copy(file.path(root, name), work, recursive = TRUE))
   case <- file.path(work, name); setwd(case)
   expected <- list.files("expected", pattern = "[.]csv$", full.names = TRUE)
@@ -210,7 +210,7 @@ for (name in fixture_strings(host_truth[["original_case_names"]])) {
     unlink(artifact)
   }
   stopifnot(is.null(runs$save()), identical(rawfile(artifact), rawfile(expected)))
-  cat(name, "public project exact original CSV and repeated activation passed\n")
+  cat(name, "public project exact base R CSV and repeated activation passed\n")
 }
 name <- "negative-function-contract"
 stopifnot(file.copy(file.path(root, name), work, recursive = TRUE))
@@ -235,7 +235,8 @@ writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readtext("spec.yaml"), fix
 stopifnot(nrow(refuse_activation(project$spec("TEST")$check())$issues) == 0L)
 # Version disagreement precedes binding, tests and even a missing study input.
 lock <- "r/renv.lock"
-writeLines(sub('"Version": "1.0.0"', '"Version": "999999.0"', readtext(lock), fixed = TRUE), lock)
+writeLines(sub(paste0('"Version": "', as.character(packageVersion("yamaa")), '"'),
+  '"Version": "999999.0"', readtext(lock), fixed = TRUE), lock)
 failed <- project$spec("TEST")$run()
 stopifnot(identical(failed$issues$condition, "runtime_artifact_mismatch"),
           grepl('"source_reads":[]', observations(failed), fixed = TRUE),

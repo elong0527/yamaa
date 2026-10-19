@@ -11,7 +11,7 @@ from tools.staging.stage_r_package import stage
 
 
 def install(work):
-    """Build the staged R package in work and install it with the project programs.
+    """Build the staged R package in work and install it without benchmark helpers.
 
     Returns the source archive and the environment whose R_LIBS selects them.
     """
@@ -43,13 +43,12 @@ def install(work):
     archives = list(work.glob("yamaa_*.tar.gz"))
     if len(archives) != 1:
         raise RuntimeError("R build did not produce one source archive")
-    for package in (ROOT / "rust/tests/project-programs/r", archives[0]):
-        subprocess.run(
-            ["R", "CMD", "INSTALL", f"--library={library}", str(package)],
-            cwd=work,
-            env=environment,
-            check=True,
-        )
+    subprocess.run(
+        ["R", "CMD", "INSTALL", f"--library={library}", str(archives[0])],
+        cwd=work,
+        env=environment,
+        check=True,
+    )
     return archives[0], environment
 
 
