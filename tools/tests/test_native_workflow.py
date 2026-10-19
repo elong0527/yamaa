@@ -368,6 +368,33 @@ class NativeWorkflowContract(unittest.TestCase):
             ):
                 evaluate(expression, context)
 
+    def test_every_cran_job_keeps_its_check_installation_and_test_logs(self):
+        # A failed CRAN check is diagnosed from its artifact. In a container
+        # job, ${{ runner.temp }} names the runner's directory, which the
+        # runner maps to the container's only at the start of an input, so
+        # there the paths start from the directory that the check step names.
+        files = ["00check.log", "00install.out", "tests/*.Rout*"]
+        jobs = [name for name in self.jobs if name.startswith("native-cran ")]
+        self.assertTrue(jobs)
+        for job in jobs:
+            [upload] = [
+                step
+                for step in self.jobs[job]["definitions"]
+                if step.get("name") == "Preserve the CRAN check"
+            ]
+            paths = [
+                path.strip().partition("/yamaa.Rcheck/")
+                for path in upload["with"]["path"].splitlines()
+            ]
+            directory = (
+                "${{ steps.check.outputs.directory }}"
+                if "container" in self.jobs[job]["job"]
+                else "${{ runner.temp }}/cran-check"
+            )
+            with self.subTest(job=job):
+                self.assertEqual([path[2] for path in paths], files)
+                self.assertEqual({path[0] for path in paths}, {directory})
+
 
 if __name__ == "__main__":
     unittest.main()
