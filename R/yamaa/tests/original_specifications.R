@@ -8,6 +8,12 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
+# The truth is JSON, and jsonlite, which reads it, is a suggested package:
+# where it is not installed, the file is skipped.
+if (!requireNamespace("jsonlite", quietly = TRUE)) {
+  message("Skipped original_specifications.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
+  quit(save = "no")
+}
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
@@ -427,8 +433,12 @@ local({
 local({
   # arrow writes a factor as a BYTE_ARRAY String field whose embedded Arrow
   # schema names a dictionary. A layout is not a type (REQ-1032), so each
-  # field reads as its text (#2940).
-  stopifnot(requireNamespace("arrow", quietly = TRUE))
+  # field reads as its text (#2940). arrow is a suggested package: where it is
+  # not installed, this control is skipped.
+  if (!requireNamespace("arrow", quietly = TRUE)) {
+    message("Skipped the Parquet factor columns of original_specifications.R: arrow, a suggested package, is not installed")
+    return(invisible())
+  }
   directory <- tempfile("public-parquet-factors-"); dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
   text <- c("b",NA,"","a","b","\u03b2")

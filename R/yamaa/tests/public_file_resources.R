@@ -1,5 +1,11 @@
 # Real public filesystem controls; private cache/limits/Changed stay in typed Rust.
 library(yamaa)
+# The truth is JSON, and jsonlite, which reads it, is a suggested package:
+# where it is not installed, the file is skipped.
+if (!requireNamespace("jsonlite", quietly = TRUE)) {
+  message("Skipped public_file_resources.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
+  quit(save = "no")
+}
 host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
   system.file("host-fixtures",package="yamaa",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)

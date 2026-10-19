@@ -127,9 +127,9 @@ The **Release checks** badge shows the latest release package checks on `main`,
 which run weekly and before each release: Python and R installation, benchmark
 conformance, and numerical consistency across Linux, macOS, and Windows, and
 CRAN's incoming checks of the R source package (`R CMD check --as-cran` with
-R-devel, R-release and R 4.4 and the minimum Rust, and in a CRAN-like Fedora
-container). Release assets come from that workflow. CRAN and r-universe
-publication are later distribution work.
+R-devel, R-release and R 4.4 and the minimum Rust, without the suggested
+packages, and in a CRAN-like Fedora container). Release assets come from that
+workflow. CRAN and r-universe publication are later distribution work.
 
 ## Where to go next
 

@@ -7,7 +7,9 @@ a shared Rust engine, which the package compiles at installation.
 
 To be completed from the checks of the 1.0.0 candidate that is submitted:
 `R CMD check --as-cran` on Linux, macOS and Windows with R 4.4, R-release and
-R-devel, win-builder (R-release, R-devel and R-oldrel) and the macOS builder.
+R-devel, with R-devel on Linux without the suggested packages
+(`_R_CHECK_DEPENDS_ONLY_=true`), win-builder (R-release, R-devel and R-oldrel)
+and the macOS builder.
 The package is also installed with the network disabled on Linux x86_64 and
 aarch64, macOS and Windows.
 

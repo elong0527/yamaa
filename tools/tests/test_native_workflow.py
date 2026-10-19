@@ -267,6 +267,11 @@ class NativeWorkflowContract(unittest.TestCase):
             f"native-cran ({platform})"
             for platform in self.coverage["cran_container"]["platform"]
         ]
+        jobs += [
+            f"native-cran ({platform}, R {version}, no Suggests)"
+            for platform in self.coverage["cran_no_suggests"]["os"]
+            for version in self.coverage["cran_no_suggests"]["r"]
+        ]
         self.assertEqual(set(self.coverage["cran"]["r"]), {"devel", "release", "4.4"})
         for job in jobs:
             with self.subTest(job=job):
@@ -286,6 +291,40 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertIn("-m tools.commands.check_r --archive", check["run"])
                 # Without a network: connections go to a refusing proxy.
                 self.assertEqual(check["env"]["http_proxy"], "http://127.0.0.1:9")
+
+    def test_only_the_no_suggests_lane_checks_without_the_suggested_packages(self):
+        # CRAN's noSuggests check is R-devel on Linux with
+        # _R_CHECK_DEPENDS_ONLY_; with _R_CHECK_FORCE_SUGGESTS_ false, R
+        # reports the missing Suggests instead of stopping. Every other CRAN
+        # lane installs them and sets neither, so R stops there when one is
+        # missing rather than letting the tests skip what needs it.
+        settings = {
+            "_R_CHECK_DEPENDS_ONLY_": "true",
+            "_R_CHECK_FORCE_SUGGESTS_": "false",
+        }
+        lanes = {
+            f"native-cran ({platform}, R {version}, no Suggests)"
+            for platform in self.coverage["cran_no_suggests"]["os"]
+            for version in self.coverage["cran_no_suggests"]["r"]
+        }
+        self.assertEqual(lanes, {"native-cran (ubuntu-24.04, R devel, no Suggests)"})
+        for job in [name for name in self.jobs if name.startswith("native-cran ")]:
+            steps = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in steps]
+            check = steps[names.index("Check the R source package as CRAN does")]
+            with self.subTest(job=job):
+                chosen = {name: check["env"].get(name) for name in settings}
+                if job not in lanes:
+                    self.assertEqual(chosen, dict.fromkeys(settings))
+                    continue
+                self.assertEqual(chosen, settings)
+                self.assertLess(
+                    names.index("Confirm that no suggested package is installed"),
+                    names.index("Check the R source package as CRAN does"),
+                )
+                for step in steps:
+                    self.assertNotIn("setup-r-dependencies", step.get("uses", ""))
+                    self.assertNotRegex(step.get("run", ""), r"install\.packages|pak::")
 
     def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
         # Linux aarch64 has no R lane yet; its lanes use Linux x86_64's.

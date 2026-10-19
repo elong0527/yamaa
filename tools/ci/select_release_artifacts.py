@@ -281,6 +281,14 @@ def required_jobs(coverage):
                 "Check the R source package as CRAN does",
                 "Confirm that the build used the minimum Rust",
             )
+    # The same check with none of the suggested packages installed.
+    for platform in coverage["cran_no_suggests"]["os"]:
+        for version in coverage["cran_no_suggests"]["r"]:
+            jobs[f"native-cran ({platform}, R {version}, no Suggests)"] = (
+                "Confirm that no suggested package is installed",
+                "Check the R source package as CRAN does",
+                "Confirm that the build used the minimum Rust",
+            )
     for platform in coverage["cran_container"]["platform"]:
         jobs[f"native-cran ({platform})"] = ("Check the R source package as CRAN does",)
     return jobs

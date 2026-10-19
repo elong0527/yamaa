@@ -1,6 +1,14 @@
 # Installed 1,024/1,025 controls for every width route (#2299).
 library(yamaa)
-stopifnot(requireNamespace("arrow", quietly = TRUE), requireNamespace("jsonlite", quietly = TRUE))
+# arrow and jsonlite are suggested packages, each used only where it is
+# installed. Without jsonlite, which decodes the project route's issues,
+# the capacity refusals are compared on the specification route alone;
+# without arrow, which writes the Parquet sources, only the CSV sources run.
+has_arrow <- requireNamespace("arrow", quietly = TRUE)
+has_jsonlite <- requireNamespace("jsonlite", quietly = TRUE)
+routes <- if (has_jsonlite) c(FALSE, TRUE) else FALSE
+if (!has_jsonlite) message("Skipped the project route of the capacity refusals in column_ceilings.R: jsonlite, a suggested package, is not installed")
+if (!has_arrow) message("Skipped the Parquet sources of column_ceilings.R: arrow, a suggested package, is not installed")
 
 # Two routes reach one specification: alone, through yamaa_spec(), or as the
 # one specification a project lists, through the project's own check() and
@@ -23,6 +31,10 @@ operations <- function(project) {
 # listed specification, and so does `source` unless the finding already names
 # its own source operand. The specification alone adds neither.
 route_issues <- function(issues, spec, project) {
+  if (!has_jsonlite) {
+    stopifnot(!project)
+    return(issues)
+  }
   issues$context <- vapply(issues$context, function(text) {
     context <- jsonlite::fromJSON(text, simplifyVector = FALSE)
     stopifnot(identical(!is.null(context$entry), project))
@@ -179,7 +191,7 @@ run_column_ceilings <- function() {
     "  - {name: C0001, type: int, derivation: {literal: 1}}"
   lines[grepl("name: C0002,", lines, fixed = TRUE)] <-
     "  - {name: C0002, type: str, derivation: {str_case: {source: C0001, to: upper}}}"
-  for (project in c(FALSE, TRUE)) {
+  for (project in routes) {
     writeLines(lines, spec)
     for (operation in operations(project)) {
       refused <- operation(spec)
@@ -230,7 +242,7 @@ run_column_ceilings <- function() {
                         projected_columns = "output.columns", "columns")
     expected <- sprintf('{"actual":%s,"code":"compiler_limit","limit":%s,"resource":"%s","stage":"prepare"}',
                         actual, limit, resource)
-    for (project in c(FALSE, TRUE)) {
+    for (project in routes) {
       for (operation in operations(project)) {
         issue <- route_issues(operation(spec)$issues, spec, project)
         stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
@@ -291,7 +303,7 @@ run_column_ceilings <- function() {
   spec <- write_case(path("refuse-types"), fields = 1025L, typed = TRUE)
   for (operation in operations(FALSE)) assert_refusal(operation(spec), TRUE)
 
-  for (format in c("csv", "parquet")) {
+  for (format in if (has_arrow) c("csv", "parquet") else "csv") {
     assert_build(write_case(path(paste0("admit-", format)), fields = 1024L, source_format = format))
     spec <- write_case(path(paste0("refuse-", format)), fields = 1025L, source_format = format)
     assert_refusal(yamaa_spec(spec)$run())

@@ -4,6 +4,10 @@
 # never changed, and a result converts by its declared type. Inputs and truth
 # are authored here, independently of the engine.
 library(yamaa)
+# jsonlite is a suggested package: where it is not installed, a refusal's
+# reason, which its JSON context holds, is not compared, and the rest is.
+has_jsonlite <- requireNamespace("jsonlite", quietly = TRUE)
+if (!has_jsonlite) message("Skipped the refusal reasons of function_values.R: jsonlite, a suggested package, is not installed")
 namespace <- asNamespace("yamaa")
 capabilities <- get(".yamaa_locked_host_capabilities", namespace)()
 with_resolve <- function(resolve, code) {
@@ -39,7 +43,7 @@ refused <- function(result, condition, requirement, reason) {
     identical(result$issues$phase, "derivation"),
     identical(result$issues$condition, condition),
     identical(result$issues$requirement, requirement),
-    identical(reasons(result$issues), reason))
+    !has_jsonlite || identical(reasons(result$issues), reason))
   failure <- tryCatch(result$save(), error = identity)
   stopifnot(inherits(failure, "yamaa_error"),
     identical(conditionMessage(failure), "cannot save a failed run; see issues"),
