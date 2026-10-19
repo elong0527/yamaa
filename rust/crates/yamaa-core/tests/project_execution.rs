@@ -1657,6 +1657,36 @@ mod project {
             );
         }
         #[test]
+        fn text_format_names_begin_with_a_dollar_sign() {
+            // A text codelist names a character format, so `$` leads its
+            // format name; a numeric codelist's name is not checked for it.
+            let named = |data_type, format: Option<&str>| {
+                let mut list = list();
+                list.data_type = data_type;
+                if data_type != DataType::Text {
+                    list.items = Some(vec![item(Value::Int(1)), item(Value::Int(2))]);
+                }
+                list.format_name = format.map(String::from);
+                validate(&[source(list)])
+            };
+            assert!(named(DataType::Text, None).is_empty());
+            assert!(named(DataType::Text, Some("$SEX")).is_empty());
+            for format in ["SEX", "S$EX", " $SEX"] {
+                assert_eq!(
+                    named(DataType::Text, Some(format)),
+                    vec![Finding {
+                        source: 0,
+                        codelist: 0,
+                        fault: Fault::FormatNamePrefix
+                    }]
+                );
+            }
+            for data_type in [DataType::Integer, DataType::Float] {
+                assert!(named(data_type, Some("NY")).is_empty());
+                assert!(named(data_type, None).is_empty());
+            }
+        }
+        #[test]
         fn numeric_equality_is_exact_at_i64_and_binary64_boundaries() {
             let mut list = list();
             list.data_type = DataType::Float;

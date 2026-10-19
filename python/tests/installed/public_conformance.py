@@ -235,7 +235,21 @@ def main(argv=None):
             # A project names a specification by its entry's own `domain`.
             name = read_yaml(case / entry["specification"])["domain"]
             listing = project_for(case, project, entry["specification"], specification)
-            spec = yamaa.project(case / listing).spec(name)
+            try:
+                spec = yamaa.project(case / listing).spec(name)
+            except yamaa.Error as refusal:
+                # A project that fails admission refuses to name its specs.
+                # The spec-with-project object, which R's runner opens for
+                # every project build, then refuses its runs with the
+                # project's issues, which the record keeps. A refusal that
+                # this spec's check does not reproduce exactly stays this
+                # record's error.
+                spec = yamaa.Spec(case / specification, os.fspath(case / listing))
+                checked = spec.check().issues
+                if not checked.height or (
+                    checked.to_dicts() != refusal.issues.to_dicts()
+                ):
+                    raise refusal
         first = spec.run()
         record = {
             "specification": specification,
