@@ -31,20 +31,6 @@ impl Declaration {
     pub(super) fn condition(&self) -> Option<&CompiledExpression> {
         self.condition.as_ref().ok()
     }
-    /// EXPR-14: the types `true_value`, `false_value` and `missing` can take.
-    pub(super) fn result_type(&self) -> crate::result_type::ResultType {
-        use crate::result_type::ResultType;
-        [
-            Some(&self.true_value),
-            self.false_value.as_ref(),
-            self.missing.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .fold(ResultType::MISSING, |kind, value| {
-            kind.or(ResultType::of_value(value))
-        })
-    }
     pub(super) fn has_findings(&self) -> bool {
         self.condition.is_err() || self.false_value.is_some() && self.missing.is_none()
     }
@@ -265,26 +251,14 @@ pub(super) fn bind(
             findings.push(unknown(condition.spec_path(), name));
         }
     }
+    let captured = types::CapturedTypes::new(declarations, catalog, secondary, intermediates);
     if findings.len() == start {
-        static_types::predicate(
-            condition,
-            declarations,
-            catalog,
-            secondary,
-            intermediates,
-            findings,
-        )?;
+        captured.predicate(condition, findings);
     }
     if findings.len() != start {
         Ok(None)
     } else {
-        finish(
-            operation,
-            |condition| {
-                static_types::typed(condition, declarations, catalog, secondary, intermediates)
-            },
-            bindings,
-        )
+        finish(operation, |condition| captured.typed(condition), bindings)
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -407,7 +381,7 @@ pub(super) fn bind_row(
     }
     if findings.len() == start {
         findings.extend(
-            static_types::predicate_kinds(condition, |name| catalog.type_of(name).map(Into::into))
+            types::predicate_kinds(condition, |name| catalog.type_of(name).map(Into::into))
                 .into_iter()
                 .map(BindFinding::Predicate),
         );

@@ -9,6 +9,7 @@ impl Prepared {
     pub(super) fn new(
         d: &Document,
         output: &TableSchema,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<PreflightFinding>,
     ) -> Result<Self, PrepareError> {
         let mut operations = BTreeMap::new();
@@ -34,8 +35,9 @@ impl Prepared {
                         findings.push(PreflightFinding::TextTemplate(
                             operation.unknown_diagnostic(index).expect("admitted index"),
                         ));
-                    } else if let Some(kind) = output_kind
-                        .or(temporal::declared_source_type(d, source)?)
+                    } else if let Some(kind) = declared
+                        .operand(source)
+                        .column_type()
                         .filter(|kind| *kind != ColumnType::Str)
                     {
                         findings.push(PreflightFinding::TextTemplate(

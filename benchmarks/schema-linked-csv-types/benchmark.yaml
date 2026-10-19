@@ -1,0 +1,14 @@
+lifecycle: draft
+standard: ADaM
+domain: ADSL
+entries:
+  python:
+  - specification: spec_dm.yaml
+    environment: null
+  - specification: spec_adsl.yaml
+    environment: null
+  r:
+  - specification: spec_dm.yaml
+    environment: null
+  - specification: spec_adsl.yaml
+    environment: null

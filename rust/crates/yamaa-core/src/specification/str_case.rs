@@ -41,6 +41,7 @@ pub(super) fn declaration_findings(
     d: &Document,
     columns: &[usize],
     output: &TableSchema,
+    declared: &types::DeclaredTypes<'_>,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
     #[allow(clippy::too_many_arguments)]
@@ -48,7 +49,7 @@ pub(super) fn declaration_findings(
         d: &Document,
         value: usize,
         path: &str,
-        output: &TableSchema,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
         rows: bool,
@@ -71,16 +72,11 @@ pub(super) fn declaration_findings(
                 None,
                 &mut Vec::new(),
             )?;
-            let kind = if rows {
-                None
-            } else {
-                output
-                    .columns()
-                    .iter()
-                    .find(|item| item.name == operation.source())
-                    .map(|item| item.kind)
-            }
-            .or(temporal::declared_source_type(d, operation.source())?);
+            // With row templates a bare name's phase is binding's to decide.
+            let source = operation.source();
+            let kind = (source.contains('.') || !rows)
+                .then(|| declared.operand(source).column_type())
+                .flatten();
             if let Some(kind) = kind.filter(|kind| *kind != ColumnType::Str) {
                 let actual = match kind {
                     ColumnType::Int => "int",
@@ -105,7 +101,7 @@ pub(super) fn declaration_findings(
                     d,
                     child,
                     &format!("{path}.case[{index}].{name}"),
-                    output,
+                    declared,
                     findings,
                     depth + 1,
                     rows,
@@ -124,7 +120,7 @@ pub(super) fn declaration_findings(
                 d,
                 value,
                 &format!("columns.{}.derivation", output.columns()[index].name),
-                output,
+                declared,
                 findings,
                 0,
                 has_rows,
@@ -143,7 +139,7 @@ pub(super) fn declaration_findings(
                             d,
                             value,
                             &format!("rows[{index}].derivations.{}", text(d, name)?),
-                            output,
+                            declared,
                             findings,
                             0,
                             true,
@@ -154,7 +150,7 @@ pub(super) fn declaration_findings(
         }
     }
     match_values::visit_keys(d, &mut |value, path| {
-        visit(d, value, path, output, findings, 0, has_rows)
+        visit(d, value, path, declared, findings, 0, has_rows)
     })?;
     Ok(())
 }
