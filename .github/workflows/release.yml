@@ -47,12 +47,14 @@ jobs:
             --repository "${GITHUB_REPOSITORY}" --tag "${RELEASE_TAG}" \
             --destination "${RUNNER_TEMP}/qualified-release"
       # Handed over before the GitHub release exists: a failed upload leaves no
-      # release behind, so the workflow can simply run again.
+      # release behind, so the workflow can simply run again. A re-run after a
+      # failed release creation replaces the earlier attempt's copy.
       - name: Hand the selected Python packages to the PyPI upload
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: pypi-packages
           path: ${{ runner.temp }}/qualified-release/pypi-packages
+          overwrite: true
           if-no-files-found: error
       - name: Publish qualified assets without rebuilding
         run: |

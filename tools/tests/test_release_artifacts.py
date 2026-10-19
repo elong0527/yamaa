@@ -1247,6 +1247,8 @@ class ReleaseWorkflow(unittest.TestCase):
             {
                 "name": "pypi-packages",
                 "path": "${{ runner.temp }}/qualified-release/pypi-packages",
+                # A re-run after a failed release creation hands over again.
+                "overwrite": True,
                 "if-no-files-found": "error",
             },
         )
