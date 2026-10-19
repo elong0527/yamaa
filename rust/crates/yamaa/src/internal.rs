@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::SourceBytes;
-use crate::error::{FunctionError, ResolverFailure};
+use crate::error::{Error, FunctionError, ResolverFailure};
 use crate::functions::{
     Argument, CallError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, LockKind,
     ProjectFunctions, Signature,
@@ -498,29 +498,19 @@ impl yamaa_adapters::file_application::RuntimePort for EngineRuntime<'_> {
     }
 }
 
-pub(crate) fn cancelled_issue() -> yamaa_adapters::issue_rows::Issue {
-    yamaa_adapters::issue_rows::Issue {
-        phase: "check".into(),
-        condition: "cancelled".into(),
-        requirement: None,
-        spec_paths: Vec::new(),
-        context: yamaa_adapters::json!({}),
-        source_span: None,
-        operand_route: None,
-    }
-}
-
+/// The static check of one specification. Its findings are issues; only a
+/// cancelled token fails the call, with no issue.
 pub(crate) fn run_check(
     shared: &EngineShared,
     specification: &str,
     environment: Option<&str>,
     token: &CancellationToken,
-) -> Vec<yamaa_adapters::issue_rows::Issue> {
+) -> Result<Vec<yamaa_adapters::issue_rows::Issue>, Error> {
     if token.is_cancelled() {
-        return vec![cancelled_issue()];
+        return Err(Error::Cancelled);
     }
     let identity = shared.identity("check", specification);
-    yamaa_adapters::file_application::check_with_resolver(
+    Ok(yamaa_adapters::file_application::check_with_resolver(
         shared.language,
         yamaa_core::domain_entry::Request {
             specification,
@@ -528,7 +518,7 @@ pub(crate) fn run_check(
         },
         identity,
         resolver_bridge(shared),
-    )
+    ))
 }
 
 /// One compiled request: the selected prepared route, or a refused

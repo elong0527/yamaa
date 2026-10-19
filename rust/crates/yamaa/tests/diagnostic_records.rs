@@ -135,7 +135,7 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
         "  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 340282366920938463463374607431768211456}}\n",
         "[ID, VALUE]",
     );
-    let report = engine.check(&Request::new("spec.yaml"), &token);
+    let report = engine.check(&Request::new("spec.yaml"), &token).unwrap();
     assert!(!report.is_empty());
     if cfg!(feature = "yaml") {
         let diagnostic = &report.diagnostics[0];
@@ -185,7 +185,7 @@ fn check_takes_the_host_language_from_the_options_not_the_runtime_name() {
         );
         let token = CancellationToken::new();
         let request = Request::new("spec.yaml").with_environment("project.yaml");
-        let checked = engine.check(&request, &token);
+        let checked = engine.check(&request, &token).unwrap();
         let built = engine
             .build(&request, &token)
             .expect("adjudicated outcomes return an owned build");

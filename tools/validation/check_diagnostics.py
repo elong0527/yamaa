@@ -12,6 +12,10 @@ release coverage.
 Condition and requirement literals outside the canonical registry, the generated
 shipped schema and private unit tests are refused. A requirement is a legacy
 REQ ID or a card ID, read from the shared rules model.
+A condition written as a literal must also name a registered condition: the
+value of a `condition` field, key or binding, in Rust or in JSON text, outside
+the items that compile only for tests. Matching registered names alone would
+miss an issue row built with a condition the registry does not have.
 """
 
 import argparse
@@ -54,6 +58,17 @@ NAMED_CONDITION = re.compile(
     rf"\b(?:condition|diagnostic)\s+(?:named\s+)?({CONDITION_LIST})",
     re.IGNORECASE,
 )
+# The code just before a string literal that makes the literal a condition: a
+# `condition` field or JSON key, optionally through a conversion call, or a
+# `condition` binding, constant or assignment.
+CONDITION_SITE = re.compile(
+    r'(?:(?:\bcondition|"condition")\s*:\s*'
+    r"(?:(?:String::from|str::to_owned|ToOwned::to_owned|ToString::to_string"
+    r"|Into::into|Cow::from|Cow::Borrowed)\s*\(\s*)?"
+    r"|(?i:\bcondition)\s*(?::[^=;{}()]*)?=\s*)\Z"
+)
+CONDITION_KEY = re.compile(r'"condition"\s*:\s*("(?:[^"\\]|\\.)*")')
+SPACE = re.compile(r"\s*")
 
 
 def cause_pattern(rules) -> re.Pattern:
@@ -187,16 +202,25 @@ def decode_rust_string(source: str) -> str:
     return "".join(result)
 
 
-def rust_literals(source: str):
-    """Yield decoded string literals and their original first source line."""
+def rust_tokens(source: str):
+    """Yield every comment, character and string literal of Rust source.
+
+    A token is ``(kind, start, end, line, text)``: ``kind`` is ``comment``,
+    ``character`` or ``string``, ``source[start:end]`` is the whole token,
+    ``line`` is its first source line and ``text`` is a string's decoded value
+    (None otherwise). An unterminated string ends the scan.
+    """
     offset = 0
     line = 1
     while offset < len(source):
         if source.startswith("//", offset):
             end = source.find("\n", offset)
-            offset = len(source) if end < 0 else end
+            end = len(source) if end < 0 else end
+            yield "comment", offset, end, line, None
+            offset = end
             continue
         if source.startswith("/*", offset):
+            start, first = offset, line
             depth = 1
             offset += 2
             while offset < len(source) and depth:
@@ -209,10 +233,12 @@ def rust_literals(source: str):
                 else:
                     line += source[offset] == "\n"
                     offset += 1
+            yield "comment", start, offset, first, None
             continue
         if source[offset] == "'":
             character = CHARACTER.match(source, offset)
             if character is not None:
+                yield "character", offset, character.end(), line, None
                 offset = character.end()
                 continue
         raw = RAW_START.match(source, offset)
@@ -224,7 +250,7 @@ def rust_literals(source: str):
             end = source.find(delimiter, raw.end())
             if end < 0:
                 return
-            yield line, source[raw.end() : end]
+            yield "string", offset, end + len(delimiter), line, source[raw.end() : end]
             end += len(delimiter)
             line += source[offset:end].count("\n")
             offset = end
@@ -240,12 +266,171 @@ def rust_literals(source: str):
                     end += 1
             if end >= len(source):
                 return
-            yield line, decode_rust_string(source[offset + 1 : end])
+            yield (
+                "string",
+                offset,
+                end + 1,
+                line,
+                decode_rust_string(source[offset + 1 : end]),
+            )
             line += source[offset : end + 1].count("\n")
             offset = end + 1
             continue
         line += source[offset] == "\n"
         offset += 1
+
+
+def rust_literals(source: str):
+    """Yield decoded string literals and their original first source line."""
+    for kind, _, _, line, text in rust_tokens(source):
+        if kind == "string":
+            yield line, text
+
+
+def blank(source: str, tokens: list, kinds: set[str]) -> str:
+    """The source with every token of ``kinds`` spaced out, lines kept."""
+    pieces = []
+    offset = 0
+    for kind, start, end, _, _ in tokens:
+        if kind in kinds:
+            pieces.append(source[offset:start])
+            pieces.append(re.sub(r"[^\n]", " ", source[start:end]))
+            offset = end
+    pieces.append(source[offset:])
+    return "".join(pieces)
+
+
+def balanced(code: str, start: int, opening: str, closing: str) -> int | None:
+    """The offset just past the bracket that closes the one at ``start``."""
+    depth = 0
+    for index in range(start, len(code)):
+        if code[index] == opening:
+            depth += 1
+        elif code[index] == closing:
+            depth -= 1
+            if not depth:
+                return index + 1
+    return None
+
+
+def is_test_gate(attribute: str) -> bool:
+    """Whether one attribute compiles its item for tests only: exactly
+    ``#[cfg(test)]``, or ``test`` as a top-level operand of ``#[cfg(all(...))]``.
+    ``#[cfg(not(test))]`` and feature names that contain ``test`` do not count.
+    """
+    body = re.sub(r"\s+", "", attribute)
+    if body == "#[cfg(test)]":
+        return True
+    operands = re.fullmatch(r"#\[cfg\(all\((.*)\)\)\]", body)
+    if operands is None:
+        return False
+    depth = 0
+    operand = ""
+    for character in operands[1] + ",":
+        if character == "," and not depth:
+            if operand == "test":
+                return True
+            operand = ""
+            continue
+        depth += (character == "(") - (character == ")")
+        operand += character
+    return False
+
+
+def cfg_test_items(code: str) -> list[tuple[int, int]]:
+    """The offsets of every item that a test gate compiles for tests only.
+
+    ``code`` is Rust source with its comments and literals spaced out, so only
+    real brackets count. A gated item follows its attributes and ends at its
+    closing brace or, without a body, at its semicolon.
+    """
+    regions = []
+    offset = 0
+    while (start := code.find("#[", offset)) >= 0:
+        end = balanced(code, start + 1, "[", "]")
+        if end is None:
+            break
+        offset = end
+        if not is_test_gate(code[start:end]):
+            continue
+        item = SPACE.match(code, end).end()
+        while code.startswith("#[", item):
+            item = SPACE.match(
+                code, balanced(code, item + 1, "[", "]") or len(code)
+            ).end()
+        depth = 0
+        stop = len(code)
+        for index in range(item, len(code)):
+            character = code[index]
+            if character in "([":
+                depth += 1
+            elif character in ")]":
+                depth -= 1
+            elif character == ";" and not depth:
+                stop = index + 1
+                break
+            elif character == "{" and not depth:
+                stop = balanced(code, index, "{", "}") or len(code)
+                break
+        regions.append((start, stop))
+        offset = stop
+    return regions
+
+
+def json_conditions(text: str) -> list[str]:
+    """The values of every ``condition`` key in JSON text, nested JSON
+    strings and format templates included."""
+    try:
+        pending = [json.loads(text)]
+    except (ValueError, RecursionError):
+        if not text.lstrip().startswith(("{", "[")):
+            return []
+        found = []
+        for literal in CONDITION_KEY.findall(text):
+            try:
+                found.append(json.loads(literal))
+            except ValueError:
+                continue
+        return found
+    found = []
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            condition = value.get("condition")
+            if isinstance(condition, str):
+                found.append(condition)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+        elif isinstance(value, str):
+            try:
+                nested = json.loads(value)
+            except (ValueError, RecursionError):
+                continue
+            if isinstance(nested, (dict, list)):
+                pending.append(nested)
+    return found
+
+
+def condition_literals(source: str) -> list[tuple[int, str]]:
+    """Every condition written as a literal, with its first source line.
+
+    A string literal is a condition when the code just before it is a
+    ``condition`` field, key, binding or assignment (comments ignored), and a
+    literal holding JSON text names one under each ``condition`` key. Items
+    that compile only for tests hold fixtures, not issue rows.
+    """
+    tokens = list(rust_tokens(source))
+    tests = cfg_test_items(blank(source, tokens, {"comment", "character", "string"}))
+    code = blank(source, tokens, {"comment"})
+    found = []
+    for kind, start, _, line, text in tokens:
+        if kind != "string" or any(low <= start < high for low, high in tests):
+            continue
+        if CONDITION_SITE.search(code[max(0, start - 120) : start]):
+            found.append((line, text))
+        found.extend((line, condition) for condition in json_conditions(text))
+    return found
 
 
 def embedded_json_strings(source: str) -> list[str]:
@@ -528,6 +713,15 @@ def violations(root: Path) -> list[str]:
                 )
                 + ", ".join(literals)
             )
+        if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or test_only:
+            continue
+        # A registered literal is already a new site above; an unregistered
+        # one names a condition that no registry, card or host knows.
+        for number, condition in condition_literals(source):
+            if condition not in registered:
+                errors.append(
+                    f"{relative}:{number}: unregistered condition literal {condition}"
+                )
     return errors
 
 

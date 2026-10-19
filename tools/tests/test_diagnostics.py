@@ -342,6 +342,135 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertEqual(len(self.errors()), 2)
         self.assertTrue(all("outside canonical registry" in e for e in self.errors()))
 
+    def test_an_issue_row_built_with_an_unregistered_condition_is_refused(self):
+        # The facade's cancellation row before #3144: a condition and a phase
+        # that no registry names, which a scan for registered names misses.
+        self.write(
+            "rust/crates/yamaa/src/internal.rs",
+            "pub(crate) fn cancelled_issue() -> yamaa_adapters::issue_rows::Issue {\n"
+            "    yamaa_adapters::issue_rows::Issue {\n"
+            '        phase: "check".into(),\n'
+            '        condition: "cancelled".into(),\n'
+            "        requirement: None,\n"
+            "        spec_paths: Vec::new(),\n"
+            "        context: yamaa_adapters::json!({}),\n"
+            "        source_span: None,\n"
+            "        operand_route: None,\n"
+            "    }\n"
+            "}\n",
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa/src/internal.rs:4: unregistered condition literal cancelled"
+            ],
+        )
+
+    def test_every_condition_literal_form_must_be_registered_in_every_crate(self):
+        # Each source with the line of its condition literal.
+        sources = [
+            (
+                'let issue = Issue { phase: "engine".into(), condition: "cancelled".into() };',
+                1,
+            ),
+            (
+                'let issue = Issue {\n    condition:\n        String::from("cancelled"),\n};',
+                3,
+            ),
+            ('let value = json!({"phase": "engine", "condition": "cancelled"});', 1),
+            ('let condition = "cancelled";', 1),
+            ('const CONDITION: &str = "cancelled";', 1),
+            ('row.condition = "cancelled".to_owned();', 1),
+            (r'const ROW: &str = r#"{"phase":"engine","condition":"cancelled"}"#;', 1),
+            (r'const ROW: &str = "{\"condition\":\"cancelled\"}";', 1),
+            (
+                r'const ROW: &str = "{\"payload\":\"{\\\"condition\\\":\\\"cancelled\\\"}\"}";',
+                1,
+            ),
+            (
+                r'let row = format!("{{\"condition\":\"cancelled\",\"path\":\"{path}\"}}");',
+                1,
+            ),
+        ]
+        for crate in ("yamaa", "yamaa-core", *sorted(guard.HOST_CRATES)):
+            for source, line in sources:
+                with self.subTest(crate=crate, source=source):
+                    path = self.write(f"rust/crates/{crate}/src/rows.rs", source + "\n")
+                    self.assertEqual(
+                        self.errors(),
+                        [
+                            f"rust/crates/{crate}/src/rows.rs:{line}: "
+                            "unregistered condition literal cancelled"
+                        ],
+                    )
+                    path.unlink()
+
+    def test_test_items_comments_and_condition_reads_are_not_condition_sites(self):
+        self.write(
+            "rust/crates/yamaa/src/diagnostic.rs",
+            "pub fn issue(definition: Definition, failure: &Value) -> Issue {\n"
+            "    let reasons = [\n"
+            "        // the reported condition:\n"
+            '        "not a condition",\n'
+            "    ];\n"
+            '    let known = failure["condition"] == "cancelled";\n'
+            "    Issue {\n"
+            "        condition: definition.condition.into(),\n"
+            '        requirement: text(failure, "condition"),\n'
+            "    }\n"
+            "}\n"
+            "#[cfg(test)]\n"
+            "mod tests {\n"
+            "    fn issue() -> Issue {\n"
+            '        Issue { phase: "input".into(), condition: "conversion_probe".into() }\n'
+            "    }\n"
+            "    const BRACE: char = '}';\n"
+            '    const TEMPLATE: &str = r#"{"condition":"__CONDITION__"}"#;\n'
+            "}\n"
+            '#[cfg(all(test, feature = "yaml"))]\n'
+            "#[allow(dead_code)]\n"
+            'fn fixture() { let condition = "finding"; }\n',
+        )
+        self.assertEqual(self.errors(), [])
+        for gate in ("#[cfg(not(test))]", '#[cfg(feature = "test-utils")]'):
+            with self.subTest(gate=gate):
+                self.write(
+                    "rust/crates/yamaa/src/diagnostic.rs",
+                    f'{gate}\nmod live {{\n    const CONDITION: &str = "cancelled";\n}}\n',
+                )
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        "rust/crates/yamaa/src/diagnostic.rs:3: "
+                        "unregistered condition literal cancelled"
+                    ],
+                )
+
+    def test_registered_condition_literal_is_reported_once_as_a_new_site(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/rows.rs",
+            'let issue = Issue { condition: "invalid_value".into() };\n',
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa-adapters/src/rows.rs:1: new diagnostic literal "
+                "site outside core: invalid_value"
+            ],
+        )
+
+    def test_generated_schema_and_private_unit_tests_hold_no_condition_sites(self):
+        self.write(
+            str(guard.SHIPPED_SCHEMA),
+            'const DATA: &str = r#"{"condition":"cancelled"}"#;\n',
+        )
+        self.publication_unit_module()
+        self.write(
+            str(guard.PRIVATE_TEST_MODULE),
+            '#[test]\nfn probe() { let row = Issue { condition: "probe".into() }; }\n',
+        )
+        self.assertEqual(self.errors(), [])
+
     def test_retired_citation_is_not_a_definition(self):
         self.write(
             "rules/values.md",

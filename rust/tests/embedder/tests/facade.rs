@@ -86,6 +86,8 @@ fn check_admits_a_compact_flow_verification_in_a_block_specification() {
         EngineOptions::new(HostLanguage::Python, "embedder".into(), "0".into())
             .with_resolver(resolver),
     );
-    let report = engine.check(&Request::new("spec.yaml"), &CancellationToken::new());
+    let report = engine
+        .check(&Request::new("spec.yaml"), &CancellationToken::new())
+        .unwrap();
     assert!(report.is_empty(), "{:?}", report.diagnostics);
 }

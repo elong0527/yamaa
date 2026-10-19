@@ -45,6 +45,22 @@ refusal <- function(code) {
   check_issues(seen$issues)
   seen
 }
+# The one issue of a project run asked for ADSL, which it did not build;
+# `available` is the canonical JSON of the names it has.
+unknown_member <- function(error, available) {
+  issue <- error$issues
+  nrow(issue) == 1L && identical(issue$phase, "validation") &&
+    identical(issue$condition, "unknown_specification_name") &&
+    identical(issue$requirement, "REQ-1339") && identical(issue$spec_paths, list(character())) &&
+    identical(issue$context, paste0('{"available":', available, ',"name":"ADSL"}'))
+}
+# The one issue of a save with nothing to write, under `rule`.
+nothing_to_save <- function(error, rule) {
+  issue <- error$issues
+  nrow(issue) == 1L && identical(issue$phase, "output") &&
+    identical(issue$condition, "nothing_to_save") && identical(issue$requirement, rule) &&
+    identical(issue$spec_paths, list(character())) && identical(issue$context, "{}")
+}
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument_failure <- function(code) {
   seen <- tryCatch({ force(code); NULL }, error = identity)
@@ -373,7 +389,15 @@ qualify_project_run_members <- function() {
   locked(member, c(fixture_strings(host_truth[["read_only_views"]][["member_run"]]), "save"))
   error <- refusal(runs[["ADSL"]])
   stopifnot(identical(conditionMessage(error), messages[["unknown_member"]]),
-    identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
+    unknown_member(error, '["TEST"]'))
+  # A run or a submission that built nothing has nothing to save.
+  error <- refusal(project$run("sdtm")$save())
+  stopifnot(identical(conditionMessage(error), messages[["empty_project_run_save"]]),
+    nothing_to_save(error, "PROJECT-12"))
+  error <- refusal(project$submission()$save())
+  stopifnot(identical(conditionMessage(error), messages[["empty_submission_save"]]),
+    nothing_to_save(error, "PROJECT-13"))
+  stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
     !file.exists(file.path(case, "test.csv")), is.null(runs$save()),
     identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
   cat("project run members hold each run and only the project run saves\n")
@@ -474,7 +498,7 @@ qualify_project_refusals <- function() {
   stopifnot(identical(conditionMessage(error), messages[["refused_project_run_save"]]),
     identical(error$issues, unread))
   error <- refusal(runs[["ADSL"]])
-  stopifnot(identical(conditionMessage(error), messages[["no_member_built"]]), nrow(error$issues) == 0L)
+  stopifnot(identical(conditionMessage(error), messages[["no_member_built"]]), unknown_member(error, "[]"))
   submission <- project$submission("sdtm", created = "2026-09-11T00:00:00")
   stopifnot(identical(members(submission), expected_members("submission")),
     identical(check_issues(submission$issues), unread))

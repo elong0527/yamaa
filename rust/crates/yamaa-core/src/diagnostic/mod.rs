@@ -292,6 +292,8 @@ conditions! {
     ProjectUnlinkedProducer => ("validation", "unlinked_producer", Some("REQ-1344")),
     ProjectProducerNotCompleted => ("validation", "producer_not_completed", Some("REQ-1345")),
     ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("REQ-1342")),
+    ProjectRunNothingToSave => ("output", "nothing_to_save", Some("PROJECT-12")),
+    ProjectSubmissionNothingToSave => ("output", "nothing_to_save", Some("PROJECT-13")),
     OutputUnknownProfile => ("validation", "unknown_artifact_profile", Some("REQ-0760")),
     MissingReport => ("validation", "missing_report", Some("REQ-0391")),
     ReportPathCollision => ("validation", "artifact_path_collision", Some("REQ-0756")),

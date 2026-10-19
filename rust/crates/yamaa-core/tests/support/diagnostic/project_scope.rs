@@ -1,5 +1,6 @@
-//! Project operation findings: names, unlinked producers, blocked consumers
-//! and run-scope cycles, each with its independently authored mapping.
+//! Project operation findings: names, unlinked producers, blocked consumers,
+//! run-scope cycles and saves with nothing to write, each with its
+//! independently authored mapping.
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
@@ -23,13 +24,31 @@ fn check(
     paths: &[&str],
     context: &[(&str, Value)],
 ) -> ConditionCode {
+    check_at(
+        finding,
+        "validation",
+        condition,
+        requirement,
+        paths,
+        context,
+    )
+}
+
+fn check_at(
+    finding: &Diagnostic,
+    phase: &str,
+    condition: &str,
+    requirement: &str,
+    paths: &[&str],
+    context: &[(&str, Value)],
+) -> ConditionCode {
     assert_eq!(
         (
             finding.definition().phase,
             finding.definition().condition,
             finding.definition().requirement
         ),
-        ("validation", condition, Some(requirement))
+        (phase, condition, Some(requirement))
     );
     assert_eq!(finding.spec_paths, paths);
     assert_eq!(
@@ -104,6 +123,24 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "REQ-1342",
         &["input.B.schema"],
         &[("cycle", texts(&["/a.yaml", "/b.yaml", "/a.yaml"]))],
+    ));
+    // Saving a run or a submission that built nothing is refused at output,
+    // each under its own card.
+    reached.insert(check_at(
+        &project_scope::run_nothing_to_save(),
+        "output",
+        "nothing_to_save",
+        "PROJECT-12",
+        &[],
+        &[],
+    ));
+    reached.insert(check_at(
+        &project_scope::submission_nothing_to_save(),
+        "output",
+        "nothing_to_save",
+        "PROJECT-13",
+        &[],
+        &[],
     ));
     reached
 }
