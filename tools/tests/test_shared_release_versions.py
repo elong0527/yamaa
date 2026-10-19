@@ -160,23 +160,32 @@ class CoherentRelease(ReleaseTree):
             checker.violations(self.root),
         )
 
-    def test_r_bundled_crate_authors_must_stay_credited(self):
-        # CRAN's policy asks the R package to credit the authors of the Rust
-        # code it bundles; inst/AUTHORS, staged with the package, names them.
-        entry = (
-            'person("The authors of the bundled Rust crates", role = "ctb",\n'
+    def test_r_bundled_code_authors_must_stay_credited(self):
+        # CRAN's policy asks the R package to credit the authors of the
+        # third-party code it bundles as contributors, and its copyright
+        # holders: inst/AUTHORS, staged with the package, names the crates'.
+        crates = (
+            'person("The authors of the bundled Rust crates", role = c("ctb", "cph"),\n'
             '           comment = "listed in inst/AUTHORS")'
         )
-        for replacement in (
-            "",
-            entry.replace('role = "ctb"', 'role = c("ctb", "cph")'),
-            entry.replace("bundled Rust crates", "vendored crates"),
-            entry.replace('"listed in inst/AUTHORS"', 'c(file = "inst/AUTHORS")'),
+        readstat = (
+            'person("Evan Miller and the ReadStat authors", role = c("ctb", "cph"),\n'
+            '           comment = "bundled ReadStat C sources, inst/LICENSE-READSTAT.txt")'
+        )
+        for entry, replacement in (
+            (",\n    " + crates, ""),
+            (",\n    " + readstat, ""),
+            (crates, crates.replace('c("ctb", "cph")', '"ctb"')),
+            (readstat, readstat.replace('c("ctb", "cph")', '"cph"')),
+            (crates, crates.replace("bundled Rust crates", "vendored crates")),
+            (
+                crates,
+                crates.replace('"listed in inst/AUTHORS"', 'c(file = "inst/AUTHORS")'),
+            ),
         ):
             with self.subTest(replacement=replacement):
                 self.setUp()
-                old = ",\n    " + entry if not replacement else entry
-                self.change("R/yamaa/DESCRIPTION", old, replacement)
+                self.change("R/yamaa/DESCRIPTION", entry, replacement)
                 self.assertIn(
                     "R/yamaa/DESCRIPTION: author list differs from the selected"
                     " author list",

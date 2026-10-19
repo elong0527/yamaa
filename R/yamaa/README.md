@@ -48,13 +48,14 @@ install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
 Installation compiles the Rust engine, so it needs R 4.4.0 or later, a C
 compiler, and Cargo and rustc 1.90 or later, from [rustup](https://rustup.rs/)
 or from system packages that are that recent. The build uses your default
-Rust toolchain, and rustup installs none. On
-Windows, also install Rtools45 and the `x86_64-pc-windows-gnu` target:
-`rustup target add x86_64-pc-windows-gnu`. The archive carries the locked
-Rust crates, so installation needs no network; it compiles with two jobs and
-writes nothing outside its build directory and the temporary directory. The
-[release guidance](../../docs/release.md#supported-platforms) lists the
-supported platforms.
+Rust toolchain, found on the PATH or in `~/.cargo/bin`, and rustup installs
+none; installation stops first, with advice, when Cargo or rustc is missing
+or older. On Windows, also install Rtools45 and the `x86_64-pc-windows-gnu`
+target: `rustup target add x86_64-pc-windows-gnu`. The archive carries the
+locked Rust crates, so installation needs no network; it compiles with two
+jobs and writes nothing outside its build directory and the temporary
+directory. The [release guidance](../../docs/release.md#supported-platforms)
+lists the supported platforms.
 
 The `R/yamaa/` directory lacks the shared Rust sources, so it cannot be
 installed directly, for example with `remotes::install_github()`. From a
@@ -72,7 +73,8 @@ see the [contributor guide](../../CONTRIBUTING.md).
 | `src/` | C entry point, build rules, the shared Rust workspace, Cargo lock and toolchain declaration, the locked crates.io crates in `rust/vendor.tar.xz` with their source replacement, native test inputs, vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
 | `inst/` | License notices, `AUTHORS`, and the specification, grammar, project, Define-XML and host test fixtures | Yes; copied to the package root |
 | `tests/` | Installed-host regression scripts | Used by `R CMD check`; not ordinarily installed |
-| `tools/` | `vendor_crates.py`, the script that wrote `src/rust/vendor.tar.xz` | No |
+| `configure`, `configure.win`, `cleanup`, `cleanup.win` | Run `tools/configure.R` to find and check Cargo and rustc and write `src/Makevars` from `src/Makevars.in` (or the Windows pair); remove what it writes | No |
+| `tools/` | `configure.R`, and `vendor_crates.py`, the script that wrote `src/rust/vendor.tar.xz` | No |
 
 All five Rust workspace members are retained to preserve the canonical Cargo
 manifest and lock, including the Python binding's source. Building `yamaa-r`
@@ -100,19 +102,22 @@ submission, run `R CMD check --as-cran` on the built tarball with current R
 release and R-devel, and validate Windows and macOS as well as Linux.
 
 The build follows CRAN's
-[Rust guidance](https://cran.r-project.org/web/packages/using_rust.html): the
-Makevars check that Cargo and rustc are present and recent enough, report
-their versions before compiling, never install a toolchain, and run
-`cargo build --offline -j 2` from the bundled crates with a Cargo home inside
-the build tree. Rust 1.90, the minimum, builds the full locked dependency
-graph, not only our workspace. `cran-comments.md` explains what a submission
-reports.
+[Rust guidance](https://cran.r-project.org/web/packages/using_rust.html):
+`configure` checks that Cargo and rustc are present and at least the
+workspace's `rust-version`, reports their versions before compiling and never
+installs a toolchain, and the Makevars run `cargo build --offline -j 2` from
+the bundled crates with a Cargo home inside the build tree. Rust 1.90, the
+minimum, builds the full locked dependency graph, not only our workspace.
+`cran-comments.md` explains the notes that a submission reports, and
+`make test-r` fails on any other.
 
 The package declares `R (>= 4.4.0)` after an audit of the R C API that the
 binding calls ([#3058](https://github.com/elong0527/yamaa/issues/3058)).
-Inspect termination symbols linked
-from Rust and native libraries, including `abort`, and establish whether they
-can be reached before explaining any retained symbols in a submission.
+The shared object imports `abort` through the Rust standard library, which
+R's compiled-code check does not attribute to the package's own code. It is
+reached only on fatal conditions of the Rust runtime, such as a failed
+allocation or a panic while another panic unwinds; every call from R catches
+an ordinary panic and returns it as an R error.
 
 Review the archive and installed library against the
 [CRAN policies](https://cran.r-project.org/web/packages/policies.html),

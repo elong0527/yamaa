@@ -1,0 +1,5 @@
+#!/bin/sh
+# Find and check Cargo and rustc, report their versions, and write src/Makevars
+# from src/Makevars.in. tools/configure.R does the work with the R that
+# installs the package; it never installs Rust.
+exec "${R_HOME}/bin/Rscript" --vanilla tools/configure.R

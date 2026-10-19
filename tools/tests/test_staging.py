@@ -4,6 +4,7 @@ import contextlib
 import csv
 import io
 import json
+import os
 import tarfile
 import tempfile
 import tomllib
@@ -24,6 +25,14 @@ class StagingTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 staging.stage(destination)
             self.assertTrue((destination / "DESCRIPTION").is_file())
+            # configure writes the Makevars from their templates at
+            # installation, so the package carries only the templates.
+            for name in ("configure", "configure.win", "cleanup", "cleanup.win"):
+                self.assertTrue(os.access(destination / name, os.X_OK), name)
+            self.assertTrue((destination / "tools/configure.R").is_file())
+            for name in ("Makevars", "Makevars.win"):
+                self.assertFalse((destination / "src" / name).exists(), name)
+                self.assertTrue((destination / "src" / f"{name}.in").is_file(), name)
             embedded = destination / "src/rust"
             for source in (staging.WORKSPACE / "crates").rglob("*"):
                 if (

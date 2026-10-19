@@ -1,0 +1,46 @@
+# The shared Rust engine builds as a static library linked into yamaa.so.
+# configure writes this file as src/Makevars with the Cargo and rustc that
+# tools/configure.R found, checked and reported, and on macOS the deployment
+# target for the C code that crates compile.
+#
+# CRAN's Repository Policy and its guidance for packages that use Rust shape
+# this build. Cargo reads the locked crates from rust/vendor.tar.xz, never the
+# network (--offline), and keeps its home below rust/target, so the build
+# writes nothing outside this tree and the temporary directory. It runs at
+# most two jobs: -j 2, with MAKEFLAGS cleared, because Cargo otherwise joins
+# the jobserver of a parallel make and runs as many jobs as make allows.
+# RUSTUP_AUTO_INSTALL=0 stops rustup from installing a toolchain that a
+# rust-toolchain.toml in a parent directory names, and Cargo runs from here
+# rather than from rust/, so the bundled rust-toolchain.toml selects nothing.
+# Paths are relative to this directory, where make and Cargo run.
+CARGO = @CARGO@
+RUSTC = @RUSTC@
+CARGO_ENV = @CARGO_ENV@
+CARGO_TARGET_DIR = rust/target
+CARGO_HOME_DIR = $(CARGO_TARGET_DIR)/cargo-home
+RUST_LIB = $(CARGO_TARGET_DIR)/release/libyamaa_r.a
+PKG_LIBS = $(RUST_LIB)
+
+all: $(SHLIB) rust_clean
+
+$(SHLIB): $(RUST_LIB)
+
+$(RUST_LIB): FORCE
+	rm -rf "$(CARGO_HOME_DIR)" "$(CARGO_TARGET_DIR)/vendor"
+	mkdir -p "$(CARGO_HOME_DIR)"
+	"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" --vanilla -e 'untar("rust/vendor.tar.xz", exdir = "$(CARGO_TARGET_DIR)", tar = "internal")'
+	cp rust/vendor-config.toml "$(CARGO_HOME_DIR)/config.toml"
+	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(CARGO_ENV) \
+	  CARGO_HOME="$(CARGO_HOME_DIR)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" \
+	  "$(CARGO)" build --locked --offline -j 2 --release --manifest-path rust/Cargo.toml -p yamaa-r
+
+.PHONY: clean rust_clean FORCE
+FORCE:
+
+# Release build intermediates, the unpacked crates and the Cargo home are not
+# package objects. Match rextendr's post-link cleanup.
+rust_clean: $(SHLIB)
+	rm -rf rust/target
+
+clean:
+	rm -rf rust/target

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Remove the Makevars that configure writes and the Rust build tree.
+rm -f src/Makevars src/Makevars.win
+rm -rf src/rust/target
