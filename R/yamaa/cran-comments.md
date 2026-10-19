@@ -14,8 +14,7 @@ aarch64, macOS and Windows.
 ## R CMD check results
 
 0 errors | 0 warnings | 1 note with R 4.6.1 and R-devel; R 4.4 also notes
-the installed size. To be confirmed from the same checks. The notes, and why
-they remain:
+the installed size. The notes, and why they remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
   size of the tarball, about 14.5 MB. About 11 MB of it is
