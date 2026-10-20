@@ -136,6 +136,21 @@ pub fn project_bindings(spec: &Spec) -> Vec<UnsupportedFeature> {
 /// The findings of a lowered 1.0 specification, in written order.
 pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
     let mut findings = Vec::new();
+    // An intermediate states its own `key`, unless it drives a row template,
+    // which declares none (LOOKUP-3, ROW-2; D23, D63). The record is the
+    // schema's own for a missing required field.
+    for item in &spec.intermediates {
+        if spec.lacks_key(item) {
+            findings.push(SchemaDiagnostic {
+                path: format!("{}.key", spec.cite(item.meta)),
+                code: ConditionCode::IntermediateKeyRequired,
+                context: vec![
+                    ("field", C::Text("key".into())),
+                    ("class", C::Text("intermediate_class".into())),
+                ],
+            });
+        }
+    }
     let name = |id: ExprId| match &spec.expr(id).kind {
         ExprKind::Ref(name) => name.as_str().to_string(),
         _ => String::new(),

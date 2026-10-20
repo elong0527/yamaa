@@ -321,6 +321,7 @@ pub(in crate::specification) fn source_findings(
                 path: written.into(),
             });
         }
+        findings.extend(input_key_findings(spec, input)?);
         if odm_inputs.contains(name) {
             // A written `types` declares types even when it is empty (NAME-8).
             let types = input.source.written.contains("types");
@@ -364,6 +365,54 @@ pub(in crate::specification) fn source_findings(
                     kind: *kind,
                 });
             }
+        }
+    }
+    Ok(findings)
+}
+
+/// A 1.0 input's declared `key` names at least one column, and each once,
+/// as a named intermediate's list does (LOOKUP-5). Whether the input stores
+/// each column, and whether the current row has it, is decided where an
+/// implicit join or a keyless qualified aggregate reads the input, so a key
+/// that no read uses is admitted (P-KEY-1).
+fn input_key_findings(
+    spec: &Spec,
+    input: &ast::Input,
+) -> Result<Vec<PreflightFinding>, PrepareError> {
+    let ast::KeyDecl::Declared(columns) = &input.key else {
+        return Ok(Vec::new());
+    };
+    let name = input.name.name.as_str();
+    let path = format!("input.{name}.key");
+    if columns.len() > Limits::KEYS {
+        return Err(PrepareError::limit(
+            "input_keys",
+            Limits::KEYS,
+            Some(columns.len()),
+            Some(&path),
+        ));
+    }
+    if columns.is_empty() {
+        return Ok(vec![PreflightFinding::Scalar(
+            crate::diagnostic::lookup::empty_key(
+                &path,
+                crate::diagnostic::lookup::Owner::Unnamed,
+                name,
+            ),
+        )]);
+    }
+    let mut findings = Vec::new();
+    for (position, column) in columns.iter().enumerate() {
+        if columns[..position]
+            .iter()
+            .any(|prior| prior.name == column.name)
+        {
+            let mut finding =
+                LookupFinding::new(&render(spec, column.meta), C::IntermediateRepeatedKey);
+            finding.text("dataset", name);
+            finding.text("identifier", &column.name);
+            finding.text("expected", "each column once");
+            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
     }
     Ok(findings)

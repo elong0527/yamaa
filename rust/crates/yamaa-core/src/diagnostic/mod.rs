@@ -409,6 +409,8 @@ conditions! {
     IntermediateUniqueField => ("validation", "unknown_field", Some("LOOKUP-17")),
     IntermediateUniqueCorrelatedFilter => ("validation", "correlated_filter_with_unique_verification", Some("LOOKUP-17")),
     IntermediateIdentifierCollision => ("validation", "duplicate_identifier", Some("LOOKUP-3")),
+    // A 1.0 intermediate read as a lookup without `key` (D23, D63).
+    IntermediateKeyRequired => ("validation", "missing_required_field", Some("LOOKUP-3")),
     IntermediateDatasetReference => ("validation", "unknown_field", Some("NAME-1")),
     IntermediateRenameOnly => ("validation", "rename_only_intermediate", Some("LOOKUP-4")),
     IntermediateRepeatedKey => ("validation", "invalid_field_type", Some("LOOKUP-5")),

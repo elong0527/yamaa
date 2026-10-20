@@ -601,6 +601,47 @@ class KeyTests(unittest.TestCase):
             1,
         )
 
+    def test_an_input_an_intermediate_only_renames_declares_its_key(self):
+        # LOOKUP-4 compares a 1.0 intermediate's key with its input's declared
+        # key (D71): the input CODED renames declares the same key, so the
+        # refusal stays. An intermediate that narrows keys only itself.
+        spec = (
+            "schema_version: '1.0'\ndomain: CM\nkeys: [USUBJID, CMSEQ]\n"
+            "input:\n  CM: cm.csv\n  CODING: coding.csv\n  DICT: dict.csv\nbase: CM\n"
+            "output:\n  path: cm.csv\n  columns: [USUBJID, CMSEQ]\n"
+            "intermediates:\n  - id: CODED\n    dataset: CODING\n"
+            "    no_match: {literal: null}\n"
+            '  - id: KEPT\n    dataset: DICT\n    filter: "DICT.X = 1"\n'
+            "columns:\n  - {name: USUBJID, type: str, derivation: CM.USUBJID}\n"
+            "  - {name: CMSEQ, type: int, derivation: CM.CMSEQ}\n"
+        )
+        files = {
+            "spec.yaml": spec,
+            "cm.csv": "USUBJID,CMSEQ\n",
+            "coding.csv": "USUBJID,CMSEQ,CODE\n",
+            "dict.csv": "USUBJID,X\n",
+        }
+        _, texts = converted(files)
+        text = texts["spec.yaml"]
+        self.assertIn("  CODING: {path: coding.csv, key: [USUBJID, CMSEQ]}\n", text)
+        self.assertIn("    dataset: CODING\n    key: [USUBJID, CMSEQ]\n", text)
+        self.assertIn("  DICT: dict.csv\n", text)
+        self.assertIn("    dataset: DICT\n    key: [USUBJID]\n", text)
+
+    def test_a_whole_record_reduction_matches_on_its_input_s_key(self):
+        # `COUNT(AE.*)` reduces AE's records, so AE declares the key a keyless
+        # qualified aggregate matches on (P-KEY-1, FORMULA-18).
+        spec = (
+            "schema_version: '1.0'\ndomain: ADSL\nkeys: [USUBJID]\n"
+            "input:\n  DM: dm.csv\n  AE: ae.csv\nbase: DM\n"
+            "output:\n  path: adsl.csv\n  columns: [USUBJID, NAE]\n"
+            "columns:\n  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n"
+            '  - name: NAE\n    type: int\n    derivation: {aggregate: "COUNT(AE.*)"}\n'
+        )
+        files = {"spec.yaml": spec, "dm.csv": "USUBJID\n", "ae.csv": "USUBJID,AESEQ\n"}
+        _, texts = converted(files)
+        self.assertIn("  AE: {path: ae.csv, key: [USUBJID]}\n", texts["spec.yaml"])
+
     def test_a_grouped_row_aggregate_over_its_driver_needs_no_key(self):
         spec = (
             "schema_version: '1.0'\ndomain: VS\nkeys: [USUBJID]\ninput:\n  HOME: home.csv\n"

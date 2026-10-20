@@ -57,6 +57,8 @@ pub use functions::{Cause as FunctionCause, FunctionFinding};
 mod aggregates;
 mod case_predicates;
 mod cases;
+#[cfg(test)]
+mod declared_keys;
 mod derivations;
 mod flags;
 mod imputation;

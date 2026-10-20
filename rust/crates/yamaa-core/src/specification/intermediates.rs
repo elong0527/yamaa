@@ -25,6 +25,9 @@ struct Declaration {
     derivations: Vec<intermediate_derivations::Derivation>,
     driver_prohibited: Vec<String>,
     driver_keys: Option<std::sync::Arc<TableSchema>>,
+    /// The `key` path of a 1.0 row driver, which declares no key, so a read
+    /// of it as a lookup is refused there (LOOKUP-3, ROW-2).
+    key_required: Option<String>,
 }
 #[derive(Debug, Default)]
 pub(super) struct Declarations(std::sync::Arc<Vec<Declaration>>, Option<String>);
@@ -323,7 +326,10 @@ fn bind_one(
         })
         .collect::<Vec<_>>();
     let catalog = Catalog::compile(&output_fields, &datasets).map_err(BindError::Catalog)?;
-    let default_keys = if item.keys.is_none() {
+    // A 0.5 lookup without `key` infers the applicable keys. A 1.0
+    // intermediate without `key` drives rows and is never a keyed lookup
+    // (ROW-2, LOOKUP-3); preparation refused every other.
+    let default_keys = if item.keys.is_none() && tree.spec().header.surface.infers_join_keys() {
         let before_keys = findings.len();
         match intermediate_admission::inferred_keys(
             &catalog,
@@ -563,6 +569,11 @@ impl Declarations {
     }
     pub(super) fn driver_keys(&self, index: usize) -> Option<&TableSchema> {
         self.0.get(index)?.driver_keys.as_deref()
+    }
+    /// Where a read of the 1.0 row driver at `index` as a keyed lookup is
+    /// refused: its `key`, which it does not declare (LOOKUP-3, ROW-2).
+    pub(super) fn key_required(&self, index: usize) -> Option<&str> {
+        self.0.get(index)?.key_required.as_deref()
     }
     pub(super) fn driver_findings(
         &self,
@@ -891,6 +902,8 @@ impl Declarations {
                     derivations,
                     driver_prohibited,
                     driver_keys,
+                    key_required: (item.key.is_none() && !spec.header.surface.infers_join_keys())
+                        .then(|| format!("{}.key", checks::render(spec, item.meta))),
                 });
         }
         Ok(result)

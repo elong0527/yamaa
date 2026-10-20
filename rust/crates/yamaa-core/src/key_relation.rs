@@ -7,7 +7,8 @@ use crate::{
     value::ColumnType,
 };
 
-/// One inference outcome; indices refer to the original ordered output key names.
+/// One outcome; indices refer to the ordered key names submitted: the
+/// output keys [`infer`] selects from, or the key [`declared`] pairs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Inference {
     /// Output identity is invalid independently of the right relation's fields.
@@ -23,6 +24,101 @@ pub enum Inference {
     Keys {
         keys: Vec<usize>,
     },
+    /// A declared key column the relation does not store (LOOKUP-5).
+    UnknownColumn {
+        key: usize,
+    },
+    /// A declared key column the current row has no column of (LOOKUP-5).
+    UnknownValue {
+        key: usize,
+    },
+}
+
+/// What a lookup that declares no `key` of its own matches a relation on: an
+/// implicit join, or a qualified aggregate without `key` (LOOKUP-1,
+/// LOOKUP-5).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Implied<'a> {
+    /// On the 0.5 surface, the applicable output keys, inferred from the
+    /// fields the relation stores ([`infer`]).
+    Applicable,
+    /// A 1.0 input's declared `key` ([`declared`]), empty when it declares
+    /// none (D23, D63).
+    Declared(Vec<&'a str>),
+}
+
+impl<'a> Implied<'a> {
+    /// The key names a lookup tries, in order: the output keys, of which
+    /// inference applies those the relation stores, or the declared key, all
+    /// of which apply.
+    pub fn names<'k>(&'k self, output_keys: &'k [&'a str]) -> &'k [&'a str] {
+        match self {
+            Self::Applicable => output_keys,
+            Self::Declared(names) => names,
+        }
+    }
+    /// [`infer`] or [`declared`], as the surface decides.
+    pub fn resolve(
+        &self,
+        catalog: &Catalog,
+        output_keys: &[&str],
+        fields: &[Field<'_>],
+    ) -> Result<Inference, Error> {
+        match self {
+            Self::Applicable => infer(catalog, output_keys, fields),
+            Self::Declared(names) => declared(catalog, names, fields),
+        }
+    }
+}
+
+/// Pair a 1.0 input's declared `key` (LOOKUP-1, LOOKUP-5): each column, in
+/// declared order, with the current row's same-named column. Nothing is
+/// selected: every declared column must be one the relation stores and a
+/// column of the current row, and the first that is not, or whose pair
+/// cannot compare (LOOKUP-9), is reported. An input that declares no key
+/// matches on no pair ([`Inference::NoApplicableKeys`]).
+pub fn declared(
+    catalog: &Catalog,
+    names: &[&str],
+    fields: &[Field<'_>],
+) -> Result<Inference, Error> {
+    if names
+        .iter()
+        .copied()
+        .chain(fields.iter().map(|field| field.name))
+        .any(str::is_empty)
+    {
+        return Err(Error::EmptyName);
+    }
+    let mut right = BTreeMap::new();
+    for field in fields {
+        if right.insert(field.name, field.column_type).is_some() {
+            return Err(Error::DuplicateField);
+        }
+    }
+    if names.is_empty() {
+        return Ok(Inference::NoApplicableKeys);
+    }
+    for (key, name) in names.iter().enumerate() {
+        let Some(&actual) = right.get(name) else {
+            return Ok(Inference::UnknownColumn { key });
+        };
+        if catalog.output_type(name).is_none() {
+            return Ok(Inference::UnknownValue { key });
+        }
+        if let Some(expected) = catalog.type_of(name) {
+            if !ResultType::from(expected).comparable(actual.into()) {
+                return Ok(Inference::Incompatible {
+                    key,
+                    expected,
+                    actual,
+                });
+            }
+        }
+    }
+    Ok(Inference::Keys {
+        keys: (0..names.len()).collect(),
+    })
 }
 
 /// Infer the applicable keys (LOOKUP-5) in output order and report the first key
@@ -196,6 +292,71 @@ mod tests {
             infer(&catalog, &["ABSENT", "B"], &fields),
             Ok(Inference::UndeclaredOutput { key: 0 })
         );
+    }
+
+    /// A declared key pairs every column it names, in declared order, and
+    /// selects nothing: a column the relation does not store, one the
+    /// current row has no column of, and an incomparable pair each fail at
+    /// the first such column; no key matches on no pair.
+    #[test]
+    fn a_declared_key_pairs_every_column_it_names() {
+        let catalog = catalog();
+        let fields = [
+            Field {
+                name: "B",
+                column_type: Str,
+            },
+            Field {
+                name: "A",
+                column_type: Float,
+            },
+            Field {
+                name: "E",
+                column_type: Str,
+            },
+        ];
+        assert_eq!(
+            declared(&catalog, &["B", "A"], &fields),
+            Ok(Inference::Keys {
+                keys: std::vec![0, 1]
+            })
+        );
+        assert_eq!(
+            declared(&catalog, &["A", "D"], &fields),
+            Ok(Inference::UnknownColumn { key: 1 })
+        );
+        assert_eq!(
+            declared(&catalog, &["E"], &fields),
+            Ok(Inference::UnknownValue { key: 0 })
+        );
+        let mismatched = [Field {
+            name: "D",
+            column_type: Str,
+        }];
+        assert_eq!(
+            declared(&catalog, &["D"], &mismatched),
+            Ok(Inference::Incompatible {
+                key: 0,
+                expected: Date,
+                actual: Str
+            })
+        );
+        assert_eq!(
+            declared(&catalog, &[], &fields),
+            Ok(Inference::NoApplicableKeys)
+        );
+        // The same relation's applicable keys, on the 0.5 surface, are the
+        // output keys it stores.
+        let applicable = Implied::Applicable;
+        assert_eq!(
+            applicable.resolve(&catalog, &["D", "A", "B"], &fields),
+            Ok(Inference::Keys {
+                keys: std::vec![1, 2]
+            })
+        );
+        assert_eq!(applicable.names(&["D", "A"]), ["D", "A"]);
+        let declared_key = Implied::Declared(std::vec!["B"]);
+        assert_eq!(declared_key.names(&["D", "A"]), ["B"]);
     }
 
     #[test]
