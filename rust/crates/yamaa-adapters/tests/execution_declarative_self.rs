@@ -2044,7 +2044,13 @@ rows:
                     specification: entry,
                     base_directory: ".",
                 };
-                if !case["check_issues"].as_array().unwrap().is_empty() {
+                // A refusal binding decides from the declarations is reported
+                // by the build only once it has captured the inputs.
+                let after_capture = case
+                    .get("check_after_capture")
+                    .and_then(yamaa_core::json::Value::as_bool)
+                    == Some(true);
+                if !case["check_issues"].as_array().unwrap().is_empty() && !after_capture {
                     assert_eq!(
                         rows(&file_application::check(
                             yamaa_core::project_function::Language::Python,

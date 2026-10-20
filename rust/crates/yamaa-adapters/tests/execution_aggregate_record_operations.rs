@@ -1330,27 +1330,7 @@ S1,002,2024-06
         /// what decides it. `domain` reaches each of them once it reads or binds
         /// the inputs. The list may only shrink: a case that `check` starts to
         /// report fails until it leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 18] = [
-            (
-                "negative-aggregate-key-other-template",
-                "the driver of each row template that evaluates an aggregate key",
-            ),
-            (
-                "negative-grouped-lookup-ungrouped-key",
-                "the group keys of the row template that reads a lookup",
-            ),
-            (
-                "negative-grouped-range-ungrouped-value",
-                "the group keys of the row template that reads a lookup range",
-            ),
-            (
-                "negative-lookup-derivation-scope",
-                "the driver of each row template that reads a lookup derivation",
-            ),
-            (
-                "negative-lookup-key-other-template",
-                "the driver of each row template that reads a lookup key",
-            ),
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 10] = [
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
@@ -1377,14 +1357,6 @@ S1,002,2024-06
                 "an unknown name in a flag condition",
             ),
             (
-                "negative-row-filter-lookup-scope",
-                "the driver of the row template whose filter reads a lookup",
-            ),
-            (
-                "negative-row-ungrouped-second-template",
-                "the group keys of a later grouped row template",
-            ),
-            (
                 "negative-source-ordinal-collision",
                 "the fields stored in the input",
             ),
@@ -1395,10 +1367,6 @@ S1,002,2024-06
             (
                 "negative-types-unknown-field",
                 "the fields stored in the input",
-            ),
-            (
-                "negative-verification-lookup-key",
-                "the driver of the rows a verification's lookup reads",
             ),
         ];
 
@@ -1535,27 +1503,36 @@ S1,002,2024-06
             // Column order over every kind of derivation, in either row
             // construction, and what binding decides of an aggregate, a
             // mapping or cut, a lookup range and a source filter from the
-            // declarations (#2844, owner decision 3); and the phase
-            // boundaries each row template's phase set decides (#2754).
+            // declarations (#2844, owner decision 3); the phase boundaries
+            // each row template's phase set decides (#2754); and the group
+            // and driver scopes of what the rows read (#3229).
             for name in [
                 "negative-adlb-computed-param",
+                "negative-aggregate-key-other-template",
                 "negative-cut-coded",
                 "negative-direct-dose-read",
                 "negative-dose-intensity",
                 "negative-first-available-self",
                 "negative-forward-key-reference",
                 "negative-forward-reference",
+                "negative-grouped-lookup-ungrouped-key",
+                "negative-grouped-range-ungrouped-value",
                 "negative-keys-missing",
                 "negative-lookup-bad-range",
+                "negative-lookup-derivation-scope",
                 "negative-lookup-key-column-phase",
+                "negative-lookup-key-other-template",
                 "negative-lookup-match-column-phase",
                 "negative-row-aggregate-keys",
+                "negative-row-filter-lookup-scope",
                 "negative-row-phase-flag",
+                "negative-row-ungrouped-second-template",
                 "negative-row-value-self",
                 "negative-row-window-ungrouped",
                 "negative-source-missing-field",
                 "negative-source-trivial-filter",
                 "negative-sum-non-numeric",
+                "negative-verification-lookup-key",
             ] {
                 assert!(compared.contains(&name), "{name}: not compared");
             }
