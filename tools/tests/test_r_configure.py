@@ -3,8 +3,8 @@
 These tests run R/yamaa/tools/configure.R, which configure and configure.win
 run, against fake cargo and rustc commands, and run the engine recipe of the
 Makevars that it writes with make. They need R; `make test-r` runs them.
-One test runs the recipes with the real Cargo of the Rust toolchain that the
-workspace selects; set RUSTUP_TOOLCHAIN to run it with another, such as the
+Two tests run the recipes with the real Cargo of the Rust toolchain that the
+workspace selects; set RUSTUP_TOOLCHAIN to run them with another, such as the
 workspace rust-version.
 """
 
@@ -253,6 +253,27 @@ class ConfigureTests(unittest.TestCase):
             "pub fn answer() -> i32 {\n    42\n}\n", encoding="utf-8"
         )
 
+    def configured_for_cargo(self, windows, rust):
+        """Configure the package for Unix or Windows beside a bundle that
+        Cargo can build, for the cargo, rustc and host target that
+        rust_toolchain() found as `rust`.
+
+        The toolchain's own tools stand in for configure's fake ones.
+        Makevars.win builds for the host, whose standard library the
+        toolchain has, with GNU make as on Rtools. Returns the Makevars name,
+        the variables for make's command line and the engine library that
+        the recipe builds.
+        """
+        cargo, rustc, host = rust
+        makevars = self.configured(windows)
+        self.bundle()
+        variables = [f"CARGO={cargo}", f"RUSTC={rustc}"]
+        release = self.package / "src/rust/target"
+        if windows:
+            variables.append(f"RUST_TARGET={host}")
+            release = release / host
+        return makevars, variables, release / "release/libyamaa_r.a"
+
     def outside_package(self):
         """Every path below the temporary root that is not in the package."""
         return {
@@ -489,10 +510,12 @@ class ConfigureTests(unittest.TestCase):
                     if windows
                     else "rust/target"
                 )
+                # The build directory is relative on Windows too, so that no
+                # path of the build tree enters Cargo's template.
                 settings = [
                     "RUSTC_WRAPPER=",
                     "RUSTC_WORKSPACE_WRAPPER=",
-                    f"CARGO_BUILD_BUILD_DIR={own}",
+                    "CARGO_BUILD_BUILD_DIR=rust/target",
                 ]
                 options = [
                     "--config",
@@ -526,10 +549,9 @@ class ConfigureTests(unittest.TestCase):
         # a .cargo/config.toml in a parent directory names must neither move
         # Cargo's output nor run (#3030 D86). Both recipes run here with a
         # real Cargo on a one-crate bundle.
-        found = rust_toolchain()
-        if found is None:
+        rust = rust_toolchain()
+        if rust is None:
             self.skipTest("no Rust toolchain")
-        cargo, rustc, host = found
         runs = self.root / "wrapper-runs"
         wrapper = self.root / "wrapper"
         wrapper.write_text(
@@ -568,16 +590,7 @@ class ConfigureTests(unittest.TestCase):
             return self.outside_package() - before
 
         for windows in (False, True):
-            makevars = self.configured(windows)
-            self.bundle()
-            # The toolchain's own tools stand in for configure's fake ones.
-            # Makevars.win builds for the host, whose standard library the
-            # toolchain has, with GNU make as on Rtools.
-            variables = [f"CARGO={cargo}", f"RUSTC={rustc}"]
-            library = own / "release/libyamaa_r.a"
-            if windows:
-                variables.append(f"RUST_TARGET={host}")
-                library = own / host / "release/libyamaa_r.a"
+            makevars, variables, library = self.configured_for_cargo(windows, rust)
             # Without the isolation, as with YAMAA_R_CARGO_TARGET_DIR set, the
             # caller's wrapper runs, and the check below would see it.
             for environment, configuration in (
@@ -603,6 +616,32 @@ class ConfigureTests(unittest.TestCase):
                     )
                     self.assertTrue(library.is_file())
                     self.assertEqual(written, set())
+
+    def test_braces_in_the_build_path_neither_stop_nor_move_the_build(self):
+        # R's temporary directory, or the directory that a user installs from,
+        # may hold a { or }. Cargo 1.91 and later read the build directory as
+        # a template, so a build directory holding such a path would stop
+        # Cargo ("unexpected variable", "unexpected opening bracket"), or, with
+        # braces around one of Cargo's template variables, send its output out
+        # of the package (#3275). Both recipes run here with a real Cargo.
+        rust = rust_toolchain()
+        if rust is None:
+            self.skipTest("no Rust toolchain")
+        for name in ("path{x}", "{", "}", "{workspace-path-hash}"):
+            package = self.root / name / "yamaa"
+            package.parent.mkdir()
+            self.package = self.package.rename(package)
+            for windows in (False, True):
+                with self.subTest(directory=name, windows=windows):
+                    makevars, variables, library = self.configured_for_cargo(
+                        windows, rust
+                    )
+                    shutil.rmtree(self.package / "src/rust/target", ignore_errors=True)
+                    before = self.outside_package()
+                    result = self.make(makevars, *variables)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(library.is_file())
+                    self.assertEqual(self.outside_package() - before, set())
 
     def test_a_target_directory_that_make_cannot_read_is_refused(self):
         tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
