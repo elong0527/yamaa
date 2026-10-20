@@ -336,8 +336,9 @@ pub(crate) fn root_limit(error: &SourceError) -> Option<Error> {
 pub(crate) fn capture_sources(
     rejected: &RejectedEnvironment<crate::file_resources::Error>,
 ) -> Result<Vec<Diagnostic>, Error> {
-    // A 1.0 project's dependencies are read as every file a run reads; their
-    // read failures are projected when public calls read 1.0 files (P1-9).
+    // A 1.0 project's listed files and lock are read as every file a run
+    // reads; projecting their read failures comes with #3277, before public
+    // calls read 1.0 files (P1-9).
     if versioned(rejected) {
         return Err(Error::Projection);
     }

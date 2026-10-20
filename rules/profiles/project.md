@@ -34,8 +34,9 @@ of a codelist file, which declares `type: codelists`
 against the project schema fails, before any activation or study read, with
 the conditions of [SCHEMA-12](../reference/schema-language.md#schema-12) and
 [SCHEMA-13](../reference/schema-language.md#schema-13) at its own paths; the
-project file has no condition of its own. The last sentence of the statement
-holds whether or not a specification binds codelists or calls functions.
+project file has no condition of its own. Without a project file, a function
+call names no declared function ([FUNC-4](functions.md#func-4)) and a codelist
+binding names no declared codelist ([CT-1](terminology.md#ct-1)).
 
 A project file that declares `schema_version` declares `environments`,
 `codelists`, `study` and the sections instead, and is read under the rules at
