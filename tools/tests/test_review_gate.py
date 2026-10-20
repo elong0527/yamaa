@@ -16,6 +16,8 @@ REPOSITORY_ID = 1299533902
 HEAD, OTHER = "a" * 40, "b" * 40
 NUMBER = 42
 EVENT_REPOSITORY = {"full_name": REPOSITORY, "id": REPOSITORY_ID}
+# The authentic summary on #3316 opens with this line and a blank line.
+GENERATED = "<!-- coderabbit-ai-generated:v1 -->"
 
 
 def pull(head=HEAD, *, branch="main", state="open", repository_id=REPOSITORY_ID):
@@ -514,6 +516,45 @@ class OrdinaryReviewScope(unittest.TestCase):
                     "\n<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
                 )
             with self.subTest(mutation=mutation), self.assertRaises(gate.GateError):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_generated_content_marker_line_may_open_the_summary(self):
+        for blank_lines in ["\n", "", "\n\n"]:
+            api = Evidence()
+            comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+            comment["body"] = f"{GENERATED}\n{blank_lines}{comment['body']}"
+            with self.subTest(blank_lines=blank_lines):
+                self.assertEqual(
+                    gate.verify(api, NUMBER, expected_head=HEAD).state, "success"
+                )
+
+    def test_generated_content_marker_admits_no_other_text_or_account(self):
+        for mutation in [
+            "text-before-marker",
+            "text-after-marker",
+            "other-marker-version",
+            "authentic-reply",
+            "other-account",
+        ]:
+            api = Evidence()
+            comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+            summary = comment["body"]
+            comment["body"] = f"{GENERATED}\n\n{summary}"
+            if mutation == "text-before-marker":
+                comment["body"] = f"A quoted review:\n{GENERATED}\n\n{summary}"
+            elif mutation == "text-after-marker":
+                comment["body"] = f"{GENERATED}\n\nA quoted review:\n{summary}"
+            elif mutation == "other-marker-version":
+                comment["body"] = comment["body"].replace(":v1 -->", ":v2 -->")
+            elif mutation == "authentic-reply":
+                comment["body"] = comment["body"].replace("summarize by", "reply by")
+            else:
+                comment["user"] = {"login": "contributor", "id": 7, "type": "User"}
+            with (
+                self.subTest(mutation=mutation),
+                self.assertRaisesRegex(gate.GateError, "own authentic"),
+            ):
                 gate.verify(api, NUMBER, publish=True)
             self.assertNotIn("success", [v.state for v in api.published])
 
