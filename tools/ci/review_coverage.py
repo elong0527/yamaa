@@ -35,6 +35,10 @@ REVIEW_RANGE = re.compile(
 FINAL_MARKER = "final_review_risk_coverage:"
 FINAL_REVIEW = re.compile(r"<!-- final_review_risk_coverage:(.*?) -->", re.DOTALL)
 SUMMARY = "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->"
+# The app's summary comment may open with its generated-content marker line
+# and blank lines before the summary marker. No other text may precede it.
+GENERATED = "<!-- coderabbit-ai-generated:v1 -->"
+SUMMARY_START = re.compile("(?:" + re.escape(GENERATED) + r"\n+)?" + re.escape(SUMMARY))
 WALKTHROUGH = "<!-- walkthrough_start -->"
 FORMAL_REVIEW = (
     "<!-- This is an auto-generated comment by CodeRabbit for review status -->"
@@ -467,7 +471,7 @@ def attest_review(api, number, head, status, authentic, *, base=None):
         require(isinstance(body, str), "invalid authentic review comment body")
         # App-authored discussion replies can quote ranges and footers. Only
         # the provider's own summary/walkthrough comment is review evidence.
-        if not body.startswith(SUMMARY):
+        if not SUMMARY_START.match(body):
             continue
         identity = comment.get("id")
         require(
