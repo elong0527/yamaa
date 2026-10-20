@@ -129,9 +129,10 @@ struct AliasCache<'a, P> {
     parent_failure: Option<Diagnostic>,
 }
 impl<P: NativePort> AliasCache<'_, P> {
-    /// A `parent` the port refused as written (FILE-5) or found changed
-    /// (FILE-10) fails with that condition at `parent`, naming the path as
-    /// written; any other refusal stays the port's own error.
+    /// A `parent` the port refused as written (FILE-5), found to reach a
+    /// symbolic link (FILE-8) or found changed (FILE-10) fails with that
+    /// condition at `parent`, naming the path as written; any other refusal
+    /// stays the port's own error.
     fn parent_error(port: &P, written: &str, error: &SourceError<P::Error>) -> Option<Diagnostic> {
         let SourceError::Raised(error) = error else {
             return None;
@@ -140,6 +141,7 @@ impl<P: NativePort> AliasCache<'_, P> {
             failure @ (ResourceFailure::UriScheme
             | ResourceFailure::Backslash
             | ResourceFailure::EmptySegment
+            | ResourceFailure::Symlink
             | ResourceFailure::ContentChanged) => Some(failure.field_diagnostic("parent", written)),
             _ => None,
         }
