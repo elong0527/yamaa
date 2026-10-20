@@ -414,7 +414,7 @@ nothing is published into the checkout:
 ```sh
 uv run --project python --no-sync python -m tools.benchmark benchmarks/<name>
 uv run --project python --no-sync python -m tools.validation.validate_repository
-uv run --project python --no-sync python -m yamaa.style benchmarks/<name>/
+uv run --project python --no-sync python -m tools.commands.lint benchmarks/<name>/
 ```
 
 Conformance qualification compares both hosts with the authored expected data.
