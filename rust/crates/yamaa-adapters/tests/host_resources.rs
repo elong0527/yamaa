@@ -329,31 +329,54 @@ fn a_parent_on_another_drive_reads_its_input_beside_itself() {
 #[cfg(feature = "yaml")]
 #[test]
 fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
-    for (entry, parent) in [
+    use yamaa_core::project_function::Language;
+    const PARENT: &str = "//server/share/std/base.yaml";
+    for (entry, entry_root) in [
         // The entry on a local drive, the parent on a share it maps.
-        ("C:/study/child.yaml", "//server/share/std/base.yaml"),
+        ("C:/study/child.yaml", "C:"),
+        // The entry below `/`.
+        ("/study/child.yaml", "/"),
         // The entry on one share, the parent on another.
-        (
-            "//other/share/study/child.yaml",
-            "//server/share/std/base.yaml",
-        ),
+        ("//other/share/study/child.yaml", "//other/share"),
     ] {
-        let resolver = Arc::new(parent_elsewhere(entry, parent));
+        // LAYER-10's finding, never the opaque engine refusal: the parent,
+        // the path it writes beside itself and both roots.
+        let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str| {
+            assert_eq!(issues.len(), 1, "{entry} {route}: {issues:?}");
+            let issue = &issues[0];
+            assert_eq!(
+                (issue.phase(), issue.condition(), issue.requirement()),
+                ("validation", "parent_on_another_share", Some("LAYER-10")),
+                "{entry} {route}"
+            );
+            assert_eq!(issue.spec_paths, ["parent"], "{entry} {route}");
+            assert_eq!(
+                yamaa_core::json::Value::Object(issue.context.clone()),
+                yamaa_adapters::json!({
+                    "source": PARENT,
+                    "path": "input/src.csv",
+                    "parent_root": "//server/share",
+                    "entry_root": entry_root,
+                }),
+                "{entry} {route}"
+            );
+        };
+        let request = || yamaa_core::build::Request {
+            specification: "child.yaml",
+            environment: None,
+        };
+        let resolver = Arc::new(parent_elsewhere(entry, PARENT));
         let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
-            yamaa_core::build::Request {
-                specification: "child.yaml",
-                environment: None,
-            },
-            yamaa_core::project_function::Language::Python,
+            request(),
+            Language::Python,
             resolver.clone(),
         ) else {
-            panic!("a parent at {parent} was rebased onto the root of {entry}");
+            panic!("a parent at {PARENT} was rebased onto the root of {entry}");
         };
-        let issues = yamaa_adapters::project_application::selection_failure(&error);
-        assert_eq!(issues.len(), 1, "{issues:?}");
-        // A registered refusal, as any opaque preparation failure reports.
-        assert_eq!(issues[0].condition(), "engine_rejected", "{issues:?}");
-        assert_eq!(issues[0].phase(), "engine", "{issues:?}");
+        refused(
+            &yamaa_adapters::project_application::selection_failure(&error),
+            "select",
+        );
         // Only the two specifications were read: nothing under folders named
         // like the parent's share, in its input's place.
         let captures = resolver.captures.lock().unwrap();
@@ -363,7 +386,41 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
                 .map(|(_, written)| written.as_str())
                 .collect::<Vec<_>>(),
             ["child.yaml", "P:/std/base.yaml"],
-            "{entry} {parent}"
+            "{entry}"
         );
+        // A check, a resolve and a direct preparation report the same.
+        refused(
+            &yamaa_adapters::file_application::check_with_resolver(
+                Language::Python,
+                request(),
+                yamaa_adapters::specification_report::Identity {
+                    runtime: "rust",
+                    runtime_version: "test",
+                    engine_version: yamaa_core::VERSION,
+                    example: "domain",
+                    specification: "child.yaml",
+                    base_directory: ".",
+                },
+                Some(Arc::new(parent_elsewhere(entry, PARENT))),
+            ),
+            "check",
+        );
+        let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
+            "child.yaml",
+            None,
+            Language::Python,
+            Some(Arc::new(parent_elsewhere(entry, PARENT))),
+        ) else {
+            panic!("{entry}: resolved a parent on another share");
+        };
+        refused(&issues, "resolve");
+        let resources =
+            Resources::with_resolver(Arc::new(parent_elsewhere(entry, PARENT)), "child.yaml");
+        let Err(yamaa_adapters::file_preparation::Error::PreparationFinding { diagnostic, .. }) =
+            yamaa_adapters::file_preparation::FileSpecification::prepare(resources, "child.yaml")
+        else {
+            panic!("{entry}: the refusal lost its finding");
+        };
+        refused(&[*diagnostic], "prepare");
     }
 }
