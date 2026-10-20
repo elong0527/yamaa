@@ -510,12 +510,12 @@ class PublicDefine(unittest.TestCase):
                     # page. EPOCH is a permissible timing variable the sponsor
                     # derives from the subject's elements.
                     collected = ("Collected", "Investigator")
-                    for name, role, mandatory, origin, documents in (
+                    for column, role, mandatory, origin, documents in (
                         ("VSORRES", "Result Qualifier", "No", collected, ["LF.acrf"]),
                         ("VSDTC", "Timing", "No", collected, ["LF.acrf"]),
                         ("EPOCH", "Timing", "No", ("Derived", "Sponsor"), []),
                     ):
-                        reference = f"//o:ItemRef[@ItemOID='IT.VS.{name}']"
+                        reference = f"//o:ItemRef[@ItemOID='IT.VS.{column}']"
                         self.assertEqual(
                             xml.xpath(reference + "/@Role", namespaces=NS), [role]
                         )
@@ -524,7 +524,7 @@ class PublicDefine(unittest.TestCase):
                             [mandatory],
                         )
                         declared = xml.xpath(
-                            f"//o:ItemDef[@Name='{name}']/d:Origin", namespaces=NS
+                            f"//o:ItemDef[@Name='{column}']/d:Origin", namespaces=NS
                         )
                         self.assertEqual(
                             [(o.get("Type"), o.get("Source")) for o in declared],
