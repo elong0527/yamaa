@@ -43,6 +43,23 @@ CRAN_NO_SUGGESTS_R_VERSIONS = ("devel",)
 # refuses every connection.
 OFFLINE_SOURCE_PLATFORMS = PYTHON_PLATFORMS
 OFFLINE_SOURCE_HOSTS = ("python", "r")
+# R-release and R-oldrel, the two R series that CRAN builds binary packages
+# for, each at its latest patch release. The other native R lanes use
+# R-release.
+R_RELEASE = "4.6.1"
+R_OLDREL = "4.5.3"
+# The R binary packages that a release publishes: one per platform and series
+# (#3030 D48), and none for Linux, which builds from source (D54). Each is
+# built from the published R source archive, then installed on a clean runner
+# of its platform with no Rust, no Rtools and no network, where it runs the
+# conformance corpus and the installed R suites.
+R_BINARY_PLATFORMS = ("macos-15", "windows-2025")
+R_BINARY_VERSIONS = (R_RELEASE, R_OLDREL)
+
+
+def r_series(version):
+    """Return the R series of a version, such as 4.6 for 4.6.1."""
+    return ".".join(version.split(".")[:2])
 
 
 def coverage():
@@ -78,10 +95,22 @@ def coverage():
             "os": list(OFFLINE_SOURCE_PLATFORMS),
             "host": list(OFFLINE_SOURCE_HOSTS),
         },
+        "r_binary": {"os": list(R_BINARY_PLATFORMS), "r": list(R_BINARY_VERSIONS)},
     }
 
 
-def compare_cohorts(matrix, root, revision):
+def compare_cohorts(coverage, root, revision):
+    """Compare the complete reports of every installed host with their truth.
+
+    Each Python lane is compared beside the R source installation of its
+    platform. Each R binary installation is compared beside the wheel lane of
+    its platform with the build Python: on Windows the binary links through
+    Rtools' GNU toolchain, where the wheel uses MSVC.
+    """
+    matrix = coverage["qualify"]
+    binaries = list(
+        itertools.product(coverage["r_binary"]["os"], coverage["r_binary"]["r"])
+    )
     # The pinned download action flattens a single match, including a pattern.
     python_artifacts = len(matrix["include"])
     r_artifacts = len(
@@ -89,29 +118,47 @@ def compare_cohorts(matrix, root, revision):
         & set(R_PLATFORMS)
     )
     downloaded = Path("cohort-input")
+
+    def evidence(name, count):
+        return downloaded if count == 1 else downloaded / name
+
+    comparisons = []
     for combination in matrix["include"]:
         platform = combination["os"]
         version = combination["python"]
         form = combination["form"]
-        python_directory = (
-            downloaded
-            if python_artifacts == 1
-            else downloaded / f"native-qualification-{platform}-{version}-{form}"
+        python_evidence = (
+            evidence(
+                f"native-qualification-{platform}-{version}-{form}", python_artifacts
+            )
+            / form
         )
-        python_evidence = python_directory / form
         output = Path("public-cohort") / platform / version / form
         r_evidence = []
         r_platform = R_EVIDENCE.get(platform, platform)
         if r_platform in R_PLATFORMS:
-            r_directory = (
-                downloaded
-                if r_artifacts == 1
-                else downloaded / f"native-r-qualification-{r_platform}"
-            )
+            r_directory = evidence(f"native-r-qualification-{r_platform}", r_artifacts)
             r_evidence = [
                 "--r-evidence",
                 str(r_directory / "r-source"),
             ]
+        comparisons.append((python_evidence, r_evidence, output))
+    for platform, version in binaries:
+        python_evidence = (
+            evidence(
+                f"native-qualification-{platform}-{BUILD_PYTHON}-wheel",
+                python_artifacts,
+            )
+            / "wheel"
+        )
+        r_directory = evidence(
+            f"native-r-binary-qualification-{platform}-{version}", len(binaries)
+        )
+        output = Path("public-cohort") / platform / f"r-binary-{version}"
+        comparisons.append(
+            (python_evidence, ["--r-evidence", str(r_directory / "r-binary")], output)
+        )
+    for python_evidence, r_evidence, output in comparisons:
         subprocess.run(
             [
                 sys.executable,
@@ -138,7 +185,7 @@ def main():
     revision = subprocess.check_output(
         ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
     ).strip()
-    compare_cohorts(coverage()["qualify"], root, revision)
+    compare_cohorts(coverage(), root, revision)
 
 
 if __name__ == "__main__":

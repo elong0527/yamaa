@@ -69,6 +69,16 @@ class PackageNotices(unittest.TestCase):
                 archive.writestr(f"yamaa-{version}.dist-info/licenses/{name}", payload)
         return path
 
+    def r_binary(self, name, members):
+        """Write an R binary package: a ZIP for Windows, a gzipped tar for macOS."""
+        if not name.endswith(".zip"):
+            return self.tar(name, members)
+        path = self.root / name
+        with zipfile.ZipFile(path, "w") as archive:
+            for member, payload in members.items():
+                archive.writestr(member, payload)
+        return path
+
     def test_each_package_kind_carries_the_notices_at_its_own_location(self):
         wheel = self.wheel(self.notices)
         sdist = self.tar(
@@ -79,7 +89,16 @@ class PackageNotices(unittest.TestCase):
             "yamaa_0.4.0.tar.gz",
             {f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
         )
-        for path in (wheel, sdist, r_source):
+        # An R binary package holds the installed package, where R puts the
+        # notices of inst/; its name adds the R series that built it.
+        r_binaries = [
+            self.r_binary(
+                name,
+                {f"yamaa/{notice}": data for notice, data in self.r_notices.items()},
+            )
+            for name in ("yamaa_0.4.0-4.6.zip", "yamaa_0.4.0-4.5.tgz")
+        ]
+        for path in (wheel, sdist, r_source, *r_binaries):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
 
@@ -143,6 +162,21 @@ class PackageNotices(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "missing: yamaa/inst/LICENSE.txt"):
             packages.check_archive(misplaced, self.root)
+        # A binary package keeps no inst/ directory, and carries the R host's
+        # notices.
+        for members, error in (
+            (
+                {f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
+                "missing: yamaa/LICENSE.txt",
+            ),
+            (
+                {f"yamaa/{name}": data for name, data in self.notices.items()},
+                "differs or is missing: yamaa/LICENSE-THIRD-PARTY.txt",
+            ),
+        ):
+            binary = self.r_binary("yamaa_0.4.0-4.6.zip", members)
+            with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
+                packages.check_archive(binary, self.root)
         changed = self.tar(
             "yamaa-0.4.0.tar.gz",
             {
@@ -176,10 +210,20 @@ class PackageNotices(unittest.TestCase):
             "yamaa_1.0.0.tar.gz",
             {f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
         )
-        for path in (wheel, sdist, r_source):
+        r_binary = self.r_binary(
+            "yamaa_1.0.0-4.6.tgz",
+            {f"yamaa/{name}": data for name, data in self.r_notices.items()},
+        )
+        for path in (wheel, sdist, r_source, r_binary):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
-        for name in ("yamaa_1.0.0rc1.tar.gz", "yamaa-1.0.0.tar.gz"):
+        for name in (
+            "yamaa_1.0.0rc1.tar.gz",
+            "yamaa-1.0.0.tar.gz",
+            "yamaa_1.0.0rc1-4.6.tgz",
+            "yamaa_1.0.0.zip",
+            "yamaa_1.0.0-4.6.tar.gz",
+        ):
             other = self.tar(name, {})
             with (
                 self.subTest(archive=name),

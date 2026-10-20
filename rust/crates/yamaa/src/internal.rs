@@ -3,18 +3,20 @@
 //! conversions below are the only place adapters or core types appear.
 //!
 //! Every build, of a specification alone or of one member of a project run,
-//! takes one route: compile the member, then run it. Each adjudicated build,
-//! including a refused compilation, returns an owned [`Built`] carrying its
-//! diagnostics, evidence and retained sources. `Rejected` errors are reserved
-//! for operations without a handle (failed saves, failed specification
-//! resolution).
+//! takes one route: compile the member, then run it through the one
+//! host-functions port, the embedder's or an empty one. Each adjudicated
+//! build, including a refused compilation, returns an owned [`Build`]
+//! carrying its diagnostics, evidence and retained sources. `Rejected` errors
+//! are reserved for operations without a handle (failed saves, failed
+//! specification resolution).
 
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use yamaa_adapters::application_measurements::Measurements;
+
 use crate::cancel::CancellationToken;
-use crate::diagnostic::Report;
-use crate::engine::{AttemptFailure, SourceBytes};
+use crate::engine::{AttemptFailure, Build, SourceBytes};
 use crate::error::{Error, FunctionError, ResolverFailure};
 use crate::functions::{
     Argument, CallError, FunctionHandle, FunctionIdentity, HostLanguage, LockContext, LockKind,
@@ -22,7 +24,7 @@ use crate::functions::{
 };
 use crate::observe::{Event, Progress};
 use crate::resolver::{ResolverReply, ResolverRequest, ResourceResolver};
-use crate::scalar::ScalarRef;
+use crate::scalar::{Scalar, ScalarRef};
 
 pub(crate) type RetainedSources = SourceBytes;
 
@@ -81,15 +83,16 @@ impl yamaa_adapters::host_resources::Resolver for ResolverBridge {
 }
 
 /// One observed operation: its measurements always, plus the caller's
-/// progress port when there is one.
+/// progress port when there is one. A build keeps the measurements its
+/// operation observed.
 pub(crate) struct ObserverBridge<'a> {
-    measurements: &'a yamaa_adapters::application_measurements::Measurements,
+    measurements: &'a Arc<Measurements>,
     progress: Option<&'a dyn Progress>,
 }
 
 impl<'a> ObserverBridge<'a> {
     pub(crate) fn new(
-        measurements: &'a yamaa_adapters::application_measurements::Measurements,
+        measurements: &'a Arc<Measurements>,
         progress: Option<&'a dyn Progress>,
     ) -> Self {
         Self {
@@ -245,6 +248,35 @@ impl yamaa_core::project_activation::ActivationPort for HostPort<'_> {
     }
 }
 
+/// The host-functions port of an engine configured without project
+/// functions, such as the command line's. Only a member that calls no
+/// project function runs with it, with or without a project, so activation
+/// never enters it; a request that did reach it would fail as a missing
+/// binding.
+struct NoFunctions;
+
+impl ProjectFunctions for NoFunctions {
+    fn verify_lock(
+        &self,
+        _: &LockContext<'_>,
+        _: &[FunctionIdentity],
+    ) -> Result<(), FunctionError> {
+        Err(FunctionError::Protocol)
+    }
+
+    fn bind(
+        &self,
+        identity: &FunctionIdentity,
+        _: &Signature,
+    ) -> Result<FunctionHandle, FunctionError> {
+        Err(FunctionError::MissingBinding(identity.call.clone()))
+    }
+
+    fn invoke(&self, _: &FunctionHandle, _: &[Argument<'_>]) -> Result<Scalar, CallError> {
+        Err(CallError::Raised(FunctionError::Protocol))
+    }
+}
+
 /// Classify one retained host failure: ordinary facts project into
 /// diagnostics while opaque failures stay held without classification facts.
 fn classify(failure: &HostFailure) -> yamaa_adapters::file_application::Classification {
@@ -280,57 +312,6 @@ fn classify(failure: &HostFailure) -> yamaa_adapters::file_application::Classifi
                 .collect(),
         ),
         _ => Classification::Opaque,
-    }
-}
-
-/// What one build of a member produced.
-pub(crate) enum Built {
-    /// The member ran: its result, or the refusal of a result the attempt
-    /// could not build, and, with a project, the host failures it retained.
-    Ran {
-        result: Result<
-            Box<yamaa_adapters::file_application::Domain>,
-            Vec<yamaa_core::diagnostic::Diagnostic>,
-        >,
-        failures: Option<Vec<AttemptFailure>>,
-    },
-    /// The member did not run: its compilation was refused, a held file
-    /// changed since compilation, it has a project but the engine has no
-    /// project functions, or a project finding or a producer that did not
-    /// complete stopped it. A refused compilation keeps the sources it
-    /// captured.
-    Refused {
-        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
-        sources: RetainedSources,
-    },
-}
-
-impl Built {
-    /// A member that did not run, with the findings that explain why.
-    pub(crate) fn refused(issues: Vec<yamaa_core::diagnostic::Diagnostic>) -> Self {
-        Self::Refused {
-            issues,
-            sources: Vec::new(),
-        }
-    }
-
-    /// The member's result, when it ran and its result could be built.
-    pub(crate) fn domain(&self) -> Option<&yamaa_adapters::file_application::Domain> {
-        match self {
-            Self::Ran {
-                result: Ok(domain), ..
-            } => Some(domain),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn domain_mut(&mut self) -> Option<&mut yamaa_adapters::file_application::Domain> {
-        match self {
-            Self::Ran {
-                result: Ok(domain), ..
-            } => Some(domain),
-            _ => None,
-        }
     }
 }
 
@@ -414,8 +395,9 @@ pub(crate) fn compile(
 }
 
 /// The Build and Finished half: one run of a compiled request in its own
-/// resource scope. With `verify`, the run first verifies the compiled metadata
-/// and refuses if it changed. A refused compilation's run returns its held
+/// resource scope, observed by `observer`, whose measurements the build
+/// keeps. With `verify`, the run first verifies the compiled metadata and
+/// refuses if it changed. A refused compilation's run returns its held
 /// refusal and performs no resource, activation or study work. A run offers
 /// its `held` artifacts to the inputs whose `schema` links name their
 /// producers.
@@ -426,18 +408,23 @@ pub(crate) fn run(
     run_resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     verify: bool,
-    scope: yamaa_core::application_observer::Scope<'_>,
-) -> Built {
+    observer: &ObserverBridge<'_>,
+) -> Build {
+    let scope = yamaa_core::application_observer::Scope::new(observer);
+    let measurements = Arc::clone(observer.measurements);
     let prepared = match compiled {
         Compiled::Ready(prepared) => prepared,
         Compiled::Refused {
             issues, sources, ..
         } => {
             yamaa_core::domain_entry::finish(scope);
-            return Built::Refused {
-                issues: issues.clone(),
-                sources: sources.clone(),
-            };
+            return Build::new(
+                Err(issues.clone()),
+                sources.clone(),
+                None,
+                measurements,
+                shared,
+            );
         }
     };
     let built = yamaa_core::domain_entry::run(scope, || {
@@ -451,15 +438,25 @@ pub(crate) fn run(
             scope,
         ))
     });
-    match built {
+    let (result, sources, failures) = match built {
         Ok(built) => built,
         Err(never) => match never {},
-    }
+    };
+    Build::new(result, sources, failures, measurements, shared)
 }
 
-/// One run of a prepared member. A run whose held metadata changed since
-/// compilation is refused before activation or any study read, keeping the
-/// compiled sources.
+/// What one run of a member yields: its result, or the findings that explain
+/// why it has none; the sources a run refused for changed files keeps; and,
+/// with a project, the host failures the run retained.
+type Ran = (
+    Result<Box<yamaa_adapters::file_application::Domain>, Vec<yamaa_core::diagnostic::Diagnostic>>,
+    RetainedSources,
+    Option<Vec<AttemptFailure>>,
+);
+
+/// One run of a prepared member through the engine's host-functions port.
+/// A run whose held metadata changed since compilation is refused before
+/// activation or any study read, keeping the compiled sources.
 fn run_member(
     shared: &EngineShared,
     specification: &str,
@@ -468,44 +465,30 @@ fn run_member(
     held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
     verify: bool,
     scope: yamaa_core::application_observer::Scope<'_>,
-) -> Built {
+) -> Ran {
     if verify {
         if let Err(issues) = prepared.verify_metadata() {
-            return Built::Refused {
-                issues,
-                sources: prepared.retained_sources(),
-            };
+            return (Err(issues), prepared.retained_sources(), None);
         }
     }
     let project = prepared.run().has_project();
+    // Without project functions the port is empty: a member that calls a
+    // project function is unsupported before it reads data, and any other
+    // member, with or without a project, runs as a host runs it.
+    let functions: &dyn ProjectFunctions = match shared.functions.as_deref() {
+        Some(functions) => functions,
+        None if !prepared.run().compiled().called_functions().is_empty() => {
+            let issues =
+                yamaa_adapters::file_application::unsupported("environment", Some("environment"));
+            return (Err(issues), Vec::new(), None);
+        }
+        None => &NoFunctions,
+    };
     let mut run_scope = prepared.run_scope(run_resolver);
     if let Some(held) = held {
         run_scope.hold(held);
     }
     let identity = shared.identity("domain", specification);
-    let Some(functions) = shared.functions.as_deref() else {
-        // Without project functions the host-functions port is empty: a
-        // member with a project is unsupported, and one without a project
-        // calls no project function.
-        if project {
-            return Built::refused(yamaa_adapters::file_application::unsupported(
-                "environment",
-                Some("environment"),
-            ));
-        }
-        let (_, result) = yamaa_adapters::file_application::run(
-            prepared,
-            &mut run_scope,
-            &mut yamaa_adapters::specification_run::NoActivation,
-            |_| yamaa_adapters::file_application::Classification::Opaque,
-            identity,
-            scope,
-        );
-        return Built::Ran {
-            result: result.map(Box::new),
-            failures: None,
-        };
-    };
     let lock_bytes = prepared
         .run()
         .captured_environment()
@@ -534,10 +517,7 @@ fn run_member(
         });
         failures
     });
-    Built::Ran {
-        result: result.map(Box::new),
-        failures,
-    }
+    (result.map(Box::new), Vec::new(), failures)
 }
 
 /// The specification and project identities a request compiles to, resolved
@@ -586,30 +566,4 @@ pub(crate) fn unchanged(compiled: &Compiled) -> bool {
         return false;
     };
     prepared.verify_metadata().is_ok()
-}
-
-/// Whether a build produced its primary output.
-pub(crate) fn outcome_accepted(built: &Built) -> bool {
-    built
-        .domain()
-        .is_some_and(|domain| domain.output().is_some())
-}
-
-/// The issues of one build, live from its current state.
-pub(crate) fn outcome_issues(built: &Built) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-    match built {
-        Built::Ran {
-            result: Ok(domain), ..
-        } => domain.issues(),
-        Built::Ran {
-            result: Err(issues),
-            ..
-        }
-        | Built::Refused { issues, .. } => issues.clone(),
-    }
-}
-
-/// Build the public report for one build, live from its current state.
-pub(crate) fn outcome_report(built: &Built) -> Report {
-    Report::from_issues(&outcome_issues(built))
 }
