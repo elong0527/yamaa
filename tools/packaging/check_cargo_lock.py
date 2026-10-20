@@ -75,6 +75,21 @@ COMMENT = re.compile(r"(?<!\\)#")
 # Recipe commands that strip without the word strip: objcopy's -g
 # (--strip-debug), -S (--strip-all) and -x (--discard-all), and install -s.
 TOOL_STRIP = {"objcopy": {"-g", "-S", "-x", "--discard-all"}, "install": {"-s"}}
+# A shell command ends at ;, &&, ||, | or a single &, but not at the & of a
+# redirection such as 2>&1 or &>log. The quotes are gone by then, so a quoted
+# separator, such as the ; in the Windows cargo line's LIBRARY_PATH, ends one
+# too.
+COMMAND_END = re.compile(r"&&|\|\||[;|]|(?<![<>])&(?!>)")
+# A word that can come before a shell command's name, with or without make's
+# @, - or + recipe prefix: an assignment such as FOO=1, a shell keyword that a
+# command follows, or one of the launchers env, command, exec, nice, nohup and
+# time, which run the words after them as a command. A launcher's own options,
+# as in env -i, are not read.
+BEFORE_NAME = re.compile(
+    r"[@+-]*(?:[A-Za-z_][A-Za-z0-9_]*=.*"
+    r"|[!{(]|if|then|elif|else|while|until|do"
+    r"|env|command|exec|nice|nohup|time)"
+)
 
 
 def makevars_profile(label, makevars):
@@ -183,9 +198,14 @@ def refuse_strip(label, line, recipe):
     if not recipe:
         return
     # Each shell command is named by its first word, as in @objcopy or
-    # $(OBJCOPY), or a cross tool's x86_64-w64-mingw32-objcopy.
-    for command in re.split(r"&&|\|\||[;|]", text):
-        tool, *options = command.split() or [""]
+    # $(OBJCOPY), or a cross tool's x86_64-w64-mingw32-objcopy, once the words
+    # that BEFORE_NAME matches are skipped, as in env FOO=1 objcopy or
+    # then install.
+    for command in COMMAND_END.split(text):
+        words = command.split()
+        while words and BEFORE_NAME.fullmatch(words[0]):
+            del words[0]
+        tool, *options = words or [""]
         name = tool.strip("@+-$(){}").rsplit("/", 1)[-1].lower()
         for key, strips in TOOL_STRIP.items():
             if name.endswith(key) and (found := strips.intersection(options)):
@@ -203,8 +223,9 @@ def check_r_link(label, makevars):
     line may pass a linker option in LINKER_STRIP after -Wl, or -Xlinker.
     Outside the recipes, in PKG_LIBS or a variable that it reads, no line may
     pass the compiler driver's -s either, and no recipe may run a command in
-    TOOL_STRIP with its strip option. make's $(strip ...) function is
-    admitted, but not an option inside it.
+    TOOL_STRIP with its strip option, also behind a launcher, an assignment or
+    a shell keyword. make's $(strip ...) function is admitted, but not an
+    option inside it.
 
     The lines are read as make reads them. A tab-led line is a recipe only
     while a rule is open: from a target line, through blank and comment
