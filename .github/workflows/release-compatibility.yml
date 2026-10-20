@@ -56,8 +56,8 @@ jobs:
   # CRAN asks to test a package that uses Rust with a cargo at least two
   # years old, and the workspace rust-version is that minimum. The source
   # package is staged with the pinned toolchain, which vendors the crates,
-  # then installed and checked with Cargo and rustc at the rust-version: its
-  # build runs Cargo outside the bundled workspace, with the caller's toolchain.
+  # then installed and checked with Cargo and rustc at the rust-version: it
+  # carries no toolchain file, so its build uses the caller's toolchain.
   r-minimum:
     name: r (minimum toolchain)
     runs-on: ubuntu-24.04

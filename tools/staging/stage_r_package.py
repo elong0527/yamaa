@@ -1,21 +1,23 @@
 """Stage a standalone R source package without maintaining duplicate Rust code.
 
-The package builds offline: src/rust/vendor.tar.xz carries the crates.io crates
-that the unchanged Cargo.lock selects, written by tools/vendor_crates.py, which
-the package carries too, and the Makevars that configure writes point Cargo at
-them through src/rust/vendor-config.toml. configure reads the minimum Cargo and
-rustc from the rust-version of the copied workspace manifest. inst/AUTHORS
-names every bundled crate's authors and license, as CRAN's Repository Policy
-asks.
+src/rust holds the R engine bundle of tools/staging/engine_bundle.py (#3030
+D55): the engine crates and the R binding crate, with a lock trimmed from the
+canonical one and verified against it, and no tests or toolchain file. The
+package builds offline: src/rust/vendor.tar.xz carries the crates.io crates
+that the trimmed lock selects, written by tools/vendor_crates.py, which the
+package carries too, and the Makevars that configure writes point Cargo at
+them through src/rust/vendor-config.toml, the bundle's Cargo configuration.
+configure reads the minimum Cargo and rustc from the rust-version of the
+bundle's workspace manifest. inst/AUTHORS names every bundled crate's authors
+and license, as CRAN's Repository Policy asks.
 """
 
 import argparse
 import fnmatch
 import json
-import re
 import shutil
 import tempfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from tools.conformance import supplemental_inventory as inventory
 from tools.packaging import generate_third_party_notices as notices
@@ -30,8 +32,9 @@ AUTHORS = "inst/AUTHORS"
 AUTHORS_PREAMBLE = (
     "The yamaa R source package bundles the Rust crates below. The crates.io "
     f"crates that src/rust/Cargo.lock selects are in {VENDOR_ARCHIVE}, as "
-    "`cargo vendor` writes them, apart from the prebuilt binaries an entry "
-    f"names as left out; {VENDOR_SCRIPT} wrote the archive. The other crates "
+    "`cargo vendor` writes them, apart from the prebuilt binaries and Rust "
+    "toolchain files that an entry names as left out; "
+    f"{VENDOR_SCRIPT} wrote the archive. The other crates "
     "are in the directory their entry names. Each crate keeps its own license "
     "and copyright files beside its sources, and LICENSE-THIRD-PARTY.txt "
     "reproduces those texts for every crate.",
@@ -82,97 +85,6 @@ UNREAD_BY_R_SUITES = (
 )
 
 
-def native_test_fixtures(workspace: Path):
-    """Select the original test inputs and truth that the crate tests read.
-
-    The R package carries the crates with their tests, so it carries the
-    explicitly listed benchmark files that they compile in as well.
-    """
-    repository = workspace.parent
-    relative_manifest = "rust/qualification/native-source-fixtures.json"
-    manifest = repository / relative_manifest
-    declaration = json.loads(manifest.read_bytes())
-    if (
-        not isinstance(declaration, dict)
-        or set(declaration) != {"format", "files"}
-        or declaration["format"] != "yamaa-native-source-fixtures/1"
-        or not isinstance(declaration["files"], list)
-    ):
-        raise ValueError("invalid native source fixture manifest")
-    files = declaration["files"]
-    if len(files) > 4096:
-        raise ValueError("native source fixture manifest is too large")
-    selected = [(relative_manifest, manifest)]
-    seen = set()
-    for name in files:
-        if (
-            not isinstance(name, str)
-            or len(name) > 65_536
-            or not name.startswith("benchmarks/")
-            or "\\" in name
-            or ":" in name
-            or any(part in {"", ".", ".."} for part in name.split("/"))
-            or name in seen
-        ):
-            raise ValueError("invalid or duplicate native source fixture path")
-        seen.add(name)
-        selected.append((name, repository / name))
-    for name, path in selected:
-        if not path.is_file():
-            raise ValueError(f"native source fixture is missing: {name}")
-        parent = repository
-        for part in name.split("/"):
-            parent = parent / part
-            if parent.is_symlink():
-                raise ValueError("native source fixtures must not be symlinks")
-    # This conservative source-text scan admits direct include_str!/include_bytes!
-    # calls only with ordinary quoted literals and matching (), [] or {}.
-    # Raw/dynamic arguments and comment-separated tokens are refused. Inputs
-    # outside Cargo's workspace need an explicit declaration before an archive.
-    include = re.compile(r"\binclude_(?:str|bytes)\b")
-    invocation = re.compile(r"\s*!\s*([\(\[\{])\s*")
-    argument = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,?\s*([\)\]\}])')
-    closing = {"(": ")", "[": "]", "{": "}"}
-    crates = workspace / "crates"
-    for source in sorted(crates.rglob("*.rs")):
-        if any(
-            part in {"target", ".git", "__pycache__"}
-            for part in source.relative_to(crates).parts
-        ):
-            continue
-        text = source.read_text(encoding="utf-8")
-        for directive in include.finditer(text):
-            call = invocation.match(text, directive.end())
-            literal = argument.match(text, call.end()) if call is not None else None
-            if literal is None or literal.group(2) != closing[call.group(1)]:
-                raise ValueError(
-                    "native compile fixture arguments must be ordinary string literals"
-                )
-            written = literal.group(1)
-            if (
-                "\\" in written
-                or ":" in written
-                or PurePosixPath(written).is_absolute()
-            ):
-                raise ValueError(
-                    "native compile fixture paths must be unescaped relative paths"
-                )
-            path = source.parent.resolve()
-            for part in PurePosixPath(written).parts:
-                path = path / part
-                if path.is_symlink():
-                    raise ValueError("native compile fixtures must not be symlinks")
-            path = path.resolve()
-            if path.is_relative_to(workspace.resolve()):
-                continue
-            if not path.is_relative_to(repository.resolve()):
-                raise ValueError("native compile fixture escapes the repository")
-            relative = path.relative_to(repository.resolve()).as_posix()
-            if relative not in seen:
-                raise ValueError(f"native compile fixture is not declared: {relative}")
-    return selected
-
-
 def matches(relative: str, pattern: str) -> bool:
     """Match a staged path against one UNREAD_BY_R_SUITES pattern."""
     names, parts = relative.split("/"), pattern.split("/")
@@ -215,35 +127,44 @@ def leave_out_unread_inputs(resources: Path, patterns=UNREAD_BY_R_SUITES) -> Non
             directory.rmdir()
 
 
-def vendor_rust(destination: Path):
-    """Bundle the locked crates.io crates and the script that bundles them.
+def bundle_rust(destination: Path):
+    """Stage the R engine bundle in src/rust, its crates.io crates compressed.
 
+    The bundle's workspace becomes src/rust, its vendored crates
+    src/rust/vendor.tar.xz and its Cargo configuration
+    src/rust/vendor-config.toml, which the Makevars copy into the Cargo home
+    of the build. The package also carries the script that wrote the archive.
     Returns (name, version, left-out paths) for each vendored crate.
     """
-    rust = destination / "src/rust"
-    with tempfile.TemporaryDirectory(prefix="yamaa-r-vendor-") as scratch:
-        directory = Path(scratch) / vendor_crates.DIRECTORY
-        crates = vendor_crates.vendor(rust, directory)
-        vendor_crates.write_archive(directory, destination / VENDOR_ARCHIVE)
-    (destination / VENDOR_CONFIG).write_text(vendor_crates.CONFIG, encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="yamaa-r-bundle-") as scratch:
+        bundle = Path(scratch) / "bundle"
+        crates = engine_bundle.stage("r", bundle)
+        shutil.copytree(bundle / "rust", destination / "src/rust")
+        vendor_crates.write_archive(
+            bundle / vendor_crates.DIRECTORY, destination / VENDOR_ARCHIVE
+        )
+        shutil.copyfile(bundle / ".cargo/config.toml", destination / VENDOR_CONFIG)
     script = destination / VENDOR_SCRIPT
     script.parent.mkdir(exist_ok=True)
     shutil.copyfile(vendor_crates.__file__, script)
     return crates
 
 
-def authors_text(metadata, crates, listed):
+def authors_text(metadata, crates, listed, locked):
     """Name the authors and license of every Rust crate the package bundles.
 
-    `crates` are the vendored crates and `listed` the (name, version) pairs
-    that LICENSE-THIRD-PARTY.txt covers. The vendored crates must be exactly
-    the locked crates.io crates, and every bundled crate needs a notice entry.
+    `crates` are the vendored crates, `locked` the (name, version, source)
+    packages of the bundle's trimmed lock and `listed` the (name, version)
+    pairs that LICENSE-THIRD-PARTY.txt covers. The vendored crates must be
+    exactly the crates.io crates of that lock, and every bundled crate needs a
+    notice entry.
     """
     members = set(metadata["workspace_members"])
     bundled = [
         package
         for package in metadata["packages"]
         if package["id"] not in members
+        and (package["name"], package["version"], package["source"]) in locked
         and package["source"] in (notices.CRATES_IO, None)
     ]
     bundled.sort(
@@ -291,24 +212,7 @@ def stage(destination: Path):
         raise FileNotFoundError("canonical Cargo.lock is missing")
     # copytree rejects an existing destination, protecting previous builds.
     shutil.copytree(REPOSITORY / "R/yamaa", destination)
-    rust = destination / "src/rust"
-    rust.mkdir()
-    for name in ("Cargo.toml", "rust-toolchain.toml", "Cargo.lock"):
-        shutil.copy2(WORKSPACE / name, rust / name)
-    shutil.copytree(
-        WORKSPACE / "crates",
-        rust / "crates",
-        ignore=shutil.ignore_patterns("target", "__pycache__", "*.pyc", "Cargo.lock"),
-    )
-    for original in engine_bundle.vendored_sources(WORKSPACE):
-        target = rust / original.relative_to(WORKSPACE)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(original, target)
-    for relative, original in native_test_fixtures(WORKSPACE):
-        target = destination / "src" / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(original, target)
-    crates = vendor_rust(destination)
+    crates = bundle_rust(destination)
     resources = destination / "inst"
     resources.mkdir(exist_ok=True)
     from tools.staging import stage_specification_inputs as helper
@@ -351,8 +255,13 @@ def stage(destination: Path):
     listed = notices.committed_entries(
         (resources / notices.NOTICES).read_text(encoding="utf-8")
     )
+    _, locked = engine_bundle.lock_packages(
+        (destination / "src/rust/Cargo.lock").read_text(encoding="utf-8"),
+        "src/rust/Cargo.lock",
+    )
     (destination / AUTHORS).write_text(
-        authors_text(notices.locked_metadata(), crates, listed), encoding="utf-8"
+        authors_text(notices.locked_metadata(), crates, listed, set(locked)),
+        encoding="utf-8",
     )
     print(destination)
 

@@ -106,7 +106,9 @@ class ConfigureTests(unittest.TestCase):
     def test_tools_on_the_path_are_reported_and_written_into_makevars(self):
         rustc = tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
         cargo = tool(self.bin, "cargo", "cargo 1.99.1 (5f94df478 2026-08-27)")
-        result = self.configure()
+        # This case checks the plain Unix environment; the macOS case below
+        # checks its deployment target independently of the host running tests.
+        result = self.configure("main(windows = FALSE, darwin = FALSE)")
         self.assertEqual(result.returncode, 0, result.stderr)
         # R CMD check needs the rustc version in the installation log before
         # compilation starts.

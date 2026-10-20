@@ -6,8 +6,8 @@
 # As in Makevars.in, Cargo reads the locked crates from rust/vendor.tar.xz,
 # never the network (--offline), runs at most two jobs (-j 2, with MAKEFLAGS
 # cleared so that Cargo does not join make's jobserver), keeps its home below
-# rust/target, never lets rustup install a toolchain (RUSTUP_AUTO_INSTALL=0),
-# and runs from here, so the bundled rust-toolchain.toml selects nothing.
+# rust/target, and builds with the caller's toolchain: the package carries no
+# rust-toolchain.toml, and rustup installs no toolchain (RUSTUP_AUTO_INSTALL=0).
 RUST_TARGET = x86_64-pc-windows-gnu
 CARGO = @CARGO@
 RUSTC = @RUSTC@

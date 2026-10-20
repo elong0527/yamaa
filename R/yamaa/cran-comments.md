@@ -19,7 +19,7 @@ aarch64, macOS and Windows.
 the installed size. The notes, and why they remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
-  size of the tarball, about 14.1 MB. About 11 MB of it is
+  size of the tarball, about 11.4 MB. About 9.7 MB of it is
   `src/rust/vendor.tar.xz`, the Rust crates that the package compiles, which
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
@@ -40,6 +40,11 @@ The package follows "Using Rust in CRAN packages":
   `src/rust/vendor.tar.xz`, an xz-compressed tar written with
   `cargo vendor --locked --versioned-dirs` by `tools/vendor_crates.py`, which
   the package carries. Nothing is downloaded at installation.
+- `src/rust` holds only the crates that the package builds, with a
+  `Cargo.lock` trimmed from the project's. The package has no
+  `rust-toolchain.toml` or `rust-toolchain` file anywhere, the bundled crates
+  included, so the build uses the Cargo and rustc that `configure` finds and
+  never selects another toolchain.
 - `SystemRequirements: Cargo (Rust's package manager) (>= 1.82.0), rustc
   (>= 1.82.0)`. 1.82 is the `rust-version` that the bundled workspace
   declares (edition 2021). Rust 1.82.0 was released on 2024-10-17, so it is

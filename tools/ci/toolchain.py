@@ -9,8 +9,7 @@ from pathlib import Path
 from tools.paths import WORKSPACE
 
 # Repository checks lint and format with these. The toolchain file names only
-# what a build needs, because the R source package carries it and rustup would
-# otherwise add these to every build inside its bundled workspace.
+# what a build needs, so rustup adds them only where these checks run.
 CHECK_COMPONENTS = ("clippy", "rustfmt")
 
 
