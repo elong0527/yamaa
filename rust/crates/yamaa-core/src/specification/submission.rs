@@ -1,8 +1,10 @@
-//! Family-independent submission admission and completed-column length binding.
-//! Standard, document and terminology composition remains the Define use case.
+//! Family-independent submission admission and completed-column length binding,
+//! read from the typed tree. Standard, document and terminology composition
+//! remains the Define use case.
 use super::*;
 use crate::json::Value as V;
 use crate::{
+    ast::{self, ColumnCheckKind, Constant, Literal, SubmissionMetadata},
     dataset::{Check, InventoryScope, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
     specification_submission_document::OriginType,
@@ -12,22 +14,12 @@ use crate::{
 };
 use std::collections::BTreeSet;
 
-fn present_field(d: &Document, node: usize, name: &str) -> Option<usize> {
-    d.field(node, name)
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-}
-fn string<'a>(d: &'a Document, node: usize, name: &str) -> Option<&'a str> {
-    match &d.nodes()[present_field(d, node, name)?] {
-        N::Text(value) => Some(value),
-        _ => None,
-    }
-}
-fn scalar(d: &Document, node: usize) -> V {
-    match &d.nodes()[node] {
-        N::Integer(value) => V::Number((value.clone()).parse().expect("canonical integer")),
-        N::Boolean(value) => V::Bool(*value),
-        N::Text(value) => s(value),
-        N::Float(value) => V::from(Value::float(*value)),
+fn scalar(value: &Literal) -> V {
+    match value {
+        Literal::Int(value) => V::Number((value.clone()).parse().expect("canonical integer")),
+        Literal::Bool(value) => V::Bool(*value),
+        Literal::Text(value) => s(value),
+        Literal::Float(value) => V::from(Value::float(*value)),
         _ => V::Null,
     }
 }
@@ -46,34 +38,51 @@ fn finding(code: C, path: &str, fields: &[(&str, V)]) -> PreflightFinding {
         operand_route: None,
     })
 }
-fn checks(d: &Document, column: usize, name: &str) -> Vec<usize> {
-    let Some(id) = present_field(d, column, "verifications") else {
+/// The submission data type a column declares, or the one its type implies.
+fn data_type<'a>(kind: &'a str, declared: Option<&'a ast::Text>) -> &'a str {
+    declared.map_or(
+        match kind {
+            "str" => "text",
+            "int" => "integer",
+            other => other,
+        },
+        |declared| declared.text.as_str(),
+    )
+}
+/// A written length or significant-digit count: a non-negative integer, and
+/// a length is never zero.
+fn valid_count(field: &str, value: &Constant) -> bool {
+    matches!(&value.value, Literal::Int(value) if !value.starts_with('-') && (field != "length" || value != "0"))
+}
+/// The `max` each of a `str` column's `max_length` verifications writes.
+fn maxima(column: &ast::Column) -> Vec<&Constant> {
+    if column.kind != ColumnType::Str {
         return Vec::new();
-    };
-    let N::Sequence(entries) = &d.nodes()[id] else {
-        return Vec::new();
-    };
-    entries.iter().filter_map(|&id| d.field(id, name)).collect()
+    }
+    column
+        .checks
+        .iter()
+        .filter_map(|check| match &check.kind {
+            ColumnCheckKind::MaxLength(max) if max.value != Literal::Missing => Some(max),
+            _ => None,
+        })
+        .collect()
 }
 fn reserved(
-    d: &Document,
-    node: usize,
+    spec: &ast::Spec,
+    metadata: &[(ast::Named, ast::Text)],
     column: Option<&str>,
     result: &mut Vec<PreflightFinding>,
-) -> Result<(), PrepareError> {
-    let Some(metadata) = present_field(d, node, "metadata") else {
-        return Ok(());
-    };
+) {
     let governed = if column.is_some() {
         crate::specification_submission_document::COLUMN_METADATA_FIELDS
     } else {
         crate::specification_submission_document::DATASET_METADATA_FIELDS
     };
-    for &(key, _) in mapping(d, metadata)? {
-        let key = text(d, key)?;
-        if governed.iter().any(|field| field.name() == key) {
+    for (key, _) in metadata {
+        if governed.iter().any(|field| field.name() == key.name) {
             let mut fields = vec![
-                ("key", s(key)),
+                ("key", s(&key.name)),
                 ("level", s(if column.is_some() { "column" } else { "root" })),
             ];
             if let Some(column) = column {
@@ -81,19 +90,11 @@ fn reserved(
             }
             result.push(finding(
                 C::SubmissionReservedMetadata,
-                &column.map_or_else(
-                    || format!("metadata.{key}"),
-                    |name| format!("columns.{name}.metadata.{key}"),
-                ),
+                &spec.cite(key.meta),
                 &fields,
             ));
         }
     }
-    Ok(())
-}
-/// The origin types SUB-19 leaves unrefuted by one derivation.
-fn kinds(d: &Document, node: usize, reads: &Reads) -> Vec<&'static str> {
-    origin::classify(d, node, reads).admitted()
 }
 /// A declared origin's type and description.
 struct Declared<'a> {
@@ -108,15 +109,8 @@ impl Declared<'_> {
             .and_then(origin::predecessor)
     }
 }
-fn declared(d: &Document, origin: usize) -> Option<Declared<'_>> {
-    Some(Declared {
-        kind: string(d, origin, "type")?,
-        description: string(d, origin, "description"),
-    })
-}
 fn origins<'a>(
-    d: &'a Document,
-    submission: usize,
+    metadata: &'a SubmissionMetadata,
     name: &str,
     entry: Option<&str>,
     path: &str,
@@ -127,11 +121,17 @@ fn origins<'a>(
     if let Some(entry) = entry {
         fields.push(("entry", s(entry)));
     }
-    let Some(origin) = present_field(d, submission, "origin") else {
+    let Some(origin) = metadata.origins.first() else {
         result.push(finding(C::SubmissionOriginMissing, path, &fields));
         return None;
     };
-    let declaration = declared(d, origin)?;
+    let declaration = Declared {
+        kind: &origin.kind.text,
+        description: origin
+            .description
+            .as_ref()
+            .map(|description| description.text.as_str()),
+    };
     let kind = declaration.kind;
     if ["Predecessor", "Other", "Not Available"].contains(&kind)
         && declaration.description.is_none_or(str::is_empty)
@@ -150,52 +150,50 @@ fn origins<'a>(
             &context,
         ));
     }
-    if kind == "Derived" && present_field(d, submission, "method").is_none() && !inherited_method {
+    if kind == "Derived" && metadata.method.is_none() && !inherited_method {
         result.push(finding(C::SubmissionMethodMissing, path, &fields));
     }
     Some(declaration)
 }
-/// SUB-20: the first derivation that is not the copy a Predecessor claims.
-fn copy_failure(
-    d: &Document,
-    derivations: &[usize],
-    predecessor: &origin::Predecessor<'_>,
-    reads: &Reads,
-) -> Option<origin::CopyFailure> {
-    derivations
-        .iter()
-        .find_map(|&node| origin::copies(d, node, predecessor, reads).err())
+
+/// A column's or a value-level entry's effective submission metadata: the
+/// entry's own field, or the column's where the entry declares none.
+#[derive(Clone, Copy)]
+struct Effective<'a> {
+    data_type: Option<&'a ast::Text>,
+    length: Option<&'a Constant>,
+    digits: Option<&'a Constant>,
+}
+impl<'a> Effective<'a> {
+    fn of(metadata: &'a SubmissionMetadata) -> Self {
+        Self {
+            data_type: metadata.data_type.as_ref(),
+            length: metadata.length.as_ref(),
+            digits: metadata.significant_digits.as_ref(),
+        }
+    }
+    fn over(self, base: Self) -> Self {
+        Self {
+            data_type: self.data_type.or(base.data_type),
+            length: self.length.or(base.length),
+            digits: self.digits.or(base.digits),
+        }
+    }
 }
 
-fn effective_field(
-    d: &Document,
-    override_node: usize,
-    base: Option<usize>,
-    name: &str,
-) -> Option<usize> {
-    present_field(d, override_node, name)
-        .or_else(|| base.and_then(|base| present_field(d, base, name)))
-}
-fn admit_value_fields(
-    d: &Document,
-    entry: usize,
-    column: usize,
-    name: &str,
+/// The type, count and length findings a column's or an entry's effective
+/// metadata raises at `path`.
+fn admit_counts(
+    spec: &ast::Spec,
+    column: &ast::Column,
     path: &str,
+    effective: Effective<'_>,
     result: &mut Vec<PreflightFinding>,
-) -> Result<Option<String>, PrepareError> {
-    let base = present_field(d, column, "submission");
-    let kind = text(d, field(d, column, "type")?)?;
-    let resolved = effective_field(d, entry, base, "data_type")
-        .map(|id| text(d, id))
-        .transpose()?
-        .unwrap_or(if kind == "str" {
-            "text"
-        } else if kind == "int" {
-            "integer"
-        } else {
-            kind
-        });
+) {
+    let name = column.name.name.as_str();
+    let kind = column.kind.name();
+    let resolved = data_type(kind, effective.data_type);
+    let maxima = maxima(column);
     if !crate::specification_submission_document::admits_data_type_names(kind, resolved) {
         result.push(finding(
             C::SubmissionDataType,
@@ -207,90 +205,87 @@ fn admit_value_fields(
             ],
         ));
     }
-    let length = effective_field(d, entry, base, "length");
-    let digits = effective_field(d, entry, base, "significant_digits");
-    for (field_name, node) in [("length", length), ("significant_digits", digits)] {
-        if let Some(node) = node {
-            let valid = matches!(&d.nodes()[node], N::Integer(value) if !value.starts_with('-') && (field_name != "length" || value != "0"));
-            if !valid {
-                result.push(finding(
-                    C::SubmissionLengthInvalid,
-                    &format!("{path}.{field_name}"),
-                    &[("column", s(name)), (field_name, scalar(d, node))],
-                ));
-            }
+    for (field, count) in [
+        ("length", effective.length),
+        ("significant_digits", effective.digits),
+    ] {
+        if let Some(count) = count.filter(|count| !valid_count(field, count)) {
+            result.push(finding(
+                C::SubmissionLengthInvalid,
+                &format!("{path}.{field}"),
+                &[("column", s(name)), (field, scalar(&count.value))],
+            ));
         }
     }
-    let maxima = if kind == "str" {
-        checks(d, column, "max_length")
-            .into_iter()
-            .filter_map(|id| present_field(d, id, "max"))
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
-    if let Some(length) = length {
-        if let Some(&max) = maxima
-            .iter()
-            .find(|&&max| d.nodes()[length] != d.nodes()[max])
-        {
+    if let Some(length) = effective.length {
+        if let Some(max) = maxima.iter().find(|max| max.value != length.value) {
             result.push(finding(
                 C::SubmissionLengthConflict,
                 path,
                 &[
                     ("column", s(name)),
-                    ("length", scalar(d, length)),
-                    ("max_length", scalar(d, max)),
+                    ("length", scalar(&length.value)),
+                    ("max_length", scalar(&max.value)),
                 ],
             ));
         }
     }
-    if present_field(d, d.root(), "submission").is_some() {
-        // SUB-7: a date or datetime never declares a length, whatever type it
-        // is submitted as.
-        let length_type = !["date", "datetime"].contains(&kind)
-            && ["text", "integer", "float"].contains(&resolved);
-        if length_type && length.is_none() && maxima.is_empty() {
-            result.push(finding(
-                C::SubmissionLengthMissing,
-                path,
-                &[("column", s(name)), ("data_type", s(resolved))],
-            ));
-        }
-        if !length_type && length.is_some() && maxima.is_empty() {
-            result.push(finding(
-                C::SubmissionLengthNotApplicable,
-                path,
-                &[("column", s(name)), ("data_type", s(resolved))],
-            ));
-        }
-        if resolved == "float" && digits.is_none() {
-            result.push(finding(
-                C::SubmissionLengthMissing,
-                path,
-                &[("column", s(name)), ("field", s("significant_digits"))],
-            ));
-        }
-        if resolved != "float" && digits.is_some() {
-            result.push(finding(
-                C::SubmissionLengthNotApplicable,
-                path,
-                &[("column", s(name)), ("field", s("significant_digits"))],
-            ));
-        }
+    if spec.submission.is_none() {
+        return;
     }
-    // An explicit verification binds the entire column once. Only authored
-    // entry lengths without such a verification introduce a scoped check.
-    if kind == "str" && maxima.is_empty() {
-        if let Some(node) = present_field(d, entry, "length") {
-            if let N::Integer(value) = &d.nodes()[node] {
-                if !value.starts_with('-') && value != "0" {
-                    return Ok(Some(value.clone()));
-                }
-            }
-        }
+    // SUB-7: a date or datetime never declares a length, whatever type it is
+    // submitted as.
+    let length_type =
+        !["date", "datetime"].contains(&kind) && ["text", "integer", "float"].contains(&resolved);
+    if length_type && effective.length.is_none() && maxima.is_empty() {
+        result.push(finding(
+            C::SubmissionLengthMissing,
+            path,
+            &[("column", s(name)), ("data_type", s(resolved))],
+        ));
     }
-    Ok(None)
+    if !length_type && effective.length.is_some() && maxima.is_empty() {
+        result.push(finding(
+            C::SubmissionLengthNotApplicable,
+            path,
+            &[("column", s(name)), ("data_type", s(resolved))],
+        ));
+    }
+    if resolved == "float" && effective.digits.is_none() {
+        result.push(finding(
+            C::SubmissionLengthMissing,
+            path,
+            &[("column", s(name)), ("field", s("significant_digits"))],
+        ));
+    }
+    if resolved != "float" && effective.digits.is_some() {
+        result.push(finding(
+            C::SubmissionLengthNotApplicable,
+            path,
+            &[("column", s(name)), ("field", s("significant_digits"))],
+        ));
+    }
+}
+
+/// An authored length a `str` column without a `max_length` verification
+/// is bound by.
+fn authored_length<'a>(column: &ast::Column, length: Option<&'a Constant>) -> Option<&'a str> {
+    match &length?.value {
+        Literal::Int(value)
+            if column.kind == ColumnType::Str
+                && maxima(column).is_empty()
+                && !value.starts_with('-')
+                && value != "0" =>
+        {
+            Some(value)
+        }
+        _ => None,
+    }
+}
+
+/// The path of the `max_length` check a column's authored length implies.
+fn implied_max_length(spec: &ast::Spec, column: &ast::Column) -> String {
+    format!("{}.verifications.max_length", spec.cite(column.meta))
 }
 
 /// One entry's authored length bound over the rows its where clause selects.
@@ -305,72 +300,83 @@ struct ValueLength {
 /// entry's own origin against the derivations that can produce its rows
 /// (SUB-13), and collect the length bounds entries author.
 fn admit_entries(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &TableSchema,
     reads: &Reads,
     result: &mut Vec<PreflightFinding>,
-) -> Result<Vec<ValueLength>, PrepareError> {
-    let declared_columns = values::declared_columns(d);
+) -> Vec<ValueLength> {
     let mut lengths = Vec::new();
-    for (index, &column) in columns.iter().enumerate() {
+    for (index, column) in spec.columns.iter().enumerate() {
         let name = output.columns()[index].name.as_str();
-        let base = present_field(d, column, "submission");
-        for entry in values::entries(d, column) {
-            let path = values::path(name, entry.id);
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        let base = &submission.metadata;
+        for entry in &submission.value_level {
+            let path = spec.cite(entry.meta);
+            let own = &entry.metadata;
             // An entry without its own origin answers with the column's,
             // which the column's own refutation already covers.
-            let declaration = if entry.declares(d, "origin") {
+            let declaration = if own.origins.is_empty() {
+                None
+            } else {
                 origins(
-                    d,
-                    entry.node,
+                    own,
                     name,
-                    Some(entry.id),
+                    Some(&entry.id.name),
                     &path,
-                    base.is_some_and(|id| present_field(d, id, "method").is_some()),
+                    base.method.is_some(),
                     result,
                 )
-            } else {
-                None
             };
-            let length = admit_value_fields(d, entry.node, column, name, &path, result)?;
-            if let (Some(max), Some(clause)) =
-                (length, super::value_level::clause(&entry, output, index))
-            {
+            admit_counts(
+                spec,
+                column,
+                &path,
+                Effective::of(own).over(Effective::of(base)),
+                result,
+            );
+            // An explicit verification binds the entire column once. Only
+            // authored entry lengths without such a verification introduce a
+            // scoped check.
+            if let (Some(max), Some(clause)) = (
+                authored_length(column, own.length.as_ref()),
+                super::value_level::clause(entry, output, index),
+            ) {
                 lengths.push(ValueLength {
                     column: index,
                     clause,
-                    max,
+                    max: max.into(),
                     path: format!("{path}.length"),
                 });
             }
             let Some(declaration) = declaration else {
                 continue;
             };
-            let derivations = values::entry_derivations(d, column, name, &declared_columns, &entry);
+            let derivations = values::entry_expressions(spec, column, entry);
             let refuting = derivations
                 .iter()
-                .map(|&node| origin::classify(d, node, reads))
+                .map(|&expr| origin::classify_expr(spec, expr, reads))
                 .find(|kind| !kind.admitted().contains(&declaration.kind));
             let copy = if refuting.is_some() {
                 None
             } else {
                 declaration.predecessor().and_then(|predecessor| {
-                    derivations.iter().find_map(|&node| {
-                        origin::copies(d, node, &predecessor, reads)
+                    derivations.iter().find_map(|&expr| {
+                        origin::copies_expr(spec, expr, &predecessor, reads)
                             .err()
-                            .map(|failure| (node, failure))
+                            .map(|failure| (expr, failure))
                     })
                 })
             };
             let kind = match (refuting, copy) {
                 (Some(kind), _) => kind,
-                (None, Some((node, _))) => origin::classify(d, node, reads),
+                (None, Some((expr, _))) => origin::classify_expr(spec, expr, reads),
                 (None, None) => continue,
             };
             let mut context = vec![
                 ("column", s(name)),
-                ("entry", s(entry.id)),
+                ("entry", s(&entry.id.name)),
                 ("derivation_kind", s(kind.name())),
                 ("origin_type", s(declaration.kind)),
             ];
@@ -380,11 +386,10 @@ fn admit_entries(
             result.push(finding(C::SubmissionValueOriginRefuted, &path, &context));
         }
     }
-    Ok(lengths)
+    lengths
 }
 fn apply_value_bounds_and_inventory(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &TableSchema,
     inventory: &[String],
     groups: &mut [verifications::Verifications],
@@ -402,8 +407,7 @@ fn apply_value_bounds_and_inventory(
         if authored.is_empty() {
             continue;
         }
-        let name = output.columns()[column].name.as_str();
-        let default_path = format!("columns.{name}.verifications.max_length");
+        let default_path = implied_max_length(spec, &spec.columns[column]);
         let default_index = group
             .checks
             .iter()
@@ -444,21 +448,18 @@ fn apply_value_bounds_and_inventory(
             });
         }
     }
-    for (column, &node) in columns.iter().enumerate() {
-        let name = output.columns()[column].name.as_str();
-        let base = present_field(d, node, "submission");
-        let default = base
-            .and_then(|id| present_field(d, id, "inventory_vocabulary"))
-            .is_some_and(|id| d.nodes()[id] == N::Boolean(true));
+    for (index, column) in spec.columns.iter().enumerate() {
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        let name = output.columns()[index].name.as_str();
+        let default = submission.metadata.inventory_vocabulary == Some(true);
         let mut overrides = Vec::new();
-        for entry in values::entries(d, node) {
-            let Some(value) = present_field(d, entry.node, "inventory_vocabulary") else {
+        for entry in &submission.value_level {
+            let Some(enabled) = entry.metadata.inventory_vocabulary else {
                 continue;
             };
-            let N::Boolean(enabled) = d.nodes()[value] else {
-                continue;
-            };
-            let Some(clause) = super::value_level::clause(&entry, output, column) else {
+            let Some(clause) = super::value_level::clause(entry, output, index) else {
                 continue;
             };
             overrides.push((clause, enabled));
@@ -466,21 +467,22 @@ fn apply_value_bounds_and_inventory(
         if !default && !overrides.iter().any(|(_, enabled)| *enabled) {
             continue;
         }
-        if text(d, field(d, node, "type")?)? != "str" {
+        let path = format!("{}.inventory_vocabulary", spec.cite(submission.meta));
+        if column.kind != ColumnType::Str {
             result.push(finding(
                 C::SubmissionDataType,
-                &format!("columns.{name}.submission.inventory_vocabulary"),
+                &path,
                 &[
                     ("column", s(name)),
-                    ("declared_type", s(text(d, field(d, node, "type")?)?)),
+                    ("declared_type", s(column.kind.name())),
                     ("data_type", s("text")),
                 ],
             ));
             continue;
         }
         let scope = (!overrides.is_empty()).then_some(InventoryScope { default, overrides });
-        groups[column].append_codelist(Verification {
-            path: format!("columns.{name}.submission.inventory_vocabulary"),
+        groups[index].append_codelist(Verification {
+            path,
             check: Check::Inventory {
                 values: inventory.iter().cloned().map(Value::Str).collect(),
                 scope,
@@ -490,31 +492,25 @@ fn apply_value_bounds_and_inventory(
     Ok(())
 }
 pub(super) fn admit(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &TableSchema,
     inventory: &[String],
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    let root = d.root();
-    let carried = sequence(d, field(d, field(d, root, "output")?, "columns")?)?
+    let carried = spec
+        .output
+        .columns
         .iter()
-        .map(|&id| text(d, id))
-        .collect::<Result<BTreeSet<_>, _>>()?;
-    let reads = Reads::of(d);
-    let declared_columns = values::declared_columns(d);
-    reserved(d, root, None, result)?;
-    let has_root = present_field(d, root, "submission");
-    if let Some(metadata) = has_root {
-        if d.field(metadata, "reference_data")
-            .is_some_and(|id| d.nodes()[id] == N::Boolean(true))
-            && d.field(metadata, "repeating")
-                .is_some_and(|id| d.nodes()[id] == N::Boolean(true))
-        {
+        .map(|column| column.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let reads = Reads::of_spec(spec);
+    reserved(spec, &spec.metadata, None, result);
+    if let Some(dataset) = &spec.submission {
+        if dataset.reference_data && dataset.repeating {
             result.push(finding(
                 C::SubmissionReferenceRepeating,
-                "submission",
+                &spec.cite(dataset.meta),
                 &[
                     ("reference_data", V::Bool(true)),
                     ("repeating", V::Bool(true)),
@@ -522,13 +518,14 @@ pub(super) fn admit(
             ));
         }
     }
-    for (index, &column) in columns.iter().enumerate() {
-        let name = text(d, field(d, column, "name")?)?;
-        reserved(d, column, Some(name), result)?;
-        let Some(submission) = present_field(d, column, "submission") else {
+    for (index, column) in spec.columns.iter().enumerate() {
+        let name = column.name.name.as_str();
+        reserved(spec, &column.metadata, Some(name), result);
+        let Some(submission) = &column.submission else {
             continue;
         };
-        let path = format!("columns.{name}.submission");
+        let metadata = &submission.metadata;
+        let path = spec.cite(submission.meta);
         if !carried.contains(name) {
             result.push(finding(
                 C::SubmissionColumnNotOutput,
@@ -536,141 +533,40 @@ pub(super) fn admit(
                 &[("column", s(name))],
             ));
         }
-        let kind = text(d, field(d, column, "type")?)?;
-        let resolved = string(d, submission, "data_type").unwrap_or(match kind {
-            "str" => "text",
-            "int" => "integer",
-            other => other,
-        });
-        let admitted =
-            crate::specification_submission_document::admits_data_type_names(kind, resolved);
-        if !admitted {
+        admit_counts(spec, column, &path, Effective::of(metadata), result);
+        if spec.submission.is_some() && metadata.core.is_none() {
             result.push(finding(
-                C::SubmissionDataType,
+                C::SubmissionCoreMandatory,
                 &path,
-                &[
-                    ("column", s(name)),
-                    ("declared_type", s(kind)),
-                    ("data_type", s(resolved)),
-                ],
+                &[("column", s(name)), ("reason", s("core_missing"))],
             ));
         }
-        let length = present_field(d, submission, "length");
-        for (field_name, node) in [
-            ("length", length),
-            (
-                "significant_digits",
-                present_field(d, submission, "significant_digits"),
-            ),
-        ] {
-            if let Some(node) = node {
-                let valid = matches!(&d.nodes()[node], N::Integer(value) if !value.starts_with('-') && (field_name != "length" || value != "0"));
-                if !valid {
-                    result.push(finding(
-                        C::SubmissionLengthInvalid,
-                        &format!("{path}.{field_name}"),
-                        &[("column", s(name)), (field_name, scalar(d, node))],
-                    ));
-                }
-            }
+        if let Some(value) = authored_length(column, metadata.length.as_ref()) {
+            // A bound beyond the native text capacity cannot be exceeded;
+            // retaining that bound must not narrow an authored integer.
+            let check = match value.parse::<usize>() {
+                Ok(maximum) => Check::MaxLength(maximum),
+                Err(_) => Check::WideMaxLength(
+                    crate::dataset::RowCountBound::new(value)
+                        .map_err(|_| PrepareError::Internal)?,
+                ),
+            };
+            groups[index].append_metadata(Verification {
+                path: implied_max_length(spec, column),
+                check,
+            });
         }
-        let maxima = if kind == "str" {
-            checks(d, column, "max_length")
-                .into_iter()
-                .filter_map(|id| present_field(d, id, "max"))
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
-        if let Some(length) = length {
-            if let Some(&max) = maxima
-                .iter()
-                .find(|&&max| d.nodes()[length] != d.nodes()[max])
-            {
-                result.push(finding(
-                    C::SubmissionLengthConflict,
-                    &path,
-                    &[
-                        ("column", s(name)),
-                        ("length", scalar(d, length)),
-                        ("max_length", scalar(d, max)),
-                    ],
-                ));
-            }
-            if kind == "str" && maxima.is_empty() {
-                let N::Integer(value) = &d.nodes()[length] else {
-                    continue;
-                };
-                if !value.starts_with('-') && value != "0" {
-                    // A bound beyond the native text capacity cannot be exceeded;
-                    // retaining that bound must not narrow an authored integer.
-                    let check = match value.parse::<usize>() {
-                        Ok(maximum) => Check::MaxLength(maximum),
-                        Err(_) => Check::WideMaxLength(
-                            crate::dataset::RowCountBound::new(value)
-                                .map_err(|_| PrepareError::Internal)?,
-                        ),
-                    };
-                    groups[index].append_metadata(Verification {
-                        path: format!("columns.{name}.verifications.max_length"),
-                        check,
-                    });
-                }
-            }
-        }
-        if has_root.is_some() {
-            // SUB-7: a date or datetime never declares a length, whatever
-            // type it is submitted as.
-            let length_type = !["date", "datetime"].contains(&kind)
-                && ["text", "integer", "float"].contains(&resolved);
-            if length_type && length.is_none() && maxima.is_empty() {
-                result.push(finding(
-                    C::SubmissionLengthMissing,
-                    &path,
-                    &[("column", s(name)), ("data_type", s(resolved))],
-                ));
-            }
-            if !length_type && length.is_some() && maxima.is_empty() {
-                result.push(finding(
-                    C::SubmissionLengthNotApplicable,
-                    &path,
-                    &[("column", s(name)), ("data_type", s(resolved))],
-                ));
-            }
-            let digits = present_field(d, submission, "significant_digits");
-            if resolved == "float" && digits.is_none() {
-                result.push(finding(
-                    C::SubmissionLengthMissing,
-                    &path,
-                    &[("column", s(name)), ("field", s("significant_digits"))],
-                ));
-            }
-            if resolved != "float" && digits.is_some() {
-                result.push(finding(
-                    C::SubmissionLengthNotApplicable,
-                    &path,
-                    &[("column", s(name)), ("field", s("significant_digits"))],
-                ));
-            }
-            if present_field(d, submission, "core").is_none() {
-                result.push(finding(
-                    C::SubmissionCoreMandatory,
-                    &path,
-                    &[("column", s(name)), ("reason", s("core_missing"))],
-                ));
-            }
-        }
-        let Some(origin) = origins(d, submission, name, None, &path, false, result) else {
+        let Some(origin) = origins(metadata, name, None, &path, false, result) else {
             continue;
         };
         // The column's origin answers for every construction whose rows an
         // entry declaring its own origin does not all select (SUB-19).
-        let entries = values::entries(d, column);
-        let derivations = values::column_derivations(d, column, name, &declared_columns, &entries);
+        let derivations = values::column_expressions(spec, column);
         if !derivations.is_empty() {
-            let mut admitted = kinds(d, derivations[0], &reads);
-            for &node in &derivations[1..] {
-                admitted.retain(|kind| kinds(d, node, &reads).contains(kind));
+            let mut admitted = origin::classify_expr(spec, derivations[0], &reads).admitted();
+            for &expr in &derivations[1..] {
+                let kinds = origin::classify_expr(spec, expr, &reads).admitted();
+                admitted.retain(|kind| kinds.contains(kind));
             }
             if admitted.is_empty() {
                 result.push(finding(
@@ -696,7 +592,11 @@ pub(super) fn admit(
                 ));
             } else if let Some((predecessor, failure)) =
                 origin.predecessor().and_then(|predecessor| {
-                    copy_failure(d, &derivations, &predecessor, &reads)
+                    derivations
+                        .iter()
+                        .find_map(|&expr| {
+                            origin::copies_expr(spec, expr, &predecessor, &reads).err()
+                        })
                         .map(|failure| (predecessor.name(), failure))
                 })
             {
@@ -714,10 +614,10 @@ pub(super) fn admit(
             }
         }
     }
-    let lengths = admit_entries(d, columns, output, &reads, result)?;
-    apply_value_bounds_and_inventory(d, columns, output, inventory, groups, result, &lengths)?;
-    data_type_checks(d, columns, output, groups)?;
-    reject_datetime_columns(d, columns, &carried, result)?;
+    let lengths = admit_entries(spec, output, &reads, result);
+    apply_value_bounds_and_inventory(spec, output, inventory, groups, result, &lengths)?;
+    data_type_checks(spec, output, groups);
+    reject_datetime_columns(spec, &carried, result);
     Ok(())
 }
 
@@ -727,42 +627,39 @@ pub(super) fn admit(
 /// declaring a data type other than the column's decides the rows its where
 /// clause selects, and the column's data type every other row.
 fn data_type_checks(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &TableSchema,
     groups: &mut [verifications::Verifications],
-) -> Result<(), PrepareError> {
+) {
     use crate::iso8601::Form;
-    for (index, &node) in columns.iter().enumerate() {
-        if text(d, field(d, node, "type")?)? != "str" {
+    for (index, column) in spec.columns.iter().enumerate() {
+        if column.kind != ColumnType::Str {
             continue;
         }
-        let name = output.columns()[index].name.as_str();
-        let declared =
-            present_field(d, node, "submission").and_then(|id| string(d, id, "data_type"));
-        let effective = declared.unwrap_or("text");
+        let declared = column
+            .submission
+            .as_ref()
+            .and_then(|submission| submission.metadata.data_type.as_ref());
+        let effective = declared.map_or("text", |declared| declared.text.as_str());
         // Entries declaring their own, different data type, each over the
         // rows its where clause selects. Value-level admission reports a
         // clause it cannot select by.
         let mut overrides = Vec::new();
-        for entry in values::entries(d, node) {
-            let Some(own) = string(d, entry.node, "data_type") else {
+        for entry in values::levels(column) {
+            let Some(own) = &entry.metadata.data_type else {
                 continue;
             };
-            if own == effective {
+            if own.text == effective {
                 continue;
             }
-            let Some(clause) = super::value_level::clause(&entry, output, index) else {
+            let Some(clause) = super::value_level::clause(entry, output, index) else {
                 continue;
             };
-            overrides.push((
-                clause,
-                Form::of(own),
-                format!("{}.data_type", values::path(name, entry.id)),
-            ));
+            overrides.push((clause, Form::of(&own.text), spec.cite(own.meta)));
         }
-        let path = format!("columns.{name}.submission.data_type");
-        if let Some(form) = declared.and_then(Form::of) {
+        if let Some((declared, form)) =
+            declared.and_then(|declared| Some((declared, Form::of(&declared.text)?)))
+        {
             // Every row but those the overriding entries select.
             let scope = (!overrides.is_empty()).then(|| RowScope {
                 clauses: overrides
@@ -772,7 +669,7 @@ fn data_type_checks(
                 include: false,
             });
             groups[index].append_metadata(Verification {
-                path,
+                path: spec.cite(declared.meta),
                 check: Check::DataType { form, scope },
             });
         }
@@ -791,32 +688,32 @@ fn data_type_checks(
             }
         }
     }
-    Ok(())
 }
 
 /// SUB-27: a dataset whose class is a tabulation class, so of the `sdtm` or
 /// `send` family, writes no `datetime` column; its date and time text is a
 /// `str` column with a date or time data type.
 fn reject_datetime_columns(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &BTreeSet<&str>,
     result: &mut Vec<PreflightFinding>,
-) -> Result<(), PrepareError> {
-    let Some(class) =
-        present_field(d, d.root(), "submission").and_then(|id| string(d, id, "class"))
+) {
+    let Some(class) = spec
+        .submission
+        .as_ref()
+        .map(|dataset| dataset.class.text.as_str())
     else {
-        return Ok(());
+        return;
     };
     if !crate::specification_submission_document::DatasetClass::tabulation_name(class) {
-        return Ok(());
+        return;
     }
-    for &column in columns {
-        let name = text(d, field(d, column, "name")?)?;
-        if output.contains(name) && text(d, field(d, column, "type")?)? == "datetime" {
+    for column in &spec.columns {
+        let name = column.name.name.as_str();
+        if output.contains(name) && column.kind == ColumnType::DateTime {
             result.push(finding(
                 C::SubmissionDatetimeColumn,
-                &format!("columns.{name}.type"),
+                &format!("{}.type", spec.cite(column.meta)),
                 &[
                     ("column", s(name)),
                     ("value", s("datetime")),
@@ -826,5 +723,4 @@ fn reject_datetime_columns(
             ));
         }
     }
-    Ok(())
 }

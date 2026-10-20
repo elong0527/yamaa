@@ -1098,73 +1098,77 @@ struct PreparedOutputDeclarations {
     keys: Vec<usize>,
     verifications: verifications::Verifications,
     output_report: Option<String>,
-    intermediates: intermediates::Declarations,
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Admit the output declaration, the keys and the dataset verifications,
+/// then the run report the declared warnings require.
 fn prepare_output_declarations(
-    d: &Document,
+    spec: &ast::Spec,
     output: &TableSchema,
     column_verifications: &[verifications::Verifications],
-    sources: &[SourceDeclaration],
-    driver_index: usize,
-    project: Option<&functions::Prepared>,
-    extraction: &str_extract::Prepared,
-    templates: &str_template::Prepared,
-    extra: &mut Vec<UnsupportedFeature>,
 ) -> Result<PreparedOutputDeclarations, PrepareError> {
-    let root = d.root();
-    let output_id = field(d, root, "output")?;
-    let output_order = d
-        .field(output_id, "order_by")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| {
-            sequence(d, id)?
-                .iter()
-                .map(|&term| order_term(d, term))
-                .collect::<Result<Vec<_>, PrepareError>>()
+    let declared = &spec.output;
+    // Every `list[order_by_term]` field reads its terms one way (VALUE-22): an
+    // omitted `nulls` sorts missing lowest, first under `asc` and last under
+    // `desc`, while a declared `nulls` is absolute and never flips.
+    let output_order = declared
+        .order_by
+        .iter()
+        .map(|term| {
+            let ast::ExprKind::Ref(name) = &spec.expr(term.variable).kind else {
+                return Err(PrepareError::Internal);
+            };
+            let descending = term.direction == ast::Direction::Desc;
+            let nulls_first = match term.nulls {
+                None => !descending,
+                Some(ast::Nulls::First) => true,
+                Some(ast::Nulls::Last) => false,
+            };
+            Ok((name.as_str().into(), descending, nulls_first))
         })
-        .transpose()?
-        .unwrap_or_default();
-    let output_path = String::from(text(d, field(d, output_id, "path")?)?);
+        .collect::<Result<Vec<_>, _>>()?;
+    let output_path = declared.path.text.clone();
     // Retain the complete integer for output-declaration diagnostics, even
     // when it exceeds REQ-0744's range. Build validation retains its existing
     // post-verification phase; saved-file size is admitted at publication.
-    let output_decimals = d
-        .field(output_id, "decimals")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| match &d.nodes()[id] {
-            N::Integer(value) => Ok(value.clone()),
+    let output_decimals = declared
+        .decimals
+        .as_ref()
+        .map(|decimals| match &decimals.value {
+            ast::Literal::Int(value) => Ok(value.clone()),
             _ => Err(PrepareError::Internal),
         })
         .transpose()?;
     // Output declaration errors retain their post-verification phase.
-    let projection = sequence(d, field(d, output_id, "columns")?)?
+    let projection = declared
+        .columns
         .iter()
-        .map(|&id| text(d, id).map(String::from))
-        .collect::<Result<Vec<_>, _>>()?;
-    let _columns = sequence(d, field(d, root, "columns")?)?;
+        .map(|column| column.name.clone())
+        .collect();
     let names = output
         .columns()
         .iter()
         .enumerate()
         .map(|(id, c)| (c.name.as_str(), id))
         .collect::<BTreeMap<_, _>>();
-    let keys = sequence(d, field(d, root, "keys")?)?
+    let keys = spec
+        .keys
         .iter()
-        .map(|&id| {
-            let name = text(d, id)?;
-            names.get(name).copied().ok_or(PrepareError::Internal)
+        .map(|key| {
+            names
+                .get(key.name.as_str())
+                .copied()
+                .ok_or(PrepareError::Internal)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let verifications = verifications::Verifications::prepare(d, output)?;
+    let verifications = verifications::Verifications::prepare(spec, output)?;
     let warnings = column_verifications
         .iter()
         .flat_map(|group| &group.declared_warning_paths)
         .chain(&verifications.declared_warning_paths)
         .cloned()
         .collect::<Vec<_>>();
-    let (output_report, report_findings) = report::prepare(d, output_id, &output_path, warnings)?;
+    let (output_report, report_findings) = report::prepare(declared, warnings);
     if !report_findings.is_empty() {
         return Err(PrepareError::Invalid(
             report_findings
@@ -1173,17 +1177,6 @@ fn prepare_output_declarations(
                 .collect(),
         ));
     }
-    let intermediates = intermediates::Declarations::prepare(
-        d,
-        sources,
-        driver_index,
-        output,
-        &keys,
-        project,
-        extraction,
-        templates,
-        extra,
-    )?;
     Ok(PreparedOutputDeclarations {
         output_order,
         output_path,
@@ -1192,7 +1185,6 @@ fn prepare_output_declarations(
         keys,
         verifications,
         output_report,
-        intermediates,
     })
 }
 
@@ -1405,41 +1397,12 @@ impl PreparedSpecification {
             }
             Err(error) => return Err(error),
         };
-        let mut column_verifications = columns
-            .iter()
-            .enumerate()
-            .map(|(column, &id)| {
-                verifications::Verifications::prepare_column(d, &output, id, column)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        if let Some(catalogue) = catalogue {
-            match terminology::apply(d, columns, &output, catalogue, &mut column_verifications) {
-                Ok(()) => (),
-                Err(PrepareError::Invalid(errors)) => findings.extend(errors),
-                Err(error) => return Err(error),
-            }
-        }
-        value_level::admit(
-            d,
-            columns,
+        let inventory = inventory.map_or(&[][..], |inventory| inventory.names());
+        let column_verifications = verifications::prepare_columns(
+            lowered.spec(),
             &output,
-            &mut column_verifications,
-            &mut findings,
-        )?;
-        mandatory::admit(
-            d,
-            columns,
-            &output,
-            &mut column_verifications,
-            &mut findings,
-        )?;
-        verifications::redundant_unique(d, &mut findings)?;
-        submission::admit(
-            d,
-            columns,
-            &output,
-            inventory.map_or(&[], |inventory| inventory.names()),
-            &mut column_verifications,
+            catalogue,
+            inventory,
             &mut findings,
         )?;
         // Operand types before capture: each link's producer types its input.
@@ -1509,13 +1472,13 @@ impl PreparedSpecification {
             keys,
             verifications,
             output_report,
-            intermediates,
-        } = prepare_output_declarations(
+        } = prepare_output_declarations(lowered.spec(), &output, &column_verifications)?;
+        let intermediates = intermediates::Declarations::prepare(
             d,
-            &output,
-            &column_verifications,
             &sources,
             driver_index,
+            &output,
+            &keys,
             project.as_ref(),
             &extraction,
             &templates,
