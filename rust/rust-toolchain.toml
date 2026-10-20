@@ -1,4 +1,5 @@
-# Both source packages carry this file, so it names only what a build needs.
+# CI and development builds use this toolchain; no source package carries
+# this file (#3030 D55). It names only what a build needs.
 # Repository checks add Clippy and rustfmt (tools/ci/toolchain.py).
 [toolchain]
 channel = "1.99.1"

@@ -2,12 +2,12 @@
 use super::*;
 use crate::dataset::{Intermediate, SecondarySource};
 
-pub(super) fn declared(d: &Document, name: &str) -> Option<usize> {
+/// The named intermediate a qualified name reads through, by its position.
+pub(super) fn declared(spec: &crate::ast::Spec, name: &str) -> Option<usize> {
     let (relation, _) = name.split_once('.')?;
-    let N::Sequence(entries) = &d.nodes()[d.field(d.root(), "intermediates")?] else {
-        return None;
-    };
-    entries.iter().position(|&entry| matches!(d.field(entry, "id").map(|id| &d.nodes()[id]), Some(N::Text(id)) if id == relation))
+    spec.intermediates
+        .iter()
+        .position(|item| item.id.name == relation)
 }
 fn unknown(predicate: &BoundPredicate, name: &str) -> Diagnostic {
     Diagnostic {

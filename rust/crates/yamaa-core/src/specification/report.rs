@@ -1,10 +1,10 @@
 //! The run report's optional file declaration and its static findings,
 //! without file authority.
-use super::{output_profile, text, PrepareError};
+use super::output_profile;
 use crate::json::Value as JsonValue;
 use crate::{
+    ast,
     diagnostic::{ConditionCode, Diagnostic},
-    schema::{Document, DocumentNode},
 };
 use std::vec;
 
@@ -35,16 +35,10 @@ pub enum ReportFinding {
 /// a warning without a report file, an unmapped extension and a written path
 /// equal to `output.path`.
 pub(super) fn prepare(
-    document: &Document,
-    output: usize,
-    primary: &str,
+    output: &ast::Output,
     warnings: Vec<String>,
-) -> Result<(Option<String>, Vec<ReportFinding>), PrepareError> {
-    let report = document
-        .field(output, "report")
-        .filter(|&node| !matches!(document.nodes()[node], DocumentNode::Null))
-        .map(|node| text(document, node).map(String::from))
-        .transpose()?;
+) -> (Option<String>, Vec<ReportFinding>) {
+    let report = output.report.as_ref().map(|report| report.text.clone());
     let mut findings = Vec::new();
     if !warnings.is_empty() && report.is_none() {
         findings.push(ReportFinding::Missing { warnings });
@@ -53,11 +47,11 @@ pub(super) fn prepare(
         if output_profile(path).is_none() {
             findings.push(ReportFinding::UnknownProfile { path: path.into() });
         }
-        if path == primary {
+        if path == output.path.text {
             findings.push(ReportFinding::Collision { path: path.into() });
         }
     }
-    Ok((report, findings))
+    (report, findings)
 }
 
 impl ReportFinding {

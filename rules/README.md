@@ -90,6 +90,12 @@ Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
 profiles in `rules/profiles/`.
 
+While the 0.5 and 1.0 surfaces coexist
+([#3030](https://github.com/elong0527/yamaa/issues/3030)), a file that
+declares `schema_version` is read under the rules at the `yamaa-v0.5.0` tag,
+and until Phase 2 removes the 0.5 path (P2-13) cards keep on their Fails lines
+the conditions that path still raises.
+
 | File | Prefix | Covers |
 | --- | --- | --- |
 | [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal columns, and ASCII source. |
@@ -100,7 +106,7 @@ profiles in `rules/profiles/`.
 | [Row construction](rows.md) | ROW | Construct output rows from declared input records or groups, or from the distinct keys of the base records. |
 | [Column derivation](columns.md) | COLUMN | Sequence a run, order column dependencies, complete each value's lifecycle, and handle conditions at their site. |
 | [Expressions](expressions.md) | EXPR | Register and dispatch expressions, give each one result type, restrict nesting, and copy, select and classify values. |
-| [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, compute and aggregate fields, and evaluate it exactly as written. |
+| [Formulas](formulas.md) | FORMULA | Read the one closed expression language in its predicate, aggregate and expression fields, and evaluate it exactly as written. |
 | [Lookup and joins](lookup.md) | LOOKUP | Match declared keys, narrow and select records, answer absence, and scope aggregates to one relation. |
 | [Windows](windows.md) | WINDOW | Declare complete named windows and compute partitions, ranks, neighbors, carried values, and baseline flags. |
 | [Text](text.md) | TEXT | Pad, change case, interpolate templates, and extract and replace with portable regular expressions. |

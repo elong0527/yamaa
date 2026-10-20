@@ -59,8 +59,9 @@ One tool, `tools/staging/engine_bundle.py`, stages the engine source bundle
 that each host's source package builds from: the engine crates and that
 host's binding crate, a lock trimmed from the canonical one and verified crate
 by crate against it, and the crates.io crates that the lock selects, vendored,
-with no tests or toolchain file (#3030 D55). It builds the Python source
-archive, maturin's output over the bundle, with maturin 1.9.6 on the PATH:
+with no tests and no toolchain file anywhere (#3030 D55). It builds the Python
+source archive, maturin's output over the bundle, with maturin 1.9.6 on the
+PATH:
 
 ```sh
 uv run --project python --no-sync --with maturin==1.9.6 \
@@ -69,9 +70,12 @@ uv run --project python --no-sync --with maturin==1.9.6 \
 
 `python -m tools.staging.engine_bundle bundle {python,r} <new directory>`
 writes a host's bundle alone, and `make check-repository` verifies both hosts'
-trimmed locks (`tools.packaging.check_cargo_lock`). The R source package still
-carries the workspace, lock and toolchain file unchanged until it moves onto
-the bundle (#3105), so the toolchain file names only what a build needs; add
+trimmed locks (`tools.packaging.check_cargo_lock`). The R source package
+stages the R bundle under `src/rust`, with its crates compressed
+(`python -m tools.staging.stage_r_package <new directory>`, which
+`make test-r` runs). Given built archives, `tools.packaging.check_cargo_lock`
+checks their bundles against the checkout and refuses a toolchain file
+anywhere in them. The toolchain file names only what a build needs; add
 Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
 from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links

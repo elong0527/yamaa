@@ -70,7 +70,9 @@ impl PreparedStandalone {
     }
 }
 
-/// A non-null parent precedes normalization, and no study data is read.
+/// A non-null parent precedes normalization, and no study data is read. A
+/// root that declares the 1.x header is refused before the 0.5 closure reads
+/// it (SCHEMA-2).
 /// A specification without a `parent` is a composition of one layer
 /// (LAYER-1): after normalization it is resolved on the same terms as a
 /// composed specification, so a dead declaration's unresolved reference is
@@ -79,6 +81,14 @@ impl PreparedStandalone {
 pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
     if crate::inheritance::declares_parent(&raw) {
         return Err(Error::InheritanceRequired);
+    }
+    // A root that declares the 1.x header is refused before the 0.5 closure
+    // reads it (SCHEMA-2, #3030 D76).
+    if let Some(fault) = crate::language::refusal(&raw) {
+        return Err(normalization_failure(
+            NormalizationError::Invalid(vec![fault.finding()]),
+            raw,
+        ));
     }
     let normalized = match schema.normalize_specification(&raw) {
         Ok(normalized) => normalized,

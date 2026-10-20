@@ -120,6 +120,7 @@ pub(crate) fn inheritance_dependencies(
                 Context::Compute => "numeric",
                 Context::Aggregate => "aggregate",
                 Context::Predicate => "predicate",
+                Context::Derivation => "derivation",
             };
             match resource {
                 Resource::Depth => limit(

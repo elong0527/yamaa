@@ -1114,6 +1114,73 @@ fn an_empty_document_has_no_findings_but_its_suppressions_are_read() {
     );
 }
 
+#[test]
+fn lint_faults_keep_their_existing_codes_and_resource_facts() {
+    use super::Error;
+    use yamaa_core::{diagnostic::ConditionCode, json::Value};
+
+    for (error, context) in [
+        (
+            Error::Unavailable,
+            crate::json!({"stage":"prepare", "code":"yaml_reader_unavailable"}),
+        ),
+        (
+            Error::Source {
+                file: "spec.yaml".into(),
+                failure: crate::yaml_decode::DecodeFailure::Internal,
+            },
+            crate::json!({"stage":"prepare", "code":"yaml_admission"}),
+        ),
+        (
+            Error::Write {
+                file: "spec.yaml".into(),
+                error: crate::file_publication::Error::Io(std::io::Error::other("write failed")),
+            },
+            crate::json!({"stage":"output", "code":"output_publication_failed"}),
+        ),
+        (
+            Error::Write {
+                file: "spec.yaml".into(),
+                error: crate::file_publication::Error::Host(
+                    crate::host_resources::Failure::Cancelled,
+                ),
+            },
+            crate::json!({"stage":"output", "code":"host_publication_failure"}),
+        ),
+        (
+            Error::Write {
+                file: "spec.yaml".into(),
+                error: crate::file_publication::Error::Host(
+                    crate::host_resources::Failure::Cleanup,
+                ),
+            },
+            crate::json!({"stage":"output", "code":"host_publication_failure"}),
+        ),
+        (
+            Error::Write {
+                file: "spec.yaml".into(),
+                error: crate::file_publication::Error::Limit(yamaa_core::limits::LimitExceeded {
+                    resource: "output_bytes",
+                    limit: 1024,
+                    actual: Some(1025),
+                }),
+            },
+            crate::json!({"stage":"output", "code":"publication_limit",
+                "resource":"output_bytes", "limit":1024, "actual":1025}),
+        ),
+    ] {
+        let diagnostics = error.diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
+        assert_eq!(diagnostic.rule(), None);
+        assert!(diagnostic.spec_paths.is_empty());
+        assert_eq!(Value::Object(diagnostic.context.clone()), context);
+        assert_eq!(diagnostic.source_span, None);
+        assert_eq!(diagnostic.operand_route, None);
+    }
+}
+
 mod files {
     use super::{super::lint, CANONICAL};
     use std::path::{Path, PathBuf};
@@ -1294,7 +1361,7 @@ mod files {
                     error.diagnostics(),
                     [yamaa_core::application_issue::rejected(
                         yamaa_core::application_issue::Stage::Prepare,
-                        yamaa_core::application_issue::Fault::ResourceUnreadable,
+                        yamaa_core::application_issue::Fault::ResourceUnreadable
                     )]
                 );
             }
@@ -1328,7 +1395,7 @@ mod files {
                 error.diagnostics(),
                 [yamaa_core::application_issue::rejected(
                     yamaa_core::application_issue::Stage::Prepare,
-                    yamaa_core::application_issue::Fault::ResourceUnreadable,
+                    yamaa_core::application_issue::Fault::ResourceUnreadable
                 )]
             );
         }

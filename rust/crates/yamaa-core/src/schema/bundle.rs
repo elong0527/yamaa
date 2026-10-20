@@ -1,7 +1,10 @@
 //! Complete decoded-bundle structure. Filesystem authority and YAML stay in adapters.
 //! A structure is not executable: defaults and document values still need interpretation.
 
-use super::{Descriptor, DescriptorError, DescriptorIssue, Document, DocumentNode as N};
+use super::{
+    Descriptor, DescriptorError, DescriptorIssue, DescriptorSite, Document, DocumentNode as N,
+};
+use crate::language::LanguageVersion;
 use std::{
     collections::{BTreeMap, BTreeSet},
     vec,
@@ -136,6 +139,9 @@ pub struct SchemaStructure {
     descriptors: Vec<LocatedDescriptor>,
     class_indices: BTreeMap<String, usize>,
     alias_indices: BTreeMap<String, usize>,
+    /// Fields a version view leaves out, by owning class or registry entry and
+    /// field name, with the language version that introduced each (P-VER-1).
+    later: BTreeMap<(String, String), LanguageVersion>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -222,9 +228,9 @@ impl Builder {
         &mut self,
         raw: Raw,
         path: &str,
-        class_field: bool,
+        site: DescriptorSite,
     ) -> Result<Option<usize>, BundleError> {
-        let report = Descriptor::admit(&self.modules[raw.module].document, raw.node, class_field)
+        let report = Descriptor::admit(&self.modules[raw.module].document, raw.node, site)
             .map_err(BundleError::Descriptor)?;
         for finding in report.issues() {
             self.issue(raw, path, BundleIssueKind::Descriptor(finding.clone()))?;
@@ -291,7 +297,7 @@ impl Builder {
                     node: descriptor,
                 },
                 &field_path,
-                true,
+                DescriptorSite::ClassField,
             )? {
                 fields.push(SchemaField { name, descriptor });
             }
@@ -715,7 +721,9 @@ impl SchemaStructure {
                         kind: SchemaAliasKind::Registry(id),
                     });
                 }
-            } else if let Some(id) = builder.descriptor(alias.raw, &alias.name, false)? {
+            } else if let Some(id) =
+                builder.descriptor(alias.raw, &alias.name, DescriptorSite::NamedType)?
+            {
                 aliases.push(SchemaAlias {
                     name: alias.name.clone(),
                     kind: SchemaAliasKind::Descriptor(id),
@@ -756,7 +764,7 @@ impl SchemaStructure {
                         Some(SchemaShape::Class(builder.fields(&raw, &path)?))
                     }
                     N::Mapping(_) => builder
-                        .descriptor(payload, &path, false)?
+                        .descriptor(payload, &path, DescriptorSite::RegistryEntry)?
                         .map(SchemaShape::Descriptor),
                     _ => {
                         builder.issue(payload, &path, BundleIssueKind::RegistryEntryShape)?;
@@ -808,7 +816,47 @@ impl SchemaStructure {
             descriptors: builder.descriptors,
             class_indices: class_names,
             alias_indices,
+            later: BTreeMap::new(),
         })
+    }
+
+    /// The view of this closure a document declaring `version` is checked
+    /// against (P-VER-1): a field whose `since` names a later version is not
+    /// declared, and writing it fails as `unknown_field`, with context naming
+    /// that version. Descriptor indices are shared with this closure, so
+    /// findings made against the view resolve against either.
+    pub fn at_version(&self, version: LanguageVersion) -> Self {
+        let mut view = self.clone();
+        let descriptors = &self.descriptors;
+        let mut later = std::mem::take(&mut view.later);
+        let mut keep = |owner: &str, field: &SchemaField| {
+            let since = descriptors[field.descriptor]
+                .descriptor
+                .since()
+                .filter(|since| *since > version);
+            if let Some(since) = since {
+                later.insert((owner.into(), field.name.clone()), since);
+            }
+            since.is_none()
+        };
+        for class in &mut view.classes {
+            class.fields.retain(|field| keep(&class.name, field));
+        }
+        for registry in &mut view.registries {
+            for entry in &mut registry.entries {
+                if let SchemaShape::Class(fields) = &mut entry.shape {
+                    fields.retain(|field| keep(&entry.name, field));
+                }
+            }
+        }
+        view.later = later;
+        view
+    }
+    /// The language version that introduced `field` of `owner`, a class or a
+    /// class-shaped registry entry, when this view leaves it out as newer than
+    /// the version it checks.
+    pub fn later_field(&self, owner: &str, field: &str) -> Option<LanguageVersion> {
+        self.later.get(&(owner.into(), field.into())).copied()
     }
 
     /// Decoded schema documents remain alive for defaults and source-aware diagnostics.

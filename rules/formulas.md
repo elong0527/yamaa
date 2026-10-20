@@ -1,7 +1,8 @@
 # Formulas
 
 One closed expression language is written inside a specification: in fields
-typed `predicate`, in `compute.expr` and in `aggregate.expr`. Its grammar has
+typed `predicate`, in `aggregate.expr` and as text in an expression field
+([EXPR-5](expressions.md#expr-5)). Its grammar has
 one source under [yaml/grammar/](../yaml/grammar/README.md), rendered into
 [FORMULA-1](#formula-1), and the field a text is written in decides the root
 it has and what it may use ([FORMULA-27](#formula-27)). String templates keep
@@ -13,13 +14,14 @@ their own grammar ([TEXT-3](text.md#text-3)).
 
 ### FORMULA-1. An expression is one text in the closed expression grammar
 
-Fields typed `predicate`, `compute.expr` and `aggregate.expr` each hold one
-text in the grammar below. Comparisons, Boolean logic, arithmetic, the closed
-functions and the reducers are the whole language: `CASE`, windows,
-subqueries, host-language calls and `!=` are not in it. The whole text is
-read, and checked against its field, before any name is resolved or value
-read. Text that does not parse as one expression fails, as does a truth value
-where a value belongs or a value where a truth value belongs.
+Fields typed `predicate`, `aggregate.expr` and expression fields written as
+text ([EXPR-5](expressions.md#expr-5)) each hold one text in the grammar
+below. Comparisons, Boolean logic, arithmetic, the closed functions and the
+reducers are the whole language: `CASE`, windows, subqueries, host-language
+calls and `!=` are not in it. The whole text is read, and checked against its
+field, before any name is resolved or value read. Text that does not parse as
+one expression fails, as does a truth value where a value belongs or a value
+where a truth value belongs.
 
 Fails: `invalid_expression`.
 Evidence: `schema-predicates`, `schema-numeric-functions`, `schema-aggregation`, `negative-flag-condition`, `yaml/grammar/expression.yaml`.
@@ -145,12 +147,12 @@ temporal conditions. Which literals a field admits is
 
 A predicate has a truth-valued root and admits comparisons, Boolean logic,
 every literal, `str_contains`, and arithmetic and the numeric functions in an
-operand. `compute.expr` has a numeric root over numbers, `NULL`, names,
-arithmetic and the numeric functions. `aggregate.expr` admits what
-`compute.expr` admits and the reducers. A reduction is refused outside
-`aggregate.expr`, and a refused construct fails wherever it is written. A
-call of a function or reducer its field does not admit fails, as does an
-admitted function called with another number of arguments.
+operand. `aggregate.expr` admits numbers, `NULL`, names, arithmetic, the
+numeric functions and the reducers. Text in an expression field
+([EXPR-5](expressions.md#expr-5)) admits the same except the reducers, plus
+quoted text and temporal literals. A refused construct fails wherever it is
+written. A call of a function or reducer its field does not admit fails, as
+does an admitted function called with another number of arguments.
 
 Fails: `prohibited_construct`, `prohibited_function`.
 Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
@@ -158,28 +160,31 @@ Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expre
 | Written in | Root | Admits | Refuses |
 | --- | --- | --- | --- |
 | a field typed `predicate` | a truth value, under [FORMULA-4](#formula-4) | comparisons, `IN`, `BETWEEN`, `LIKE`, `IS NULL`, `AND`, `OR`, `NOT`, every literal, `str_contains`, and in an operand arithmetic and the numeric functions | a reduction |
-| `compute.expr` | a number for each current row | numbers, `NULL`, names, arithmetic and the numeric functions | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; a string or temporal literal; `str_contains`; a reduction |
-| `aggregate.expr` | a number, or a reduction that is the whole expression and keeps the type it reduces ([FORMULA-23](#formula-23)) | what `compute.expr` admits, and the reducers of [FORMULA-18](#formula-18) | what `compute.expr` refuses, except a reduction |
+| an expression field: `derivation`, a `derivations` entry, `then`, `otherwise`, a handled wrapper's `value` and a key match value | any value, for each current row | numbers, quoted text, temporal literals, `NULL`, names, arithmetic and the numeric functions | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; `str_contains`; a reduction |
+| `aggregate.expr` | a number, or a reduction that is the whole expression and keeps the type it reduces ([FORMULA-23](#formula-23)) | numbers, `NULL`, names, arithmetic, the numeric functions and the reducers of [FORMULA-18](#formula-18) | comparisons and `IN`, `BETWEEN`, `LIKE` and `IS NULL`; `AND`, `OR`, `NOT`, `TRUE` and `FALSE`; a string or temporal literal; `str_contains` |
+
+A function argument is also an expression field, and it admits one leaf
+([FUNC-6](profiles/functions.md#func-6)).
 
 A refused construct fails with `prohibited_construct`, naming it:
-`comparison`, `boolean`, `string` or `temporal`. When a text holds several,
-the one written first is reported. A call of a name outside the field's
-functions, including a reducer outside `aggregate.expr` and `str_contains`
-outside a predicate, fails with `prohibited_function` naming the function as
-written; an admitted function called with another number of arguments also
-reports the count. `SUM(AVAL)` in `compute.expr` fails with
-`prohibited_function`, and `AVAL > ANRHI` in `compute.expr` fails with
-`prohibited_construct`.
+`comparison`, `boolean`, or, in `aggregate.expr`, `string` or `temporal`.
+When a text holds several, the one written first is reported. A call of a
+name outside the field's functions, including a reducer outside
+`aggregate.expr` and `str_contains` outside a predicate, fails with
+`prohibited_function` naming the function as written; an admitted function
+called with another number of arguments also reports the count. `SUM(AVAL)`
+in an expression field fails with `prohibited_function`, and `AVAL > ANRHI`
+there fails with `prohibited_construct`.
 
-Arithmetic in a predicate has the numeric semantics of `compute`:
+Arithmetic in a predicate has the numeric semantics of expression-field text:
 [FORMULA-12](#formula-12) types its operands, [FORMULA-14](#formula-14)
 propagates missing and [FORMULA-15](#formula-15) fails it, and its result
 compares under [FORMULA-5](#formula-5). `ALT > 3 * ULN` is `TRUE` for a row
 whose `ALT` exceeds three times its `ULN`, and `UNKNOWN` when either is
 missing.
 
-`compute` evaluates `expr` over constructed output columns, fields of a
-declared record lookup and numeric literals, and returns one numeric value per
+Text in an expression field that holds only a name or a literal returns it
+([EXPR-4](expressions.md#expr-4)), and other text returns one value per
 current row. [Values](values.md)' representation, promotion and overflow rules
 apply to every operator and function. `aggregate` reduces one relation under
 [FORMULA-17](#formula-17).
@@ -189,12 +194,13 @@ apply to every operator and function. `aggregate` reduces one relation under
 ### FORMULA-9. An identifier names a value visible at its site, and any other name fails
 
 Each site sees the names the table below gives, under
-[Column derivation](columns.md), and `compute.expr` resolves a name as a
-predicate does in the same phase. An identifier in a right-side predicate is
-qualified by the right-side dataset's ID, and one over a completed or
-candidate output row is unqualified. No expression reaches an undeclared
-relation. Identifiers are collected for dependency ordering, so an unresolved
-name fails rather than leaving an expression dependency-free.
+[Column derivation](columns.md), and text in an expression field resolves a
+name as a predicate does in the same phase, except that text holding only a
+name is a reference ([EXPR-4](expressions.md#expr-4)). An identifier in a
+right-side predicate is qualified by the right-side dataset's ID, and one over
+a completed or candidate output row is unqualified. No expression reaches an
+undeclared relation. Identifiers are collected for dependency ordering, so an
+unresolved name fails rather than leaving an expression dependency-free.
 
 Fails: `unresolvable_name`, `unknown_field`, `qualified_identifier`.
 Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-adsl-bmi`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs`.
@@ -207,8 +213,8 @@ Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-ads
 | Window filter | Constructed output columns in row construction; in an intermediate derivation, the augmented donor records [LOOKUP-15](lookup.md#lookup-15) describes |
 | Verification | Completed columns and record intermediates resolved for the completed row |
 | `case` | The values available to its enclosing derivation |
-| `compute.expr` in column derivation | Constructed output columns, and fields of a declared record lookup |
-| `compute.expr` in row construction | The names the paragraphs below give |
+| Expression-field text in column derivation | Constructed output columns, and fields of a declared record lookup |
+| Expression-field text in row construction | The names the paragraphs below give |
 | `aggregate.expr` | The relation [LOOKUP-18](lookup.md#lookup-18) gives, and grouping columns ([FORMULA-22](#formula-22)) |
 
 An enclosing column derivation may also bind a qualified dataset or
@@ -222,7 +228,10 @@ identifier that names a field of an in-scope dataset fails with
 identifier fails with `unknown_field`. Both report under
 [Column derivation](columns.md).
 
-During column derivation an unqualified identifier in `compute.expr` is a
+Text in an expression field that holds only a name is a reference: a
+dataset-qualified one, such as `derivation: DM.SEX`, reads its variable
+through the implicit join of [LOOKUP-1](lookup.md#lookup-1). During column
+derivation, an unqualified identifier in any other expression-field text is a
 constructed output column, and a qualified identifier is permitted only when
 its qualifier is a declared record lookup `id`; it reads the named field of
 that lookup's selected record. An arbitrary `DATASET.VARIABLE` reference is
@@ -233,8 +242,8 @@ declared record lookup fails with `qualified_identifier`, and an identifier
 that resolves to neither a declared output column nor a field of a declared
 record lookup fails with `unknown_field`.
 
-During ungrouped row construction an identifier in `compute.expr` is either a
-variable of the row template's input dataset, qualified exactly as
+During ungrouped row construction an identifier in expression-field text is
+either a variable of the row template's input dataset, qualified exactly as
 `row.filter` qualifies a variable, or an unqualified column derived by the
 same `rows` entry. A value from another dataset reaches the expression only
 through such a column, bound by a row-phase source or lookup under
@@ -253,15 +262,13 @@ no dataset but its own.
   derivation: DM.HEIGHTCM
 - name: BMI
   type: float
-  derivation:
-    compute:
-      expr: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
+  derivation: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
 ```
 
 A lookup field carries the type [Inputs](inputs.md) assigns to the field in
 the lookup's dataset. [Column derivation](columns.md) collects the
-identifiers of every expression and the lookup source dependencies, so a
-`compute` derivation takes part in dependency ordering as a predicate does.
+identifiers of every expression and the lookup source dependencies, so
+expression-field text takes part in dependency ordering as a predicate does.
 
 ## Predicates
 
@@ -392,10 +399,9 @@ string literal fails with `invalid_expression`.
 
 ### FORMULA-12. Every operand of arithmetic or of a numeric function must be numeric
 
-An operand of `+`, `-`, `*`, `/`, a unary sign or a numeric function, and the
-root of `compute.expr`, must have runtime type `int` or `float`, in every
-field; an operand of any other type fails.
-[VALUE-2](values.md#value-2) forbids implicit conversion between
+An operand of `+`, `-`, `*`, `/`, a unary sign or a numeric function must
+have runtime type `int` or `float`, in every field; an operand of any other
+type fails. [VALUE-2](values.md#value-2) forbids implicit conversion between
 operation inputs, and expressions do not relax that rule: a collected string
 is converted by binding it to a numeric column first.
 

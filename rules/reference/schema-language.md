@@ -1,10 +1,10 @@
 # Schema language
 
-The schema bundle under `yaml/` defines the shape of every specification,
-project file and environment file. These rules fix how the bundle is written
-and read: its documents and includes, the YAML every document is read as,
-named types and registries, type expressions, shorthand unions, the one
-spelling a written value takes, and descriptor keywords.
+The schema bundles under `yaml/` define the shape of every yamaa file: a
+specification, project file, codelist file or function file. These rules fix
+how a bundle is written and read: its documents and includes, the YAML every
+document is read as, named types and registries, type expressions, shorthand
+unions, the one spelling a written value takes, and descriptor keywords.
 
 ## Bundles and documents
 
@@ -12,41 +12,75 @@ spelling a written value takes, and descriptor keywords.
 
 ### SCHEMA-1. A schema bundle is one entry point and every document it includes, loaded whole
 
-`schema.yaml` is the specification-bundle entry point, `schema_project.yaml`
-is the independent project-bundle entry point of the
-[Project file](../profiles/project.md), and `schema_environment.yaml` is the
-independent environment-bundle entry point of
-[Project functions](../profiles/functions.md). Every schema document is a YAML
-1.2 mapping containing `version`, an optional `includes` and declarations.
-`includes` is an ordered list of filenames matching `schema_[a-z0-9_]+.yaml`,
-resolved relative to the including file. The complete transitive bundle is
-loaded before names resolve, and every document in a bundle declares the same
-version.
+`schema_spec.yaml` is the specification-bundle entry point, and
+`schema_project.yaml`, `schema_codelists.yaml` and `schema_function.yaml`
+are the independent entry points of a project file, a codelist file and a
+function file; a file's `type` selects its bundle ([SCHEMA-2](#schema-2)).
+Every schema document is a YAML 1.2 mapping containing `version`, an optional
+`includes` and declarations. `includes` is an ordered list of filenames
+matching `schema_[a-z0-9_]+.yaml`, resolved relative to the including file.
+The complete transitive bundle is loaded before names resolve, and every
+document in a bundle declares the same version.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_root_is_read_before_a_closure_is_chosen`, `rust/crates/yamaa-adapters/tests/declaration_v1_schema.rs::every_file_type_closure_is_admitted_with_valid_defaults_and_kinds`, `tools/tests/test_schema_v1.py`.
 
 A document may be included by several entry points; declaration uniqueness
 applies within each loaded bundle. Absolute paths, parent traversal, URLs,
 missing files and include cycles are errors. Include order has no validation
 or execution meaning. Except for registries, a declaration name may occur once
 in the bundle. An unknown or duplicate type, registry, registry entry or schema
-construct fails.
+construct fails, and so does an invalid include or an inconsistent bundle
+version.
+
+Until Phase 2 of [#3030](https://github.com/elong0527/yamaa/issues/3030)
+removes the 0.5 schema, the 1.0 bundles sit in `yaml/v1/`, beside the 0.5
+bundles in `yaml/` (`schema.yaml`, `schema_project.yaml` and
+`schema_environment.yaml`) that govern a file declaring `schema_version`
+([Rules](../README.md)); `yaml/v1/` then moves up. A 1.0 schema document also
+declares `kind` on its named value types and may declare `since` on a class
+field ([SCHEMA-11](#schema-11)).
 
 <a id="schema-2"></a>
 
-### SCHEMA-2. A specification, project file or environment file declares in `schema_version` the bundle version it is written against
+### SCHEMA-2. A yamaa file declares its type and the oldest language version it needs, and an older engine refuses it
 
-A specification, project file or environment file declares its entry-point
-bundle version in `schema_version`, and the declared version must equal the
-bundle version. Any other version is an error, and the document is not validated
-against the bundle. An invalid include or an inconsistent bundle version also
-fails.
+A specification, project file, codelist file or function file declares
+`yamaa`, the oldest language version it needs, quoted as `"1.N"`, and
+`type`: `spec`, `project`, `codelists` or `function`. An engine of language
+version 1.M reads a file declaring 1.M or an older 1.x version, and admits a
+feature only in a file declaring the version that introduced it or a later
+one. A file declaring a version the engine does not read fails as
+`unsupported_language_version`, and one whose `type` its call or referencing
+field does not expect fails as `unexpected_file_type`.
 
-Fails: `schema_version_mismatch`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
+Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`, `schema_version_mismatch`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
 
-A specification whose `schema_version` does not equal the bundle version fails
-with `schema_version_mismatch`.
+The header is read before the file is checked against any schema: `yamaa`
+first, then `type`. A version is written `1.N`, with `N` a decimal number
+without a leading zero. An unquoted `1.0` is a YAML float
+([SCHEMA-4](#schema-4)) and fails as `invalid_field_type`, and a missing
+`yamaa` or `type` fails as `missing_required_field`. A file whose version the
+engine does not read is not checked further. A field or value newer than the
+version a file declares fails in that file as `unknown_field` or
+`value_not_permitted`, with context naming the version that introduced it;
+each layer of a specification is admitted at its own version
+([LAYER-4](../inheritance.md#layer-4)).
+
+A file a call reads reports these at its own `yamaa` or `type`. Each
+referencing field checks the header of the file it names: a project's
+`functions`, `codelists` and section `specs`, a specification's `parent` and
+an input's `schema`. A version the engine does not read, or a type the field
+does not expect, is reported at that field; a malformed header is reported in
+the named file. A dictionary file that `mapping.dict` names carries no header,
+like a data file. Until the engine reads 1.0 files it reads no 1.x version: a
+file that declares `yamaa` fails as `unsupported_language_version` wherever it
+is read, at its own `yamaa`, or at the `parent` naming a parent layer.
+
+A file that declares `schema_version`, or no `yamaa`, is read under the rules
+at the `yamaa-v0.5.0` tag ([Rules](../README.md)), where a version other than
+the bundle's fails as `schema_version_mismatch`, and a `yamaa` beside
+`schema_version` is an unknown field.
 
 <a id="schema-3"></a>
 
@@ -303,13 +337,13 @@ long form valid.
 ### SCHEMA-11. A descriptor uses only the closed descriptor keywords, each where it applies
 
 Only these descriptor keywords are supported: `type`, `required`,
-`description`, `pattern`, `min_length`, `size`, `values` and `default`. `type`
-is required and contains one type expression or a union. Every other keyword
-is allowed only where the table below admits it. A `default` is allowed only
-when `required` is false or absent, and it must satisfy the same descriptor.
-An invalid descriptor keyword or default fails.
+`description`, `pattern`, `min_length`, `size`, `values`, `default`, `kind`
+and `since`. `type` is required and contains one type expression or a union.
+Every other keyword is allowed only where the table below admits it. A
+`default` is allowed only when `required` is false or absent, and it must
+satisfy the same descriptor. An invalid descriptor keyword or default fails.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::findings_follow_keyword_type_required_description_constraint_order`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::invalid_types_and_required_flags_do_not_become_boolean_integer_coercions`, `rust/crates/yamaa-core/tests/schema_references.rs::invalid_default_preparation_never_bypasses_normalization_admission`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::findings_follow_keyword_type_required_description_constraint_order`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::invalid_types_and_required_flags_do_not_become_boolean_integer_coercions`, `rust/crates/yamaa-core/tests/schema_references.rs::invalid_default_preparation_never_bypasses_normalization_admission`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::a_named_type_declares_a_kind_and_a_class_field_the_version_that_introduced_it`, `tools/tests/test_schema_v1.py::test_only_a_named_value_type_declares_a_known_kind`, `tools/tests/test_schema_v1.py::test_a_class_field_declares_the_version_that_introduced_it`.
 
 | Keyword | Allowed | Meaning |
 |---|---|---|
@@ -321,6 +355,8 @@ Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostic
 | `size` | `list` or `dict` only | an exact size |
 | `values` | `str` only | permitted values, compared by [Values](../values.md) equality |
 | `default` | when `required` is false or absent | a value satisfying the same descriptor |
+| `kind` | a named value type only | the kind of the fields the type gives their type: `expression`, `name`, `identifier`, `value`, `path` or `structure`; [the 1.0 schema](../../yaml/README.md#the-10-schema) gives the kind a field takes |
+| `since` | a class field descriptor only | the language version, quoted as `"1.N"`, that introduced the field; a file declaring an older version does not declare it ([SCHEMA-2](#schema-2)) |
 
 Runtime semantics belong to the owning rule, which a description references.
 

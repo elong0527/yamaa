@@ -472,6 +472,789 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         (self.root / "rust/crates/yamaa/src/api.rs").unlink()
         self.assertEqual(self.errors(), [])
 
+    def test_json_reader_imports_and_aliases_cannot_bypass_the_codec_boundary(self):
+        sources = [
+            "crate :: json_wire :: decode_slice(bytes)",
+            "crate::r#json_wire::r#decode(text)",
+            "use crate::r#json_wire as r#wire;\nr#wire::r#decode(text)",
+            "use crate::json_wire as wire;\nwire::decode(text)",
+            "use crate::{json_wire::{self as wire}};\nwire::decode_array(text)",
+            "use yamaa_adapters as adapters;\nuse adapters::json_wire as wire;\nwire::decode(text)",
+            "use crate::json_wire::*;\ndecode(text)",
+            "use crate::json_wire as wire;\nuse wire::*;\ndecode(text)",
+            "use crate::{json_wire::{decode as read}};\nread(text)",
+            "pub use crate::json_wire::{decode_slice as read, encode};",
+            "serde_json :: from_str::<serde_json::Value>(text)",
+            "serde_json::from_slice::<crate::json_wire::WireValueOwned>(bytes)",
+            "use serde_json as json;\njson::from_reader(reader)",
+            "use serde_json::{from_str as read};\nread::<Value>(text)",
+            "use serde_json as json;\nuse json::{from_slice as read};\nread(bytes)",
+            "use serde_json::*;\nfrom_str::<Value>(text)",
+            "use serde_json::de::*;\nDeserializer::from_str(text)",
+            "serde_json::de::Deserializer::from_slice(bytes)",
+            "use serde_json::Deserializer as Reader;\nReader::from_str(text)",
+            "use crate::json_wire::WireValueOwned as Owned;\nOwned::deserialize(reader)",
+            "use serde_json::Value as Tree;\nTree::deserialize(reader)",
+            "use serde_json::value::Value as Tree;\n<Tree as serde::Deserialize<'_>>::deserialize(reader)",
+            "use serde_json::value::*;\nValue::deserialize(reader)",
+            "use crate::json_wire as wire;\nfn read() { wire::decode(text); }\nmod other { use unrelated as wire; }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                path = self.write("rust/crates/yamaa-adapters/src/rows.rs", source)
+                self.assertTrue(self.errors())
+                self.assertTrue(
+                    all(
+                        "JSON text decoded outside a codec" in error
+                        for error in self.errors()
+                    )
+                )
+                path.unlink()
+
+    def test_explicit_json_from_str_targets_cannot_bypass_the_codec_boundary(self):
+        sources = [
+            "fn read() { text.parse::<serde_json::Value>(); }",
+            "fn read() { text . parse :: < ::serde_json::value::Value, > (); }",
+            "use serde_json::Value as Tree;\nfn read() { text.parse::<Tree>(); }",
+            "use serde_json as json;\nfn read() { text.parse::<json::value::Value>(); }",
+            "use serde_json::Value as r#Tree;\nfn read() { text.r#parse::<r#Tree>(); }",
+            "extern crate serde_json as json;\nfn read() { text.parse::<json::Value>(); }",
+            "fn read() { <serde_json::Value as std::str::FromStr>::from_str(text); }",
+            "fn read() { <serde_json::Value as std::str::FromStr>::r#from_str(text); }",
+            "fn read() { <::serde_json::Value as ::core::str::FromStr>::from_str(text); }",
+            "use serde_json::Value as Tree; use std::str::FromStr as Read;\n"
+            "fn read() { <Tree as Read>::from_str(text); }",
+            "fn read() { str::parse::<serde_json::Value>(text); }",
+            "fn read() { std::primitive::str::parse::<serde_json::Value>(text); }",
+            "fn read() { ::core::primitive::str::parse::<serde_json::Value>(text); }",
+            "use std::primitive::str as Text; use serde_json::Value as Tree;\n"
+            "fn read() { Text::parse::<Tree>(text); }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [len(source.splitlines())])
+
+    def test_parse_routes_respect_target_scope_and_leave_custom_parsers_allowed(self):
+        source = (
+            "use serde_json::Value as Tree;\n"
+            "fn read() { text.parse::<Tree>(); }\n"
+            "fn custom() { use other::Value as Tree; text.parse::<Tree>(); }\n"
+            "mod child { fn custom() { text.parse::<Tree>(); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [2])
+        for source in (
+            "fn read() { parse::<serde_json::Value>(text); }",
+            "fn read() { custom::parse::<serde_json::Value>(text); }",
+            "fn read() { text.parse::<String>(); text.parse::<u64>(); }",
+            "use other::Value as Tree; fn read() { str::parse::<Tree>(text); }",
+            "use other::Text as str; fn read() { str::parse::<serde_json::Value>(text); }",
+            "use other::FromStr as Read;\n"
+            "fn read() { <serde_json::Value as Read>::from_str(text); }",
+            "#[cfg(test)] mod tests { fn fixture() { text.parse::<serde_json::Value>(); } }",
+            'const NOTE: &str = "text.parse::<serde_json::Value>()"; // text.parse::<serde_json::Value>()',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [])
+
+    def test_serde_field_deserializers_are_code_but_ordinary_strings_are_not(self):
+        sources = [
+            '#[serde(deserialize_with = "crate::json_wire::deserialize_value")]\nvalue: Value,',
+            'use crate::json_wire as wire;\n#[serde(deserialize_with = "wire::deserialize_value")]\nvalue: Value,',
+            'use serde_json as json;\n#[serde(deserialize_with = "json::Value::deserialize")]\nvalue: Value,',
+            '#[serde(deserialize_with = r#"crate :: json_wire :: deserialize_value"#)]\nvalue: Value,',
+            '#[serde(with = "crate::json_wire")]\nvalue: Value,',
+            'use crate::json_wire as wire;\n#[serde(with = "wire")]\nvalue: Value,',
+            'use crate::json_wire as wire;\n#[serde(with = r#"wire"#)]\nvalue: Value,',
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                path = self.write("rust/crates/yamaa-adapters/src/rows.rs", source)
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        f"rust/crates/yamaa-adapters/src/rows.rs:{len(source.splitlines()) - 1}: JSON text decoded outside a codec"
+                    ],
+                )
+                path.unlink()
+
+    def test_json_aliases_do_not_leak_across_siblings_or_module_boundaries(self):
+        sources = [
+            "fn encode() { use serde_json as json; json::to_string(value); }\n"
+            "fn read() { use other as json; json::from_str(text); }",
+            "fn read() { use other as json; json::from_str(text); }\n"
+            "fn encode() { use serde_json as json; json::to_string(value); }",
+            "mod encode { use serde_json as json; fn write() { json::to_string(value); } }\n"
+            "mod read { use other as json; fn run() { json::from_str(text); } }",
+            "use serde_json as json;\n"
+            "fn read() { use other as json; json::from_str(text); }",
+            "use serde_json as json;\n"
+            "mod child { fn read() { json::from_str(text); } }",
+            "fn outer() { use serde_json as json;\n"
+            "mod child { fn read() { json::from_str(text); } } }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [])
+
+    def test_json_aliases_follow_nested_blocks_and_whole_block_item_scope(self):
+        source = (
+            "use serde_json as json;\n"
+            "fn run() {\n"
+            "    { use other as json; json::from_str(text); }\n"
+            "    json::from_str(text);\n"
+            "}\n"
+            "fn outer() {\n"
+            "    fn inner() { json::from_str(text); }\n"
+            "    use serde_json as json;\n"
+            "}\n"
+            "fn shadow() {\n"
+            "    json::from_str(text);\n"
+            "    use other as json;\n"
+            "}\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [4, 7])
+
+    def test_alias_targets_resolve_at_their_declaration_not_their_caller(self):
+        for owner, shadow, expected in (
+            ("serde_json", "other", [4]),
+            ("other", "serde_json", []),
+        ):
+            source = (
+                f"use {owner} as json;\n"
+                "use json as saved;\n"
+                f"fn read() {{ use {shadow} as json;\n"
+                "    saved::from_str(text);\n"
+                "}\n"
+            )
+            with self.subTest(owner=owner):
+                self.assertEqual(guard.json_decodes(source), expected)
+
+    def test_local_serde_json_names_do_not_acquire_external_crate_identity(self):
+        for declarations, owner in (
+            ("use custom::serde_json;", "serde_json"),
+            ("use custom::serde_json as json; use json as saved;", "saved"),
+            ("use crate::serde_json;", "serde_json"),
+            ("mod serde_json {}", "serde_json"),
+            ("mod serde_json;", "serde_json"),
+            ("mod r#serde_json; use r#serde_json as json;", "json"),
+            (
+                "mod custom { pub mod serde_json; } use custom::serde_json;",
+                "serde_json",
+            ),
+        ):
+            for expression in (
+                f"{owner}::from_str(text)",
+                f"{owner}::Deserializer::from_slice(bytes)",
+                f"text.parse::<{owner}::Value>()",
+                f"<{owner}::Value as serde::Deserialize<'_>>::deserialize(reader)",
+            ):
+                with self.subTest(declarations=declarations, expression=expression):
+                    self.assertEqual(
+                        guard.json_decodes(
+                            f"{declarations}\nfn read() {{ {expression}; }}"
+                        ),
+                        [],
+                    )
+        self.assertEqual(
+            guard.json_decodes(
+                "use custom::serde_json; struct Record {\n"
+                '    #[serde(deserialize_with = "serde_json::Value::deserialize")] value: Value\n'
+                "}"
+            ),
+            [],
+        )
+
+    def test_local_value_globs_do_not_imply_external_json_values(self):
+        for declarations in (
+            "use custom::serde_json::value::*;",
+            "use custom::serde_json as json; use json::value::*;",
+            "use crate::serde_json::value::*;",
+            "mod serde_json; use serde_json::value::*;",
+            "mod serde_json { pub mod value; } use serde_json::value::*;",
+        ):
+            with self.subTest(declarations=declarations):
+                self.assertEqual(
+                    guard.json_decodes(
+                        declarations + "\nfn read() { Value::deserialize(reader); "
+                        "text.parse::<Value>(); <Value as serde::Deserialize<'_>>::deserialize(reader); }"
+                    ),
+                    [],
+                )
+
+    def test_external_json_identity_survives_local_names_and_explicit_reexports(self):
+        for source in (
+            "mod serde_json;\nfn read() { ::serde_json::from_str(text); }",
+            "mod serde_json { pub use ::serde_json::Value; }\n"
+            "fn read() { serde_json::Value::deserialize(reader); }",
+            "mod custom { pub use ::serde_json as serde_json; }\n"
+            "fn read() { custom::serde_json::from_str(text); }",
+            "mod custom { pub extern crate serde_json; }\n"
+            "fn read() { custom::serde_json::from_str(text); }",
+            "extern crate serde_json;\n"
+            "fn read() { crate::serde_json::from_str(text); }",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+
+    def test_simple_type_aliases_preserve_explicit_json_reader_targets(self):
+        for declaration in (
+            "type Tree = serde_json::Value;",
+            "type Tree = ::serde_json::value::Value;",
+            "type r#Tree = r#serde_json :: r#Value;",
+            "use serde_json::Value as Value; type Tree = Value;",
+            "use serde_json::value::*; type Tree = Value;",
+            "type Tree = Saved; type Saved = serde_json::Value;",
+            "mod model { pub type Value = serde_json::Value; } type Tree = model::Value;",
+        ):
+            for expression in (
+                "Tree::from_str(text)",
+                "Tree::deserialize(reader)",
+                "text.parse::<Tree>()",
+                "text.r#parse::<r#Tree>()",
+                "str::parse::<Tree>(text)",
+                "<Tree as std::str::FromStr>::from_str(text)",
+                "<Tree as serde::Deserialize<'_>>::deserialize(reader)",
+            ):
+                with self.subTest(declaration=declaration, expression=expression):
+                    self.assertEqual(
+                        guard.json_decodes(
+                            f"{declaration}\nfn read() {{ {expression}; }}"
+                        ),
+                        [2],
+                    )
+        self.assertEqual(
+            guard.json_decodes(
+                "type Tree = serde_json::Value; struct Record {\n"
+                '    #[serde(deserialize_with = "Tree::deserialize")] value: Tree\n'
+                "}"
+            ),
+            [2],
+        )
+
+    def test_type_aliases_use_declaration_scope_and_whole_block_visibility(self):
+        for owner, shadow, expected in (
+            ("serde_json", "custom", [4]),
+            ("custom", "serde_json", []),
+        ):
+            source = (
+                f"use {owner} as json;\n"
+                "type Tree = json::Value; type Saved = Tree;\n"
+                f"fn read() {{ use {shadow} as json; type Tree = other::Value;\n"
+                "    text.parse::<Saved>();\n"
+                "}\n"
+            )
+            with self.subTest(owner=owner):
+                self.assertEqual(guard.json_decodes(source), expected)
+        source = (
+            "type Tree = serde_json::Value;\n"
+            "fn run() {\n"
+            "    { type Tree = other::Value; Tree::from_str(text); }\n"
+            "    text.parse::<Tree>();\n"
+            "}\n"
+            "fn before() { text.parse::<Tree>(); type Tree = other::Value; }\n"
+            "fn outer() {\n"
+            "    fn inner() { text.parse::<Saved>(); }\n"
+            "    type Saved = Tree;\n"
+            "}\n"
+            "mod child { fn read() { text.parse::<Tree>(); } }\n"
+            "mod sibling { type Tree = other::Value; fn read() { Tree::from_str(text); } }\n"
+            "mod imported { use super::*; fn read() { text.parse::<Tree>(); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [4, 8, 13])
+
+    def test_type_aliases_allow_custom_types_projection_and_cycles(self):
+        for declaration in (
+            "type Tree = custom::Value;",
+            "type Tree = custom::serde_json::Value;",
+            "mod serde_json; type Tree = serde_json::Value;",
+            "mod serde_json {} type Tree = crate::serde_json::Value;",
+            "type Tree = Saved; type Saved = Tree;",
+        ):
+            with self.subTest(declaration=declaration):
+                self.assertEqual(
+                    guard.json_decodes(
+                        declaration + "\nfn read() { Tree::from_str(text); "
+                        "text.parse::<Tree>(); Tree::deserialize(reader); }"
+                    ),
+                    [],
+                )
+        self.assertEqual(
+            guard.json_decodes(
+                "type Tree = serde_json::Value;\n"
+                "fn build() { serde_json::from_value::<Record>(Tree::Null); "
+                "serde_json::to_value(Tree::Null); }\n"
+                "#[cfg(test)] fn fixture() { text.parse::<Tree>(); }"
+            ),
+            [],
+        )
+        for declaration in (
+            "type Tree<T> = T;",
+            "type Tree = custom::Wrapper<serde_json::Value>;",
+            "type Tree = &'static serde_json::Value;",
+        ):
+            with self.subTest(declaration=declaration):
+                self.assertEqual(
+                    guard.json_decodes(
+                        "type Tree = serde_json::Value;\n"
+                        f"fn read() {{ {declaration} text.parse::<Tree>(); }}"
+                    ),
+                    [],
+                )
+
+    def test_associated_types_are_not_lexical_aliases_but_method_local_types_are(self):
+        for header in (
+            "impl Custom for Record",
+            "pub trait Custom",
+            "#[allow(dead_code)] unsafe impl Custom for Record",
+        ):
+            with self.subTest(header=header):
+                self.assertEqual(
+                    guard.json_decodes(
+                        f"{header} {{ type Tree = serde_json::Value;\n"
+                        "fn read() { text.parse::<Tree>(); }\n"
+                        "fn local() { type Tree = serde_json::Value; text.parse::<Tree>(); } }"
+                    ),
+                    [3],
+                )
+        for header in ("impl Custom for Record", "trait Custom"):
+            with self.subTest(header=header):
+                self.assertEqual(
+                    guard.json_decodes(
+                        "type Tree = serde_json::Value;\n"
+                        f"{header} {{ type Tree = other::Value;\n"
+                        "fn read() { text.parse::<Tree>(); } }"
+                    ),
+                    [3],
+                )
+
+    def test_return_position_impl_trait_does_not_hide_function_local_type_aliases(self):
+        for header in (
+            "fn read() -> impl Display",
+            "pub fn read() -> impl Display",
+            "fn read() -> Result<impl Display, Error>",
+        ):
+            with self.subTest(header=header):
+                self.assertEqual(
+                    guard.json_decodes(
+                        f"{header} {{ type Tree = serde_json::Value;\n"
+                        "text.parse::<Tree>(); result }"
+                    ),
+                    [2],
+                )
+
+    def test_module_qualified_aliases_and_parent_globs_keep_their_owners(self):
+        sources = [
+            "use serde_json as json;\nmod child { fn read() { super::json::from_str(text); } }",
+            "use serde_json as json;\nmod child { use super::json as saved; fn read() { saved::from_str(text); } }",
+            "use serde_json as json;\nmod child { use super::*; fn read() { json::from_str(text); } }",
+            "use serde_json as json;\nmod child { fn read() { crate::json::from_str(text); } }",
+            "mod child { use serde_json as json;\nfn read() { self::json::from_str(text); } }",
+            "use serde_json as json;\nfn outer() { use other as json; mod child { fn read() { super::json::from_str(text); } } }",
+            "mod helpers { pub use serde_json as json; }\nuse helpers::*; fn read() { json::from_str(text); }",
+            "mod helpers { pub use serde_json as json; }\nuse helpers as saved; fn read() { saved::json::from_str(text); }",
+            "use serde_json as json;\nmod child { mod grandchild { fn read() { super::super::json::from_str(text); } } }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+
+    def test_absolute_json_paths_bypass_local_aliases_and_use_tree_braces(self):
+        sources = [
+            "use other as serde_json;\nfn read() { ::serde_json::from_str(text); }",
+            "use other as serde_json; use ::serde_json as json;\nfn read() { json::from_str(text); }",
+            "use ::serde_json::{self as json};\nfn read() { json::from_str(text); }",
+            "use crate::{json_wire::{self as wire}};\nfn read() { wire::decode(text); }",
+            "use ::r#serde_json::{self as r#json};\nfn read() { r#json::from_str(text); }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+
+    def test_extern_crate_aliases_keep_json_reader_identity(self):
+        sources = [
+            "extern crate serde_json as json;\nfn read() { json::from_str(text); }",
+            "extern crate serde_json;\nfn read() { serde_json::from_slice(bytes); }",
+            "pub extern crate serde_json as json;\nfn read() { ::json::from_reader(reader); }",
+            "extern crate r#serde_json as r#json;\nfn read() { r#json::from_str(text); }",
+            "extern crate r#serde_json as r#json;\nfn read() { ::r#json::from_str(text); }",
+            "fn read() { extern crate serde_json as json;\njson::from_str(text); }",
+            "fn read() {\njson::from_str(text); extern crate serde_json as json; }",
+            "mod reader { extern crate serde_json as json;\nfn read() { self::json::from_str(text); } }",
+            "extern crate yamaa_adapters as adapters;\nfn read() { adapters::json_wire::decode(text); }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+
+    def test_only_root_extern_aliases_enter_the_extern_prelude(self):
+        sources = [
+            "extern crate serde_json as json;\nmod child { fn read() { json::from_str(text); } }",
+            "extern crate serde_json as json;\nmod child { fn read() { ::json::from_str(text); } }",
+            "mod parent { extern crate serde_json as json;\nmod child { fn read() { super::json::from_str(text); } } }",
+            "fn outer() { extern crate serde_json as json;\nfn inner() { json::from_str(text); } }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+        for source in (
+            "mod parent { extern crate serde_json as json;\nmod child { fn read() { json::from_str(text); } } }",
+            "fn outer() { extern crate serde_json as json;\nmod child { fn read() { json::from_str(text); } } }",
+            "mod first { extern crate serde_json as json; }\nmod second { fn read() { json::from_str(text); } }",
+            "extern crate serde_json as json;\nmod child { use other as json; fn read() { json::from_str(text); } }",
+            "extern crate serde_json as json;\nmod child { fn read() { self::json::from_str(text); } }",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [])
+
+    def test_nonroot_files_do_not_promote_extern_aliases_to_the_extern_prelude(self):
+        source = (
+            "extern crate serde_json as json;\n"
+            "fn read() { json::from_str(text); }\n"
+            "mod child { fn read() { json::from_str(text); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source, crate_root=False), [2])
+        self.assertEqual(guard.json_decodes(source, crate_root=True), [2, 3])
+        for name, lines in (
+            ("reader.rs", [2]),
+            ("lib.rs", [2, 3]),
+            ("main.rs", [2, 3]),
+        ):
+            with self.subTest(name=name):
+                relative = f"rust/crates/yamaa-adapters/src/{name}"
+                path = self.write(relative, source)
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        f"{relative}:{line}: JSON text decoded outside a codec"
+                        for line in lines
+                    ],
+                )
+                path.unlink()
+
+    def test_nonroot_extern_self_cannot_retarget_crate_paths_to_file_local_aliases(
+        self,
+    ):
+        source = (
+            "use serde_json as json; extern crate self as root;\n"
+            "fn read() { root::json::from_str(text); }\n"
+            "mod nested { extern crate self as local;\n"
+            "fn read() { local::json::from_str(text); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source, crate_root=False), [])
+        self.assertEqual(guard.json_decodes(source, crate_root=True), [2, 4])
+
+    def test_extern_crate_targets_are_anchored_before_local_shadowing(self):
+        sources = [
+            "use other as serde_json; extern crate serde_json as json;\nfn read() { json::from_str(text); }",
+            "extern crate serde_json as json; use json as saved;\nfn read() { use other as json; saved::from_str(text); }",
+            "extern crate serde_json as json;\nmod child { use other as json; fn read() { ::json::from_str(text); } }",
+            "extern crate other as serde_json; extern crate serde_json as json;\nfn read() { json::from_str(text); }",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+        for source in (
+            "extern crate other as serde_json; fn read() { serde_json::from_str(text); ::serde_json::from_str(text); }",
+            "use serde_json as other; extern crate other as json; fn read() { json::from_str(text); }",
+            "extern crate other as json; use json as saved; fn read() { use serde_json as json; saved::from_str(text); }",
+            "extern crate serde_json as json; fn write() { json::to_string(value); json::from_value(value); }",
+            "extern crate serde_json as _; fn read() { json::from_str(text); }",
+            "#[cfg(test)]\nextern crate serde_json as json; fn read() { json::from_str(text); }",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [])
+
+    def test_extern_crate_self_names_the_crate_root_without_external_reader_identity(
+        self,
+    ):
+        for source in (
+            "extern crate self as serde_json; fn read() { serde_json::from_str(text); ::serde_json::from_str(text); }",
+            "extern crate self as local; mod child { fn read() { local::from_str(text); ::local::from_str(text); } }",
+            "mod nested { extern crate self as serde_json; fn read() { serde_json::from_str(text); } }",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [])
+        source = (
+            "use serde_json as json; extern crate self as local;\n"
+            "mod child { fn read() { local::json::from_str(text); } }\n"
+            "mod nested { extern crate self as root; use other as json;\n"
+            "fn read() { root::json::from_str(text); } }"
+        )
+        self.assertEqual(guard.json_decodes(source), [2, 4])
+
+    def test_extern_aliases_cover_serde_readers_value_globs_and_field_hooks(self):
+        for route in (
+            "fn read() { json::Deserializer::from_str(text); }",
+            "use json::value::*; fn read() { Value::deserialize(reader); }",
+            "use json::Value as Tree; fn read() { <Tree as serde::Deserialize<'_>>::deserialize(reader); }",
+            'struct Record { #[serde(deserialize_with = "json::Value::deserialize")] value: Value }',
+            "use json::de::*;",
+        ):
+            with self.subTest(route=route):
+                self.assertEqual(
+                    guard.json_decodes("extern crate serde_json as json;\n" + route),
+                    [2],
+                )
+        source = (
+            "extern crate yamaa_adapters as adapters; use adapters::json_wire as wire;\n"
+            'struct Record { #[serde(with = "wire")] value: Value }'
+        )
+        self.assertEqual(guard.json_decodes(source), [2])
+        self.assertEqual(
+            guard.json_decodes(
+                "extern crate serde_json as json; use json::ser::*; use json::value::*;\n"
+                "fn build() { to_value(Value::Null); from_value(Value::Null); }"
+            ),
+            [],
+        )
+
+    def test_conditional_alias_alternatives_are_unioned_only_in_the_same_scope(self):
+        source = (
+            '#[cfg(feature = "reader")]\nuse serde_json as json;\n'
+            '#[cfg(not(feature = "reader"))]\nuse other as json;\n'
+            "fn read() { json::from_str(text); }\n"
+            "mod sibling { use other as json; fn read() { json::from_str(text); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [5])
+
+    def test_serde_globs_distinguish_reader_modules_from_serializers_and_maps(self):
+        for owner in ("ser", "map", "error", "value"):
+            for source in (
+                f"use serde_json::{owner}::*;",
+                f"use serde_json::{owner} as module;\nuse module::*;",
+                f"use serde_json as json;\nuse json::{{{owner}::*}};",
+            ):
+                with self.subTest(source=source):
+                    self.assertEqual(guard.json_decodes(source), [])
+        source = "use serde_json::de as module;\nuse module::*;"
+        self.assertEqual(guard.json_decodes(source), [2])
+
+    def test_value_glob_allows_trees_and_projection_but_tracks_deserialization(self):
+        source = (
+            "use serde_json::value::*;\n"
+            "fn build() { let value = Value::Null; to_value(value); from_value(value); }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [])
+        for imports in (
+            "use serde_json::value::*;",
+            "use serde_json as json; use json::value::*;",
+            "use ::serde_json::value as values; use values::*;",
+        ):
+            for expression in (
+                "Value::deserialize(reader)",
+                "<Value as serde::Deserialize<'_>>::deserialize(reader)",
+            ):
+                with self.subTest(imports=imports, expression=expression):
+                    self.assertEqual(
+                        guard.json_decodes(f"{imports}\nfn read() {{ {expression}; }}"),
+                        [2],
+                    )
+        self.assertEqual(
+            guard.json_decodes(
+                "use serde_json::value::*;\n"
+                "fn read() { use other::Value; Value::deserialize(reader); }"
+            ),
+            [],
+        )
+        for imports in (
+            "use crate::serde_json::value::*;",
+            "use crate::serde_json as json; use json::value::*;",
+        ):
+            source = f"extern crate serde_json;\n{imports}\n"
+            with self.subTest(imports=imports):
+                self.assertEqual(
+                    guard.json_decodes(
+                        source + "fn build() { to_value(Value::Null); }"
+                    ),
+                    [],
+                )
+                self.assertEqual(
+                    guard.json_decodes(
+                        source + "fn read() { Value::deserialize(reader); }"
+                    ),
+                    [3],
+                )
+
+    def test_serde_deserialize_attributes_resolve_aliases_in_their_own_scope(self):
+        source = (
+            "use serde_json as json; use json as saved;\n"
+            "mod unrelated { use other as json; struct Record {\n"
+            '    #[serde(deserialize_with = "json::Value::deserialize")] value: Value,\n'
+            "} }\n"
+            "mod reader { use super::saved as json; struct Record {\n"
+            '    #[serde(deserialize_with = "json::Value::deserialize")] value: Value,\n'
+            "} }\n"
+            "fn nested() { use other as json; struct Record {\n"
+            '    #[serde(deserialize_with = "saved::Value::deserialize")] value: Value,\n'
+            "} }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [6, 9])
+
+    def test_serde_with_resolves_the_module_deserializer_in_attribute_scope(self):
+        source = (
+            "use crate::json_wire as wire;\n"
+            "mod unrelated { use other as wire; struct Record {\n"
+            '    #[serde(with = "wire")] value: Value,\n'
+            "} }\n"
+            "mod reader { use super::wire as owned; struct Record {\n"
+            '    #[serde(with = "owned")] value: Value,\n'
+            "} }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [6])
+
+    def test_value_glob_resolves_self_super_and_aliases_inside_inline_modules(self):
+        for modules, imports, closing in (
+            (
+                "mod reader { extern crate serde_json;\n",
+                "use self::serde_json::value::*;\n",
+                "}",
+            ),
+            (
+                "mod reader { extern crate serde_json;\n",
+                "use self::serde_json as json; use json::value::*;\n",
+                "}",
+            ),
+            (
+                "mod reader { extern crate serde_json;\nmod nested {\n",
+                "use super::serde_json::value::*;\n",
+                "}}",
+            ),
+            (
+                "mod reader { extern crate serde_json;\nmod nested {\n",
+                "use super::serde_json as json; use json::value::*;\n",
+                "}}",
+            ),
+        ):
+            source = modules + imports
+            with self.subTest(imports=imports):
+                self.assertEqual(
+                    guard.json_decodes(
+                        source
+                        + "fn build() { let value = Value::Null; to_value(value); from_value(value); }"
+                        + closing
+                    ),
+                    [],
+                )
+                for expression in (
+                    "Value::deserialize(reader)",
+                    "<Value as serde::Deserialize<'_>>::deserialize(reader)",
+                ):
+                    with self.subTest(expression=expression):
+                        self.assertEqual(
+                            guard.json_decodes(
+                                source + f"fn read() {{ {expression}; }}" + closing
+                            ),
+                            [source.count("\n") + 1],
+                        )
+
+    def test_json_serialization_projection_and_test_fixtures_remain_allowed(self):
+        source = (
+            "use crate::json_wire as wire;\n"
+            "use serde_json as json;\n"
+            "use serde_json::Value as Tree;\n"
+            "fn encode(value: Tree) {\n"
+            "    wire::encode(&wire::project(value));\n"
+            "    json::to_string(&value);\n"
+            "    json::to_value(&value);\n"
+            "    json::from_value::<Record>(value);\n"
+            "}\n"
+            '#[serde(serialize_with = "wire::serialize_value")]\nvalue: Value,\n'
+            "// serde_json::from_str(text)\n"
+            'const NOTE: &str = r#"deserialize_with = "wire::deserialize_value""#;\n'
+            "#[cfg(test)]\nmod tests {\n"
+            "    use crate::json_wire::*;\n"
+            "    use serde_json::Deserializer;\n"
+            '    #[serde(deserialize_with = "wire::deserialize_value")]\nvalue: Value,\n'
+            '    fn fixture() { decode("{}"); }\n'
+            "}\n"
+        )
+        self.write("rust/crates/yamaa-adapters/src/rows.rs", source)
+        self.assertEqual(self.errors(), [])
+
+    def test_json_decodes_in_separate_cfg_test_modules_are_fixtures(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/lib.rs",
+            '#[cfg(test)]\nmod tests;\nmod reader;\n#[cfg(all(test, feature = "yaml"))]\nmod probes { mod nested; }\n',
+        )
+        self.write(
+            "rust/crates/yamaa-adapters/src/reader.rs",
+            "#[cfg(test)]\nmod tests;\n",
+        )
+        for relative in ("tests.rs", "reader/tests.rs", "probes/nested.rs"):
+            self.write(
+                f"rust/crates/yamaa-adapters/src/{relative}",
+                'fn fixture() { crate::json_wire::decode("{}"); }\n',
+            )
+        self.write("rust/crates/yamaa-adapters/src/tests.rs", "mod helpers;\n")
+        self.write(
+            "rust/crates/yamaa-adapters/src/tests/helpers.rs",
+            'fn fixture() { serde_json::from_str::<serde_json::Value>("{}"); }\n',
+        )
+        self.assertEqual(self.errors(), [])
+
+    def test_test_filename_or_production_loader_does_not_exempt_json_decoding(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/tests.rs",
+            'fn fixture() { crate::json_wire::decode("{}"); }\n',
+        )
+        for loader in (
+            "",
+            "mod tests;\n",
+            "#[cfg(not(test))]\nmod tests;\n",
+            '#[cfg(feature = "test-utils")]\nmod tests;\n',
+            '#[cfg(test)]\nmod tests;\n#[path = "tests.rs"]\nmod exposed;\n',
+            '#[cfg(test)]\nmod tests;\n#[path = r#"tests.rs"#]\nmod exposed;\n',
+            '#[cfg(test)]\nmod tests;\n#[cfg_attr(feature = "live", path = "tests.rs")]\nmod exposed;\n',
+            '#[cfg(test)]\nmod tests;\ninclude!("tests.rs");\n',
+            '#[cfg(test)]\nmod tests;\ninclude!(concat!("test", "s.rs"));\n',
+        ):
+            with self.subTest(loader=loader):
+                self.write("rust/crates/yamaa-adapters/src/lib.rs", loader)
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        "rust/crates/yamaa-adapters/src/tests.rs:1: JSON text decoded outside a codec"
+                    ],
+                )
+
+    def test_explicit_test_module_paths_and_test_includes_are_exempt(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/lib.rs",
+            '#[cfg(test)]\n#[path = r#"fixtures.rs"#]\nmod tests;\n'
+            '#[cfg(test)]\nmod extra { include!("fixtures.rs"); }\n',
+        )
+        self.write(
+            "rust/crates/yamaa-adapters/src/fixtures.rs",
+            'fn fixture() { crate::json_wire::decode("{}"); }\n',
+        )
+        self.assertEqual(self.errors(), [])
+
+    def test_inline_path_in_non_mod_file_tracks_its_production_loader(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/lib.rs",
+            'mod reader;\n#[cfg(test)]\n#[path = "reader/nested/fixtures.rs"]\nmod tests;\n',
+        )
+        reader = self.write(
+            "rust/crates/yamaa-adapters/src/reader.rs",
+            '#[cfg(test)]\n#[path = "fixtures.rs"]\nmod fixtures;\n'
+            'mod nested {\n    #[path = "fixtures.rs"]\n    mod production;\n}\n',
+        )
+        for relative in ("fixtures.rs", "reader/nested/fixtures.rs"):
+            self.write(
+                f"rust/crates/yamaa-adapters/src/{relative}",
+                'fn fixture() { crate::json_wire::decode("{}"); }\n',
+            )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa-adapters/src/reader/nested/fixtures.rs:1: JSON text decoded outside a codec"
+            ],
+        )
+        reader.write_text(
+            reader.read_text().replace("mod nested", "#[cfg(test)]\nmod nested")
+        )
+        self.assertEqual(self.errors(), [])
+
     def test_json_decoders_reached_by_alias_glob_or_serde_route_are_refused(self):
         self.write(
             "rust/crates/yamaa-adapters/src/rows.rs",
@@ -504,7 +1287,9 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertEqual(
             self.errors(),
             [
-                "rust/crates/yamaa/src/glob.rs:3: JSON text decoded outside a codec",
+                # The glob already exposes readers, even in encode-only code.
+                "rust/crates/yamaa/src/encode_only.rs:1: JSON text decoded outside a codec",
+                "rust/crates/yamaa/src/glob.rs:1: JSON text decoded outside a codec",
                 "rust/crates/yamaa-adapters/src/rows.rs:3: JSON text decoded outside a codec",
                 "rust/crates/yamaa-adapters/src/rows.rs:4: JSON text decoded outside a codec",
                 "rust/crates/yamaa-adapters/src/rows.rs:5: JSON text decoded outside a codec",
@@ -537,6 +1322,50 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                 f"{crate}/rows/helpers.rs:1: JSON text decoded outside a codec",
                 f"{crate}/rows/live.rs:1: JSON text decoded outside a codec",
             ],
+        )
+
+    def test_external_test_module_gating_is_independent_of_attribute_order(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/fixtures.rs",
+            'fn fixture() { crate::json_wire::decode("{}"); }\n',
+        )
+        for attributes in (
+            '#[path = "fixtures.rs"]\n#[cfg(test)]',
+            '#[cfg(test)]\n#[path = "fixtures.rs"]',
+            "#[allow(dead_code)]\n#[cfg(test)]",
+            "#[cfg(test)]\n#[allow(dead_code)]",
+            '#[path = "fixtures.rs"]\n#[allow(dead_code)]\n#[cfg(all(test, feature = "yaml"))]',
+            '#[cfg(all(test, feature = "yaml"))]\n#[allow(dead_code)]\n#[path = "fixtures.rs"]',
+        ):
+            with self.subTest(attributes=attributes):
+                loader = self.write(
+                    f"{crate}/lib.rs", attributes + "\npub(crate) mod fixtures;\n"
+                )
+                self.assertEqual(self.errors(), [])
+                loader.write_text(
+                    loader.read_text() + '#[path = "fixtures.rs"]\nmod live;\n'
+                )
+                self.assertEqual(
+                    self.errors(),
+                    [f"{crate}/fixtures.rs:1: JSON text decoded outside a codec"],
+                )
+
+    def test_unregistered_condition_fixture_requires_every_loader_to_be_test_only(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/fixtures.rs",
+            'fn fixture() { let row = Issue { condition: "not_registered".into() }; }\n',
+        )
+        loader = self.write(
+            f"{crate}/lib.rs",
+            '#[cfg(test)]\n#[path = "fixtures.rs"]\nmod fixtures;\n',
+        )
+        self.assertEqual(self.errors(), [])
+        loader.write_text(loader.read_text() + '#[path = "fixtures.rs"]\nmod live;\n')
+        self.assertEqual(
+            self.errors(),
+            [f"{crate}/fixtures.rs:1: unregistered condition literal not_registered"],
         )
 
     def test_registered_condition_literal_is_reported_once_as_a_new_site(self):

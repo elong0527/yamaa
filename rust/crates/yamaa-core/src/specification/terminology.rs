@@ -1,10 +1,10 @@
 //! Lower column and value-level terminology against one admitted environment.
 use super::*;
 use crate::{
+    ast,
     dataset::{Check, ValueCodelist, Verification, WhereClause},
     project_codelist_binding as ct,
     project_terminology::Catalogue,
-    submission_values as values,
 };
 
 /// One binding: the column's own, or an entry's over the rows its where
@@ -15,43 +15,38 @@ struct Declaration<'a> {
     path: String,
     clause: Option<WhereClause>,
 }
-fn present(d: &Document, node: usize, name: &str) -> Option<usize> {
-    d.field(node, name)
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-}
 pub(super) fn apply(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &TableSchema,
     catalogue: &Catalogue,
     groups: &mut [verifications::Verifications],
 ) -> Result<(), PrepareError> {
     let mut declarations = Vec::new();
-    for (column, &node) in columns.iter().enumerate() {
-        let name = output.columns()[column].name.as_str();
-        if let Some(identifier) =
-            present(d, node, "submission").and_then(|id| present(d, id, "codelist"))
-        {
+    for (column, declared) in spec.columns.iter().enumerate() {
+        let Some(submission) = &declared.submission else {
+            continue;
+        };
+        if let Some(codelist) = &submission.metadata.codelist {
             declarations.push(Declaration {
                 column,
-                identifier: text(d, identifier)?,
-                path: format!("columns.{name}.submission.codelist"),
+                identifier: &codelist.name,
+                path: spec.cite(codelist.meta),
                 clause: None,
             });
         }
-        for entry in values::entries(d, node) {
-            let Some(identifier) = present(d, entry.node, "codelist") else {
+        for entry in &submission.value_level {
+            let Some(codelist) = &entry.metadata.codelist else {
                 continue;
             };
             // Value-level admission owns a clause no row could be selected by;
             // no partially selected scope is executable.
-            let Some(clause) = super::value_level::clause(&entry, output, column) else {
+            let Some(clause) = super::value_level::clause(entry, output, column) else {
                 continue;
             };
             declarations.push(Declaration {
                 column,
-                identifier: text(d, identifier)?,
-                path: format!("{}.codelist", values::path(name, entry.id)),
+                identifier: &codelist.name,
+                path: spec.cite(codelist.meta),
                 clause: Some(clause),
             });
         }
@@ -136,11 +131,12 @@ pub(super) fn apply(
             }
         }
         if !lists.is_empty() {
+            let submission = spec.columns[column]
+                .submission
+                .as_ref()
+                .ok_or(PrepareError::Internal)?;
             group.append_codelist(Verification {
-                path: format!(
-                    "columns.{}.submission.codelist",
-                    output.columns()[column].name
-                ),
+                path: format!("{}.codelist", spec.cite(submission.meta)),
                 check: Check::ValueCodelists {
                     overrides,
                     bindings: lists,

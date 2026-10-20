@@ -32,6 +32,7 @@ mod fix;
 mod tests;
 
 use crate::yaml_decode::DecodeFailure;
+use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
@@ -106,7 +107,7 @@ impl Error {
     /// admitted, and the publication refusal for a file that cannot be
     /// replaced.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
+        use yamaa_core::application_issue::{rejected, resource_rejected};
         match self {
             Self::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
             Self::Read { file, error } => vec![read_diagnostic(file, error)],
@@ -122,11 +123,7 @@ impl Error {
                         Vec::new(),
                     )];
                 }
-                // A replaced file fails as any published output does.
-                vec![rejected(
-                    Stage::Output,
-                    crate::file_application::publication_fault(error),
-                )]
+                vec![rejected(Stage::Output, write_code(error))]
             }
         }
     }
@@ -136,7 +133,7 @@ impl Error {
 /// failure stays an opaque resource refusal.
 fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnostic {
     use crate::file_resources::Error as E;
-    use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
+    use yamaa_core::application_issue::{rejected, resource_rejected};
     use yamaa_core::resource::ResourceFailure;
     match crate::file_resources::resource_failure(error) {
         Some(ResourceFailure::Boundary(limit)) => resource_rejected(
@@ -175,7 +172,7 @@ fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnost
 
 /// The findings document admission gives a specification's own text.
 fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
-    use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
+    use yamaa_core::application_issue::{rejected, resource_rejected};
     use yamaa_core::diagnostic::ConditionCode;
     use yamaa_core::json::Value;
     let finding = |code, spec_path: String, context: Vec<(&str, Value)>| Diagnostic {
@@ -232,8 +229,21 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
             Vec::new(),
         )],
         DecodeFailure::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
-        // An admission defect, as specification capture reports it.
-        DecodeFailure::Internal => vec![rejected(Stage::Prepare, Fault::YamlDecode)],
+        DecodeFailure::Internal => vec![rejected(Stage::Prepare, Fault::YamlAdmission)],
+    }
+}
+
+fn write_code(error: &crate::file_publication::Error) -> Fault {
+    use crate::file_publication::Error as E;
+    match error {
+        E::Host(_) => Fault::HostPublicationFailure,
+        E::InvalidTarget => Fault::InvalidTarget,
+        E::PathMismatch => Fault::PathMismatch,
+        E::Limit(_) => Fault::PublicationLimit,
+        E::StagingCollision => Fault::StagingCollision,
+        E::Changed => Fault::TargetChanged,
+        E::Io(_) => Fault::OutputPublicationFailed,
+        E::Cleanup { .. } => Fault::CleanupIncomplete,
     }
 }
 

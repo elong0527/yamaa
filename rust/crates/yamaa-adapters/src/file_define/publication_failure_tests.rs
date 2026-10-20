@@ -5,6 +5,71 @@ use std::{
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[test]
+fn target_admission_keeps_typed_publication_fault_and_original_error_in_both_hosts() {
+    use file_publication::Error;
+
+    for host in [Language::Python, Language::R] {
+        for (error, code) in [
+            (Error::InvalidTarget, "invalid_target"),
+            (Error::Changed, "target_changed"),
+            (
+                Error::Host(crate::host_resources::Failure::Cancelled),
+                "publication_cancelled",
+            ),
+            (
+                Error::Host(crate::host_resources::Failure::Cleanup),
+                "cleanup_incomplete",
+            ),
+            (
+                Error::Io(std::io::Error::other("invalid explicit publication target")),
+                "publication_failed",
+            ),
+        ] {
+            let cause = error.message();
+            let mut result = Define::prepare("", "sdtm", None, "0.4.0", host, None);
+            result.refuse(native_failure(service::Failure::TargetAdmission {
+                index: usize::MAX,
+                error,
+            }));
+            assert_eq!(result.issues().len(), 1);
+            let finding = &result.issues()[0];
+            assert_eq!(finding.phase(), "engine");
+            assert_eq!(finding.condition(), "engine_rejected");
+            assert_eq!(finding.rule(), None);
+            assert_eq!(finding.spec_paths, ["define"]);
+            assert_eq!(
+                yamaa_core::json::Value::Object(finding.context.clone()),
+                crate::json!({
+                    "stage": "publication_target_admission",
+                    "code": code,
+                    "artifact": usize::MAX,
+                    "cause": cause,
+                })
+            );
+            let Some(Failure::TargetAdmission { index, error }) = result.failure() else {
+                panic!("lost original target admission error")
+            };
+            assert_eq!(*index, usize::MAX);
+            match error {
+                Error::InvalidTarget => assert_eq!(code, "invalid_target"),
+                Error::Changed => assert_eq!(code, "target_changed"),
+                Error::Host(crate::host_resources::Failure::Cancelled) => {
+                    assert_eq!(code, "publication_cancelled");
+                }
+                Error::Host(crate::host_resources::Failure::Cleanup) => {
+                    assert_eq!(code, "cleanup_incomplete");
+                }
+                Error::Io(error) => {
+                    assert_eq!(code, "publication_failed");
+                    assert_eq!(error.to_string(), "invalid explicit publication target");
+                }
+                other => panic!("original target admission error was replaced: {other:?}"),
+            }
+        }
+    }
+}
+
+#[test]
 fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_both_hosts() {
     use yamaa_core::{application_issue, limits::Limits};
     for host in [Language::Python, Language::R] {

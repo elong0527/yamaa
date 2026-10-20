@@ -8,7 +8,10 @@ inputs:
     description: Python version for the locked development environment
     default: '3.14'
   package:
-    description: Build the development package and install repository tools (true or false)
+    description: >-
+      Build the development package and install repository tools (true), install
+      the tools and their locked environment without the package (tools), or
+      install neither (false)
     default: 'true'
 runs:
   using: composite
@@ -24,15 +27,15 @@ runs:
           *) echo "::error::r must be none, runtime, or check"; exit 1 ;;
         esac
         case "$PACKAGE_SETUP" in
-          true|false) ;;
-          *) echo "::error::package must be true or false"; exit 1 ;;
+          true|tools|false) ;;
+          *) echo "::error::package must be true, tools, or false"; exit 1 ;;
         esac
     - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       with:
         version: '0.13.0'
-        # Without the package build no uv command runs, so there is nothing to
+        # Without the environment no uv command runs, so there is nothing to
         # cache, and setup-uv's post step fails on a cache miss after a lock change.
-        enable-cache: ${{ inputs.package }}
+        enable-cache: ${{ inputs.package != 'false' }}
         python-version: ${{ inputs.python }}
     - name: Read the workspace toolchain
       shell: bash
@@ -70,3 +73,7 @@ runs:
       if: inputs.package == 'true'
       shell: bash
       run: make setup
+    - name: Install repository tools without the development package
+      if: inputs.package == 'tools'
+      shell: bash
+      run: python -m tools.commands.setup --without-package

@@ -1059,6 +1059,22 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
             "verifications[0].row_count",
             "row_count group_by repeats a column",
         ),
+        // A written empty `group_by` is refused; an omitted one groups nothing.
+        (
+            "int",
+            T::List(vec![]),
+            T::List(vec![T::map(vec![(
+                "row_count",
+                T::map(vec![
+                    ("min", T::Scalar(N::Integer("1".into()))),
+                    ("group_by", T::List(vec![])),
+                ]),
+            )])]),
+            "invalid_declaration",
+            "CHECK-14",
+            "verifications[0].row_count",
+            "group_by names at least one column",
+        ),
         (
             "str",
             T::List(vec![T::map(vec![(

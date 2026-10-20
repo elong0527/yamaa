@@ -115,10 +115,10 @@ pub fn compile(
     binder.refused_constructs()?;
     binder.visit(
         syntax.root(),
-        if context == Context::Predicate {
-            Need::Truth
-        } else {
-            Need::Number
+        match context {
+            Context::Predicate => Need::Truth,
+            Context::Compute | Context::Aggregate => Need::Number,
+            Context::Derivation => Need::Value,
         },
     )?;
     let patterns = binder.patterns;
@@ -251,12 +251,22 @@ fn literal(kind: &NodeKind) -> Option<Value> {
     })
 }
 
+/// Whether a context refuses a construct wherever it is written.
+fn refuses(context: Context, construct: Construct) -> bool {
+    match context {
+        Context::Predicate => false,
+        Context::Compute | Context::Aggregate => true,
+        Context::Derivation => matches!(construct, Construct::Comparison | Construct::Boolean),
+    }
+}
+
 /// What a position requires of the node written there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Need {
     /// An operand of `AND`, `OR` or `NOT`, or a predicate's root.
     Truth,
-    /// A comparison or reduction operand, of any value type.
+    /// A comparison or reduction operand, or an expression field's root, of
+    /// any value type.
     Value,
     /// An operand of arithmetic or a numeric function, or a numeric root.
     Number,
@@ -278,11 +288,9 @@ impl Binder<'_> {
     }
 
     /// `compute` and `aggregate` refuse comparisons, Boolean logic and text or
-    /// temporal literals wherever they are written; report the first one.
+    /// temporal literals wherever they are written, and an expression field
+    /// refuses comparisons and Boolean logic; report the first one.
     fn refused_constructs(&self) -> Result<(), CompileError> {
-        if self.context == Context::Predicate {
-            return Ok(());
-        }
         let refused = self
             .syntax
             .nodes()
@@ -302,7 +310,7 @@ impl Binder<'_> {
                     NodeKind::Temporal { .. } => Construct::Temporal,
                     _ => return None,
                 };
-                Some((node.site, construct))
+                refuses(self.context, construct).then_some((node.site, construct))
             })
             .min_by_key(|(site, _)| *site);
         match refused {

@@ -1,6 +1,6 @@
 //! Expression findings: the parser's and binder's, static types and evaluation.
 //! Each keeps the original spelling; a predicate field names its text under
-//! `predicate` with the character position, an `expr` field under `expr`.
+//! `predicate` with the character position, and any other field under `expr`.
 use super::{ConditionCode as C, Context, Diagnostic, ProjectionError};
 use crate::expression::{
     Condition, Context as Field, ErrorKind, EvaluationError, Failure, Step, TemporalKind,
@@ -91,7 +91,7 @@ impl Failure {
                 context.insert("predicate".into(), text(expression));
                 context.insert("position".into(), V::from(position));
             }
-            Field::Compute | Field::Aggregate => {
+            Field::Compute | Field::Aggregate | Field::Derivation => {
                 context.insert("expr".into(), text(expression));
             }
         }

@@ -166,6 +166,7 @@ mod diagnostics {
                     "opaque_host",
                     "output_limit",
                     "output_projection",
+                    "output_publication_failed",
                     "output_schema",
                     "parent_required",
                     "parquet_boundary",
@@ -214,6 +215,7 @@ mod diagnostics {
                     "unknown_section",
                     "validation_policy",
                     "versioned_root_required",
+                    "yaml_admission",
                     "yaml_decode",
                     "yaml_reader_unavailable",
                 ]
@@ -435,6 +437,7 @@ mod diagnostics {
             reached.extend(preflight::output_reached());
             reached.extend(grammar::reached());
             reached.extend(inheritance::reached());
+            reached.extend(language::reached());
             reached.extend(grammar::predicate_reached());
             reached.extend(predicate_evaluation::reached());
             reached.extend(binding::reached());

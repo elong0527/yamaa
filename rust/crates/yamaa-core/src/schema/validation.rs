@@ -105,6 +105,8 @@ pub enum SchemaContext {
     DescriptorPattern(usize),
     DescriptorMinimum(usize),
     DescriptorSize(usize),
+    /// A list of text values, such as the language versions an engine reads.
+    TextList(Vec<String>),
 }
 
 /// Portable validation findings retain ordered context and exact declaring paths.
@@ -177,6 +179,28 @@ pub(super) fn diagnostic(
         code,
         context,
     }
+}
+
+/// An undeclared class field (SCHEMA-13), or one this view of the closure
+/// leaves out as newer than the version the document declares (SCHEMA-2).
+pub(super) fn unknown_field(
+    path: &str,
+    field: &str,
+    class: &str,
+    later: Option<crate::language::LanguageVersion>,
+) -> SchemaDiagnostic {
+    let mut context = vec![
+        ("field", SchemaContext::Text(field.into())),
+        ("class", SchemaContext::Text(class.into())),
+    ];
+    let code = match later {
+        Some(since) => {
+            context.push(("since", SchemaContext::Text(since.to_string())));
+            ConditionCode::SchemaUnknownFieldSince
+        }
+        None => ConditionCode::SchemaUnknownField,
+    };
+    diagnostic(path, code, context)
 }
 
 pub(super) fn depth(depth: usize) -> Result<(), ValidationError> {
@@ -483,13 +507,13 @@ impl Run<'_> {
         for &(key, _) in items {
             let known = matches!(&self.input.nodes()[key],N::Text(name) if fields.iter().any(|f|f.name==*name));
             if !known {
+                let later = match &self.input.nodes()[key] {
+                    N::Text(field) => self.schema.later_field(name, field),
+                    _ => None,
+                };
                 let (key, index) = self.key(key)?;
                 let path = self.joined(site.path, &key, index)?;
-                diagnostics.push(self.diagnostic(
-                    site.child(site.value, &path),
-                    ConditionCode::SchemaUnknownField,
-                    vec![("field", Self::text(&key)), ("class", Self::text(name))],
-                ));
+                diagnostics.push(unknown_field(&path, &key, name, later));
             }
         }
         Ok(diagnostics)

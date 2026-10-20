@@ -403,7 +403,8 @@ fn inheritance_issues<'a>(
                 G::Unavailable { .. }
                 | G::InvalidParent { .. }
                 | G::Cycle { .. }
-                | G::Version { .. },
+                | G::Version { .. }
+                | G::Header { .. },
             ) => true,
             E::Traversal(G::Layer {
                 error: N::Invalid(_),
