@@ -34,6 +34,13 @@ mod declaration {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
         }
 
+        /// A repository file's identity as the engine reports it.
+        fn repository_file(name: &str) -> String {
+            identity(
+                &yamaa_adapters::canonical_path::canonicalize(repository().join(name)).unwrap(),
+            )
+        }
+
         struct Study(PathBuf);
         impl Study {
             fn new() -> Self {
@@ -697,12 +704,7 @@ columns:
         #[test]
         fn the_converted_negative_property_clear_fails_as_its_source_at_clear_0() {
             // The 0.5 source, checked as a public call checks it.
-            let source = identity(
-                &repository()
-                    .join("benchmarks/negative-property-clear/spec.yaml")
-                    .canonicalize()
-                    .unwrap(),
-            );
+            let source = repository_file("benchmarks/negative-property-clear/spec.yaml");
             let issues = yamaa_adapters::file_application::check(
                 Language::Python,
                 Request {
@@ -748,16 +750,15 @@ columns:
 
         #[test]
         fn the_converted_schema_inheritance_clear_resolves_as_its_source() {
-            let benchmark = repository().join("benchmarks/schema-inheritance-clear");
-            let source = identity(&benchmark.join("spec_study.yaml").canonicalize().unwrap());
+            let source = repository_file("benchmarks/schema-inheritance-clear/spec_study.yaml");
             let artifact =
                 resolved_artifact::resolve(&source, None, Language::Python, None).unwrap();
             let legacy = &artifact.entries()[0].specification;
             // The converter's output for the benchmark: its YAML values are
             // the example's (`tools/tests/test_migrate.py`).
-            let converted =
-                repository().join("docs/design/interface-1.0/examples/schema-inheritance-clear");
-            let entry = identity(&converted.join("spec_study.yaml").canonicalize().unwrap());
+            let entry = repository_file(
+                "docs/design/interface-1.0/examples/schema-inheritance-clear/spec_study.yaml",
+            );
             let prepared = prepare(&entry).unwrap();
             let spec = resolved(&prepared);
             // Every field but the header resolves to the same value, the
