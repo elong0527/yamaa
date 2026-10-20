@@ -1,10 +1,14 @@
-# SDTM to ADaM study test with yamaa 0.5.0
+# Assess the yamaa R package 0.5.0 on an SDTM to ADaM study
 
-Use this recipe to test one organizational study, starting from installation
-and ending with reviewed yamaa specifications, a reproducible comparison, and
-feedback that can safely be shared on GitHub. The statistical programmer owns
-the study evidence; a second programmer or study lead reviews the derivations
-and the final conclusions.
+You are an AI assistant helping a statistical programmer assess the installed
+yamaa R package 0.5.0 on one organizational study. Use R for installation,
+specification checks, study execution, comparison, and report generation.
+Assess the complete R user experience, starting from installation and ending
+with reviewed yamaa specifications, a reproducible comparison, and feedback
+that can safely be shared on GitHub. The statistical programmer owns the study
+evidence; a second programmer or study lead reviews the derivations and the
+final conclusions. If the R package cannot complete a step, record the blocker
+and continue independent work through R.
 
 The goal is to express all SDTM-to-ADaM derivation logic in idiomatic yamaa
 specifications and reproduce every in-scope reference ADaM dataset. Matching
@@ -13,53 +17,43 @@ every rule, including branches the study data do not exercise. Report partial
 results and blockers honestly; never claim 100% equivalence by dropping a
 dataset, variable, record, or unresolved rule.
 
-## 1. Install and verify yamaa 0.5.0
+## 1. Install and verify the yamaa R package 0.5.0
 
 Start the job clock and effort/usage ledger before installation. Work in an
 organization-approved environment with approved access to study data and any
 AI service used for specification authoring. Keep study artifacts in the
 organization's controlled study workspace.
 
-0.5.0 is distributed as assets of the
-[yamaa-v0.5.0 release](https://github.com/elong0527/yamaa/releases/tag/yamaa-v0.5.0),
-not on PyPI or CRAN. Download the wheel matching the host from that release
-or the organization's approved mirror. Use CPython 3.12 through 3.15; wheels
-cover Linux x86_64/aarch64, macOS arm64, and Windows x64. Linux wheels require
-glibc 2.28 or later. For example, after downloading the Linux x86_64 wheel:
-
-```sh
-python -m venv .venv
-# Activate .venv: POSIX shells
-. .venv/bin/activate
-# On Windows PowerShell, use .\.venv\Scripts\Activate.ps1 instead.
-python -m pip install './yamaa-0.5.0-cp312-abi3-manylinux_2_28_x86_64.whl[style]'
-python -c "import yamaa; assert yamaa.__version__ == '0.5.0'; print(yamaa.__version__)"
-python -m pip freeze > environment-python.txt
-```
-
-Replace the wheel filename for the selected platform. The `style` extra is
-needed for the 0.5.0 authoring checker. In a restricted environment, stage
-the wheel and its dependencies through the approved package process. The
-alternative Python source asset is `yamaa-0.5.0.tar.gz`; source builds need
-Rust/Cargo 1.82 or later and a C compiler. Follow the release instructions
-for build dependencies and offline installation.
-
-If the study will run yamaa through R, install the release's R source asset
-instead. It needs R 4.4 or later, Rust/Cargo 1.82 or later, and a C toolchain
-(including the appropriate Rtools on Windows):
+The R package 0.5.0 is distributed as an asset of the
+[yamaa-v0.5.0 release](https://github.com/elong0527/yamaa/releases/tag/yamaa-v0.5.0).
+It is not published on CRAN. Download `yamaa_0.5.0.tar.gz` from that release
+or the organization's approved mirror. This is the R source package; use an
+organization-approved writable R library. It needs R 4.4 or later,
+Rust/Cargo 1.82 or later, and a C toolchain, including the appropriate Rtools
+and Rust target on Windows as described in the
+[0.5.0 R installation guide](https://github.com/elong0527/yamaa/blob/yamaa-v0.5.0/R/yamaa/README.md#installation).
+The archive bundles its Rust dependencies for offline compilation. Record
+compiler detection, compilation time, permissions, and any installation
+failure as part of the R package assessment.
 
 ```r
 install.packages("yamaa_0.5.0.tar.gz", repos = NULL, type = "source")
+library(yamaa)
 stopifnot(as.character(packageVersion("yamaa")) == "0.5.0")
-sessionInfo()
+writeLines(c(capture.output(sessionInfo()), find.package("yamaa")),
+           "environment-r.txt")
+write.csv(installed.packages()[, c("Package", "Version", "LibPath")],
+          "environment-r-packages.csv", row.names = FALSE)
 ```
 
-Python orchestration below is the default; existing SAS or R reference code
-does not require switching the yamaa host. Record the selected host, package
-asset/reference, OS/architecture, interpreter, dependencies, and installation
-errors or manual steps. Perform a small synthetic check/run/save smoke test
-before opening study data. Verify that saved values and reports can be read
-with the comparison tools.
+Ensure subsequent `Rscript --vanilla` sessions use that same library, setting
+`R_LIBS_USER` through the approved environment configuration when needed.
+Record the release asset/reference, installed package location, OS/architecture,
+R and compiler versions, dependency versions, and manual steps. Retain the
+study's `renv.lock` if it uses renv. Inspect the installed package help for
+`yamaa_spec` and `yamaa_project`; perform a small synthetic R check/run/save
+smoke test before opening study data. Verify that the R outputs, issue tables,
+and saved artifacts can be inspected with the comparison tools.
 
 Use the [0.5.0 rules](https://github.com/elong0527/yamaa/tree/yamaa-v0.5.0/rules),
 [schemas](https://github.com/elong0527/yamaa/tree/yamaa-v0.5.0/yaml), and
@@ -157,8 +151,8 @@ study-test/
   reference/specs/           # existing specifications and metadata
   reference/code/            # original programs and dependencies
   adam/                     # generated <dataset>-yamaa.parquet
-  run.py
-  compare.py
+  run.R
+  compare.R
   reports/                  # confidential evidence, metrics, and logs
   public-feedback/          # reviewed, synthetic GitHub-ready drafts
 ```
@@ -175,7 +169,11 @@ utilities to the yamaa repository's `.github/scripts`.
 - Prefer native yamaa operations and succinct, reviewable rules. Original
   SAS/R code is evidence of intent, not a line-by-line template. Any required
   project function must be declared, versioned, reviewed, and independently
-  tested; do not hide the study pipeline in a function or preprocessing step.
+  tested through the R implementation environment; do not hide the study
+  pipeline in a function or preprocessing step. Link the R implementation
+  environment from `project.yaml` with
+  `environments: {r: r/environment.yaml}`; declare its lock and function-file
+  references in that environment file, following the 0.5.0 API.
 - Put uniform derivations at column level: key echoes, literals, and common
   assignments. Keep row-phase-dependent aggregates, windows, named
   intermediate reads, or reads from differing row drivers in their templates
@@ -196,10 +194,14 @@ utilities to the yamaa repository's `.github/scripts`.
   counts, and other study invariants. Best-practice authoring must preserve
   approved study logic; propose methodological changes as separate findings.
 
-Run `python -m yamaa.style --fix adsl.yaml` with the pinned 0.5.0 environment,
-repeat for every specification, and resolve the remaining findings. Follow
-the 0.5.0 field order, spacing, and line width; write literals as
-`{literal: X}` and source reads using the documented bare-string spelling.
+After creating the project file described below, initialize
+`project <- yamaa_project("project.yaml")` in R. Check every specification with
+`project$spec("ADSL")$check()` and inspect `project$spec("ADSL")$resolve()`;
+repeat for every target. Review the 0.5.0 field order, spacing, line width,
+uniform derivations, redundant intermediates, and output-column labels.
+Write literals as `{literal: X}` and source reads using the documented
+bare-string spelling. The R package 0.5.0 has no exported style checker;
+record this authoring-tool gap and perform the style review explicitly.
 Review the resolved specifications and traceability map with the second
 programmer.
 
@@ -232,41 +234,45 @@ artifact. Never feed reference ADaM outputs into the candidate derivation to
 bypass a missing dependency; account for approved external inputs in the
 inventory.
 
-Keep `run.py` within 30 lines using the Python engine. For example:
+Keep `run.R` within 30 lines using the installed R package. Pass the study
+workspace explicitly: `Rscript --vanilla run.R /path/to/study-test`.
 
-```python
-from pathlib import Path
-
-import yamaa
-
-root = Path(__file__).resolve().parent
-reports = root / "reports"
-reports.mkdir(exist_ok=True)
-assert yamaa.__version__ == "0.5.0"
-try:
-    project = yamaa.project(root / "project.yaml")
-    checked = project.check()
-    checked.issues.write_ndjson(reports / "preflight-issues.ndjson")
-    if checked.issues.height:
-        raise SystemExit("Resolve preflight issues before running")
-    runs = project.run("adam")
-    runs.issues.write_ndjson(reports / "run-issues.ndjson")
-    runs.report.write_parquet(reports / "engine-report.parquet")
-    if runs.issues.height or any(runs[name].output is None for name in runs):
-        raise SystemExit("Study run incomplete; inspect reports")
-    runs.save()
-except yamaa.Error as error:
-    error.issues.write_ndjson(reports / "failure-issues.ndjson")
-    raise
+```r
+library(yamaa)
+stopifnot(as.character(packageVersion("yamaa")) == "0.5.0")
+args <- commandArgs(trailingOnly = TRUE)
+stopifnot(length(args) == 1L)
+root <- normalizePath(args[[1]], mustWork = TRUE)
+reports <- file.path(root, "reports")
+dir.create(reports, showWarnings = FALSE)
+tryCatch({
+  project <- yamaa_project(file.path(root, "project.yaml"))
+  checked <- project$check()
+  saveRDS(checked$issues, file.path(reports, "preflight-issues.rds"))
+  if (nrow(checked$issues)) stop("Resolve preflight issues before running")
+  runs <- project$run("adam")
+  saveRDS(runs$issues, file.path(reports, "run-issues.rds"))
+  saveRDS(runs$report, file.path(reports, "engine-report.rds"))
+  missing_output <- vapply(runs$names, function(name) is.null(runs[[name]]$output),
+                           logical(1))
+  if (nrow(runs$issues) || any(missing_output)) stop("Study run incomplete")
+  runs$save()
+}, yamaa_error = function(error) {
+  saveRDS(error$issues, file.path(reports, "failure-issues.rds"))
+  stop(error)
+})
 ```
 
-The issue files use newline-delimited JSON to preserve nested diagnostic
-locations. Retain each attempt's logs, issue tables, and reports before
+Use `readRDS()` to inspect the saved R issue tables and engine report; RDS
+preserves list columns and diagnostic locations without another package.
+Retain each attempt's logs, issue tables, and reports before
 retrying; isolate output directories or archive previous attempts so stale
 outputs cannot pass comparison after a failed run. Time generation and
 comparison separately with an external job wrapper/ledger; also record
 installation, investigation, authoring, review, and rework. A successful
-`save()` alone is not equivalence.
+`runs$save()` alone is not equivalence. Assess R data-frame types, missing
+values, dates/times, and error conditions. Record a value the R interface
+cannot represent exactly as a blocker rather than rounding or coercing it.
 
 If a specification is blocked, reduce it to a minimal **synthetic** single-spec
 case. Record the 0.5.0 diagnostic or timeout, expected/actual behavior, and
@@ -278,10 +284,13 @@ intended derivation. Prepare a GitHub-ready finding as described below.
 
 ## 6. Independently compare every output and rule
 
-Implement comparison in a separate `compare.py`, using an independent reader
-and a documented comparison contract. Compare the saved outputs from the
-current successful attempt to the frozen reference; never generate expected
-results from the candidate specifications.
+Implement comparison in a separate `compare.R`, using an independent R reader
+and a documented comparison contract. Stage approved comparison dependencies,
+for example `arrow` for Parquet, `haven` for SAS datasets/transport files and
+tagged missing values, and `jsonlite` for JSON metrics, when those formats
+require them. Record their versions separately from yamaa's runtime needs.
+Compare the saved outputs from the current successful attempt to the frozen
+reference; never generate expected results from the candidate specifications.
 
 1. Check the complete dataset inventory and all columns, their order, logical
    types, and required metadata, including labels. Report missing/extra
@@ -310,7 +319,7 @@ results from the candidate specifications.
    every rule/branch, including those unobserved in the study. Record rule
    coverage, missing evidence, and reviewer sign-off alongside data matching.
 
-`compare.py` must report matched/total columns and cells for each dataset,
+`compare.R` must report matched/total columns and cells for each dataset,
 structural/metadata differences, and scope coverage. It exits nonzero on any
 mismatch, missing or unassessable target, or validation issue. If the study
 lead accepts numeric tolerance differences for a separate practical
@@ -367,18 +376,24 @@ finding. Cover user interface (installation, authoring, diagnostics, review,
 comparison), specification schema (clarity, expressiveness, repetition,
 traceability), engine (correctness, supported operations, determinism,
 performance), and documentation/tooling as supported by observed evidence.
+Use R installation steps, `yamaa_spec()`/`yamaa_project()` calls, package help,
+R data frames, and `yamaa_error` conditions as the evidence for the user
+interface assessment. Identify whether a finding belongs to the R package,
+the specification schema, or the shared engine reached through R.
 Distinguish study/source defects from product defects, missing capabilities,
 and usability suggestions. If an area has no finding, say so.
 
 Each finding must stand on its own for a GitHub maintainer:
 
-- Concise title, category, tested yamaa version and relevant public platform
-  details; identify a separately tested development revision if applicable.
+- Concise title, category, tested R package and R versions, and relevant
+  public platform details; identify a separately tested development revision
+  if applicable.
 - User task and observed problem, expected behavior, impact, priority, and a
   measurable acceptance criterion.
-- Minimal synthetic inputs/specification/code, reproduction commands, and
-  sanitized actual/expected output or diagnostic. Build synthetic values
-  independently; anonymizing rows from the study is not a public fixture.
+- Minimal synthetic inputs/specification/R code, `Rscript` reproduction
+  commands, and sanitized actual/expected output or diagnostic. Build
+  synthetic values independently; anonymizing rows from the study is not a
+  public fixture.
 - Suggested improvement and any workaround, clearly distinguished from a
   confirmed root cause. Include only performance measurements reproduced on
   the synthetic case and authorized aggregate metrics.
