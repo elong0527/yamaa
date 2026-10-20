@@ -6,6 +6,8 @@ keeps every comment of the source, and a second run changes nothing. The
 other tests pin each transform of the rename table on a small document.
 """
 
+import subprocess
+import sys
 import tempfile
 import unittest
 from collections import Counter
@@ -876,6 +878,32 @@ class SafetyTests(unittest.TestCase):
             )
             with self.assertRaises(table_module.TableError):
                 table_module.load(path)
+
+    def test_the_repository_yaml_directory_cannot_stand_in_for_pyyaml(self):
+        # Without site-packages there is no PyYAML, so `import yaml` from the
+        # repository root finds its yaml/ directory, as in an environment that
+        # was never synced. The converter names what it found instead of
+        # failing later on a missing loader.
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]); import tools.migrate",
+                str(ROOT),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "ImportError: tools.migrate needs PyYAML, but `import yaml` found "
+            f"{ROOT / 'yaml'}, which is not PyYAML",
+            result.stderr,
+        )
+        self.assertNotIn("AttributeError", result.stderr)
 
 
 if __name__ == "__main__":

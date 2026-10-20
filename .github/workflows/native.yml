@@ -72,6 +72,12 @@ jobs:
         run: |
           python -m pip install pyyaml==6.0.3
           python -m tools.ci.toolchain --install
+      # The front-end comparison test runs tools/migrate through
+      # `uv run --project python --no-sync`, so it needs the locked tooling
+      # environment and its PyYAML. Like the other tool-only jobs, the sync
+      # leaves out the extension.
+      - name: Install the converter's tooling environment
+        run: uv sync --project python --locked --group tooling --no-install-package yamaa
       # CI runs the development-profile workspace tests and Clippy on Linux, for
       # every pull request and on main's schedule; this lane runs the workspace
       # tests with the optimized release-test profile alone, on each platform.
