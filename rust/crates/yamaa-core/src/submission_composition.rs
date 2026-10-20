@@ -1833,33 +1833,35 @@ pub fn compose(
         status: guide_declaration.status.name(),
     }];
     let mut codelists = Vec::new();
-    for source in catalogue.sources() {
+    for (index, source) in catalogue.sources().iter().enumerate() {
         if !source.codelists.iter().any(|c| bound.contains(&c.id.name)) {
             continue;
         }
         let standard = source.standard.as_ref().map(|ct| {
-            let candidate = format!("CT_{}", ct.publishing_set.text);
-            if let Some(prior) = standards.iter().find(|s| {
-                s.kind == "CT"
-                    && s.publishing_set.as_ref() == Some(&ct.publishing_set.text)
-                    && s.name == ct.name.text
-                    && s.version == ct.version.text
-            }) {
-                return prior.id.clone();
+            // DEFINE-9: a terminology standard is identified by its publishing set.
+            let id = format!("CT_{}", ct.publishing_set.text);
+            match standards.iter().find(|s| s.id == id) {
+                // Sources citing one standard share its definition.
+                Some(prior)
+                    if prior.kind == "CT"
+                        && prior.name == ct.name.text
+                        && prior.version == ct.version.text => {}
+                // DEFINE-10: another standard under the same identifier is
+                // refused, never numbered.
+                Some(_) => findings.push(Finding::cause(
+                    ConditionCode::SubmissionDuplicateIdentifier,
+                    &format!("codelists[{index}].standard.publishing_set"),
+                    &format!("STD.{id}"),
+                )),
+                None => standards.push(Standard {
+                    id: id.clone(),
+                    name: ct.name.text.clone(),
+                    kind: "CT",
+                    publishing_set: Some(ct.publishing_set.text.clone()),
+                    version: ct.version.text.clone(),
+                    status: "Final",
+                }),
             }
-            let id = if standards.iter().any(|s| s.id == candidate) {
-                format!("{candidate}_{}", standards.len())
-            } else {
-                candidate
-            };
-            standards.push(Standard {
-                id: id.clone(),
-                name: ct.name.text.clone(),
-                kind: "CT",
-                publishing_set: Some(ct.publishing_set.text.clone()),
-                version: ct.version.text.clone(),
-                status: "Final",
-            });
             id
         });
         for list in &source.codelists {
