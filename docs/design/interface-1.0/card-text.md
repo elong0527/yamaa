@@ -1243,6 +1243,9 @@ these as written.
 that writes each, starting with the P1-5 cards; SCHEMA-1 waits for P1-1's file
 names, and CSV-10 for #3157.
 
+D78 sent these cards to a second page, which drafts them:
+[Card text beyond D78](card-text-2.md).
+
 Two more changes D71 described without drafting them, and approved in that
 form: CT-1's statement gains the case without a project file (P1-11), and
 LOOKUP-2's "the applicable keys" becomes "the input's declared key" (P1-6).
