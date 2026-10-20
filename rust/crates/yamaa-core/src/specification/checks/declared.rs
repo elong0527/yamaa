@@ -3,10 +3,11 @@
 //! [`DeclaredTypes`]. `run()` reports the same findings from binding, in
 //! binding's order, and this pass reports them in that order too: the root
 //! filter, the intermediates in the order they are derived, then each column
-//! (or each row template's derivations and the column phase), column order,
-//! and the lookup ranges each row reads. Each row-phase derivation's phase
-//! boundaries follow its own defects ([`super::boundaries`]). Group scope and
-//! driver scope inside row templates are not among them yet.
+//! (or the column phase and each row template's filter and derivations),
+//! column order, the lookup ranges each row reads, and the scopes of the
+//! lookups and aggregate keys the rows read ([`super::scopes`]). Under row
+//! templates each derivation is checked node by node in binding's order,
+//! with what binding decides of each read ([`super::boundaries`]).
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -31,6 +32,25 @@ struct Scope<'a> {
     row: Option<&'a str>,
     /// The grouping phase under row templates; without them there is none.
     phase: Option<Phase<'a>>,
+    /// The columns a row-phase derivation may read: those its template
+    /// derives in the row phase. `None` reads any.
+    available: Option<&'a [usize]>,
+}
+
+/// Which derivations and filters bound, as binding admits the reads of the
+/// rows once they are bound ([`super::scopes`]).
+enum Bound {
+    /// Without row templates, whether each column's derivation bound.
+    Implicit(Vec<bool>),
+    Templates(TemplatesBound),
+}
+
+/// Under row templates: whether each column-phase derivation bound, and for
+/// each row template the derivations that bound, in the order they
+/// complete, and whether its filter bound.
+struct TemplatesBound {
+    columns: Vec<bool>,
+    templates: Vec<(Vec<ExprId>, bool)>,
 }
 
 struct Checks<'a> {
@@ -79,12 +99,15 @@ pub(in crate::specification) fn findings(
     if let Some(filter) = checks.spec.rows.filter {
         checks.grammar(filter, &mut findings)?;
     }
-    checks.intermediates(&mut findings)?;
-    match &prepared.rows {
-        rows::Rows::Implicit(_) => checks.base(&mut findings)?,
-        rows::Rows::Templates(rows) => checks.rows(rows, &mut findings)?,
-    }
+    let refused = checks.intermediates(&mut findings)?;
+    let bound = match &prepared.rows {
+        rows::Rows::Implicit(_) => Bound::Implicit(checks.base(&mut findings)?),
+        rows::Rows::Templates(rows) => {
+            Bound::Templates(checks.rows(rows, &refused, &mut findings)?)
+        }
+    };
     checks.ranges(&mut findings)?;
+    checks.scopes(&bound, &refused, &mut findings);
     Ok(findings)
 }
 
@@ -203,7 +226,7 @@ fn reduces_output(spec: &Spec, aggregate: &ast::Aggregate) -> bool {
 
 /// Whether an aggregate reduces a declared relation: a derive binding or a
 /// qualified name of its expression names one.
-fn qualified(spec: &Spec, aggregate: &ast::Aggregate) -> bool {
+pub(super) fn qualified(spec: &Spec, aggregate: &ast::Aggregate) -> bool {
     matches!(&spec.expr(aggregate.expr).kind, ExprKind::Formula(ast::Formula {
         compiled: Ok(compiled),
         ..
@@ -346,7 +369,9 @@ impl Checks<'_> {
         let spec = self.spec;
         for e in positions(spec, root) {
             match &spec.expr(e).kind {
-                ExprKind::Source(_) => self.source(e, scope, findings)?,
+                ExprKind::Source(_) => {
+                    self.source(e, scope, findings)?;
+                }
                 ExprKind::FirstAvailable { sources, .. } => {
                     for &source in sources {
                         self.source(source, scope, findings)?;
@@ -372,39 +397,7 @@ impl Checks<'_> {
                     }
                 }
                 ExprKind::Aggregate(aggregate) => {
-                    let mut compiled = true;
-                    if let ExprKind::Formula(formula) = &spec.expr(aggregate.expr).kind {
-                        match &formula.compiled {
-                            Ok(_) => {}
-                            Err(CompileError::Invalid { failure, .. }) => {
-                                compiled = false;
-                                findings.push(BindFinding::Aggregate {
-                                    path: render(spec, formula.text.meta),
-                                    expression: formula.text.text.clone(),
-                                    error: failure.clone(),
-                                })
-                            }
-                            Err(_) => return Err(BindError::Internal),
-                        }
-                    }
-                    // Binding binds nothing more of a column or row aggregate
-                    // whose expression or header fails, and binds its derive
-                    // steps only when nothing else of it failed.
-                    let start = findings.len();
-                    if scope.is_some()
-                        && !(compiled && self.aggregate(e, aggregate, scope, findings)?)
-                    {
-                        continue;
-                    }
-                    if let Some(filter) = aggregate.filter {
-                        self.grammar(filter, findings)?;
-                    }
-                    if scope.is_some() && findings.len() != start {
-                        continue;
-                    }
-                    for binding in &aggregate.bindings {
-                        self.derivation(binding.derivation.expr, None, false, findings)?;
-                    }
+                    self.reduction(e, aggregate, scope, findings)?;
                 }
                 ExprKind::Odm(read) => {
                     if let Some(filter) = read.filter {
@@ -412,6 +405,166 @@ impl Checks<'_> {
                     }
                 }
                 _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// An aggregate's expression grammar and header, then its filter's
+    /// grammar and its derive bindings. Binding binds nothing more of a
+    /// column or row aggregate whose expression or header fails, and binds
+    /// its derive steps only when nothing else of it failed.
+    fn reduction(
+        &self,
+        e: ExprId,
+        aggregate: &ast::Aggregate,
+        scope: Option<Scope<'_>>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let spec = self.spec;
+        let mut compiled = true;
+        if let ExprKind::Formula(formula) = &spec.expr(aggregate.expr).kind {
+            match &formula.compiled {
+                Ok(_) => {}
+                Err(CompileError::Invalid { failure, .. }) => {
+                    compiled = false;
+                    findings.push(BindFinding::Aggregate {
+                        path: render(spec, formula.text.meta),
+                        expression: formula.text.text.clone(),
+                        error: failure.clone(),
+                    })
+                }
+                Err(_) => return Err(BindError::Internal),
+            }
+        }
+        let start = findings.len();
+        if scope.is_some() && !(compiled && self.aggregate(e, aggregate, scope, findings)?) {
+            return Ok(());
+        }
+        if let Some(filter) = aggregate.filter {
+            self.grammar(filter, findings)?;
+        }
+        if scope.is_some() && findings.len() != start {
+            return Ok(());
+        }
+        for binding in &aggregate.bindings {
+            self.derivation(binding.derivation.expr, None, false, findings)?;
+        }
+        Ok(())
+    }
+
+    /// One derivation of a row template or the column phase, node by node
+    /// in binding's order (`BindContext::bind`): a structured source's
+    /// declaration and selection before its variable, a window's grouping
+    /// and defects before its reads, a mapping's source type once its source
+    /// binds, an aggregate's header alone, and each other read where binding
+    /// binds it ([`super::boundaries`]). The authored defects precede it.
+    fn walk(
+        &self,
+        reads: &super::boundaries::Reads<'_>,
+        scope: Scope<'_>,
+        e: ExprId,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let spec = self.spec;
+        // The names a compiled text reads outside any reduction, each once.
+        let names = |text: ExprId| match &spec.expr(text).kind {
+            ExprKind::Formula(formula) if formula.compiled.is_ok() => formula
+                .names
+                .iter()
+                .filter(|&&(role, _)| role == ast::Role::Operand)
+                .filter_map(|&(_, read)| Some((path(spec, read), name(spec, read)?)))
+                .collect(),
+            _ => Vec::new(),
+        };
+        // A source operand: a structured binding unless its declaration or
+        // selection stops binding before its variable, or a name.
+        let source = |e: ExprId, findings: &mut Vec<BindFinding>| -> Result<(), BindError> {
+            match &spec.expr(e).kind {
+                ExprKind::Source(_) => {
+                    if !self.source(e, Some(scope), findings)? {
+                        reads.source(e, findings);
+                    }
+                }
+                ExprKind::Ref(read) => reads.read(&path(spec, e), read.as_str(), findings),
+                _ => {}
+            }
+            Ok(())
+        };
+        match &spec.expr(e).kind {
+            ExprKind::Literal(_) | ExprKind::Unsupported(_) => {}
+            ExprKind::Ref(_) | ExprKind::Source(_) => source(e, findings)?,
+            ExprKind::Formula(formula) => {
+                if let Ok(compiled) = &formula.compiled {
+                    for (at, read) in names(e) {
+                        reads.formula(&at, compiled.expression(), read, findings);
+                    }
+                }
+            }
+            ExprKind::Case(arms) => {
+                for arm in arms {
+                    for (at, read) in arm.condition.map(names).unwrap_or_default() {
+                        reads.predicate(&at, read, findings);
+                    }
+                    self.walk(reads, scope, arm.result, findings)?;
+                }
+            }
+            ExprKind::Flag { condition, .. } => {
+                for (at, read) in names(*condition) {
+                    reads.flag(&at, read, findings);
+                }
+            }
+            ExprKind::FirstAvailable { sources, .. } => {
+                for &operand in sources {
+                    source(operand, findings)?;
+                }
+            }
+            ExprKind::Scalar {
+                op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
+                operands,
+                ..
+            } => {
+                for operand in operands {
+                    let start = findings.len();
+                    source(operand.expr, findings)?;
+                    if findings.len() == start {
+                        self.mapping_type(e, operand.expr, findings)?;
+                    }
+                }
+            }
+            // Each placeholder is read at the template's text.
+            ExprKind::Scalar {
+                op: ScalarOp::StrTemplate { .. },
+                operands,
+                ..
+            } => {
+                let at = format!("{}.template", path(spec, e));
+                for operand in operands {
+                    if let Some(read) = name(spec, operand.expr) {
+                        reads.read(&at, read, findings);
+                    }
+                }
+            }
+            ExprKind::Scalar { operands, .. } => {
+                for operand in operands {
+                    self.walk(reads, scope, operand.expr, findings)?;
+                }
+            }
+            ExprKind::Window(window) => self.window(e, window, Some(scope), findings)?,
+            ExprKind::Aggregate(aggregate) => {
+                self.reduction(e, aggregate, Some(scope), findings)?
+            }
+            ExprKind::Odm(read) => {
+                if let Some(filter) = read.filter {
+                    self.grammar(filter, findings)?;
+                }
+            }
+            ExprKind::Call { args, .. } => {
+                for &(_, value) in args {
+                    if let Some(read) = name(spec, value) {
+                        reads.argument(&path(spec, value), read, findings);
+                    }
+                }
             }
         }
         Ok(())
@@ -659,6 +812,26 @@ impl Checks<'_> {
             return Ok(false);
         }
         if row {
+            // A grouped row's aggregate reads, outside its reductions, only
+            // its template's group keys (FORMULA-22).
+            if let Phase::Row {
+                group_by: Some(groups),
+            } = phase
+            {
+                for identifier in compiled.ungrouped_identifiers() {
+                    if !groups.contains(&identifier) {
+                        finding(
+                            Finding::IdentifierNotGrouped {
+                                path: &at,
+                                expression,
+                                dataset: relation,
+                                identifier,
+                            },
+                            findings,
+                        )?;
+                    }
+                }
+            }
             return Ok(true);
         }
         for identifier in compiled.ungrouped_identifiers() {
@@ -752,15 +925,17 @@ impl Checks<'_> {
     /// and two absence policies; then a filter on one value (a group key, an
     /// output column, a row's value or a named intermediate's field), the
     /// filter's grammar and each name it reads outside its variable's input.
+    /// True when binding binds nothing more of it: a declaration defect, or
+    /// a filter on a group key.
     fn source(
         &self,
         e: ExprId,
         scope: Option<Scope<'_>>,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
+    ) -> Result<bool, BindError> {
         let spec = self.spec;
         let ExprKind::Source(source) = &spec.expr(e).kind else {
-            return Ok(());
+            return Ok(false);
         };
         let path = path(spec, e);
         let variable = name(spec, source.variable).unwrap_or_default();
@@ -811,17 +986,17 @@ impl Checks<'_> {
                     &render(spec, formula.text.meta),
                     &[("identifier", variable)],
                 )));
-                return Ok(());
+                return Ok(true);
             }
         }
         if !defects.is_empty() {
             findings.extend(defects.into_iter().map(|defect| {
                 BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(defect))
             }));
-            return Ok(());
+            return Ok(true);
         }
         let Some(filter) = source.filter else {
-            return Ok(());
+            return Ok(false);
         };
         let qualifier = variable.split_once('.').map(|(owner, _)| owner);
         match (
@@ -835,7 +1010,7 @@ impl Checks<'_> {
                 let start = findings.len();
                 self.grammar(filter, findings)?;
                 let ExprKind::Formula(formula) = &spec.expr(filter).kind else {
-                    return Ok(());
+                    return Ok(false);
                 };
                 let (Some(_), true, Ok(plan)) = (
                     scope,
@@ -847,7 +1022,7 @@ impl Checks<'_> {
                             .any(|input| input.name == dataset),
                     &formula.compiled,
                 ) else {
-                    return Ok(());
+                    return Ok(false);
                 };
                 let at = render(spec, formula.text.meta);
                 let mut seen = BTreeSet::new();
@@ -891,7 +1066,7 @@ impl Checks<'_> {
             }
             (None, _) => {}
         }
-        Ok(())
+        Ok(false)
     }
 
     /// The findings binding reports for a window that the declarations
@@ -968,7 +1143,9 @@ impl Checks<'_> {
         }
         // Binding's catalog holds one dataset, the rows' driver, so it refuses
         // a field of any other dataset whether or not that dataset stores it
-        // (NAME-3): the operands, then each filter name once, in sorted order.
+        // (NAME-3), and a row template's window reads only the columns the
+        // template derives in the row phase (COLUMN-4): the operands, then
+        // each filter name once, in sorted order.
         if let Some(scope) = scope {
             let filtered = window
                 .filter
@@ -986,10 +1163,29 @@ impl Checks<'_> {
                     names.into_iter().map(move |name| (name, path.clone()))
                 });
             for (name, path) in operands.into_iter().chain(filtered) {
-                if name.contains('.') && !driver(name, scope) {
-                    findings.push(BindFinding::UnknownReference {
+                if name.contains('.') {
+                    if !driver(name, scope) {
+                        findings.push(BindFinding::UnknownReference {
+                            path,
+                            name: name.into(),
+                        });
+                    }
+                } else if let (Some(row), Some(column)) = (
+                    scope.row.filter(|_| scope.available.is_some()),
+                    spec.columns
+                        .iter()
+                        .position(|column| column.name.name == name)
+                        .filter(|column| {
+                            scope
+                                .available
+                                .is_some_and(|available| !available.contains(column))
+                        }),
+                ) {
+                    findings.push(BindFinding::OutputReference {
                         path,
                         name: name.into(),
+                        row: Some(row.into()),
+                        finding: crate::reference_binding::Diagnostic::PhaseBoundary { column },
                     });
                 }
             }
@@ -1375,8 +1571,9 @@ impl Checks<'_> {
     /// Each intermediate in the order it is derived: its filter's grammar,
     /// each derivation's defects, selections and conversion (VALUE-24), its
     /// filter's operand types, its key types and its range's types, over the
-    /// declared types of its donor and of earlier intermediates.
-    fn intermediates(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    /// declared types of its donor and of earlier intermediates. Returns the
+    /// intermediates whose key types fail, which binding does not bind.
+    fn intermediates(&self, findings: &mut Vec<BindFinding>) -> Result<BTreeSet<usize>, BindError> {
         let spec = self.spec;
         let declared = &self.declared;
         // A stored field's declared type: every field of a delimited input is
@@ -1404,6 +1601,7 @@ impl Checks<'_> {
             None => declared.name(name),
         };
         let donors = self.donors(&stored, &current)?;
+        let mut refused = BTreeSet::new();
         for (position, donor) in donors.iter().enumerate() {
             let (index, item) = (donor.index, donor.item);
             let identifier = item.id.name.as_str();
@@ -1459,6 +1657,7 @@ impl Checks<'_> {
                     ),
                 };
                 if !expected.comparable(actual.into()) {
+                    refused.insert(index);
                     findings.push(BindFinding::Lookup(LookupFinding::key_type(
                         &format!("intermediates[{index}].key"),
                         identifier,
@@ -1508,7 +1707,7 @@ impl Checks<'_> {
                 }
             }
         }
-        Ok(())
+        Ok(refused)
     }
 
     /// The type faults of each intermediate's filter that written
@@ -1530,8 +1729,9 @@ impl Checks<'_> {
     /// reads other records, the derivation's defects and selections, its
     /// formula's qualified names (FORMULA-9), its static types and its
     /// conversion (VALUE-24); then column order over what every derivation
-    /// reads (COLUMN-5, COLUMN-6, COLUMN-7).
-    fn base(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    /// reads (COLUMN-5, COLUMN-6, COLUMN-7). Returns whether each column's
+    /// derivation binds: a conversion finding keeps it bound.
+    fn base(&self, findings: &mut Vec<BindFinding>) -> Result<Vec<bool>, BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
         let driver = [prepared.source().name.as_str()];
@@ -1539,7 +1739,9 @@ impl Checks<'_> {
             drivers: &driver,
             row: None,
             phase: None,
+            available: None,
         };
+        let mut bound = Vec::new();
         let mut dependencies = Vec::new();
         let mut paths = Vec::new();
         for (column, declared) in spec.columns.iter().enumerate() {
@@ -1555,6 +1757,7 @@ impl Checks<'_> {
             if !refused.is_empty() {
                 findings.extend(refused);
                 dependencies.push(Some(Vec::new()));
+                bound.push(false);
                 continue;
             }
             self.derivation(root, Some(scope), true, findings)?;
@@ -1574,6 +1777,7 @@ impl Checks<'_> {
             }
             dependencies.push(Some(self.edges(root, driver[0])));
             self.predicate_types(root, findings)?;
+            bound.push(findings.len() == start);
             if findings.len() == start && derivation.unconvertible.is_none() {
                 let result = self.result_type(root, ast::Scope::Row, &self.declared);
                 findings.extend(
@@ -1583,19 +1787,23 @@ impl Checks<'_> {
                 );
             }
         }
-        self.order(&dependencies, paths, false, findings)
+        self.order(&dependencies, paths, false, findings)?;
+        Ok(bound)
     }
 
-    /// With row templates: each column-phase derivation's defects and
-    /// selections, then each template's filter and row-phase derivations',
-    /// each scoped to the rows it evaluates on; then the static types and
-    /// conversions in binding's order, each template's derivations first;
-    /// then each template's cycles and the column phase's order.
+    /// With row templates: each column-phase derivation, then each
+    /// template's filter and row-phase derivations, each derivation's
+    /// defects and then its nodes in binding's order, scoped to the rows it
+    /// evaluates on ([`Self::walk`]); a template's filter reads after its
+    /// derivations. Then the static types and conversions in binding's
+    /// order, each template's derivations first; then each template's
+    /// cycles and the column phase's order. Returns what bound.
     fn rows(
         &self,
         rows: &rows::Templates,
+        refused: &BTreeSet<usize>,
         findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
+    ) -> Result<TemplatesBound, BindError> {
         let spec = self.spec;
         let primary = self.prepared.source().name.as_str();
         let phases = rows.phases();
@@ -1608,51 +1816,94 @@ impl Checks<'_> {
             .iter()
             .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
-        let root = |derivation: &rows::PhaseDerivation| Ok::<_, BindError>(derivation.expr);
+        let mut bound = TemplatesBound {
+            columns: Vec::new(),
+            templates: Vec::new(),
+        };
         for derivation in &columns {
-            let root = root(derivation)?;
+            let root = derivation.expr;
             let drivers = rows
                 .column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
                 .into_iter()
                 .map(|binding| binding.driver)
                 .collect::<Vec<_>>();
-            self.derivation(
-                root,
-                Some(Scope {
-                    drivers: &drivers,
-                    row: None,
-                    phase: Some(Phase::Column {
-                        groups: &column_groups,
-                    }),
+            let scope = Scope {
+                drivers: &drivers,
+                row: None,
+                phase: Some(Phase::Column {
+                    groups: &column_groups,
                 }),
-                false,
-                findings,
-            )?;
+                available: None,
+            };
+            let reads = super::boundaries::Reads::column(
+                spec,
+                self.prepared,
+                &drivers,
+                &column_groups,
+                refused,
+            );
+            let start = findings.len();
+            self.defects(root, findings)?;
+            self.walk(&reads, scope, root, findings)?;
+            // Every driver binds the column for its own rows, and a failure
+            // several bindings share is reported once.
+            if drivers.len() > 1 {
+                rows::distinct_findings(findings, start, self.prepared.source());
+            }
+            let read = reads.bound();
+            bound.columns.push(read && findings.len() == start);
         }
+        let mut graphs = Vec::new();
         for (index, template) in phases.iter().enumerate() {
-            if let Some(filter) = spec
-                .rows
-                .templates
-                .get(index)
-                .and_then(|declared| declared.filter)
-            {
-                self.grammar(filter, findings)?;
+            let declared = &spec.rows.templates[index];
+            let reads = super::boundaries::Reads::row(spec, self.prepared, template, refused);
+            let filter = declared
+                .filter
+                .map(|filter| (filter, format!("{}.filter", render(spec, declared.meta))));
+            if let Some((filter, at)) = &filter {
+                self.grammar(*filter, findings)?;
+                reads.grouped_filter(*filter, at, findings);
             }
             // The scope binding binds the template's derivations in.
-            let bound = template.scope();
+            let bound_scope = template.scope();
+            let scope = Scope {
+                drivers: std::slice::from_ref(&bound_scope.driver),
+                row: Some(template.id),
+                phase: Some(bound_scope.phase),
+                available: bound_scope.available,
+            };
+            let mut clean = Vec::new();
             for derivation in &template.derivations {
-                let root = root(derivation)?;
-                // A phase boundary stops binding before the selections.
-                self.defects(root, findings)?;
-                if !super::boundaries::derivation(spec, template, root, findings) {
-                    let scope = Scope {
-                        drivers: std::slice::from_ref(&bound.driver),
-                        row: Some(template.id),
-                        phase: Some(bound.phase),
-                    };
-                    self.selections(root, Some(scope), false, findings)?;
-                }
+                let start = findings.len();
+                self.defects(derivation.expr, findings)?;
+                self.walk(&reads, scope, derivation.expr, findings)?;
+                let read = reads.bound();
+                clean.push(read && findings.len() == start);
             }
+            // The derivations that bound, in the order they complete.
+            let (graph, paths) = self.template_graph(template);
+            let order = crate::dependency_analysis::analyze(&graph)
+                .map_err(|_| BindError::Internal)?
+                .order;
+            let completed = order
+                .into_iter()
+                .filter_map(|column| {
+                    template
+                        .derivations
+                        .iter()
+                        .zip(&clean)
+                        .find(|&(derivation, &clean)| derivation.column == column && clean)
+                        .map(|(derivation, _)| (derivation.column, derivation.expr))
+                })
+                .collect::<Vec<_>>();
+            let filtered = filter.as_ref().is_some_and(|(filter, at)| {
+                reads.filter(*filter, at, reads.stages(&completed).as_deref(), findings)
+            });
+            bound.templates.push((
+                completed.into_iter().map(|(_, root)| root).collect(),
+                filtered,
+            ));
+            graphs.push((graph, paths));
         }
         for derivation in phases
             .iter()
@@ -1660,7 +1911,7 @@ impl Checks<'_> {
             .chain(&columns)
         {
             let start = findings.len();
-            let root = root(derivation)?;
+            let root = derivation.expr;
             self.predicate_types(root, findings)?;
             if derivation.handled || findings.len() != start {
                 continue;
@@ -1681,19 +1932,7 @@ impl Checks<'_> {
         // Each template's row-phase derivations read its own row-phase
         // columns, which must not form a cycle; a cycle several templates
         // share is one finding.
-        let width = spec.columns.len();
-        for template in &phases {
-            let mut graph = vec![Vec::new(); width];
-            let mut paths = vec![String::new(); width];
-            for derivation in &template.derivations {
-                let root = root(derivation)?;
-                graph[derivation.column] = self
-                    .edges(root, template.driver)
-                    .into_iter()
-                    .filter(|&column| template.derivations.iter().any(|d| d.column == column))
-                    .collect();
-                paths[derivation.column] = path(spec, root);
-            }
+        for (graph, paths) in graphs {
             let analysis =
                 crate::dependency_analysis::analyze(&graph).map_err(|_| BindError::Internal)?;
             let Some(cycle) = analysis.cycle else {
@@ -1718,10 +1957,11 @@ impl Checks<'_> {
         // The column phase follows declaration order; a completed row-phase
         // column is already available. Every driver binds the column for its
         // own rows, and a read several bindings make is one edge.
+        let width = spec.columns.len();
         let mut dependencies = vec![None; width];
         let mut paths = vec![String::new(); width];
         for derivation in &columns {
-            let root = root(derivation)?;
+            let root = derivation.expr;
             let mut edges = Vec::new();
             for binding in
                 rows.column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
@@ -1735,7 +1975,173 @@ impl Checks<'_> {
             dependencies[derivation.column] = Some(edges);
             paths[derivation.column] = path(spec, root);
         }
-        self.order(&dependencies, paths, true, findings)
+        self.order(&dependencies, paths, true, findings)?;
+        Ok(bound)
+    }
+
+    /// A row template's graph of what its row-phase derivations read of its
+    /// own row-phase columns, with each derivation's path.
+    fn template_graph(&self, template: &rows::TemplatePhase<'_>) -> (Vec<Vec<usize>>, Vec<String>) {
+        let width = self.spec.columns.len();
+        let mut graph = vec![Vec::new(); width];
+        let mut paths = vec![String::new(); width];
+        for derivation in &template.derivations {
+            graph[derivation.column] = self
+                .edges(derivation.expr, template.driver)
+                .into_iter()
+                .filter(|&column| template.derivations.iter().any(|d| d.column == column))
+                .collect();
+            paths[derivation.column] = path(self.spec, derivation.expr);
+        }
+        (graph, paths)
+    }
+
+    /// The input whose records build the rows of a template over `driver`:
+    /// the input itself, or the input a driver intermediate reads.
+    fn driver_input<'s>(&'s self, driver: &'s str) -> Option<&'s str> {
+        let prepared = self.prepared;
+        if prepared.sources.iter().any(|source| source.name == driver) {
+            return Some(driver);
+        }
+        prepared
+            .intermediates
+            .input(driver)
+            .and_then(|index| prepared.sources.get(index))
+            .map(|source| source.name.as_str())
+    }
+
+    /// The scopes binding admits once the rows are bound
+    /// ([`super::scopes`]): each matched aggregate's key values for the rows
+    /// that evaluate it, then each lookup the rows read, over the reads that
+    /// bound. A dataset verification reads its lookups for every row.
+    fn scopes(&self, bound: &Bound, refused: &BTreeSet<usize>, findings: &mut Vec<BindFinding>) {
+        use super::scopes::{Reading, Scopes};
+        let spec = self.spec;
+        let prepared = self.prepared;
+        let scopes = Scopes {
+            spec,
+            prepared,
+            refused,
+        };
+        let verified = relation_predicates::verification_predicates(&prepared.verifications.checks)
+            .flat_map(crate::bound_expression::BoundPredicate::bindings)
+            .filter(|binding| {
+                matches!(
+                    binding.read,
+                    crate::bound_expression::Read::Intermediate { .. }
+                )
+            })
+            .map(|binding| binding.name.as_str())
+            .collect::<Vec<_>>();
+        match (bound, &prepared.rows) {
+            (Bound::Implicit(columns), _) => {
+                let base = prepared.source().name.as_str();
+                let derivations = spec
+                    .columns
+                    .iter()
+                    .zip(columns)
+                    .filter(|&(_, &bound)| bound)
+                    .filter_map(|(column, _)| column.derivation.as_ref())
+                    .map(|derivation| derivation.expr)
+                    .collect::<Vec<_>>();
+                let contexts = derivations
+                    .iter()
+                    .map(|&root| (root, vec![base]))
+                    .collect::<Vec<_>>();
+                scopes.record_keys(&contexts, findings);
+                let reading = Reading {
+                    row: None,
+                    input: base,
+                    groups: None,
+                    derivations,
+                    names: verified,
+                };
+                scopes.lookup_reads(&[reading], findings);
+            }
+            (Bound::Templates(bound), rows::Rows::Templates(rows)) => {
+                let primary = prepared.source().name.as_str();
+                let phases = rows.phases();
+                let inputs = phases
+                    .iter()
+                    .map(|template| self.driver_input(template.driver))
+                    .collect::<Vec<_>>();
+                // Each column-phase derivation evaluates for the rows of the
+                // templates that leave its column to this phase.
+                let completing = rows
+                    .column_phase()
+                    .iter()
+                    .map(|derivation| {
+                        let templates = rows
+                            .column_bindings(
+                                derivation.column,
+                                lookups::aggregates(spec, derivation.expr),
+                                primary,
+                            )
+                            .into_iter()
+                            .flat_map(|binding| binding.templates)
+                            .collect::<Vec<_>>();
+                        (derivation.expr, templates)
+                    })
+                    .zip(&bound.columns)
+                    .filter(|&(_, &bound)| bound)
+                    .map(|(completing, _)| completing)
+                    .collect::<Vec<_>>();
+                let contexts = completing
+                    .iter()
+                    .map(|(root, templates)| {
+                        let drivers = templates
+                            .iter()
+                            .filter_map(|&template| inputs[template])
+                            .collect::<Vec<_>>();
+                        (*root, drivers)
+                    })
+                    .collect::<Vec<_>>();
+                scopes.record_keys(&contexts, findings);
+                let readings = phases
+                    .iter()
+                    .enumerate()
+                    .map(|(index, template)| {
+                        let (own, filtered) = &bound.templates[index];
+                        let mut derivations = own.clone();
+                        derivations.extend(
+                            completing
+                                .iter()
+                                .filter(|(_, templates)| templates.contains(&index))
+                                .map(|&(root, _)| root),
+                        );
+                        // An ungrouped filter that bound reads its lookups.
+                        let mut names = spec.rows.templates[index]
+                            .filter
+                            .filter(|_| *filtered)
+                            .and_then(|filter| match &spec.expr(filter).kind {
+                                ExprKind::Formula(ast::Formula {
+                                    compiled: Ok(plan), ..
+                                }) => Some(plan),
+                                _ => None,
+                            })
+                            .into_iter()
+                            .flat_map(|plan| plan.identifiers())
+                            .filter(|name| {
+                                name.split_once('.').is_some_and(|(owner, _)| {
+                                    owner != template.driver
+                                        && prepared.intermediates.contains(owner)
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        names.extend(&verified);
+                        Reading {
+                            row: Some((template.id, template.driver)),
+                            input: inputs[index].unwrap_or(template.driver),
+                            groups: template.groups.as_deref(),
+                            derivations,
+                            names,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                scopes.lookup_reads(&readings, findings);
+            }
+            (Bound::Templates(_), rows::Rows::Implicit(_)) => {}
+        }
     }
 
     /// LOOKUP-9 from the declarations alone: a range value qualified by an
