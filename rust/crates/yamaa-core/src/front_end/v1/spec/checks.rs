@@ -2,7 +2,7 @@
 //! lowered tree before any input is read. Their findings belong to
 //! validation, as the schema's do, and name the 1.0 paths (P-CLR-2).
 
-use crate::ast::{Direction, ExprId, ExprKind, Spec, Window, WindowFunction};
+use crate::ast::{Direction, ExprId, ExprKind, ScalarOp, Spec, Window, WindowFunction};
 use crate::diagnostic::ConditionCode;
 use crate::schema::{SchemaContext as C, SchemaDiagnostic};
 
@@ -56,6 +56,25 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                     ],
                 });
             }
+        }
+        // A declared `month` requires a declared `day`: a source missing its
+        // month also misses its day, so the month alone completes no date
+        // (TIME-10).
+        if let ExprKind::Scalar {
+            op:
+                ScalarOp::Impute {
+                    month: Some(_),
+                    day: None,
+                    ..
+                },
+            ..
+        } = &expr.kind
+        {
+            findings.push(SchemaDiagnostic {
+                path: spec.cite(expr.meta),
+                code: ConditionCode::ImputeMonthWithoutDay,
+                context: vec![("field", C::Text("day".into()))],
+            });
         }
         let ExprKind::Call { function, args, .. } = &expr.kind else {
             continue;

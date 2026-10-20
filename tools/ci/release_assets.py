@@ -36,12 +36,21 @@ WHEEL_PLATFORMS = {
     "ubuntu-24.04-arm": ("Linux aarch64", "manylinux_2_28_aarch64"),
 }
 
+# The platform that each R binary lane builds for, the extension of the
+# package that R CMD INSTALL --build writes there, and the start of the R
+# platform that the package's Built field names.
+R_BINARY_PLATFORMS = {
+    "macos-15": ("macOS arm64", "tgz", "aarch64-apple-darwin"),
+    "windows-2025": ("Windows x64", "zip", "x86_64-w64-mingw32"),
+}
+
 
 @dataclass(frozen=True)
 class Asset:
     """One file that a release publishes, and the native artifact holding it."""
 
-    # What the selector checks inside the file: "wheel", "sdist" or "r-source".
+    # What the selector checks inside the file: "wheel", "sdist", "r-source"
+    # or "r-binary".
     kind: str
     title: str
     # The file name, with the placeholders above.
@@ -49,6 +58,9 @@ class Asset:
     artifact: str
     # The native job that uploads the artifact.
     producer: str
+    # For an R binary package, the start of the Built field of its
+    # DESCRIPTION: the R version and platform that it was built for.
+    built: str | None = None
 
     def pattern(self, identity):
         """Return the pattern of this asset's file name in release `identity`."""
@@ -102,6 +114,24 @@ def declared(coverage=None):
             f"native-r-dist ({source})",
         ),
     ]
+    # One R binary package per platform and R series. Its name is the one that
+    # R CMD INSTALL --build writes with the series added after a hyphen, so
+    # that both series' packages fit in one release: install.packages() takes
+    # the package name from what comes before the underscore.
+    for platform in coverage["r_binary"]["os"]:
+        label, extension, r_platform = R_BINARY_PLATFORMS[platform]
+        for version in coverage["r_binary"]["r"]:
+            series = native.r_series(version)
+            assets.append(
+                Asset(
+                    "r-binary",
+                    f"R binary package for {label}, R {series}",
+                    f"yamaa_<R version>-{series}.{extension}",
+                    f"native-r-binary-{platform}-{version}",
+                    f"native-r-binary ({platform}, R {version})",
+                    f"R {version}; {r_platform}",
+                )
+            )
     return assets
 
 

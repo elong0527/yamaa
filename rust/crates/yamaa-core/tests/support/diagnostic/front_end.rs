@@ -1,6 +1,6 @@
-//! The 1.0 front end's own causes (FUNC-6, WINDOW-5, LOOKUP-3), raised by its checks
-//! on a lowered 1.0 tree and pinned to their phase, condition, rule, path
-//! and context.
+//! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3), raised
+//! by its checks on a lowered 1.0 tree and pinned to their phase, condition,
+//! rule, path and context.
 use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
@@ -134,6 +134,24 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("direction", C::Text("asc".into())),
             ("date", C::Text("ADT".into())),
         ],
+    );
+    // A month rule completes no date without a day rule beside it.
+    let impute = spec(column(
+        "ADT",
+        "date",
+        "impute",
+        T::map(vec![
+            ("type", T::text("date")),
+            ("source", T::text("SRC.DTC")),
+            ("month", T::integer(6)),
+        ]),
+    ));
+    pinned(
+        &mut reached,
+        finding(&impute),
+        ("missing_required_field", "TIME-10"),
+        "columns.ADT.derivation.impute",
+        vec![("field", C::Text("day".into()))],
     );
     // An intermediate states its own key, unless it drives a row template,
     // which declares none (LOOKUP-3, ROW-2; D23, D63).

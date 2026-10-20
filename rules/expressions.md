@@ -359,8 +359,8 @@ occur in that sequence.
 
 `cut` assigns a numeric `source` to one of the intervals its ascending
 `breaks` bound and returns that interval's label. `labels` holds one label per
-interval, exactly one more than `breaks`. With `right: true` the intervals are
-right-closed and left-open; with `right: false`, the default, they are
+interval, exactly one more than `breaks`. With `closed: right` the intervals
+are right-closed and left-open; with `closed: left`, the default, they are
 left-closed and right-open. A missing source returns `missing`, or missing
 when it is omitted, counted under `missing`, and a non-numeric source fails.
 
@@ -371,4 +371,6 @@ The source may be a filtered source carrying the variable with its range,
 filter, selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare
 mathematical values exactly under [VALUE-19](values.md#value-19).
 Without `missing`, a missing source gives missing, the default substitution of
-[COLUMN-10](columns.md#column-10).
+[COLUMN-10](columns.md#column-10). A file that declares `schema_version` is
+read under the rules at the `yamaa-v0.5.0` tag, where `right: true` makes the
+intervals right-closed.

@@ -2,18 +2,19 @@
 
 The python/pyproject.toml license files are the package notices. A wheel holds
 them in its .dist-info/licenses directory, the Python source archive at its
-root and the R source archive in inst/, from which R installs them. Each copy
-must equal its host's copy in the checkout byte for byte: python/ for the
-Python packages and R/yamaa/inst/ for the R source archive. The two hosts'
-copies are the same, apart from LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv,
-which list each host's own crates and components:
-tools/packaging/generate_third_party_notices.py and
+root, the R source archive in inst/, from which R installs them, and an R
+binary package at the root of the installed package. Each copy must equal its
+host's copy in the checkout byte for byte: python/ for the Python packages and
+R/yamaa/inst/ for the R packages. The two hosts' copies are the same, apart
+from LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv, which list each host's own
+crates and components: tools/packaging/generate_third_party_notices.py and
 tools/packaging/generate_component_inventory.py write them. The Python source
 archive's COMPONENTS.tsv is the wheels' without its rust-std row, the Rust
 standard library that the wheels link (source_inventory in the latter).
 """
 
 import argparse
+import re
 import tarfile
 import tomllib
 import zipfile
@@ -33,11 +34,12 @@ def package_notices(root=ROOT):
 
 
 def notice_members(name, identity, notices):
-    """Map each notice to its member in a wheel, Python sdist or R source archive.
+    """Map each notice to its member in a wheel, Python sdist or R package.
 
     Also returns the checkout directory that holds the host's copies. The
-    Python packages carry the Python version and the R source archive the R
-    version, which differ for a release candidate.
+    Python packages carry the Python version and the R packages the R
+    version, which differ for a release candidate. An R binary package's name
+    adds the R series that it was built for, as in yamaa_1.0.0-4.6.zip.
     """
     python, r = identity.python, identity.r
     if name.startswith(f"yamaa-{python}-") and name.endswith(".whl"):
@@ -46,18 +48,24 @@ def notice_members(name, identity, notices):
         copies, directory = "python", f"yamaa-{python}"
     elif name == f"yamaa_{r}.tar.gz":
         copies, directory = "R/yamaa/inst", "yamaa/inst"
+    elif re.fullmatch(rf"yamaa_{re.escape(r)}-[0-9]+\.[0-9]+\.(zip|tgz)", name):
+        copies, directory = "R/yamaa/inst", "yamaa"
     else:
-        raise ValueError(f"{name}: not a yamaa {identity} wheel or source archive")
+        raise ValueError(
+            f"{name}: not a yamaa {identity} wheel, source archive or R binary package"
+        )
     return copies, {notice: f"{directory}/{notice}" for notice in notices}
 
 
 def read_members(path, wanted):
     """Read the wanted regular members of an archive; refuse duplicate names."""
-    if path.suffix == ".whl":
+    # A wheel and a Windows R binary package are ZIP archives; the source
+    # archives and a macOS R binary package are gzipped tar archives.
+    if path.suffix in {".whl", ".zip"}:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
             if len(names) != len(set(names)):
-                raise ValueError(f"{path.name}: duplicate wheel member")
+                raise ValueError(f"{path.name}: duplicate archive member")
             return {name: archive.read(name) for name in names if name in wanted}
     with tarfile.open(path, "r:gz") as archive:
         entries = archive.getmembers()

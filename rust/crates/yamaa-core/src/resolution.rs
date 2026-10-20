@@ -67,8 +67,17 @@ pub enum Error {
 /// Keep the declarations reachable from the semantic roots (LAYER-11), with
 /// the surviving columns in `order`, and each node's origin in `document`.
 pub fn prune(document: &Document, order: Order) -> Result<NormalizedDocument, Error> {
-    let lowered = lower_document(document, None);
-    let mut live = Live::new(lowered.spec());
+    prune_lowered(document, lower_document(document, None).spec(), order)
+}
+
+/// [`prune`] a document that `spec` lowers, written in either surface: the
+/// 1.0 front end lowers its own documents ([`crate::front_end::v1::spec`]).
+pub fn prune_lowered(
+    document: &Document,
+    spec: &Spec,
+    order: Order,
+) -> Result<NormalizedDocument, Error> {
+    let mut live = Live::new(spec);
     live.roots()?;
     live.reach()?;
     let columns = match order {
@@ -349,7 +358,8 @@ impl<'a> Live<'a> {
             }
         }
         for item in &spec.intermediates {
-            if !item.checks.is_empty() || (rename_only(item) && !item.dataset.name.is_empty()) {
+            if !item.checks.is_empty() || (rename_only(spec, item) && !item.dataset.name.is_empty())
+            {
                 self.intermediates.insert(item.id.name.clone());
             }
         }
@@ -583,12 +593,18 @@ impl<'a> Live<'a> {
 }
 
 /// Without a relation change or `require_match`, an intermediate whose
-/// absence answer is missing reads what the implicit join reads (LOOKUP-4).
-fn rename_only(item: &Intermediate) -> bool {
-    !matches!(
-        item.key,
-        Some(JoinKey::Columns { .. } | JoinKey::Pairs { .. })
-    ) && item.between.is_none()
+/// absence answer is missing reads what the implicit join reads (LOOKUP-4):
+/// in 0.5 one that writes no `key`, in 1.0 one whose `key` lists the columns
+/// of its input's declared key (D23, D71). A 1.0 one that writes no `key`
+/// stays a root too, for its `missing_required_field` (LOOKUP-3).
+fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
+    let joins_as_input = match &item.key {
+        Some(JoinKey::Columns { .. }) => spec.keys_as_input(item),
+        Some(JoinKey::Pairs { .. }) => false,
+        Some(JoinKey::FromInput | JoinKey::Applicable) | None => true,
+    };
+    joins_as_input
+        && item.between.is_none()
         && item.filter.is_none()
         && item.order_by.is_empty()
         && item.keep.is_none()

@@ -216,6 +216,7 @@ conditions! {
     ImputationDayNotPermitted => ("validation", "day_not_permitted", Some("TIME-10")),
     ImputationDayRange => ("validation", "value_not_permitted", Some("TIME-10")),
     ImputationDayRule => ("validation", "value_not_permitted", Some("TIME-10")),
+    ImputeMonthWithoutDay => ("validation", "missing_required_field", Some("TIME-10")),
     ImputeInvalid => ("impute", "invalid_date_text", Some("TIME-13")),
     ImputeIntervalText => ("impute", "interval_or_duration_text", Some("TIME-13")),
     ImputeCalendar => ("impute", "invalid_calendar_date", Some("TIME-10")),
