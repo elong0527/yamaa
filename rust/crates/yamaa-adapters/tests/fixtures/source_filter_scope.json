@@ -230,7 +230,21 @@
           }
         }
       ],
-      "check_issues": [],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "ungrouped_driver_field",
+          "rule": "ROW-5",
+          "spec_paths": [
+            "columns.VALUE.derivation.source"
+          ],
+          "context": {
+            "identifier": "SRC.V",
+            "dataset": "SRC",
+            "row": "grouped"
+          }
+        }
+      ],
       "source_reads": [
         "input.csv"
       ],

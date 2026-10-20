@@ -3259,7 +3259,9 @@ class KeyExpressions(unittest.TestCase):
                 root = Path(directory)
                 entry = root / "spec.yaml"
                 entry.write_text(case["specification"], encoding="ascii")
-                if case["check_issues"]:
+                # A refusal binding decides from the declarations is reported
+                # by the build only once it has captured the inputs.
+                if case["check_issues"] and not case.get("check_after_capture", False):
                     self.assertEqual(
                         issues(yamaa.spec(entry).check().issues), case["check_issues"]
                     )

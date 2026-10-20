@@ -575,7 +575,11 @@ fn validate_row_phases(
 /// Keep the first of the findings from `start` on that project to the same
 /// diagnostics: the bindings of one declaration for several drivers report a
 /// failure they share once.
-fn distinct_findings(findings: &mut Vec<BindFinding>, start: usize, source: &SourceDeclaration) {
+pub(super) fn distinct_findings(
+    findings: &mut Vec<BindFinding>,
+    start: usize,
+    source: &SourceDeclaration,
+) {
     let mut seen = Vec::new();
     let mut index = start;
     while index < findings.len() {
