@@ -32,8 +32,15 @@ rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 readtext <- function(path) readLines(path, warn = FALSE)
 observations <- function(run) yamaa:::.run_observations(run)
 here <- function(name) file.path(normalizePath(getwd(), winslash = "/"), name)
-# One issue row as a list of plain R values, for exact comparison.
-row_of <- function(frame, index = 1L) lapply(frame, function(column) column[[index]])
+# One issue row as a list of plain R values, for exact comparison. Each is an
+# error with a message and, until issue locations land (#3262), no location;
+# the cases author the other columns.
+row_of <- function(frame, index = 1L) {
+  stopifnot(identical(frame$severity[[index]], "error"), nzchar(frame$message[[index]]),
+    is.na(frame$file[[index]]), is.na(frame$line[[index]]), is.na(frame$column[[index]]))
+  authored <- setdiff(names(frame), c("severity", "file", "line", "column", "message"))
+  lapply(frame[authored], function(column) column[[index]])
+}
 issue <- function(condition, rule, spec_paths, context, phase = "validation")
   list(phase = phase, condition = condition, rule = rule, spec_paths = spec_paths,
     context = context, source_span = NULL, operand_route = NULL)

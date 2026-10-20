@@ -1,5 +1,8 @@
 use super::*;
-use crate::{diagnostic::ConditionCode as C, schema::SpecificationDocument};
+use crate::{
+    diagnostic::ConditionCode as C,
+    schema::{Document, DocumentNode as N, SpecificationDocument},
+};
 
 use crate::test_document::Tree;
 

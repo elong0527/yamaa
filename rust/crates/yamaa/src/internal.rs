@@ -338,13 +338,26 @@ pub(crate) fn run_check(
 }
 
 /// One compiled request: the prepared member, or a refused compilation that
-/// still owns its diagnostics and the sources it captured.
+/// still owns its diagnostics, the sources it captured and the dataset name
+/// it read.
 pub(crate) enum Compiled {
     Ready(Box<yamaa_adapters::file_preparation::FileSpecification>),
     Refused {
         issues: Vec<yamaa_core::diagnostic::Diagnostic>,
         sources: RetainedSources,
+        name: Option<String>,
     },
+}
+
+impl Compiled {
+    /// The specification's dataset name, its `domain`, once its document was
+    /// read: what a run's printed summary names.
+    pub(crate) fn name(&self) -> Option<&str> {
+        match self {
+            Self::Ready(prepared) => prepared.run().document().domain(),
+            Self::Refused { name, .. } => name.as_deref(),
+        }
+    }
 }
 
 /// The Preparation half of a build: capture metadata through the engine's
@@ -370,6 +383,12 @@ pub(crate) fn compile(
         Err(error) => Compiled::Refused {
             issues: yamaa_adapters::project_application::selection_failure(&error),
             sources: error.retained_sources(),
+            name: match &error {
+                yamaa_adapters::file_workflow::SelectionError::Compile(rejected) => {
+                    rejected.run().document.domain().map(str::to_owned)
+                }
+                yamaa_adapters::file_workflow::SelectionError::Preparation(_) => None,
+            },
         },
     }
 }
@@ -394,7 +413,9 @@ pub(crate) fn run(
     let measurements = Arc::clone(observer.measurements);
     let prepared = match compiled {
         Compiled::Ready(prepared) => prepared,
-        Compiled::Refused { issues, sources } => {
+        Compiled::Refused {
+            issues, sources, ..
+        } => {
             yamaa_core::domain_entry::finish(scope);
             return Build::new(
                 Err(issues.clone()),

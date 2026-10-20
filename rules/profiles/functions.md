@@ -57,7 +57,7 @@ files declare, fails, and static checking returns every independently
 inferable finding before activation.
 
 Fails: `function_file_invalid`, `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
+Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::an_unclassified_read_failure_refuses_the_preparation_opaquely`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
 
 A function file declares `yamaa`, `type`, its own `name`, and the definition
 of [FUNC-4](#func-4). The project's `functions` checks the header of each
@@ -77,10 +77,16 @@ type cannot read, or an integer outside the `int` range, fails with its
 
 Each listed function file is a local resource path under
 [File resolution](../reference/files.md), relative to the project file
-([PROJECT-4](project.md#project-4)), as is the lock
-([FUNC-3](#func-3)). Absolute local paths and parent segments have the same
-meaning as domain resource paths, and an absent file fails at that location
-without configuration discovery or fallback search.
+([PROJECT-4](project.md#project-4)), as are the lock
+([FUNC-3](#func-3)) and each codelist file. Absolute local paths and parent
+segments have the same meaning as domain resource paths, and an absent file
+fails at that location without configuration discovery or fallback search. A
+listed file or the lock that cannot be read fails as any file a run reads, at
+the field that names it, `functions[i]`, `codelists[i]` or
+`environments.<host>.lock`, with the path as written and one condition of
+[FILE-11](../reference/files.md#file-11): a listed function file that does not
+exist fails at `functions[i]` with `resource_path_missing`. A host failure that
+FILE-11 does not classify is an engine refusal, `engine_rejected`.
 
 In a project file that declares `schema_version`, the environment file a
 project links declares `schema_version`, and its `lock` and `functions` declare
@@ -103,7 +109,7 @@ verifies the installed version of yamaa and of every called function package
 against the captured lock.
 
 Fails: `runtime_artifact_mismatch`, `function_file_invalid`, `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_lock_that_is_no_packaging_lock_fails_as_the_function_files_do`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
 
 Parallel bindings and per-function language choices are invalid:
 `implementations` names one callable per host language. A lock is optional,
@@ -115,18 +121,21 @@ neither vendors, resolves, pins nor caches project code. Captured bytes
 establish the lock format independently of the filename.
 
 Static checking rejects a lock format incompatible with the host key that
-holds it, without importing project code or reading study data, and fails with
-`function_file_invalid` at `environments.<host>.lock`. Standard-library and
-base-package functions are exempt from the version check. This is a
-called-package check; a full environment audit belongs to uv or renv. In a
-project file that declares `schema_version`, the linked environment file
-declares the lock, the `environments` key that links that file states its
-language, and an incompatible lock format fails with
-`project_environment_invalid`.
+holds it, and captured bytes that are no packaging lock, without importing
+project code or reading study data, and fails with `function_file_invalid` at
+`environments.<host>.lock`. Standard-library and base-package functions are
+exempt from the version check. This is a called-package check; a full
+environment audit belongs to uv or renv. In a project file that declares
+`schema_version`, the linked environment file declares the lock, the
+`environments` key that links that file states its language, and an
+incompatible lock format fails with `project_environment_invalid`.
 
 A missing, invalid, ambiguous or mismatched installed called-package version
-fails with `runtime_artifact_mismatch`; its context identifies the package,
-the expected lock versions and the observed installed version.
+fails with `runtime_artifact_mismatch` at `environments.<host>.lock`; its
+context names the project file as the lock's source and identifies the
+package, the expected lock versions and the observed installed version. In a
+project file that declares `schema_version`, it is reported at the `lock` of
+the linked environment file.
 
 ## Definitions and calls
 
@@ -360,7 +369,15 @@ performs no lock verification or code execution. A failed activation vector or
 numeric comparison fails.
 
 Fails: `function_conformance_failed`.
-Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::owned_environment_repeats_selected_activation_before_cached_study_capture`, `rust/crates/yamaa-core/tests/project_execution.rs::lock_binding_case_and_original_interrupt_failures_never_enter_study_ports`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::real_activation_mismatches_keep_every_case_in_selected_order_without_retry`.
+Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::owned_environment_repeats_selected_activation_before_cached_study_capture`, `rust/crates/yamaa-core/tests/project_execution.rs::lock_binding_case_and_original_interrupt_failures_never_enter_study_ports`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::real_activation_mismatches_keep_every_case_in_selected_order_without_retry`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::activation_reports_a_function_file_s_findings_in_that_file_and_its_lock_in_the_project`.
+
+A failed case is reported in the function file that defines it, at its
+`tests[i]`, naming that file as `source`, the project file as `entry` and the
+listing, such as `functions[0]`, as `environment_path`; a callable that cannot
+be bound fails under [FUNC-2](#func-2) at the function file's
+`implementations.<host>`. In a project file that declares `schema_version`, a
+definition the environment file declares inline is reported at its
+`functions.<name>` in that file.
 
 <a id="func-13"></a>
 

@@ -38,19 +38,25 @@ write_text <- function(path, text) {
 }
 read_text <- function(path) rawToChar(readBin(path, "raw", n = file.info(path)$size))
 refused <- function(code) inherits(tryCatch({ force(code); NULL }, yamaa_error = identity), "yamaa_error")
-# Issue rows as the shared parity truth holds them: context as canonical JSON
-# text, spans as doubles and routes as character.
+# Issue rows as the shared parity truth holds them, all twelve columns:
+# context as canonical JSON text, lines, columns and spans as doubles and
+# routes as character.
 issue_rows <- function(frame) {
-  list(phase = frame$phase, condition = frame$condition, rule = frame$rule,
-    spec_paths = frame$spec_paths, context = frame$context, source_span = frame$source_span,
-    operand_route = frame$operand_route)
+  list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
+    rule = frame$rule, spec_paths = frame$spec_paths, file = frame$file, line = frame$line,
+    column = frame$column, message = frame$message, context = frame$context,
+    source_span = frame$source_span, operand_route = frame$operand_route)
 }
 issue_truth <- function(expected) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  list(phase = text("phase"), condition = text("condition"), rule = text("rule"),
+  number <- function(field) vapply(expected, function(issue)
+    if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
+  list(severity = text("severity"), phase = text("phase"), condition = text("condition"),
+    rule = text("rule"),
     spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-    context = enc2utf8(text("context")),
+    file = text("file"), line = number("line"), column = number("column"),
+    message = enc2utf8(text("message")), context = enc2utf8(text("context")),
     source_span = lapply(expected, function(issue)
       if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),
     operand_route = lapply(expected, function(issue)

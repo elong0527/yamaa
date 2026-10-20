@@ -134,6 +134,16 @@ columns:
 running project code. It does not open the input datasets, so some problems, such
 as a column name that no input has, appear only when you call `run()`.
 
+Each problem is one row of `issues`: its `severity`, `phase` and
+`condition`, the `rule` it breaks, the `spec_paths` it concerns, its `file`,
+`line` and `column` once the engine locates them, a `message` to read, and its
+facts in `context` as JSON text. A call that cannot complete, such as a
+`save()` of a failed run, raises `yamaa.Error` in Python or signals a
+`yamaa_error` condition in R. Its message names the call and the first issue,
+such as `cannot save ADAE: column ASTDY reads TRTSDT, which is declared after
+it [forward_reference, COLUMN-5] (and 2 more issues)`, and its `issues` hold
+every row.
+
 === "R"
 
     ```r

@@ -174,6 +174,20 @@ fn text(value: &str) -> Value {
     Value::String(value.into())
 }
 
+/// D39's error text for a save of `subject` that `failure` refused: the
+/// call, the first issue's printed line and the count of the others.
+fn save_refusal(subject: &str, failure: &yamaa::Failure) -> String {
+    let count = match failure.diagnostics.len() - 1 {
+        0 => String::new(),
+        1 => " (and 1 more issue)".to_owned(),
+        others => format!(" (and {others} more issues)"),
+    };
+    format!(
+        "cannot save {subject}: {}{count}",
+        failure.diagnostics[0].text()
+    )
+}
+
 #[test]
 fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let study = study();
@@ -181,10 +195,11 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let path = engine.project_spec(&study.project(), "ADSL").unwrap();
     assert_eq!(Path::new(&path), study.0.join("adam/adsl.yaml"));
     let unknown = engine.project_spec(&study.project(), "ADXX").unwrap_err();
-    assert!(
-        unknown.message.contains("available: ADSL, AE, DM"),
-        "{}",
-        unknown.message
+    // D39: the call, then the issue, which lists the names in its context.
+    assert_eq!(
+        unknown.message,
+        "cannot select ADXX: the project has no specification named ADXX \
+         [unknown_specification_name, PROJECT-6]"
     );
     let issues = rows(&unknown.issues);
     assert_eq!(issues.len(), 1);
@@ -382,7 +397,11 @@ fn a_save_that_would_write_nothing_fails() {
     let failure = send.save().unwrap_err();
     assert_eq!(
         failure.message,
-        "the project run built no specification, so nothing was saved"
+        format!(
+            "cannot save {}, section send: there is nothing to save \
+             [nothing_to_save, PROJECT-12]",
+            study.project()
+        )
     );
     assert_nothing_to_save(&failure.issues, "PROJECT-12");
     // No section names `define`: the submission composes nothing.
@@ -394,7 +413,10 @@ fn a_save_that_would_write_nothing_fails() {
     let failure = submission.save().unwrap_err();
     assert_eq!(
         failure.message,
-        "the submission composed no section, so nothing was saved"
+        format!(
+            "cannot save {}: there is nothing to save [nothing_to_save, PROJECT-13]",
+            study.project()
+        )
     );
     assert_nothing_to_save(&failure.issues, "PROJECT-13");
     assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
@@ -414,7 +436,10 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
         let failure = sdtm.member(name).err().unwrap();
         assert_eq!(
             failure.message,
-            format!("the project run has no specification named {name:?}; it has DM, AE")
+            format!(
+                "cannot select {name}: the project has no specification named {name} \
+                 [unknown_specification_name, PROJECT-6]"
+            )
         );
         let issues = rows(&failure.issues);
         assert_eq!(issues.len(), 1, "{issues:?}");
@@ -436,7 +461,8 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
     let failure = send.member("DM").err().unwrap();
     assert_eq!(
         failure.message,
-        "the project run has no specification named \"DM\"; it built none"
+        "cannot select DM: the project has no specification named DM \
+         [unknown_specification_name, PROJECT-6]"
     );
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
@@ -775,7 +801,8 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
         .spec_run(&study.path("sdtm/dm.yaml"), Some(&study.project()), &token)
         .unwrap();
     let failure = alone.save().unwrap_err();
-    assert_eq!(failure.message, "cannot save a failed run; see issues");
+    // D39: the run names its dataset, read before the run failed.
+    assert_eq!(failure.message, save_refusal("DM", &failure));
     assert_eq!(rows(&failure.issues).len(), 1);
     assert_eq!(failure.paths, [study.path("out/dm-report.csv")]);
     assert!(study.exists("out/dm-report.csv"));
@@ -794,7 +821,13 @@ fn every_target_is_validated_before_the_first_file_is_written() {
     let mut run = engine.project_run(&study.project(), None, &token).unwrap();
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
     let failure = run.save().unwrap_err();
-    assert!(failure.message.contains("ADSL"), "{}", failure.message);
+    // D39: the call names the project run; the issue names ADSL's
+    // specification as its entry.
+    assert_eq!(failure.message, save_refusal(&study.project(), &failure));
+    assert_eq!(
+        rows(&failure.issues)[0].context["entry"],
+        text(&study.path("adam/adsl.yaml"))
+    );
     assert!(failure.paths.is_empty());
     assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
     // Two run-scope specifications that write one file refuse the run.
@@ -838,7 +871,7 @@ fn a_file_that_cannot_be_staged_stops_the_save_before_any_target_is_replaced() {
         .unwrap();
     assert_eq!(run.status(), Status::Succeeded);
     let failure = run.save().unwrap_err();
-    assert!(failure.message.contains("ADSL"), "{}", failure.message);
+    assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");
@@ -1062,7 +1095,15 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
         .all(|row| row.condition == "missing_required_field"));
     assert!(issues.iter().any(|row| row.spec_paths == ["adam.standard"]));
     let failure = submission.save().unwrap_err();
-    assert!(failure.message.contains("adam"), "{}", failure.message);
+    // D39: the call names the submission; ADaM's issue says what it lacks.
+    assert_eq!(failure.message, save_refusal(&study.project(), &failure));
+    assert!(
+        failure
+            .message
+            .contains(": adam.standard lacks a field it requires [missing_required_field, "),
+        "{}",
+        failure.message
+    );
     assert_eq!(
         failure.paths,
         [study.path("dm.json"), study.path("define.xml")]
@@ -1103,7 +1144,7 @@ fn two_sections_that_write_one_file_save_neither() {
         rows(&submission.issues())
     );
     let failure = submission.save().unwrap_err();
-    assert!(failure.message.contains("adam"), "{}", failure.message);
+    assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
     assert!(!study.exists("define.xml"));
     assert!(!study.exists("dm.json"));
@@ -1146,7 +1187,7 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
     );
     std::fs::create_dir(study.0.join("adam-define.xml")).unwrap();
     let failure = submission.save().unwrap_err();
-    assert!(failure.message.contains("adam"), "{}", failure.message);
+    assert_eq!(failure.message, save_refusal(&study.project(), &failure));
     assert!(failure.paths.is_empty());
     let issues = rows(&failure.issues);
     assert_eq!(issues.len(), 1, "{issues:?}");

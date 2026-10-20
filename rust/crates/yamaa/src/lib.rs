@@ -56,6 +56,7 @@ pub mod plan;
 pub mod resolver;
 pub mod scalar;
 pub mod table;
+pub mod text;
 
 mod internal;
 mod outcome;
@@ -63,8 +64,8 @@ mod outcome;
 pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission};
 pub use cancel::CancellationToken;
 pub use diagnostic::{
-    ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan, ISSUE_COLUMNS,
-    PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
+    ContextValue, Diagnostic, DiagnosticContext, Location, Position, Report, Severity, SourceSpan,
+    ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
 };
 pub use engine::{
     AttemptFailure, Build, DefineArtifact, DefineBuild, DefineRequest, Engine, EngineOptions,
@@ -80,7 +81,7 @@ pub use functions::{
     Signature,
 };
 pub use info::{info, Host, Info};
-pub use lint::{lint, LINT_COLUMNS, LINT_FINDINGS};
+pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
 pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};
 pub use plan::{Plan, RunRequest};
@@ -94,6 +95,7 @@ pub use table::{
     Int64Array, LargeStringArray, ListArray, RecordBatch, SchemaRef, StringArray, StringViewArray,
     Table, TimeUnit, TimestampSecondArray,
 };
+pub use text::{Action, Summary};
 
 /// Version of the shared core compiled into a native installation.
 pub const VERSION: &str = yamaa_core::VERSION;

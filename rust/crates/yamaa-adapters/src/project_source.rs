@@ -1,13 +1,11 @@
 //! Captured YAML codec and compatibility results for engine project preparation.
 use crate::document::{self, Closures, Decoded};
-use crate::specification_source::{
-    CapturedDocument, CapturedFindings, CapturedSchema, Error, Source,
-};
+use crate::specification_source::{CapturedDocument, CapturedSchema, Error, Source};
 pub use application::{
     DecodeTarget, Kind, LockCapture, Origin, ProjectCapturePort, Reply, Request, SourceOrigins,
 };
 use std::sync::Arc;
-use yamaa_core::language::{self, FileType, LanguageVersion};
+use yamaa_core::language::{FileType, LanguageVersion};
 use yamaa_core::project_preparation as application;
 use yamaa_core::{
     ast, project_environment::Environment, project_function::Language, project_function_document,
@@ -17,13 +15,63 @@ pub type SourceFailure<E> = application::SourceFailure<E, CapturedDocument, Erro
 pub type DocumentCapture = application::DocumentCapture<CapturedDocument>;
 pub type RejectedEnvironment<E> = application::RejectedEnvironment<E, CapturedDocument, Error>;
 
-/// The two separately versioned roots one project preparation decodes: the
-/// project file with its codelist sources, and the environment file a project
-/// links with its function definitions.
+/// The schemas one project preparation decodes with: the two separately
+/// versioned 0.5 roots, the project file with its codelist sources and the
+/// environment file a project links with its function definitions, and, for
+/// an engine that reads 1.x files, the 1.0 closure of each file type with the
+/// newest version it reads.
 #[derive(Clone, Debug)]
 pub struct ProjectSchemas {
     pub project: Arc<CapturedSchema>,
     pub environment: Arc<CapturedSchema>,
+    /// The 1.0 closures and the newest 1.x version a preparation reads, or
+    /// none for one that reads no 1.x file. Public calls read none until the
+    /// engine reads 1.0 files (#3030 D76): `shipped_schema::capture_project`
+    /// holds the one setting the switch (P1-9) changes.
+    pub versioned: Option<(Closures, LanguageVersion)>,
+}
+impl ProjectSchemas {
+    /// These schemas, reading 1.x files up to `reads` against `closures`: a
+    /// 1.0 project, and each function file and codelist file it lists (D8,
+    /// P-TYPE-1).
+    pub fn reading(self, closures: Closures, reads: LanguageVersion) -> Self {
+        Self {
+            versioned: Some((closures, reads)),
+            ..self
+        }
+    }
+}
+
+/// Where one admitted definition is declared: the file that holds it and the
+/// field that declares it, and whether that file holds it alone, so a path in
+/// it starts at that file's root (FUNC-2, D8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FunctionOrigin<'a> {
+    /// The identity of the file that holds the definition: a 0.5 definition
+    /// file, the 0.5 environment file that declares it inline, or a 1.0
+    /// function file.
+    pub source: &'a str,
+    /// The field that declares it: `functions.<name>` in a 0.5 environment
+    /// file, or `functions[i]` in a 1.0 project file.
+    pub declaration: Declaration<'a>,
+    /// Whether `source` holds this definition alone.
+    pub external: bool,
+}
+/// The field that declares one definition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Declaration<'a> {
+    /// `functions.<name>` in a 0.5 environment file.
+    Keyed(&'a str),
+    /// `functions[i]` in a 1.0 project file.
+    Listed(usize),
+}
+impl std::fmt::Display for Declaration<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Keyed(name) => write!(formatter, "functions.{name}"),
+            Self::Listed(index) => write!(formatter, "functions[{index}]"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -98,6 +146,46 @@ impl CapturedEnvironment {
     }
     pub fn lock(&self) -> Option<&LockCapture> {
         self.lock.as_ref()
+    }
+    /// Where the admitted definition at `index`, in admission order, is
+    /// declared: a 1.0 definition by the function file the project lists at
+    /// `functions[i]`, and a 0.5 one by its definition file or, inline, by the
+    /// environment file at `functions.<name>`. `None` when the held origins
+    /// name no such definition.
+    pub fn function_origin(&self, index: usize) -> Option<FunctionOrigin<'_>> {
+        let name = self.origins.functions.get(index)?;
+        fn identity(capture: &DocumentCapture) -> &str {
+            capture.document.source().identity.as_str()
+        }
+        if self
+            .project
+            .as_ref()
+            .is_some_and(|project| matches!(project.header.surface, ast::Surface::V1 { .. }))
+        {
+            let listed = *self.origins.function_files.get(index)?;
+            let capture = self
+                .captures
+                .iter()
+                .find(|capture| capture.origin == Origin::FunctionFile(listed))?;
+            return Some(FunctionOrigin {
+                source: identity(capture),
+                declaration: Declaration::Listed(listed),
+                external: true,
+            });
+        }
+        let external = self
+            .captures
+            .iter()
+            .find(|capture| matches!(&capture.origin, Origin::Function(held) if held == name));
+        let source = match external {
+            Some(capture) => identity(capture),
+            None => self.environment_file.as_ref()?.source().identity.as_str(),
+        };
+        Some(FunctionOrigin {
+            source,
+            declaration: Declaration::Keyed(name),
+            external: external.is_some(),
+        })
     }
 }
 impl PreparedEnvironment {
@@ -214,75 +302,50 @@ pub enum Failure<E> {
     Rejected(Box<RejectedEnvironment<E>>),
 }
 
+/// The decoder of one project preparation, configured by its schemas. A 0.5
+/// project, and every file it links, is read against the 0.5 roots, which
+/// refuse a file that declares the 1.x header (#3030 D76). Schemas that read
+/// 1.x files ([`ProjectSchemas::versioned`]) admit a project file that
+/// declares the header against the 1.0 project closure, at the version it
+/// declares, and each function file and codelist file a 1.0 project lists
+/// against the closure of its type; a listed file must declare the header,
+/// and one whose version the engine does not read, or whose type is another,
+/// is refused at the project's field that lists it (SCHEMA-2).
 pub(crate) struct Decoder(pub(crate) ProjectSchemas);
 impl application::ProjectDecodePort for Decoder {
     type Error = Error;
     type Document = CapturedDocument;
     fn decode(&mut self, source: Source, target: DecodeTarget) -> Result<CapturedDocument, Error> {
-        match target {
-            DecodeTarget::Project => self.0.project.prepare_structural(source),
-            DecodeTarget::Environment => self.0.environment.prepare_structural(source),
-            DecodeTarget::Function => self
-                .0
-                .environment
-                .prepare_named_class(source, "function_definition_class"),
-            DecodeTarget::Codelist => self
-                .0
-                .project
-                .prepare_named_class(source, "codelist_source_class"),
-            // This decoder admits no 1.x root, so preparation never asks it
-            // for a file only a 1.0 project lists.
-            DecodeTarget::FunctionFile | DecodeTarget::CodelistFile => {
-                unreachable!("a 0.5 decoder admits no 1.0 project")
+        let schemas = &self.0;
+        let listed = match target {
+            DecodeTarget::Environment => return schemas.environment.prepare_structural(source),
+            DecodeTarget::Function => {
+                return schemas
+                    .environment
+                    .prepare_named_class(source, "function_definition_class")
             }
-        }
-    }
-    fn document(document: &CapturedDocument) -> &yamaa_core::schema::Document {
-        &document.normalized().document
-    }
-    fn source(document: &CapturedDocument) -> &Source {
-        document.source()
-    }
-}
-
-/// The decoder of a build that reads 1.x files, which public calls do not
-/// until the engine reads 1.0 files (#3030 D76, P1-9). A root that declares
-/// the 1.x header is admitted against the 1.0 closure of its type, at the
-/// version it declares, and so is each function file and codelist file a 1.0
-/// project lists, which must declare the header (SCHEMA-2). A 0.5 project
-/// reads as [`Decoder`] reads it.
-pub(crate) struct VersionedDecoder {
-    legacy: Decoder,
-    closures: Closures,
-    reads: LanguageVersion,
-}
-impl application::ProjectDecodePort for VersionedDecoder {
-    type Error = Error;
-    type Document = CapturedDocument;
-    fn decode(&mut self, source: Source, target: DecodeTarget) -> Result<CapturedDocument, Error> {
-        let expected = match target {
-            DecodeTarget::Project => FileType::Project,
-            DecodeTarget::FunctionFile => FileType::Function,
-            DecodeTarget::CodelistFile => FileType::Codelists,
-            DecodeTarget::Environment | DecodeTarget::Function | DecodeTarget::Codelist => {
-                return self.legacy.decode(source, target)
+            DecodeTarget::Codelist => {
+                return schemas
+                    .project
+                    .prepare_named_class(source, "codelist_source_class")
             }
+            DecodeTarget::Project => None,
+            DecodeTarget::FunctionFile => Some(FileType::Function),
+            DecodeTarget::CodelistFile => Some(FileType::Codelists),
         };
-        match document::decode(source, expected, Some(self.reads), &self.closures)? {
+        let Some((closures, reads)) = &schemas.versioned else {
+            // Schemas that read no 1.x file admit no 1.0 project, so
+            // preparation never asks them for a file only one lists.
+            assert!(listed.is_none(), "a 0.5 decoder admits no 1.0 project");
+            return schemas.project.prepare_structural(source);
+        };
+        if let Some(expected) = listed {
+            let document = document::decode_referenced(source, expected, *reads, closures)?;
+            return Ok(document.admit()?.into_captured());
+        }
+        match document::decode(source, FileType::Project, Some(*reads), closures)? {
             Decoded::Versioned(document) => Ok(document.admit()?.into_captured()),
-            Decoded::Legacy { source, .. } if target == DecodeTarget::Project => {
-                self.legacy.decode(source, target)
-            }
-            Decoded::Legacy { source, raw } => {
-                let fault = language::read_header(&raw.document, Some(self.reads), expected)
-                    .expect_err("a document without the 1.x header");
-                Err(Error::Findings(Box::new(CapturedFindings::new(
-                    Arc::clone(self.closures.get(expected)),
-                    source,
-                    Some(raw.document),
-                    vec![fault.finding()],
-                ))))
-            }
+            Decoded::Legacy { source, .. } => schemas.project.prepare_structural(source),
         }
     }
     fn document(document: &CapturedDocument) -> &yamaa_core::schema::Document {
@@ -293,7 +356,10 @@ impl application::ProjectDecodePort for VersionedDecoder {
     }
 }
 
-/// Decode through the captured schema codecs; the engine owns ordering and admission.
+/// Decode through the captured schema codecs; the engine owns ordering and
+/// admission. A 1.0 project is read only by schemas that read 1.x files
+/// ([`ProjectSchemas::reading`]); public calls read none until the engine
+/// reads 1.0 files (#3030 D76, P1-9).
 pub fn prepare<P: ProjectCapturePort>(
     schemas: ProjectSchemas,
     source: Source,
@@ -302,29 +368,6 @@ pub fn prepare<P: ProjectCapturePort>(
 ) -> Result<PreparedEnvironment, Failure<P::Error>> {
     adapt_preparation(application::prepare(
         &mut Decoder(schemas),
-        source,
-        host,
-        port,
-    ))
-}
-
-/// Prepare a project as an engine that reads 1.x files up to `reads` does: a
-/// 1.0 project, and each function file and codelist file it lists, is read
-/// against `closures` (D8, P-TYPE-1); a 0.5 project as [`prepare`] reads it.
-/// Only tests call this until the engine reads 1.0 files (#3030 D76, P1-9).
-pub fn prepare_versioned<P: ProjectCapturePort>(
-    schemas: ProjectSchemas,
-    (closures, reads): (Closures, LanguageVersion),
-    source: Source,
-    host: Language,
-    port: &mut P,
-) -> Result<PreparedEnvironment, Failure<P::Error>> {
-    adapt_preparation(application::prepare(
-        &mut VersionedDecoder {
-            legacy: Decoder(schemas),
-            closures,
-            reads,
-        },
         source,
         host,
         port,

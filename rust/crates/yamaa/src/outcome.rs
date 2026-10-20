@@ -7,7 +7,7 @@
 //!
 //! [`save`] is the one save every result shares (D38, D74, P-API-1): it plans
 //! every member's files, opens and stages all of them, and only then commits
-//! them in publication order.
+//! them in publication order. Its refusals name the result they save (D39).
 
 use std::ops::Range;
 
@@ -15,11 +15,11 @@ use yamaa_adapters::file_application::Admitted;
 use yamaa_adapters::project_scope::identify;
 use yamaa_adapters::publication::{self, Cause};
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::project_environment::Submission as Section;
 
 use crate::api::{Failure, Run, Status};
 use crate::diagnostic::Severity;
 use crate::engine::{Build, DefineBuild};
+use crate::text::Action;
 
 /// Whether any of `issues` fails a result: an error-severity issue does.
 pub(crate) fn fails(issues: &[Diagnostic]) -> bool {
@@ -49,7 +49,7 @@ pub(crate) struct Member {
 pub(crate) enum Work {
     Checked(Vec<Diagnostic>),
     Built(Box<Run>),
-    Composed(Section, Box<DefineBuild>),
+    Composed(Box<DefineBuild>),
 }
 
 impl Member {
@@ -59,7 +59,7 @@ impl Member {
         let mut issues = match &self.work {
             Work::Checked(issues) => issues.clone(),
             Work::Built(run) => run.build().issues(),
-            Work::Composed(_, define) => define.issues(),
+            Work::Composed(define) => define.issues(),
         };
         if let Some(identity) = &self.identity {
             identify(&mut issues, identity);
@@ -71,7 +71,7 @@ impl Member {
         match &self.work {
             Work::Checked(issues) => Status::of_all(issues, []),
             Work::Built(run) => run.status(),
-            Work::Composed(_, define) => Status::of_all(define.composed(), []),
+            Work::Composed(define) => Status::of_all(define.composed(), []),
         }
     }
 
@@ -106,29 +106,31 @@ impl Outcome {
         Status::of_all(&self.issues, self.members.iter().map(Member::status))
     }
 
-    /// Save every member as one save; see [`save`].
-    pub(crate) fn save(&mut self, operation: Operation) -> Result<Vec<String>, Failure> {
+    /// Save every member as one save, whose refusals name `subject`; see
+    /// [`save`].
+    pub(crate) fn save(
+        &mut self,
+        operation: Operation,
+        subject: &str,
+    ) -> Result<Vec<String>, Failure> {
         let parts = self
             .members
             .iter_mut()
             .filter_map(|member| match &mut member.work {
                 Work::Built(run) => Some(Part::Built {
-                    label: member.name.as_deref().or(member.identity.as_deref()),
                     identity: member.identity.as_deref(),
                     build: &mut run.build,
                 }),
-                Work::Composed(section, define) => Some(Part::Composed {
-                    label: yamaa_core::project_scope::key(*section),
-                    define,
-                }),
+                Work::Composed(define) => Some(Part::Composed { define }),
                 Work::Checked(_) => None,
             })
             .collect();
-        save(&self.issues, parts, operation)
+        save(&self.issues, parts, operation, subject)
     }
 }
 
-/// The operation a save belongs to, for what its refusals say.
+/// The operation a save belongs to, which says which rule a save with
+/// nothing to write breaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Operation {
     Run,
@@ -138,17 +140,13 @@ pub(crate) enum Operation {
 
 /// One member as a save sees it.
 pub(crate) enum Part<'a> {
-    /// A specification's build, named in a project run.
+    /// A specification's build, with its identity in a project run.
     Built {
-        label: Option<&'a str>,
         identity: Option<&'a str>,
         build: &'a mut Build,
     },
-    /// One submission section's composition, named by its section.
-    Composed {
-        label: &'a str,
-        define: &'a mut DefineBuild,
-    },
+    /// One submission section's composition.
+    Composed { define: &'a mut DefineBuild },
 }
 
 impl Part<'_> {
@@ -169,27 +167,10 @@ impl Part<'_> {
         }
     }
 
-    /// The refusal of a save stopped at this part, which wrote `paths`.
-    fn refusal(&self, operation: Operation, report_only: bool, paths: Vec<String>) -> Failure {
-        let message = match self {
-            Self::Built { .. } if operation == Operation::Run => if report_only {
-                "cannot save a failed run; see issues"
-            } else {
-                "nothing was saved; see issues"
-            }
-            .to_owned(),
-            Self::Built { label, .. } if report_only => format!(
-                "cannot save the report of {}; see issues",
-                label.unwrap_or_default()
-            ),
-            Self::Built { label, .. } => {
-                format!("cannot save {}; see issues", label.unwrap_or_default())
-            }
-            Self::Composed { label, .. } => {
-                format!("cannot save the {label} submission; see issues")
-            }
-        };
-        Failure::from_issues(message, &self.issues()).with_paths(paths)
+    /// The refusal of a save of `subject` stopped at this part, which wrote
+    /// `paths`: the part's issues say why.
+    fn refusal(&self, subject: &str, paths: Vec<String>) -> Failure {
+        Failure::from_issues(Action::Save(subject), &self.issues()).with_paths(paths)
     }
 }
 
@@ -220,28 +201,26 @@ struct Planned {
 /// carries those issues and the paths written before it (P-API-1). A save
 /// that wrote every planned file still refuses when a run failed, with every
 /// run's issues, or when a section stopped it, with that section's issues.
+/// Every refusal is D39's error text for saving `subject`, the result's
+/// subject, whichever member stopped it.
 pub(crate) fn save(
     refusal: &[Diagnostic],
     mut parts: Vec<Part<'_>>,
     operation: Operation,
+    subject: &str,
 ) -> Result<Vec<String>, Failure> {
-    let (refused, nothing, finding) = match operation {
-        Operation::Submission => (
-            "the submission was refused; see issues",
-            "the submission composed no section, so nothing was saved",
-            yamaa_core::project_scope::submission_nothing_to_save as fn() -> Diagnostic,
-        ),
-        _ => (
-            "the project run was refused; see issues",
-            "the project run built no specification, so nothing was saved",
-            yamaa_core::project_scope::run_nothing_to_save as fn() -> Diagnostic,
-        ),
-    };
+    let action = Action::Save(subject);
     if !refusal.is_empty() {
-        return Err(Failure::from_issues(refused, refusal));
+        return Err(Failure::from_issues(action, refusal));
     }
     if parts.is_empty() {
-        return Err(Failure::from_finding(nothing, finding()));
+        let finding = match operation {
+            Operation::Submission => yamaa_core::project_scope::submission_nothing_to_save(),
+            Operation::Run | Operation::ProjectRun => {
+                yamaa_core::project_scope::run_nothing_to_save()
+            }
+        };
+        return Err(Failure::from_finding(action, finding));
     }
     let failed = parts
         .iter()
@@ -299,7 +278,7 @@ pub(crate) fn save(
             build.refuse(issues);
             build.measure_save("refused");
         }
-        return Err(parts[position].refusal(operation, failed, Vec::new()));
+        return Err(parts[position].refusal(subject, Vec::new()));
     }
     // D74: cancellation (#3260) polls once here, after every file is staged
     // and before the first commit; a cancelled save aborts what it staged and
@@ -364,15 +343,11 @@ pub(crate) fn save(
         }
     }
     if let Some(part) = stopped.or(ended) {
-        return Err(parts[part].refusal(operation, failed, written));
+        return Err(parts[part].refusal(subject, written));
     }
     if failed {
-        let message = match operation {
-            Operation::Run => "cannot save a failed run; see issues",
-            _ => "a specification failed, so no primary artifact was saved; see issues",
-        };
         let issues = parts.iter().flat_map(Part::issues).collect::<Vec<_>>();
-        return Err(Failure::from_issues(message, &issues).with_paths(written));
+        return Err(Failure::from_issues(action, &issues).with_paths(written));
     }
     Ok(written)
 }

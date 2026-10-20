@@ -13,6 +13,7 @@ pub(crate) fn origins() -> LockOrigins<'static> {
     LockOrigins {
         source: "study/environment.yaml",
         entry: "study/project.yaml",
+        field: "lock",
         lock_source: "held/uv.lock",
         written: "../uv.lock",
     }
@@ -109,6 +110,38 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(
         lock_diagnostics(Some(origins()), &findings).unwrap(),
         diagnostics
+    );
+    // A 1.0 project file declares its host's lock itself, at
+    // `environments.<host>.lock` (FUNC-3, D8).
+    let versioned = LockOrigins {
+        source: "study/project.yaml",
+        field: "environments.python.lock",
+        written: "uv.lock",
+        ..origins()
+    };
+    let [mismatch] = lock_diagnostics(Some(versioned), &findings[6..])
+        .unwrap()
+        .try_into()
+        .unwrap();
+    assert_eq!(
+        (mismatch.condition(), mismatch.spec_paths.as_slice()),
+        (
+            "runtime_artifact_mismatch",
+            ["environments.python.lock".to_string()].as_slice()
+        )
+    );
+    assert_eq!(mismatch.context["source"], text("study/project.yaml"));
+    assert_eq!(mismatch.context["entry"], text("study/project.yaml"));
+    assert_eq!(mismatch.context["lock"], text("uv.lock"));
+    reached.insert(rendered(&mismatch));
+    // A lock declared at no field has no place to be reported.
+    let fieldless = LockOrigins {
+        field: "",
+        ..origins()
+    };
+    assert_eq!(
+        lock_diagnostics(Some(fieldless), &findings),
+        Err(E::InvalidContext)
     );
     assert_eq!(findings[2].expected[0].as_ptr(), first_expected);
     assert_eq!(

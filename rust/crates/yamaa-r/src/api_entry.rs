@@ -15,7 +15,9 @@ use std::{
     rc::{Rc, Weak},
     sync::Arc,
 };
-use yamaa::{CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage, Report};
+use yamaa::{
+    Action, CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage, Report,
+};
 
 /// Why a call could not return its value.
 enum Refusal {
@@ -36,20 +38,22 @@ impl From<&str> for Refusal {
 }
 
 fn refused(error: Refusal) -> List {
-    let failure = match error {
-        Refusal::Failure(failure) => failure,
-        Refusal::Message(message) => Failure::new(message, &Report::default()),
+    // A refusal of this boundary itself carries an empty issues table and
+    // wrote nothing.
+    let (message, issues, paths) = match error {
+        Refusal::Failure(failure) => (failure.message, failure.issues, failure.paths),
+        Refusal::Message(message) => (message, Report::default().table(), Vec::new()),
     };
-    let paths = Strings::from_values(&failure.paths);
-    match crate::public_table::frame(&failure.issues) {
+    let paths = Strings::from_values(&paths);
+    match crate::public_table::frame(&issues) {
         Ok(issues) => list!(
             value = NULL,
-            error = list!(message = failure.message, issues = issues, paths = paths)
+            error = list!(message = message, issues = issues, paths = paths)
         ),
         Err(conversion) => list!(
             value = NULL,
             error = list!(
-                message = format!("{}; {conversion}", failure.message),
+                message = format!("{message}; {conversion}"),
                 issues = NULL,
                 paths = paths
             )
@@ -65,8 +69,9 @@ fn reply(run: impl FnOnce() -> std::result::Result<Robj, Refusal>) -> List {
     }
 }
 
-fn from_error(context: &str, error: &Error) -> Refusal {
-    Refusal::Failure(Failure::from_error(context, error))
+/// The refusal of `action` for `error` (D39).
+fn from_error(action: Action<'_>, error: &Error) -> Refusal {
+    Refusal::Failure(Failure::from_error(action, error))
 }
 
 fn text(bytes: &Raw) -> std::result::Result<String, Refusal> {
@@ -222,13 +227,14 @@ fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {
 fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
         let project = optional_text(&project)?;
+        let specification = text(&specification)?;
         let check = engine(&version, None)?
             .spec_check(
-                &text(&specification)?,
+                &specification,
                 project.as_deref(),
                 &CancellationToken::new(),
             )
-            .map_err(|error| from_error("cannot check the specification", &error))?;
+            .map_err(|error| from_error(Action::Read(&specification), &error))?;
         Ok(crate::public_table::frame(&check.issues())?)
     })
 }
@@ -277,7 +283,7 @@ fn spec_run(
             }
             None => engine.spec_run(&specification, project.as_deref(), &token),
         }
-        .map_err(|error| from_error("cannot run the specification", &error))?;
+        .map_err(|error| from_error(Action::Read(&specification), &error))?;
         store(run)
     })
 }
@@ -309,8 +315,9 @@ fn read_odm(
         if let Some(member) = optional_text(&archive_member)? {
             options = options.with_archive_member(member);
         }
-        let items = yamaa::read_odm(std::path::Path::new(&text(&source)?), &options)
-            .map_err(|error| from_error("cannot read ODM", &error))?;
+        let source = text(&source)?;
+        let items = yamaa::read_odm(std::path::Path::new(&source), &options)
+            .map_err(|error| from_error(Action::Read(&source), &error))?;
         Ok(crate::public_table::frame(&items)?)
     })
 }
@@ -335,8 +342,8 @@ fn texts(value: &Robj) -> std::result::Result<Vec<String>, Refusal> {
 #[extendr]
 fn lint(paths: Robj, fix: bool) -> List {
     reply(|| {
-        let table = yamaa::lint(&texts(&paths)?, fix).map_err(Refusal::Failure)?;
-        Ok(crate::public_table::frame(&table)?)
+        let lint = yamaa::lint(&texts(&paths)?, fix).map_err(Refusal::Failure)?;
+        Ok(crate::public_table::frame(&lint.table())?)
     })
 }
 
@@ -413,9 +420,10 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
 #[extendr]
 fn project_check(project: Raw, version: Raw) -> List {
     reply(|| {
+        let project = text(&project)?;
         let check = engine(&version, None)?
-            .project_check(&text(&project)?, &CancellationToken::new())
-            .map_err(|error| from_error("cannot check the project", &error))?;
+            .project_check(&project, &CancellationToken::new())
+            .map_err(|error| from_error(Action::Read(&project), &error))?;
         Ok(crate::public_table::frame(&check.issues())?)
     })
 }
@@ -433,7 +441,13 @@ fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, pl
             }
             None => engine.project_run(&project, section.as_deref(), &token),
         }
-        .map_err(|error| from_error("cannot run the project", &error))?;
+        // Only an unknown section refuses the call with issues.
+        .map_err(|error| {
+            from_error(
+                Action::Select(section.as_deref().unwrap_or_default()),
+                &error,
+            )
+        })?;
         store_project_run(runs)
     })
 }
@@ -536,7 +550,13 @@ fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) 
                 yamaa::VERSION,
                 &CancellationToken::new(),
             )
-            .map_err(|error| from_error("cannot compose the submission", &error))?;
+            // Only an unknown section refuses the call with issues.
+            .map_err(|error| {
+                from_error(
+                    Action::Select(section.as_deref().unwrap_or_default()),
+                    &error,
+                )
+            })?;
         store_submission(submission)
     })
 }

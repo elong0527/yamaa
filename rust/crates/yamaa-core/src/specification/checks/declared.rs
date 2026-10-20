@@ -34,8 +34,6 @@ struct Scope<'a> {
 }
 
 struct Checks<'a> {
-    d: &'a Document,
-    lowered: &'a Lowered,
     spec: &'a Spec,
     prepared: &'a PreparedSpecification,
     declared: types::DeclaredTypes<'a>,
@@ -71,11 +69,8 @@ impl Donor<'_> {
 /// Every declaration finding of `prepared`, in binding's order.
 pub(in crate::specification) fn findings(
     prepared: &PreparedSpecification,
-    d: &Document,
 ) -> Result<Vec<BindFinding>, BindError> {
     let checks = Checks {
-        d,
-        lowered: prepared.tree.lowered(),
         spec: prepared.tree.spec(),
         prepared,
         declared: prepared.declared_types(),
@@ -98,11 +93,8 @@ pub(in crate::specification) fn findings(
 /// reports these instead of the missing inputs (`specification_run`).
 pub(in crate::specification) fn written_filter_types(
     prepared: &PreparedSpecification,
-    d: &Document,
 ) -> Result<Vec<Diagnostic>, BindError> {
     Checks {
-        d,
-        lowered: prepared.tree.lowered(),
         spec: prepared.tree.spec(),
         prepared,
         declared: prepared.declared_types(),
@@ -310,18 +302,8 @@ impl Checks<'_> {
                         ExprKind::Literal(ast::Literal::Float(_))
                     )
                 }) {
-                    let (keyword, payload) =
-                        operation(self.d, self.lowered, root).map_err(|_| BindError::Internal)?;
-                    let operation = temporal::prepare(
-                        self.d,
-                        payload,
-                        keyword,
-                        &path(spec, root),
-                        None,
-                        None,
-                        &mut Vec::new(),
-                    )
-                    .map_err(|_| BindError::Internal)?;
+                    let operation =
+                        temporal::from_tree(spec, root).map_err(|_| BindError::Internal)?;
                     for index in 0..operation.sources().len() {
                         if matches!(
                             operation.literal(index),
@@ -452,17 +434,7 @@ impl Checks<'_> {
         else {
             return Ok(());
         };
-        let (keyword, payload) =
-            operation(self.d, self.lowered, e).map_err(|_| BindError::Internal)?;
-        let declaration = mapping_cut::prepare(
-            self.d,
-            payload,
-            keyword,
-            &path(self.spec, e),
-            &self.prepared.intermediates,
-            &mut Vec::new(),
-        )
-        .map_err(|_| BindError::Internal)?;
+        let declaration = mapping_cut::from_tree(self.spec, e).map_err(|_| BindError::Internal)?;
         if !declaration.operation.accepts(kind) {
             findings.push(BindFinding::Scalar(
                 declaration.operation.input_diagnostic(type_name(kind)),
@@ -897,11 +869,12 @@ impl Checks<'_> {
             // field is one value already: there are no records to filter.
             // Without row templates a bare name that is no output column
             // fails as a reference first, unless the binding answers its
-            // absence.
+            // absence, which only the 0.5 surface does (D67).
             (None, Some(scope))
                 if qualifier.is_some()
                     || scope.phase.is_some()
-                    || source.absent.is_some()
+                    || (source.absent.is_some()
+                        && spec.header.surface.absent_answers_unknown_variable())
                     || spec
                         .columns
                         .iter()
@@ -1315,7 +1288,7 @@ impl Checks<'_> {
         let mut known = BTreeMap::<String, ResultType>::new();
         let mut inputs = BTreeMap::<&str, &str>::new();
         let mut donors = Vec::new();
-        for (identifier, _, _) in self.prepared.intermediates.audit_entries() {
+        for identifier in self.prepared.intermediates.names() {
             let Some((index, item)) = spec
                 .intermediates
                 .iter()
@@ -1635,11 +1608,7 @@ impl Checks<'_> {
             .iter()
             .map(|(driver, group)| (*driver, group.as_slice()))
             .collect::<Vec<_>>();
-        let root = |derivation: &rows::PhaseDerivation| {
-            self.lowered
-                .expression(derivation.value)
-                .ok_or(BindError::Internal)
-        };
+        let root = |derivation: &rows::PhaseDerivation| Ok::<_, BindError>(derivation.expr);
         for derivation in &columns {
             let root = root(derivation)?;
             let drivers = rows
@@ -1879,7 +1848,7 @@ impl Checks<'_> {
         else {
             return Ok(Vec::new());
         };
-        let root = |value: usize| self.lowered.expression(value).ok_or(BindError::Internal);
+        let root = |expr: ExprId| Ok::<_, BindError>(expr);
         let mut contexts = Vec::new();
         // A column derivation evaluates only for the rows of the templates that
         // leave the column to this phase (LOOKUP-9), and every driver binds it
@@ -1887,7 +1856,7 @@ impl Checks<'_> {
         // the whole dataset, where every input joins unless every row template
         // is driven by the input behind the first.
         for derivation in rows.column_phase() {
-            let root = root(derivation.value)?;
+            let root = root(derivation.expr)?;
             let leaving = phases.iter().zip(&drivers).filter(|(template, _)| {
                 !template
                     .derivations
@@ -1919,7 +1888,7 @@ impl Checks<'_> {
             let mut evaluated = Vec::new();
             for derivation in &template.derivations {
                 evaluated.push(Evaluated::Expression(
-                    root(derivation.value)?,
+                    root(derivation.expr)?,
                     Some(template.driver),
                 ));
             }

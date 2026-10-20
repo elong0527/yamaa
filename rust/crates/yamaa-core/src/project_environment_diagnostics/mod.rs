@@ -239,10 +239,33 @@ fn implementation_field(language: Language) -> &'static str {
     }
 }
 /// The field of a 1.0 project file that holds a host language's lock.
-fn lock_field(language: Language) -> &'static str {
+pub fn lock_field(language: Language) -> &'static str {
     match language {
         Language::Python => "environments.python.lock",
         Language::R => "environments.r.lock",
+    }
+}
+/// The lock a 1.0 project holds for `host`, written `written`, when its
+/// captured bytes are no packaging lock of either host language: it fails as
+/// the project's function files do, at the field that holds it (FUNC-3), with
+/// the context of the 0.5 record it replaces and the project file, which holds
+/// that field, as `source`.
+pub fn invalid_packaging_lock(host: Language, project: &str, written: &str) -> Diagnostic {
+    let field = lock_field(host);
+    let text = |value: &str| JsonValue::String(value.into());
+    Diagnostic {
+        code: C::FunctionFileInvalid,
+        spec_paths: vec![field.into()],
+        context: [
+            ("source".into(), text(project)),
+            ("entry".into(), text(project)),
+            ("path".into(), text(written)),
+            ("environment_path".into(), text(field)),
+            ("cause".into(), text("invalid_packaging_lock")),
+        ]
+        .into(),
+        source_span: None,
+        operand_route: None,
     }
 }
 fn function_diagnostic<'a, B: Project<'a>>(

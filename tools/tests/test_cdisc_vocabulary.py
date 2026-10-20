@@ -1,6 +1,7 @@
 """The CDISC vocabulary data file against the bundled Define-XML enumerations
-and the schema types that spell its vocabularies."""
+and the schema types and fields that spell its vocabularies."""
 
+import copy
 import shutil
 import tempfile
 import unittest
@@ -46,19 +47,45 @@ class CdiscVocabularyTests(unittest.TestCase):
         self.assertEqual(OWNER.check(ROOT), [])
         self.assertEqual(OWNER.check(self.root), [])
 
-    def test_every_vocabulary_names_its_schema_type_and_only_published_lists_an_enumeration(
+    def test_every_vocabulary_names_its_spelling_and_only_published_lists_an_enumeration(
         self,
     ):
         vocabularies = self.vocabulary()["vocabularies"]
         self.assertEqual(
-            {name: entry.get("enumeration") for name, entry in vocabularies.items()},
             {
-                "dataset_class": "ItemGroupClass",
-                "dataset_subclass": "ItemGroupSubClass",
-                "standard_name": "StandardName",
-                "origin_type": "OriginType",
-                "origin_source": "OriginSource",
-                "role": None,
+                name: (
+                    entry.get("type") or entry.get("field"),
+                    entry.get("enumeration"),
+                    entry.get("schemas"),
+                )
+                for name, entry in vocabularies.items()
+            },
+            {
+                "model": ("root_class.model", None, ["yaml/v1"]),
+                "dataset_class": ("dataset_class_name", "ItemGroupClass", None),
+                "dataset_subclass": (
+                    "dataset_subclass_name",
+                    "ItemGroupSubClass",
+                    None,
+                ),
+                "standard_name": ("standard_name", "StandardName", None),
+                # The 0.5 schema lists Draft and Final alone (P-STD-1).
+                "standard_status": (
+                    "implementation_guide_class.status",
+                    "StandardStatus",
+                    ["yaml/v1"],
+                ),
+                "publishing_set": (
+                    "terminology_standard_class.publishing_set",
+                    "StandardPublishingSet",
+                    None,
+                ),
+                "origin_type": ("origin_type", "OriginType", None),
+                "origin_source": ("origin_source", "OriginSource", None),
+                "role": ("column_role", None, None),
+                "core_designation": ("core_designation", None, None),
+                "submission_data_type": ("define_data_type", None, None),
+                "comparator": ("where_comparison_class.comparator", None, ["yaml/v1"]),
             },
         )
         self.assertEqual(
@@ -114,6 +141,145 @@ class CdiscVocabularyTests(unittest.TestCase):
                 "ERROR: yaml/vocabulary/cdisc.yaml.vocabularies.role.type: "
                 f"{directory} has no type submission_role"
                 for directory in OWNER.SCHEMA_SETS
+            ],
+        )
+
+    def test_a_registry_type_lists_no_values(self):
+        document = self.vocabulary()
+        document["vocabularies"]["core_designation"]["type"] = "column_verification"
+        self.write(document)
+        errors = OWNER.check(self.root)
+        self.assertEqual(len(errors), 2, errors)
+        self.assertTrue(
+            errors[0].startswith(
+                "ERROR: yaml/schema_verification.yaml: column_verification lists [], "
+            ),
+            errors,
+        )
+
+    def test_each_vocabulary_is_compared_with_each_schema_set_and_enumeration_it_names(
+        self,
+    ):
+        metadata = ["yaml/schema_metadata.yaml", "yaml/v1/schema_metadata.yaml"]
+        terminology = ["yaml/schema_project.yaml", "yaml/v1/schema_terminology.yaml"]
+        # The modules that spell each vocabulary, in schema-set order.
+        spelled = {
+            "model": ["yaml/v1/schema_spec.yaml"],
+            "dataset_class": metadata,
+            "dataset_subclass": metadata,
+            "standard_name": terminology,
+            "standard_status": ["yaml/v1/schema_project.yaml"],
+            "publishing_set": terminology,
+            "origin_type": metadata,
+            "origin_source": metadata,
+            "role": metadata,
+            "core_designation": metadata,
+            "submission_data_type": metadata,
+            "comparator": ["yaml/v1/schema_metadata.yaml"],
+        }
+        pristine = self.vocabulary()
+        self.assertEqual(list(spelled), list(pristine["vocabularies"]))
+        for name, modules in spelled.items():
+            with self.subTest(name):
+                document = copy.deepcopy(pristine)
+                vocabulary = document["vocabularies"][name]
+                vocabulary["values"].pop()
+                self.write(document)
+                expected = []
+                if "enumeration" in vocabulary:
+                    expected.append(
+                        f"ERROR: {OWNER.VOCABULARY}.vocabularies.{name}: values differ "
+                        f"from {vocabulary['enumeration']} in {OWNER.ENUMERATIONS}"
+                    )
+                spelling = vocabulary.get("type") or vocabulary["field"]
+                expected += [f"ERROR: {module}: {spelling} lists" for module in modules]
+                errors = OWNER.check(self.root)
+                self.assertEqual(len(errors), len(expected), errors)
+                for error, start in zip(errors, expected):
+                    self.assertTrue(error.startswith(start), (error, start))
+
+    def test_a_schema_field_that_drifts_from_the_file_is_reported_per_schema_set(self):
+        self.replace(
+            Path("yaml/v1/schema_project.yaml"),
+            "values: [Draft, Final, Provisional]}",
+            "values: [Draft, Final]}",
+        )
+        self.replace(Path("yaml/schema_project.yaml"), "    - DEFINE-XML\n", "")
+        self.assertEqual(
+            OWNER.check(self.root),
+            [
+                "ERROR: yaml/schema_project.yaml: "
+                "terminology_standard_class.publishing_set lists "
+                "['ADaM', 'CDASH', 'SDTM', 'SEND'], but "
+                "yaml/vocabulary/cdisc.yaml.vocabularies.publishing_set lists "
+                "['ADaM', 'CDASH', 'DEFINE-XML', 'SDTM', 'SEND']",
+                "ERROR: yaml/v1/schema_project.yaml: "
+                "implementation_guide_class.status lists ['Draft', 'Final'], but "
+                "yaml/vocabulary/cdisc.yaml.vocabularies.standard_status lists "
+                "['Draft', 'Final', 'Provisional']",
+            ],
+        )
+
+    def test_schemas_limits_a_vocabulary_to_the_schema_sets_that_spell_it_so(self):
+        document = self.vocabulary()
+        for name in ("model", "standard_status", "comparator"):
+            del document["vocabularies"][name]["schemas"]
+        self.write(document)
+        # The 0.5 schema has no model or comparator, and no Provisional.
+        self.assertEqual(
+            OWNER.check(self.root),
+            [
+                "ERROR: yaml/vocabulary/cdisc.yaml.vocabularies.model.field: "
+                "yaml has no field root_class.model",
+                "ERROR: yaml/schema_project.yaml: implementation_guide_class.status "
+                "lists ['Draft', 'Final'], but "
+                "yaml/vocabulary/cdisc.yaml.vocabularies.standard_status lists "
+                "['Draft', 'Final', 'Provisional']",
+                "ERROR: yaml/vocabulary/cdisc.yaml.vocabularies.comparator.field: "
+                "yaml has no field where_comparison_class.comparator",
+            ],
+        )
+
+    def test_a_vocabulary_whose_field_no_schema_set_declares_is_reported(self):
+        document = self.vocabulary()
+        vocabularies = document["vocabularies"]
+        vocabularies["publishing_set"]["field"] = "terminology_standard_class.set"
+        vocabularies["standard_status"]["field"] = "guide_class.status"
+        self.write(document)
+        label = "ERROR: yaml/vocabulary/cdisc.yaml.vocabularies"
+        self.assertEqual(
+            OWNER.check(self.root),
+            [
+                f"{label}.publishing_set.field: "
+                "yaml has no field terminology_standard_class.set",
+                f"{label}.standard_status.field: "
+                "yaml/v1 has no field guide_class.status",
+                f"{label}.publishing_set.field: "
+                "yaml/v1 has no field terminology_standard_class.set",
+            ],
+        )
+
+    def test_a_vocabulary_names_one_spelling_and_distinct_known_schema_sets(self):
+        document = self.vocabulary()
+        vocabularies = document["vocabularies"]
+        del vocabularies["model"]["field"]
+        vocabularies["standard_status"]["schemas"] = ["yaml/v2"]
+        vocabularies["publishing_set"]["schemas"] = []
+        vocabularies["role"]["field"] = "submission_role_fields.role"
+        vocabularies["core_designation"]["schemas"] = ["yaml/v1", "yaml/v1"]
+        vocabularies["comparator"]["field"] = "comparator"
+        self.write(document)
+        label = "ERROR: yaml/vocabulary/cdisc.yaml.vocabularies"
+        sets = "expected distinct schema sets among ['yaml', 'yaml/v1']"
+        self.assertEqual(
+            OWNER.check(self.root),
+            [
+                f"{label}.model: expected exactly one of type and field",
+                f"{label}.standard_status.schemas: {sets}",
+                f"{label}.publishing_set.schemas: {sets}",
+                f"{label}.role: expected exactly one of type and field",
+                f"{label}.core_designation.schemas: {sets}",
+                f"{label}.comparator.field: expected a class field as class.field",
             ],
         )
 

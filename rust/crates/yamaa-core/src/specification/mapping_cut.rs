@@ -18,103 +18,71 @@ fn admission<T>(result: Result<T, AdmissionError>) -> Result<T, PrepareError> {
         }
     })
 }
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    op: &str,
-    path: &str,
-    named: &intermediates::Declarations,
-    extra: &mut Vec<UnsupportedFeature>,
-) -> Result<Declaration, PrepareError> {
-    let fields = if op == "mapping" {
-        ["source", "dict", "case_sensitive", "missing", "unmapped"].as_slice()
-    } else {
-        ["source", "breaks", "labels", "right", "missing"].as_slice()
+/// The mapping or cut at `e`: its source binding and the executor's
+/// operation. A dictionary file is refused before binding.
+pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Declaration, PrepareError> {
+    let ExprKind::Scalar {
+        op,
+        operands,
+        handlers,
+    } = &spec.expr(e).kind
+    else {
+        return Err(PrepareError::Internal);
     };
-    for &(key, _) in mapping(d, payload)? {
-        let name = text(d, key)?;
-        if !fields.contains(&name) {
-            reject(extra, name, format!("{path}.{name}"));
-        }
-    }
-    let source = source_expressions::Declaration::prepare(
-        d,
-        field(d, payload, "source")?,
-        &format!("{path}.source"),
-        extra,
-        named,
+    let path = checks::path(spec, e);
+    let source = source_expressions::Declaration::from_tree(
+        spec,
+        checks::operand(operands, ast::Slot::Source).ok_or(PrepareError::Internal)?,
     )?;
-    let missing = d
-        .field(payload, "missing")
-        .map(|id| literal(d, id, &format!("{path}.missing")))
-        .transpose()?;
-    let operation = if op == "mapping" {
-        let dictionary = field(d, payload, "dict")?;
-        if matches!(d.nodes()[dictionary], N::Text(_)) {
-            reject(extra, "mapping_dictionary_resource", format!("{path}.dict"));
-        }
-        let entries = if matches!(d.nodes()[dictionary], N::Mapping(_)) {
-            mapping(d, dictionary)?
-                .iter()
-                .map(|&(key, value)| {
-                    Ok((
-                        String::from(text(d, key)?),
-                        literal(d, value, &format!("{path}.dict.{}", text(d, key)?))?,
-                    ))
-                })
-                .collect::<Result<Vec<_>, PrepareError>>()?
-        } else {
-            vec![]
-        };
-        let case_sensitive = match d.field(payload, "case_sensitive").map(|id| &d.nodes()[id]) {
-            Some(N::Boolean(value)) => *value,
-            None => true,
-            _ => return Err(PrepareError::Internal),
-        };
-        let unmapped = d
-            .field(payload, "unmapped")
-            .map(|id| literal(d, id, &format!("{path}.unmapped")))
-            .transpose()?;
-        MappingCut::Mapping(admission(Mapping::new(
-            source.variable.clone(),
-            path.into(),
-            entries,
+    let missing = checks::handler(spec, handlers.missing.as_ref())?;
+    let operation = match op {
+        ast::ScalarOp::Mapping {
+            dict,
             case_sensitive,
-            missing,
-            unmapped,
-        ))?)
-    } else {
-        let breaks = sequence(d, field(d, payload, "breaks")?)?
-            .iter()
-            .map(|&id| match &d.nodes()[id] {
-                N::Float(value) => Ok(*value),
-                N::Integer(value) => value.parse::<f64>().map_err(|_| PrepareError::Internal),
-                _ => Err(PrepareError::Internal),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let labels = sequence(d, field(d, payload, "labels")?)?
-            .iter()
-            .map(|&id| text(d, id).map(String::from))
-            .collect::<Result<Vec<_>, _>>()?;
-        let right = match d.field(payload, "right").map(|id| &d.nodes()[id]) {
-            Some(N::Boolean(value)) => *value,
-            None => false,
-            _ => return Err(PrepareError::Internal),
-        };
-        let findings = Cut::declaration_findings(path, &breaks, &labels);
-        if !findings.is_empty() {
-            return Err(PrepareError::Invalid(
-                findings.into_iter().map(PreflightFinding::Scalar).collect(),
-            ));
+        } => {
+            let entries = match dict {
+                ast::Dictionary::Inline(entries) => entries
+                    .iter()
+                    .map(|(key, value)| {
+                        Ok((
+                            key.text.clone(),
+                            constant(&value.value, &checks::render(spec, value.meta))?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, PrepareError>>()?,
+                ast::Dictionary::File(_) => Vec::new(),
+            };
+            let unmapped = checks::handler(spec, handlers.unmapped.as_ref())?;
+            MappingCut::Mapping(admission(Mapping::new(
+                source.variable.clone(),
+                path,
+                entries,
+                *case_sensitive,
+                missing,
+                unmapped,
+            ))?)
         }
-        MappingCut::Cut(admission(Cut::new(
-            source.variable.clone(),
-            path.into(),
+        ast::ScalarOp::Cut {
             breaks,
             labels,
-            right,
-            missing,
-        ))?)
+            closed,
+        } => {
+            let findings = Cut::declaration_findings(&path, breaks, labels);
+            if !findings.is_empty() {
+                return Err(PrepareError::Invalid(
+                    findings.into_iter().map(PreflightFinding::Scalar).collect(),
+                ));
+            }
+            MappingCut::Cut(admission(Cut::new(
+                source.variable.clone(),
+                path,
+                breaks.clone(),
+                labels.clone(),
+                *closed == ast::Closed::Right,
+                missing,
+            ))?)
+        }
+        _ => return Err(PrepareError::Internal),
     };
     Ok(Declaration { source, operation })
 }

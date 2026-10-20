@@ -133,6 +133,44 @@ pub fn decode(
     }
 }
 
+/// Decode one file a referencing field names, expecting a file of type
+/// `expected`, by an engine whose newest language version is `reads`: a
+/// function file or codelist file a 1.0 project lists (SCHEMA-2). The file
+/// must declare the 1.x header. A missing or malformed header is a finding in
+/// the file, at its own field, as [`decode`] reports it; a version the engine
+/// does not read, or another type, is refused at the field instead
+/// ([`Error::Reference`]), which the reader of the field names with
+/// `yamaa_core::language::Reference::refuse`.
+pub fn decode_referenced(
+    source: Source,
+    expected: FileType,
+    reads: LanguageVersion,
+    closures: &Closures,
+) -> Result<VersionedDocument, Error> {
+    let raw = decode_yaml(&source.bytes).map_err(|error| Error::Decode {
+        identity: source.identity.clone(),
+        error,
+    })?;
+    match language::read_header(&raw.document, Some(reads), expected) {
+        Ok(header) => Ok(VersionedDocument {
+            schema: Arc::clone(closures.get(header.file_type)),
+            reads,
+            source,
+            raw,
+            header,
+        }),
+        Err(language::HeaderFault::Shape(finding)) => Err(findings(
+            closures.get(expected),
+            source,
+            raw.document,
+            vec![finding],
+        )),
+        Err(fault) => Err(Error::Reference(Box::new(
+            crate::specification_source::RefusedHeader::new(source, fault),
+        ))),
+    }
+}
+
 fn findings(
     schema: &Arc<CapturedSchema>,
     source: Source,

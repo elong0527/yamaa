@@ -1,10 +1,10 @@
 //! Closed row lowering with per-template defaults and shared group-scope validation.
 //!
-//! Preparation lowers each admitted column default once, keyed by its
-//! authored document node, and shares the immutable [`RowDeclaration`]
-//! across every row template that inherits it; authored row overrides keep
-//! their own lowered payloads. Sharing covers only the immutable prepared
-//! operation/literal/predicate payload: driver-specific admission still
+//! Preparation admits each column default once, keyed by its expression in
+//! the tree, and shares the immutable [`RowDeclaration`] across every row
+//! template that inherits it; authored row overrides keep their own
+//! declarations. Sharing covers only the immutable declaration: its handler,
+//! column, path and expression. Driver-specific admission still
 //! runs for each template, and binding still runs per template against its
 //! own driver, catalog, grouping phase and available outputs, so no bound
 //! assignment is ever cached by declaration identity alone.
@@ -15,52 +15,31 @@ use crate::{
     reference_scope::Phase,
 };
 
-#[derive(Debug)]
-enum RowOperation {
-    Shared(cases::Branch),
-    ProjectFunction { call: usize },
-    Output(String),
-    Source(String),
-}
+/// One derivation a row template or the column phase evaluates: the column
+/// it derives, its expression, the path of its operation and its answer for
+/// a value its column type cannot hold.
 #[derive(Debug)]
 struct RowDeclaration {
     handler: Option<crate::conversion::LiteralHandler>,
     column: usize,
     path: String,
-    /// The document node of the derivation's operation.
-    value: usize,
-    operation: RowOperation,
+    expr: ExprId,
 }
-impl RowDeclaration {
-    /// Whether a qualified aggregate occurs anywhere in this declaration.
-    fn aggregates(&self) -> bool {
-        fn nested(operation: &Operation) -> bool {
-            match operation {
-                Operation::Aggregate(_) => true,
-                Operation::Case(branches) => {
-                    branches.iter().any(|branch| nested(&branch.operation))
-                }
-                _ => false,
-            }
-        }
-        matches!(&self.operation, RowOperation::Shared(branch) if nested(&branch.operation))
-    }
-}
-/// One lowered declaration, shared immutably across templates by node.
-///
-/// The payload (operation, literal values, predicate arenas and compiled
-/// patterns, mapping/cut dictionaries) is authored once per document node;
-/// everything template-specific (driver/catalog bindings, grouping phase,
-/// available outputs, row diagnostics, conversion-handler occurrence
-/// ownership and per-run state) lives outside this declaration.
+/// One admitted derivation, shared immutably across templates by its
+/// expression: a column default every template that inherits it evaluates,
+/// or a template's own override. Everything template-specific (driver and
+/// catalog bindings, grouping phase, available outputs, row diagnostics and
+/// per-run state) lives outside it.
 type SharedDeclaration = std::sync::Arc<RowDeclaration>;
 #[derive(Debug)]
 struct Template {
     id: String,
+    /// The template's own path, `rows[i]` in 0.5.
+    path: String,
     driver: String,
     groups: Option<Vec<String>>,
     declarations: Vec<SharedDeclaration>,
-    filter: Option<(String, Result<CompiledExpression, CompileError>)>,
+    filter: Option<ExprId>,
 }
 fn deferred_odm_contexts(
     declarations: &[Template],
@@ -104,9 +83,11 @@ pub(super) enum Rows {
 #[derive(Debug)]
 pub(super) struct Implicit {
     /// Each column's derivation, in declaration order.
-    declarations: Vec<Declaration>,
+    declarations: Vec<RowDeclaration>,
     /// The root filter, which reads only the base driver (ROW-9).
-    filter: Option<std::boxed::Box<root_filter::RootFilter>>,
+    filter: Option<ExprId>,
+    /// Whether every row is one base record: a window derives a key.
+    records: bool,
 }
 /// The row templates, and the derivations the column phase completes.
 #[derive(Debug)]
@@ -175,28 +156,50 @@ impl Rows {
 }
 
 impl Implicit {
-    pub(super) fn new(
-        declarations: Vec<Declaration>,
-        filter: Option<root_filter::RootFilter>,
-    ) -> Self {
-        Self {
-            declarations,
-            filter: filter.map(std::boxed::Box::new),
+    /// The implicit template of `spec`: each column's derivation in
+    /// declaration order, admitted before any source is read, and the root
+    /// filter. A derivation binding does not support is collected in `extra`.
+    pub(super) fn prepare(
+        spec: &ast::Spec,
+        keys: &[usize],
+        admission: &derivations::Admission<'_>,
+        extra: &mut Vec<UnsupportedFeature>,
+    ) -> Result<Self, PrepareError> {
+        let mut declarations = Vec::new();
+        for (column, declared) in spec.columns.iter().enumerate() {
+            let derivation = declared.derivation.as_ref().ok_or(PrepareError::Internal)?;
+            let handler = literal_handler(spec, derivation)?;
+            match admission.admit(spec, derivation.expr, 0) {
+                Ok(()) => {}
+                Err(PrepareError::Unsupported(features)) => extra.extend(features),
+                Err(error) => return Err(error),
+            }
+            declarations.push(RowDeclaration {
+                handler,
+                column,
+                path: checks::path(spec, derivation.expr),
+                expr: derivation.expr,
+            });
         }
-    }
-    /// Each column's derivation, in declaration order.
-    pub(super) fn declarations(&self) -> &[Declaration] {
-        &self.declarations
+        // A window that derives a key gives each retained base record its own
+        // row: the key table is the records themselves, not their distinct
+        // key combinations.
+        let records = keys.iter().any(|&key| {
+            declarations.get(key).is_some_and(|declaration| {
+                matches!(spec.expr(declaration.expr).kind, ExprKind::Window(_))
+            })
+        });
+        Ok(Self {
+            declarations,
+            filter: spec.rows.filter,
+            records,
+        })
     }
     /// Whether every row is one base record: a window derives a key, so the
     /// key table is the records themselves, not their distinct key
     /// combinations.
-    pub(super) fn record_rows(&self, keys: &[usize]) -> bool {
-        keys.iter().any(|&key| {
-            self.declarations
-                .get(key)
-                .is_some_and(|declaration| matches!(declaration.operation, Operation::Window(_)))
-        })
+    pub(super) fn record_rows(&self) -> bool {
+        self.records
     }
     /// The scope the derivation of `column` binds in: the base driver's
     /// rows, in the column phase without grouping; a key reads one base
@@ -211,7 +214,7 @@ impl Implicit {
             template: binder::Template::Implicit(binder::Implicit {
                 keys,
                 key: keys.contains(&column),
-                records: self.record_rows(keys),
+                records: self.records,
             }),
             phase: Phase::Column { groups: &[] },
             driver: base,
@@ -244,7 +247,8 @@ impl Implicit {
                 dependencies.push(Some(Vec::new()));
                 continue;
             }
-            let reported = cases::padding_findings(&declaration.operation, &mut findings)?;
+            let spec = prepared.tree.spec();
+            let reported = cases::padding_findings(spec, declaration.expr, &mut findings)?;
             let mut edges = Vec::new();
             let start = findings.len();
             let expression = BindContext {
@@ -262,7 +266,7 @@ impl Implicit {
                 findings: &mut findings,
                 reported,
             }
-            .bind(&declaration.operation, &declaration.path, column)?;
+            .bind(declaration.expr, column)?;
             if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
                 let captured = types::CapturedTypes::new(
                     &prepared.intermediates,
@@ -273,7 +277,7 @@ impl Implicit {
                 let result =
                     prepared
                         .tree
-                        .result_type(declaration.value, ast::Scope::Row, &captured)?;
+                        .result_type(declaration.expr, ast::Scope::Row, &captured);
                 findings.extend(
                     prepared
                         .conversion_finding(column, result)
@@ -310,8 +314,9 @@ impl Implicit {
         }
         let filter = self
             .filter
-            .as_ref()
-            .map(|filter| filter.bind(base, source, &mut findings))
+            .map(|filter| {
+                root_filter::bind(prepared.tree.spec(), filter, base, source, &mut findings)
+            })
             .transpose()?
             .flatten();
         // Every row is built from the base driver, the primary port. A dataset
@@ -399,129 +404,60 @@ impl Implicit {
         ))
     }
 }
-fn unsupported(operation: &str, path: &str) -> PrepareError {
-    PrepareError::Unsupported(vec![UnsupportedFeature {
-        operation: operation.into(),
-        path: path.into(),
-    }])
-}
-fn closed_fields(
-    d: &Document,
-    id: usize,
-    allowed: &[&str],
-    path: &str,
-) -> Result<(), PrepareError> {
-    for &(name, _) in mapping(d, id)? {
-        let name = text(d, name)?;
-        if !allowed.contains(&name) {
-            return Err(unsupported(name, &format!("{path}.{name}")));
-        }
-    }
-    Ok(())
-}
-#[allow(clippy::too_many_arguments)]
+/// Admit one row-phase or column-phase derivation of `column`: a project
+/// call reads its admitted call, a lone variable needs nothing more, and
+/// any other derivation is admitted as every derivation is.
 fn declaration(
-    d: &Document,
-    id: usize,
+    spec: &ast::Spec,
+    derivation: &ast::Derivation,
     column: usize,
-    prefix: String,
-    _grouped: bool,
-    project: Option<&functions::Prepared>,
-    extraction: &str_extract::Prepared,
-    string_templates: &str_template::Prepared,
-    intermediates: &intermediates::Declarations,
+    admission: &derivations::Admission<'_>,
 ) -> Result<RowDeclaration, PrepareError> {
-    closed_fields(d, id, &["value", "unconvertible"], &prefix)?;
-    let handler = literal_handler(d, id, &prefix)?;
-    let value = field(d, id, "value")?;
-    let &[(op, payload)] = mapping(d, value)? else {
-        return Err(PrepareError::Internal);
-    };
-    let op = text(d, op)?;
-    let path = format!("{prefix}.{op}");
-    let operation = match op {
-        "function" if project.is_some() => {
-            let project = project.unwrap();
+    let handler = literal_handler(spec, derivation)?;
+    let expr = derivation.expr;
+    match &spec.expr(expr).kind {
+        ExprKind::Call { .. } => {
             // The tree types the call by the return its definition declares.
-            project
-                .returns
-                .get(&payload)
-                .ok_or(PrepareError::Internal)?;
-            RowOperation::ProjectFunction {
-                call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
-            }
+            let project = admission.project.ok_or_else(|| {
+                PrepareError::Unsupported(vec![UnsupportedFeature {
+                    operation: "function".into(),
+                    path: checks::path(spec, expr),
+                }])
+            })?;
+            project.call(expr).ok_or(PrepareError::Internal)?;
         }
-        "function" if project.is_none() => return Err(unsupported("function", &path)),
-        "source" if mapping(d, payload)?.len() == 1 => {
-            closed_fields(d, payload, &["variable"], &path)?;
-            let name = text(d, field(d, payload, "variable")?)?;
-            if name.contains('.') {
-                RowOperation::Source(name.into())
-            } else {
-                RowOperation::Output(name.into())
-            }
-        }
-        _ => RowOperation::Shared(derivations::prepare_value_with_driver(
-            d,
-            field(d, id, "value")?,
-            &prefix,
-            project,
-            intermediates,
-            true,
-            0,
-            extraction,
-            string_templates,
-            None,
-        )?),
-    };
+        ExprKind::Ref(_) => {}
+        _ => admission.admit(spec, expr, 0)?,
+    }
     Ok(RowDeclaration {
         handler,
         column,
-        path,
-        value,
-        operation,
+        path: checks::path(spec, expr),
+        expr,
     })
 }
-/// Lower an authored derivation node at most once per preparation.
-///
-/// The cache key is the authored document node itself: one node has one
-/// owning column and one authored path, so every caller that reaches the
-/// same node is asking for the same immutable declaration. Authored row
-/// overrides are distinct nodes and therefore retain distinct payloads.
-/// `declaration` ignores its grouped flag, so the shared lowering does not
-/// depend on any one template's grouping; grouping, driver admission and
-/// binding remain per-template work outside this cache.
-#[allow(clippy::too_many_arguments)]
+/// Admit a derivation at most once per preparation, keyed by its
+/// expression: one expression has one owning column and one path, so every
+/// template that reaches the same default shares one immutable declaration.
+/// Overrides are distinct expressions and keep their own declarations.
+/// Grouping, driver admission and binding remain per-template work.
 fn lower_shared(
-    cache: &mut BTreeMap<usize, SharedDeclaration>,
-    d: &Document,
-    id: usize,
+    cache: &mut BTreeMap<ExprId, SharedDeclaration>,
+    spec: &ast::Spec,
+    derivation: &ast::Derivation,
     column: usize,
-    prefix: String,
-    project: Option<&functions::Prepared>,
-    extraction: &str_extract::Prepared,
-    string_templates: &str_template::Prepared,
-    intermediates: &intermediates::Declarations,
+    admission: &derivations::Admission<'_>,
 ) -> Result<SharedDeclaration, PrepareError> {
-    if let Some(shared) = cache.get(&id) {
+    if let Some(shared) = cache.get(&derivation.expr) {
         return Ok(shared.clone());
     }
-    let shared = SharedDeclaration::new(declaration(
-        d,
-        id,
-        column,
-        prefix,
-        false,
-        project,
-        extraction,
-        string_templates,
-        intermediates,
-    )?);
-    cache.insert(id, shared.clone());
+    let shared = SharedDeclaration::new(declaration(spec, derivation, column, admission)?);
+    cache.insert(derivation.expr, shared.clone());
     Ok(shared)
 }
 /// Validate every row-phase use before projecting its authored context.
 fn validate_row_phases(
+    spec: &ast::Spec,
     templates: &[Template],
     project: Option<&functions::Prepared>,
     output: &TableSchema,
@@ -561,23 +497,27 @@ fn validate_row_phases(
 
     for template in templates {
         for declaration in &template.declarations {
-            match &declaration.operation {
-                RowOperation::Output(identifier) => register(
+            match &spec.expr(declaration.expr).kind {
+                ExprKind::Ref(identifier) => register(
                     Site {
                         template,
                         declaration,
-                        identifier,
+                        identifier: identifier.as_str(),
                         function: None,
                     },
                     output,
                     &mut sites,
                 ),
-                RowOperation::ProjectFunction { call, .. } => {
+                ExprKind::Call { .. } => {
+                    let project = project.ok_or(PrepareError::Internal)?;
                     let call = &project
-                        .ok_or(PrepareError::Internal)?
                         .calls
                         .calls()
-                        .get(*call)
+                        .get(
+                            project
+                                .call(declaration.expr)
+                                .ok_or(PrepareError::Internal)?,
+                        )
                         .ok_or(PrepareError::Internal)?
                         .located;
                     for argument in &call.call.arguments {
@@ -612,7 +552,6 @@ fn validate_row_phases(
                     path: format!("{}.args.{}", call.path, argument.name),
                     function: call.call.name.clone(),
                     argument: Some(argument.name.clone()),
-                    node: argument.node,
                     cause: functions::Cause::RowPhase {
                         identifier: site.identifier.into(),
                         row: site.template.id.clone(),
@@ -675,19 +614,16 @@ fn bind_assignment(
     declaration: &RowDeclaration,
 ) -> Result<Option<Assignment>, BindError> {
     let start = cx.findings.len();
-    let expression = match &declaration.operation {
-        RowOperation::ProjectFunction { call } => cx.call(*call)?,
-        RowOperation::Output(reference) | RowOperation::Source(reference) => {
-            cx.operand(reference, &declaration.path)?
-        }
-        RowOperation::Shared(branch) => {
-            cx.bind(&branch.operation, &branch.path, declaration.column)?
-        }
+    let spec = cx.spec();
+    let expression = match &spec.expr(declaration.expr).kind {
+        ExprKind::Call { .. } => cx.call(cx.tree.call(declaration.expr)?)?,
+        ExprKind::Ref(reference) => cx.operand(reference.as_str(), &declaration.path)?,
+        _ => cx.bind(declaration.expr, declaration.column)?,
     };
     if expression.is_some() && cx.findings.len() == start && declaration.handler.is_none() {
         let result = cx
             .tree
-            .result_type(declaration.value, ast::Scope::Row, &cx.captured())?;
+            .result_type(declaration.expr, ast::Scope::Row, &cx.captured());
         let column = &cx.output.columns()[declaration.column];
         if let Some(finding) =
             types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
@@ -894,7 +830,6 @@ fn bind_template_filter(
 fn bind_template(
     template: &Template,
     declared: &TemplatePhase<'_>,
-    index: usize,
     source: &TableSchema,
     name: &str,
     keys: &[usize],
@@ -906,7 +841,7 @@ fn bind_template(
     project: Option<&crate::project_calls::ProjectCalls>,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<RowTemplate>, BindError> {
-    let filter_path = format!("rows[{index}].filter");
+    let filter_path = format!("{}.filter", template.path);
     if named
         .reference(&format!("{}.driver", template.driver))
         .is_some_and(|(index, _)| intermediates.get(index).is_some_and(Option::is_none))
@@ -925,7 +860,7 @@ fn bind_template(
     if let Some(named_driver) = named_driver {
         named.driver_findings(
             &template.driver,
-            &format!("rows[{index}].dataset"),
+            &format!("{}.dataset", template.path),
             intermediates[named_driver]
                 .as_ref()
                 .ok_or(BindError::Internal)?,
@@ -951,7 +886,7 @@ fn bind_template(
                 .filter_map(|(position, name)| {
                     let resolved = resolve_reference(
                         name,
-                        &format!("rows[{index}].group_by[{position}]"),
+                        &format!("{}.group_by[{position}]", template.path),
                         row_source,
                         &template.driver,
                         findings,
@@ -962,7 +897,7 @@ fn bind_template(
                             .is_none_or(|item| item.admits_column(column));
                         if !visible {
                             findings.push(BindFinding::Lookup(LookupFinding::reference(
-                                &format!("rows[{index}].group_by[{position}]"),
+                                &format!("{}.group_by[{position}]", template.path),
                                 name,
                                 Some(&template.driver),
                                 ReferenceCause::Value,
@@ -975,23 +910,24 @@ fn bind_template(
                 .collect(),
         ),
     };
-    let predicate = match &template.filter {
-        Some((
-            text,
+    let spec = tree.spec();
+    let predicate = match template.filter.map(|filter| &spec.expr(filter).kind) {
+        Some(ExprKind::Formula(formula)) => match &formula.compiled {
             Err(CompileError::Invalid {
                 position, failure, ..
-            }),
-        )) => {
-            findings.push(BindFinding::Lookup(LookupFinding::grammar(
-                &filter_path,
-                text,
-                position.character,
-                failure,
-            )));
-            None
-        }
-        Some((_, Err(error))) => return Err(BindError::ExpressionPolicy(error.clone())),
-        Some((_, Ok(plan))) => Some(plan),
+            }) => {
+                findings.push(BindFinding::Lookup(LookupFinding::grammar(
+                    &filter_path,
+                    &formula.text.text,
+                    position.character,
+                    failure,
+                )));
+                None
+            }
+            Err(error) => return Err(BindError::ExpressionPolicy(error.clone())),
+            Ok(plan) => Some(plan),
+        },
+        Some(_) => return Err(BindError::Internal),
         None => None,
     };
     let grouped = template.groups.is_some();
@@ -1018,16 +954,12 @@ fn bind_template(
     let mut declaration_findings = Vec::new();
     let mut declarations_reported = false;
     for declaration in &template.declarations {
-        if let RowOperation::Shared(branch) = &declaration.operation {
-            declarations_reported |=
-                cases::padding_findings(&branch.operation, &mut declaration_findings)?;
-        }
+        declarations_reported |=
+            cases::padding_findings(spec, declaration.expr, &mut declaration_findings)?;
     }
     if declarations_reported {
         for declaration in &template.declarations {
-            if let RowOperation::Shared(branch) = &declaration.operation {
-                derivations::declaration_findings(&branch.operation, &branch.path, findings)?;
-            }
+            derivations::declaration_findings(spec, declaration.expr, findings)?;
         }
     }
     let scope = declared.scope();
@@ -1122,38 +1054,9 @@ fn bind_template(
     }))
 }
 
-type RowFilterDeclaration = Option<(String, Result<CompiledExpression, CompileError>)>;
-
-fn prepare_row_filters(
-    d: &Document,
-    raw_rows: &[usize],
-) -> Result<Vec<RowFilterDeclaration>, PrepareError> {
-    raw_rows
-        .iter()
-        .enumerate()
-        .map(|(index, &row)| {
-            d.field(row, "filter")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| {
-                    let expression = text(d, id)?;
-                    let path = format!("rows[{index}].filter");
-                    let compiled = compile(expression, ExpressionContext::Predicate, &path);
-                    match &compiled {
-                        Ok(_) | Err(CompileError::Invalid { .. }) => {}
-                        Err(error) => {
-                            return Err(PrepareError::expression(error.clone(), Some(&path)))
-                        }
-                    }
-                    Ok((String::from(expression), compiled))
-                })
-                .transpose()
-        })
-        .collect::<Result<Vec<_>, PrepareError>>()
-}
-
 /// One row template as binding and the checks read it: its id, driver,
 /// `group_by` and the derivations it evaluates in the row phase (each with
-/// its column, the document node of its operation and whether it declares
+/// its column, its expression and whether it declares
 /// `unconvertible`), in construction order. Its [`scope`](Self::scope) is
 /// what those derivations bind in, decided by the declarations alone.
 pub(super) struct TemplatePhase<'a> {
@@ -1189,12 +1092,12 @@ pub(super) struct ColumnPhaseBinding<'a> {
     pub templates: Vec<usize>,
 }
 
-/// A derivation one phase evaluates: its column, the document node of its
-/// operation and whether it declares `unconvertible`.
+/// A derivation one phase evaluates: its column, its expression and whether
+/// it declares `unconvertible`.
 #[derive(Clone, Copy)]
 pub(super) struct PhaseDerivation {
     pub column: usize,
-    pub value: usize,
+    pub expr: ExprId,
     pub handled: bool,
 }
 
@@ -1282,18 +1185,18 @@ impl RowDeclaration {
     fn phase(&self) -> PhaseDerivation {
         PhaseDerivation {
             column: self.column,
-            value: self.value,
+            expr: self.expr,
             handled: self.handler.is_some(),
         }
     }
 }
 
 impl Templates {
-    /// Each row template's driver name, in construction order.
-    pub(super) fn drivers(&self) -> impl Iterator<Item = &str> {
+    /// Each row template's path and driver name, in construction order.
+    pub(super) fn constructions(&self) -> impl Iterator<Item = (&str, &str)> {
         self.templates
             .iter()
-            .map(|template| template.driver.as_str())
+            .map(|template| (template.path.as_str(), template.driver.as_str()))
     }
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
@@ -1310,91 +1213,53 @@ impl Templates {
             })
             .collect()
     }
-    #[allow(clippy::too_many_arguments)]
+    /// The row templates of `spec`, each with the derivations it evaluates
+    /// in the row phase, and the derivations the column phase completes,
+    /// admitted before any source is read. Every selected default is
+    /// admitted once and shared by every template that inherits it.
     pub(super) fn prepare(
-        d: &Document,
-        tree: &crate::front_end::v0_5::Lowered,
+        spec: &ast::Spec,
         output: &TableSchema,
         driver: &str,
-        project: Option<&functions::Prepared>,
-        _column_terminology: bool,
-        extraction: &str_extract::Prepared,
-        string_templates: &str_template::Prepared,
-        intermediates: &intermediates::Declarations,
+        admission: &derivations::Admission<'_>,
     ) -> Result<Self, PrepareError> {
-        let root = d.root();
-        let raw_rows = sequence(d, field(d, root, "rows")?)?;
-        if raw_rows.is_empty() {
+        if spec.rows.templates.is_empty() {
             return Err(PrepareError::Internal);
         }
-        let columns = sequence(d, field(d, root, "columns")?)?;
-        let filters = prepare_row_filters(d, raw_rows)?;
-        let selected = super::phases::row_phases(tree.spec(), driver)?;
+        for template in &spec.rows.templates {
+            derivations::predicate_limits(spec, template.filter)?;
+        }
+        let selected = super::phases::row_phases(spec, driver)?;
+        let calls = admission.project.is_some();
         let mut templates = Vec::new();
         // Admission lowers every selected default once and keeps it: the
         // per-template pass below inherits these shared declarations
-        // instead of lowering the same authored default again per template.
-        // The union warms the cache; inherited defaults share the
-        // `columns.<name>.derivation` node while authored overrides keep
-        // their own `rows[i].derivations.<name>` nodes.
-        let mut lowered: BTreeMap<usize, SharedDeclaration> = BTreeMap::new();
+        // instead of admitting the same default again per template.
+        let mut lowered: BTreeMap<ExprId, SharedDeclaration> = BTreeMap::new();
         {
             let mut union: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
             for template_selected in &selected {
                 union.extend(template_selected.iter().copied());
             }
             for column in union {
-                let metadata = &output.columns()[column];
-                if let Some(id) = d
-                    .field(columns[column], "derivation")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                {
-                    lower_shared(
-                        &mut lowered,
-                        d,
-                        id,
-                        column,
-                        format!("columns.{}.derivation", metadata.name),
-                        project,
-                        extraction,
-                        string_templates,
-                        intermediates,
-                    )?;
+                if let Some(derivation) = &spec.columns[column].derivation {
+                    lower_shared(&mut lowered, spec, derivation, column, admission)?;
                 }
             }
         }
-        for (index, (&row, filter)) in raw_rows.iter().zip(filters).enumerate() {
-            let path = format!("rows[{index}]");
-            closed_fields(
-                d,
-                row,
-                &["id", "dataset", "group_by", "derivations", "filter"],
-                &path,
-            )?;
-            let row_driver = d
-                .field(row, "dataset")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| text(d, id))
-                .transpose()?
-                .unwrap_or(driver);
-            let groups = d
-                .field(row, "group_by")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| {
-                    let values = sequence(d, id)?;
-                    values
-                        .iter()
-                        .map(|&id| text(d, id).map(String::from))
-                        .collect::<Result<Vec<_>, _>>()
-                })
-                .transpose()?;
-            let entries = mapping(d, field(d, row, "derivations")?)?;
-            for &(name, _) in entries {
-                if !output
-                    .columns()
+        for (index, row) in spec.rows.templates.iter().enumerate() {
+            let row_driver = row
+                .driver
+                .as_ref()
+                .map_or(driver, |driver| driver.name.as_str());
+            let groups = row.group_by.as_ref().map(|groups| {
+                groups
                     .iter()
-                    .any(|c| text(d, name).is_ok_and(|name| name == c.name))
-                {
+                    .filter_map(|&group| checks::name(spec, group).map(String::from))
+                    .collect::<Vec<_>>()
+            });
+            for (name, _) in &row.overrides {
+                if !output.columns().iter().any(|c| c.name == name.name) {
                     // Authored preflight already owns the undeclared-column
                     // diagnostic; this is only a normalized-plan invariant.
                     return Err(PrepareError::Internal);
@@ -1403,53 +1268,49 @@ impl Templates {
             let mut declarations = Vec::new();
             for &column in &selected[index] {
                 let metadata = &output.columns()[column];
-                let (id, prefix) = if let Some(&(_, id)) = entries
+                let derivation = match row
+                    .overrides
                     .iter()
-                    .find(|&&(name, _)| text(d, name).is_ok_and(|name| name == metadata.name))
+                    .find(|(name, _)| name.name == metadata.name)
                 {
-                    (id, format!("{path}.derivations.{}", metadata.name))
-                } else {
-                    (
-                        field(d, columns[column], "derivation")?,
-                        format!("columns.{}.derivation", metadata.name),
-                    )
+                    Some((_, derivation)) => derivation,
+                    None => spec.columns[column]
+                        .derivation
+                        .as_ref()
+                        .ok_or(PrepareError::Internal)?,
                 };
                 declarations.push(lower_shared(
                     &mut lowered,
-                    d,
-                    id,
+                    spec,
+                    derivation,
                     column,
-                    prefix,
-                    project,
-                    extraction,
-                    string_templates,
-                    intermediates,
+                    admission,
                 )?);
             }
             templates.push(Template {
-                id: text(d, field(d, row, "id")?)?.into(),
+                id: row.id.name.clone(),
+                path: checks::render(spec, row.meta),
                 driver: row_driver.into(),
                 groups,
                 declarations,
-                filter,
+                filter: row.filter,
             });
         }
         // The first template's SELF reads, every alternative included.
         let roots = templates[0]
             .declarations
             .iter()
-            .map(|declaration| tree.expression(declaration.value))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(PrepareError::Internal)?;
-        let filter = tree.spec().rows.templates[0]
+            .map(|declaration| declaration.expr)
+            .collect::<Vec<_>>();
+        let filter = spec.rows.templates[0]
             .filter
             .filter(|_| templates[0].groups.is_none());
         let self_findings =
-            checks::lookups::first_template(d, tree, &roots, filter, project, intermediates)?;
+            checks::lookups::first_template(spec, &roots, filter, calls, admission.intermediates)?;
         if !self_findings.is_empty() {
             return Err(PrepareError::Invalid(self_findings));
         }
-        validate_row_phases(&templates, project, output)?;
+        validate_row_phases(spec, &templates, admission.project, output)?;
         // A column-level window spans the rows of every row template and
         // reads a driver field at the record that built each row, so it may
         // read only a driver they all share (WINDOW-11). The records that
@@ -1461,12 +1322,16 @@ impl Templates {
                 drivers.push(&template.driver);
             }
         }
-        let declared_inputs = mapping(d, field(d, root, "input")?)?;
         let mut records = drivers.clone();
         for &name in &drivers {
-            if let Some(index) = intermediates.input(name) {
-                let (input, _) = declared_inputs.get(index).ok_or(PrepareError::Internal)?;
-                let input = text(d, *input)?;
+            if let Some(index) = admission.intermediates.input(name) {
+                let input = spec
+                    .inputs
+                    .get(index)
+                    .ok_or(PrepareError::Internal)?
+                    .name
+                    .name
+                    .as_str();
                 if !records.contains(&input) {
                     records.push(input);
                 }
@@ -1475,74 +1340,52 @@ impl Templates {
         let mut window_drivers = Vec::new();
         let mut lowered_columns = Vec::new();
         let mut unaddressable = Vec::new();
-        for (column, &id) in columns.iter().enumerate() {
-            let prefix = format!("columns.{}", output.columns()[column].name);
+        for (column, declared) in spec.columns.iter().enumerate() {
             // Third state: a default that is row-phase for some templates
             // stays column-phase for the rest. Columns selected in every
             // template need no column assignment; columns missing from at
             // least one template are completed column-phase for the rows
             // that did not derive them up front.
-            if !selected.iter().all(|template| template.contains(&column)) {
-                let Some(derivation) = d
-                    .field(id, "derivation")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                else {
-                    // Authored preflight already retains missing defaults and
-                    // row derivations before lowering any template.
-                    return Err(PrepareError::Internal);
-                };
-                let declaration = lower_shared(
-                    &mut lowered,
-                    d,
-                    derivation,
-                    column,
-                    format!("{prefix}.derivation"),
-                    project,
-                    extraction,
-                    string_templates,
-                    intermediates,
-                )?;
-                if let RowOperation::Shared(branch) = &declaration.operation {
-                    windows::column_driver_findings(
-                        &branch.operation,
-                        &drivers,
-                        &records,
-                        &mut window_drivers,
-                    );
-                }
-                // Every driver binds the column for its own rows (#2829); a
-                // named intermediate's unaddressable record is refused here.
-                let mut needing: Vec<&str> = Vec::new();
-                for (template, selected) in templates.iter().zip(&selected) {
-                    if !selected.contains(&column) && !needing.contains(&template.driver.as_str()) {
-                        needing.push(&template.driver);
-                    }
-                }
-                let root = tree.spec().columns[column]
-                    .derivation
-                    .as_ref()
-                    .map(|derivation| derivation.expr)
-                    .ok_or(PrepareError::Internal)?;
-                for driver in needing {
-                    if intermediates.contains(driver)
-                        && checks::lookups::unaddressable(
-                            d,
-                            tree,
-                            root,
-                            driver,
-                            declaration.aggregates(),
-                            project,
-                        )?
-                    {
-                        unaddressable.push(UnsupportedFeature {
-                            operation: "intermediate_driver_column_read".into(),
-                            path: declaration.path.clone(),
-                        });
-                        break;
-                    }
-                }
-                lowered_columns.push(declaration);
+            if selected.iter().all(|template| template.contains(&column)) {
+                continue;
             }
+            // Authored preflight already retains missing defaults and row
+            // derivations before lowering any template.
+            let derivation = declared.derivation.as_ref().ok_or(PrepareError::Internal)?;
+            let declaration = lower_shared(&mut lowered, spec, derivation, column, admission)?;
+            windows::column_driver_findings(
+                spec,
+                declaration.expr,
+                &drivers,
+                &records,
+                &mut window_drivers,
+            )?;
+            // Every driver binds the column for its own rows (#2829); a
+            // named intermediate's unaddressable record is refused here.
+            let mut needing: Vec<&str> = Vec::new();
+            for (template, selected) in templates.iter().zip(&selected) {
+                if !selected.contains(&column) && !needing.contains(&template.driver.as_str()) {
+                    needing.push(&template.driver);
+                }
+            }
+            for driver in needing {
+                if admission.intermediates.contains(driver)
+                    && checks::lookups::unaddressable(
+                        spec,
+                        declaration.expr,
+                        driver,
+                        checks::lookups::aggregates(spec, declaration.expr),
+                        calls,
+                    )?
+                {
+                    unaddressable.push(UnsupportedFeature {
+                        operation: "intermediate_driver_column_read".into(),
+                        path: declaration.path.clone(),
+                    });
+                    break;
+                }
+            }
+            lowered_columns.push(declaration);
         }
         // A language refusal comes before an implementation refusal.
         if !window_drivers.is_empty() {
@@ -1561,28 +1404,15 @@ impl Templates {
             columns: lowered_columns,
         })
     }
-    /// Each row declaration's operation node and path, with the branch it
-    /// shares with case and column lowering.
-    pub(super) fn audit_entries(
-        &self,
-    ) -> impl Iterator<Item = (usize, &str, Option<&cases::Branch>)> + '_ {
+    /// The root of each row declaration: once for each template that
+    /// evaluates it at the row phase, and once if the column phase
+    /// completes it.
+    pub(super) fn declaration_roots(&self) -> impl Iterator<Item = ExprId> + '_ {
         self.templates
             .iter()
             .flat_map(|template| &template.declarations)
             .chain(&self.columns)
-            .map(|declaration| {
-                let branch = match &declaration.operation {
-                    RowOperation::Shared(branch) => Some(branch),
-                    _ => None,
-                };
-                (declaration.value, declaration.path.as_str(), branch)
-            })
-    }
-    /// The operation node of each row declaration: once for each template
-    /// that evaluates it at the row phase, and once if the column phase
-    /// completes it.
-    pub(super) fn declaration_values(&self) -> impl Iterator<Item = usize> + '_ {
-        self.audit_entries().map(|(value, ..)| value)
+            .map(|declaration| declaration.expr)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1630,7 +1460,6 @@ impl Templates {
             let bound = bind_template(
                 template,
                 &phases[index],
-                index,
                 source,
                 name,
                 keys,
@@ -1651,18 +1480,28 @@ impl Templates {
         let mut odm_contexts: Option<std::sync::Arc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns: Vec<ColumnBinding> = Vec::new();
         let mut dependencies = std::vec![None; output.columns().len()];
+        let spec = prepared.tree.spec();
         for declaration in &self.columns {
-            if let RowOperation::Shared(branch) = &declaration.operation {
-                if let Operation::StrPad(operation) = branch.operation.as_ref() {
-                    str_pad::declaration_findings(operation, &mut findings);
-                }
+            if let ExprKind::Scalar {
+                op: ast::ScalarOp::StrPad { .. },
+                ..
+            } = &spec.expr(declaration.expr).kind
+            {
+                str_pad::declaration_findings(
+                    &str_pad::from_tree(spec, declaration.expr).map_err(|_| BindError::Internal)?,
+                    &mut findings,
+                );
             }
             // A column derivation evaluates only for the rows of the bound
             // templates that leave the column to the column phase. A template
             // whose driver intermediate failed to bind was skipped with its
             // own findings, and so are its rows here.
             let mut scopes = self
-                .column_bindings(declaration.column, declaration.aggregates(), name)
+                .column_bindings(
+                    declaration.column,
+                    checks::lookups::aggregates(spec, declaration.expr),
+                    name,
+                )
                 .into_iter()
                 .filter_map(|binding| {
                     let members = binding
@@ -1936,6 +1775,7 @@ impl Templates {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schema::{Document, DocumentNode as N};
 
     /// Minimal child-before-parent arena builder for row preparations.
     struct Arena(Vec<N>);
@@ -2026,7 +1866,7 @@ mod tests {
     /// a grouped SRC template overriding neither. Every template filters on
     /// the two bare defaults, so each template needs all three columns
     /// row-phase and the inherited defaults stay shared.
-    fn shared_default_rows() -> Templates {
+    fn shared_default_rows() -> (Templates, ast::Spec) {
         let large = "shared-authored-default ".repeat(256);
         let mut arena = Arena::new();
         let id_default = arena.source_derivation("SRC.ID");
@@ -2108,28 +1948,14 @@ mod tests {
             },
         ])
         .unwrap();
-        let mut findings = Vec::new();
-        let declared = types::DeclaredTypes::default();
-        let extraction =
-            str_extract::Prepared::new(&document, Vec::new(), &declared, &mut findings).unwrap();
-        let string_templates =
-            str_template::Prepared::new(&document, &[], Vec::new(), &declared, &mut findings)
-                .unwrap();
-        assert!(findings.is_empty());
         let intermediates = intermediates::Declarations::default();
-        let tree = crate::front_end::v0_5::lower_document(&document, None);
-        Templates::prepare(
-            &document,
-            &tree,
-            &output,
-            "SRC",
-            None,
-            false,
-            &extraction,
-            &string_templates,
-            &intermediates,
-        )
-        .unwrap()
+        let spec = crate::front_end::v0_5::lower_document(&document, None).into_spec();
+        let admission = derivations::Admission {
+            project: None,
+            intermediates: &intermediates,
+        };
+        let rows = Templates::prepare(&spec, &output, "SRC", &admission).unwrap();
+        (rows, spec)
     }
 
     fn declaration(rows: &Templates, template: usize, column: usize) -> &SharedDeclaration {
@@ -2139,11 +1965,8 @@ mod tests {
             .find(|declaration| declaration.column == column)
             .unwrap()
     }
-    fn literal_payload(declaration: &RowDeclaration) -> &str {
-        let RowOperation::Shared(branch) = &declaration.operation else {
-            panic!("literal default lowers to a shared branch");
-        };
-        let Operation::Literal(crate::value::Value::Str(value)) = branch.operation.as_ref() else {
+    fn literal_payload<'s>(spec: &'s ast::Spec, declaration: &RowDeclaration) -> &'s str {
+        let ExprKind::Literal(ast::Literal::Text(value)) = &spec.expr(declaration.expr).kind else {
             panic!("literal default payload");
         };
         value
@@ -2151,7 +1974,7 @@ mod tests {
 
     #[test]
     fn admitted_defaults_are_shared_once_across_templates() {
-        let rows = shared_default_rows();
+        let (rows, spec) = shared_default_rows();
         assert_eq!(rows.templates.len(), 3);
         // BIG (column 1): templates 0 and 2 inherit the authored default and
         // hold the very same immutable declaration and literal payload.
@@ -2159,8 +1982,11 @@ mod tests {
         let c_big = declaration(&rows, 2, 1);
         assert!(std::sync::Arc::ptr_eq(a_big, c_big));
         assert_eq!(a_big.path, "columns.BIG.derivation.literal");
-        assert!(std::ptr::eq(literal_payload(a_big), literal_payload(c_big)));
-        assert_eq!(literal_payload(a_big).len(), 6144);
+        assert!(std::ptr::eq(
+            literal_payload(&spec, a_big),
+            literal_payload(&spec, c_big)
+        ));
+        assert_eq!(literal_payload(&spec, a_big).len(), 6144);
         // The conversion handler rides the shared declaration, not a copy.
         let handler = a_big.handler.as_ref().unwrap();
         assert_eq!(handler.spec_path, "columns.BIG.derivation.unconvertible");
@@ -2169,23 +1995,23 @@ mod tests {
         let b_note = declaration(&rows, 1, 2);
         let c_note = declaration(&rows, 2, 2);
         assert!(std::sync::Arc::ptr_eq(b_note, c_note));
-        assert_eq!(literal_payload(b_note), "note-default");
+        assert_eq!(literal_payload(&spec, b_note), "note-default");
     }
 
     #[test]
     fn authored_overrides_retain_their_own_payloads() {
-        let rows = shared_default_rows();
+        let (rows, spec) = shared_default_rows();
         // Template 1 overrides BIG: its own declaration, path and payload.
         let b_big = declaration(&rows, 1, 1);
         assert!(!std::sync::Arc::ptr_eq(b_big, declaration(&rows, 0, 1)));
         assert_eq!(b_big.path, "rows[1].derivations.BIG.literal");
-        assert_eq!(literal_payload(b_big), "big-override");
+        assert_eq!(literal_payload(&spec, b_big), "big-override");
         assert!(b_big.handler.is_none());
         // Template 0 overrides NOTE likewise.
         let a_note = declaration(&rows, 0, 2);
         assert!(!std::sync::Arc::ptr_eq(a_note, declaration(&rows, 1, 2)));
         assert_eq!(a_note.path, "rows[0].derivations.NOTE.literal");
-        assert_eq!(literal_payload(a_note), "note-a");
+        assert_eq!(literal_payload(&spec, a_note), "note-a");
         // Every template still carries every selected column exactly once.
         for template in &rows.templates {
             let mut columns = template
@@ -2201,7 +2027,7 @@ mod tests {
 
     #[test]
     fn template_scope_stays_outside_the_shared_declaration() {
-        let rows = shared_default_rows();
+        let (rows, _) = shared_default_rows();
         // Driver and grouping remain per-template state even where the
         // declarations themselves are shared.
         assert_eq!(rows.templates[0].driver, "SRC");
@@ -2212,7 +2038,7 @@ mod tests {
         // A repeated preparation of the same document admits the same
         // per-template structure (sharing is per-preparation, never a
         // cross-run cache of bound or prepared state).
-        let repeated = shared_default_rows();
+        let (repeated, _) = shared_default_rows();
         for (template, again) in rows.templates.iter().zip(&repeated.templates) {
             assert_eq!(template.id, again.id);
             assert_eq!(template.driver, again.driver);
@@ -2231,6 +2057,7 @@ mod tests {
     fn scoped_templates() -> Templates {
         let template = |id: &str, driver: &str, groups: Option<&str>, columns: &[usize]| Template {
             id: id.into(),
+            path: format!("rows.{id}"),
             driver: driver.into(),
             groups: groups.map(|group| vec![group.to_string()]),
             declarations: columns
@@ -2240,8 +2067,7 @@ mod tests {
                         handler: None,
                         column,
                         path: format!("rows.{id}.{column}"),
-                        value: 0,
-                        operation: RowOperation::Output("ID".into()),
+                        expr: ExprId(0),
                     })
                 })
                 .collect(),

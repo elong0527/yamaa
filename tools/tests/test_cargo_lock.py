@@ -122,8 +122,9 @@ class BundleArchiveTests(unittest.TestCase):
             )
             (self.workspace / "crates" / crate / "src/lib.rs").write_text("//\n")
         listed = ", ".join(f'"crates/{crate}"' for crate in crates)
+        # The wheels' stripping profile, which the R bundle leaves out.
         (self.workspace / "Cargo.toml").write_text(
-            f'[workspace]\nmembers = [{listed}]\nresolver = "2"\n'
+            f'[workspace]\nmembers = [{listed}]\nresolver = "2"\n' + DIST
         )
         self.canonical = lock_text(
             self.ENGINE + self.BINDINGS["python"] + self.BINDINGS["r"]
@@ -187,10 +188,12 @@ class BundleArchiveTests(unittest.TestCase):
                     ),
                 )
                 layout = guard.LAYOUTS[host]
+                manifest = entries[layout.workspace + "Cargo.toml"]
                 self.assertEqual(
-                    entries[layout.workspace + "Cargo.toml"],
-                    engine_bundle.workspace_manifest(self.workspace).encode(),
+                    manifest,
+                    engine_bundle.workspace_manifest(host, self.workspace).encode(),
                 )
+                self.assertEqual(b"[profile.dist]" in manifest, host == "python")
                 self.assertEqual(
                     entries[layout.config], engine_bundle.CARGO_CONFIG.encode()
                 )
@@ -287,6 +290,12 @@ class BundleArchiveTests(unittest.TestCase):
             ),
             ("src/rust/crates/yamaa-r/src/lib.rs", b"changed\n", "differs from the"),
             ("src/rust/vendor-config.toml", b"[source]\n", "differs from the"),
+            # The Python bundle's manifest, with the wheels' stripping profile.
+            (
+                "src/rust/Cargo.toml",
+                engine_bundle.workspace_manifest("python", self.workspace).encode(),
+                "src/rust/Cargo.toml differs from the checkout",
+            ),
             (
                 "src/rust/Cargo.lock",
                 self.canonical.encode(),
@@ -354,19 +363,20 @@ class BundleArchiveTests(unittest.TestCase):
                     self.check(self.entries("r", vendored, links))
 
     def test_an_r_package_whose_build_strips_refuses(self):
-        # A stripping profile that the Makevars do not select is admitted.
+        # A stripping profile that the Makevars do not select is admitted. The
+        # R bundle leaves out the wheels' one but keeps any other.
         manifest = self.workspace / "Cargo.toml"
-        manifest.write_text(manifest.read_text() + DIST)
+        manifest.write_text(manifest.read_text() + SMALL)
         entries = self.entries("r")
         self.assertEqual(self.check(entries)[0], "r")
         for name in guard.R_MAKEVARS:
-            dist = entries[name].replace(b" --release ", b" --profile dist ")
-            self.assertNotEqual(dist, entries[name])
+            small = entries[name].replace(b" --release ", b" --profile small ")
+            self.assertNotEqual(small, entries[name])
             with self.subTest(name=name):
                 with self.assertRaisesRegex(
-                    ValueError, f"in the dist profile, which {name} builds with"
+                    ValueError, f"in the small profile, which {name} builds with"
                 ):
-                    self.check(dict(entries, **{name: dist}))
+                    self.check(dict(entries, **{name: small}))
                 linked = entries[name] + b"PKG_LIBS += -Wl,-s\n"
                 with self.assertRaisesRegex(
                     ValueError, f"{name}: -Wl,-s strips the shared object at R's"
@@ -386,6 +396,8 @@ class BundleArchiveTests(unittest.TestCase):
 
 
 DIST = '\n[profile.dist]\ninherits = "release"\nstrip = "symbols"\n'
+# A stripping profile other than the wheels' one, which the R bundle keeps.
+SMALL = '\n[profile.small]\ninherits = "release"\nstrip = "symbols"\n'
 
 
 class RBuildSymbolsTests(unittest.TestCase):
@@ -412,7 +424,7 @@ class RBuildSymbolsTests(unittest.TestCase):
             self.assertEqual(guard.makevars_profile(name, text), "release")
         guard.check_r_symbols(
             "R/yamaa",
-            engine_bundle.workspace_manifest(),
+            engine_bundle.workspace_manifest("r"),
             engine_bundle.CARGO_CONFIG,
             templates,
         )

@@ -24,6 +24,10 @@ pub enum Error {
     Dependencies(yamaa_core::resolution::Error),
     Validation(ValidationError),
     Findings(Box<CapturedFindings>),
+    /// A file a referencing field names declares a version the engine does
+    /// not read, or a type the field does not expect: refused at that field,
+    /// which the reader of the field names, not in the file (SCHEMA-2).
+    Reference(Box<RefusedHeader>),
     /// This entry point cannot silently treat an inherited layer as standalone.
     InheritanceRequired,
     /// A versioned root must retain its schema-version admission gate.
@@ -68,6 +72,29 @@ impl CapturedFindings {
     }
     pub fn findings(&self) -> &[SchemaDiagnostic] {
         &self.findings
+    }
+}
+
+/// The header of a file a referencing field names, refused at that field: it
+/// declares a version the engine does not read or a type the field does not
+/// expect (SCHEMA-2). The reader of the field reports it with
+/// `yamaa_core::language::Reference::refuse`.
+#[derive(Debug)]
+pub struct RefusedHeader {
+    source: Source,
+    fault: yamaa_core::language::HeaderFault,
+}
+impl RefusedHeader {
+    pub(crate) fn new(source: Source, fault: yamaa_core::language::HeaderFault) -> Self {
+        Self { source, fault }
+    }
+    /// The named file, as captured.
+    pub fn source(&self) -> &Source {
+        &self.source
+    }
+    /// Its version or type fault.
+    pub fn fault(&self) -> &yamaa_core::language::HeaderFault {
+        &self.fault
     }
 }
 
@@ -583,6 +610,15 @@ impl PreparedDocument {
         match &self.content {
             PreparedContent::Standalone { model, .. } => model,
             PreparedContent::Inherited(prepared) => prepared.model(),
+        }
+    }
+    /// The specification's `domain`, when it is written as text: the dataset
+    /// name a run's printed summary names.
+    pub fn domain(&self) -> Option<&str> {
+        let model = self.model().document();
+        match &model.nodes()[model.field(model.root(), "domain")?] {
+            yamaa_core::schema::DocumentNode::Text(text) => Some(text),
+            _ => None,
         }
     }
     pub fn dictionary_sources(&self) -> impl Iterator<Item = &Source> {

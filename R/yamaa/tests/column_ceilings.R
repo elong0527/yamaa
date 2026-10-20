@@ -102,6 +102,17 @@ assert_build <- function(spec, width = 1L, project = FALSE) {
   if (width > 1L) stopifnot(all(built$output[1L, -1L] == "x"))
 }
 
+# D39's error text: `cannot save <subject>`, then the first issue's line,
+# `<message> [<condition>, <rule>]`, and the count of the other issues.
+save_refusal_text <- function(failure, issues) {
+  rule <- issues$rule[[1L]]
+  line <- sprintf("%s [%s]", issues$message[[1L]],
+    if (is.na(rule)) issues$condition[[1L]] else paste(issues$condition[[1L]], rule, sep = ", "))
+  others <- nrow(issues) - 1L
+  if (others > 0L) line <- sprintf("%s (and %d more %s)", line, others, if (others == 1L) "issue" else "issues")
+  text <- conditionMessage(failure)
+  startsWith(text, "cannot save ") && endsWith(text, paste0(": ", line))
+}
 assert_refusal <- function(result, compiler = FALSE) {
   issues <- result$issues
   stopifnot(nrow(issues) > 0L, any(issues$condition == "engine_rejected"))
@@ -110,7 +121,7 @@ assert_refusal <- function(result, compiler = FALSE) {
   if (inherits(result, "yamaa_run")) {
     failure <- tryCatch(result$save(), error = identity)
     stopifnot(is.null(result$output), inherits(failure, "yamaa_error"),
-              identical(conditionMessage(failure), "cannot save a failed run; see issues"),
+              save_refusal_text(failure, issues),
               identical(failure$issues, issues))
   }
   if (inherits(result, "yamaa_project_run")) {

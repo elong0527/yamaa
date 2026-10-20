@@ -538,7 +538,7 @@ mod tests {
             .calls(root)
             .into_iter()
             .map(|call| match &spec.expr(call).kind {
-                ExprKind::Call { function, args } => {
+                ExprKind::Call { function, args, .. } => {
                     assert_eq!(args.len(), 1);
                     function.name.clone()
                 }

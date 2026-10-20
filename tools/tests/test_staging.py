@@ -44,7 +44,7 @@ class StagingTests(unittest.TestCase):
                 relative: source.read_bytes()
                 for relative, source in engine_bundle.sources("r")
             }
-            expected["Cargo.toml"] = engine_bundle.workspace_manifest().encode()
+            expected["Cargo.toml"] = engine_bundle.workspace_manifest("r").encode()
             self.assertEqual(
                 {
                     path.relative_to(embedded).as_posix()
@@ -56,6 +56,12 @@ class StagingTests(unittest.TestCase):
             for relative, payload in expected.items():
                 self.assertFalse((embedded / relative).is_symlink())
                 self.assertEqual((embedded / relative).read_bytes(), payload)
+            # The manifest names no stripping: it leaves out the wheels' dist
+            # profile, and the Makevars build with release.
+            manifest = (embedded / "Cargo.toml").read_text(encoding="utf-8")
+            self.assertNotIn('strip = "symbols"', manifest)
+            self.assertIn("release", tomllib.loads(manifest)["profile"])
+            self.assertNotIn("dist", tomllib.loads(manifest)["profile"])
             kept = engine_bundle.verify_lock(
                 (embedded / "Cargo.lock").read_text(encoding="utf-8"),
                 (staging.WORKSPACE / "Cargo.lock").read_text(encoding="utf-8"),

@@ -169,13 +169,19 @@ impl Plan {
         });
         let build = self.run_observed(resolver, true, &measurements, progress);
         measurements.complete(build.accepted());
-        Ok(build)
+        let subject = self.name().unwrap_or(&self.compiled.specification);
+        Ok(build.with_subject(subject))
     }
 
     /// Borrow the compilation report: a refused compilation's diagnostics,
     /// empty when the specification compiled.
     pub fn report(&self) -> &Report {
         &self.compiled.report
+    }
+
+    /// The specification's dataset name, once compilation read its document.
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.compiled.state.name()
     }
 
     /// One run; with `verify` it first verifies the compiled metadata.

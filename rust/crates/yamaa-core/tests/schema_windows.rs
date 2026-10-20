@@ -1887,7 +1887,6 @@ mod schema {
             let expected = document.clone();
             let model = SpecificationDocument::admit(document).unwrap().unwrap();
             assert_eq!(model.document(), &expected);
-            assert_eq!(model.default_driver(), None);
             assert_eq!(
                 model.document().field(model.document().root(), "base"),
                 None
