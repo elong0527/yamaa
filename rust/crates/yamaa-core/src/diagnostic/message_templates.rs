@@ -108,7 +108,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("ordinal_field_collision", "the ordinal field {field} of input {dataset} collides with a stored field"),
     ("origin_contradicts_derivation", "the origin at {spec_path} contradicts the column's derivation"),
     ("origin_description_missing", "the origin at {spec_path} lacks the description its type requires"),
-    ("origin_document_missing", "the collected origin of column {detail} names no annotated CRF reference"),
+    ("origin_document_missing", "the collected origin of column {detail} lacks its annotated case report form reference"),
     ("origin_missing", "{spec_path} declares no origin"),
     ("origin_source_not_admitted", "the origin source of column {detail} is not admitted for its origin type"),
     ("parent_not_found", "parent {path} does not exist"),

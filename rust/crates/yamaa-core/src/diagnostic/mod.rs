@@ -155,7 +155,8 @@ macro_rules! conditions {
             }
         }
 
-        /// Every migrated cause must be reached by the diagnostic integration tests.
+        /// Every migrated cause must be reached by the diagnostic integration tests,
+        /// which render the message of each record a cause makes there.
         pub const CONDITIONS: &[ConditionCode] = &[$(ConditionCode::$code,)*];
     };
 }

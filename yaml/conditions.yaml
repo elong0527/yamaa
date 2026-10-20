@@ -337,7 +337,7 @@ conditions:
     message: "the origin at {spec_path} lacks the description its type requires"
   origin_document_missing:
     phases: [validation]
-    message: "the collected origin of column {detail} names no annotated CRF reference"
+    message: "the collected origin of column {detail} lacks its annotated case report form reference"
   origin_missing:
     phases: [validation]
     message: "{spec_path} declares no origin"
