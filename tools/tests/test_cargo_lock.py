@@ -156,6 +156,8 @@ class BundleArchiveTests(unittest.TestCase):
         if layout.packed:
             entries[layout.packed] = packed([*vendored.items(), *links])
             entries["DESCRIPTION"] = b"Package: yamaa\n"
+            for name in guard.R_MAKEVARS:
+                entries[name] = (guard.R_PACKAGE / name).read_bytes()
         else:
             self.assertEqual(links, ())
             entries.update(vendored)
@@ -349,6 +351,115 @@ class BundleArchiveTests(unittest.TestCase):
             with self.subTest(message=message):
                 with self.assertRaisesRegex(ValueError, message):
                     self.check(self.entries("r", vendored, links))
+
+    def test_an_r_package_whose_build_strips_refuses(self):
+        # A stripping profile that the Makevars do not select is admitted.
+        manifest = self.workspace / "Cargo.toml"
+        manifest.write_text(manifest.read_text() + DIST)
+        entries = self.entries("r")
+        self.assertEqual(self.check(entries)[0], "r")
+        for name in guard.R_MAKEVARS:
+            dist = entries[name].replace(b" --release ", b" --profile dist ")
+            self.assertNotEqual(dist, entries[name])
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(
+                    ValueError, f"in the dist profile, which {name} builds with"
+                ):
+                    self.check(dict(entries, **{name: dist}))
+                with self.assertRaisesRegex(
+                    ValueError, f"the R package is missing {name}"
+                ):
+                    self.check({k: v for k, v in entries.items() if k != name})
+        manifest.write_text(
+            manifest.read_text() + '\n[profile.release]\nstrip = "symbols"\n'
+        )
+        with self.assertRaisesRegex(
+            ValueError, "the workspace manifest sets strip in the release profile"
+        ):
+            self.check(self.entries("r"))
+
+
+DIST = '\n[profile.dist]\ninherits = "release"\nstrip = "symbols"\n'
+
+
+class RBuildSymbolsTests(unittest.TestCase):
+    """The R package's build strips nothing, as CRAN's Repository Policy asks."""
+
+    def makevars(self, selection="--release", environment=""):
+        return (
+            "$(RUST_LIB): FORCE\n"
+            f"\tMAKEFLAGS= RUSTUP_AUTO_INSTALL=0 {environment}\\\n"
+            f'\t  "$(CARGO)" build --locked --offline -j 2 {selection} -p yamaa-r\n'
+        )
+
+    def check(self, manifest="", config="", **makevars):
+        guard.check_r_symbols(
+            "yamaa", manifest, config, {"src/Makevars.in": self.makevars(**makevars)}
+        )
+
+    def test_the_checkout_r_build_selects_release_and_strips_nothing(self):
+        templates = {
+            name: (guard.R_PACKAGE / name).read_text(encoding="utf-8")
+            for name in guard.R_MAKEVARS
+        }
+        for name, text in templates.items():
+            self.assertEqual(guard.makevars_profile(name, text), "release")
+        guard.check_r_symbols(
+            "R/yamaa",
+            engine_bundle.workspace_manifest(),
+            engine_bundle.CARGO_CONFIG,
+            templates,
+        )
+
+    def test_profiles_that_strip_nothing_are_admitted(self):
+        for manifest in (
+            "",
+            DIST,
+            "[profile.release]\nstrip = false\n",
+            '[profile.release]\nstrip = "none"\n',
+        ):
+            with self.subTest(manifest=manifest):
+                self.check(manifest)
+
+    def test_a_build_that_strips_refuses(self):
+        inherited = DIST + '[profile.r]\ninherits = "dist"\n'
+        for arguments, message in (
+            (
+                {"manifest": '[profile.release]\nstrip = "debuginfo"\n'},
+                "the workspace manifest sets strip in the release profile",
+            ),
+            (
+                {"config": "[profile.release]\nstrip = true\n"},
+                "the Cargo configuration sets strip in the release profile",
+            ),
+            (
+                {"manifest": DIST, "selection": "--profile dist"},
+                "in the dist profile, which src/Makevars.in builds with",
+            ),
+            ({"manifest": DIST, "selection": "--profile=dist"}, "the dist profile"),
+            (
+                {"manifest": inherited, "selection": "--profile r"},
+                "in the dist profile, which the r profile of src/Makevars.in inherits",
+            ),
+            (
+                {"environment": "CARGO_PROFILE_RELEASE_STRIP=symbols "},
+                "the cargo build command sets strip",
+            ),
+            (
+                {"selection": "--release --config profile.release.strip=true"},
+                "the cargo build command sets strip",
+            ),
+        ):
+            with self.subTest(arguments=arguments):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.check(**arguments)
+
+    def test_one_cargo_build_selects_one_profile(self):
+        with self.assertRaisesRegex(ValueError, "expected one cargo build command"):
+            guard.check_r_symbols("yamaa", "", "", {"src/Makevars.in": "all:\n"})
+        with self.assertRaisesRegex(ValueError, "selects more than one profile"):
+            self.check(selection="--release --profile dist")
+        self.assertEqual(guard.makevars_profile("x", self.makevars("")), "dev")
 
 
 if __name__ == "__main__":

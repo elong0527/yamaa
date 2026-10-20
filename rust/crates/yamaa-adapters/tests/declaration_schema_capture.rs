@@ -1150,7 +1150,7 @@ mod declaration {
                 ),
                 (
                     "",
-                    "{row_value: {source: V, offset: 0, window: {order_by: [ID]}}}",
+                    "{row_value: {source: ID, offset: 0, window: {order_by: [ID]}}}",
                     "zero_offset",
                     "columns.V.derivation.row_value.offset",
                 ),
@@ -2824,10 +2824,9 @@ mod declaration {
         //! lock verification, activation, source binding, values and publication.
         use std::{convert::Infallible, path::PathBuf};
         use yamaa_adapters::{
-            project_check,
-            project_run::PreparedRun,
             project_source::{self, Kind, ProjectCapturePort, Reply, Request},
-            shipped_schema,
+            shipped_schema, specification_check,
+            specification_run::PreparedRun,
             specification_source::Source,
         };
         use yamaa_core::{project_environment::LockKind, project_function::Language};
@@ -2909,9 +2908,9 @@ mod declaration {
                     bytes: std::fs::read(case.join("spec.yaml")).unwrap(),
                 })
                 .unwrap();
-            let rows = match PreparedRun::prepare(document, environment) {
-                Ok(run) => project_check::prepared(&run),
-                Err(run) => project_check::rejected(&run).unwrap(),
+            let rows = match PreparedRun::prepare_with_environment(document, environment) {
+                Ok(run) => specification_check::issues(&run),
+                Err(run) => specification_check::rejected(&run).unwrap(),
             };
             match expected {
                 None => assert!(rows.is_empty(), "{name}: {rows:?}"),

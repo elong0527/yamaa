@@ -103,7 +103,7 @@ pub fn _spec_check(
     let token = CancellationToken::new();
     engine(py)
         .spec_check(specification, project, &token)
-        .map(|issues| ArrowTable::from(&issues))
+        .map(|check| ArrowTable::from(&check.issues()))
         .map_err(|error| raise_error(py, "cannot check the specification", error))
 }
 
@@ -272,7 +272,7 @@ pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<Stri
 pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<ArrowTable> {
     engine(py)
         .project_check(project, &CancellationToken::new())
-        .map(|issues| ArrowTable::from(&issues))
+        .map(|check| ArrowTable::from(&check.issues()))
         .map_err(|error| raise_error(py, "cannot check the project", error))
 }
 

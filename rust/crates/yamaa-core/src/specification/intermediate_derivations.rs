@@ -39,15 +39,6 @@ impl Derivation {
     pub(super) fn field_type(&self, result: ResultType) -> ResultType {
         self.typed.map_or(result, ResultType::column)
     }
-    /// VALUE-24: a typed entry whose expression's result type, `result`, can
-    /// never convert to the declared type, unless `unconvertible` answers it.
-    pub(super) fn conversion_finding(
-        &self,
-        result: ResultType,
-    ) -> Option<crate::diagnostic::Diagnostic> {
-        let typed = self.typed.filter(|_| self.handler.is_none())?;
-        types::conversion_finding(&self.path, result, typed)
-    }
 }
 /// Both admitted entry forms expose the same normalized expression boundary.
 pub(super) fn value(

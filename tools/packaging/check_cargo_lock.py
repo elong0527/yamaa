@@ -2,9 +2,11 @@
 
 Without archives, it checks that the canonical rust/Cargo.lock is current and
 that each host's bundle trims it to a lock that verifies crate by crate against
-it, as `make check-repository` runs it. With archives, it checks the engine
-bundle (#3030 D55) of each Python source archive and R source package against
-the checkout, and that the archive holds no Rust toolchain file anywhere.
+it, as `make check-repository` runs it, and that the R package's build strips
+nothing. With archives, it checks the engine bundle (#3030 D55) of each Python
+source archive and R source package against the checkout, that the archive
+holds no Rust toolchain file anywhere, and that an R source package's build
+strips nothing.
 """
 
 import argparse
@@ -14,9 +16,10 @@ import json
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 from pathlib import Path, PurePosixPath
 
-from tools.paths import WORKSPACE
+from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle, vendor_crates
 
 
@@ -40,6 +43,81 @@ LAYOUTS = {
     # build's Cargo home (tools/staging/stage_r_package.py).
     "r": Layout("src/rust/", "src/rust/vendor-config.toml", "src/rust/vendor.tar.xz"),
 }
+# The R package's shared object keeps its symbols: CRAN's Repository Policy asks
+# a package not to remove diagnostic information such as symbols in shared
+# objects. Its Makevars build with the release profile; the Python wheels strip
+# theirs with the dist profile (rust/Cargo.toml).
+R_PACKAGE = ROOT / "R/yamaa"
+R_MAKEVARS = ("src/Makevars.in", "src/Makevars.win.in")
+
+
+def makevars_profile(label, makevars):
+    """The Cargo profile that a Makevars template's one cargo build selects.
+
+    Refuses a command that sets strip itself, as a variable, flag or
+    configuration value.
+    """
+    commands = [
+        line
+        for line in makevars.replace("\\\n", " ").splitlines()
+        if '"$(CARGO)" build ' in line
+    ]
+    if len(commands) != 1:
+        raise ValueError(f"{label}: expected one cargo build command")
+    if "strip" in commands[0].lower():
+        raise ValueError(f"{label}: the cargo build command sets strip")
+    words = commands[0].split()
+    profiles = []
+    for index, word in enumerate(words):
+        if word in ("--release", "-r"):
+            profiles.append("release")
+        elif word == "--profile" and index + 1 < len(words):
+            profiles.append(words[index + 1])
+        elif word.startswith("--profile="):
+            profiles.append(word.removeprefix("--profile="))
+    if len(profiles) > 1:
+        raise ValueError(f"{label}: the cargo build selects more than one profile")
+    return profiles[0] if profiles else "dev"
+
+
+def check_r_symbols(label, manifest, config, makevars):
+    """Refuse an R build that would strip its shared object.
+
+    `manifest` and `config` are the texts of the bundle's workspace manifest
+    and Cargo configuration, and `makevars` maps each Makevars template's name
+    to its text. Neither the profile that a template's cargo build selects nor
+    a profile that it inherits from may set strip, other than to false or
+    "none", in the manifest or in the configuration.
+    """
+    sources = [
+        ("the Cargo configuration", tomllib.loads(config).get("profile", {})),
+        ("the workspace manifest", tomllib.loads(manifest).get("profile", {})),
+    ]
+    for name, text in makevars.items():
+        selected = makevars_profile(f"{label}: {name}", text)
+        profile, seen = selected, set()
+        while profile is not None and profile not in seen:
+            seen.add(profile)
+            for where, profiles in sources:
+                if profiles.get(profile, {}).get("strip", False) not in (False, "none"):
+                    use = (
+                        f"which {name} builds with"
+                        if profile == selected
+                        else f"which the {selected} profile of {name} inherits"
+                    )
+                    raise ValueError(
+                        f"{label}: {where} sets strip in the {profile} profile, "
+                        f"{use}; the R package keeps its symbols, as CRAN's "
+                        "Repository Policy asks"
+                    )
+            profile = next(
+                (
+                    profiles[profile]["inherits"]
+                    for _, profiles in sources
+                    if "inherits" in profiles.get(profile, {})
+                ),
+                None,
+            )
 
 
 def locked_metadata(workspace: Path) -> str:
@@ -150,8 +228,9 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
     Cargo configuration, a lock that verifies against the canonical lock, and
     each crates.io crate of that lock, with every file that its
     `.cargo-checksum.json` lists and no other: in vendor/ in a Python source
-    archive, and in src/rust/vendor.tar.xz in an R source package. Returns the
-    host and the lock's packages.
+    archive, and in src/rust/vendor.tar.xz in an R source package. An R source
+    package's Makevars must build with a profile that strips nothing
+    (check_r_symbols). Returns the host and the lock's packages.
     """
     canonical = (workspace / "Cargo.lock").read_bytes().decode()
     with tarfile.open(path, "r:gz") as archive:
@@ -192,6 +271,18 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
         for name, payload in sorted(expected.items()):
             if read(name) != payload:
                 raise ValueError(f"{path.name}: {name} differs from the checkout")
+        if host == "r":
+            templates = {}
+            for name in R_MAKEVARS:
+                if name not in files:
+                    raise ValueError(f"{path.name}: the R package is missing {name}")
+                templates[name] = archive.extractfile(files[name]).read().decode()
+            check_r_symbols(
+                path.name,
+                read(layout.workspace + "Cargo.toml").decode(),
+                read(layout.config).decode(),
+                templates,
+            )
         kept = engine_bundle.verify_lock(
             read(lock).decode(), canonical, engine_bundle.members(host)
         )
@@ -233,6 +324,16 @@ def main():
                     "packages, the dependency closure of "
                     + ", ".join(engine_bundle.members(host))
                 )
+        check_r_symbols(
+            "R/yamaa",
+            engine_bundle.workspace_manifest(),
+            engine_bundle.CARGO_CONFIG,
+            {
+                name: (R_PACKAGE / name).read_text(encoding="utf-8")
+                for name in R_MAKEVARS
+            },
+        )
+        print("R package: the profile that its Makevars build with strips nothing")
     if args.output_dir:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         (args.output_dir / "cargo-metadata.json").write_text(metadata)

@@ -1,13 +1,25 @@
 //! Execute prepared YAML specifications over captured schema and typed snapshots.
 //! Source ports supply snapshots; publication belongs to the public Save service.
+//!
+//! [`PreparedRun`] is the one prepared specification: alone, it carries an
+//! empty environment, and with a project it carries the project's admitted
+//! environment. Every build of it activates the project functions it calls
+//! through one host-functions port, then captures, decodes, binds and executes.
 use crate::{
     arrow_table::ArrowTable,
     csv_source::{self, TextTableError},
     dataset_result::{self, DatasetError, DatasetResponse},
+    project_source::{CapturedEnvironment, OwnedEnvironment},
+    project_source_decoder::{Decoder, Snapshot},
     specification_source::{LinkedSpecification, PreparedDocument},
 };
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use yamaa_core::domain::{self, CheckedSpecification};
+use std::{
+    any::Any,
+    panic::{catch_unwind, AssertUnwindSafe},
+};
+use yamaa_core::project_activation::{ActivationPort, Failure, Observations};
+use yamaa_core::project_domain::{self, CheckedOwnedProject, RejectedOwnedProject};
+use yamaa_core::project_environment::ExecutionEnvironment;
 use yamaa_core::specification::{
     BindError, PrepareError, PreparedSpecification, SourceDeclaration,
 };
@@ -29,65 +41,176 @@ pub enum Error {
     Bind(BindError),
     Execution(DatasetError),
 }
-pub use yamaa_core::specification_run::{InspectionFailure, SourceRead, SpecificationSourcePort};
-#[derive(Debug)]
-pub enum PortError<E> {
-    Capture(E),
-    Inspect(Vec<InspectionFailure<E>>),
-    Run(Error),
-    CaptureAccounting,
-}
-/// Observations survive failed binding/execution. The table is the exact owned
-/// source snapshot used for execution; reporting never reopens or reparses data.
-pub type CapturedSource = application::CapturedSource<ArrowTable>;
-pub struct CapturedAttempt<E> {
-    pub sources: Vec<CapturedSource>,
-    pub result: Result<DatasetResponse, PortError<E>>,
-}
+pub use yamaa_core::specification_run::{
+    InspectionFailure, PortError, SourceRead, SpecificationSourcePort,
+};
+/// One captured source of an attempt: the exact owned snapshot used for
+/// execution; reporting never reopens or reparses data.
+pub type CapturedSource<E> = application::CapturedSource<Snapshot<E>>;
+/// The dataset half of one attempt: every source it entered and the
+/// execution or the port failure that ended it.
+pub type CapturedAttempt<C, E> = application::CapturedAttempt<C, Error, Snapshot<E>>;
 
-/// Keeps schema/source provenance alive through binding and execution.
+/// One prepared specification: its document, the environment it was compiled
+/// against (empty without a project) and its compilation. Preparation has no
+/// runtime or study authority; every build retains its own observations and
+/// original host failures, including an unwound host boundary.
 #[derive(Debug)]
 pub struct PreparedRun {
     document: PreparedDocument,
-    checked: CheckedSpecification,
+    captured: CapturedEnvironment,
+    checked: CheckedOwnedProject,
 }
-impl PreparedRun {
-    /// Entire vocabulary admission precedes obtaining a study-data snapshot.
-    pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
-        Self::prepare_with_profile_inspection(document, &[], |_, _, _| None)
+
+/// Failed static checking still owns the original documents, lock and metadata.
+/// A diagnostic renderer must use these held origins instead of recapturing them.
+#[derive(Debug)]
+pub struct RejectedRun {
+    pub document: PreparedDocument,
+    pub captured: CapturedEnvironment,
+    pub rejection: Box<RejectedOwnedProject>,
+}
+
+pub enum BoundaryFailure<E> {
+    Activation(Failure<E>),
+    Unwind(Box<dyn Any + Send>),
+}
+impl<E: std::fmt::Debug> std::fmt::Debug for BoundaryFailure<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Activation(error) => formatter.debug_tuple("Activation").field(error).finish(),
+            Self::Unwind(_) => formatter.write_str("Unwind(..)"),
+        }
     }
-    /// Compile with the producing specifications that the document's `schema`
-    /// links name; each supplies only its output contract.
+}
+
+/// Boundary success alone does not imply dataset success. The engine's dataset
+/// attempt independently owns capture, ingestion, execution and check outcomes.
+pub struct Attempt<C, E> {
+    pub boundary: Result<(), BoundaryFailure<E>>,
+    pub activation: Observations,
+    pub dataset: CapturedAttempt<C, E>,
+}
+
+/// The host-functions port of a run that has no project functions to call:
+/// it activates nothing, so a specification that calls a project function
+/// fails at its lock or binding. A specification without a project never
+/// enters it, because it calls no project function.
+pub struct NoActivation;
+/// The failure [`NoActivation`] reports for every request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Unavailable;
+impl ActivationPort for NoActivation {
+    type Handle = ();
+    type Error = Unavailable;
+    fn verify_lock(
+        &mut self,
+        _: yamaa_core::project_function::Language,
+        _: &yamaa_core::project_environment::LockReference,
+        _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
+    ) -> Result<(), Unavailable> {
+        Err(Unavailable)
+    }
+    fn bind(
+        &mut self,
+        _: &yamaa_core::function_signature::ProjectFunctionIdentity,
+        _: &yamaa_core::function_signature::LogicalSignature,
+    ) -> Result<(), Unavailable> {
+        Err(Unavailable)
+    }
+    fn invoke(
+        &mut self,
+        _: &(),
+        _: &[yamaa_core::function_invocation::Argument<'_>],
+    ) -> Result<yamaa_core::value::Value, yamaa_core::function_invocation::HostError<Unavailable>>
+    {
+        Err(yamaa_core::function_invocation::HostError::Raised(
+            Unavailable,
+        ))
+    }
+}
+
+impl PreparedRun {
+    /// Compile a document alone, without a project. Entire vocabulary
+    /// admission precedes obtaining a study-data snapshot. A specification
+    /// without a project never reads its environment's host language.
+    pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
+        let environment =
+            OwnedEnvironment::without_environment(yamaa_core::project_function::Language::Python);
+        Self::prepare_with_environment(document, environment)
+            .map_err(|rejected| Error::Prepare(rejected.rejection.error))
+    }
+    /// Compile a document against an admitted environment.
+    pub fn prepare_with_environment(
+        document: PreparedDocument,
+        environment: OwnedEnvironment,
+    ) -> Result<Self, Box<RejectedRun>> {
+        Self::prepare_with_profile_inspection(document, &[], environment, |_, _, _| None)
+    }
+    /// Compile against the admitted environment and the producing
+    /// specifications that the document's `schema` links name; each supplies
+    /// only its output contract.
     pub(crate) fn prepare_with_profile_inspection(
         document: PreparedDocument,
         links: &[LinkedSpecification],
+        environment: OwnedEnvironment,
         mut inspect: impl FnMut(
             &PreparedDocument,
             &str,
             &str,
         ) -> Option<(yamaa_core::resource::ResourceFailure, String)>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, Box<RejectedRun>> {
+        let (environment, captured) = environment.into_parts();
         let checked = {
             let metadata = crate::specification_source::link_metadata(&document, links);
-            domain::check_linked(
+            project_domain::check_owned_linked(
                 document.compilation_model(),
-                None,
+                environment,
                 yamaa_core::producer_contract::Links {
                     consumer: &document.source().identity,
                     links: &metadata,
                 },
             )
         };
-        let checked = checked.map_err(|error| {
-            Error::Prepare(yamaa_core::source_profile_inspection::refine(
-                error,
-                |dataset, path| inspect(&document, dataset, path),
-            ))
-        })?;
-        Ok(Self { document, checked })
+        match checked {
+            Ok(checked) => Ok(Self {
+                document,
+                captured,
+                checked,
+            }),
+            Err(mut rejection) => {
+                rejection.error = yamaa_core::source_profile_inspection::refine(
+                    rejection.error,
+                    |dataset, path| inspect(&document, dataset, path),
+                );
+                Err(Box::new(RejectedRun {
+                    document,
+                    captured,
+                    rejection,
+                }))
+            }
+        }
     }
     pub fn document(&self) -> &PreparedDocument {
         &self.document
+    }
+    pub(crate) fn reject(self, error: PrepareError) -> Box<RejectedRun> {
+        Box::new(RejectedRun {
+            document: self.document,
+            captured: self.captured,
+            rejection: self.checked.reject(error),
+        })
+    }
+    /// The captured project documents, empty without a project.
+    pub fn captured_environment(&self) -> &CapturedEnvironment {
+        &self.captured
+    }
+    /// Whether a project file was supplied for this specification.
+    pub fn has_project(&self) -> bool {
+        self.captured.root_optional().is_some()
+    }
+    pub fn environment(&self) -> &ExecutionEnvironment {
+        self.checked.environment()
     }
     pub fn key_names(&self) -> impl Iterator<Item = &str> {
         self.compiled().key_names()
@@ -114,52 +237,43 @@ impl PreparedRun {
         response(execution)
     }
 
-    /// Delegate capture and execution order to the engine. Preserve observations
-    /// outside the panic fence; reporting never captures or decodes a source again.
-    pub fn execute_with_port<P: SpecificationSourcePort>(
+    /// Own evidence outside the host boundary before granting activation or
+    /// study authority. No prior attempt, binding or successful test is
+    /// reused here. A specification that calls no project function never
+    /// enters `activation`.
+    pub fn execute_with_ports<A: ActivationPort, P: SpecificationSourcePort>(
         &self,
-        port: &mut P,
+        activation: &mut A,
+        source: &mut P,
         scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> CapturedAttempt<P::Error> {
-        let mut attempt = application::CapturedAttempt::new(self.source());
-        let guarded = catch_unwind(AssertUnwindSafe(|| {
-            self.checked.build_into(
-                port,
-                &mut SourceDecoder,
-                &mut yamaa_core::function_invocation::NoFunctions::new(),
-                &mut attempt,
-                scope,
-            );
-        }));
-        let result = if guarded.is_err() {
-            Err(PortError::Run(Error::Execution(DatasetError::Internal)))
-        } else {
-            match attempt.result {
-                Ok(execution) => response(execution).map_err(PortError::Run),
-                Err(application::PortError::Incomplete) => {
-                    Err(PortError::Run(Error::Execution(DatasetError::Internal)))
-                }
-                Err(application::PortError::Capture(error)) => Err(PortError::Capture(error)),
-                Err(application::PortError::Inspect(errors)) => Err(PortError::Inspect(errors)),
-                Err(application::PortError::Run(error)) => {
-                    Err(PortError::Run(run_error(error, self.compiled())))
-                }
-                Err(application::PortError::CaptureAccounting) => Err(PortError::CaptureAccounting),
-            }
+    ) -> Attempt<P::Error, A::Error> {
+        let mut attempt = Attempt {
+            boundary: Ok(()),
+            activation: Observations::default(),
+            dataset: application::CapturedAttempt::new(self.compiled().source()),
         };
-        CapturedAttempt {
-            sources: attempt
-                .sources
-                .into_iter()
-                .map(|source| CapturedSource {
-                    read: source.read,
-                    snapshot: source.snapshot,
-                    owned_snapshot: source.owned_snapshot,
-                    table: source.table.map(|table| table.0),
-                })
-                .collect(),
-            result,
-        }
+        attempt.boundary = match catch_unwind(AssertUnwindSafe(|| {
+            self.checked.build_into(
+                activation,
+                source,
+                &mut Decoder::<A::Error>::default(),
+                &mut attempt.dataset,
+                Some(&mut attempt.activation),
+                scope,
+            )
+        })) {
+            Ok(result) => result.map_err(BoundaryFailure::Activation),
+            Err(payload) => Err(BoundaryFailure::Unwind(payload)),
+        };
+        attempt
+    }
+    /// One build with no project functions to call; see [`NoActivation`].
+    pub fn execute<P: SpecificationSourcePort>(
+        &self,
+        source: &mut P,
+        scope: yamaa_core::application_observer::Scope<'_>,
+    ) -> Attempt<P::Error, Unavailable> {
+        self.execute_with_ports(&mut NoActivation, source, scope)
     }
 }
 

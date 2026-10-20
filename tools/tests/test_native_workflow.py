@@ -217,7 +217,7 @@ class NativeWorkflowContract(unittest.TestCase):
                     'if [ "${RUNNER_OS}" = Linux ]; then\n'
                     '    python -m tools.ci.manylinux --out "${RUNNER_TEMP}/native-dist"\n'
                     "  else\n"
-                    '    maturin build --release --locked --out "${RUNNER_TEMP}/native-dist"\n',
+                    '    maturin build --profile dist --locked --out "${RUNNER_TEMP}/native-dist"\n',
                     build["run"],
                 )
 

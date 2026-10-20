@@ -211,6 +211,8 @@ jobs:
           PYTHON
       # A Linux wheel builds in the manylinux_2_28 container of the runner's
       # architecture, so it runs on glibc 2.28 and later (tools/ci/manylinux.py).
+      # Every wheel builds with the dist profile that python/pyproject.toml
+      # names, release without the symbol table.
       # The source archive is maturin's output over the Python engine bundle,
       # with its vendored crates (tools/staging/engine_bundle.py).
       - name: Build wheel and source archive
@@ -220,7 +222,7 @@ jobs:
             if [ "${RUNNER_OS}" = Linux ]; then
               python -m tools.ci.manylinux --out "${RUNNER_TEMP}/native-dist"
             else
-              maturin build --release --locked --out "${RUNNER_TEMP}/native-dist"
+              maturin build --profile dist --locked --out "${RUNNER_TEMP}/native-dist"
             fi
           )
           python -m tools.staging.engine_bundle sdist "${RUNNER_TEMP}/native-dist"
