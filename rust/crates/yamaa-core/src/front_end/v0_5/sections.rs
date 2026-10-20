@@ -10,7 +10,7 @@
 use super::project::Metas;
 use crate::ast::{
     DefineContext, DocumentKind, GuideStatus, ImplementationGuide, Meta, MetadataVersion, Named,
-    Section, Study, SubmissionDeclarations, SupportingDocument, Text, Transport,
+    Section, Study, SubmissionDeclarations, SupportingDocument, Text, Transport, STANDARD_NAMES,
 };
 use crate::diagnostic::ScalarSubmissionRule;
 use crate::project_environment::Submission;
@@ -208,20 +208,6 @@ const SECTION: &[FieldName] = &[
     FieldName::Stylesheet,
     FieldName::SourceSystemVersion,
 ];
-const GUIDE_NAMES: &[(&str, &str)] = &[
-    ("ADaMIG", "ADaMIG"),
-    ("ADaMIG-MD", "ADaMIG-MD"),
-    ("BIMO", "BIMO"),
-    ("CDISC/NCI", "CDISC/NCI"),
-    ("SDTMIG", "SDTMIG"),
-    ("SDTMIG-AP", "SDTMIG-AP"),
-    ("SDTMIG-MD", "SDTMIG-MD"),
-    ("SENDIG", "SENDIG"),
-    ("SENDIG-AR", "SENDIG-AR"),
-    ("SENDIG-DART", "SENDIG-DART"),
-    ("SENDIG-GENETOX", "SENDIG-GENETOX"),
-];
-
 fn family(field: &str) -> Option<(Submission, FieldName)> {
     match field {
         "sdtm" => Some((Submission::Sdtm, FieldName::Sdtm)),
@@ -526,8 +512,9 @@ impl<'d> Parser<'d, '_, '_> {
         let node = origin.node.unwrap();
         let meta = self.meta(parent, origin);
         let name_origin = self.get(node, FieldName::Name);
+        let names: Vec<_> = STANDARD_NAMES.iter().map(|name| (*name, *name)).collect();
         let name = self
-            .choice(name_origin, path.field(FieldName::Name), GUIDE_NAMES, None)
+            .choice(name_origin, path.field(FieldName::Name), &names, None)
             .map(|name| Text {
                 text: name.into(),
                 meta: self.meta(meta, name_origin),

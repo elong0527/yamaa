@@ -35,20 +35,26 @@ verification beside it. A duplicate `id` or `name` fails with
 
 ### CT-2. A codelist source's `standard` names its published terminology, and a source without one is sponsor-defined
 
-`standard` belongs to a codelist source and states its terminology name,
-publishing set (`ADaM`, `CDASH`, `DEFINE-XML`, `SDTM` or `SEND`) and version
-once for every list in that source. A source that omits `standard` is
-sponsor-defined rather than unknown; exactly one of published or
-sponsor-defined holds for any codelist. A codelist's `alias` carries the
-published concept identifier of the codelist itself, and an item's `alias` the
-published identifier of that value.
+`standard` belongs to a codelist source and states its terminology name, one of
+the standard names Define-XML publishes such as `CDISC/NCI`, its publishing set
+(`ADaM`, `CDASH`, `DEFINE-XML`, `SDTM` or `SEND`) and its version once for
+every list in that source. A source that omits `standard` is sponsor-defined
+rather than unknown; exactly one of published or sponsor-defined holds for any
+codelist. A codelist's `alias` carries the published concept identifier of the
+codelist itself, and an item's `alias` the published identifier of that value.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elements`.
+Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elements`, `negative-terminology-standard-unknown`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_terminology_standard_name_outside_the_vocabulary_fails_where_the_project_is_read`.
 
 Both aliases are optional here; [DEFINE-4](define-xml.md#define-4) states when a
 document requires an alias, and [CT-6](#ct-6) refuses one on a sponsor-extended
 item, which has no published identifier. A `standard` naming a declared
 standard whose type is not `CT` fails validation.
+
+The name takes the closed list an implementation guide's name takes, the eleven
+standard names of Define-XML 2.1, which `yaml/vocabulary/cdisc.yaml` holds. It
+is checked wherever the project's codelists are read, before any data and
+whether or not a document is generated: a name outside the list fails with
+`value_not_permitted` at the source's `standard.name`.
 
 <a id="ct-12"></a>
 

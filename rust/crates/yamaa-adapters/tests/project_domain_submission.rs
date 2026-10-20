@@ -200,6 +200,137 @@ mod project {
             );
             assert!(!study.0.join("output.csv").exists());
         }
+        /// One closed CDISC vocabulary, in the order of the data file that
+        /// holds them all (P-VOC-1).
+        fn vocabulary(name: &str) -> Vec<String> {
+            use yamaa_core::schema::DocumentNode as N;
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../..")
+                .join("yaml/vocabulary/cdisc.yaml");
+            let bytes = fs::read(path).unwrap();
+            let decoded = yamaa_adapters::yaml_decode::decode_yaml(&bytes).unwrap();
+            let document = &decoded.document;
+            let entries = document
+                .field(document.root(), "vocabularies")
+                .and_then(|vocabularies| document.field(vocabularies, name))
+                .and_then(|vocabulary| document.field(vocabulary, "values"))
+                .unwrap_or_else(|| panic!("{name} has no values"));
+            let N::Sequence(items) = &document.nodes()[entries] else {
+                panic!("{name}: values is not a list")
+            };
+            items
+                .iter()
+                .map(|&item| match document.field(item, "value") {
+                    Some(value) => match &document.nodes()[value] {
+                        N::Text(text) => text.clone(),
+                        other => panic!("{name}: {other:?}"),
+                    },
+                    None => panic!("{name}: an entry has no value"),
+                })
+                .collect()
+        }
+        /// The engine's typed copies of each vocabulary are the data file's
+        /// lists, in order.
+        #[test]
+        fn engine_vocabularies_equal_the_cdisc_vocabulary_file() {
+            use yamaa_core::specification_submission_document::{
+                DatasetClass, DatasetSubclass, OriginSource, OriginType, ROLES,
+            };
+            for (name, engine) in [
+                ("dataset_class", DatasetClass::NAMES),
+                ("dataset_subclass", DatasetSubclass::NAMES),
+                ("standard_name", yamaa_core::ast::STANDARD_NAMES),
+                ("origin_type", OriginType::NAMES),
+                ("origin_source", OriginSource::NAMES),
+                ("role", ROLES),
+            ] {
+                assert_eq!(vocabulary(name), engine, "{name}");
+            }
+        }
+        /// SUB-9: every role the data file lists is admitted where the
+        /// specification is read, and any other fails there.
+        #[test]
+        fn a_role_outside_the_nine_fails_where_the_specification_is_read() {
+            let study = Study::new();
+            let with_role = |role: &str| {
+                VALID.replace("submission: {", &format!("submission: {{role: {role}, "))
+            };
+            let roles = vocabulary("role");
+            assert_eq!(roles.len(), 9);
+            for role in &roles {
+                assert!(study.check(&with_role(role)).is_empty(), "{role}");
+            }
+            for role in ["Qualifier", "record qualifier", "Analysis Value"] {
+                let issues = study.check(&with_role(role));
+                assert_eq!(issues.len(), 1, "{role}: {issues:?}");
+                assert_eq!(
+                    (issues[0].phase(), issues[0].condition(), issues[0].rule()),
+                    ("validation", "value_not_permitted", Some("SCHEMA-12"))
+                );
+                assert_eq!(issues[0].spec_paths, ["columns.VALUE.submission.role"]);
+                let context = yamaa_core::json::Value::Object(issues[0].context.clone());
+                assert_eq!(context["value"], role);
+                let permitted = context["permitted"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|value| value.as_str().unwrap())
+                    .collect::<Vec<_>>();
+                assert_eq!(roles, permitted);
+            }
+            assert!(!study.0.join("output.csv").exists());
+        }
+        /// CT-2: a terminology standard's name is one of the standard names
+        /// the data file lists, refused where the project is read, before any
+        /// document is generated.
+        #[test]
+        fn a_terminology_standard_name_outside_the_vocabulary_fails_where_the_project_is_read() {
+            let study = Study::new();
+            fs::write(study.0.join("spec.yaml"), VALID).unwrap();
+            let check = |name: &str| {
+                fs::write(
+                    study.0.join("project.yaml"),
+                    format!(
+                        "schema_version: '1.0'\ncodelists:\n  - standard: {{name: {name}, \
+                         publishing_set: SDTM, version: '2026-03-27'}}\n    codelists:\n      \
+                         - {{id: SEX, name: Sex, items: [{{value: F}}, {{value: M}}]}}\nsdtm:\n  \
+                         specs: [spec.yaml]\n"
+                    ),
+                )
+                .unwrap();
+                let path = study.0.join("spec.yaml");
+                let project = study.0.join("project.yaml");
+                file_application::check(
+                    yamaa_core::project_function::Language::Python,
+                    Request {
+                        specification: path.to_str().unwrap(),
+                        environment: Some(project.to_str().unwrap()),
+                    },
+                    identity(path.to_str().unwrap()),
+                )
+            };
+            let names = vocabulary("standard_name");
+            for name in &names {
+                assert!(check(name).is_empty(), "{name}");
+            }
+            let issues = check("CDISC CT");
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(
+                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
+                ("validation", "value_not_permitted", Some("SCHEMA-12"))
+            );
+            assert_eq!(issues[0].spec_paths, ["codelists[0].standard.name"]);
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
+            assert_eq!(context["value"], "CDISC CT");
+            let permitted = context["permitted"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(names, permitted);
+            assert!(!study.0.join("output.csv").exists());
+        }
         #[test]
         fn declared_length_is_checked_once_over_unicode_scalar_values() {
             let study = Study::new();

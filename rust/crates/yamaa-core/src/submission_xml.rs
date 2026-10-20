@@ -733,20 +733,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
     // immutable writer fixes element order/cardinality and generated references;
     // independent installed tests validate bytes with the unchanged official XSD.
     for standard in &study.standards {
-        if !matches!(
-            standard.name.as_str(),
-            "ADaMIG"
-                | "ADaMIG-MD"
-                | "BIMO"
-                | "CDISC/NCI"
-                | "SDTMIG"
-                | "SDTMIG-AP"
-                | "SDTMIG-MD"
-                | "SENDIG"
-                | "SENDIG-AR"
-                | "SENDIG-DART"
-                | "SENDIG-GENETOX"
-        ) {
+        if !ast::STANDARD_NAMES.contains(&standard.name.as_str()) {
             return Err(invalid("standards", "StandardName enumeration"));
         }
         if standard.publishing_set.as_ref().is_some_and(|set| {

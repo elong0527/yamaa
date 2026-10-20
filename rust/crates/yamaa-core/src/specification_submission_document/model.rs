@@ -8,6 +8,8 @@ macro_rules! vocabulary {
         impl $name {
             pub fn name(self) -> &'static str { match self { $(Self::$variant => $text),+ } }
             pub(super) const VALUES: &'static [(&'static str, Self)] = &[$(($text, Self::$variant)),+];
+            /// Every spelling, in declaration order.
+            pub const NAMES: &'static [&'static str] = &[$($text),+];
         }
     }
 }
@@ -72,6 +74,19 @@ vocabulary!(ColumnType { String => "str", Integer => "int", Float => "float", Da
 vocabulary!(Core { Required => "Req", Expected => "Exp", Permissible => "Perm", Conditional => "Cond" });
 vocabulary!(OriginType { Assigned => "Assigned", Collected => "Collected", Derived => "Derived", NotAvailable => "Not Available", Other => "Other", Predecessor => "Predecessor", Protocol => "Protocol" });
 vocabulary!(OriginSource { Investigator => "Investigator", Sponsor => "Sponsor", Subject => "Subject", Vendor => "Vendor" });
+/// Every role a column's `role` takes: the nine of the SDTM model, which
+/// `yaml/vocabulary/cdisc.yaml` holds (SUB-9). A role stays text.
+pub const ROLES: &[&str] = &[
+    "Identifier",
+    "Topic",
+    "Timing",
+    "Grouping Qualifier",
+    "Result Qualifier",
+    "Synonym Qualifier",
+    "Record Qualifier",
+    "Variable Qualifier",
+    "Rule",
+];
 vocabulary!(MethodType { Computation => "Computation", Imputation => "Imputation" });
 vocabulary!(PageType { Physical => "PhysicalRef", Named => "NamedDestination" });
 vocabulary!(DataType {

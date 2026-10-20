@@ -1,0 +1,19 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - codelists[0].standard.name
+rule: SCHEMA-12
+context:
+  value: CDISC CT
+  permitted:
+    - ADaMIG
+    - ADaMIG-MD
+    - BIMO
+    - CDISC/NCI
+    - SDTMIG
+    - SDTMIG-AP
+    - SDTMIG-MD
+    - SENDIG
+    - SENDIG-AR
+    - SENDIG-DART
+    - SENDIG-GENETOX

@@ -1,5 +1,8 @@
 //! Normalized model shape, independent of the authored schema's shorthand rules.
 use super::{Field, Kind, Model};
+use crate::specification_submission_document::{
+    DatasetClass, DatasetSubclass, OriginSource, OriginType, ROLES,
+};
 use Kind::*;
 
 macro_rules! required {
@@ -249,22 +252,8 @@ model!(
     ORIGIN,
     "SubmissionOrigin",
     [
-        required!(
-            "type",
-            Enum(&[
-                "Assigned",
-                "Collected",
-                "Derived",
-                "Not Available",
-                "Other",
-                "Predecessor",
-                "Protocol"
-            ])
-        ),
-        optional!(
-            "source",
-            Enum(&["Investigator", "Sponsor", "Subject", "Vendor"])
-        ),
+        required!("type", Enum(OriginType::NAMES)),
+        optional!("source", Enum(OriginSource::NAMES)),
         optional!("description", Text),
         optional!("documents", List(&DOCUMENT_REFERENCE)),
     ]
@@ -292,7 +281,7 @@ macro_rules! submission_metadata {
         [
             optional!("core", Enum(&["Req", "Exp", "Perm", "Cond"])),
             optional!("mandatory", Boolean),
-            optional!("role", Text),
+            optional!("role", Enum(ROLES)),
             optional!("data_type", DATA_TYPE),
             optional!("length", Integer),
             optional!("significant_digits", Integer),
@@ -323,37 +312,8 @@ model!(
     "SubmissionDataset",
     [
         required!("label", Text),
-        required!(
-            "class",
-            Enum(&[
-                "ADAM OTHER",
-                "BASIC DATA STRUCTURE",
-                "DEVICE LEVEL ANALYSIS DATASET",
-                "EVENTS",
-                "FINDINGS",
-                "FINDINGS ABOUT",
-                "INTERVENTIONS",
-                "MEDICAL DEVICE BASIC DATA STRUCTURE",
-                "MEDICAL DEVICE OCCURRENCE DATA STRUCTURE",
-                "OCCURRENCE DATA STRUCTURE",
-                "REFERENCE DATA STRUCTURE",
-                "RELATIONSHIP",
-                "SPECIAL PURPOSE",
-                "STUDY REFERENCE",
-                "SUBJECT LEVEL ANALYSIS DATASET",
-                "TRIAL DESIGN"
-            ])
-        ),
-        optional!(
-            "subclass",
-            Enum(&[
-                "ADVERSE EVENT",
-                "MEDICAL DEVICE TIME-TO-EVENT",
-                "NON-COMPARTMENTAL ANALYSIS",
-                "POPULATION PHARMACOKINETIC ANALYSIS",
-                "TIME-TO-EVENT"
-            ])
-        ),
+        required!("class", Enum(DatasetClass::NAMES)),
+        optional!("subclass", Enum(DatasetSubclass::NAMES)),
         required!("structure", Text),
         required!("repeating", Boolean),
         field!("reference_data", Boolean),

@@ -599,8 +599,25 @@ class PublicDefine(unittest.TestCase):
         )
         for name in written:
             (directory / name).unlink()
+        # A terminology standard's name is closed where the project is read
+        # (CT-2), before any document is composed.
         project.write_text(
             project.read_text().replace("name: CDISC/NCI", "name: InvalidStandard")
+        )
+        result = self.call(directory)
+        self.assertEqual(result.issues["condition"].to_list(), ["value_not_permitted"])
+        self.assertEqual(result.issues["rule"].to_list(), ["SCHEMA-12"])
+        self.assertEqual(
+            result.issues["spec_paths"].to_list(), [["codelists[0].standard.name"]]
+        )
+        self.refused(result)
+        self.assertFalse((directory / "define.xml").exists())
+        # A SAS format name longer than eight characters fails only against
+        # the Define-XML schema's facet, as the document is generated.
+        project.write_text(
+            project.read_text()
+            .replace("name: InvalidStandard", "name: CDISC/NCI")
+            .replace("format_name: $SEX\n", "format_name: $SEXCODELIST\n")
         )
         result = self.call(directory)
         self.assertIn("DEFINE-25", result.issues["rule"].to_list())

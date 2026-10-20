@@ -115,12 +115,6 @@ language_tag:
     pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
     description: Language tag carried by every generated translated text.
 
-standard_name:
-    type: str
-    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
-        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
-    description: Standard name, in the exact case Define-XML 2.1 publishes.
-
 submission_section_class:
     - specs:
         type: "list[path]"

@@ -316,7 +316,7 @@ mod schema {
             let digits = a.node(N::Integer("-18446744073709551616000000".into()));
             let core = a.text("Cond");
             let mandatory = a.node(N::Boolean(true));
-            let role = a.text("Qualifier");
+            let role = a.text("Record Qualifier");
             let data_type = a.text("text");
             let display = a.text("$20.");
             let codelist = a.text("SEX");
@@ -351,7 +351,7 @@ mod schema {
             );
             assert_eq!(sub.core.as_ref().unwrap().value, Core::Conditional);
             assert!(sub.mandatory.as_ref().unwrap().value);
-            assert_eq!(sub.role.as_ref().unwrap().value, "Qualifier");
+            assert_eq!(sub.role.as_ref().unwrap().value, "Record Qualifier");
             assert_eq!(sub.data_type.as_ref().unwrap().value, DataType::Text);
             assert_eq!(sub.display_format.as_ref().unwrap().value, "$20.");
             assert_eq!(sub.codelist.as_ref().unwrap().value, "SEX");
