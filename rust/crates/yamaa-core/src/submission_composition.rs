@@ -1673,16 +1673,22 @@ pub struct Required<'a> {
     pub section: &'a ast::Section,
     pub standard: &'a ast::ImplementationGuide,
     pub define: &'a ast::Text,
+    /// The surface the project is written in, which spells the guide's path:
+    /// `standard` in 0.5, `standards[0]` in 1.0.
+    pub surface: ast::Surface,
 }
 impl<'a> Required<'a> {
     /// A section admits for runs with only its `specs`. Composition requires the
     /// project `study`, the selected family's section and that section's
-    /// `standard` and `define`, and reports every missing one together as a
-    /// missing required field.
+    /// guide and `define`, and reports every missing one together as a
+    /// missing required field: the guide as a project written in `surface`
+    /// spells it, `standards` in 1.0, whose list may also be empty, and
+    /// `standard` in 0.5 (DEFINE-28).
     pub fn admit(
         study: Option<&'a ast::Study>,
         section: Option<&'a ast::Section>,
         family: Submission,
+        surface: ast::Surface,
     ) -> Result<Self, Vec<Finding>> {
         let family = family_name(family);
         let missing = |path: String, field: &str| {
@@ -1698,6 +1704,7 @@ impl<'a> Required<'a> {
                 section,
                 standard,
                 define,
+                surface,
             });
         }
         let mut findings = Vec::new();
@@ -1708,7 +1715,11 @@ impl<'a> Required<'a> {
             findings.push(missing(family.into(), family));
         } else {
             if standard.is_none() {
-                findings.push(missing(format!("{family}.standard"), "standard"));
+                let field = match surface {
+                    ast::Surface::V0_5 => "standard",
+                    ast::Surface::V1 { .. } => "standards",
+                };
+                findings.push(missing(format!("{family}.{field}"), field));
             }
             if define.is_none() {
                 findings.push(missing(format!("{family}.define"), "define"));
@@ -1735,6 +1746,7 @@ pub fn compose(
         section,
         standard: guide_declaration,
         define,
+        surface,
     } = required;
     let mut findings = Vec::new();
     let specifications: Vec<&Document> = inputs
@@ -1765,11 +1777,13 @@ pub fn compose(
         Submission::Send => guide.starts_with("SENDIG"),
     };
     if !compatible {
-        fail(
-            ConditionCode::SubmissionStandardFamily,
-            "standard.name",
-            guide,
-        );
+        // The guide composition binds: 0.5's one `standard`, or the first of
+        // a 1.0 section's `standards` (D16).
+        let path = match surface {
+            ast::Surface::V0_5 => "standard.name",
+            ast::Surface::V1 { .. } => "standards[0].name",
+        };
+        fail(ConditionCode::SubmissionStandardFamily, path, guide);
     }
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
         fail(
