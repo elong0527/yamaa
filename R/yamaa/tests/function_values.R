@@ -52,6 +52,8 @@ refused <- function(result, condition, requirement, reason) {
 # The project's one specification, run with the project's functions.
 run <- function() yamaa_project("project.yaml")$spec("TEST")$run()
 
+# Read before the runs move into their own directory.
+rounding <- readLines(file.path("project-base", "base-round", "r", "environment.yaml"))
 work <- tempfile("function-values-"); dir.create(work)
 previous <- setwd(work)
 writeLines(c("schema_version: '1.0'", "environments: {r: environment.yaml}",
@@ -63,8 +65,6 @@ identity_function <- function(name, type, cases, extra = character()) c(
     if (length(extra)) ", accepts_missing: true" else "", "}]"),
   paste0("    returns: ", type), "    tests:", paste0("      - ", cases))
 missing_case <- "{id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}"
-rounding <- readLines(system.file("project-base", "base-round", "r", "environment.yaml",
-  package = "yamaa", mustWork = TRUE))
 writeLines(c("schema_version: '1.0'", "functions:",
   identity_function("int_value", "int", c(
     "{id: normal, covers: [normal], args: {x: 7}, result: 7}",

@@ -14,8 +14,7 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 source(file.path(host_fixture_root,"context.R"),local=TRUE)
 local({
@@ -27,7 +26,7 @@ local({
     !context_equal(actual,decode('{"dataset":"SRC","keys":[{"A":1,"B":2}]}')))
 })
 host_truth <- read_host_fixture(host_fixture_root,"original-specifications")
-root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
+root <- normalizePath("specification-original", winslash="/", mustWork=TRUE)
 fixture_rows <- function(filename) {
   jsonlite::fromJSON(file.path(root,filename),simplifyVector=FALSE)
 }

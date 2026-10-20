@@ -14,6 +14,7 @@ from pathlib import Path
 
 from tools.conformance import supplemental_inventory as inventory
 from tools.paths import ROOT
+from tools.staging import stage_r_package
 
 CATALOG = ROOT / "rust/qualification/supplemental.json"
 
@@ -48,6 +49,10 @@ def stage(runtime, destination):
                 "grammar-original",
             )
         ]
+    else:
+        # The inputs that the R package's tests directory carries beside the
+        # suites, which read them from their working directory.
+        directories += [destination / name for name in stage_r_package.TEST_INPUTS]
     for target in [*(target for _, target in copies), *directories]:
         if target.exists():
             raise FileExistsError(f"refusing to overwrite staged checks: {target}")
@@ -71,6 +76,8 @@ def stage(runtime, destination):
                 ],
                 check=True,
             )
+    else:
+        stage_r_package.stage_test_inputs(destination)
 
 
 def main():

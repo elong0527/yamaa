@@ -19,18 +19,18 @@ aarch64, macOS and Windows.
 the installed size. The notes, and why they remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
-  size of the tarball, about 11.4 MB. About 9.7 MB of it is
+  size of the tarball, about 11.5 MB. About 9.7 MB of it is
   `src/rust/vendor.tar.xz`, the Rust crates that the package compiles, which
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
   be requested for such bundled sources; we request a limit of 15 MB.
 - `checking installed package size ... NOTE` (R 4.4; R 4.6.1 and R-devel
-  report it as INFO): 32 to 36 MB on Linux, by Rust release. The shared
-  object, 23 to 27 MB, links the Rust engine statically: most of it is machine
-  code, and the symbols and the debug information of the Rust standard
-  library are kept, as the policy asks. The inputs that the package's tests
-  read are about 7.5 MB, in `inst/specification-original`,
-  `inst/grammar-original` and `inst/host-fixtures`.
+  report it as INFO): 24 to 28 MB on Linux, by Rust release, almost all of it
+  the shared object. The shared object, 23 to 27 MB, links the Rust engine
+  statically: most of it is machine code, and the symbols and the debug
+  information of the Rust standard library are kept, as the policy asks. The
+  inputs that the package's tests read are in `tests/`, which R does not
+  install.
 
 ## Rust
 

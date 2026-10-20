@@ -10,6 +10,12 @@ them through src/rust/vendor-config.toml, the bundle's Cargo configuration.
 configure reads the minimum Cargo and rustc from the rust-version of the
 bundle's workspace manifest. inst/AUTHORS names every bundled crate's authors
 and license, as CRAN's Repository Policy asks.
+
+inst/ holds only AUTHORS and the license notices, which R installs with the
+package. The inputs that the R suites read sit beside them in tests/, which
+R CMD check copies and runs from but R never installs (#3105).
+stage_test_inputs stages them there, and tools.commands.installed stages the
+same inputs beside the suites that native qualification runs.
 """
 
 import argparse
@@ -41,17 +47,30 @@ AUTHORS_PREAMBLE = (
     "Each entry gives the authors, license and repository that the crate's "
     "manifest declares. The yamaa authors are in DESCRIPTION.",
 )
-# Staged test inputs the installed R package leaves out, as paths under inst/
-# in .gitignore form: "*" stays within one name, a final "/**" covers a whole
-# directory, and a later "!" pattern keeps a file an earlier one left out. The
-# installed R suites (R/yamaa/tests) read every other staged file; the Python
-# suites stage the complete trees outside any package.
+# The trees of inputs that the R suites read from their working directory:
+# R CMD check runs each suite in a copy of the package's tests directory, and
+# native qualification in the directory where it stages the installed suites.
+# The shared host fixtures are staged beside them separately.
+TEST_INPUTS = (
+    "specification-original",
+    "grammar-original",
+    "project-base",
+    "define-fixtures",
+)
+# The authored project studies; stage_projects adds a benchmark study to them.
+PROJECTS = REPOSITORY / "R/yamaa/tests/project-base"
+# Staged test inputs that no R suite reads, left out wherever the R suites'
+# inputs are staged, as paths from the directory that holds the TEST_INPUTS
+# trees, in .gitignore form: "*" stays within one name, a final "/**" covers a
+# whole directory, and a later "!" pattern keeps a file an earlier one left
+# out. The R suites (R/yamaa/tests) read every other staged file; the Python
+# suites stage the complete trees.
 UNREAD_BY_R_SUITES = (
-    # The Python suites' truth codec and their XML and JSON schema validation.
-    "host_fixtures.py",
+    # The Python suites' XML and JSON schema validation.
     "define-fixtures/schemas/**",
-    # Top-level JSON truth; the R suites read the generated R truth instead.
+    # JSON truth; the R suites read the generated R truth instead.
     "specification-original/*.json",
+    "specification-original/row-cases/*/findings.json",
     # R strings cannot hold NUL, so original_specifications.R skips this case.
     "specification-original/text-template-cases/nul-value/**",
     # Staged for no installed suite.
@@ -99,7 +118,7 @@ def matches(relative: str, pattern: str) -> bool:
 
 
 def leave_out_unread_inputs(resources: Path, patterns=UNREAD_BY_R_SUITES) -> None:
-    """Remove the staged inputs no installed R suite reads.
+    """Remove the staged inputs no R suite reads.
 
     A pattern that matches no staged file is refused before anything is removed.
     """
@@ -205,55 +224,93 @@ def authors_text(metadata, crates, listed, locked):
     return "\n".join(lines)
 
 
-def stage(destination: Path):
-    """Copy shared sources and independent installed-test truth into a new archive tree."""
-    # A source package must never generate its own dependency resolution.
-    if not (WORKSPACE / "Cargo.lock").is_file():
-        raise FileNotFoundError("canonical Cargo.lock is missing")
-    # copytree rejects an existing destination, protecting previous builds.
-    shutil.copytree(REPOSITORY / "R/yamaa", destination)
-    crates = bundle_rust(destination)
-    resources = destination / "inst"
-    resources.mkdir(exist_ok=True)
-    from tools.staging import stage_specification_inputs as helper
+def stage_projects(projects: Path) -> None:
+    """Stage the project studies that the R suites read into a new directory.
 
-    helper.stage(resources / "specification-original")
-    from tools.staging import stage_grammar_inputs as grammar_helper
-
-    grammar_helper.stage(resources / "grammar-original")
-    # Package checks use base R functions. The original project studies and
-    # their separately installed helper belong to public benchmark qualification.
-    projects = resources / "project-base"
-    negative = projects / "negative-function-contract"
+    Package checks use base R functions: the original project studies and
+    their separately installed helper belong to public benchmark
+    qualification. Beside the authored base-round study,
+    negative-function-contract calls base::identity instead of the helper, and
+    both get the benchmark's R lock without the helper. The rewritten files end
+    their lines with LF on every platform, as the copied ones do.
+    """
     from tools.staging import stage_project_inputs as project_helper
 
+    shutil.copytree(PROJECTS, projects)
+    negative = projects / "negative-function-contract"
     # Retain the foreign Python lock for the R lock-kind refusal test.
     project_helper.stage_case(
         REPOSITORY / "benchmarks/negative-function-contract", negative
     )
     environment = negative / "r/environment.yaml"
     environment.write_text(
-        environment.read_text().replace(
+        environment.read_text(encoding="utf-8").replace(
             "yamaabenchmarks::project_value", "base::identity"
-        )
+        ),
+        encoding="utf-8",
+        newline="\n",
     )
-    lock = json.loads((negative / "r/renv.lock").read_text())
+    lock = json.loads((negative / "r/renv.lock").read_text(encoding="utf-8"))
     del lock["Packages"]["yamaabenchmarks"]
     for case in (negative, projects / "base-round"):
-        (case / "r/renv.lock").write_text(json.dumps(lock, indent=2) + "\n")
-    from tools.staging import stage_define_inputs as define_helper
+        (case / "r/renv.lock").write_text(
+            json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
 
-    define_helper.stage(resources / "define-fixtures")
+
+def stage_test_inputs(tests: Path) -> None:
+    """Stage the TEST_INPUTS trees beside the R suites, in tests.
+
+    The trees are staged apart first and left without the inputs that no R
+    suite reads, so that nothing else in tests is touched. A tree that tests
+    already holds is refused before anything is staged.
+    """
+    from tools.staging import stage_define_inputs as define_helper
+    from tools.staging import stage_grammar_inputs as grammar_helper
+    from tools.staging import stage_specification_inputs as helper
+
+    for name in TEST_INPUTS:
+        if (tests / name).exists():
+            raise FileExistsError(f"refusing to overwrite test inputs: {tests / name}")
+    with tempfile.TemporaryDirectory(prefix="yamaa-r-test-inputs-") as scratch:
+        staged = Path(scratch)
+        helper.stage(staged / "specification-original")
+        grammar_helper.stage(staged / "grammar-original")
+        stage_projects(staged / "project-base")
+        define_helper.stage(staged / "define-fixtures")
+        leave_out_unread_inputs(staged)
+        for name in TEST_INPUTS:
+            shutil.copytree(staged / name, tests / name)
+
+
+def stage(destination: Path):
+    """Copy shared sources into a new archive tree, the suites' inputs beside them."""
+    # A source package must never generate its own dependency resolution.
+    if not (WORKSPACE / "Cargo.lock").is_file():
+        raise FileNotFoundError("canonical Cargo.lock is missing")
+    # copytree rejects an existing destination, protecting previous builds.
+    # The authored project studies arrive with the other test inputs below.
+    shutil.copytree(
+        REPOSITORY / "R/yamaa",
+        destination,
+        ignore=lambda directory, names: [
+            name for name in names if Path(directory, name) == PROJECTS
+        ],
+    )
+    crates = bundle_rust(destination)
+    tests = destination / "tests"
+    stage_test_inputs(tests)
     catalog = inventory.load_catalog(
         REPOSITORY, WORKSPACE / "qualification/supplemental.json"
     )
     for name, relative in inventory.host_fixture_files(catalog):
-        target = resources / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPOSITORY / name, target)
-    leave_out_unread_inputs(resources)
+        # host_fixtures.py is the Python suites' codec of the shared truth.
+        if relative.startswith("host-fixtures/"):
+            target = tests / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPOSITORY / name, target)
     listed = notices.committed_entries(
-        (resources / notices.NOTICES).read_text(encoding="utf-8")
+        (destination / "inst" / notices.NOTICES).read_text(encoding="utf-8")
     )
     _, locked = engine_bundle.lock_packages(
         (destination / "src/rust/Cargo.lock").read_text(encoding="utf-8"),
