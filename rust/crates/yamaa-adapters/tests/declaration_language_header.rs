@@ -17,13 +17,12 @@ mod declaration {
         use yamaa_adapters::document::{
             self, check_references, Closures, Decoded, ReferenceError, SpecificationError,
         };
-        use yamaa_adapters::issue_rows::Issue;
         use yamaa_adapters::json;
         use yamaa_adapters::specification_report::Identity;
         use yamaa_adapters::specification_source::{
             CapturedSchema, Error, InheritancePort, Source,
         };
-        use yamaa_core::diagnostic::ConditionCode;
+        use yamaa_core::diagnostic::{ConditionCode, Diagnostic as Issue};
         use yamaa_core::domain_entry::Request;
         use yamaa_core::inheritance::{self as graph, Source as GraphSource, SourceError};
         use yamaa_core::json::Value;
@@ -97,11 +96,11 @@ mod declaration {
         }
 
         fn refused(issue: &Issue, requirement: &str, path: &str, context: Value) {
-            assert_eq!(issue.phase, "validation");
-            assert_eq!(issue.condition, "unsupported_language_version");
-            assert_eq!(issue.requirement.as_deref(), Some(requirement));
+            assert_eq!(issue.phase(), "validation");
+            assert_eq!(issue.condition(), "unsupported_language_version");
+            assert_eq!(issue.requirement(), Some(requirement));
             assert_eq!(issue.spec_paths, [path]);
-            assert_eq!(issue.context, context);
+            assert_eq!(Value::Object(issue.context.clone()), context);
         }
 
         #[test]
@@ -136,10 +135,10 @@ mod declaration {
             // An unquoted version is a YAML float and no version (SCHEMA-4).
             study.write("spec.yaml", "yamaa: 1.0\ntype: spec\n");
             let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition, "invalid_field_type");
+            assert_eq!(issue.condition(), "invalid_field_type");
             assert_eq!(issue.spec_paths, ["yamaa"]);
             assert_eq!(
-                issue.context,
+                Value::Object(issue.context),
                 json!({"expected": "language_version", "actual": "float"})
             );
         }
@@ -153,12 +152,12 @@ mod declaration {
             // Beside `schema_version`, `yamaa` is an unknown 0.5 field.
             study.write("spec.yaml", &format!("{LEGACY}yamaa: \"1.0\"\n"));
             let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition, "unknown_field");
+            assert_eq!(issue.condition(), "unknown_field");
             assert_eq!(issue.spec_paths, ["yamaa"]);
             // A file declaring neither keeps today's version finding.
             study.write("spec.yaml", "domain: TEST\n");
             let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition, "schema_version_mismatch");
+            assert_eq!(issue.condition(), "schema_version_mismatch");
             assert_eq!(issue.spec_paths, ["schema_version"]);
         }
 
@@ -180,7 +179,7 @@ mod declaration {
             // A parent whose version is unquoted fails in that layer.
             study.write("base.yaml", "yamaa: 1.0\n");
             let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition, "invalid_field_type");
+            assert_eq!(issue.condition(), "invalid_field_type");
             assert_eq!(issue.spec_paths, ["yamaa"]);
             assert_eq!(issue.context["source"], study.path("base.yaml"));
         }
