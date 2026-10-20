@@ -1334,7 +1334,7 @@ S1,002,2024-06
         /// what decides it. `domain` reaches each of them once it reads or binds
         /// the inputs. The list may only shrink: a case that `check` starts to
         /// report fails until it leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 21] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 18] = [
             (
                 "negative-aggregate-key-other-template",
                 "the driver of each row template that evaluates an aggregate key",
@@ -1352,16 +1352,8 @@ S1,002,2024-06
                 "the driver of each row template that reads a lookup derivation",
             ),
             (
-                "negative-lookup-key-column-phase",
-                "the phase of a column a row template's lookup matches on",
-            ),
-            (
                 "negative-lookup-key-other-template",
                 "the driver of each row template that reads a lookup key",
-            ),
-            (
-                "negative-lookup-match-column-phase",
-                "the phase of a column a row template's lookup range reads",
             ),
             (
                 "negative-lookup-mismatched",
@@ -1391,10 +1383,6 @@ S1,002,2024-06
             (
                 "negative-row-filter-lookup-scope",
                 "the driver of the row template whose filter reads a lookup",
-            ),
-            (
-                "negative-row-phase-flag",
-                "the phase of a column a row template reads",
             ),
             (
                 "negative-row-ungrouped-second-template",
@@ -1543,7 +1531,8 @@ S1,002,2024-06
             // Column order over every kind of derivation, in either row
             // construction, and what binding decides of an aggregate, a
             // mapping or cut, a lookup range and a source filter from the
-            // declarations (#2844, owner decision 3).
+            // declarations (#2844, owner decision 3); and the phase
+            // boundaries each row template's phase set decides (#2754).
             for name in [
                 "negative-adlb-computed-param",
                 "negative-cut-coded",
@@ -1554,7 +1543,10 @@ S1,002,2024-06
                 "negative-forward-reference",
                 "negative-keys-missing",
                 "negative-lookup-bad-range",
+                "negative-lookup-key-column-phase",
+                "negative-lookup-match-column-phase",
                 "negative-row-aggregate-keys",
+                "negative-row-phase-flag",
                 "negative-row-value-self",
                 "negative-row-window-ungrouped",
                 "negative-source-missing-field",

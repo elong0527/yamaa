@@ -38,7 +38,7 @@ fn match_sites(
 
 /// Whether `findings` already holds this lookup finding: a template reads
 /// one intermediate through several identifiers of one site.
-fn reported(findings: &[BindFinding], finding: &BindFinding) -> bool {
+pub(super) fn reported(findings: &[BindFinding], finding: &BindFinding) -> bool {
     findings.iter().any(|prior| {
         matches!((prior, finding), (BindFinding::Lookup(prior), BindFinding::Lookup(finding))
             if prior.diagnostic() == finding.diagnostic())
@@ -65,7 +65,12 @@ pub(super) fn dependencies(
 /// phase completes (LOOKUP-2): a key match value, its `between` value, or a
 /// match value of another lookup a `between` value reads. The finding is at
 /// the template's read of the lookup.
-fn match_phase_boundary(path: &str, column: &str, intermediate: &str, row: &str) -> BindFinding {
+pub(super) fn match_phase_boundary(
+    path: &str,
+    column: &str,
+    intermediate: &str,
+    row: &str,
+) -> BindFinding {
     let mut finding = LookupFinding::new(
         path,
         crate::diagnostic::ConditionCode::IntermediateMatchPhaseBoundary,

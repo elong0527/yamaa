@@ -4,9 +4,9 @@
 //! binding's order, and this pass reports them in that order too: the root
 //! filter, the intermediates in the order they are derived, then each column
 //! (or each row template's derivations and the column phase), column order,
-//! and the lookup ranges each row reads. Phase boundaries, group scope and
-//! driver scope inside row templates are not among them yet: they need each
-//! template's phase set (#2754).
+//! and the lookup ranges each row reads. Each row-phase derivation's phase
+//! boundaries follow its own defects ([`super::boundaries`]). Group scope and
+//! driver scope inside row templates are not among them yet.
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -1567,18 +1567,19 @@ impl Checks<'_> {
             }
             let driver = [template.driver];
             for derivation in &template.derivations {
-                self.derivation(
-                    root(derivation)?,
-                    Some(Scope {
+                let root = root(derivation)?;
+                // A phase boundary stops binding before the selections.
+                self.defects(root, findings)?;
+                if !super::boundaries::derivation(spec, template, root, findings) {
+                    let scope = Scope {
                         drivers: &driver,
                         row: Some(template.id),
                         phase: Some(Phase::Row {
                             group_by: template.groups.as_deref(),
                         }),
-                    }),
-                    false,
-                    findings,
-                )?;
+                    };
+                    self.selections(root, Some(scope), false, findings)?;
+                }
             }
         }
         for derivation in phases

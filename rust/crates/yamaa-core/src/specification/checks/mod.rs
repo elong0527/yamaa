@@ -17,6 +17,7 @@
 //! preparation's own constructor, from the document node the tree was
 //! lowered from, until binding reads the tree.
 
+pub(super) mod boundaries;
 pub(super) mod declared;
 pub(super) mod lookups;
 pub(super) mod odm;
