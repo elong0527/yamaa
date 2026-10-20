@@ -425,10 +425,12 @@ uv run --project python --no-sync python -m yamaa.style benchmarks/<name>/
 ```
 
 Conformance qualification compares both hosts with the authored expected data.
-When prompts or independent solutions change, also run the Harbor controls:
+When prompts or independent solutions change, also run the Harbor controls in
+the evaluation's own locked environment:
 
 ```sh
-uv run --project python --no-sync pytest evaluations/harbor/tests
+uv sync --project evaluations/harbor
+uv run --project evaluations/harbor --no-sync pytest evaluations/harbor/tests
 ```
 
 ## Adding a benchmark
