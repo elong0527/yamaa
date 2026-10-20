@@ -73,7 +73,9 @@ impl EngineOptions {
     }
 
     /// Activate project functions through a caller-supplied capability.
-    /// Project routes without functions report unsupported.
+    /// Without one, a build that calls a project function reports
+    /// unsupported before it reads data; every other build runs, with or
+    /// without a project.
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self {
         self.functions = Some(functions);
         self

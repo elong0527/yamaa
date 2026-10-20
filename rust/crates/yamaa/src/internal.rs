@@ -249,9 +249,10 @@ impl yamaa_core::project_activation::ActivationPort for HostPort<'_> {
 }
 
 /// The host-functions port of an engine configured without project
-/// functions. Only a member without a project runs with it, and such a
-/// member calls no project function, so no request reaches it; one that did
-/// would fail as a missing binding.
+/// functions, such as the command line's. Only a member that calls no
+/// project function runs with it, with or without a project, so activation
+/// never enters it; a request that did reach it would fail as a missing
+/// binding.
 struct NoFunctions;
 
 impl ProjectFunctions for NoFunctions {
@@ -471,11 +472,12 @@ fn run_member(
         }
     }
     let project = prepared.run().has_project();
-    // Without project functions the port is empty: a member with a project
-    // is unsupported, and one without a project calls no project function.
+    // Without project functions the port is empty: a member that calls a
+    // project function is unsupported before it reads data, and any other
+    // member, with or without a project, runs as a host runs it.
     let functions: &dyn ProjectFunctions = match shared.functions.as_deref() {
         Some(functions) => functions,
-        None if project => {
+        None if !prepared.run().compiled().called_functions().is_empty() => {
             let issues =
                 yamaa_adapters::file_application::unsupported("environment", Some("environment"));
             return (Err(issues), Vec::new(), None);

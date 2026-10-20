@@ -237,19 +237,21 @@ impl Served {
         }
     }
 
-    /// The engine every host configures, over this case's resolver: R, with
-    /// the benchmarks' project functions.
-    fn engine(&self) -> Engine {
-        self.engine_with(Arc::new(functions::Benchmarks))
+    /// An engine over this case's resolver as the R host configures it, with
+    /// `functions`, or with none, as the command line runs.
+    fn engine_with(&self, functions: Option<Arc<dyn ProjectFunctions>>) -> Engine {
+        let options = EngineOptions::new(HostLanguage::R, "rust".into(), "memory".into())
+            .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>);
+        Engine::new(match functions {
+            Some(functions) => options.with_functions(functions),
+            None => options,
+        })
     }
+}
 
-    fn engine_with(&self, functions: Arc<dyn ProjectFunctions>) -> Engine {
-        Engine::new(
-            EngineOptions::new(HostLanguage::R, "rust".into(), "memory".into())
-                .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>)
-                .with_functions(functions),
-        )
-    }
+/// The benchmarks' project functions, as the R host supplies them.
+fn benchmarks() -> Option<Arc<dyn ProjectFunctions>> {
+    Some(Arc::new(functions::Benchmarks))
 }
 
 fn expected_error(case: &Path) -> Option<Json> {
@@ -653,6 +655,15 @@ fn case_needs_parquet(case: &Path) -> bool {
 /// Run one benchmark case entirely through the memory resolver and compare
 /// the outcome with the authored expectation, the file route's way.
 fn check_case(name: &str, case: &Path) -> CaseOutcome {
+    check_case_with(name, case, benchmarks())
+}
+
+/// [`check_case`] on an engine with `functions`, or with none.
+fn check_case_with(
+    name: &str,
+    case: &Path,
+    functions: Option<Arc<dyn ProjectFunctions>>,
+) -> CaseOutcome {
     if !cfg!(feature = "parquet") && case_needs_parquet(case) {
         return CaseOutcome::Skipped;
     }
@@ -664,7 +675,7 @@ fn check_case(name: &str, case: &Path) -> CaseOutcome {
         return CaseOutcome::Findings(findings);
     }
     let served = Served::case(case);
-    let engine = served.engine();
+    let engine = served.engine_with(functions);
     let entries = plan_entries(case);
     // A Define benchmark's expected failure belongs to its Define call, as in
     // compare_example; its domain builds are compared as a positive case.
@@ -803,7 +814,7 @@ fn first_issue(
     let served = Served::case(&root().join(name));
     edit(&served);
     let run = run_entry(
-        &served.engine_with(functions),
+        &served.engine_with(Some(functions)),
         &EntryCall {
             specification: "spec.yaml".into(),
             project: Some("project.yaml".into()),
@@ -849,6 +860,33 @@ fn the_port_verifies_the_lock() {
         context["expected"],
         Json::Array(vec![Json::from("0.9.0")]),
         "{issue:?}"
+    );
+}
+
+/// The `selftest` cases (`benchmarks/selftest.yaml`, D105) pass the memory
+/// route on an engine without project functions, as the command line runs
+/// them: each calls no project function, so it runs with its project through
+/// the empty port.
+#[test]
+fn the_selftest_cases_pass_without_project_functions() {
+    let listed = yaml_json(&fs::read(root().join("selftest.yaml")).unwrap());
+    let names = listed["cases"]
+        .as_array()
+        .expect("selftest.yaml lists its cases")
+        .iter()
+        .map(|name| name.as_str().expect("a case is named by its directory"))
+        .collect::<Vec<_>>();
+    assert!(!names.is_empty());
+    let mut failures = Vec::new();
+    for name in names {
+        if let CaseOutcome::Findings(findings) = check_case_with(name, &root().join(name), None) {
+            failures.extend(findings);
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "the memory route without project functions disagrees with the file route:\n{}",
+        failures.join("\n")
     );
 }
 
