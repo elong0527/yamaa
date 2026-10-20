@@ -72,11 +72,20 @@ fn yaml_capability_is_explicit_at_document_admission() {
                 ..
             }
         ));
-        let reply: serde_json::Value = serde_json::from_str(
-            &yamaa_adapters::specification_diagnostics::capture_failure(&error),
-        )
-        .unwrap();
-        assert_eq!(reply["outcome"]["code"], "yaml_reader_unavailable");
+        let yamaa_adapters::specification_diagnostics::Rejection::Fault(finding) =
+            yamaa_adapters::specification_diagnostics::capture_failure(&error)
+        else {
+            panic!("an omitted YAML reader must remain an engine fault");
+        };
+        assert_eq!(
+            finding.code,
+            yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+        );
+        assert_eq!(finding.context["stage"].as_str(), Some("capture"));
+        assert_eq!(
+            finding.context["code"].as_str(),
+            Some("yaml_reader_unavailable")
+        );
     }
 }
 
@@ -111,13 +120,23 @@ fn parquet_source_and_artifact_share_one_capability() {
         let error = yamaa_adapters::specification_run::Error::ParquetSource(
             parquet_source::Error::ReaderUnavailable,
         );
-        let reply: serde_json::Value =
-            serde_json::from_str(&yamaa_adapters::specification_diagnostics::failure(
+        let yamaa_adapters::specification_diagnostics::Rejection::Fault(finding) =
+            yamaa_adapters::specification_diagnostics::failure(
                 &error,
                 Some(&source(SourceProfile::Parquet)),
-            ))
-            .unwrap();
-        assert_eq!(reply["outcome"]["code"], "parquet_reader_unavailable");
+            )
+        else {
+            panic!("an omitted Parquet reader must remain an engine fault");
+        };
+        assert_eq!(
+            finding.code,
+            yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+        );
+        assert_eq!(finding.context["stage"].as_str(), Some("ingest"));
+        assert_eq!(
+            finding.context["code"].as_str(),
+            Some("parquet_reader_unavailable")
+        );
     }
 }
 
