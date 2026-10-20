@@ -91,13 +91,13 @@ def install_python(work, uv):
     return python
 
 
-def compare(work):
+def compare(work, fixtures=FIXTURES):
     """Judge one host's observations against the independent expected truth."""
     return public_conformance.main(
         [
             "compare",
             "--fixtures",
-            str(FIXTURES),
+            str(fixtures),
             "--observed",
             str(work / "observed"),
             "--output",
@@ -106,7 +106,7 @@ def compare(work):
     )
 
 
-def python_conformance(work, python, plan, revision):
+def python_conformance(work, python, plan, revision, fixtures=FIXTURES):
     subprocess.run(
         [
             str(python),
@@ -115,7 +115,7 @@ def python_conformance(work, python, plan, revision):
             "--plan",
             str(plan),
             "--fixtures",
-            str(FIXTURES),
+            str(fixtures),
             "--python-lock",
             str(ROOT / "python/uv.lock"),
             "--output",
@@ -126,10 +126,10 @@ def python_conformance(work, python, plan, revision):
         cwd=work.parent,
         check=True,
     )
-    return compare(work)
+    return compare(work, fixtures)
 
 
-def r_conformance(work, environment, plan, revision):
+def r_conformance(work, environment, plan, revision, fixtures=FIXTURES):
     # Only full benchmark qualification needs the authored project programs.
     subprocess.run(
         [
@@ -161,7 +161,7 @@ def r_conformance(work, environment, plan, revision):
             "--vanilla",
             str(runner),
             str(plan),
-            str(FIXTURES),
+            str(fixtures),
             str(work / "observed"),
             revision,
         ],
@@ -169,7 +169,7 @@ def r_conformance(work, environment, plan, revision):
         env=environment | {"PUBLIC_CONFORMANCE_PACKAGE_FORM": "source"},
         check=True,
     )
-    return compare(work)
+    return compare(work, fixtures)
 
 
 def main(argv=None):

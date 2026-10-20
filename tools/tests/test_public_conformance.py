@@ -284,6 +284,24 @@ class PublicConformance(unittest.TestCase):
         self.assertTrue((moved / "input/linked.csv").is_symlink())
         self.assertEqual(os.readlink(moved / "input/linked.csv"), "target.csv")
 
+    def test_an_empty_child_is_written_in_its_parent_s_language(self):
+        """A 1.0 parent's empty child declares the 1.x header (LAYER-4), and
+        any other parent's declares schema_version, as every 0.5 layer does."""
+        self.assertEqual(
+            judge.empty_child({"yamaa": "1.0", "type": "spec"}, "spec.yaml"),
+            'yamaa: "1.0"\ntype: spec\nparent: spec.yaml\n',
+        )
+        for document in (
+            {"schema_version": "1.0"},
+            {"schema_version": "1.0", "yamaa": "1.0"},
+            None,
+            [],
+        ):
+            self.assertEqual(
+                judge.empty_child(document, "spec.yaml"),
+                'schema_version: "1.0"\nparent: spec.yaml\n',
+            )
+
     def test_quoted_empty_is_distinct_from_missing_and_csv_bytes_are_exact(self):
         self.build["tables"]["output"]["rows"][0][1] = None
         self.assertEqual(self.verdict()["verdict"], "mismatch")
