@@ -686,9 +686,10 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
     };
     let inputs = [("ae.csv", AE), ("periods.csv", PERIODS)];
     // ASTDT's row-local default completes in the row phase of `events`, so
-    // each event takes the period holding its start date: the first day of
-    // S-1's second period is in it, and no period holds an event before the
-    // first, one without a start date, or one in a period with no last day.
+    // each event takes the period holding its start date. The first day of
+    // S-1's second period is in that period; no period holds an event before
+    // S-1's first period, one without a start date, or one whose period has
+    // no last day.
     let fixture = Fixture::new(&specification("AE.ASTDT"), &inputs);
     assert_eq!(agreeing(&fixture), Vec::<Value>::new());
     let (csv, _) = fixture.saved();
