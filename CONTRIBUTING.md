@@ -98,6 +98,18 @@ stops instead of guessing when a crate needs a license outside its reviewed
 list or ships an unclassified license file; review the crate and extend the
 tables in `tools/packaging/generate_third_party_notices.py`.
 
+Every crate of either host's trimmed lock has a purpose in
+`tools/packaging/crate_purposes.toml`: the source archives ship them all,
+including the crates that only build scripts and procedural macros use and
+those that no supported target compiles. `make check-repository` fails while
+a shipped crate has no purpose, a purpose names a crate that neither host
+ships, or a purpose is empty (`tools.packaging.check_crate_purposes`). After a
+dependency change, add a line for each new crate saying why yamaa ships it, as
+the file's header describes, and remove the lines of crates that no host ships
+any more. From `rust/`,
+`cargo tree --locked --offline --workspace --target all -i <crate>` shows what
+pulls a crate in.
+
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
