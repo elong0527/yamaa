@@ -268,6 +268,7 @@ conditions! {
     InheritanceInvalidParent => ("validation", "invalid_parent_path", Some("REQ-0653")),
     InheritanceUnknownDependency => ("validation", "unknown_reference", Some("REQ-0070")),
     InheritanceParentUnavailable => ("validation", "parent_not_found", Some("REQ-0654")),
+    InheritanceParentOnAnotherShare => ("validation", "parent_on_another_share", Some("LAYER-10")),
     InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
     InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
     InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("REQ-0245")),

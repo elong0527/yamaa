@@ -399,7 +399,8 @@ A parent specification's relative input and output paths resolve beside the
 parent, even when it sits on another drive than the specification you pass. A
 parent on a network share that the specification you pass is not on cannot
 declare relative input or output paths, because a path in YAML cannot name a
-share: such a parent is refused. Keep it on the same share, or write those
+share: such a parent is refused with `parent_on_another_share`, naming the
+parent, the path and both roots. Keep it on the same share, or write those
 paths with `relative_to: entry`.
 
 While a save replaces a file, it locks the file's folder, and another save on

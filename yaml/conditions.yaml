@@ -120,6 +120,8 @@ conditions:
   origin_missing: {phases: [validation]}
   origin_source_not_admitted: {phases: [validation]}
   parent_not_found: {phases: [validation]}
+  # LAYER-10
+  parent_on_another_share: {phases: [validation]}
   pattern_mismatch: {phases: [validation]}
   phase_boundary: {phases: [validation]}
   predecessor_label_mismatch: {phases: [validation]}
