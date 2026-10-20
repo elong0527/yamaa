@@ -1,10 +1,31 @@
 //! Core-owned static check findings, read without executing or entering a port.
-use crate::specification_run_view::RunView;
-use yamaa_core::diagnostic::Diagnostic;
+//! Unsupported vocabulary and policy/resource failures remain typed boundaries.
+use crate::specification_run::{PreparedRun, RejectedRun};
+use yamaa_core::{diagnostic::Diagnostic, specification::PrepareError};
 
 /// The static check findings of a compiled specification, in report order.
-pub fn issues(run: &dyn RunView) -> Vec<Diagnostic> {
+pub fn issues(run: &PreparedRun) -> Vec<Diagnostic> {
     run.check_diagnostics()
+}
+
+#[derive(Debug)]
+pub enum Error<'a> {
+    Compile(&'a PrepareError),
+    /// A rejected compilation that names no finding.
+    Projection,
+}
+/// The findings of a compilation the compiler refused.
+pub fn rejected(run: &RejectedRun) -> Result<Vec<Diagnostic>, Error<'_>> {
+    let PrepareError::Invalid(findings) = &run.rejection.error else {
+        return Err(Error::Compile(&run.rejection.error));
+    };
+    if findings.is_empty() {
+        return Err(Error::Projection);
+    }
+    Ok(findings
+        .iter()
+        .map(|finding| finding.diagnostic())
+        .collect())
 }
 
 #[cfg(all(test, feature = "yaml"))]

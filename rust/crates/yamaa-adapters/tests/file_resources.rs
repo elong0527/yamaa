@@ -92,7 +92,12 @@ mod file {
                     })
                 );
                 assert!(prepared
-                    .build(&mut prepared.run_scope(None), Scope::default())
+                    .build(
+                        &mut prepared.run_scope(None),
+                        &mut yamaa_adapters::specification_run::NoActivation,
+                        Scope::default()
+                    )
+                    .dataset
                     .result
                     .is_ok());
             }
@@ -421,7 +426,12 @@ mod file {
             assert_eq!(prepared.capture_reads(), 2);
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 3);

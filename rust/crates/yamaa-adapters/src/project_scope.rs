@@ -545,19 +545,27 @@ impl Step {
     pub fn producers(&self) -> impl Iterator<Item = usize> + '_ {
         self.producers.iter().map(|(_, producer)| *producer)
     }
-    /// One `producer_not_completed` finding for each link whose producer
-    /// `failed` reports, naming the consumer as their entry.
-    pub fn blocked(&self, project: &Project, failed: impl Fn(usize) -> bool) -> Vec<Diagnostic> {
+    /// Each in-scope producer link: the producer's listing and the
+    /// `producer_not_completed` finding the specification reports when that
+    /// producer did not complete, naming the consumer as its entry.
+    pub fn links(&self, project: &Project) -> Vec<(usize, Diagnostic)> {
         let consumer = project.listed[self.listed].identity();
         self.producers
             .iter()
-            .filter(|(_, producer)| failed(*producer))
             .map(|(dataset, producer)| {
-                identified(
-                    scope::producer_not_completed(dataset, project.listed[*producer].identity()),
-                    consumer,
-                )
+                let finding =
+                    scope::producer_not_completed(dataset, project.listed[*producer].identity());
+                (*producer, identified(finding, consumer))
             })
+            .collect()
+    }
+    /// One `producer_not_completed` finding for each link whose producer
+    /// `failed` reports, naming the consumer as their entry.
+    pub fn blocked(&self, project: &Project, failed: impl Fn(usize) -> bool) -> Vec<Diagnostic> {
+        self.links(project)
+            .into_iter()
+            .filter(|(producer, _)| failed(*producer))
+            .map(|(_, finding)| finding)
             .collect()
     }
 }

@@ -9,7 +9,8 @@ use std::sync::Arc;
 use arrow_array::{Array, ListArray, StringArray};
 use yamaa::{
     Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, ProjectFunctions, Scalar, Signature, Table,
+    FunctionIdentity, HostLanguage, LockContext, ProjectFunctions, Scalar, Signature, Status,
+    Table,
 };
 use yamaa_core::json::Value;
 
@@ -209,7 +210,12 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1338"));
     assert_eq!(issues[0].spec_paths, ["sdtm.specs[0]", "adam.specs[1]"]);
     assert_eq!(issues[0].context["name"], text("DM"));
-    let check = conditions(&engine.project_check(&study.project(), &token).unwrap());
+    let check = conditions(
+        &engine
+            .project_check(&study.project(), &token)
+            .unwrap()
+            .issues(),
+    );
     assert!(check.iter().any(|c| c == "duplicate_specification_name"));
     let mut run = engine.project_run(&study.project(), None, &token).unwrap();
     assert!(run.names().is_empty());
@@ -248,7 +254,7 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     let project = link.0.join("project.yaml").to_str().unwrap().to_owned();
     let engine = engine();
     let token = CancellationToken::new();
-    let check = engine.project_check(&project, &token).unwrap();
+    let check = engine.project_check(&project, &token).unwrap().issues();
     assert_eq!(check.rows(), 0, "{:?}", rows(&check));
     let run = engine.project_run(&project, None, &token).unwrap();
     assert_eq!(run.names(), ["DM", "AE", "ADSL"]);
@@ -256,7 +262,10 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     // A selected specification is checked and run as the caller named it.
     let path = engine.project_spec(&project, "DM").unwrap();
     assert_eq!(path, study.path("sdtm/dm.yaml"));
-    let check = engine.spec_check(&path, Some(&project), &token).unwrap();
+    let check = engine
+        .spec_check(&path, Some(&project), &token)
+        .unwrap()
+        .issues();
     assert_eq!(check.rows(), 0, "{:?}", rows(&check));
     let run = engine.spec_run(&path, Some(&project), &token).unwrap();
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
@@ -368,6 +377,8 @@ fn a_save_that_would_write_nothing_fails() {
         .unwrap();
     assert!(send.names().is_empty());
     assert_eq!(send.issues().rows(), 0);
+    // An empty scope succeeds; its save refuses.
+    assert_eq!(send.status(), Status::Succeeded);
     let failure = send.save().unwrap_err();
     assert_eq!(
         failure.message,
@@ -379,6 +390,7 @@ fn a_save_that_would_write_nothing_fails() {
         .project_submission(&study.project(), None, None, "0.4.0", &token)
         .unwrap();
     assert_eq!(submission.issues().rows(), 0);
+    assert_eq!(submission.status(), Status::Succeeded);
     let failure = submission.save().unwrap_err();
     assert_eq!(
         failure.message,
@@ -487,7 +499,8 @@ fn project_check_reports_every_specification_and_the_project_findings() {
     );
     let table = engine()
         .project_check(&study.project(), &CancellationToken::new())
-        .unwrap();
+        .unwrap()
+        .issues();
     let issues = rows(&table);
     let ae = study.path("sdtm/ae.yaml");
     let adae = study.path("adam/adae.yaml");
@@ -664,6 +677,9 @@ fn an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone() {
     let adsl = run.get("ADSL").unwrap();
     assert!(adsl.output().is_none());
     assert!(adsl.report().is_none());
+    // Its own finding stopped it, so it failed rather than skipped.
+    assert_eq!(adsl.status(), Status::Failed);
+    assert_eq!(run.status(), Status::Failed);
     let issues = rows(&run.issues());
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].condition, "unlinked_producer");
@@ -694,6 +710,12 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
     let adsl = run.get("ADSL").unwrap();
     assert!(adsl.output().is_none());
     assert!(adsl.report().is_none(), "ADSL did not run");
+    // DM failed, AE succeeded, and ADSL, whose producer did not complete,
+    // was skipped; the run failed.
+    assert_eq!(dm.status(), Status::Failed);
+    assert_eq!(run.get("AE").unwrap().status(), Status::Succeeded);
+    assert_eq!(adsl.status(), Status::Skipped);
+    assert_eq!(run.status(), Status::Failed);
     let issues = rows(&run.issues());
     assert_eq!(issues.len(), 2, "{issues:?}");
     assert_eq!(
@@ -762,6 +784,92 @@ fn every_target_is_validated_before_the_first_file_is_written() {
     assert!(run.save().is_err());
 }
 
+/// One specification runs on the same route alone or as a member of a
+/// project run, and every view computes its status from its issues and its
+/// build (P-STATUS-1).
+#[test]
+fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses() {
+    let study = study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let project = study.project();
+    let dm = study.path("sdtm/dm.yaml");
+    let check = engine.spec_check(&dm, Some(&project), &token).unwrap();
+    assert_eq!(check.status(), Status::Succeeded);
+    assert_eq!(
+        engine.project_check(&project, &token).unwrap().status(),
+        Status::Succeeded
+    );
+    let alone = engine.spec_run(&dm, Some(&project), &token).unwrap();
+    assert_eq!(alone.status(), Status::Succeeded);
+    let runs = engine.project_run(&project, None, &token).unwrap();
+    assert_eq!(runs.status(), Status::Succeeded);
+    for name in runs.names() {
+        assert_eq!(
+            runs.get(&name).unwrap().status(),
+            Status::Succeeded,
+            "{name}"
+        );
+    }
+    // The member and the specification run alone hold the same output,
+    // report and evidence.
+    let member = runs.get("DM").unwrap();
+    assert_eq!(
+        member.output().unwrap().ipc().unwrap(),
+        alone.output().unwrap().ipc().unwrap()
+    );
+    assert_eq!(
+        member.report().unwrap().ipc().unwrap(),
+        alone.report().unwrap().ipc().unwrap()
+    );
+    assert_eq!(
+        member.build().observations(false),
+        alone.build().observations(false)
+    );
+    // A failed input fails the run but not the check, which reads no data.
+    study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
+    assert_eq!(
+        engine
+            .spec_run(&dm, Some(&project), &token)
+            .unwrap()
+            .status(),
+        Status::Failed
+    );
+    assert_eq!(
+        engine
+            .spec_check(&dm, Some(&project), &token)
+            .unwrap()
+            .status(),
+        Status::Succeeded
+    );
+    // A finding of the specification itself fails its check too.
+    study.write("sdtm/dm.yaml", DM.replace("RAW.AGE", "RAW.AGE +"));
+    let check = engine.spec_check(&dm, Some(&project), &token).unwrap();
+    assert_ne!(check.issues().rows(), 0);
+    assert_eq!(check.status(), Status::Failed);
+    assert_eq!(
+        engine.project_check(&project, &token).unwrap().status(),
+        Status::Failed
+    );
+    // A save's refusal joins the issues but describes the save, not the run.
+    study.write(
+        "sdtm/ae.yaml",
+        AE.replace("../out/ae.csv", "../missing/ae.csv"),
+    );
+    let mut ae = engine
+        .spec_run(&study.path("sdtm/ae.yaml"), Some(&project), &token)
+        .unwrap();
+    assert_eq!(ae.issues().rows(), 0);
+    assert_eq!(ae.status(), Status::Succeeded);
+    assert!(ae.save().is_err());
+    assert_ne!(ae.issues().rows(), 0);
+    assert_eq!(ae.status(), Status::Succeeded);
+    assert_eq!(
+        [Status::Succeeded, Status::Failed, Status::Skipped].map(Status::as_str),
+        ["succeeded", "failed", "skipped"]
+    );
+}
+
 fn define_study() -> Study {
     let study = Study::new();
     let fixture =
@@ -800,6 +908,7 @@ fn a_submission_composes_the_selected_section() {
         "{:?}",
         rows(&submission.issues())
     );
+    assert_eq!(submission.status(), Status::Succeeded);
     submission.save().unwrap();
     assert_eq!(
         study.read("define.xml").unwrap(),
@@ -840,6 +949,7 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
         .unwrap();
     let issues = rows(&submission.issues());
     assert!(!issues.is_empty());
+    assert_eq!(submission.status(), Status::Failed);
     assert!(issues
         .iter()
         .all(|row| row.condition == "missing_required_field"));

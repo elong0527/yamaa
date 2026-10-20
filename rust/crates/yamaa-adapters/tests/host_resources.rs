@@ -145,9 +145,11 @@ fn interrupted_stage_leaves_no_provisional_output() {
     let prepared =
         yamaa_adapters::file_preparation::FileSpecification::prepare(resources, "spec.yaml")
             .unwrap();
-    let mut result = yamaa_adapters::file_application::plain(
+    let mut result = yamaa_adapters::file_application::run(
         &prepared,
         &mut prepared.run_scope(None),
+        &mut yamaa_adapters::specification_run::NoActivation,
+        |_| yamaa_adapters::file_application::Classification::Opaque,
         yamaa_adapters::specification_report::Identity {
             runtime: "rust",
             runtime_version: "test",
@@ -158,6 +160,7 @@ fn interrupted_stage_leaves_no_provisional_output() {
         },
         yamaa_core::application_observer::Scope::default(),
     )
+    .1
     .unwrap();
     assert!(!result.save().unwrap());
     assert_eq!(backend.0.staged_count(), 0);
@@ -317,8 +320,12 @@ fn a_parent_on_another_drive_reads_its_input_beside_itself() {
         // location is written whole.
         assert_eq!(prepared.run().source().path, "D:/std/input/src.csv");
         let mut run = prepared.run_scope(None);
-        let attempt = prepared.build(&mut run, yamaa_core::application_observer::Scope::default());
-        assert!(attempt.result.is_ok());
+        let attempt = prepared.build(
+            &mut run,
+            &mut yamaa_adapters::specification_run::NoActivation,
+            yamaa_core::application_observer::Scope::default(),
+        );
+        assert!(attempt.dataset.result.is_ok());
         assert_eq!(
             resolver.captures.lock().unwrap().last(),
             Some(&(entry.to_owned(), "D:/std/input/src.csv".to_owned()))

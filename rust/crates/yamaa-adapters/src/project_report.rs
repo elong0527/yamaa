@@ -1,19 +1,20 @@
-//! Complete project reports borrow one owned attempt. Only explicit ordinary
-//! host facts are portable; original opaque payloads and interrupts stay held.
+//! The project half of one attempt's report: its activation evidence, its
+//! activation failures and its project-function invocations. Only explicit
+//! ordinary host facts are portable; original opaque payloads and interrupts
+//! stay held.
 use crate::{
     project_activation_diagnostics::{self as activation, DefinitionSource},
     project_function_diagnostics::{self as invocation, HostDetails},
-    project_run::{Attempt, BoundaryFailure, PreparedRun},
-    specification_report::{self as report, BuildResult, Identity},
+    specification_report::{self as report, Identity, Refusal},
+    specification_run::{Attempt, BoundaryFailure, PreparedRun},
 };
-use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
 use yamaa_core::{
-    dataset::{CheckRecord, ExecutionError},
+    dataset::CheckRecord,
     function_invocation::FailureKind,
     project_activation::{Failure, TestFailure},
-    specification_run::{PortError, RunError},
+    specification_run::PortError,
 };
 
 /// Facts refer to the exact payload in this attempt, never to an error string or
@@ -62,46 +63,17 @@ pub fn classify_host_failures<'a, E>(
         .collect()
 }
 
-#[derive(Debug)]
-pub enum Error<'a, C, E> {
-    Report(report::Error),
-    Opaque(&'a E),
-    Boundary(&'a BoundaryFailure<E>),
-    Source(&'a PortError<C, crate::specification_run::Error>),
-    Execution(&'a ExecutionError<E>),
+fn invalid<'a, E>() -> Refusal<'a, E> {
+    Refusal::Report(report::Error::InvalidObservation)
 }
-impl<C, E> From<report::Error> for Error<'_, C, E> {
-    fn from(error: report::Error) -> Self {
-        Self::Report(error)
-    }
-}
-impl<C, E> Error<'_, C, E> {
-    /// The public refusal for a project result this attempt could not build.
-    pub fn refusal(&self) -> crate::file_application::BuildRefusal {
-        let (code, limit) = match self {
-            Self::Opaque(_) => (Fault::OpaqueHost, None),
-            Self::Boundary(_) => (Fault::ActivationBoundary, None),
-            Self::Source(_) => (Fault::SourceBoundary, None),
-            Self::Execution(_) => (Fault::ExecutionBoundary, None),
-            Self::Report(report::Error::ResourceLimit(limit)) => {
-                (Fault::OutputLimit, Some(limit.clone()))
-            }
-            Self::Report(_) => (Fault::ReportRefusal, None),
-        };
-        crate::file_application::BuildRefusal { code, limit }
-    }
-}
-fn invalid<'a, C, E>() -> Error<'a, C, E> {
-    Error::Report(report::Error::InvalidObservation)
-}
-type FactMap<'a, 'f, E> = std::collections::BTreeMap<*const E, &'f Classified<'a, E>>;
+pub(crate) type FactMap<'a, 'f, E> = std::collections::BTreeMap<*const E, &'f Classified<'a, E>>;
 fn host<'a, E>(facts: &FactMap<'a, '_, E>, error: &E) -> Option<HostDetails<'a>> {
     match facts.get(&std::ptr::from_ref(error)) {
         Some(Classified::Host { details, .. }) => Some(*details),
         _ => None,
     }
 }
-fn invocation_host<'a, E>(
+pub(crate) fn invocation_host<'a, E>(
     facts: &FactMap<'a, '_, E>,
     failure: &FailureKind<E>,
 ) -> Option<HostDetails<'a>> {
@@ -112,14 +84,14 @@ fn invocation_host<'a, E>(
         _ => None,
     }
 }
-fn project_error<C, E>(error: invocation::Error<'_, E>) -> Error<'_, C, E> {
+pub(crate) fn project_error<E>(error: invocation::Error<'_, E>) -> Refusal<'_, E> {
     match error {
-        invocation::Error::Opaque(error) => Error::Opaque(error),
+        invocation::Error::Opaque(error) => Refusal::Opaque(error),
         invocation::Error::InvalidContext => invalid(),
     }
 }
 pub(crate) fn checked_records(
-    run: &dyn crate::specification_run_view::RunView,
+    run: &PreparedRun,
     records: &[CheckRecord],
     phase: &str,
     id: &Identity<'_>,
@@ -150,12 +122,12 @@ pub(crate) enum ActivationBoundary<'a, E> {
     Incomplete,
 }
 pub(crate) fn validate_activation<E>(
-    run: &dyn crate::project_activation_observations::ActivationView,
+    run: &PreparedRun,
     observed: &yamaa_core::project_activation::Observations,
     boundary: ActivationBoundary<'_, E>,
 ) -> Result<(), report::Error> {
     use yamaa_core::project_activation::{BindingOutcome, LockObservation, TestOutcome};
-    let selected = run.called_functions();
+    let selected = run.compiled().called_functions();
     let total = selected
         .iter()
         .map(|&index| {
@@ -290,7 +262,7 @@ pub(crate) fn validate_activation<E>(
 }
 
 pub(crate) fn activation_origins(
-    run: &dyn crate::project_activation_observations::ActivationView,
+    run: &PreparedRun,
     paths: &[String],
     issues: Vec<Diagnostic>,
     functions: impl Iterator<Item = usize> + Clone,
@@ -319,6 +291,7 @@ pub(crate) fn activation_origins(
     let mut metadata = Vec::new();
     for &selected in &functions {
         let &index = run
+            .compiled()
             .called_functions()
             .get(selected)
             .ok_or(report::Error::InvalidObservation)?;
@@ -366,18 +339,17 @@ pub(crate) fn activation_origins(
         .collect()
 }
 
-/// Build the report envelope for an activation-boundary failure, appending
-/// its diagnostics to the caller's collection in the original order.
-fn activation_failure_result<'a, C, E>(
+/// The report of an activation-boundary failure: its findings, in the
+/// original order, over an attempt that captured no source.
+pub(crate) fn activation_failure<'a, C, E>(
     run: &PreparedRun,
     attempt: &'a Attempt<C, E>,
     boundary: &'a BoundaryFailure<E>,
     supplied: &FactMap<'a, '_, E>,
     id: &Identity<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
-) -> Result<crate::report_storage::StoredReport, Error<'a, C, E>> {
+) -> Result<crate::report_storage::StoredReport, Refusal<'a, E>> {
     let BoundaryFailure::Activation(failure) = boundary else {
-        return Err(Error::Boundary(boundary));
+        return Err(Refusal::Boundary(boundary));
     };
     let paths = run
         .compiled()
@@ -404,7 +376,7 @@ fn activation_failure_result<'a, C, E>(
         Failure::Lock(error) => {
             let Some(Classified::Lock { findings, .. }) = supplied.get(&std::ptr::from_ref(error))
             else {
-                return Err(Error::Opaque(error));
+                return Err(Refusal::Opaque(error));
             };
             if findings.is_empty() {
                 return Err(invalid());
@@ -446,31 +418,27 @@ fn activation_failure_result<'a, C, E>(
                 }),
             )?
         }
-        _ => return Err(Error::Boundary(boundary)),
+        _ => return Err(Refusal::Boundary(boundary)),
     };
-    diagnostics.extend(issues);
     // Before activation succeeds, the engine has no inspection/capture authority.
     if !attempt.dataset.sources.is_empty()
         || !matches!(attempt.dataset.result, Err(PortError::Incomplete))
     {
         return Err(invalid());
     }
-    Ok(report::envelope_sources(
-        run,
-        &attempt.dataset.sources,
-        id,
-        true,
-    )?)
+    let mut report = report::envelope_sources(&attempt.dataset.sources, id, true)?;
+    report.set_diagnostics(issues);
+    report["verifications"] = Value::Array(Vec::new());
+    Ok(report)
 }
 
-/// Neither reporting nor obtaining output invokes a port. Publication remains
-/// the same explicit successful-output gate used by ordinary specification runs.
-pub fn build_result<'a, C, E>(
-    run: &PreparedRun,
+/// Index the classification facts a host supplied for this attempt's held
+/// failures. Facts refer to the exact payload in this attempt, never to an
+/// error string or an ordinal supplied by a host.
+pub(crate) fn supplied<'a, 'f, C, E>(
     attempt: &'a Attempt<C, E>,
-    id: Identity<'_>,
-    facts: &[Classified<'a, E>],
-) -> Result<BuildResult, Error<'a, C, E>> {
+    facts: &'f [Classified<'a, E>],
+) -> Result<FactMap<'a, 'f, E>, Refusal<'a, E>> {
     // Distinct zero-sized values can share an address. Never grant one fact
     // authority over another held failure merely because their pointers agree.
     if std::mem::size_of::<E>() == 0 && !facts.is_empty() {
@@ -486,21 +454,19 @@ pub fn build_result<'a, C, E>(
         if !held.contains(&pointer) || supplied.insert(pointer, fact).is_some() {
             return Err(invalid());
         }
-        match fact {
-            Classified::Lock { failure, .. } => {
-                if !matches!(&attempt.boundary, Err(BoundaryFailure::Activation(Failure::Lock(error))) if std::ptr::eq(*failure,error))
-                {
-                    return Err(invalid());
-                }
-            }
-            Classified::Host { failure, .. } => {
-                if matches!(&attempt.boundary, Err(BoundaryFailure::Activation(Failure::Lock(error))) if std::ptr::eq(*failure,error))
-                {
-                    return Err(invalid());
-                }
-            }
+        let lock = matches!(&attempt.boundary, Err(BoundaryFailure::Activation(Failure::Lock(error))) if std::ptr::eq(fact.failure(), error));
+        if lock != matches!(fact, Classified::Lock { .. }) {
+            return Err(invalid());
         }
     }
+    Ok(supplied)
+}
+
+/// Validate the activation evidence of an attempt and render it.
+pub(crate) fn activation_evidence<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a Attempt<C, E>,
+) -> Result<Value, Refusal<'a, E>> {
     let activation = crate::project_activation_observations::activation(run, &attempt.activation)
         .map_err(|_| invalid())?;
     let boundary = match &attempt.boundary {
@@ -509,199 +475,7 @@ pub fn build_result<'a, C, E>(
         _ => ActivationBoundary::Incomplete,
     };
     validate_activation(run, &attempt.activation, boundary)?;
-    let execution = crate::project_attempt::execution(attempt);
-    let mut diagnostics = Vec::new();
-    let mut verifications = Vec::new();
-    let mut result;
-    if let Err(boundary) = &attempt.boundary {
-        result =
-            activation_failure_result(run, attempt, boundary, &supplied, &id, &mut diagnostics)?;
-    } else {
-        result = report::envelope_sources(run, &attempt.dataset.sources, &id, true)?;
-        match &attempt.dataset.result {
-            Ok(dataset) => {
-                let (checks, findings) =
-                    checked_records(run, &dataset.retained_verifications, "verification", &id)?;
-                verifications.extend(checks);
-                diagnostics.extend(findings);
-                match &dataset.result {
-                    Ok(success) => {
-                        let (checks, findings) =
-                            checked_records(run, &success.verifications, "verification", &id)?;
-                        if !findings.is_empty() {
-                            return Err(invalid());
-                        }
-                        verifications.extend(checks);
-                    }
-                    Err(error) => match error.as_ref() {
-                        ExecutionError::ProjectFunction {
-                            path,
-                            error,
-                            identity,
-                        } => diagnostics.push(
-                            invocation::invocation(
-                                path,
-                                error,
-                                identity.as_ref(),
-                                &run.compiled().key_names().collect::<Vec<_>>(),
-                                invocation_host(&supplied, &error.kind),
-                            )
-                            .map_err(project_error)?,
-                        ),
-                        ExecutionError::KeyFailures(records)
-                        | ExecutionError::VerificationFailures(records) => {
-                            let phase = if matches!(error.as_ref(), ExecutionError::KeyFailures(_))
-                            {
-                                "output"
-                            } else {
-                                "verification"
-                            };
-                            let (checks, findings) = checked_records(run, records, phase, &id)?;
-                            verifications.extend(checks);
-                            diagnostics.extend(findings);
-                        }
-                        other => {
-                            let completed = match other {
-                                ExecutionError::VerificationDiagnostic { records, .. }
-                                | ExecutionError::VerificationDeclaration { records, .. }
-                                | ExecutionError::VerificationPredicate { records, .. } => {
-                                    records.as_slice()
-                                }
-                                _ => &[],
-                            };
-                            let (checks, findings) =
-                                checked_records(run, completed, "verification", &id)?;
-                            verifications.extend(checks);
-                            diagnostics.extend(findings);
-                            if let Some(refusal) = crate::resource_diagnostics::execution(
-                                other,
-                                run.compiled().sources(),
-                                run.compiled().driver_index(),
-                            ) {
-                                diagnostics.push(
-                                    refusal.diagnostic(Stage::Execute, Fault::ExecutionLimit),
-                                );
-                            } else {
-                                let crate::dataset_result::Outcome::Condition(found) =
-                                    crate::dataset_result::semantic_condition(other)
-                                        .map_err(|_| Error::Execution(other))?
-                                else {
-                                    return Err(Error::Execution(other));
-                                };
-                                diagnostics.push(report::condition(run, &found)?);
-                            }
-                        }
-                    },
-                }
-                report::set_handler_counts(&mut result, &dataset.handler_counts);
-            }
-            Err(error) => {
-                let finding = |source: &yamaa_core::specification::SourceDeclaration,
-                               failure: yamaa_core::resource::ResourceFailure|
-                 -> Result<Diagnostic, report::Error> {
-                    let written = run
-                        .document()
-                        .written_source_path(&source.name)
-                        .ok_or(report::Error::InvalidObservation)?;
-                    Ok(failure.diagnostic(&source.name, written))
-                };
-                match error {
-                    PortError::Capture(_) => {
-                        let Some((last, prefix)) = attempt.dataset.sources.split_last() else {
-                            return Err(invalid());
-                        };
-                        if last.read.captured
-                            || last.snapshot.is_some()
-                            || last.table.is_some()
-                            || prefix.iter().any(|source| {
-                                !source.read.captured || source.read.failure.is_some()
-                            })
-                        {
-                            return Err(invalid());
-                        }
-                        diagnostics.push(finding(
-                            &last.read.source,
-                            last.read.failure.ok_or(Error::Source(error))?,
-                        )?);
-                    }
-                    PortError::Inspect(failures) => {
-                        if !attempt.dataset.sources.is_empty() || failures.is_empty() {
-                            return Err(invalid());
-                        }
-                        let mut sources = run.compiled().sources().iter();
-                        for failure in failures {
-                            if !sources.any(|source| source == &failure.source) {
-                                return Err(invalid());
-                            }
-                            diagnostics.push(finding(
-                                &failure.source,
-                                failure.failure.ok_or(Error::Source(error))?,
-                            )?);
-                        }
-                    }
-                    PortError::Run(failure) => {
-                        let findings = match failure {
-                            RunError::Decode(error) => {
-                                crate::resource_diagnostics::source_findings(
-                                    error,
-                                    run.compiled().source(),
-                                )
-                                .map_err(report::Error::from)?
-                            }
-                            RunError::Bind(error) => crate::specification_diagnostics::binding(
-                                error,
-                                run.compiled().source(),
-                            ),
-                            RunError::Sources(errors) => {
-                                let mut findings = Vec::new();
-                                for (index, ingestion) in errors {
-                                    let source =
-                                        run.compiled().sources().get(*index).ok_or_else(invalid)?;
-                                    findings.extend(
-                                        crate::resource_diagnostics::source_findings(
-                                            ingestion, source,
-                                        )
-                                        .map_err(report::Error::from)?
-                                        .ok_or(Error::Source(error))?,
-                                    );
-                                }
-                                Some(findings)
-                            }
-                            RunError::AdmittedSources(errors) => {
-                                crate::source_diagnostics::admitted_findings(
-                                    errors,
-                                    run.compiled().sources(),
-                                )
-                                .map_err(report::Error::from)?
-                            }
-                            _ => crate::resource_diagnostics::run_limit(
-                                failure,
-                                run.compiled().sources(),
-                            )
-                            .map(|refusal| {
-                                vec![refusal.diagnostic(Stage::Ingest, Fault::SourceLimit)]
-                            }),
-                        }
-                        .ok_or(Error::Source(error))?;
-                        diagnostics.extend(findings);
-                    }
-                    _ => return Err(Error::Source(error)),
-                }
-            }
-        }
-    }
-    result.set_diagnostics(diagnostics);
-    result["verifications"] = Value::Array(verifications);
-    result["activation"] = activation;
-    let facts = crate::run_report::RunFacts::captured(
-        &attempt.dataset.sources,
-        attempt
-            .dataset
-            .result
-            .as_ref()
-            .map_or(&[], |dataset| dataset.template_rows.as_slice()),
-    );
-    Ok(report::prepare_result(run, execution, id, result, &facts)?)
+    Ok(activation)
 }
 
 #[cfg(test)]
