@@ -131,32 +131,38 @@ fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Di
     };
     yamaa_core::application_issue::rejected(stage, code)
 }
-pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
+/// The closed code a refused publication reports, selected from its typed cause.
+pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault {
     use crate::file_publication::Error as E;
-    use yamaa_core::json::Value as JsonValue;
-
-    let code = match error {
+    match error {
         E::Host(crate::host_resources::Failure::Cleanup) => Fault::CleanupIncomplete,
         E::Host(crate::host_resources::Failure::Cancelled) => Fault::PublicationCancelled,
         E::Host(_) => Fault::HostPublicationFailure,
         E::Cleanup { .. } => Fault::CleanupIncomplete,
         E::Changed => Fault::TargetChanged,
-        E::Limit(error) => {
-            return vec![yamaa_core::application_issue::resource_rejected(
-                Stage::Output,
-                Fault::PublicationLimit,
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            )]
-        }
+        E::Limit(_) => Fault::PublicationLimit,
         E::StagingCollision => Fault::StagingCollision,
         E::InvalidTarget => Fault::InvalidTarget,
         E::PathMismatch => Fault::PathMismatch,
         E::Io(_) => Fault::PublicationFailed,
-    };
-    let mut finding = yamaa_core::application_issue::rejected(Stage::Output, code);
+    }
+}
+pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
+    use crate::file_publication::Error as E;
+    use yamaa_core::json::Value as JsonValue;
+
+    if let E::Limit(error) = error {
+        return vec![yamaa_core::application_issue::resource_rejected(
+            Stage::Output,
+            Fault::PublicationLimit,
+            error.resource,
+            error.limit,
+            error.actual,
+            Vec::new(),
+        )];
+    }
+    let mut finding =
+        yamaa_core::application_issue::rejected(Stage::Output, publication_fault(error));
     if let E::Cleanup {
         operation,
         staging,
