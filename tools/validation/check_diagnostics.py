@@ -17,8 +17,8 @@ value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
 miss an issue row built with a condition the registry does not have.
 A diagnostic record crosses Rust modules typed, so JSON text is decoded only
-in a codec that owns its format: a `json_wire` decode anywhere else, outside
-the items that compile only for tests, is refused.
+in a codec that owns its format. Wire helpers and serde JSON readers, including
+imports and field deserializers, are refused elsewhere outside test-only code.
 """
 
 import argparse
@@ -71,8 +71,8 @@ CONDITION_SITE = re.compile(
     r"|(?i:\bcondition)\s*(?::[^=;{}()]*)?=\s*)\Z"
 )
 CONDITION_KEY = re.compile(r'"condition"\s*:\s*("(?:[^"\\]|\\.)*")')
-# A `json_wire` decode, called by path or imported by name.
-JSON_DECODE = re.compile(r"\bjson_wire::(?:decode\w*|\{[^}]*\bdecode\w*)")
+RUST_NAME = r"(?:r#)?[A-Za-z_][A-Za-z_0-9]*"
+RUST_PATH = re.compile(rf"\b{RUST_NAME}(?:\s*::\s*{RUST_NAME})*")
 # The codecs that read JSON text they own: the wire module itself, the
 # package-lock reader, the stored report rows and the resolved artifact.
 JSON_CODECS = {
@@ -447,15 +447,226 @@ def condition_literals(source: str) -> list[tuple[int, str]]:
 
 
 def json_decodes(source: str) -> list[int]:
-    """The lines that decode JSON text, outside items that compile only for
-    tests; comments and literals never count."""
-    code = blank(source, list(rust_tokens(source)), {"comment", "character", "string"})
+    """JSON reading capabilities outside test items, including Rust imports.
+
+    Resolve use trees before checking paths so renames, nested imports and
+    module aliases retain their owner's identity. Importing a reader or a
+    glob that exposes readers is itself a site, as in the original guard.
+    Serialization, typed tree projection and ordinary string literals are
+    not decoding. Serde's field-deserializer string is executable metadata,
+    so inspect that string only inside its actual serde attribute.
+    """
+    tokens = list(rust_tokens(source))
+    code = blank(source, tokens, {"comment", "character", "string"})
     tests = cfg_test_items(code)
-    return [
-        code.count("\n", 0, match.start()) + 1
-        for match in JSON_DECODE.finditer(code)
-        if not any(low <= match.start() < high for low, high in tests)
-    ]
+    code = blank(code, [("test", low, high, 0, None) for low, high in tests], {"test"})
+    imports = []
+    for match in re.finditer(r"\buse\s+([^;]+);", code):
+        imports.extend(rust_imports(match[1], match.start(1)))
+    aliases: dict[str, set[tuple[str, ...]]] = {}
+    for path, alias, _ in imports:
+        if alias is not None:
+            aliases.setdefault(alias.removeprefix("r#"), set()).add(
+                tuple(part.removeprefix("r#") for part in path)
+            )
+
+    def resolve(path):
+        path = tuple(part.removeprefix("r#") for part in path)
+        pending = [(path, frozenset())]
+        resolved = set()
+        while pending:
+            path, seen = pending.pop()
+            if path and path[0] in aliases and path[0] not in seen:
+                pending.extend(
+                    (replacement + path[1:], seen | {path[0]})
+                    for replacement in aliases[path[0]]
+                )
+            else:
+                resolved.add(path)
+        return resolved
+
+    def reader(path):
+        return any(reader_path(candidate) for candidate in resolve(path))
+
+    def reader_path(path):
+        for owner in ("json_wire", "serde_json"):
+            if owner not in path:
+                continue
+            tail = path[path.index(owner) + 1 :]
+            if owner == "json_wire":
+                return bool(tail) and (
+                    tail[0] == "*"
+                    or tail[0].startswith("decode")
+                    or tail[0] in {"deserialize_value", "WireValueOwned"}
+                )
+            return bool(tail) and (
+                tail[-1] == "*"
+                or any(
+                    part in {"from_str", "from_slice", "from_reader", "Deserializer"}
+                    for part in tail
+                )
+                or (tail[-1] == "deserialize" and "Value" in tail)
+            )
+        return False
+
+    sites = {offset for path, _, offset in imports if reader(path)}
+    for match in RUST_PATH.finditer(code):
+        if reader(tuple(re.split(r"\s*::\s*", match[0]))):
+            sites.add(match.start())
+    # A qualified trait call separates the receiver from `deserialize`:
+    # `<Value as serde::Deserialize>::deserialize(deserializer)`.
+    for match in re.finditer(
+        rf"<\s*({RUST_PATH.pattern})\s+as\s+{RUST_PATH.pattern}(?:\s*<[^>]*>)?\s*>\s*::\s*deserialize\b",
+        code,
+    ):
+        if reader(tuple(re.split(r"\s*::\s*", match[1])) + ("deserialize",)):
+            sites.add(match.start())
+    for attribute in re.finditer(r"#\s*\[\s*serde\s*\(", code):
+        end = balanced(code, code.index("[", attribute.start()), "[", "]")
+        if end is None:
+            continue
+        for kind, start, _, _, value in tokens:
+            if (
+                kind == "string"
+                and attribute.end() <= start < end
+                and re.search(
+                    r"\bdeserialize_with\s*=\s*$", code[attribute.end() : start]
+                )
+                and reader(
+                    tuple(re.split(r"\s*::\s*", value.strip().removeprefix("::")))
+                )
+            ):
+                sites.add(start)
+    return sorted({source.count("\n", 0, offset) + 1 for offset in sites})
+
+
+def rust_imports(
+    tree: str, offset: int = 0
+) -> list[tuple[tuple[str, ...], str | None, int]]:
+    """Expand a Rust use tree into (path, local name, source offset) leaves."""
+    tokens = list(re.finditer(rf"{RUST_NAME}|::|[{{}},*]", tree))
+    result = []
+    index = 0
+
+    def branch(prefix):
+        nonlocal index
+        path = prefix
+        start = tokens[index].start() if index < len(tokens) else 0
+        alias = None
+        while index < len(tokens):
+            token = tokens[index][0]
+            index += 1
+            if token == "::":
+                continue
+            if token == "{":
+                while index < len(tokens) and tokens[index][0] != "}":
+                    branch(path)
+                    if index < len(tokens) and tokens[index][0] == ",":
+                        index += 1
+                index += 1
+                return
+            if token == "as":
+                if index < len(tokens):
+                    alias = tokens[index][0]
+                    index += 1
+                break
+            if token in {",", "}"}:
+                index -= 1
+                break
+            if token != "self" or not path:
+                path += (token,)
+        if path:
+            result.append(
+                (path, alias or (None if path[-1] == "*" else path[-1]), offset + start)
+            )
+
+    branch(())
+    return result
+
+
+def json_test_sources(sources: dict[Path, str]) -> set[Path]:
+    """External modules whose every code loader is test-only.
+
+    A filename such as `tests.rs` grants no exemption. Follow ordinary module
+    declarations, explicit path attributes and literal includes; a production
+    alias of a test module prevents exemption. Children of a proven test
+    module are test-only too. Unresolved includes conservatively prevent this
+    exemption, since their code target cannot be proved here.
+    """
+    incoming: dict[Path, list[tuple[Path, bool]]] = {}
+    unresolved = []
+    for path, source in sources.items():
+        tokens = list(rust_tokens(source))
+        code = blank(source, tokens, {"comment", "character", "string"})
+        visible = blank(source, tokens, {"comment"})
+        tests = cfg_test_items(code)
+
+        def gated(offset):
+            return any(low <= offset < high for low, high in tests)
+
+        inline = []
+        for match in re.finditer(rf"\bmod\s+({RUST_NAME})\s*\{{", code):
+            end = balanced(code, match.end() - 1, "{", "}")
+            if end is not None:
+                inline.append((match.start(), end, match[1]))
+        for match in re.finditer(
+            rf"((?:#\s*\[[^\]]*\]\s*)*)(?:pub(?:\s*\([^)]*\))?\s+)?"
+            rf"\bmod\s+({RUST_NAME})\s*;",
+            visible,
+        ):
+            # Comments are already blank; reject matches inside string literals.
+            start = match.end() - len(match[0].lstrip())
+            if not re.search(r"\bmod\s+", code[match.start() : match.end()]):
+                continue
+            directories = [name for low, high, name in inline if low < start < high]
+            explicit = [
+                text
+                for kind, start, _, _, text in rust_tokens(match[1])
+                if kind == "string" and re.search(r"\bpath\s*=\s*$", match[1][:start])
+            ]
+            candidates = [
+                path.parent.joinpath(*directories) / name for name in explicit
+            ]
+            # A conditional path can still load the ordinary module on the
+            # other configuration. Both loaders must be accounted for.
+            if not re.search(r"#\s*\[\s*path\s*=", match[1]):
+                base = path.parent
+                if path.stem not in {"lib", "main", "mod"}:
+                    base /= path.stem
+                base = base.joinpath(*directories)
+                candidates.extend([base / f"{match[2]}.rs", base / match[2] / "mod.rs"])
+            for candidate in candidates:
+                target = candidate.resolve()
+                if target in sources:
+                    incoming.setdefault(target, []).append((path, gated(start)))
+        for match in re.finditer(r"\binclude\s*!\s*\(", code):
+            end = balanced(code, match.end() - 1, "(", ")")
+            strings = [
+                text
+                for kind, start, stop, _, text in tokens
+                if kind == "string" and match.end() <= start < stop <= (end or 0)
+            ]
+            body = code[match.end() : (end or match.end()) - 1].strip()
+            if end is None or len(strings) != 1 or body:
+                unresolved.append((path, gated(match.start())))
+            else:
+                target = (path.parent / strings[0]).resolve()
+                if target in sources:
+                    incoming.setdefault(target, []).append((path, gated(match.start())))
+    result = set()
+    while True:
+        added = {
+            path
+            for path, loaders in incoming.items()
+            if path.stem not in {"lib", "main"}
+            and all(test or parent in result for parent, test in loaders)
+        } - result
+        if not added:
+            break
+        result.update(added)
+    if any(not test and parent not in result for parent, test in unresolved):
+        return set()
+    return result
 
 
 def embedded_json_strings(source: str) -> list[str]:
@@ -695,11 +906,15 @@ def registry_errors(
 
 def violations(root: Path) -> list[str]:
     """Check every mapping and exact existing literals outside the canonical registry."""
+    root = root.resolve()
     rules = load(root)
     defined = rules.identifiers()
     if not defined:
         return ["no rule definitions found"]
-    sources = sorted((root / "rust/crates").glob("*/src/**/*.rs"))
+    sources = {
+        path.resolve(): path.read_text(encoding="utf-8")
+        for path in sorted((root / "rust/crates").glob("*/src/**/*.rs"))
+    }
     if not sources:
         return ["no Rust crate sources found"]
     registered, errors = vocabulary(root)
@@ -710,10 +925,10 @@ def violations(root: Path) -> list[str]:
     )
     errors.extend(rule_vocabulary_errors(root, registered))
     requirement = rules.identifier
-    for path in sources:
+    json_tests = json_test_sources(sources)
+    for path, source in sources.items():
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
-        source = path.read_text(encoding="utf-8")
         test_only = private_unit_test_source(root, Path(relative))
         for number, literals in diagnostic_literals(
             source, registered, requirement
@@ -738,7 +953,7 @@ def violations(root: Path) -> list[str]:
                 )
                 + ", ".join(literals)
             )
-        if Path(relative) not in JSON_CODECS:
+        if Path(relative) not in JSON_CODECS and path not in json_tests:
             for number in json_decodes(source):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
         if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or test_only:
