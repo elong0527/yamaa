@@ -335,6 +335,7 @@ impl<P: Ports> Application<P> {
                 .iter()
                 .find(|section| section.family == family),
             family,
+            environment.project.header.surface,
         )
         .map_err(Failure::Metadata)?;
         let section = required.section;

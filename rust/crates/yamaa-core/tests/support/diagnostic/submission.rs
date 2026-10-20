@@ -158,8 +158,12 @@ pub(crate) fn compose_study(
         })
         .collect();
     let section = &declared.sections[0];
-    let required =
-        composition::Required::admit(declared.study.as_ref(), Some(section), section.family)?;
+    let required = composition::Required::admit(
+        declared.study.as_ref(),
+        Some(section),
+        section.family,
+        yamaa_core::ast::Surface::V0_5,
+    )?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 pub(crate) fn one(
@@ -1045,7 +1049,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     );
     // A project without the selected family's section names that section.
     assert_eq!(
-        composition::Required::admit(None, None, Submission::Adam).unwrap_err(),
+        composition::Required::admit(None, None, Submission::Adam, yamaa_core::ast::Surface::V0_5)
+            .unwrap_err(),
         [
             Finding::cause(DefineRequiredDeclaration, "study", "study"),
             Finding::cause(DefineRequiredDeclaration, "adam", "adam"),

@@ -120,6 +120,29 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(binding[0].code, ConditionCode::ProjectEnvironmentInvalid);
     assert_eq!(binding[0].spec_path, "functions.id.function");
     reached.insert(binding[0].code);
+    // A 1.0 function file names the host's callable under `implementations`,
+    // and a callable that cannot be bound fails as its file does (FUNC-2).
+    let file = yamaa_core::project_function::Function::admit(
+        yamaa_core::project_function::Language::Python,
+        support::definition("id")
+            .file(&[(yamaa_core::project_function::Language::Python, "project.id")]),
+    )
+    .unwrap();
+    let binding = projection::binding_diagnostics(
+        &[DefinitionSource {
+            function: &file,
+            path: "functions[0]",
+        }],
+        &[BindingFailure {
+            function: 0,
+            error: &payload,
+        }],
+        &[host],
+    )
+    .unwrap();
+    assert_eq!(binding[0].code, ConditionCode::FunctionFileInvalid);
+    assert_eq!(binding[0].spec_path, "functions[0].implementations.python");
+    reached.insert(binding[0].code);
     let actual = Value::Int(8);
     let failures: [TestFailure<Rc<&str>>; 1] = [TestFailure::Result {
         function: 0,

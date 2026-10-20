@@ -607,6 +607,80 @@ mod declaration {
         }
 
         #[test]
+        fn a_lock_of_another_kind_and_a_repeated_name_fail_where_they_are_declared() {
+            let study = converted_study();
+            let project = fs::read_to_string(study.path("project.yaml")).unwrap();
+            // The R lock under Python's key, and a second file declaring the
+            // function's name.
+            study.write(
+                "project.yaml",
+                project
+                    .replace(
+                        "environments:\n  r:",
+                        "environments:\n  python:\n    lock: r/renv.lock\n  r:",
+                    )
+                    .replace(
+                        "- functions/bmi.yaml",
+                        "- functions/bmi.yaml\n- functions/copy.yaml",
+                    )
+                    .as_bytes(),
+            );
+            study.write(
+                "functions/copy.yaml",
+                &fs::read(study.path("functions/bmi.yaml")).unwrap(),
+            );
+            let Err(Failure::Rejected(rejected)) =
+                prepare(&study, Language::Python, &mut Files::default())
+            else {
+                panic!("a lock of another kind and a repeated name")
+            };
+            let issues =
+                yamaa_adapters::project_environment_diagnostics::admission(&rejected).unwrap();
+            let text = |text: &str| Value::String(text.into());
+            let project = study.path("project.yaml").to_str().unwrap().to_owned();
+            let copy = study
+                .path("functions/copy.yaml")
+                .to_str()
+                .unwrap()
+                .to_owned();
+            let expected = [
+                (
+                    "environments.python.lock",
+                    vec![
+                        ("reason", text("lock_kind_mismatch")),
+                        ("language", text("python")),
+                        ("actual_lock_kind", text("renv")),
+                        ("source", text(&project)),
+                        ("entry", text(&project)),
+                        ("environment_path", text("environments.python.lock")),
+                    ],
+                ),
+                (
+                    "name",
+                    vec![
+                        ("function", text("bmi")),
+                        ("reason", text("duplicate_function")),
+                        ("source", text(&copy)),
+                        ("entry", text(&project)),
+                        ("environment_path", text("functions[1]")),
+                    ],
+                ),
+            ];
+            assert_eq!(issues.len(), expected.len(), "{issues:?}");
+            for (issue, (path, context)) in issues.iter().zip(expected) {
+                assert_eq!(
+                    (issue.condition(), issue.rule()),
+                    ("function_file_invalid", Some("FUNC-2"))
+                );
+                assert_eq!(issue.spec_paths, [path]);
+                assert_eq!(issue.context.len(), context.len(), "{path}");
+                for (key, value) in context {
+                    assert_eq!(issue.context[key], value, "{path}: {key}");
+                }
+            }
+        }
+
+        #[test]
         fn function_file_findings_name_the_function_file_and_its_listing() {
             let study = converted_study();
             let bmi = fs::read_to_string(study.path("functions/bmi.yaml")).unwrap();

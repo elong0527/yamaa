@@ -521,6 +521,51 @@ mod tests {
     }
 
     #[test]
+    fn define_requires_a_1_0_section_s_standards_by_their_1_0_name() {
+        // An omitted list and an empty one both leave the section without the
+        // guide Define-XML composition requires (DEFINE-28).
+        for standards in [None, Some(Tree::list(vec![]))] {
+            let mut section = vec![
+                ("specs", Tree::list(vec![Tree::text("adsl.yaml")])),
+                ("define", Tree::text("define.xml")),
+            ];
+            section.extend(standards.map(|list| ("standards", list)));
+            let tree = with_header(
+                "project",
+                vec![
+                    (
+                        "study",
+                        Tree::map(vec![
+                            ("id", Tree::text("STUDY01")),
+                            ("name", Tree::text("STUDY01")),
+                            ("description", Tree::text("Study")),
+                            ("protocol_name", Tree::text("STUDY-01")),
+                        ]),
+                    ),
+                    ("adam", Tree::map(section)),
+                ],
+            );
+            let project = project(&tree.document(), None).unwrap();
+            let declarations = project.submission.as_ref().unwrap();
+            let Err(findings) = crate::submission_composition::Required::admit(
+                declarations.study.as_ref(),
+                declarations.sections.first(),
+                crate::project_environment::Submission::Adam,
+                project.header.surface,
+            ) else {
+                panic!("a section without a guide")
+            };
+            assert_eq!(
+                findings
+                    .iter()
+                    .map(|finding| finding.path.as_str())
+                    .collect::<Vec<_>>(),
+                ["adam.standards"]
+            );
+        }
+    }
+
+    #[test]
     fn a_function_file_names_its_function_and_types_its_values_by_declaration() {
         let tree = function_file(
             Tree::text("2024-01-01"),

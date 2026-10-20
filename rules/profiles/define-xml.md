@@ -780,9 +780,10 @@ every missing field at once, each at its project path such as `study`,
 and does not report them.
 
 Fails: `missing_required_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
 
 A project can therefore list its specifications and run them before its
-submission metadata is ready ([PROJECT-3](project.md#project-3)). A project
+submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty
+`standards` list leaves the section without a guide, as an omitted one does. A project
 file that declares `schema_version` writes the section's one guide as
 `standard`, reported at `sdtm.standard`.
