@@ -94,8 +94,8 @@ mod scalar {
             json(&expected, expected.root())
         }
 
-        fn issue_json(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+        fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -105,7 +105,7 @@ mod scalar {
         }
         fn attempt(
             fixture: &Fixture,
-        ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
+        ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
                 yamaa_core::project_function::Language::Python,
@@ -288,8 +288,8 @@ mod scalar {
                 identity,
             );
             assert_eq!(checked.len(), 1, "{expression}: {checked:?}");
-            assert_eq!(checked[0].condition, condition);
-            assert_eq!(checked[0].requirement.as_deref(), Some(requirement));
+            assert_eq!(checked[0].condition(), condition);
+            assert_eq!(checked[0].requirement(), Some(requirement));
             assert_eq!(checked[0].spec_paths, [format!("columns.RESULT.derivation.{suffix}")]);
             assert_eq!(attempt(&fixture).err().unwrap(), checked);
             assert!(!fixture.0.join("output.csv").exists());
@@ -306,8 +306,8 @@ mod scalar {
             fs::remove_file(fixture.0.join("input.csv")).unwrap();
             let issues = attempt(&fixture).err().unwrap();
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "incompatible_input_type");
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0308"));
+            assert_eq!(issues[0].condition(), "incompatible_input_type");
+            assert_eq!(issues[0].requirement(), Some("REQ-0308"));
             assert_eq!(
                 issues[0].spec_paths,
                 ["columns.RESULT.derivation.str_extract.source"]
@@ -337,7 +337,7 @@ mod scalar {
             }
             fn run(
                 &self,
-            ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>>
+            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
@@ -387,10 +387,10 @@ mod scalar {
             let mut result = fixture.run().unwrap();
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition, "multiple_matches");
-            assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0127"));
+            assert_eq!(result.issues()[0].condition(), "multiple_matches");
+            assert_eq!(result.issues()[0].requirement(), Some("REQ-0127"));
             assert_eq!(result.issues()[0].spec_paths, ["rows[0].filter"]);
-            let context: yamaa_core::json::Value = result.issues()[0].context.clone();
+            let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(context["match_count"], 2);
             assert!(result.save().is_err());
             assert!(!fixture.0.join("result.csv").exists());
@@ -493,13 +493,15 @@ mod scalar {
             };
             assert!(!issues.is_empty());
             assert!(
-                issues.iter().all(|issue| issue.phase == "validation"),
+                issues.iter().all(|issue| issue.phase() == "validation"),
                 "{issues:?}"
             );
             assert!(
-                issues.iter().any(|issue| issue.condition == "unknown_field"
-                    && issue.requirement.as_deref() == Some("REQ-0410")
-                    && issue.spec_paths == ["rows[0].derivations.VALUE.compute.expr"]),
+                issues
+                    .iter()
+                    .any(|issue| issue.condition() == "unknown_field"
+                        && issue.requirement() == Some("REQ-0410")
+                        && issue.spec_paths == ["rows[0].derivations.VALUE.compute.expr"]),
                 "{issues:?}"
             );
             assert!(!fixture.0.join("result.csv").exists());
@@ -524,9 +526,11 @@ mod scalar {
                     Err(issues) => issues,
                 };
                 assert!(
-                    issues.iter().any(|issue| issue.condition == "unknown_field"
-                        && issue.requirement.as_deref() == Some("REQ-0410")
-                        && issue.spec_paths == [path]),
+                    issues
+                        .iter()
+                        .any(|issue| issue.condition() == "unknown_field"
+                            && issue.requirement() == Some("REQ-0410")
+                            && issue.spec_paths == [path]),
                     "{issues:?}"
                 );
             }
@@ -817,7 +821,7 @@ rows:
             // The run, its input and base rows, then the two column checks it reached.
             assert_eq!(result.report_table().rows(), 5);
             assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition, "range_failed");
+            assert_eq!(result.issues()[0].condition(), "range_failed");
             for name in ["adsl.csv", "adsl-checks.csv"] {
                 fs::write(study.0.join(name), "sentinel").unwrap();
             }
@@ -911,7 +915,7 @@ rows:
             let mut result = study.build(&raw);
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition, "division_by_zero");
+            assert_eq!(result.issues()[0].condition(), "division_by_zero");
             assert!(result.save().is_err());
             assert!(!study.0.join("adsl.csv").exists());
             assert_eq!(
@@ -936,7 +940,7 @@ rows:
             fs::remove_file(study.0.join("input/dm.csv")).unwrap();
             let mut result = study.build(&raw);
             assert!(result.output().is_none());
-            assert_eq!(result.issues()[0].condition, "resource_path_missing");
+            assert_eq!(result.issues()[0].condition(), "resource_path_missing");
             assert!(result.save().is_err());
             assert_eq!(
                 saved_report(&study, "adsl-checks.csv"),

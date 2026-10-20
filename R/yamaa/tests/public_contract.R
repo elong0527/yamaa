@@ -15,7 +15,8 @@ namespace <- asNamespace("yamaa")
 
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))),
-  identical(sort(getNamespaceExports("yamaa")), c("yamaa_project", "yamaa_read_odm", "yamaa_spec")),
+  identical(sort(getNamespaceExports("yamaa")),
+    c("yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_spec")),
   identical(getNamespaceInfo("yamaa", "S3methods")[, 3L], "[[.yamaa_project_run"))
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",
   "yamaa_read_resolved_specification", "yamaa_resource_resolver", "yamaa_memory_resolver",
@@ -82,7 +83,7 @@ qualify_signatures <- function() {
   spec <- yamaa_spec(file.path(root, "absent.yaml"))
   project <- yamaa_project(file.path(root, "absent-project.yaml"))
   callables <- list(spec = yamaa_spec, project = yamaa_project, read_odm = yamaa_read_odm,
-    spec.check = spec$check, spec.resolve = spec$resolve, spec.run = spec$run,
+    lint = yamaa_lint, spec.check = spec$check, spec.resolve = spec$resolve, spec.run = spec$run,
     project.spec = project$spec, project.check = project$check, project.run = project$run,
     project.submission = project$submission)
   for (name in names(callables)) {

@@ -12,6 +12,12 @@ fn projected_findings(
 ) -> Option<Vec<Value>> {
     specification_diagnostics::findings(error, source)
         .expect("valid authored source finding context")
+        .map(|findings| {
+            findings
+                .iter()
+                .map(yamaa_adapters::report_storage::diagnostic_value)
+                .collect()
+        })
 }
 
 use yamaa_core::{

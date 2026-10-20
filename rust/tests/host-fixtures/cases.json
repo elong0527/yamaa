@@ -4632,6 +4632,10 @@
           "max_expanded_bytes",
           "max_xml_depth"
         ],
+        "lint": [
+          "paths",
+          "fix"
+        ],
         "spec.check": [],
         "spec.resolve": [],
         "spec.run": [],
@@ -5313,6 +5317,86 @@
         "after": "default: 1"
       },
       "function_output_csv": "ID,RATIO,RATIO_DEFAULT,RATIO_PCT,RATIO_ADJ_MISSING,RATIO_MISSING\nR1,2.5,2.5,250,2.5,\nR2,0.33,0.3,33.3,0.8300000000000001,\nR3,3.5,3.5,350,3.75,\nR4,0,0,0,0,\nR5,2.25,2.2,225,1.75,\nR6,,,,,\nR7,,,,,\n"
+    },
+    "lint": {
+      "columns": [
+        "file",
+        "line",
+        "column",
+        "finding",
+        "spec_path",
+        "message"
+      ],
+      "integer_columns": [
+        "line",
+        "column"
+      ],
+      "file_name": "lint-spec.yaml",
+      "specification_yaml": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\noutput:\n  path: adsl.csv\n  columns: [USUBJID, AGE]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n  # yamaa-lint: allow line_width -- the description is quoted verbatim\n  - name: AGE\n    type: int\n    derivation: DM.AGE\n    metadata: {description: \"Age in completed years at informed consent, as recorded\"}\n  # yamaa-lint: allow line_width\n  - name: SEX\n    type: str\n    label: Sex\n    derivation: DM.SEX\n",
+      "rows": [
+        {
+          "line": "6",
+          "column": "1",
+          "finding": "root_spacing",
+          "spec_path": "output",
+          "message": "leave one blank line before `output`"
+        },
+        {
+          "line": "16",
+          "column": "5",
+          "finding": "entry_spacing",
+          "spec_path": "columns[1]",
+          "message": "leave one blank line between `columns` entries"
+        },
+        {
+          "line": "16",
+          "column": "5",
+          "finding": "missing_label",
+          "spec_path": "columns[1]",
+          "message": "output column `AGE` has no label; declare `label:`"
+        },
+        {
+          "line": "20",
+          "column": "3",
+          "finding": "invalid_suppression",
+          "spec_path": "$",
+          "message": "name the findings and give a reason after `--`"
+        },
+        {
+          "line": "21",
+          "column": "5",
+          "finding": "entry_spacing",
+          "spec_path": "columns[2]",
+          "message": "leave one blank line between `columns` entries"
+        }
+      ],
+      "fixed_yaml": "schema_version: \"1.0\"\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: adsl.csv\n  columns: [USUBJID, AGE]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  # yamaa-lint: allow line_width -- the description is quoted verbatim\n  - name: AGE\n    type: int\n    derivation: DM.AGE\n    metadata: {description: \"Age in completed years at informed consent, as recorded\"}\n\n  # yamaa-lint: allow line_width\n  - name: SEX\n    type: str\n    label: Sex\n    derivation: DM.SEX\n",
+      "fixed_rows": [
+        {
+          "line": "18",
+          "column": "5",
+          "finding": "missing_label",
+          "spec_path": "columns[1]",
+          "message": "output column `AGE` has no label; declare `label:`"
+        },
+        {
+          "line": "23",
+          "column": "3",
+          "finding": "invalid_suppression",
+          "spec_path": "$",
+          "message": "name the findings and give a reason after `--`"
+        }
+      ],
+      "refusals": [
+        {
+          "yaml": "a: [\n",
+          "condition": "invalid_yaml"
+        },
+        {
+          "yaml": null,
+          "condition": "resource_path_missing"
+        }
+      ]
     }
   }
 }

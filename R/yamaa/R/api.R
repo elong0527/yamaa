@@ -29,6 +29,14 @@
 
 .optional_text <- function(value, what) if (is.null(value)) NULL else .text(value, what)
 
+.texts <- function(value, what) {
+  if (!is.character(value) || length(value) == 0L || anyNA(value)) {
+    stop(sprintf("`%s` must be a non-empty character vector without missing values", what),
+      call. = FALSE)
+  }
+  lapply(unname(value), .utf8_raw)
+}
+
 .version <- function() charToRaw(as.character(getRversion()))
 
 .capabilities <- function() {

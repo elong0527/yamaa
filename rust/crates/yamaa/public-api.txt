@@ -7,6 +7,7 @@ yamaa: pub mod diagnostic
 yamaa: pub mod engine
 yamaa: pub mod error
 yamaa: pub mod functions
+yamaa: pub mod lint
 yamaa: pub mod observe
 yamaa: pub mod odm
 yamaa: pub mod plan
@@ -51,6 +52,8 @@ yamaa::HostPayload: pub use yamaa::error::HostPayload
 yamaa::ISSUE_COLUMNS: pub use yamaa::diagnostic::ISSUE_COLUMNS
 yamaa::InputFrame: pub use yamaa::table::InputFrame
 yamaa::Int64Array: pub use yamaa::table::Int64Array
+yamaa::LINT_COLUMNS: pub use yamaa::lint::LINT_COLUMNS
+yamaa::LINT_FINDINGS: pub use yamaa::lint::LINT_FINDINGS
 yamaa::LargeStringArray: pub use yamaa::table::LargeStringArray
 yamaa::ListArray: pub use yamaa::table::ListArray
 yamaa::LockContext: pub use yamaa::functions::LockContext
@@ -398,6 +401,10 @@ yamaa::functions::Signature::may_return_missing: pub may_return_missing: bool
 yamaa::functions::Signature::parameters: pub parameters: Vec<Parameter>
 yamaa::functions::Signature::returns: pub returns: ColumnType
 yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
+yamaa::lint: pub use yamaa::lint::lint
+yamaa::lint::LINT_COLUMNS: pub const LINT_COLUMNS: [&str; 6]
+yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 9]
+yamaa::lint::lint: pub fn lint(paths: &[String], fix: bool) -> Result<Table, Failure>
 yamaa::observe::CallStage: impl CallStage
 yamaa::observe::CallStage: pub enum CallStage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::observe::CallStage::Activation: Activation

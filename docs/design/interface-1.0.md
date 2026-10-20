@@ -28,6 +28,7 @@ each number was taken.
 | [CDISC alignment](interface-1.0/cdisc.md) | Each submission field against Define-XML 2.1, Dataset-JSON 1.1 and the implementation guides; reserved spellings; closed vocabularies; the CDISC items of #3048 |
 | [Rules](interface-1.0/rules.md) | The disposition of each rule contradiction, the rules items of #3048, and the proposed card text |
 | [Card text beyond D71](interface-1.0/card-text.md) | Proposed titles and statements for the cards 1.0 changes that D71 did not cover, for the owner's approval (#3162) |
+| [Card text beyond D78](interface-1.0/card-text-2.md) | Proposed titles and statements for the twelve cards D78 sent back and a new ODM source-profile card, for the owner's approval (#3193) |
 | [API and command line](interface-1.0/api.md) | `status`, printed text, `lint()`, `info()`, the command line, the issues table, and the bindings draft |
 | [Stability contract](interface-1.0/stability.md) | The contract text and how `make check-repository` enforces it |
 | [Converted examples](interface-1.0/examples.md) | Six benchmarks converted by hand to the proposed surface, with notes |

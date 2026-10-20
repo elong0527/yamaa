@@ -63,9 +63,11 @@ and Rust 1.82 or later from 0.5.0 on, with Cargo, a C compiler and GNU make:
 python -m pip install ./yamaa-0.4.0.tar.gz
 ```
 
-The build downloads the locked Rust crates from crates.io, and pip's build
-isolation fetches `maturin`. To build offline, fill the Cargo cache first,
-install `maturin` 1.9.6 and pass `--no-build-isolation`.
+From 1.0.0 on, the source archive carries the locked Rust crates, so the build
+reads nothing from crates.io; pip's build isolation still fetches `maturin`.
+To build offline, install `maturin` 1.9.6 and pass `--no-build-isolation`. The
+0.4.0 and 0.5.0 source archives download the locked crates from crates.io, so
+building them offline also needs the Cargo cache filled first.
 
 To set up the development version from GitHub, install uv, the pinned Rust
 toolchain and a C compiler, then run:
@@ -76,11 +78,9 @@ cd yamaa
 make setup
 ```
 
-The development package requires only Polars and packaging at runtime. Its
-optional `style` extra adds the Python YAML readers used by the style checker;
-from a source checkout, install it with `python -m pip install './python[style]'`.
-The `test` extra also includes these readers, plus PyArrow, lxml and Pydantic
-for independent artifact and conformance checks. `make setup` installs it.
+The development package requires only Polars and packaging at runtime. The
+`test` extra adds the Python YAML readers, PyArrow, lxml and Pydantic for
+independent artifact and conformance checks. `make setup` installs it.
 
 The [release guidance](https://elong0527.github.io/yamaa/release/#supported-platforms)
 lists the supported Python versions and platforms.

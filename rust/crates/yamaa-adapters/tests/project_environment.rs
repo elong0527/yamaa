@@ -9,7 +9,6 @@ mod project {
         use std::{cell::Cell, rc::Rc};
         use yamaa_adapters::json;
         use yamaa_adapters::{
-            issue_rows::Issue,
             project_environment_diagnostics::{self as diagnostic, Error as ProjectionError},
             project_source::{
                 self, CaptureFailure, Failure, Kind, Origin, ProjectCapturePort, Reply, Request,
@@ -137,16 +136,8 @@ mod project {
             );
             (rejected, port, allocation, pointer)
         }
-        fn expected(condition: &str, requirement: &str, path: &str, context: Value) -> Issue {
-            Issue {
-                phase: "validation".into(),
-                condition: condition.into(),
-                requirement: Some(requirement.into()),
-                spec_paths: vec![path.into()],
-                context,
-                source_span: None,
-                operand_route: None,
-            }
+        fn expected(condition: &str, requirement: &str, path: &str, context: Value) -> Value {
+            yamaa_adapters::json!({"phase": "validation", "condition": condition, "requirement": requirement, "spec_paths": [path], "context": context})
         }
         fn opaque(
             rejected: &project_source::RejectedEnvironment<Opaque>,
@@ -189,7 +180,7 @@ mod project {
                 want.push(expected("codelist_shape_invalid", "REQ-0950", "codelists[0].items[0].value", json!({"codelist":"SEX","value":true,"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"})));
                 want.push(expected("codelist_shape_invalid", "REQ-0950", "codelists[2].codelists[0].items[0].value", json!({"codelist":"OTHER","value":true,"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"codelists[2]"})));
                 let result = diagnostic::admission(&rejected).unwrap();
-                assert_eq!(result, want);
+                assert_eq!(crate::support::rows(&result), want);
                 assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
                 assert_eq!(port.trace.len(), 5);
                 opaque(&rejected, &allocation, pointer);
@@ -216,7 +207,7 @@ mod project {
                 ),
             ];
             let result = diagnostic::scalar_sources(&rejected).unwrap();
-            assert_eq!(result, want);
+            assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::scalar_sources(&rejected).unwrap(), result);
             assert_eq!(port.trace.len(), 5);
             opaque(&rejected, &allocation, pointer);
@@ -370,20 +361,14 @@ mod project {
             for _ in 0..2 {
                 let rows = project_application::failure(&error);
                 assert_eq!(
-                    rows,
-                    [Issue {
-                        phase: "engine".into(),
-                        condition: "engine_rejected".into(),
-                        requirement: None,
-                        spec_paths: vec!["codelists[1]".into()],
-                        context: json!({
+                    crate::support::rows(&rows),
+                    [
+                        yamaa_adapters::json!({"phase": "engine", "condition": "engine_rejected", "requirement": null, "spec_paths": ["codelists[1]"], "context": json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,
                             "actual": Limits::SPEC_BYTES + 1,
-                        }),
-                        source_span: None,
-                        operand_route: None,
-                    }],
+                        })})
+                    ],
                 );
                 assert_eq!(owner.root.source().bytes.as_ptr(), held_root);
                 assert_eq!(owner.sources.as_ptr(), held_sources);
@@ -462,7 +447,10 @@ mod project {
                 ),
             ];
             for _ in 0..2 {
-                assert_eq!(project_application::failure(&error), want);
+                assert_eq!(
+                    crate::support::rows(&project_application::failure(&error)),
+                    want
+                );
             }
             assert_eq!(port.trace.len(), 2);
         }
@@ -507,7 +495,7 @@ mod project {
                 ),
             ];
             let result = diagnostic::scalar_root(&root, &findings).unwrap();
-            assert_eq!(result, want);
+            assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::scalar_root(&root, &findings).unwrap(), result);
             // A failed project scalar stops before its environment link is read.
             assert_eq!(port.trace, []);
@@ -563,7 +551,7 @@ mod project {
                     ),
                 ];
                 let result = diagnostic::scalar_sources(&rejected).unwrap();
-                assert_eq!(result, want);
+                assert_eq!(crate::support::rows(&result), want);
                 assert_eq!(diagnostic::scalar_sources(&rejected).unwrap(), result);
                 assert_eq!(diagnostic::admission(&rejected).unwrap(), []);
                 assert_eq!(diagnostic::schema_sources(&rejected).unwrap(), []);
@@ -602,7 +590,7 @@ mod project {
                 json!({"reason":"lock_kind_mismatch","language":"python","actual_lock_kind":"renv","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":"lock"}),
             )];
             let result = diagnostic::admission(&rejected).unwrap();
-            assert_eq!(result, want);
+            assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
             assert_eq!(
                 port.trace,
@@ -659,7 +647,7 @@ mod project {
                     want.push(expected("project_environment_invalid", "REQ-0695", &format!("{declaration}.tests"), json!({"function":name,"obligation":obligation,"reason":"missing_coverage_obligation","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
                 }
             }
-            assert_eq!(result, want);
+            assert_eq!(crate::support::rows(&result), want);
             assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
             assert_eq!(
                 port.trace,
@@ -755,11 +743,11 @@ mod project {
                     None,
                 )
                 .unwrap();
-                assert_eq!(issue.phase, "derivation");
-                assert_eq!(issue.condition, condition);
-                assert_eq!(issue.requirement.as_deref(), Some(requirement));
+                assert_eq!(issue.phase(), "derivation");
+                assert_eq!(issue.condition(), condition);
+                assert_eq!(issue.requirement(), Some(requirement));
                 assert_eq!(issue.spec_paths, ["rows[2].derivation.BMI.function"]);
-                let context: yamaa_core::json::Value = issue.context.clone();
+                let context = yamaa_core::json::Value::Object(issue.context.clone());
                 assert_eq!(context["function"], "bmi");
                 assert_eq!(context["call"], "projectbmi.bmi");
                 assert_eq!(
@@ -795,7 +783,7 @@ mod project {
                     }),
                 )
                 .unwrap();
-                let context: yamaa_core::json::Value = issue.context.clone();
+                let context = yamaa_core::json::Value::Object(issue.context.clone());
                 assert_eq!(context["host_error"], "ValueError");
                 assert_eq!(context["host_message"], "é\0🙂");
                 assert!(context.get("host_details_truncated").is_none());
@@ -812,7 +800,7 @@ mod project {
                     }),
                 )
                 .unwrap();
-                let context: yamaa_core::json::Value = issue.context.clone();
+                let context = yamaa_core::json::Value::Object(issue.context.clone());
                 assert_eq!(context["reason"], oversized);
             }
             let failure = make_failure(FailureKind::InvalidHostResult(payload));
@@ -827,7 +815,7 @@ mod project {
                 }),
             )
             .unwrap();
-            assert_eq!(issue.condition, "invalid_function_result");
+            assert_eq!(issue.condition(), "invalid_function_result");
             assert_eq!(issue.context.clone()["returned"], "list");
         }
         #[test]
@@ -870,7 +858,7 @@ mod project {
             let failure = make_failure(FailureKind::UnknownArguments(vec![oversized.clone()]));
             let issue =
                 invocation("columns.BMI.derivation.function", &failure, None, &[], None).unwrap();
-            let context: yamaa_core::json::Value = issue.context.clone();
+            let context = yamaa_core::json::Value::Object(issue.context.clone());
             assert_eq!(context["unknown"], yamaa_adapters::json!([oversized]));
         }
 
@@ -977,8 +965,8 @@ mod project {
                     )
                     .unwrap()
                 };
-                assert_eq!(issue.condition, condition);
-                assert_eq!(issue.requirement.as_deref(), Some(requirement));
+                assert_eq!(issue.condition(), condition);
+                assert_eq!(issue.requirement(), Some(requirement));
                 assert_eq!(port.calls, 1);
             }
         }
@@ -1218,12 +1206,12 @@ mod project {
                 ),
             ];
             for (record, (reason, versions, actual)) in records.iter().zip(expected) {
-                assert_eq!(record.phase, "validation");
-                assert_eq!(record.condition, "runtime_artifact_mismatch");
-                assert_eq!(record.requirement.as_deref(), Some("REQ-0697"));
+                assert_eq!(record.phase(), "validation");
+                assert_eq!(record.condition(), "runtime_artifact_mismatch");
+                assert_eq!(record.requirement(), Some("REQ-0697"));
                 assert_eq!(record.spec_paths, ["lock"]);
                 assert_eq!(
-                    record.context.clone(),
+                    yamaa_core::json::Value::Object(record.context.clone()),
                     yamaa_adapters::json!({"source":"study/environment.yaml", "entry":"study/project.yaml",
                 "lock_source":"held/uv.lock", "lock":"../uv.lock", "package":"program",
                 "reason":reason, "expected":versions, "actual":actual})
@@ -1254,7 +1242,7 @@ mod project {
             ];
             let records = issues(&environment, &facts).unwrap();
             assert_eq!(records.len(), 3);
-            let context: yamaa_core::json::Value = records[2].context.clone();
+            let context = yamaa_core::json::Value::Object(records[2].context.clone());
             assert_eq!(context["expected"], yamaa_adapters::json!(["1.0"]));
             assert_eq!(context["actual"], "1.0.0");
         }
@@ -1302,7 +1290,7 @@ mod project {
                 )],
             )
             .unwrap();
-            let context: yamaa_core::json::Value = result[0].context.clone();
+            let context = yamaa_core::json::Value::Object(result[0].context.clone());
             assert_eq!(context["actual"], wide);
             let facts = (0..2_050)
                 .map(|_| finding(Reason::VersionNotLocked, &[], None))
@@ -1550,7 +1538,7 @@ mod project {
             let result = project_report::build_result(&run, &attempt, id("codelist"), &[]).unwrap();
             assert_eq!(result.output(), None);
             assert_eq!(result.issues().len(), 1);
-            let context: yamaa_core::json::Value = result.issues()[0].context.clone();
+            let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(
                 context,
                 yamaa_adapters::json!({"column":"CODE","codelist":"SEX","failure_count":2,"keys":[{"ID":i64::MAX},{"ID":i64::MIN}],"values":["X","Z"]})
@@ -2229,8 +2217,8 @@ functions:
             assert!(
                 issues
                     .iter()
-                    .any(|issue| issue.condition == "invalid_derive_step"
-                        && issue.requirement.as_deref() == Some("REQ-1242")),
+                    .any(|issue| issue.condition() == "invalid_derive_step"
+                        && issue.requirement() == Some("REQ-1242")),
                 "{issues:?}"
             );
         }
@@ -2442,7 +2430,6 @@ functions:
 
         #[test]
         fn project_without_the_host_environment_reports_each_project_call_as_missing() {
-            use yamaa_adapters::issue_rows::Issue;
             struct OtherHost;
             impl ProjectCapturePort for OtherHost {
                 type Error = std::convert::Infallible;
@@ -2479,17 +2466,9 @@ functions:
             let Err(rejected) = PreparedRun::prepare(document, environment()) else {
                 panic!("project calls without a host environment cannot execute")
             };
-            let missing = |column: &str, function: &str| Issue {
-                phase: "validation".into(),
-                condition: "project_environment_missing".into(),
-                requirement: Some("REQ-0694".into()),
-                spec_paths: vec![format!("columns.{column}.derivation.function.name")],
-                context: yamaa_adapters::json!({"function":function,"language":"python","cause":"undeclared"}),
-                source_span: None,
-                operand_route: None,
-            };
+            let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "requirement": "REQ-0694", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
             assert_eq!(
-                yamaa_adapters::project_check::rejected(&rejected).unwrap(),
+                crate::support::rows(&yamaa_adapters::project_check::rejected(&rejected).unwrap()),
                 [missing("VALUE", "id"), missing("OTHER", "absent")]
             );
             assert!(rejected.captured.environment_file().is_none());
@@ -2726,7 +2705,7 @@ functions:
                     } else {
                         "function_call_failed"
                     };
-                    assert_eq!(result.issues()[0].condition, expected);
+                    assert_eq!(result.issues()[0].condition(), expected);
                     if matches!(mode, Mode::LiveFailure) {
                         assert_eq!(observed["source_reads"].as_array().unwrap().len(), 1);
                         assert_eq!(observed["activation"]["tests"].as_array().unwrap().len(), 3);
@@ -2870,9 +2849,9 @@ functions:
                 }],
             )
             .unwrap();
-            assert_eq!(result.issues()[0].condition, "runtime_artifact_mismatch");
+            assert_eq!(result.issues()[0].condition(), "runtime_artifact_mismatch");
             assert_eq!(
-                result.issues()[0].context.clone(),
+                yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
                 yamaa_adapters::json!({"source":"study/environment.yaml","entry":"study/project.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
             );
             assert_eq!(
@@ -2905,9 +2884,12 @@ functions:
                 &[],
             )
             .unwrap();
-            assert_eq!(result.issues()[0].condition, "function_conformance_failed");
+            assert_eq!(
+                result.issues()[0].condition(),
+                "function_conformance_failed"
+            );
             assert_eq!(result.issues()[0].spec_paths, ["functions.id.tests[0]"]);
-            let context: yamaa_core::json::Value = result.issues()[0].context.clone();
+            let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(context["expected"], 7);
             assert_eq!(context["actual"], 8);
             // The linked environment file declares the inline definition.

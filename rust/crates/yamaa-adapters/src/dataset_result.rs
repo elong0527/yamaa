@@ -2,13 +2,14 @@
 pub(crate) use crate::dataset_snapshot::Snapshot;
 use crate::{
     callback::{BoundaryError, CallbackError},
-    execution_diagnostics::{self as diagnostics, arithmetic, conversion, Diagnostic},
-    ipc_table::{encode_dataset, serialize_json, TableError},
-    report_scalar::ScalarValue,
+    execution_diagnostics as diagnostics,
+    ipc_table::{encode_dataset, TableError},
 };
-use serde::Serialize;
 use std::fmt;
+use yamaa_core::diagnostic::Diagnostic;
+use yamaa_core::numeric_lifecycle::HandlerCount;
 use yamaa_core::reduction::ReductionError;
+use yamaa_core::value::Value;
 use yamaa_core::{
     dataset::{self, CheckRecord, ExecutionError, RowIdentity},
     table_grouping::GroupingError,
@@ -54,15 +55,18 @@ impl fmt::Display for DatasetError {
 impl std::error::Error for DatasetError {}
 type Error = DatasetError;
 
-/// A checked table is present only for success. JSON carries exact typed observations.
+/// A checked table is present only for success. Observations stay typed until
+/// the report renders them.
 pub struct DatasetResponse {
     pub table: Option<Vec<u8>>,
-    pub outcome: String,
+    pub outcome: Outcome,
+    /// Every handler path the attempt registered, in registration order.
+    pub handler_counts: Vec<HandlerCount>,
     // The application publishes from its accepted typed result, never by
-    // reconstructing execution success from JSON or decoding its own IPC output.
+    // reconstructing execution success or decoding its own IPC output.
     pub(crate) execution: Option<dataset::Execution>,
     pub(crate) retained_verifications: Vec<dataset::CheckRecord>,
-    pub(crate) intermediate_diagnostics: Vec<yamaa_core::diagnostic::Diagnostic>,
+    pub(crate) intermediate_diagnostics: Vec<Diagnostic>,
     // Preserve the typed completed failure ledger for core report projection;
     // all observations remain typed until report projection.
     pub(crate) failed_verifications: Option<(
@@ -73,114 +77,41 @@ pub struct DatasetResponse {
     pub(crate) template_rows: Vec<dataset::TemplateRows>,
 }
 
-#[derive(Serialize)]
-struct Envelope {
-    protocol: &'static str,
-    outcome: Outcome,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    handler_counts: Vec<HandlerCount>,
+/// The typed outcome of one execution attempt.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Outcome {
+    Success,
+    /// Key or verification failures; the response keeps their records.
+    Failure,
+    /// One language finding and the row and keys it names.
+    Condition(Box<Condition>),
+    /// A resource bound.
+    Limit(Limit),
 }
-#[derive(Serialize)]
-struct HandlerCount {
-    spec_path: String,
-    handler: &'static str,
-    count: String,
+
+/// One language finding of an execution, with the facts that locate it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Condition {
+    pub diagnostic: Diagnostic,
+    /// The output row the finding names.
+    pub identity: Option<RowIdentity>,
+    /// The partition an ambiguous baseline names, field by field.
+    pub partition: Option<Vec<(String, Value)>>,
+    /// The intermediate key a lookup matched, field by field.
+    pub matched_key: Option<Vec<(String, Value)>>,
 }
-#[derive(Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-enum Outcome {
-    Success {
-        verifications: Vec<Record>,
-    },
-    Failure {
-        phase: &'static str,
-        verifications: Vec<Record>,
-    },
-    Condition {
-        #[serde(serialize_with = "serialize_diagnostic")]
-        diagnostic: Box<Diagnostic>,
-        identity: Option<Identity>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        partition: Option<Vec<PartitionValue>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        matched_key: Option<Vec<PartitionValue>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        verifications: Option<Vec<Record>>,
-    },
-    Limit {
-        resource: &'static str,
-        limit: Option<String>,
-        required: Option<String>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        spec_paths: Vec<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        source_index: Option<usize>,
-    },
+
+/// An execution bound: its resource, the limit and the requirement when
+/// known, and the paths or the source coordinate that own it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Limit {
+    pub resource: &'static str,
+    pub limit: Option<usize>,
+    pub required: Option<usize>,
+    pub spec_paths: Vec<String>,
+    pub source_index: Option<usize>,
 }
-#[derive(Serialize)]
-struct PartitionValue {
-    name: String,
-    value: ScalarValue,
-}
-#[derive(Serialize)]
-struct Identity {
-    position: String,
-    keys: Vec<ScalarValue>,
-}
-#[derive(Serialize)]
-struct CodelistRecord {
-    id: String,
-    values: Vec<ScalarValue>,
-}
-#[derive(Serialize)]
-struct Record {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    codelist: Option<CodelistRecord>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    inventory: Option<Vec<ScalarValue>>,
-    spec_path: String,
-    condition: &'static str,
-    requirement: &'static str,
-    evaluated_count: String,
-    failed_count: String,
-    output_rows: String,
-    offending_rows: Vec<Identity>,
-}
-/// Move owned identities into the scalar codec without another copy of key strings.
-fn identity(row: RowIdentity) -> Identity {
-    Identity {
-        position: row.position.to_string(),
-        keys: row.values.into_iter().map(ScalarValue::from_core).collect(),
-    }
-}
-fn native_records(records: Vec<CheckRecord>) -> Result<Vec<Record>, Error> {
-    records
-        .into_iter()
-        .map(|record| {
-            let definition = record.definition();
-            Ok(Record {
-                codelist: record.codelist.map(|observation| CodelistRecord {
-                    id: observation.id,
-                    values: observation
-                        .values
-                        .into_iter()
-                        .map(ScalarValue::from_core)
-                        .collect(),
-                }),
-                inventory: record
-                    .inventory
-                    .map(|values| values.into_iter().map(ScalarValue::from_core).collect()),
-                spec_path: record.path,
-                condition: definition.condition,
-                requirement: definition.requirement.ok_or(Error::Internal)?,
-                evaluated_count: record.evaluated_count.to_string(),
-                failed_count: record.failed_count.to_string(),
-                output_rows: record.output_rows.to_string(),
-                offending_rows: record.offending_rows.into_iter().map(identity).collect(),
-            })
-        })
-        .collect()
-}
+
 /// Expose resource policy separately from semantic conversion/reduction/check failures.
 type FailedChecks = (
     yamaa_core::verification_diagnostics::Phase,
@@ -188,8 +119,8 @@ type FailedChecks = (
 );
 fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<FailedChecks>), Error> {
     use yamaa_core::verification_diagnostics::Phase;
-    // Encode before moving the ledger; no host error is cloned or inspected.
-    let outcome = semantic_failure(&error, true)?;
+    // Classify before moving the ledger; no host error is cloned or inspected.
+    let outcome = semantic_failure(&error)?;
     let records = match error {
         ExecutionError::KeyFailures(records) => Some((Phase::Output, records)),
         ExecutionError::VerificationFailures(records)
@@ -203,258 +134,158 @@ fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<Fail
     Ok((outcome, records))
 }
 
+fn condition(diagnostic: Diagnostic, identity: Option<&RowIdentity>) -> Outcome {
+    Outcome::Condition(Box::new(Condition {
+        diagnostic,
+        identity: identity.cloned(),
+        partition: None,
+        matched_key: None,
+    }))
+}
+
+fn limit(
+    resource: &'static str,
+    limit: usize,
+    required: Option<usize>,
+    spec_paths: Vec<String>,
+    source_index: Option<usize>,
+) -> Outcome {
+    Outcome::Limit(Limit {
+        resource,
+        limit: Some(limit),
+        required,
+        spec_paths,
+        source_index,
+    })
+}
+
 /// Read core-owned semantic facts without cloning or classifying any host payload.
 /// Project calls and codelist records retain their separate typed formatters.
-fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Result<Outcome, Error> {
-    let encode_records = native_records;
+fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
     Ok(match error {
         ExecutionError::FunctionBinding { .. } => return Err(Error::FunctionBinding),
         // Project failures use the owned application report with original host payloads.
         ExecutionError::ProjectFunction { .. } => return Err(Error::UnsupportedOutcome),
         ExecutionError::SemanticDiagnostic {
             diagnostic,
-            identity: keys,
-        } => Outcome::Condition {
-            diagnostic: diagnostics::project(diagnostic.clone())?,
-            identity: keys.clone().map(identity),
-            matched_key: None,
-            partition: None,
-            verifications: None,
-        },
+            identity,
+        } => condition(diagnostic.clone(), identity.as_ref()),
         ExecutionError::IntermediateVerifications(diagnostics)
-        | ExecutionError::IntermediateFilterTypes(diagnostics) => Outcome::Condition {
-            diagnostic: diagnostics::project(diagnostics.first().ok_or(Error::Internal)?.clone())?,
-            identity: None,
-            matched_key: None,
-            partition: None,
-            verifications: None,
-        },
-        ExecutionError::ScalarDiagnostic(diagnostic) => Outcome::Condition {
-            diagnostic: diagnostics::project(diagnostic.clone())?,
-            identity: None,
-            matched_key: None,
-            partition: None,
-            verifications: None,
-        },
-        ExecutionError::Numeric {
-            error,
-            identity: keys,
-        } => Outcome::Condition {
-            diagnostic: crate::execution_diagnostics::numeric(error.clone())
-                .map_err(|_| Error::Internal)?,
-            identity: keys.clone().map(identity),
-            matched_key: None,
-            partition: None,
-            verifications: None,
-        },
-        ExecutionError::BaselineAmbiguity { partition, .. } => Outcome::Condition {
-            diagnostic: diagnostics::failure(error)?,
-            identity: None,
-            matched_key: None,
-            partition: Some(
-                partition
-                    .iter()
-                    .map(|(name, value)| PartitionValue {
-                        name: name.clone(),
-                        value: ScalarValue::from_core(value.clone()),
-                    })
-                    .collect(),
-            ),
-            verifications: None,
-        },
-
+        | ExecutionError::IntermediateFilterTypes(diagnostics) => {
+            condition(diagnostics.first().ok_or(Error::Internal)?.clone(), None)
+        }
+        ExecutionError::ScalarDiagnostic(diagnostic) => condition(diagnostic.clone(), None),
+        ExecutionError::Numeric { error, identity } => {
+            condition(diagnostics::numeric(error.clone())?, identity.as_ref())
+        }
+        ExecutionError::BaselineAmbiguity { partition, .. } => {
+            Outcome::Condition(Box::new(Condition {
+                diagnostic: diagnostics::failure(error)?,
+                identity: None,
+                partition: Some(partition.clone()),
+                matched_key: None,
+            }))
+        }
         ExecutionError::MultipleMatches {
             matched_key,
-            identity: keys,
+            identity,
             ..
-        } => Outcome::Condition {
-            diagnostic: diagnostics::failure(error)?,
-            identity: keys.clone().map(identity),
-            partition: None,
-            verifications: None,
-            matched_key: Some(
-                matched_key
-                    .iter()
-                    .map(|(name, value)| PartitionValue {
-                        name: name.clone(),
-                        value: ScalarValue::from_core(value.clone()),
-                    })
-                    .collect(),
-            ),
-        },
-        ExecutionError::UnmatchedKey {
+        }
+        | ExecutionError::UnmatchedKey {
             matched_key,
-            identity: keys,
+            identity,
             ..
-        } => Outcome::Condition {
+        } => Outcome::Condition(Box::new(Condition {
             diagnostic: diagnostics::failure(error)?,
-            identity: keys.clone().map(identity),
+            identity: identity.clone(),
             partition: None,
-            verifications: None,
-            matched_key: Some(
-                matched_key
-                    .iter()
-                    .map(|(name, value)| PartitionValue {
-                        name: name.clone(),
-                        value: ScalarValue::from_core(value.clone()),
-                    })
-                    .collect(),
-            ),
-        },
-        ExecutionError::MultipleValues { identity: keys, .. } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            diagnostic: diagnostics::failure(error)?,
-            identity: keys.clone().map(identity),
-            verifications: None,
-        },
+            matched_key: Some(matched_key.clone()),
+        })),
+        ExecutionError::MultipleValues { identity, .. } => {
+            condition(diagnostics::failure(error)?, identity.as_ref())
+        }
         ExecutionError::Limit {
             resource,
-            limit,
+            limit: bound,
             required,
-        } => Outcome::Limit {
-            resource: crate::resource_diagnostics::resource_name(*resource),
-            limit: Some(limit.to_string()),
-            required: required.map(|value| value.to_string()),
-            spec_paths: Vec::new(),
-            source_index: None,
-        },
+        } => limit(
+            crate::resource_diagnostics::resource_name(*resource),
+            *bound,
+            *required,
+            Vec::new(),
+            None,
+        ),
         ExecutionError::SourceLimit {
             resource,
-            limit,
+            limit: bound,
             required,
             source_index,
-        } => Outcome::Limit {
-            resource: crate::resource_diagnostics::resource_name(*resource),
-            limit: Some(limit.to_string()),
-            required: required.map(|value| value.to_string()),
-            spec_paths: Vec::new(),
-            source_index: Some(*source_index),
-        },
+        } => limit(
+            crate::resource_diagnostics::resource_name(*resource),
+            *bound,
+            *required,
+            Vec::new(),
+            Some(*source_index),
+        ),
         ExecutionError::ScopedLimit {
             resource,
-            limit,
+            limit: bound,
             required,
             spec_paths,
-        } => Outcome::Limit {
-            resource: crate::resource_diagnostics::resource_name(*resource),
-            limit: Some(limit.to_string()),
-            required: required.map(|value| value.to_string()),
-            spec_paths: spec_paths.clone(),
-            source_index: None,
-        },
-        ExecutionError::Capacity => Outcome::Limit {
+        } => limit(
+            crate::resource_diagnostics::resource_name(*resource),
+            *bound,
+            *required,
+            spec_paths.clone(),
+            None,
+        ),
+        ExecutionError::Capacity => Outcome::Limit(Limit {
             resource: "shape",
             limit: None,
             required: None,
             spec_paths: Vec::new(),
             source_index: None,
-        },
+        }),
         ExecutionError::Grouping(GroupingError::Limit(error))
         | ExecutionError::OutputGrouping(GroupingError::Limit(error))
         | ExecutionError::Reduction {
             error: TableReductionError::Limit(error),
             ..
-        } => Outcome::Limit {
-            resource: error.resource,
-            limit: Some(error.limit.to_string()),
-            required: error.actual.map(|value| value.to_string()),
-            spec_paths: Vec::new(),
-            source_index: None,
-        },
-        ExecutionError::KeyFailures(found) => Outcome::Failure {
-            phase: "output",
-            verifications: encode_records(found.clone())?,
-        },
-        ExecutionError::VerificationFailures(found) => Outcome::Failure {
-            phase: "verification",
-            verifications: encode_records(found.clone())?,
-        },
+        } => limit(error.resource, error.limit, error.actual, Vec::new(), None),
+        ExecutionError::KeyFailures(_) | ExecutionError::VerificationFailures(_) => {
+            Outcome::Failure
+        }
         ExecutionError::Conversion {
             path,
             error,
-            identity: keys,
+            identity,
             ..
-        } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            verifications: None,
-            diagnostic: conversion(error.clone(), path.clone())?,
-            identity: keys.clone().map(identity),
-        },
-        ExecutionError::Predicate { error, .. } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            verifications: None,
-            diagnostic: crate::execution_diagnostics::predicate(error)?,
-            identity: None,
-        },
-        ExecutionError::ReductionType { .. } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            verifications: None,
-            identity: None,
-            diagnostic: diagnostics::failure(error)?,
-        },
+        } => condition(
+            error.clone().into_diagnostic(path.clone()),
+            identity.as_ref(),
+        ),
+        ExecutionError::Predicate { error, .. } => condition(diagnostics::predicate(error)?, None),
+        ExecutionError::ReductionType { .. } => condition(diagnostics::failure(error)?, None),
         ExecutionError::Reduction {
             path,
             error: TableReductionError::Reduction(ReductionError::Arithmetic { error, .. }),
-            identity: keys,
-        } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            verifications: None,
-            diagnostic: arithmetic(error.clone(), path.clone())?,
-            identity: keys.clone().map(identity),
-        },
-        ExecutionError::VerificationDiagnostic {
-            diagnostic,
-            records: completed,
-        } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            identity: None,
-            diagnostic: diagnostics::project(diagnostic.clone())?,
-            verifications: if retain_records {
-                Some(encode_records(completed.clone())?)
-            } else {
-                None
-            },
-        },
+            identity,
+        } => condition(
+            error.clone().into_diagnostic(path.clone()),
+            identity.as_ref(),
+        ),
+        ExecutionError::VerificationDiagnostic { diagnostic, .. } => {
+            condition(diagnostic.clone(), None)
+        }
         ExecutionError::VerificationDeclaration {
-            path,
-            code,
-            reason,
-            records: completed,
-        } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            identity: None,
-            diagnostic: crate::execution_diagnostics::declaration(
-                path.clone(),
-                *code,
-                reason.clone(),
-            )?,
-            verifications: if retain_records {
-                Some(encode_records(completed.clone())?)
-            } else {
-                None
-            },
-        },
-        ExecutionError::VerificationPredicate {
-            error,
-            records: completed,
-        } => Outcome::Condition {
-            matched_key: None,
-            partition: None,
-            diagnostic: crate::execution_diagnostics::predicate(error)?,
-            identity: None,
-            verifications: if retain_records {
-                Some(encode_records(completed.clone())?)
-            } else {
-                None
-            },
-        },
+            path, code, reason, ..
+        } => condition(
+            diagnostics::declaration(path.clone(), *code, reason.clone())?,
+            None,
+        ),
+        ExecutionError::VerificationPredicate { error, .. } => {
+            condition(diagnostics::predicate(error)?, None)
+        }
         ExecutionError::SchemaMismatch => return Err(Error::InvalidObservation),
         // Admitted references and normalized owned Arrow values make other semantic
         // and coordinate failures impossible. Never invent missing or acceptance.
@@ -462,199 +293,12 @@ fn semantic_failure<E>(error: &ExecutionError<E>, retain_records: bool) -> Resul
     })
 }
 
-fn serialize_diagnostic<S: serde::Serializer>(
-    value: &Diagnostic,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    use serde::Serialize;
-    crate::json_wire::WireValue(value).serialize(serializer)
-}
-
-/// Project one scalar record fact into the owned tree without text reparse.
-fn scalar_json(value: &ScalarValue) -> yamaa_core::json::Value {
-    value.to_json()
-}
-
-fn identity_json(identity: &Identity) -> yamaa_core::json::Value {
-    use yamaa_core::json::{Map, Value as Json};
-    Json::Object(
-        [
-            ("position".into(), Json::String(identity.position.clone())),
-            (
-                "keys".into(),
-                Json::Array(identity.keys.iter().map(scalar_json).collect()),
-            ),
-        ]
-        .into_iter()
-        .collect::<Map<_, _>>(),
-    )
-}
-
-fn record_json(record: &Record) -> yamaa_core::json::Value {
-    use yamaa_core::json::{Map, Value as Json};
-    let mut object = Map::new();
-    if let Some(codelist) = &record.codelist {
-        object.insert(
-            "codelist".into(),
-            Json::Object(
-                [
-                    ("id".into(), Json::String(codelist.id.clone())),
-                    (
-                        "values".into(),
-                        Json::Array(codelist.values.iter().map(scalar_json).collect()),
-                    ),
-                ]
-                .into_iter()
-                .collect::<Map<_, _>>(),
-            ),
-        );
-    }
-    if let Some(inventory) = &record.inventory {
-        object.insert(
-            "inventory".into(),
-            Json::Array(inventory.iter().map(scalar_json).collect()),
-        );
-    }
-    object.insert("spec_path".into(), Json::String(record.spec_path.clone()));
-    object.insert("condition".into(), Json::String(record.condition.into()));
-    object.insert(
-        "requirement".into(),
-        Json::String(record.requirement.into()),
-    );
-    object.insert(
-        "evaluated_count".into(),
-        Json::String(record.evaluated_count.clone()),
-    );
-    object.insert(
-        "failed_count".into(),
-        Json::String(record.failed_count.clone()),
-    );
-    object.insert(
-        "output_rows".into(),
-        Json::String(record.output_rows.clone()),
-    );
-    object.insert(
-        "offending_rows".into(),
-        Json::Array(record.offending_rows.iter().map(identity_json).collect()),
-    );
-    Json::Object(object)
-}
-
-fn partition_json(value: &PartitionValue) -> yamaa_core::json::Value {
-    use yamaa_core::json::{Map, Value as Json};
-    Json::Object(
-        [
-            ("name".into(), Json::String(value.name.clone())),
-            ("value".into(), scalar_json(&value.value)),
-        ]
-        .into_iter()
-        .collect::<Map<_, _>>(),
-    )
-}
-
-/// Direct typed projection of the serde outcome shape into the owned tree.
-/// This replaces the removed stringify-and-reparse helper: the diagnostic
-/// subtree is already an owned tree and scalar facts project through
-/// `ScalarValue::to_json`, so exact number tokens never narrow.
-fn outcome_json(outcome: &Outcome) -> yamaa_core::json::Value {
-    use yamaa_core::json::{Map, Value as Json};
-    let mut object = Map::new();
-    match outcome {
-        Outcome::Success { verifications } => {
-            object.insert("status".into(), Json::String("success".into()));
-            object.insert(
-                "verifications".into(),
-                Json::Array(verifications.iter().map(record_json).collect()),
-            );
-        }
-        Outcome::Failure {
-            phase,
-            verifications,
-        } => {
-            object.insert("status".into(), Json::String("failure".into()));
-            object.insert("phase".into(), Json::String((*phase).into()));
-            object.insert(
-                "verifications".into(),
-                Json::Array(verifications.iter().map(record_json).collect()),
-            );
-        }
-        Outcome::Condition {
-            diagnostic,
-            identity,
-            partition,
-            matched_key,
-            verifications,
-        } => {
-            object.insert("status".into(), Json::String("condition".into()));
-            object.insert("diagnostic".into(), (**diagnostic).clone());
-            object.insert(
-                "identity".into(),
-                identity.as_ref().map_or(Json::Null, identity_json),
-            );
-            if let Some(partition) = partition {
-                object.insert(
-                    "partition".into(),
-                    Json::Array(partition.iter().map(partition_json).collect()),
-                );
-            }
-            if let Some(matched_key) = matched_key {
-                object.insert(
-                    "matched_key".into(),
-                    Json::Array(matched_key.iter().map(partition_json).collect()),
-                );
-            }
-            if let Some(verifications) = verifications {
-                object.insert(
-                    "verifications".into(),
-                    Json::Array(verifications.iter().map(record_json).collect()),
-                );
-            }
-        }
-        Outcome::Limit {
-            resource,
-            limit,
-            required,
-            spec_paths,
-            source_index,
-        } => {
-            object.insert("status".into(), Json::String("limit".into()));
-            object.insert("resource".into(), Json::String((*resource).into()));
-            object.insert(
-                "limit".into(),
-                limit.clone().map_or(Json::Null, Json::String),
-            );
-            object.insert(
-                "required".into(),
-                required.clone().map_or(Json::Null, Json::String),
-            );
-            if !spec_paths.is_empty() {
-                object.insert(
-                    "spec_paths".into(),
-                    Json::Array(
-                        spec_paths
-                            .iter()
-                            .map(|path| Json::String(path.clone()))
-                            .collect(),
-                    ),
-                );
-            }
-            if let Some(source_index) = source_index {
-                object.insert("source_index".into(), Json::from(*source_index));
-            }
-        }
-    }
-    Json::Object(object)
-}
-
 /// Borrow a retained non-host failure for the complete project report formatter.
-pub(crate) fn semantic_condition<E>(
-    error: &ExecutionError<E>,
-) -> Result<yamaa_core::json::Value, Error> {
-    let outcome = semantic_failure(error, false)?;
-    Ok(outcome_json(&outcome))
+pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
+    semantic_failure(error)
 }
 
-/// Encode the admitted execution attempt, retaining typed results for publication.
+/// Classify the admitted execution attempt, retaining typed results for publication.
 pub(crate) fn specification_response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
@@ -670,33 +314,17 @@ pub(crate) fn specification_response(
     let (table, outcome, execution, failed_verifications) = match attempt.result {
         Ok(result) => {
             let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
-            let outcome = Outcome::Success {
-                verifications: native_records(result.verifications.clone())?,
-            };
-            (table, outcome, Some(result), None)
+            (table, Outcome::Success, Some(result), None)
         }
         Err(error) => {
             let (outcome, records) = failure(*error)?;
             (None, outcome, None, records)
         }
     };
-    let outcome = serialize_json(&Envelope {
-        protocol: "execution/1",
-        outcome,
-        handler_counts: attempt
-            .handler_counts
-            .into_iter()
-            .map(|entry| HandlerCount {
-                spec_path: entry.spec_path,
-                handler: entry.handler.name(),
-                count: entry.count.to_string(),
-            })
-            .collect(),
-    })
-    .map_err(|_| Error::Internal)?;
     Ok(DatasetResponse {
         table,
         outcome,
+        handler_counts: attempt.handler_counts,
         execution,
         retained_verifications: attempt.retained_verifications,
         intermediate_diagnostics,

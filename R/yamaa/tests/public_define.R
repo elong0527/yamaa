@@ -186,8 +186,8 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
 cat("PASS: independent LB value metadata, original-source rejection and selected-value codelist\n")
 
 for (case in list(
-  list(name = "sdtm-ae-coding", id = "AE", columns = fixture_strings(host_truth[["ae_columns"]]), context = "Submission", codelist = "MEDDRA", acrf = TRUE),
-  list(name = "sdtm-vs-epoch-from-subject-elements", id = "VS", columns = fixture_strings(host_truth[["vs_columns"]]), context = "Other", codelist = "EPOCH", acrf = FALSE))) {
+  list(name = "sdtm-ae-coding", id = "AE", columns = fixture_strings(host_truth[["ae_columns"]]), context = "Submission", codelist = "MEDDRA"),
+  list(name = "sdtm-vs-epoch-from-subject-elements", id = "VS", columns = fixture_strings(host_truth[["vs_columns"]]), context = "Other", codelist = "EPOCH"))) {
   root <- fixture(case$name)
   result <- submission(root, created = "2026-09-30T00:00:00"); check_issues(result)
   stopifnot(!file.exists(file.path(root, paste0(tolower(case$id), ".csv"))))
@@ -196,14 +196,34 @@ for (case in list(
     grepl('SourceSystem="yamaa" SourceSystemVersion="1.0"', xml, fixed = TRUE),
     grepl(paste0('def:Context="', case$context, '"'), xml, fixed = TRUE),
     grepl(paste0('OID="IG.', case$id, '" Name="', case$id, '"'), xml, fixed = TRUE),
-    identical(grepl("<def:AnnotatedCRF>", xml, fixed = TRUE), case$acrf),
+    # Each project declares the annotated case report form its collected
+    # values reference.
+    grepl("<def:AnnotatedCRF>", xml, fixed = TRUE),
     grepl(paste0('OID="CL.', case$codelist, '"'), xml, fixed = TRUE))
   lines <- strsplit(xml, "\n", fixed = TRUE)[[1L]]
   items <- lines[grepl("<ItemDef ", lines, fixed = TRUE)]
   stopifnot(length(items) == length(case$columns))
   for (i in seq_along(items)) stopifnot(grepl(paste0('OID="IT.', case$id, '.', case$columns[[i]], '" Name="', case$columns[[i]], '"'), items[[i]], fixed = TRUE))
-  if (case$id == "AE") stopifnot(grepl('Dictionary="MedDRA" Version="26.1"', xml, fixed = TRUE), grepl('OID="MT.AE.AEDECOD"', xml, fixed = TRUE))
-  else stopifnot(grepl('Name="VSDTC" DataType="partialDatetime"', xml, fixed = TRUE), grepl('CodedValue="FOLLOW-UP"', xml, fixed = TRUE))
+  if (case$id == "AE") stopifnot(grepl('Dictionary="MedDRA" Version="26.1"', xml, fixed = TRUE), grepl('OID="MT.AE.AEDECOD"', xml, fixed = TRUE),
+    grepl('ItemOID="IT.AE.AEDECOD" OrderNumber="6" Mandatory="Yes" Role="Synonym Qualifier"', xml, fixed = TRUE))
+  else {
+    # A column's ItemDef, its lines trimmed and joined.
+    item <- function(column) {
+      begin <- grep(paste0('<ItemDef OID="IT.VS.', column, '"'), lines, fixed = TRUE)
+      end <- begin - 1L + match("</ItemDef>", trimws(lines[begin:length(lines)]))
+      paste(trimws(lines[begin:end]), collapse = "")
+    }
+    # The investigator collects the result and its date-time, and under Other
+    # each references the annotated form with no page. EPOCH is a permissible
+    # timing variable the sponsor derives from the subject's elements.
+    collected <- '<def:Origin Type="Collected" Source="Investigator"><def:DocumentRef leafID="LF.acrf"/></def:Origin>'
+    stopifnot(grepl('Name="VSDTC" DataType="partialDatetime"', xml, fixed = TRUE), grepl('CodedValue="FOLLOW-UP"', xml, fixed = TRUE),
+      grepl('<ItemRef ItemOID="IT.VS.VSORRES" OrderNumber="6" Mandatory="No" Role="Result Qualifier"/>', xml, fixed = TRUE),
+      grepl('<ItemRef ItemOID="IT.VS.VSDTC" OrderNumber="7" Mandatory="No" Role="Timing"/>', xml, fixed = TRUE),
+      grepl('<ItemRef ItemOID="IT.VS.EPOCH" OrderNumber="8" Mandatory="No" Role="Timing" MethodOID="MT.VS.EPOCH"/>', xml, fixed = TRUE),
+      grepl(collected, item("VSORRES"), fixed = TRUE), grepl(collected, item("VSDTC"), fixed = TRUE),
+      grepl('<def:Origin Type="Derived" Source="Sponsor"/>', item("EPOCH"), fixed = TRUE))
+  }
   unlink(root, recursive = TRUE)
 }
 
@@ -226,6 +246,7 @@ stopifnot(inherits(error, "yamaa_error"), identical(error$issues, result$issues)
   !file.exists(file.path(root, "dm.json")), dir.exists(file.path(root, "define.xml")),
   identical(result$issues$phase, "engine"), identical(result$issues$condition, "engine_rejected"),
   all(is.na(result$issues$requirement)), grepl("publication_target_admission", result$issues$context, fixed = TRUE),
+  grepl('"code":"invalid_target"', result$issues$context, fixed = TRUE),
   grepl("cause", result$issues$context, fixed = TRUE))
 unlink(root, recursive = TRUE)
 

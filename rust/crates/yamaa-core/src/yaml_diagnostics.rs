@@ -28,7 +28,7 @@ pub enum Failure<'a> {
 }
 /// Source admission already bounds the complete ordered decoder findings and
 /// authored paths. This projection adds no stricter quota or parser policy;
-/// adapters retain the original exact final-envelope serialization admission.
+/// the edge that renders a finding owns its serialization.
 pub fn diagnostics<'a>(failure: Failure<'a>, identity: Option<&'a str>) -> Vec<Diagnostic<'a>> {
     match failure {
         Failure::NonAscii { line, column } => {

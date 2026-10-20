@@ -19,7 +19,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
 struct Fixture(PathBuf);
@@ -57,7 +58,7 @@ impl Fixture {
             environment: None,
         }
     }
-    fn domain(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();
         file_application::domain(
             yamaa_core::project_function::Language::Python,
@@ -65,7 +66,7 @@ impl Fixture {
             Self::identity(&specification),
         )
     }
-    fn check(&self) -> Vec<Issue> {
+    fn check(&self) -> Vec<Diagnostic> {
         let specification = self.specification();
         file_application::check(
             yamaa_core::project_function::Language::Python,
@@ -131,11 +132,11 @@ impl Drop for Fixture {
     }
 }
 
-fn row(issue: &Issue) -> Value {
+fn row(issue: &Diagnostic) -> Value {
     yamaa_adapters::json!({
-        "phase": issue.phase,
-        "condition": issue.condition,
-        "requirement": issue.requirement,
+        "phase": issue.phase(),
+        "condition": issue.condition(),
+        "requirement": issue.requirement(),
         "spec_paths": issue.spec_paths,
         "context": issue.context.clone()
     })

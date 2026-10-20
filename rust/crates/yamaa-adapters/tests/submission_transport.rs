@@ -201,9 +201,9 @@ mod transport {
                         panic!("{name}: Define reported no issue");
                     });
                     let got = yamaa_adapters::json!({
-                        "phase": issue.phase,
-                        "condition": issue.condition,
-                        "requirement": issue.requirement,
+                        "phase": issue.phase(),
+                        "condition": issue.condition(),
+                        "requirement": issue.requirement(),
                         "spec_paths": issue.spec_paths,
                         "context": issue.context.clone(),
                     });
@@ -500,7 +500,7 @@ mod transport {
         let mut result = run(&case, &temp);
         let issue = &result.issues()[0];
         assert_eq!(
-            (issue.phase.as_str(), issue.condition.as_str()),
+            (issue.phase(), issue.condition()),
             ("output", "transport_dataset_empty")
         );
         assert_eq!(issue.spec_paths, ["datasets.DM.artifact"]);
@@ -523,7 +523,7 @@ mod transport {
         fs::write(temp.0.join("spec.yaml"), spec).unwrap();
         let mut result = run(&case, &temp);
         let issue = &result.issues()[0];
-        assert_eq!(issue.condition, "transport_path_collision");
+        assert_eq!(issue.condition(), "transport_path_collision");
         assert_eq!(issue.spec_paths, ["sdtm.specs[0].input.DM_RAW.path"]);
         assert!(result.save().is_err());
     }

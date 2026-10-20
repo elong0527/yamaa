@@ -26,23 +26,30 @@ def draft():
 
 
 class FacadeCopy:
-    """A temporary copy of the facade and the core modules its constants name."""
+    """A temporary copy of the facade and the modules its constants name."""
 
     CORE_MODULES = ("run_report.rs", "odm_items.rs", "dataset/mod.rs")
+    ADAPTER_MODULES = ("lint.rs",)
 
     def __enter__(self):
         self.directory = tempfile.TemporaryDirectory()
         root = Path(self.directory.name)
         self.facade = root / "facade"
         self.core = root / "core"
+        self.adapters = root / "adapters"
         shutil.copytree(surface.FACADE, self.facade)
-        for module in self.CORE_MODULES:
-            target = self.core / module
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(surface.CORE / module, target)
+        for source, copy_root, modules in (
+            (surface.CORE, self.core, self.CORE_MODULES),
+            (surface.ADAPTERS, self.adapters, self.ADAPTER_MODULES),
+        ):
+            for module in modules:
+                target = copy_root / module
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(source / module, target)
         self.patches = [
             mock.patch.object(surface, "FACADE", self.facade),
             mock.patch.object(surface, "CORE", self.core),
+            mock.patch.object(surface, "ADAPTERS", self.adapters),
         ]
         for patch in self.patches:
             patch.start()
@@ -79,6 +86,11 @@ class FacadeConstantTests(unittest.TestCase):
         )
         self.assertEqual(len(surface.facade_constant("yamaa::ODM_COLUMNS")), 30)
 
+    def test_aliases_are_followed_into_the_adapters_crate(self):
+        findings = surface.facade_constant("yamaa::LINT_FINDINGS")
+        self.assertEqual(findings[:2], ["field_order", "root_spacing"])
+        self.assertEqual(len(findings), 9)
+
     def test_a_reference_must_name_one_exported_facade_constant(self):
         for reference, message in (
             ("yamaa::NOT_DECLARED", "does not export"),
@@ -110,6 +122,17 @@ class FacadeConstantTests(unittest.TestCase):
                 '"column", "check", "warning"];',
             )
             with self.assertRaisesRegex(ValueError, "values.report_kind differs"):
+                surface.validate_values(definition["values"])
+
+    def test_an_undeclared_lint_finding_fails_generation_through_an_alias(self):
+        definition = generator._load_definition()
+        with FacadeCopy() as copied:
+            copied.edit(
+                copied.adapters / "lint.rs",
+                '    "missing_label",\n];',
+                '    "missing_label",\n    "restated_default",\n];',
+            )
+            with self.assertRaisesRegex(ValueError, "values.lint_finding differs"):
                 surface.validate_values(definition["values"])
 
     def test_a_declared_value_the_facade_lacks_fails(self):

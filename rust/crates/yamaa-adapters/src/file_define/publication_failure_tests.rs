@@ -11,7 +11,10 @@ fn public_define_issue_prefix_keeps_complete_raw_metadata_and_diagnostics_in_bot
         for length in [Limits::FINDINGS, Limits::FINDINGS + 1] {
             let diagnostics = (0..length)
                 .map(|index| {
-                    let mut finding = application_issue::rejected("define", "authored_failure");
+                    let mut finding = application_issue::rejected(
+                        application_issue::Stage::Define,
+                        application_issue::Fault::Internal,
+                    );
                     finding.spec_paths = vec![format!("datasets.D{index}.artifact")];
                     finding
                 })
@@ -65,11 +68,14 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     let findings = issues(&resource("datasets.DM.artifact", "dm.csv", error));
     assert_eq!(findings.len(), 1);
     let finding = &findings[0];
-    assert_eq!(finding.phase, "ingest");
-    assert_eq!(finding.condition, "resource_path_content_changed");
-    assert_eq!(finding.requirement.as_deref(), Some("REQ-0788"));
+    assert_eq!(finding.phase(), "ingest");
+    assert_eq!(finding.condition(), "resource_path_content_changed");
+    assert_eq!(finding.requirement(), Some("REQ-0788"));
     assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
-    assert_eq!(finding.context.clone(), crate::json!({"path":"dm.csv"}));
+    assert_eq!(
+        yamaa_core::json::Value::Object(finding.context.clone()),
+        crate::json!({"path":"dm.csv"})
+    );
     assert_eq!(resources.capture_reads(), 1);
     assert_eq!(original.as_ref(), b"ID\n1\n");
     drop(resources);
@@ -161,11 +167,14 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         };
         let findings = issues(&failure);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].phase, "ingest");
-        assert_eq!(findings[0].condition, "resource_path_content_changed");
-        assert_eq!(findings[0].requirement.as_deref(), Some("REQ-0788"));
+        assert_eq!(findings[0].phase(), "ingest");
+        assert_eq!(findings[0].condition(), "resource_path_content_changed");
+        assert_eq!(findings[0].requirement(), Some("REQ-0788"));
         assert_eq!(findings[0].spec_paths, [field]);
-        assert_eq!(findings[0].context.clone(), crate::json!({"path":written}));
+        assert_eq!(
+            yamaa_core::json::Value::Object(findings[0].context.clone()),
+            crate::json!({"path":written})
+        );
         assert_eq!(ports.resources().capture_reads(), reads);
         assert_eq!(specification.source().bytes, spec.as_bytes());
         assert_eq!(environment.root().source().bytes, original_environment);
@@ -242,12 +251,12 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     };
     assert_eq!(*index, 1);
     assert!(matches!(error, file_publication::Error::InvalidTarget));
-    assert_eq!(result.issues()[0].phase, "output");
-    assert_eq!(result.issues()[0].condition, "publication_failed");
-    assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0764"));
+    assert_eq!(result.issues()[0].phase(), "output");
+    assert_eq!(result.issues()[0].condition(), "publication_failed");
+    assert_eq!(result.issues()[0].requirement(), Some("REQ-0764"));
     assert_eq!(result.issues()[0].spec_paths, ["define"]);
     assert_eq!(
-        result.issues()[0].context.clone(),
+        yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
         crate::json!({"artifact":1,"cause":error.message()})
     );
     assert_eq!(result.capture_reads(), reads);
@@ -296,7 +305,7 @@ fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding()
                     (0..10_001)
                         .map(|index| {
                             Finding::cause(
-                                ConditionCode::ApplicationRejected,
+                                ConditionCode::DefineStandardName,
                                 &format!("findings[{index}]"),
                                 "authored metadata refusal",
                             )
