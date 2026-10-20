@@ -280,6 +280,7 @@ mod diagnostics {
                 for (field, written, function) in [
                     (Field::Compute, "  foo(1)", "foo"),
                     (Field::Aggregate, "  sumx(SRC.ID)", "sumx"),
+                    (Field::Derivation, "  str_contains(A, 'x')", "str_contains"),
                 ] {
                     let Err(CompileError::Invalid { failure, .. }) =
                         compile(written, field, "columns.VALUE")
@@ -290,6 +291,7 @@ mod diagnostics {
                         failure.diagnostic(field, "columns.VALUE", "\u{03b2}\u{03b2}\u{03b2}", 0);
                     assert_eq!(d.definition().condition, "prohibited_function");
                     assert_eq!(d.context["function"], text(function));
+                    assert_eq!(d.context["expr"], text("\u{03b2}\u{03b2}\u{03b2}"));
                 }
             }
         }

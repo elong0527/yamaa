@@ -9,8 +9,8 @@ mod declaration {
         use yamaa_adapters::json;
         use yamaa_adapters::yaml_decode::decode_yaml;
         use yamaa_core::expression::{
-            compile, Comparison, CompileError, CompiledExpression, Context, Function, NodeKind,
-            Reducer, TemporalKind, RESERVED,
+            compile, Comparison, CompileError, CompiledExpression, Context, Failure, Function,
+            NodeKind, Reducer, TemporalKind, RESERVED,
         };
         use yamaa_core::json::Value as Json;
         use yamaa_core::numeric::{BinaryOperator, UnaryOperator};
@@ -253,6 +253,7 @@ mod declaration {
                 "predicate" => Context::Predicate,
                 "compute" => Context::Compute,
                 "aggregate" => Context::Aggregate,
+                "derivation" => Context::Derivation,
                 _ => panic!("unknown expression context: {name}"),
             }
         }
@@ -336,7 +337,7 @@ mod declaration {
             let mut case = |context: &str, text: String, accepted: bool, condition: &str| {
                 cases.push(json!({"id":format!("{context}: {text}"), "context":context, "text":text, "parse":if accepted { "accept" } else { "reject" }, "condition":condition}));
             };
-            let contexts = ["predicate", "compute", "aggregate"];
+            let contexts = ["predicate", "compute", "aggregate", "derivation"];
             for (name, arity) in document["vocabulary"]["function"].as_object().unwrap() {
                 let lower = arity["min_arguments"].as_u64().unwrap() as usize;
                 let upper = arity["max_arguments"].as_u64().map(|value| value as usize);
@@ -381,7 +382,7 @@ mod declaration {
                     "invalid_expression",
                 );
                 case("predicate", format!("D.{word} = 1"), true, "");
-                for context in ["compute", "aggregate"] {
+                for context in ["compute", "aggregate", "derivation"] {
                     case(
                         context,
                         format!("1 + {}", word.to_ascii_lowercase()),
@@ -409,7 +410,7 @@ mod declaration {
                 .step_by(2)
             {
                 case("predicate", format!("A {operator} 1"), true, "");
-                for context in ["compute", "aggregate"] {
+                for context in ["compute", "aggregate", "derivation"] {
                     case(
                         context,
                         format!("A {operator} 1"),
@@ -440,12 +441,14 @@ mod declaration {
                         !syntax && argument != "SUM(A)",
                         condition("nested_reduction"),
                     );
-                    case(
-                        "compute",
-                        text.clone(),
-                        false,
-                        condition("prohibited_function"),
-                    );
+                    for context in ["compute", "derivation"] {
+                        case(
+                            context,
+                            text.clone(),
+                            false,
+                            condition("prohibited_function"),
+                        );
+                    }
                     case(
                         "predicate",
                         format!("{text} = 1"),
@@ -942,6 +945,21 @@ mod declaration {
                         "{family}: {text}"
                     );
                 }
+                // An expression field admits quoted text and temporal literals.
+                let refused = match compile(text, Context::Derivation, "columns.RESULT.derivation")
+                {
+                    Ok(_) => None,
+                    Err(CompileError::Invalid {
+                        failure: Failure::ProhibitedConstruct { construct: found },
+                        ..
+                    }) => Some(found.name()),
+                    Err(error) => panic!("derivation: {text}: {error:?}"),
+                };
+                assert_eq!(
+                    refused,
+                    Some(construct).filter(|name| !matches!(*name, "string" | "temporal")),
+                    "derivation: {text}"
+                );
             }
             for (name, declaration) in document["vocabulary"]["reducer"].as_object().unwrap() {
                 assert_eq!(

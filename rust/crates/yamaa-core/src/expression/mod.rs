@@ -1,5 +1,5 @@
 //! The one closed expression language of fields typed `predicate`,
-//! `compute.expr` and `aggregate.expr`.
+//! `compute.expr` and `aggregate.expr`, and of text in an expression field.
 //!
 //! One lexer and parser ([`parse`]) read the grammar of
 //! `yaml/grammar/expression.yaml` into one arena. The binder ([`compile`])
@@ -34,6 +34,10 @@ pub enum Context {
     Compute,
     /// `aggregate.expr`: a numeric root, or a bare reduction, over a relation.
     Aggregate,
+    /// Text in an expression field, such as a `derivation`: any value as
+    /// root over the current row. It admits what `Compute` admits, plus
+    /// quoted text and temporal literals (FORMULA-27).
+    Derivation,
 }
 
 /// A construct a context refuses wherever it is written.

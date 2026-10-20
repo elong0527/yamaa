@@ -209,7 +209,7 @@ impl CompiledExpression {
                     }
                 }
             }
-            Context::Predicate => {
+            Context::Predicate | Context::Derivation => {
                 let mut checker = Checker {
                     compiled: self,
                     kind: &kind,
@@ -217,7 +217,14 @@ impl CompiledExpression {
                     seen: Vec::new(),
                     route: Vec::new(),
                 };
-                checker.truth(self.syntax.root());
+                if self.context == Context::Predicate {
+                    checker.truth(self.syntax.root());
+                } else {
+                    // An expression field types only the operands of its
+                    // arithmetic: a name or a literal written alone keeps its
+                    // own type.
+                    checker.numeric_leaves(self.syntax.root(), false);
+                }
             }
         }
         findings
@@ -252,7 +259,8 @@ impl CompiledExpression {
     }
 }
 
-/// The predicate type facts: numeric operands, comparable pairs and text.
+/// The type facts of a predicate (numeric operands, comparable pairs and
+/// text) and of an expression field (numeric operands).
 struct Checker<'a, K> {
     compiled: &'a CompiledExpression,
     kind: &'a K,
@@ -413,5 +421,64 @@ impl<K: Fn(&str) -> Option<ValueType>> Checker<'_, K> {
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::compile;
+    use super::*;
+
+    /// The static findings of `text` in `context`, where `A` is a `str`
+    /// column and `N` an `int` column.
+    fn findings(text: &str, context: Context) -> Vec<TypeFinding> {
+        let kind = |name: &str| match name {
+            "A" => Some(ValueType::Str),
+            "N" => Some(ValueType::Int),
+            _ => None,
+        };
+        compile(text, context, "columns.RESULT.derivation")
+            .unwrap()
+            .type_findings(kind, false)
+    }
+
+    fn numeric_operand(source: &str, actual: ValueType) -> TypeFinding {
+        TypeFinding::NumericOperand {
+            source: source.into(),
+            actual,
+        }
+    }
+
+    #[test]
+    fn an_expression_field_types_only_the_operands_of_its_arithmetic() {
+        // A name or a literal written alone keeps its own type, where the
+        // root of `compute.expr` must be numeric.
+        for text in ["A", "(A)", "'DM'", "DATE '2025-06-01'", "NULL", "N"] {
+            assert_eq!(findings(text, Context::Derivation), Vec::new(), "{text}");
+        }
+        assert_eq!(
+            findings("A", Context::Compute),
+            [numeric_operand("A", ValueType::Str)]
+        );
+        // Every operand of arithmetic or of a numeric function is numeric,
+        // and each one is reported once, in written order.
+        assert_eq!(
+            findings("POWER(A, 2) / A + N", Context::Derivation),
+            [numeric_operand("A", ValueType::Str)]
+        );
+        assert_eq!(
+            findings(
+                "N + 'text' - NULLIF(N, DATETIME '2025-06-01T08:30')",
+                Context::Derivation
+            ),
+            [
+                numeric_operand("'text'", ValueType::Str),
+                numeric_operand("DATETIME '2025-06-01T08:30'", ValueType::DateTime),
+            ]
+        );
+        assert_eq!(
+            findings("-DATE '2025-06-01'", Context::Derivation),
+            [numeric_operand("DATE '2025-06-01'", ValueType::Date)]
+        );
     }
 }
