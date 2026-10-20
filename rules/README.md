@@ -32,6 +32,7 @@ failed conversion is a named failure. Enforced by
 **P3. Missing is a value.** Missing is distinct from every string, number and
 the empty string; no text spells it, every type admits it, and every operation
 states what it does with it. Enforced by
+[VALUE-25](values.md#value-25),
 [FORMULA-4](formulas.md#formula-4),
 [COLUMN-10](columns.md#column-10),
 [FORMULA-24](formulas.md#formula-24) and
@@ -134,7 +135,7 @@ are generated from these files and `yaml/` on every docs build. The
 is informative. Closed grammars are defined in
 [yaml/grammar/](../yaml/grammar/README.md) and rendered into their rules, and
 `yaml/conditions.yaml` registers every condition an implementation may raise
-with the phases that may raise it.
+with the phases that may raise it and the message its issues carry.
 
 ## Rule cards
 

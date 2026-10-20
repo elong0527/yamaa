@@ -1,6 +1,7 @@
-//! Define preparation and one-shot publication over retained native snapshots.
-//! This service owns admission, composition, rendering and effect order. Ports
-//! observe file geometry and codecs without interpreting submission declarations.
+//! Define preparation over retained native snapshots. This service owns
+//! admission, composition and rendering, and holds the artifacts in the order a
+//! save publishes them; the save itself is the application's. Ports observe
+//! file geometry and codecs without interpreting submission declarations.
 use crate::json::Value as JsonValue;
 use crate::{
     application_issue::{Fault, Stage},
@@ -97,12 +98,6 @@ pub trait Ports {
         left: &Self::Publisher,
         right: &Self::Publisher,
     ) -> Result<bool, Self::PublicationError>;
-    fn publish(
-        &mut self,
-        publisher: &mut Self::Publisher,
-        written: &str,
-        bytes: &[u8],
-    ) -> Result<(), Self::PublicationError>;
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Failure<E, PE> {
@@ -271,11 +266,6 @@ pub struct Application<P: Ports> {
 pub struct Attempt<P: Ports> {
     pub application: Application<P>,
     pub outcome: Result<(), Failure<P::Error, P::PublicationError>>,
-}
-#[derive(Debug)]
-pub enum SaveFailure<E, PE> {
-    Refused,
-    Failure(Failure<E, PE>),
 }
 impl<P: Ports> Application<P> {
     pub fn prepare(ports: &mut P, request: Request<'_>) -> Attempt<P> {
@@ -646,8 +636,7 @@ impl<P: Ports> Application<P> {
                 .map_err(|error| published_boundary_failure(error, dataset.id(), written))?;
             Ok(Held::Parquet(table))
         } else {
-            Err(Failure::Metadata(vec![Finding::cause(
-                ConditionCode::ApplicationUnsupported,
+            Err(Failure::Metadata(vec![Finding::unsupported(
                 written,
                 "published_dataset_format",
             )]))
@@ -664,17 +653,10 @@ impl<P: Ports> Application<P> {
                     .same_target(&publisher, previous)
                     .map_err(|error| Failure::TargetAdmission { index, error })?
                 {
-                    return Err(Failure::Metadata(vec![
-                        crate::define_diagnostics::admit_relation(
-                            crate::define_diagnostics::TargetRelation::TransportCollision,
-                            "define.targets",
-                            &format!(
-                                "{} and {} name one physical publication target",
-                                self.artifacts[previous_index].written, artifact.written
-                            ),
-                        )
-                        .unwrap_err(),
-                    ]));
+                    return Err(Failure::Metadata(vec![shared_target(
+                        &self.artifacts[previous_index].written,
+                        &artifact.written,
+                    )]));
                 }
             }
             publishers.push(publisher);
@@ -704,38 +686,43 @@ impl<P: Ports> Application<P> {
             .iter()
             .map(|a| (a.written.as_str(), a.bytes.as_slice(), a.state))
     }
-    /// Each artifact's target with its written path, in publication order.
-    pub fn targets(&self) -> impl ExactSizeIterator<Item = (&P::Target, &str)> {
+    /// Whether the composition, or an earlier save of it, failed; it then
+    /// publishes nothing.
+    pub fn failed(&self) -> bool {
+        self.failed
+    }
+    /// Each artifact's target, written path and bytes, in publication order:
+    /// the transport files in entry order, then the document (JSON-14).
+    pub fn files(&self) -> impl ExactSizeIterator<Item = (&P::Target, &str, &[u8])> {
         self.artifacts
             .iter()
-            .map(|a| (&a.target, a.written.as_str()))
+            .map(|a| (&a.target, a.written.as_str(), a.bytes.as_slice()))
     }
-    pub fn save(
+    /// What a save did with the artifacts: the first `published` replaced
+    /// their targets, and a `failure` at one of them fails the composition,
+    /// so it publishes nothing again.
+    pub fn record(
         &mut self,
-        ports: &mut P,
-    ) -> Result<bool, SaveFailure<P::Error, P::PublicationError>> {
-        if self.failed {
-            return Err(SaveFailure::Refused);
-        }
-        let mut publishers = match self.preflight(ports) {
-            Ok(publishers) => publishers,
-            Err(failure) => {
-                self.refuse(&failure);
-                return Err(SaveFailure::Failure(failure));
-            }
-        };
-        for (index, (publisher, artifact)) in
-            publishers.iter_mut().zip(&mut self.artifacts).enumerate()
-        {
-            if let Err(error) = ports.publish(publisher, &artifact.written, &artifact.bytes) {
-                let failure = Failure::Publication { index, error };
-                self.refuse(&failure);
-                return Err(SaveFailure::Failure(failure));
-            }
+        published: usize,
+        failure: Option<&Failure<P::Error, P::PublicationError>>,
+    ) {
+        for artifact in self.artifacts.iter_mut().take(published) {
             artifact.state = PublicationState::Published;
         }
-        Ok(true)
+        if let Some(failure) = failure {
+            self.refuse(failure);
+        }
     }
+}
+/// Two artifacts of one composition whose written paths name one physical
+/// target (JSON-2).
+pub fn shared_target(earlier: &str, later: &str) -> Finding {
+    crate::define_diagnostics::admit_relation(
+        crate::define_diagnostics::TargetRelation::TransportCollision,
+        "define.targets",
+        &format!("{earlier} and {later} name one physical publication target"),
+    )
+    .unwrap_err()
 }
 fn created_time(
     created: Option<&str>,
@@ -885,13 +872,6 @@ pub fn publication_diagnostic(
     }
     diagnostic
 }
-
-impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::fmt::Display for SaveFailure<E, PE> {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "define: {self:?}")
-    }
-}
-impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::error::Error for SaveFailure<E, PE> {}
 
 #[cfg(test)]
 mod projection_tests {

@@ -125,7 +125,8 @@ Generated code only delegates, and the delegation is declared, never written:
 - A member that returns a class makes it from the call's result and the values
   it holds; a handle passed to a class must be the native type its members
   call. `raises: refusal` maps the native exception to `yamaa.Error`, which R's
-  reply conversion signals as `yamaa_error`.
+  reply conversion signals as `yamaa_error`. In R, a member that returns
+  `nothing` or `paths_written`, as `save()` does, returns it invisibly.
 
 Member kinds are `property` (a read-only view, an active binding in R),
 `method`, `field` (a value the object holds when made), `index` (Python's
@@ -141,8 +142,10 @@ hidden `.handle` binding when an S3 method or a private accessor reaches it.
 
 ### Command line
 
-`cli` is empty until `yamaa-cli` exists (#3060); its grammar follows the
-draft. A nonempty `cli` has `binary` (`yamaa`), `crate`
+`cli` is empty until the `yamaa-cli` commands are implemented (#3060): the
+binary checks every command's arguments but refuses to run one yet, and this
+file declares only implemented surface. Its grammar follows the draft. A
+nonempty `cli` has `binary` (`yamaa`), `crate`
 (`rust/crates/yamaa-cli`), `synopsis`, `global_flags`, `exit_status` (integer
 statuses 0 to 125 and what each means) and `commands`, and may have
 `depends_on`, `inputs`, `streams`, `interrupt` and `json` (named lists of JSON

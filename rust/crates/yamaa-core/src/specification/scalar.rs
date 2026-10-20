@@ -1,6 +1,5 @@
 //! Greatest and least, lowered without converting their intermediate values.
 use super::*;
-use crate::dataset::SecondarySource;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -65,18 +64,14 @@ fn finish_extreme(
     }
     Ok((findings.len() == start).then_some(Expression::Extreme { operands, largest }))
 }
-#[allow(clippy::too_many_arguments)]
+/// Each source binds as the scope decides; a lookup read takes the type its
+/// selector's donor captured, any other read the catalog's (VALUE-19).
 pub(super) fn bind(
-    spec: &PreparedSpecification,
     operation: &Declaration,
     column: usize,
-    catalog: &Catalog,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
-    let start = findings.len();
+    let start = cx.findings.len();
     let Declaration {
         sources,
         largest,
@@ -85,18 +80,7 @@ pub(super) fn bind(
     let mut operands = Vec::new();
     for (index, source) in sources.iter().enumerate() {
         let path = format!("{path}.sources[{index}]");
-        if let Some(expression) = rounding::bind_operand(
-            source,
-            &path,
-            column,
-            &spec.keys,
-            catalog,
-            &spec.intermediates,
-            secondary,
-            intermediates,
-            edges,
-            findings,
-        )? {
+        if let Some(expression) = cx.operand(source, &path)? {
             operands.push(Assignment {
                 column,
                 path,
@@ -104,86 +88,20 @@ pub(super) fn bind(
             });
         }
     }
-    let mut types = bound_types(sources, catalog)?;
-    for (name, kind) in sources.iter().zip(&mut types) {
-        if let Some((index, field)) = spec.intermediates.reference(name) {
-            if let Some(item) = &intermediates[index] {
-                *kind = item
-                    .source_column(secondary, field)
-                    .and_then(|column| item.source_kind(secondary, column));
+    let types = sources
+        .iter()
+        .map(|name| {
+            if let Some((index, field)) = cx.donors.named.reference(name) {
+                Ok(cx.donors.items[index].as_ref().and_then(|item| {
+                    item.source_column(cx.donors.secondary, field)
+                        .and_then(|column| item.source_kind(cx.donors.secondary, column))
+                }))
+            } else {
+                bound_types(std::slice::from_ref(name), cx.catalog).map(|types| types[0])
             }
-        }
-    }
-    finish_extreme(sources, path, *largest, types, findings, operands, start)
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &Declaration,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    let start = findings.len();
-    let Declaration {
-        sources,
-        largest,
-        path,
-    } = operation;
-    let mut operands = Vec::new();
-    for (index, source) in sources.iter().enumerate() {
-        let path = format!("{path}.sources[{index}]");
-        if let Some(expression) = self_relations::bind_operand(
-            source,
-            &path,
-            catalog,
-            driver,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            output,
-            named,
-            secondary,
-            intermediates,
-        )? {
-            operands.push(Assignment {
-                column,
-                path,
-                expression,
-            });
-        }
-    }
-    finish_extreme(
-        sources,
-        path,
-        *largest,
-        sources
-            .iter()
-            .map(|name| {
-                if let Some((index, field)) = named.reference(name) {
-                    Ok(intermediates[index].as_ref().and_then(|item| {
-                        item.source_column(secondary, field)
-                            .and_then(|column| item.source_kind(secondary, column))
-                    }))
-                } else {
-                    bound_types(std::slice::from_ref(name), catalog).map(|types| types[0])
-                }
-            })
-            .collect::<Result<Vec<_>, BindError>>()?,
-        findings,
-        operands,
-        start,
-    )
+        })
+        .collect::<Result<Vec<_>, BindError>>()?;
+    finish_extreme(sources, path, *largest, types, cx.findings, operands, start)
 }
 /// These new scalar operands may read the driver and an admitted named
 /// intermediate; implicit secondary joins are a separate language work package.

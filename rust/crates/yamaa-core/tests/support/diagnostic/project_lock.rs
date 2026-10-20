@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::diagnostic::{
     lock_diagnostics, ConditionCode, LockDiagnosticError as E, LockFinding, LockOrigins,
@@ -103,7 +104,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(R::parse(token), Some(reason));
         assert_eq!(reason.as_str(), token);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     assert_eq!(
         lock_diagnostics(Some(origins()), &findings).unwrap(),

@@ -4,14 +4,22 @@
 //! specification or section. The public views in [`crate::api`] read it, and
 //! each computes its status from the issues and the work; nothing here stores
 //! a status.
+//!
+//! [`save`] is the one save every result shares (D38, D74, P-API-1): it plans
+//! every member's files, opens and stages all of them, and only then commits
+//! them in publication order.
 
+use std::ops::Range;
+
+use yamaa_adapters::file_application::Admitted;
 use yamaa_adapters::project_scope::identify;
+use yamaa_adapters::publication::{self, Cause};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
-use crate::api::{Run, Status};
+use crate::api::{Failure, Run, Status};
 use crate::diagnostic::Severity;
-use crate::engine::DefineBuild;
+use crate::engine::{Build, DefineBuild};
 
 /// Whether any of `issues` fails a result: an error-severity issue does.
 pub(crate) fn fails(issues: &[Diagnostic]) -> bool {
@@ -73,14 +81,6 @@ impl Member {
             _ => None,
         }
     }
-
-    /// The name a message uses for the member: its name, else its identity.
-    pub(crate) fn label(&self) -> &str {
-        self.name
-            .as_deref()
-            .or(self.identity.as_deref())
-            .unwrap_or_default()
-    }
 }
 
 impl Outcome {
@@ -105,4 +105,274 @@ impl Outcome {
     pub(crate) fn status(&self) -> Status {
         Status::of_all(&self.issues, self.members.iter().map(Member::status))
     }
+
+    /// Save every member as one save; see [`save`].
+    pub(crate) fn save(&mut self, operation: Operation) -> Result<Vec<String>, Failure> {
+        let parts = self
+            .members
+            .iter_mut()
+            .filter_map(|member| match &mut member.work {
+                Work::Built(run) => Some(Part::Built {
+                    label: member.name.as_deref().or(member.identity.as_deref()),
+                    identity: member.identity.as_deref(),
+                    build: &mut run.build,
+                }),
+                Work::Composed(section, define) => Some(Part::Composed {
+                    label: yamaa_core::project_scope::key(*section),
+                    define,
+                }),
+                Work::Checked(_) => None,
+            })
+            .collect();
+        save(&self.issues, parts, operation)
+    }
+}
+
+/// The operation a save belongs to, for what its refusals say.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Operation {
+    Run,
+    ProjectRun,
+    Submission,
+}
+
+/// One member as a save sees it.
+pub(crate) enum Part<'a> {
+    /// A specification's build, named in a project run.
+    Built {
+        label: Option<&'a str>,
+        identity: Option<&'a str>,
+        build: &'a mut Build,
+    },
+    /// One submission section's composition, named by its section.
+    Composed {
+        label: &'a str,
+        define: &'a mut DefineBuild,
+    },
+}
+
+impl Part<'_> {
+    /// The part's issues, each naming its specification as its entry in a
+    /// project run.
+    fn issues(&self) -> Vec<Diagnostic> {
+        match self {
+            Self::Built {
+                identity, build, ..
+            } => {
+                let mut issues = build.issues();
+                if let Some(identity) = identity {
+                    identify(&mut issues, identity);
+                }
+                issues
+            }
+            Self::Composed { define, .. } => define.issues(),
+        }
+    }
+
+    /// The refusal of a save stopped at this part, which wrote `paths`.
+    fn refusal(&self, operation: Operation, report_only: bool, paths: Vec<String>) -> Failure {
+        let message = match self {
+            Self::Built { .. } if operation == Operation::Run => if report_only {
+                "cannot save a failed run; see issues"
+            } else {
+                "nothing was saved; see issues"
+            }
+            .to_owned(),
+            Self::Built { label, .. } if report_only => format!(
+                "cannot save the report of {}; see issues",
+                label.unwrap_or_default()
+            ),
+            Self::Built { label, .. } => {
+                format!("cannot save {}; see issues", label.unwrap_or_default())
+            }
+            Self::Composed { label, .. } => {
+                format!("cannot save the {label} submission; see issues")
+            }
+        };
+        Failure::from_issues(message, &self.issues()).with_paths(paths)
+    }
+}
+
+/// One planned part: its position, its files' positions in save order, and
+/// what a run's save admitted for them.
+struct Planned {
+    part: usize,
+    files: Range<usize>,
+    admitted: Option<Admitted>,
+}
+
+/// Save `parts` as one save and return the absolute path of every file
+/// written, with forward slashes, in publication order (D38). A caller's
+/// resolver names each file by the reference its target reply gave.
+///
+/// 1. Plan every part's files, in member order: a run's declared report and
+///    then its primary artifact (OUTPUT-10), or only its report when any run
+///    failed (PROJECT-12); a section's transport files and then its
+///    define.xml (JSON-14). A section that did not compose ends the plan: the
+///    save stops at it, after the sections before it (PROJECT-13).
+/// 2. Open every target, refusing a target that cannot be written and two
+///    files that name one target, then stage every file beside its target.
+///    Nothing is visible yet, so a save stopped here writes nothing (D74).
+/// 3. Commit the files in order. The first that cannot replace its target
+///    stops the save: the files before it stay, and the rest are removed.
+///
+/// A stop is recorded on its part, whose issues then say why; the refusal
+/// carries those issues and the paths written before it (P-API-1). A save
+/// that wrote every planned file still refuses when a run failed, with every
+/// run's issues, or when a section stopped it, with that section's issues.
+pub(crate) fn save(
+    refusal: &[Diagnostic],
+    mut parts: Vec<Part<'_>>,
+    operation: Operation,
+) -> Result<Vec<String>, Failure> {
+    let (refused, nothing, finding) = match operation {
+        Operation::Submission => (
+            "the submission was refused; see issues",
+            "the submission composed no section, so nothing was saved",
+            yamaa_core::project_scope::submission_nothing_to_save as fn() -> Diagnostic,
+        ),
+        _ => (
+            "the project run was refused; see issues",
+            "the project run built no specification, so nothing was saved",
+            yamaa_core::project_scope::run_nothing_to_save as fn() -> Diagnostic,
+        ),
+    };
+    if !refusal.is_empty() {
+        return Err(Failure::from_issues(refused, refusal));
+    }
+    if parts.is_empty() {
+        return Err(Failure::from_finding(nothing, finding()));
+    }
+    let failed = parts
+        .iter()
+        .any(|part| matches!(part, Part::Built { build, .. } if build.output().is_none()));
+
+    // 1. Plan every part's files.
+    let mut files = Vec::new();
+    let mut planned = Vec::new();
+    let mut ended = None;
+    let mut unplanned = None;
+    for (position, part) in parts.iter().enumerate() {
+        let start = files.len();
+        let admitted = match part {
+            Part::Built { build, .. } => match build.plan(failed) {
+                Ok(None) => continue,
+                Ok(Some((own, admitted))) => {
+                    files.extend(own);
+                    Some(admitted)
+                }
+                Err(issues) => {
+                    unplanned = Some((position, issues));
+                    break;
+                }
+            },
+            Part::Composed { define, .. } => match define.plan() {
+                Some(own) => {
+                    files.extend(own);
+                    None
+                }
+                None => {
+                    ended = Some(position);
+                    break;
+                }
+            },
+        };
+        planned.push(Planned {
+            part: position,
+            files: start..files.len(),
+            admitted,
+        });
+    }
+    // 2. Open and stage every file.
+    let staged = match unplanned {
+        // A run whose report cannot be recorded refuses the save unstaged.
+        Some(_) => None,
+        None => Some(publication::stage(&files)),
+    };
+    let paths = files
+        .iter()
+        .map(|file| file.path().to_owned())
+        .collect::<Vec<_>>();
+    drop(files);
+    if let Some((position, issues)) = unplanned {
+        if let Part::Built { build, .. } = &mut parts[position] {
+            build.refuse(issues);
+            build.measure_save("refused");
+        }
+        return Err(parts[position].refusal(operation, failed, Vec::new()));
+    }
+    // D74: cancellation (#3260) polls once here, after every file is staged
+    // and before the first commit; a cancelled save aborts what it staged and
+    // writes nothing.
+    // 3. Commit in order.
+    let committed = staged
+        .expect("a planned save stages")
+        .and_then(publication::Staged::commit);
+    let (written, mut stop) = match committed {
+        Ok(written) => (written, None),
+        Err(stop) => (paths[..stop.committed].to_vec(), Some(stop)),
+    };
+    let mut stopped = None;
+    for Planned {
+        part,
+        files,
+        admitted,
+    } in planned
+    {
+        let committed = written.len().clamp(files.start, files.end) - files.start;
+        let own = stop.take_if(|stop| files.contains(&stop.file));
+        if own.is_some() {
+            stopped = Some(part);
+        }
+        // A collision names the earlier file within its own part, or `None`
+        // when another part writes it.
+        let local = own.map(|stop| {
+            let cause = match stop.cause {
+                Cause::Collision { earlier } if files.contains(&earlier) => Cause::Collision {
+                    earlier: earlier - files.start,
+                },
+                Cause::Collision { .. } => return (stop.file - files.start, None),
+                cause => cause,
+            };
+            (stop.file - files.start, Some(cause))
+        });
+        match &mut parts[part] {
+            Part::Built { build, .. } => {
+                let admitted = admitted.expect("a run's plan admits its observations");
+                let local = local.map(|(file, cause)| {
+                    (
+                        file,
+                        cause.unwrap_or(Cause::Collision {
+                            earlier: usize::MAX,
+                        }),
+                    )
+                });
+                build.measure_save(if local.is_some() || written.len() < files.end {
+                    "refused"
+                } else if build.output().is_none() {
+                    "failed"
+                } else {
+                    "succeeded"
+                });
+                build.record(admitted, committed, local);
+            }
+            Part::Composed { define, .. } => match local {
+                Some((_, None)) => define.refuse(publication::shared_target()),
+                Some((file, Some(cause))) => define.record(committed, Some((file, cause))),
+                None => define.record(committed, None),
+            },
+        }
+    }
+    if let Some(part) = stopped.or(ended) {
+        return Err(parts[part].refusal(operation, failed, written));
+    }
+    if failed {
+        let message = match operation {
+            Operation::Run => "cannot save a failed run; see issues",
+            _ => "a specification failed, so no primary artifact was saved; see issues",
+        };
+        let issues = parts.iter().flat_map(Part::issues).collect::<Vec<_>>();
+        return Err(Failure::from_issues(message, &issues).with_paths(written));
+    }
+    Ok(written)
 }

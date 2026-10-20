@@ -106,99 +106,32 @@ fn finish(
     }
     Ok(expression)
 }
-#[allow(clippy::too_many_arguments)]
+/// Each placeholder binds as the scope decides, at the template's path.
 pub(super) fn bind(
     operation: &StringTemplate,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
-    bind_all(
-        operation,
-        column,
-        catalog,
-        findings,
-        |source, path, findings| {
-            rounding::bind_operand(
-                source,
-                path,
-                column,
-                keys,
-                catalog,
-                declarations,
-                secondary,
-                intermediates,
-                edges,
-                findings,
-            )
-        },
-    )
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &StringTemplate,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    bind_all(
-        operation,
-        column,
-        catalog,
-        findings,
-        |source, path, findings| {
-            self_relations::bind_operand(
-                source,
-                path,
-                catalog,
-                driver,
-                row,
-                phase,
-                available,
-                edges,
-                findings,
-                output,
-                named,
-                secondary,
-                intermediates,
-            )
-        },
-    )
-}
-fn bind_all(
-    operation: &StringTemplate,
-    column: usize,
-    catalog: &Catalog,
-    findings: &mut Vec<BindFinding>,
-    mut bind: impl FnMut(&str, &str, &mut Vec<BindFinding>) -> Result<Option<Expression>, BindError>,
-) -> Result<Option<Expression>, BindError> {
-    let start = findings.len();
+    let start = cx.findings.len();
     let mut operands = Vec::new();
     if let Some(diagnostic) = operation.declaration_diagnostic() {
-        findings.push(BindFinding::TextTemplate(diagnostic.clone()));
+        cx.findings
+            .push(BindFinding::TextTemplate(diagnostic.clone()));
         return Ok(None);
     }
     for (index, source) in operation.identifiers().iter().enumerate() {
-        let at = findings.len();
+        let at = cx.findings.len();
         let path = format!("{}.template", operation.path());
-        let expression = bind(source, &path, findings)?;
-        if let Some(expression) =
-            finish(operation, source, index, expression, at, catalog, findings)?
-        {
+        let expression = cx.operand(source, &path)?;
+        if let Some(expression) = finish(
+            operation,
+            source,
+            index,
+            expression,
+            at,
+            cx.catalog,
+            cx.findings,
+        )? {
             operands.push(Assignment {
                 column,
                 path,
@@ -206,7 +139,7 @@ fn bind_all(
             });
         }
     }
-    if findings.len() != start {
+    if cx.findings.len() != start {
         Ok(None)
     } else {
         Ok(Some(Expression::StrTemplate {

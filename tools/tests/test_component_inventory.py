@@ -297,6 +297,51 @@ class CheckTest(Checkout):
             ],
         )
 
+    def test_lines_that_are_not_rows_are_named_with_their_numbers(self):
+        # A merge left its conflict markers around the pyo3 row of the Python
+        # inventory, and a tab split the yamaa-core purpose of the R one.
+        row = (
+            "pyo3\t0.27.2\tMIT OR Apache-2.0\tcrates.io\t"
+            "the Python binding's interface to CPython\n"
+        )
+        conflicted = (
+            f"<<<<<<< HEAD\n{row}=======\n{row.replace('CPython', 'Python')}"
+            ">>>>>>> main\n"
+        )
+        self.paths["python"].write_text(
+            self.generated["python"].replace(row, conflicted), encoding="utf-8"
+        )
+        self.paths["r"].write_text(
+            self.generated["r"].replace("the language engine", "the language\tengine"),
+            encoding="utf-8",
+        )
+        not_a_row = "not a row of 5 tab-separated fields"
+        differs = (
+            "differs from the inventory that the {} bundle's trimmed lock, "
+            "tools/packaging/crate_purposes.toml and the vendored sources give"
+        )
+        messages = [
+            f"python/COMPONENTS.tsv:3: {not_a_row}",
+            f"python/COMPONENTS.tsv:5: {not_a_row}",
+            f"python/COMPONENTS.tsv:7: {not_a_row}",
+            "python/COMPONENTS.tsv: " + differs.format("python"),
+            f"R/yamaa/inst/COMPONENTS.tsv:5: {not_a_row}",
+            "R/yamaa/inst/COMPONENTS.tsv: " + differs.format("r"),
+        ]
+        self.assertEqual(
+            inventory.check(self.generated, self.paths, self.project), messages
+        )
+        code, _, errors = self.run_main()
+        self.assertEqual(
+            (code, errors),
+            (
+                1,
+                "\n".join(messages)
+                + "\nRun: python -m tools.packaging.generate_component_inventory "
+                "--write\n",
+            ),
+        )
+
     def run_main(self, *arguments):
         output, errors = io.StringIO(), io.StringIO()
         with (

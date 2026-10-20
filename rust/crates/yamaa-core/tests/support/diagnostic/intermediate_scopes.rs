@@ -1,4 +1,5 @@
 //! Owned causes reached by the compiler and eager donor uniqueness descriptor.
+use super::rendered;
 use crate::support::document::Tree;
 use crate::support::resolved::intermediates;
 use std::collections::BTreeSet;
@@ -166,7 +167,7 @@ fn check(
     );
     assert_eq!(d.source_span, None);
     assert_eq!(d.operand_route, None);
-    d.code
+    rendered(&d)
 }
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let src = TableSchema::new(vec![Column {

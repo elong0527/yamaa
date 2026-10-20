@@ -193,7 +193,6 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         let environment_written =
             crate::file_resolver::caller_path(&directory.join("project.yaml")).unwrap();
         let mut ports = NativePorts {
-            after_publish: None,
             resources: None,
             resolver: None,
             host: Language::Python,
@@ -287,14 +286,17 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert!(result.issues().is_empty(), "{:?}", result.issues());
     let held = result.artifacts().next().unwrap().1.to_vec();
     let reads = result.capture_reads();
-    // Each transport file is named for its dataset beside the document.
+    // Each transport file is named for its dataset beside the document. Once
+    // the first is committed, the second's target becomes a directory.
     let later_target = directory.join("dm2.json");
-    result.ports.after_publish = Some(Box::new(move |written| {
-        if written == "dm.json" {
-            fs::create_dir(&later_target).unwrap();
-        }
-    }));
-    assert!(result.save().is_err());
+    assert!(result
+        .save_with(|index| {
+            if index == 1 {
+                fs::create_dir(&later_target).unwrap();
+            }
+            Ok(())
+        })
+        .is_err());
     assert_eq!(fs::read(directory.join("dm.json")).unwrap(), held);
     assert_eq!(
         fs::read(directory.join("define.xml")).unwrap(),

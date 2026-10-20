@@ -227,7 +227,7 @@ impl FileSpecification {
         &self,
         run: &RunScope,
         field: &str,
-    ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
+    ) -> Result<crate::publication::AnchoredTarget, ResourceError> {
         let origin = self
             .run
             .document()

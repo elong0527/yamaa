@@ -15,25 +15,29 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use yamaa_adapters::project_scope::identify;
 use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
 use crate::cancel::CancellationToken;
 use crate::diagnostic::{context_value_from_core, ContextValue, Report};
-use crate::engine::{Build, DefineRequest, Engine, Request, SaveOutcome};
+use crate::engine::{Build, DefineRequest, Engine, Request};
 use crate::error::Error;
 use crate::outcome::{fails, Member, Outcome, Work};
 use crate::plan::Plan;
 use crate::table::Table;
 
-/// A refused operation: a message for people and the issues that explain it.
+/// A refused operation: a message for people, the issues that explain it,
+/// and the files it wrote before it was refused (P-API-1).
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct Failure {
     pub message: String,
     pub issues: Table,
+    /// The files a refused save wrote before it stopped, such as a failed
+    /// run's report, in publication order and spelled as `save` returns
+    /// them; empty for any other refusal.
+    pub paths: Vec<String>,
 }
 
 impl Failure {
@@ -41,7 +45,14 @@ impl Failure {
         Self {
             message: message.into(),
             issues: report.table(),
+            paths: Vec::new(),
         }
+    }
+
+    /// The same refusal, after a save wrote `paths`.
+    pub(crate) fn with_paths(mut self, paths: Vec<String>) -> Self {
+        self.paths = paths;
+        self
     }
 
     pub fn from_error(context: &str, error: &Error) -> Self {
@@ -51,12 +62,12 @@ impl Failure {
         }
     }
 
-    fn from_issues(message: impl Into<String>, issues: &[Diagnostic]) -> Self {
+    pub(crate) fn from_issues(message: impl Into<String>, issues: &[Diagnostic]) -> Self {
         Self::new(message, &Report::from_issues(issues))
     }
 
     /// A refusal that one registered finding explains.
-    fn from_finding(message: impl Into<String>, finding: Diagnostic) -> Self {
+    pub(crate) fn from_finding(message: impl Into<String>, finding: Diagnostic) -> Self {
         Self::from_issues(message, std::slice::from_ref(&finding))
     }
 }
@@ -128,7 +139,7 @@ impl Check {
 /// One specification run, or one member of a project run: its output
 /// dataset, issues and run report.
 pub struct Run {
-    build: Build,
+    pub(crate) build: Build,
 }
 
 impl Run {
@@ -155,17 +166,13 @@ impl Run {
         self.build.status()
     }
 
-    /// Write the declared report file and the output dataset. A failed run
-    /// writes only its report file and fails with the run's issues.
-    pub fn save(&mut self) -> Result<(), Failure> {
-        match self.build.save() {
-            Ok(SaveOutcome::Saved) => Ok(()),
-            Ok(_) => Err(Failure::new(
-                "nothing was saved; see issues",
-                self.build.report(),
-            )),
-            Err(error) => Err(Failure::from_error("cannot save a failed run", &error)),
-        }
+    /// Write the declared report file, then the output dataset (OUTPUT-10),
+    /// and return the paths written in that order (D38). A failed run writes
+    /// only its report file and fails with the run's issues; a refusal carries
+    /// the paths written before it (P-API-1). See [`ProjectRun::save`] for the
+    /// one save every result shares.
+    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+        self.build.save()
     }
 
     /// Borrow the underlying build for qualification evidence.
@@ -546,79 +553,24 @@ impl ProjectRun {
         self.outcome.status()
     }
 
-    /// Validate every target, then publish in run order. When every
-    /// specification succeeded, each publishes its declared report and then
-    /// its primary artifact. When any failed, only the report files of the
-    /// specifications that ran are written, and the save fails with every
-    /// run's issues. The first file that cannot be written stops the save. A
-    /// run that built no specification fails with `nothing_to_save`
-    /// (PROJECT-12).
-    pub fn save(&mut self) -> Result<(), Failure> {
-        let outcome = &mut self.outcome;
-        if !outcome.issues.is_empty() {
-            return Err(Failure::from_issues(
-                "the project run was refused; see issues",
-                &outcome.issues,
-            ));
-        }
-        if outcome.members.is_empty() {
-            return Err(Failure::from_finding(
-                "the project run built no specification, so nothing was saved",
-                yamaa_core::project_scope::run_nothing_to_save(),
-            ));
-        }
-        let failed = outcome
-            .members
-            .iter()
-            .any(|member| member.run().is_none_or(|run| run.output().is_none()));
-        let mut preflight = yamaa_adapters::project_scope::Preflight::new();
-        for member in &outcome.members {
-            let Some(run) = member.run() else { continue };
-            if let Err(mut issues) = run.build.preflight(&mut preflight, failed) {
-                if let Some(identity) = &member.identity {
-                    identify(&mut issues, identity);
-                }
-                return Err(Failure::from_issues(
-                    format!("cannot save {}; see issues", member.label()),
-                    &issues,
-                ));
-            }
-        }
-        drop(preflight);
-        for member in &mut outcome.members {
-            let label = member.label().to_owned();
-            let Work::Built(run) = &mut member.work else {
-                continue;
-            };
-            if failed {
-                if run.build.save_report() == Ok(false) {
-                    return Err(Failure::from_issues(
-                        format!("cannot save the report of {label}; see issues"),
-                        &member.issues(),
-                    ));
-                }
-                continue;
-            }
-            match run.build.save() {
-                Ok(SaveOutcome::Saved) => {}
-                Ok(_) => {
-                    return Err(Failure::from_issues(
-                        format!("cannot save {label}; see issues"),
-                        &member.issues(),
-                    ))
-                }
-                Err(error) => {
-                    return Err(Failure::from_error(&format!("cannot save {label}"), &error))
-                }
-            }
-        }
-        if failed {
-            return Err(Failure::from_issues(
-                "a specification failed, so no primary artifact was saved; see issues",
-                &outcome.issues(),
-            ));
-        }
-        Ok(())
+    /// Save the run as one save (PROJECT-12, D38, D74) and return the
+    /// absolute paths written, with forward slashes, in publication order.
+    ///
+    /// The run plans every file first: in run order, each specification's
+    /// declared report and then its primary artifact (OUTPUT-10), or, when any
+    /// specification failed, only the report of each one that ran. The save
+    /// then opens every target, so a target that cannot be written or two
+    /// files that name one target refuse it before anything is written; it
+    /// stages every file beside its target, and only then replaces each
+    /// target in order. The first file that cannot replace its target stops
+    /// the save there. When any specification failed, the save fails with
+    /// every run's issues once the reports are written.
+    ///
+    /// A refusal carries its issues and the paths written before it
+    /// (P-API-1). A run refused by a project finding fails with that finding,
+    /// and a run that built no specification with `nothing_to_save`.
+    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+        self.outcome.save(crate::outcome::Operation::ProjectRun)
     }
 }
 
@@ -639,62 +591,21 @@ impl Submission {
         self.outcome.status()
     }
 
-    /// Publish the sections in the order `sdtm`, `adam`, `send`, after
-    /// checking that no two sections write one file; the first section that
-    /// fails stops the save. A submission that composed no section fails with
-    /// `nothing_to_save` (PROJECT-13).
-    pub fn save(&mut self) -> Result<(), Failure> {
-        let outcome = &mut self.outcome;
-        if !outcome.issues.is_empty() {
-            return Err(Failure::from_issues(
-                "the submission was refused; see issues",
-                &outcome.issues,
-            ));
-        }
-        if outcome.members.is_empty() {
-            return Err(Failure::from_finding(
-                "the submission composed no section, so nothing was saved",
-                yamaa_core::project_scope::submission_nothing_to_save(),
-            ));
-        }
-        let mut preflight = yamaa_adapters::project_scope::Preflight::new();
-        for member in &outcome.members {
-            let Work::Composed(section, define) = &member.work else {
-                continue;
-            };
-            if let Err(issues) = define.preflight(&mut preflight) {
-                return Err(Failure::from_issues(
-                    format!(
-                        "cannot save the {} submission; see issues",
-                        yamaa_core::project_scope::key(*section)
-                    ),
-                    &issues,
-                ));
-            }
-        }
-        drop(preflight);
-        for member in &mut outcome.members {
-            let Work::Composed(section, define) = &mut member.work else {
-                continue;
-            };
-            let key = yamaa_core::project_scope::key(*section);
-            match define.save() {
-                Ok(SaveOutcome::Saved) => {}
-                Ok(_) => {
-                    return Err(Failure::new(
-                        format!("nothing was saved for the {key} submission; see issues"),
-                        define.report(),
-                    ))
-                }
-                Err(error) => {
-                    return Err(Failure::from_error(
-                        &format!("cannot save the {key} submission"),
-                        &error,
-                    ))
-                }
-            }
-        }
-        Ok(())
+    /// Save the submission as one save (PROJECT-13, JSON-14, D38, D74) and
+    /// return the absolute paths written, with forward slashes, in
+    /// publication order: section by section in the order `sdtm`, `adam`,
+    /// `send`, each section's transport files and then its define.xml.
+    ///
+    /// The save opens every target of every section first, so a target that
+    /// cannot be written or two files that name one target refuse it before
+    /// anything is written; it stages every file, then replaces each target in
+    /// order, and the first file that cannot replace its target stops the
+    /// save. A section that did not compose publishes nothing and stops the
+    /// save at its turn, after the sections before it. A refusal carries its
+    /// issues and the paths written before it (P-API-1); a submission that
+    /// composed no section fails with `nothing_to_save`.
+    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+        self.outcome.save(crate::outcome::Operation::Submission)
     }
 }
 

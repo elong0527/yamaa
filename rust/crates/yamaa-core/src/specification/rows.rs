@@ -12,7 +12,7 @@ use super::*;
 use crate::dataset::{ColumnBinding, ColumnScope, Verification};
 use crate::{
     bound_expression::{Binding, BoundPredicate, Read},
-    reference_scope::{self, Phase, Reach, Scope},
+    reference_scope::Phase,
 };
 
 #[derive(Debug)]
@@ -85,10 +85,319 @@ fn deferred_odm_contexts(
         .collect::<Vec<_>>()
         .into()
 }
+/// How a spec's rows are built: the one implicit template of a spec without
+/// `rows`, or its row templates. Binding takes one route for both
+/// ([`Rows::bind`]), and every derivation binds through one
+/// [`BindContext`].
 #[derive(Debug)]
-pub(super) struct Rows {
+pub(super) enum Rows {
+    Implicit(Implicit),
+    Templates(Templates),
+}
+/// A spec without `rows` builds one implicit template over its base driver
+/// (`yaml/schema.yaml`'s root `filter` is that template's filter). Its rows
+/// are its keys' distinct combinations of the retained base records, or
+/// the records themselves when a window derives a key. Every column binds
+/// in declaration order; a key is computed from one base record and is the
+/// template's row-phase assignment, and every other column completes the
+/// rows in the column phase.
+#[derive(Debug)]
+pub(super) struct Implicit {
+    /// Each column's derivation, in declaration order.
+    declarations: Vec<Declaration>,
+    /// The root filter, which reads only the base driver (ROW-9).
+    filter: Option<std::boxed::Box<root_filter::RootFilter>>,
+}
+/// The row templates, and the derivations the column phase completes.
+#[derive(Debug)]
+pub(super) struct Templates {
     templates: Vec<Template>,
     columns: Vec<SharedDeclaration>,
+}
+
+impl Rows {
+    /// Bind every derivation over the rows, after the intermediates: the
+    /// implicit template's columns in declaration order, or each row
+    /// template's derivations and then the column phase. Schemas follow
+    /// authored input order.
+    pub(super) fn bind(
+        &self,
+        prepared: &PreparedSpecification,
+        schemas: &[&TableSchema],
+    ) -> Result<DatasetPlan, BindError> {
+        let source = schemas[prepared.driver];
+        let mut findings = Vec::new();
+        let self_columns = match self {
+            Rows::Implicit(_) => None,
+            Rows::Templates(templates) => Some(templates.self_columns()),
+        };
+        let (secondary, intermediates) = prepared.intermediates.bind(
+            &prepared.sources,
+            prepared.driver,
+            schemas,
+            &prepared.output,
+            &prepared.keys,
+            self_columns.as_deref(),
+            prepared.project_calls.as_ref(),
+            &prepared.tree,
+            &mut findings,
+        )?;
+        let plan = match self {
+            Rows::Implicit(implicit) => {
+                implicit.bind(prepared, source, secondary, intermediates, findings)?
+            }
+            Rows::Templates(templates) => {
+                let verifications =
+                    prepared
+                        .verifications
+                        .bind(prepared, &secondary, &intermediates)?;
+                templates.bind(
+                    prepared,
+                    source,
+                    &prepared.source().name,
+                    &prepared.output,
+                    &prepared.keys,
+                    &verifications,
+                    prepared.project_calls.as_ref(),
+                    &prepared.intermediates,
+                    secondary,
+                    intermediates,
+                    findings,
+                )?
+            }
+        };
+        Ok(plan
+            .with_column_verifications(prepared.column_verification_groups())
+            .with_warning_verifications(prepared.warning_verification_paths())
+            .with_output_order(prepared.bound_output_order())
+            .with_required_matches(prepared.required_matches.iter().cloned()))
+    }
+}
+
+impl Implicit {
+    pub(super) fn new(
+        declarations: Vec<Declaration>,
+        filter: Option<root_filter::RootFilter>,
+    ) -> Self {
+        Self {
+            declarations,
+            filter: filter.map(std::boxed::Box::new),
+        }
+    }
+    /// Each column's derivation, in declaration order.
+    pub(super) fn declarations(&self) -> &[Declaration] {
+        &self.declarations
+    }
+    /// Whether every row is one base record: a window derives a key, so the
+    /// key table is the records themselves, not their distinct key
+    /// combinations.
+    pub(super) fn record_rows(&self, keys: &[usize]) -> bool {
+        keys.iter().any(|&key| {
+            self.declarations
+                .get(key)
+                .is_some_and(|declaration| matches!(declaration.operation, Operation::Window(_)))
+        })
+    }
+    /// The scope the derivation of `column` binds in: the base driver's
+    /// rows, in the column phase without grouping; a key reads one base
+    /// record (COLUMN-7).
+    pub(super) fn scope<'a>(
+        &self,
+        keys: &'a [usize],
+        base: &'a str,
+        column: usize,
+    ) -> binder::Scope<'a> {
+        binder::Scope {
+            template: binder::Template::Implicit(binder::Implicit {
+                keys,
+                key: keys.contains(&column),
+                records: self.record_rows(keys),
+            }),
+            phase: Phase::Column { groups: &[] },
+            driver: base,
+            available: None,
+        }
+    }
+    /// Bind each column in declaration order, then order the columns
+    /// (COLUMN-5, COLUMN-6, COLUMN-7), bind the root filter and the dataset
+    /// verifications, and admit what every row reads from its lookups.
+    fn bind(
+        &self,
+        prepared: &PreparedSpecification,
+        source: &TableSchema,
+        secondary: Vec<crate::dataset::SecondarySource>,
+        intermediates: Vec<Option<crate::dataset::Intermediate>>,
+        mut findings: Vec<BindFinding>,
+    ) -> Result<DatasetPlan, BindError> {
+        let base = prepared.source().name.as_str();
+        let keys = &prepared.keys;
+        let catalog =
+            row_drivers::joined_catalog(&prepared.output, source, base, keys, &secondary)?;
+        let mut assignments = BTreeMap::new();
+        let mut dependencies = Vec::new();
+        for (column, declaration) in self.declarations.iter().enumerate() {
+            // A key that reads other records than its one base record has no
+            // key-phase value to bind (COLUMN-7).
+            let refused = checks::declared::key_record(prepared, column);
+            if !refused.is_empty() {
+                findings.extend(refused);
+                dependencies.push(Some(Vec::new()));
+                continue;
+            }
+            let reported = cases::padding_findings(&declaration.operation, &mut findings)?;
+            let mut edges = Vec::new();
+            let start = findings.len();
+            let expression = BindContext {
+                scope: self.scope(keys, base, column),
+                donors: binder::Donors {
+                    named: &prepared.intermediates,
+                    secondary: &secondary,
+                    items: &intermediates,
+                },
+                catalog: &catalog,
+                output: &prepared.output,
+                project: prepared.project_calls.as_ref(),
+                tree: &prepared.tree,
+                edges: &mut edges,
+                findings: &mut findings,
+                reported,
+            }
+            .bind(&declaration.operation, &declaration.path, column)?;
+            if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
+                let captured = types::CapturedTypes::new(
+                    &prepared.intermediates,
+                    &catalog,
+                    &secondary,
+                    &intermediates,
+                );
+                let result =
+                    prepared
+                        .tree
+                        .result_type(declaration.value, ast::Scope::Row, &captured)?;
+                findings.extend(
+                    prepared
+                        .conversion_finding(column, result)
+                        .map(BindFinding::Scalar),
+                );
+            }
+            // Invalid declarations remain in the graph so independent cycles and
+            // key dependencies are still reported after the reference findings.
+            dependencies.push(Some(edges));
+            if let Some(expression) = expression {
+                assignments.insert(
+                    column,
+                    Assignment {
+                        column,
+                        expression,
+                        path: declaration.path.clone(),
+                    },
+                );
+            }
+        }
+        let analysis = column_dependencies::analyze(&dependencies, keys, false)
+            .map_err(BindError::DependencyPolicy)?;
+        if !analysis.diagnostics.is_empty() {
+            findings.push(BindFinding::Dependencies {
+                columns: prepared
+                    .output
+                    .columns()
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect(),
+                paths: self.declarations.iter().map(|d| d.path.clone()).collect(),
+                diagnostics: analysis.diagnostics,
+            });
+        }
+        let filter = self
+            .filter
+            .as_ref()
+            .map(|filter| filter.bind(base, source, &mut findings))
+            .transpose()?
+            .flatten();
+        // Every row is built from the base driver, the primary port. A dataset
+        // verification reads its intermediates for every row, as a column does.
+        let verifications = prepared
+            .verifications
+            .bind(prepared, &secondary, &intermediates)?;
+        let verification_reads = relation_predicates::predicate_reads(
+            relation_predicates::verification_predicates(&verifications),
+        );
+        let contexts = [(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads)
+                .collect::<Vec<_>>(),
+            vec![0],
+        )];
+        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
+        aggregates::admit_record_keys(&contexts, &mut findings);
+        relation_predicates::admit_reads(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads),
+            &intermediates,
+            &prepared.intermediates,
+            0,
+            &RowMode::Keys,
+            None,
+            &mut findings,
+        );
+        if !findings.is_empty() {
+            return Err(BindError::Invalid(findings));
+        }
+        let mut key_assignments = Vec::new();
+        let mut columns = Vec::new();
+        for column in analysis.order {
+            let assignment = assignments.remove(&column).expect("analyzed declaration");
+            if keys.contains(&column) {
+                key_assignments.push(assignment)
+            } else {
+                columns.push(assignment)
+            }
+        }
+        let record_windows = key_assignments
+            .iter()
+            .any(|a| a.expression.window().is_some());
+        Ok(DatasetPlan::new_with_intermediates(
+            crate::dataset::SourceSchemas {
+                primary: source.clone(),
+                secondary,
+            },
+            intermediates
+                .into_iter()
+                .map(|item| item.expect("validated intermediate"))
+                .collect(),
+            prepared.output.clone(),
+            vec![RowTemplate {
+                mode: if record_windows {
+                    RowMode::Records
+                } else {
+                    RowMode::Keys
+                },
+                assignments: key_assignments,
+                filter,
+            }],
+            columns,
+            keys.clone(),
+            verifications,
+        )
+        .with_conversion_handlers(
+            self.declarations
+                .iter()
+                .filter_map(|declaration| {
+                    declaration
+                        .handler
+                        .as_ref()
+                        .map(|handler| crate::dataset::ConversionHandler {
+                            assignment_path: declaration.path.clone(),
+                            handler: handler.clone(),
+                        })
+                })
+                .collect(),
+        ))
+    }
 }
 fn unsupported(operation: &str, path: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
@@ -357,178 +666,38 @@ fn resolve_reference(
     selected
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Bind one row declaration in its context: a call, a read of a variable or
+/// an operation. A derivation that bound without a finding states its result
+/// type once per column (VALUE-24): a default shared by several templates
+/// states one derivation.
 fn bind_assignment(
-    source: &TableSchema,
-    name: &str,
-    catalog: &Catalog,
+    cx: &mut BindContext<'_, '_>,
     declaration: &RowDeclaration,
-    phase: Phase<'_>,
-    row: Option<&str>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    declarations_reported: bool,
-    project: Option<&crate::project_calls::ProjectCalls>,
-    output: &TableSchema,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Assignment>, BindError> {
-    let start = findings.len();
+    let start = cx.findings.len();
     let expression = match &declaration.operation {
-        RowOperation::ProjectFunction { call, .. } => {
-            let project = project.ok_or(BindError::Internal)?;
-            match crate::project_call_binding::bind(
-                project,
-                *call,
-                catalog,
-                crate::project_call_binding::Context {
-                    source_dataset: 0,
-                    source_mode: crate::project_call_binding::SourceMode::Record,
-                    available_outputs: available,
-                    scope: Scope {
-                        drivers: &[name],
-                        current_driver: true,
-                        reach: Reach::Scalar,
-                        joined: false,
-                        phase,
-                    },
-                },
-            ) {
-                Ok(bound) => {
-                    edges.extend(bound.dependencies);
-                    Some(Expression::ProjectFunction(bound.function))
-                }
-                Err(crate::project_call_binding::Error::Findings(errors)) => {
-                    findings.extend(functions::bind_findings(project, *call, errors, row)?);
-                    None
-                }
-                Err(crate::project_call_binding::Error::Reference(error)) => {
-                    return Err(BindError::Catalog(error))
-                }
-                Err(_) => return Err(BindError::Internal),
-            }
+        RowOperation::ProjectFunction { call } => cx.call(*call)?,
+        RowOperation::Output(reference) | RowOperation::Source(reference) => {
+            cx.operand(reference, &declaration.path)?
         }
-        RowOperation::Output(reference) => {
-            if let Some(finding) = catalog
-                .validate_output(reference, None, available, &[0])
-                .map_err(BindError::Catalog)?
-            {
-                findings.push(BindFinding::OutputReference {
-                    path: declaration.path.clone(),
-                    name: reference.clone(),
-                    row: row.map(String::from),
-                    finding,
-                });
-                None
-            } else {
-                let Some(reference_binding::Binding::Output { column, .. }) =
-                    catalog.bind(reference)
-                else {
-                    return Err(BindError::Internal);
-                };
-                edges.push(column);
-                Some(Expression::Column(column))
-            }
-        }
-        RowOperation::Shared(branch) => derivations::bind_row(
-            &branch.operation,
-            &branch.path,
-            declaration.column,
-            catalog,
-            name,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            declarations_reported,
-            output,
-            project,
-            tree,
-            named,
-            secondary,
-            intermediates,
-        )?,
-        RowOperation::Source(reference) => {
-            if reference
-                .split_once('.')
-                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
-            {
-                source_expressions::bind_catalog_join(
-                    reference,
-                    &declaration.path,
-                    catalog,
-                    row,
-                    available,
-                    edges,
-                    findings,
-                )?
-            } else if named.reference(reference).is_some()
-                && reference
-                    .split_once('.')
-                    .is_none_or(|(owner, _)| owner != name)
-            {
-                row_intermediates::bind(
-                    reference,
-                    &declaration.path,
-                    named,
-                    secondary,
-                    intermediates,
-                    output,
-                    catalog,
-                    row,
-                    available,
-                    edges,
-                    findings,
-                )?
-            } else if let Some(column) =
-                resolve_reference(reference, &declaration.path, source, name, findings)
-            {
-                let scoped = reference_scope::validate(
-                    catalog,
-                    reference,
-                    None,
-                    Scope {
-                        drivers: &[name],
-                        current_driver: false,
-                        reach: Reach::Scalar,
-                        joined: false,
-                        phase,
-                    },
-                )
-                .map_err(BindError::Catalog)?;
-                let valid = scoped.is_empty();
-                findings.extend(scoped.into_iter().map(|finding| {
-                    BindFinding::QualifiedReference {
-                        path: declaration.path.clone(),
-                        name: reference.clone(),
-                        row: row.map(String::from),
-                        finding,
-                    }
-                }));
-                valid.then_some(Expression::Source(column))
-            } else {
-                None
-            }
+        RowOperation::Shared(branch) => {
+            cx.bind(&branch.operation, &branch.path, declaration.column)?
         }
     };
-    // VALUE-24 once per column: a default shared by several templates states
-    // one derivation.
-    if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-        let captured = types::CapturedTypes::new(named, catalog, secondary, intermediates);
-        let result = tree.result_type(declaration.value, ast::Scope::Row, &captured)?;
-        let column = &output.columns()[declaration.column];
+    if expression.is_some() && cx.findings.len() == start && declaration.handler.is_none() {
+        let result = cx
+            .tree
+            .result_type(declaration.value, ast::Scope::Row, &cx.captured())?;
+        let column = &cx.output.columns()[declaration.column];
         if let Some(finding) =
             types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
         {
-            if !findings
+            if !cx
+                .findings
                 .iter()
                 .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
             {
-                findings.push(BindFinding::Scalar(finding));
+                cx.findings.push(BindFinding::Scalar(finding));
             }
         }
     }
@@ -724,6 +893,7 @@ fn bind_template_filter(
 #[allow(clippy::too_many_arguments)]
 fn bind_template(
     template: &Template,
+    declared: &TemplatePhase<'_>,
     index: usize,
     source: &TableSchema,
     name: &str,
@@ -841,18 +1011,6 @@ fn bind_template(
             });
         }
     }
-    let group_names = template
-        .groups
-        .as_ref()
-        .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>());
-    let phase = Phase::Row {
-        group_by: group_names.as_deref(),
-    };
-    let available = template
-        .declarations
-        .iter()
-        .map(|d| d.column)
-        .collect::<Vec<_>>();
     let mut graph = std::vec![Vec::new(); output.columns().len()];
     let mut assignments = BTreeMap::new();
     // Reference planning validates one complete row template's authored
@@ -872,25 +1030,25 @@ fn bind_template(
             }
         }
     }
+    let scope = declared.scope();
+    let donors = binder::Donors {
+        named,
+        secondary,
+        items: intermediates,
+    };
     for declaration in &template.declarations {
-        if let Some(value) = bind_assignment(
-            row_source,
-            &template.driver,
-            &row_catalog,
-            declaration,
-            phase,
-            Some(&template.id),
-            Some(&available),
-            &mut graph[declaration.column],
-            findings,
-            declarations_reported,
-            project,
+        let mut cx = BindContext {
+            scope,
+            donors,
+            catalog: &row_catalog,
             output,
+            project,
             tree,
-            named,
-            secondary,
-            intermediates,
-        )? {
+            edges: &mut graph[declaration.column],
+            findings: &mut *findings,
+            reported: declarations_reported,
+        };
+        if let Some(value) = bind_assignment(&mut cx, declaration)? {
             assignments.insert(declaration.column, value);
         }
     }
@@ -938,7 +1096,7 @@ fn bind_template(
         secondary,
         intermediates,
         &row_catalog,
-        &available,
+        &declared.available,
         row_source,
         &assignments,
         output,
@@ -993,14 +1151,42 @@ fn prepare_row_filters(
         .collect::<Result<Vec<_>, PrepareError>>()
 }
 
-/// One row template as the checks read it: its id, driver, `group_by`, the
-/// document node of each derivation it evaluates in the row phase (with the
-/// column and whether it declares `unconvertible`), in construction order.
+/// One row template as binding and the checks read it: its id, driver,
+/// `group_by` and the derivations it evaluates in the row phase (each with
+/// its column, the document node of its operation and whether it declares
+/// `unconvertible`), in construction order. Its [`scope`](Self::scope) is
+/// what those derivations bind in, decided by the declarations alone.
 pub(super) struct TemplatePhase<'a> {
     pub id: &'a str,
     pub driver: &'a str,
     pub groups: Option<Vec<&'a str>>,
     pub derivations: Vec<PhaseDerivation>,
+    /// The columns the template derives during row construction, which its
+    /// row-phase derivations may read.
+    pub available: Vec<usize>,
+}
+
+impl TemplatePhase<'_> {
+    /// The scope the template's row-phase derivations bind in.
+    pub(super) fn scope(&self) -> binder::Scope<'_> {
+        binder::Scope {
+            template: binder::Template::Row(self.id),
+            phase: Phase::Row {
+                group_by: self.groups.as_deref(),
+            },
+            driver: self.driver,
+            available: Some(&self.available),
+        }
+    }
+}
+
+/// One binding of a column-phase derivation (#2829): whose records its
+/// driver reads address, that driver, and the row templates whose rows it
+/// completes, ascending.
+pub(super) struct ColumnPhaseBinding<'a> {
+    pub scope: ColumnScope,
+    pub driver: &'a str,
+    pub templates: Vec<usize>,
 }
 
 /// A derivation one phase evaluates: its column, the document node of its
@@ -1012,7 +1198,7 @@ pub(super) struct PhaseDerivation {
     pub handled: bool,
 }
 
-impl Rows {
+impl Templates {
     /// Each row template and its row-phase derivations, in construction order.
     pub(super) fn phases(&self) -> Vec<TemplatePhase<'_>> {
         self.templates
@@ -1029,6 +1215,11 @@ impl Rows {
                     .iter()
                     .map(|declaration| declaration.phase())
                     .collect(),
+                available: template
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.column)
+                    .collect(),
             })
             .collect()
     }
@@ -1039,30 +1230,51 @@ impl Rows {
             .map(|declaration| declaration.phase())
             .collect()
     }
-    /// The driver of each binding [`Rows::bind`] makes of a column-phase
-    /// derivation of `column`: `primary` when it holds a qualified aggregate
-    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
-    /// that leave the column to this phase, in construction order.
-    pub(super) fn column_drivers_of<'a>(
+    /// The bindings a column-phase derivation of `column` gets, from the
+    /// declarations alone: one over the whole dataset through `primary` when
+    /// it holds a qualified aggregate, which reduces a declared input through
+    /// the primary port (LOOKUP-18); otherwise one per distinct driver of the
+    /// row templates that leave the column to this phase, in construction
+    /// order. Its qualifier reads the record that built each row (LOOKUP-1),
+    /// another input joins on the output keys it carries, and a named lookup
+    /// matches through its key.
+    pub(super) fn column_bindings<'a>(
         &'a self,
         column: usize,
         aggregates: bool,
         primary: &'a str,
-    ) -> Vec<&'a str> {
+    ) -> Vec<ColumnPhaseBinding<'a>> {
+        let leaving = self
+            .templates
+            .iter()
+            .enumerate()
+            .filter(|(_, template)| {
+                !template
+                    .declarations
+                    .iter()
+                    .any(|derived| derived.column == column)
+            })
+            .map(|(index, _)| index);
         if aggregates {
-            return vec![primary];
+            return vec![ColumnPhaseBinding {
+                scope: ColumnScope::Dataset,
+                driver: primary,
+                templates: leaving.collect(),
+            }];
         }
-        let mut drivers = Vec::new();
-        for template in &self.templates {
-            let leaves = !template
-                .declarations
-                .iter()
-                .any(|derived| derived.column == column);
-            if leaves && !drivers.contains(&template.driver.as_str()) {
-                drivers.push(template.driver.as_str());
+        let mut bindings: Vec<ColumnPhaseBinding<'a>> = Vec::new();
+        for index in leaving {
+            let driver = self.templates[index].driver.as_str();
+            match bindings.iter_mut().find(|binding| binding.driver == driver) {
+                Some(binding) => binding.templates.push(index),
+                None => bindings.push(ColumnPhaseBinding {
+                    scope: ColumnScope::Template,
+                    driver,
+                    templates: vec![index],
+                }),
             }
         }
-        drivers
+        bindings
     }
 }
 
@@ -1076,27 +1288,12 @@ impl RowDeclaration {
     }
 }
 
-impl Rows {
+impl Templates {
     /// Each row template's driver name, in construction order.
     pub(super) fn drivers(&self) -> impl Iterator<Item = &str> {
         self.templates
             .iter()
             .map(|template| template.driver.as_str())
-    }
-    /// Each grouped row template's driver with its `group_by`, in
-    /// construction order: the column phase checks a read of a driver
-    /// against the groups of that driver's templates (NAME-4).
-    fn column_groups(&self) -> Vec<(&str, Vec<&str>)> {
-        self.templates
-            .iter()
-            .filter_map(|template| {
-                let group = template.groups.as_ref()?;
-                Some((
-                    template.driver.as_str(),
-                    group.iter().map(String::as_str).collect(),
-                ))
-            })
-            .collect()
     }
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
@@ -1415,17 +1612,24 @@ impl Rows {
             // stored source uses its captured port and output keys.
             catalog = row_drivers::extend_catalog(catalog, source, name, keys, &secondary, "")?;
         }
-        let groups = self.column_groups();
-        let column_groups = groups
+        // Each template's scope and the column phase's grouping come from the
+        // declarations alone, as `check()` reads them: the column phase checks
+        // a read of a driver against the groups of that driver's templates
+        // (NAME-4).
+        let phases = self.phases();
+        let column_groups = phases
             .iter()
-            .map(|(driver, group)| (*driver, group.as_slice()))
+            .filter_map(|phase| Some((phase.driver, phase.groups.as_deref()?)))
             .collect::<Vec<_>>();
         let mut templates = Vec::new();
-        // The declared template behind each bound one, by position.
+        // The declared template behind each bound one, by position, and the
+        // bound position of each declared template.
         let mut declared = Vec::new();
+        let mut positions = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
-            if let Some(bound) = bind_template(
+            let bound = bind_template(
                 template,
+                &phases[index],
                 index,
                 source,
                 name,
@@ -1437,21 +1641,13 @@ impl Rows {
                 output,
                 project,
                 &mut findings,
-            )? {
+            )?;
+            positions.push(bound.as_ref().map(|_| templates.len()));
+            if let Some(bound) = bound {
                 templates.push(bound);
                 declared.push(template);
             }
         }
-        // A column derivation evaluates only for the rows of the bound
-        // templates that leave the column to the column phase. A template
-        // whose driver intermediate failed to bind was skipped with its own
-        // findings, and so are its rows here.
-        let leaves = |template: &Template, column: usize| {
-            !template
-                .declarations
-                .iter()
-                .any(|declaration| declaration.column == column)
-        };
         let mut odm_contexts: Option<std::sync::Arc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns: Vec<ColumnBinding> = Vec::new();
         let mut dependencies = std::vec![None; output.columns().len()];
@@ -1461,54 +1657,39 @@ impl Rows {
                     str_pad::declaration_findings(operation, &mut findings);
                 }
             }
-            let needing = declared
-                .iter()
-                .enumerate()
-                .filter(|(_, template)| leaves(template, declaration.column))
-                .map(|(index, _)| index)
+            // A column derivation evaluates only for the rows of the bound
+            // templates that leave the column to the column phase. A template
+            // whose driver intermediate failed to bind was skipped with its
+            // own findings, and so are its rows here.
+            let mut scopes = self
+                .column_bindings(declaration.column, declaration.aggregates(), name)
+                .into_iter()
+                .filter_map(|binding| {
+                    let members = binding
+                        .templates
+                        .iter()
+                        .filter_map(|&template| positions[template])
+                        .collect::<Vec<_>>();
+                    (!members.is_empty()).then_some((binding.scope, binding.driver, members))
+                })
                 .collect::<Vec<_>>();
-            if needing.is_empty() {
+            scopes.sort_by_key(|(_, _, members)| members[0]);
+            if scopes.is_empty() {
                 dependencies[declaration.column] = Some(Vec::new());
                 continue;
             }
-            let scopes: Vec<(ColumnScope, Vec<usize>)> = if declaration.aggregates() {
-                // A qualified aggregate reduces a declared input through the
-                // primary port (LOOKUP-18), so its column keeps the
-                // whole-dataset scope, whichever driver builds the rows that
-                // evaluate it. Preparation has refused that column's reads of
-                // a driver intermediate.
-                std::vec![(ColumnScope::Dataset, needing)]
-            } else {
-                // Every driver binds the column once, for the templates it
-                // drives: its qualifier reads the record that built the row
-                // (LOOKUP-1), another input joins on the output keys it
-                // carries, and a named lookup matches through its key.
-                let mut scopes: Vec<(ColumnScope, Vec<usize>)> = Vec::new();
-                for index in needing {
-                    let driver = &declared[index].driver;
-                    match scopes
-                        .iter_mut()
-                        .find(|(_, members)| declared[members[0]].driver == *driver)
-                    {
-                        Some((_, members)) => members.push(index),
-                        None => scopes.push((ColumnScope::Template, std::vec![index])),
-                    }
-                }
-                scopes
-            };
             let bound = scopes.len();
             let start = findings.len();
             let mut edges = Vec::new();
-            for (scope, members) in scopes {
+            for (scope, driver, members) in scopes {
                 let column_catalog;
-                let (catalog_ref, column_source, column_driver, port) = match scope {
-                    ColumnScope::Dataset => (&catalog, source, name, 0),
+                let (catalog_ref, column_driver, port) = match scope {
+                    ColumnScope::Dataset => (&catalog, name, 0),
                     ColumnScope::Template => {
                         // Resolve the driver as its row template does: an
                         // input's stored schema or the intermediate's visible
                         // fields, without the row joins, so another input
                         // still joins on the output keys.
-                        let driver = declared[members[0]].driver.as_str();
                         let (port, driver_source, named_driver) = row_drivers::select(
                             source,
                             name,
@@ -1530,30 +1711,33 @@ impl Rows {
                             &secondary,
                             driver,
                         )?;
-                        (&column_catalog, driver_source, driver, port)
+                        (&column_catalog, driver, port)
                     }
                 };
                 let mut binding_edges = Vec::new();
-                if let Some(mut value) = bind_assignment(
-                    column_source,
-                    column_driver,
-                    catalog_ref,
-                    declaration,
-                    Phase::Column {
-                        groups: &column_groups,
+                let mut cx = BindContext {
+                    scope: binder::Scope {
+                        template: binder::Template::Any,
+                        phase: Phase::Column {
+                            groups: &column_groups,
+                        },
+                        driver: column_driver,
+                        available: None,
                     },
-                    None,
-                    None,
-                    &mut binding_edges,
-                    &mut findings,
-                    false,
-                    project,
+                    donors: binder::Donors {
+                        named,
+                        secondary: &secondary,
+                        items: &intermediates,
+                    },
+                    catalog: catalog_ref,
                     output,
-                    &prepared.tree,
-                    named,
-                    &secondary,
-                    &intermediates,
-                )? {
+                    project,
+                    tree: &prepared.tree,
+                    edges: &mut binding_edges,
+                    findings: &mut findings,
+                    reported: false,
+                };
+                if let Some(mut value) = bind_assignment(&mut cx, declaration)? {
                     // An ODM read takes the scope of each row's template.
                     crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
                         let contexts = odm_contexts.get_or_insert_with(|| {
@@ -1842,7 +2026,7 @@ mod tests {
     /// a grouped SRC template overriding neither. Every template filters on
     /// the two bare defaults, so each template needs all three columns
     /// row-phase and the inherited defaults stay shared.
-    fn shared_default_rows() -> Rows {
+    fn shared_default_rows() -> Templates {
         let large = "shared-authored-default ".repeat(256);
         let mut arena = Arena::new();
         let id_default = arena.source_derivation("SRC.ID");
@@ -1934,7 +2118,7 @@ mod tests {
         assert!(findings.is_empty());
         let intermediates = intermediates::Declarations::default();
         let tree = crate::front_end::v0_5::lower_document(&document, None);
-        Rows::prepare(
+        Templates::prepare(
             &document,
             &tree,
             &output,
@@ -1948,7 +2132,7 @@ mod tests {
         .unwrap()
     }
 
-    fn declaration(rows: &Rows, template: usize, column: usize) -> &SharedDeclaration {
+    fn declaration(rows: &Templates, template: usize, column: usize) -> &SharedDeclaration {
         rows.templates[template]
             .declarations
             .iter()
@@ -2039,5 +2223,90 @@ mod tests {
                 assert!(!std::sync::Arc::ptr_eq(declaration, again));
             }
         }
+    }
+
+    /// Templates a (SRC, derives column 0), b (ALT, derives 0 and 1) and c
+    /// (SRC grouped by SRC.ID, derives 0). Column 2 is left to the column
+    /// phase by every template.
+    fn scoped_templates() -> Templates {
+        let template = |id: &str, driver: &str, groups: Option<&str>, columns: &[usize]| Template {
+            id: id.into(),
+            driver: driver.into(),
+            groups: groups.map(|group| vec![group.to_string()]),
+            declarations: columns
+                .iter()
+                .map(|&column| {
+                    SharedDeclaration::new(RowDeclaration {
+                        handler: None,
+                        column,
+                        path: format!("rows.{id}.{column}"),
+                        value: 0,
+                        operation: RowOperation::Output("ID".into()),
+                    })
+                })
+                .collect(),
+            filter: None,
+        };
+        Templates {
+            templates: vec![
+                template("a", "SRC", None, &[0]),
+                template("b", "ALT", None, &[0, 1]),
+                template("c", "SRC", Some("SRC.ID"), &[0]),
+            ],
+            columns: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn column_phase_bindings_follow_the_templates_that_leave_the_column() {
+        let rows = scoped_templates();
+        let summary = |bindings: Vec<ColumnPhaseBinding<'_>>| {
+            bindings
+                .into_iter()
+                .map(|binding| (binding.scope, binding.driver.to_string(), binding.templates))
+                .collect::<Vec<_>>()
+        };
+        // Only a and c leave column 1; both are driven by SRC.
+        assert_eq!(
+            summary(rows.column_bindings(1, false, "SRC")),
+            [(ColumnScope::Template, "SRC".to_string(), vec![0, 2])]
+        );
+        // Every template leaves column 2: one binding per distinct driver, in
+        // construction order, each completing its own driver's templates.
+        assert_eq!(
+            summary(rows.column_bindings(2, false, "SRC")),
+            [
+                (ColumnScope::Template, "SRC".to_string(), vec![0, 2]),
+                (ColumnScope::Template, "ALT".to_string(), vec![1]),
+            ]
+        );
+        // A qualified aggregate keeps the whole-dataset scope through the
+        // primary port, for every template that leaves the column.
+        assert_eq!(
+            summary(rows.column_bindings(2, true, "PRIMARY")),
+            [(ColumnScope::Dataset, "PRIMARY".to_string(), vec![0, 1, 2])]
+        );
+        // No template leaves column 0.
+        assert!(summary(rows.column_bindings(0, false, "SRC")).is_empty());
+    }
+
+    #[test]
+    fn a_template_scope_is_its_row_phase_from_the_declarations() {
+        let rows = scoped_templates();
+        let phases = rows.phases();
+        let scope = phases[1].scope();
+        assert!(matches!(scope.template, binder::Template::Row("b")));
+        assert_eq!(scope.driver, "ALT");
+        assert_eq!(scope.available, Some(&[0, 1][..]));
+        assert!(matches!(scope.phase, Phase::Row { group_by: None }));
+        let grouped = phases[2].scope();
+        assert!(matches!(grouped.template, binder::Template::Row("c")));
+        assert!(matches!(
+            grouped.phase,
+            Phase::Row {
+                group_by: Some(["SRC.ID"])
+            }
+        ));
+        assert_eq!(grouped.available, Some(&[0][..]));
     }
 }

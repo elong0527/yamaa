@@ -137,6 +137,9 @@ pub struct SourceRead {
     pub filter: Option<ExprId>,
     pub order_by: Vec<OrderTerm>,
     pub keep: Option<Keep>,
+    /// The answer when the read finds no record; in 0.5 also when the
+    /// variable does not exist ([`super::Surface::absent_answers_unknown_variable`],
+    /// D67).
     pub absent: Option<Constant>,
     pub require_match: bool,
 }

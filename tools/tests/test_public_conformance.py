@@ -29,7 +29,9 @@ METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
 def repeated(build):
     """The build as the runners record it: its object compiled a plan, and its
     second run reused it, equals the first and changed no saved file (#2821)."""
-    repeat = copy.deepcopy({key: build[key] for key in ("issues", "tables", "saved")})
+    repeat = copy.deepcopy(
+        {key: build[key] for key in ("issues", "tables", "saved", "paths")}
+    )
     return {
         **build,
         "plan": "compiled",
@@ -68,6 +70,8 @@ class PublicConformance(unittest.TestCase):
             "environment": None,
             "issues": [],
             "saved": True,
+            # save() returns the declared file's absolute path (D38).
+            "paths": [candidate.resolve().as_posix()],
             "tables": {
                 "output": {
                     "columns": [["ID", "int"], ["VALUE", "str"]],
@@ -77,6 +81,11 @@ class PublicConformance(unittest.TestCase):
             },
         }
         self.example = judge.plan(self.fixtures)["examples"][0]
+
+    def saved(self, *names):
+        """The build's save wrote `names` in this order beside the candidate."""
+        work = self.observed / "work/simple"
+        self.build["paths"] = [(work / name).resolve().as_posix() for name in names]
 
     def verdict(self):
         return judge.compare_example(
@@ -145,6 +154,12 @@ class PublicConformance(unittest.TestCase):
                 "7",
             ),
             "saved": (lambda repeat: repeat.update(saved=False), "saved", True, False),
+            "paths": (
+                lambda repeat: repeat["paths"].append("/elsewhere.csv"),
+                "paths[1]",
+                None,
+                "/elsewhere.csv",
+            ),
         }
         for field, (change, at, first, second) in changes.items():
             with self.subTest(field=field):
@@ -174,6 +189,24 @@ class PublicConformance(unittest.TestCase):
             },
             result["findings"],
         )
+
+    def test_a_successful_save_returns_the_authored_paths_in_order(self):
+        path = self.build["paths"][0]
+        for paths in (
+            None,
+            [],
+            [path, path],
+            [path.replace("result.csv", "other.csv")],
+            [path.replace("/", "\\")],
+        ):
+            with self.subTest(paths=paths):
+                self.build["paths"] = paths
+                result = self.verdict()
+                self.assertEqual(result["verdict"], "mismatch")
+                self.assertIn(
+                    {"saved_paths": "spec.yaml", "expected": [path], "actual": paths},
+                    result["findings"],
+                )
 
     def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
         # Preserve the independent corruption controls from the retired
@@ -425,6 +458,7 @@ class PublicConformance(unittest.TestCase):
         (self.case / "spec.yaml").write_text(
             SPEC.replace("path: result.csv,", "path: result.csv, report: checks.csv,")
         )
+        self.saved("checks.csv", "result.csv")
         truth = b"KIND,COUNT,TOTAL,DETAILS\nrun,3,,{}\n"
         (self.case / "expected/checks.csv").write_bytes(truth)
         (self.observed / "work/simple/checks.csv").write_bytes(truth)
@@ -486,6 +520,7 @@ class PublicConformance(unittest.TestCase):
         (self.case / "spec.yaml").write_text(
             SPEC.replace("result.csv", "result.parquet")
         )
+        self.saved("result.parquet")
         (self.case / "expected/result.csv").unlink()
         table = pa.table(
             {
@@ -530,6 +565,7 @@ class PublicConformance(unittest.TestCase):
             "  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n"
             "  - {name: AGE, type: int, derivation: DM.AGE}\n"
         )
+        self.saved("adsl-checks.parquet", "adsl.parquet")
         (self.case / "expected/result.csv").unlink()
         report = pa.table(
             {
@@ -653,6 +689,7 @@ class PublicConformance(unittest.TestCase):
                 "path: result.csv,", "path: result.csv, report: report.parquet,"
             )
         )
+        self.saved("report.parquet", "result.csv")
         table = pa.table(
             {
                 "COUNT": pa.array([1, 2], pa.int64()),
@@ -764,6 +801,64 @@ class PublicConformance(unittest.TestCase):
         entries = judge.plan(self.fixtures)["examples"][0]["entries"]
         self.assertEqual(entries["python"][0]["environment"], "project.yaml")
         self.assertEqual(entries["r"][0]["environment"], "project.yaml")
+
+    def command_line(self):
+        return judge.plan(self.fixtures)["examples"][0]["cli"]
+
+    def test_command_line_runs_each_call_and_names_a_project_spec(self):
+        self.assertEqual(
+            self.example["cli"],
+            {
+                "excluded": None,
+                "calls": [
+                    {
+                        "specification": "spec.yaml",
+                        "environment": None,
+                        "arguments": ["run", "spec.yaml"],
+                    }
+                ],
+            },
+        )
+        # With a project, the call names its specification by `domain` (D68).
+        (self.case / "project.yaml").write_text(
+            'schema_version: "1.0"\nsdtm:\n  specs: [spec.yaml]\n'
+        )
+        self.assertEqual(
+            self.command_line()["calls"][0]["arguments"],
+            ["run", "project.yaml", "--spec", "TEST"],
+        )
+        # A specification that names no domain gives its call no command line.
+        (self.case / "spec.yaml").write_text(SPEC.replace("domain: TEST\n", ""))
+        self.assertIsNone(self.command_line()["calls"][0]["arguments"])
+
+    def test_command_line_excludes_benchmarks_whose_project_supplies_functions(self):
+        project = self.case / "project.yaml"
+        # A 0.5 project links the environment files that declare the
+        # functions; a 1.0 project lists function files (D8).
+        for text in (
+            'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n',
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n',
+        ):
+            project.write_text(text)
+            self.assertEqual(
+                self.command_line(),
+                {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+            )
+        # A 1.0 project's environments hold only locks, and an unreadable
+        # project supplies nothing; the hosts report why it cannot be read.
+        for text in (
+            'yamaa: "1.0"\ntype: project\nenvironments:\n  python: {lock: uv.lock}\n',
+            "sdtm: [unclosed\n",
+        ):
+            project.write_text(text)
+            self.assertIsNone(self.command_line()["excluded"])
+        # A benchmark's own exclusion holds for the command line too.
+        (self.case / "benchmark.yaml").write_text(
+            METADATA + "conformance:\n  excluded: a reviewed reason\n"
+        )
+        self.assertEqual(
+            self.command_line(), {"excluded": "a reviewed reason", "calls": []}
+        )
 
     def child_variant(self, **overrides):
         variant = copy.deepcopy(self.build)
@@ -906,6 +1001,7 @@ class PublicConformance(unittest.TestCase):
         candidate = observed / "work/ordered/result.csv"
         candidate.parent.mkdir(parents=True)
         shutil.copyfile(case / "expected/result.csv", candidate)
+        self.build["paths"] = [candidate.resolve().as_posix()]
         example = judge.plan(fixtures)["examples"][0]
         kinds = [v["kind"] for v in example["variants"]["python"]]
         self.assertEqual(
@@ -1034,6 +1130,41 @@ class PublicConformance(unittest.TestCase):
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
             self.assertTrue(item.get("issue") or item.get("permanent"))
+
+    def test_corpus_command_line_plan_excludes_only_project_function_benchmarks(self):
+        corpus = judge.plan(ROOT / "benchmarks")
+        names = {example["name"]: example for example in corpus["examples"]}
+        for name in ("adam-adsl-bmi", "schema-functions"):
+            self.assertEqual(
+                names[name]["cli"],
+                {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+            )
+        for name, example in names.items():
+            entries = example["entries"]
+            if example["cli"]["excluded"]:
+                # Only a project supplies project functions.
+                self.assertTrue(
+                    any(call["environment"] for call in entries["python"]), name
+                )
+                continue
+            # The command line makes the hosts' calls, so they must agree.
+            self.assertEqual(entries["python"], entries["r"], name)
+            calls = example["cli"]["calls"]
+            self.assertEqual(
+                [
+                    {key: call[key] for key in ("specification", "environment")}
+                    for call in calls
+                ],
+                entries["python"],
+                name,
+            )
+            for call in calls:
+                self.assertIsNotNone(call["arguments"], name)
+                self.assertEqual(
+                    call["arguments"][:2],
+                    ["run", call["environment"] or call["specification"]],
+                    name,
+                )
 
 
 if __name__ == "__main__":

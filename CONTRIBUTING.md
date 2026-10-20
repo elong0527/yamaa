@@ -17,6 +17,7 @@ aliases. From 1.0.0, the stability contract of #3030 applies.
 | `rust/crates/yamaa-core/` | Specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering. |
 | `rust/crates/yamaa-adapters/` | Codecs, storage formats, physical IO and filesystem environment capture. |
 | `rust/crates/yamaa-python/`, `rust/crates/yamaa-r/` | Host arguments, callbacks, scalar conversion and owned result views. |
+| `rust/crates/yamaa-cli/` | The `yamaa` command line: its arguments, exit statuses and printed output, over the facade alone. |
 | `python/`, `R/yamaa/` | Public host packages and package builds. |
 | `benchmarks/` | Authored specifications, inputs, metadata and expected results. |
 | `evaluations/harbor/` | Agent tasks, reference solutions and grading. |
@@ -29,11 +30,12 @@ results. Explicit Save publishes held bytes in contract order. Diagnostic codes
 belong to the shared registry. Resource policies and supported platforms have
 one owner in [release guidance](docs/release.md).
 
-The workspace has four crates. `yamaa-core` owns preparation, project ports,
+The workspace has six crates. `yamaa-core` owns preparation, project ports,
 activation and the complete build lifecycle; its dataset model owns execution.
-`yamaa-adapters` implements physical boundaries, and the two binding crates
-implement their host boundaries. Core may use `std`; portable math still uses
-the pinned libm policy.
+`yamaa-adapters` implements physical boundaries, and the `yamaa` facade
+composes the two. The two binding crates and the `yamaa-cli` command line
+implement their host boundaries and depend on the facade alone. Core may use
+`std`; portable math still uses the pinned libm policy.
 
 The [shared host interface](rust/interface/README.md) owns the binding-generation
 design, declaration input, version negotiation and lifetime contract. Public
@@ -131,7 +133,9 @@ and supported targets. Its inventory is the command reference. Set
 The R package's build ignores it: `make test-r` installs the package twice,
 each time building the engine inside the package, unless
 `YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
-to share, as CI's `r` job does.
+to share, as CI's `r` job does. Unset, the build also ignores a rustc wrapper,
+such as sccache, and a Cargo build directory that the environment or a parent
+`.cargo/config.toml` sets.
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 

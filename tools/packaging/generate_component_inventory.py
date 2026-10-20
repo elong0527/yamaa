@@ -269,13 +269,27 @@ def committed():
 
 
 def listed(text):
-    """The (name, version) of each row of an inventory's text."""
-    return {tuple(line.split("\t")[:2]) for line in text.splitlines()[1:] if line}
+    """The (name, version) of each row of an inventory's text; a line without
+    a tab names no row."""
+    return {
+        tuple(line.split("\t")[:2]) for line in text.splitlines()[1:] if "\t" in line
+    }
+
+
+def malformed(text):
+    """The numbers of an inventory's lines that do not hold one field for each
+    column, such as a conflict marker that a merge left behind."""
+    return [
+        number
+        for number, line in enumerate(text.splitlines(), start=1)
+        if line.count("\t") != len(COLUMNS) - 1
+    ]
 
 
 def check(generated, paths, project):
     """Messages for the committed inventories that differ from the generated
-    ones, and for a Python project whose license files leave the inventory out.
+    ones, naming the lines that are not rows, and for a Python project whose
+    license files leave the inventory out.
 
     `generated` and `paths` map each host to its generated inventory and to
     its committed copy, and `project` is the Python project table.
@@ -295,6 +309,10 @@ def check(generated, paths, project):
         expected = generated[host]
         if text == expected:
             continue
+        for number in malformed(text):
+            errors.append(
+                f"{relative}:{number}: not a row of {len(COLUMNS)} tab-separated fields"
+            )
         for name, version in sorted(listed(expected) - listed(text)):
             errors.append(
                 f"{relative}: no row for {name} {version}, which the {host} "

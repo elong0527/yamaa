@@ -1,5 +1,8 @@
 //! Typed semantic diagnostics and canonical owned JSON context.
-//! Public issue envelopes and host exceptions belong to adapters.
+//! Public issue envelopes and host exceptions belong to adapters. Each
+//! record's severity and message come from the condition registry: its
+//! message renders from the template `yaml/conditions.yaml` registers for its
+//! condition (`message`).
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
@@ -39,6 +42,10 @@ pub use project_lock::{
     lock_diagnostics, LockDiagnosticError, LockFinding, LockOrigins, LockReason,
 };
 
+mod message;
+mod message_templates;
+pub use message::{template, UnresolvedPlaceholder};
+
 /// Contradictory retained facts have no semantic projection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProjectionError {
@@ -54,6 +61,22 @@ pub struct Definition {
     /// Language failures cite their owning rule. Only implementation refusals
     /// listed by COLUMN-15 retain an absent rule.
     pub rule: Option<&'static str>,
+}
+
+/// The severity of an issue. The registry gives every 1.0 condition error
+/// severity (D28); warning-severity findings are rows of the run report.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Severity {
+    Error,
+}
+
+impl Severity {
+    /// The value of the issues table's `severity` column.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+        }
+    }
 }
 
 /// Normative ownership of scalar submission decoder facts. These citations do
@@ -124,9 +147,16 @@ macro_rules! conditions {
                     },)*
                 }
             }
+
+            /// The severity of the cause's condition: error for every 1.0
+            /// condition (D28).
+            pub fn severity(self) -> Severity {
+                Severity::Error
+            }
         }
 
-        /// Every migrated cause must be reached by the diagnostic integration tests.
+        /// Every migrated cause must be reached by the diagnostic integration tests,
+        /// which render the message of each record a cause makes there.
         pub const CONDITIONS: &[ConditionCode] = &[$(ConditionCode::$code,)*];
     };
 }
@@ -145,6 +175,7 @@ conditions! {
     CodelistFormatNamePrefix => ("validation", "value_not_permitted", Some("CT-12")),
     UnknownProjectFunction => ("validation", "unknown_project_function", Some("FUNC-4")),
     InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("FUNC-5")),
+    FunctionArgumentLeaf => ("validation", "invalid_function_argument", Some("FUNC-6")),
     RuntimeFunctionArgument => ("derivation", "invalid_function_argument", Some("FUNC-5")),
     RuntimeFunctionCallFailed => ("derivation", "function_call_failed", Some("FUNC-8")),
     RuntimeFunctionResult => ("derivation", "invalid_function_result", Some("FUNC-9")),
@@ -478,6 +509,7 @@ conditions! {
     WindowZeroOffset => ("validation", "zero_offset", Some("WINDOW-7")),
     WindowOrderRequired => ("validation", "window_order_by_required", Some("WINDOW-5")),
     WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("WINDOW-5")),
+    WindowBaselineOrder => ("validation", "value_not_permitted", Some("WINDOW-5")),
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("WINDOW-3")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("VALUE-2")),
     // A column-level window's read of a driver that some row template does
@@ -565,5 +597,10 @@ impl Diagnostic {
     /// The rule the cause cites, absent only for implementation refusals.
     pub fn rule(&self) -> Option<&'static str> {
         self.definition().rule
+    }
+
+    /// The severity of the cause's condition.
+    pub fn severity(&self) -> Severity {
+        self.code.severity()
     }
 }

@@ -45,7 +45,7 @@ class RenderingTests(unittest.TestCase):
             "return Run(_call(_native._spec_run, self._path, self._project, self._plans))",
             "return Spec(_call(_native._project_spec, self._path, name), self._path)",
             "return _optional_table(_call(self._native.output, self._name))",
-            "        _call(self._native.save)\n",
+            "        return _call(self._native.save)\n",
             "            _call(self._native.member_issues, name)  # raises",
             "        return MemberRun(self._native, name)",
             "        self.issues = _table(table)",
@@ -149,9 +149,7 @@ class ValidationTests(unittest.TestCase):
             ("unknown keys", lambda d: d["public"].update(metadata={})),
             (
                 "unknown token",
-                lambda d: d["public"]["types"].update(
-                    paths_written={"python": "x", "r": "y"}
-                ),
+                lambda d: d["public"]["types"].update(widget={"python": "x", "r": "y"}),
             ),
             ("undeclared type token", lambda d: d["public"]["types"].pop("count")),
             ("unknown kind", lambda d: member(d, "Run", "save").update(kind="action")),

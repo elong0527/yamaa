@@ -1,6 +1,7 @@
 //! Project operation findings: names, unlinked producers, blocked consumers,
 //! run-scope cycles and saves with nothing to write, each with its
 //! independently authored mapping.
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::{ConditionCode, Diagnostic},
@@ -53,7 +54,7 @@ fn check_at(
     );
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
-    finding.code
+    rendered(&finding)
 }
 
 pub fn reached() -> BTreeSet<ConditionCode> {

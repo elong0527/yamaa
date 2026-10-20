@@ -467,12 +467,12 @@ impl Resources {
         &self,
         declaring: &str,
         written: &str,
-    ) -> Result<crate::resource_publication::AnchoredTarget, Error> {
+    ) -> Result<crate::publication::AnchoredTarget, Error> {
         match &self.file {
             Some(file) => file
                 .publication_target(declaring, written)
-                .map(crate::resource_publication::AnchoredTarget::File),
-            None => Ok(crate::resource_publication::AnchoredTarget::Host {
+                .map(crate::publication::AnchoredTarget::File),
+            None => Ok(crate::publication::AnchoredTarget::Host {
                 resolver: Arc::clone(&self.store.resolver),
                 declaring: declaring.into(),
                 written: written.into(),

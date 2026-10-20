@@ -1630,24 +1630,30 @@ fn bind_derivations(
         let available = (0..width + index).collect::<Vec<_>>();
         let mut dependencies = Vec::new();
         let start = findings.len();
-        let expression = derivations::bind_row(
+        let expression = BindContext {
+            scope: binder::Scope {
+                template: binder::Template::Any,
+                phase: Phase::Row { group_by: None },
+                driver: relation,
+                available: Some(&available),
+            },
+            donors: binder::Donors {
+                named,
+                secondary,
+                items: intermediates,
+            },
+            catalog: &catalog,
+            output: &derive_output,
+            project,
+            tree,
+            edges: &mut dependencies,
+            findings: &mut *findings,
+            reported: false,
+        }
+        .bind(
             &binding.branch.operation,
             &binding.branch.path,
             width + index,
-            &catalog,
-            relation,
-            None,
-            Phase::Row { group_by: None },
-            Some(&available),
-            &mut dependencies,
-            findings,
-            false,
-            &derive_output,
-            project,
-            tree,
-            named,
-            secondary,
-            intermediates,
         )?;
         // VALUE-24: a binding converts to its declared type like a column.
         if expression.is_some() && findings.len() == start && binding.handler.is_none() {

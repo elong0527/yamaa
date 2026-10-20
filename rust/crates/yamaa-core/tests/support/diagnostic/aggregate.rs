@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -47,7 +48,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .into()
     );
     assert_eq!(diagnostic.spec_paths, ["aggregate"]);
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     for (phase, row, expected) in [
         (AggregatePhase::Derivation, None, "derivation"),
         (
@@ -93,7 +94,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         }
         assert_eq!(diagnostic.context, context);
         assert_eq!(diagnostic.spec_paths, ["rows[0].derivations.V.aggregate"]);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     let cases = [
         (
@@ -267,7 +268,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         assert!(diagnostic.source_span.is_none());
         assert!(diagnostic.operand_route.is_none());
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached.extend(derive_reached());
     reached
@@ -346,7 +347,7 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
             ("validation", condition, Some(rule))
         );
         assert!(diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"));
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     let source = |name| T::map(vec![("source", T::map(vec![("variable", T::text(name))]))]);
     let document = specification(vec![
@@ -404,6 +405,6 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
         ("validation", "invalid_derive_step", Some("LOOKUP-22"))
     );
     assert_eq!(diagnostic.context["intermediate"], text("CAP"));
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     reached
 }

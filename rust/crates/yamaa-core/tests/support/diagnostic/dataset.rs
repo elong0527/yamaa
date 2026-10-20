@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -134,7 +135,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             );
             assert!(diagnostic.source_span.is_none());
             assert!(diagnostic.operand_route.is_none());
-            diagnostic.code
+            rendered(&diagnostic)
         })
         .collect()
 }

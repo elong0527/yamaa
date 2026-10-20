@@ -501,9 +501,7 @@ mod service {
     mod define_service {
         //! Independently authored engine use-case controls; no native filesystem or host.
         use std::{cell::Cell, rc::Rc};
-        use yamaa_core::define::{
-            self, Application, Failure, Ports, PublicationState, SaveFailure,
-        };
+        use yamaa_core::define::{self, Application, Failure, Ports, PublicationState};
         use yamaa_core::{
             diagnostic::ConditionCode,
             project_terminology::Catalogue,
@@ -582,10 +580,8 @@ mod service {
             seconds: Option<u64>,
             environment_error: Option<Opaque>,
             verification_error: Option<Opaque>,
-            publication_error: Option<Opaque>,
             publisher_error: Option<(usize, Opaque)>,
             publishers: usize,
-            published: Vec<(String, Vec<u8>)>,
             clock_calls: Rc<Cell<usize>>,
         }
         impl Spy {
@@ -596,10 +592,8 @@ mod service {
                     seconds: Some(0),
                     environment_error: None,
                     verification_error: None,
-                    publication_error: None,
                     publisher_error: None,
                     publishers: 0,
-                    published: Vec::new(),
                     clock_calls: Rc::new(Cell::new(0)),
                 }
             }
@@ -718,20 +712,6 @@ mod service {
             fn same_target(&mut self, left: &String, right: &String) -> Result<bool, Opaque> {
                 Ok(left == right)
             }
-            fn publish(
-                &mut self,
-                publisher: &mut String,
-                written: &str,
-                bytes: &[u8],
-            ) -> Result<(), Opaque> {
-                assert_eq!(publisher, "/project/define.xml");
-                self.events.push("publish");
-                if let Some(error) = self.publication_error.take() {
-                    return Err(error);
-                }
-                self.published.push((written.into(), bytes.into()));
-                Ok(())
-            }
         }
         fn prepare(spy: &mut Spy, standard: &str, created: Option<&str>) -> define::Attempt<Spy> {
             Application::prepare(
@@ -760,7 +740,7 @@ mod service {
                 ),
             ] {
                 let mut spy = Spy::new();
-                let mut attempt = prepare(&mut spy, standard, created);
+                let attempt = prepare(&mut spy, standard, created);
                 let Err(Failure::Metadata(findings)) = attempt.outcome else {
                     panic!("missing admission cause")
                 };
@@ -768,11 +748,8 @@ mod service {
                 assert_eq!(findings[0].code, code);
                 assert!(spy.events.is_empty());
                 assert_eq!(spy.clock_calls.get(), 0);
-                assert!(matches!(
-                    attempt.application.save(&mut spy),
-                    Err(SaveFailure::Refused)
-                ));
-                assert!(spy.events.is_empty());
+                assert!(attempt.application.failed());
+                assert_eq!(attempt.application.files().len(), 0);
             }
         }
         #[test]
@@ -781,21 +758,17 @@ mod service {
             let error = Opaque(Box::new(42));
             let identity = error.identity();
             spy.environment_error = Some(error);
-            let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
             let Err(Failure::Port(error)) = attempt.outcome else {
                 panic!("original port error lost")
             };
             assert_eq!(error.identity(), identity);
             assert_eq!(spy.events, ["capture_environment"]);
-            assert!(matches!(
-                attempt.application.save(&mut spy),
-                Err(SaveFailure::Refused)
-            ));
-            assert_eq!(spy.events, ["capture_environment"]);
+            assert!(attempt.application.failed());
             assert_eq!(attempt.application.artifacts().len(), 0);
         }
         #[test]
-        fn complete_metadata_and_rendering_precede_publication_and_save_rewrites_held_bytes() {
+        fn complete_metadata_and_rendering_precede_publication_and_record_marks_held_bytes() {
             let mut spy = Spy::new();
             let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
             assert!(attempt.outcome.is_ok());
@@ -804,7 +777,6 @@ mod service {
                 ["capture_environment", "verify_metadata", "publisher"]
             );
             assert_eq!(spy.clock_calls.get(), 0);
-            assert!(spy.published.is_empty());
             let held = attempt.application.artifacts().next().unwrap();
             assert_eq!(held.0, "define.xml");
             assert_eq!(held.2, PublicationState::Ready);
@@ -812,23 +784,32 @@ mod service {
                 .unwrap()
                 .contains("CreationDateTime=\"2026-10-11T00:00:00\""));
             let bytes = held.1.to_vec();
-            assert!(attempt.application.save(&mut spy).ok().unwrap());
-            assert_eq!(spy.published, [("define.xml".into(), bytes.clone())]);
+            // A save publishes the held files in order; nothing is recomposed.
+            let files = attempt
+                .application
+                .files()
+                .map(|(target, written, bytes)| {
+                    (target.clone(), written.to_owned(), bytes.to_vec())
+                })
+                .collect::<Vec<_>>();
             assert_eq!(
-                attempt.application.artifacts().next().unwrap().2,
-                PublicationState::Published
+                files,
+                [(
+                    "/project/define.xml".to_owned(),
+                    "define.xml".to_owned(),
+                    bytes.clone()
+                )]
             );
-            // A repeated save preflights again and rewrites the same held
-            // bytes, so a deleted target is restored; nothing is recomposed.
-            assert!(attempt.application.save(&mut spy).ok().unwrap());
-            assert_eq!(
-                spy.published,
-                [
-                    ("define.xml".into(), bytes.clone()),
-                    ("define.xml".into(), bytes)
-                ]
-            );
-            assert_eq!(spy.publishers, 3);
+            // A repeated save rewrites the same held bytes.
+            for _ in 0..2 {
+                attempt.application.record(1, None);
+                assert_eq!(
+                    attempt.application.artifacts().next().unwrap(),
+                    ("define.xml", bytes.as_slice(), PublicationState::Published)
+                );
+                assert!(!attempt.application.failed());
+            }
+            assert_eq!(spy.publishers, 1);
             assert_eq!(spy.clock_calls.get(), 0);
         }
         #[test]
@@ -846,67 +827,44 @@ mod service {
             assert_eq!(attempt.application.artifacts().len(), 0);
         }
         #[test]
-        fn target_admission_during_prepare_and_save_retains_original_errors_and_never_writes() {
-            for call in [1, 2] {
-                let mut spy = Spy::new();
-                let error = Opaque(Box::new(23));
-                let identity = error.identity();
-                spy.publisher_error = Some((call, error));
-                let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
-                let failure = if call == 1 {
-                    attempt.outcome.err().unwrap()
-                } else {
-                    assert!(attempt.outcome.is_ok());
-                    let Err(SaveFailure::Failure(failure)) = attempt.application.save(&mut spy)
-                    else {
-                        panic!("missing save admission failure")
-                    };
-                    failure
-                };
-                let Failure::TargetAdmission { index, error } = failure else {
-                    panic!("original target cause lost")
-                };
-                assert_eq!(index, 0);
-                assert_eq!(error.identity(), identity);
-                assert_eq!(
-                    attempt.application.artifacts().next().unwrap().2,
-                    PublicationState::Failed
-                );
-                assert!(spy.published.is_empty());
-                let events = spy.events.clone();
-                assert!(matches!(
-                    attempt.application.save(&mut spy),
-                    Err(SaveFailure::Refused)
-                ));
-                assert_eq!(spy.events, events);
-            }
-        }
-        #[test]
-        fn actual_publication_failure_keeps_admitted_bytes_and_refuses_further_calls() {
+        fn target_admission_during_prepare_retains_the_original_error_and_never_writes() {
             let mut spy = Spy::new();
-            let error = Opaque(Box::new(81));
+            let error = Opaque(Box::new(23));
             let identity = error.identity();
-            spy.publication_error = Some(error);
-            let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
-            assert!(attempt.outcome.is_ok());
-            let held = attempt.application.artifacts().next().unwrap().1.to_vec();
-            let Err(SaveFailure::Failure(Failure::Publication { index, error })) =
-                attempt.application.save(&mut spy)
-            else {
-                panic!("original publish error lost")
+            spy.publisher_error = Some((1, error));
+            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let Some(Failure::TargetAdmission { index, error }) = attempt.outcome.err() else {
+                panic!("original target cause lost")
             };
             assert_eq!(index, 0);
             assert_eq!(error.identity(), identity);
             assert_eq!(
-                attempt.application.artifacts().next().unwrap(),
-                ("define.xml", held.as_slice(), PublicationState::Failed)
+                attempt.application.artifacts().next().unwrap().2,
+                PublicationState::Failed
             );
-            let events = spy.events.clone();
-            assert!(matches!(
-                attempt.application.save(&mut spy),
-                Err(SaveFailure::Refused)
-            ));
-            assert_eq!(spy.events, events);
+            assert!(attempt.application.failed());
+        }
+        #[test]
+        fn a_recorded_save_failure_keeps_admitted_bytes_and_fails_the_composition() {
+            for admission in [true, false] {
+                let mut spy = Spy::new();
+                let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+                assert!(attempt.outcome.is_ok());
+                let held = attempt.application.artifacts().next().unwrap().1.to_vec();
+                let error = Opaque(Box::new(81));
+                let failure = if admission {
+                    Failure::TargetAdmission { index: 0, error }
+                } else {
+                    Failure::Publication { index: 0, error }
+                };
+                attempt.application.record(0, Some(&failure));
+                assert_eq!(
+                    attempt.application.artifacts().next().unwrap(),
+                    ("define.xml", held.as_slice(), PublicationState::Failed)
+                );
+                assert!(attempt.application.failed());
+                assert_eq!(spy.publishers, 1);
+            }
         }
         #[test]
         fn missing_study_is_the_real_typed_owner_before_any_metadata_verification() {

@@ -92,6 +92,48 @@ their prerequisites. Local targets and CI share the owned scripts under
 - Evidence such as run ids and artifact names goes in issues, never in
   committed files.
 
+## Parallel sessions
+
+Several agent sessions work the 1.0 plan at once, one issue per session.
+These rules keep them from colliding; `CONTRIBUTING.md` owns the merge
+steps and the review gate.
+
+- **Claim before you start.** Assign yourself to the issue, or comment
+  "Claimed by <session>" when you cannot assign, before creating a
+  branch, and leave an issue another session has claimed. A follow-up
+  found in review goes to the session that owns the chain it belongs to.
+- **One worktree per issue, with its own Cargo target.** Create the
+  branch with `git worktree add --no-track -b <branch> .worktrees/<name>
+  origin/main` and push with an explicit refspec,
+  `git push -u origin HEAD:refs/heads/<branch>`: a branch that tracks
+  `origin/main` otherwise pushes to main. Never share `rust/target` or
+  `CARGO_TARGET_DIR` between worktrees. Each target grows to 35 to 45 GB,
+  so keep to about five Rust worktrees on one machine, and remove a
+  worktree, or its target, when its pull request merges.
+- **Closing keywords close.** GitHub reads `Closes #N` inside a negation
+  too; "does not close #N" once closed the planning issue. Write a
+  closing keyword only for the pull request's own issue, and name every
+  other issue without one.
+- **Prove engine changes on the exact head.** A pull request under
+  rewrite 2, rewrite 3 or Phase 1 or 2 of #3030 passes
+  `make check-equivalence` on its final head and says so in its
+  description. A session that cannot run the gate itself, because its
+  machine has no R, relies on CI's `equivalence` job and merges only once
+  that job is green on the head it merges.
+- **Bring the branch up to date before merging**, wait for green CI on
+  that exact head, then run the review gate. When no review bot can
+  review, the merging agent reviews the exact diff itself and records that
+  review on the pull request, as the hard rules say. Main broke three
+  times on 2026-10-20 from green pull requests merged on a stale base.
+- **Decide under the owner's standing instruction, and record it.** A
+  routine decision follows the recorded plan and is written on #3030 as
+  the next D-number, so the owner can see and reverse it. Ask the owner
+  only about a new user-facing concept, a reversal of a D-decision, or a
+  golden change that no D-decision covers.
+- **Sequence shared files.** Read the issue's "Order" line and its
+  sequencing comments before starting. An issue that edits a file an open
+  pull request reshapes waits for that pull request.
+
 ## Before a push
 
 Run `make setup` once, then `make quick` before each push. It runs the

@@ -60,85 +60,25 @@ pub(super) fn operand_findings(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The source binds as the scope decides. Preflight checks the declared type
+/// of every name without `rows` and of a qualified name with them, so a row
+/// template's bare name is checked here, on its captured type (TEXT-1).
 pub(super) fn bind(
     operation: &StringCase,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
     let path = format!("{}.source", operation.path());
-    Ok(rounding::bind_operand(
-        operation.source(),
-        &path,
-        column,
-        keys,
-        catalog,
-        declarations,
-        secondary,
-        intermediates,
-        edges,
-        findings,
-    )?
-    .map(|expression| Expression::StrCase {
-        source: std::boxed::Box::new(Assignment {
-            column,
-            path,
-            expression,
-        }),
-        operation: operation.clone(),
-    }))
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &StringCase,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    let path = format!("{}.source", operation.path());
-    let source = self_relations::bind_operand(
-        operation.source(),
-        &path,
-        catalog,
-        driver,
-        row,
-        phase,
-        available,
-        edges,
-        findings,
-        output,
-        named,
-        secondary,
-        intermediates,
-    )?;
-    if source.is_some() {
-        if let Some(kind) = catalog
+    let source = cx.operand(operation.source(), &path)?;
+    if source.is_some() && cx.implicit().is_none() {
+        if let Some(kind) = cx
+            .catalog
             .type_of(operation.source())
             .filter(|kind| *kind != ColumnType::Str)
         {
-            let actual = match kind {
-                ColumnType::Int => "int",
-                ColumnType::Float => "float",
-                ColumnType::Date => "date",
-                ColumnType::DateTime => "datetime",
-                ColumnType::Str => unreachable!(),
-            };
-            findings.push(BindFinding::Scalar(operation.input_diagnostic(actual)));
+            cx.findings.push(BindFinding::Scalar(
+                operation.input_diagnostic(checks::type_name(kind)),
+            ));
             return Ok(None);
         }
     }

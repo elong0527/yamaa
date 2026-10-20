@@ -34,7 +34,7 @@ filtered records, in source order, after its ordered `derivations` have
 completed. The row template reads them through the intermediate's qualifier as
 its current driver record, not through a keyed lookup. A driver intermediate
 must read an `input` dataset and may not declare `key`, `between`, `order_by`,
-`keep`, `no_match` or `require_match`, and every derived field it exposes must
+`keep`, `absent` or `require_match`, and every derived field it exposes must
 have one column type as its result type ([EXPR-14](expressions.md#expr-14)).
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.

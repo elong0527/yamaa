@@ -66,7 +66,9 @@ The package follows "Using Rust in CRAN packages":
   The Makevars pass that directory to Cargo, so a `CARGO_TARGET_DIR` set for
   other projects does not move the build; only `YAMAA_R_CARGO_TARGET_DIR`,
   which the project's CI sets so that its installations share one Cargo
-  build, names another.
+  build, names another. Without it, the build also ignores a Cargo build
+  directory and a rustc wrapper, such as a compiler cache, that the
+  environment or a `.cargo/config.toml` in a parent directory sets.
 - `Authors@R` credits the authors of the bundled crates and of the bundled
   ReadStat C sources as contributors and copyright holders. `inst/AUTHORS`
   lists each crate with the authors, license and repository that it declares,

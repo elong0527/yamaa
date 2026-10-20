@@ -2,8 +2,10 @@
 
 Only the comparator reads independent expected truth. CSV bytes and typed host
 views compare exactly; Parquet compares logical fields, types, nulls and rows.
-A run's output and its declared run report are the compared tables. R holds a
-declared integer as a plain double, which must equal that integer exactly.
+A run's output and its declared run report are the compared tables, and a
+successful build's save() returns the absolute paths of those declared files in
+publication order, the report first (D38, OUTPUT-10). R holds a declared
+integer as a plain double, which must equal that integer exactly.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import csv
 import datetime as dt
 import json
 import math
+import os
 import re
 import shutil
 import struct
@@ -31,6 +34,13 @@ RESOLVED_REASON = "reference-only resolved specification until cutover (#1973.14
 REPORT_INTS = {"COUNT", "TOTAL"}
 # R doubles hold every integer up to this magnitude exactly.
 EXACT_DOUBLE = 2**53
+# Why the command line runs no benchmark whose project supplies project
+# functions: the binary cannot call Python or R code (#3030 section 2.3).
+CLI_FUNCTION_EXCLUSION = (
+    "the command line has no project-function implementation, so a "
+    "specification that calls a project function fails before it reads data "
+    "(#3030 section 2.3)"
+)
 
 
 def platform_matches(runtime, platform, recorded):
@@ -80,8 +90,67 @@ def plan(fixtures):
             "define": metadata.get("define"),
         }
         example["variants"], _ = example_variants(fixtures, example)
+        example["cli"] = cli_plan(case, entries, example["excluded"])
         examples.append(example)
     return {"protocol": PROTOCOL, "examples": examples}
+
+
+def supplies_functions(case, entries):
+    """True when a call's project supplies project functions: a 0.5 project
+    links the host environment files that declare them, and a 1.0 project
+    lists function files, its `environments` holding only locks (D8). A
+    project that cannot be read supplies none; the hosts report why."""
+    projects = {
+        entry["environment"]
+        for calls in entries.values()
+        for entry in calls
+        if entry["environment"] is not None
+    }
+    for project in sorted(projects):
+        try:
+            document = load_yaml(case / project)
+        except Exception:  # noqa: BLE001 -- an unreadable project supplies no functions
+            continue
+        if isinstance(document, dict):
+            key = "functions" if "yamaa" in document else "environments"
+            if document.get(key):
+                return True
+    return False
+
+
+def spec_name(path):
+    """The name a project gives a specification, its `domain`, or None."""
+    try:
+        document = load_yaml(path)
+    except Exception:  # noqa: BLE001 -- such a call has no command line
+        return None
+    name = document.get("domain") if isinstance(document, dict) else None
+    return name if isinstance(name, str) else None
+
+
+def cli_plan(case, entries, excluded):
+    """What the command line runs for one benchmark, or why it runs nothing.
+
+    It makes the hosts' calls, whose Python and R lists agree, as
+    `yamaa run SPEC`, or `yamaa run PROJECT --spec NAME` for a call with a
+    project; a call whose specification names no `domain` has no command
+    line. Besides a benchmark's own exclusion, it excludes each benchmark
+    whose project supplies project functions.
+    """
+    if excluded is None and supplies_functions(case, entries):
+        excluded = CLI_FUNCTION_EXCLUSION
+    if excluded:
+        return {"excluded": excluded, "calls": []}
+    calls = []
+    for entry in entries["python"]:
+        arguments = ["run", entry["specification"]]
+        if entry["environment"] is not None:
+            name = spec_name(case / entry["specification"])
+            arguments = (
+                None if name is None else ["run", entry["environment"], "--spec", name]
+            )
+        calls.append({**entry, "arguments": arguments})
+    return {"excluded": None, "calls": calls}
 
 
 def json_round_trippable(value):
@@ -726,10 +795,10 @@ def judge_repeats(builds):
 
     A spec object's second run reuses the plan its first run compiled (#2821).
     It must say so in its private observations, reproduce the first run's
-    issues, typed public tables and save outcome, and leave every saved file
-    byte for byte as the first run saved it, so the saved bytes judged against
-    the authored truth below are both runs' bytes. A finding names the first
-    differing value or the changed files.
+    issues, typed public tables, save outcome and saved paths, and leave every
+    saved file byte for byte as the first run saved it, so the saved bytes
+    judged against the authored truth below are both runs' bytes. A finding
+    names the first differing value or the changed files.
     """
     findings = []
     for build in builds:
@@ -748,7 +817,7 @@ def judge_repeats(builds):
                     "expected_second_run_plan": expected,
                 }
             )
-        for field in ("issues", "tables", "saved"):
+        for field in ("issues", "tables", "saved", "paths"):
             found = first_difference(build.get(field), repeat.get(field), field)
             if found is not None:
                 at, first, second = found
@@ -770,6 +839,16 @@ def judge_repeats(builds):
                 }
             )
     return findings
+
+
+def same_path(actual, expected):
+    """Whether save() reported `expected`: one absolute path with forward
+    slashes, spelled as the host's own filesystem compares it."""
+    return (
+        isinstance(actual, str)
+        and "\\" not in actual
+        and os.path.normcase(actual) == os.path.normcase(expected)
+    )
 
 
 def compare_example(example, runtime, record, fixtures, observed, expectations=None):
@@ -925,6 +1004,19 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     compared = set()
     for entry, build in zip(entries, builds):
         types, output = declarations(case / entry["specification"])
+        written = [
+            (
+                observed
+                / "work"
+                / case.name
+                / Path(entry["specification"]).parent
+                / declared
+            )
+            .resolve()
+            .as_posix()
+            for declared in (output.get("report"), output.get("path"))
+            if declared is not None
+        ]
         for slot, key in (("output", "path"), ("report", "report")):
             declared = output.get(key)
             actual = build["tables"].get(slot)
@@ -987,6 +1079,20 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             result["findings"].append(
                 f"successful {entry['specification']} did not save"
             )
+        else:
+            paths = build.get("paths")
+            if not (
+                isinstance(paths, list)
+                and len(paths) == len(written)
+                and all(map(same_path, paths, written))
+            ):
+                result["findings"].append(
+                    {
+                        "saved_paths": entry["specification"],
+                        "expected": written,
+                        "actual": paths,
+                    }
+                )
     for truth in (case / "expected").iterdir():
         if truth.suffix in {".csv", ".parquet"} and truth.name not in compared:
             result["findings"].append(
