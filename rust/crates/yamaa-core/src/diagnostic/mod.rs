@@ -1,5 +1,8 @@
 //! Typed semantic diagnostics and canonical owned JSON context.
-//! Public issue envelopes and host exceptions belong to adapters.
+//! Public issue envelopes and host exceptions belong to adapters. Each
+//! record's severity and message come from the condition registry: its
+//! message renders from the template `yaml/conditions.yaml` registers for its
+//! condition (`message`).
 //!
 //! Registry keys identify causes, not public condition strings: the language uses
 //! `conversion_failed` for several requirements. Migrated causes cover numeric
@@ -39,6 +42,10 @@ pub use project_lock::{
     lock_diagnostics, LockDiagnosticError, LockFinding, LockOrigins, LockReason,
 };
 
+mod message;
+mod message_templates;
+pub use message::{template, UnresolvedPlaceholder};
+
 /// Contradictory retained facts have no semantic projection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProjectionError {
@@ -54,6 +61,22 @@ pub struct Definition {
     /// Language failures cite their owning rule. Only implementation refusals
     /// listed by COLUMN-15 retain an absent rule.
     pub rule: Option<&'static str>,
+}
+
+/// The severity of an issue. The registry gives every 1.0 condition error
+/// severity (D28); warning-severity findings are rows of the run report.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Severity {
+    Error,
+}
+
+impl Severity {
+    /// The value of the issues table's `severity` column.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+        }
+    }
 }
 
 /// Normative ownership of scalar submission decoder facts. These citations do
@@ -124,9 +147,16 @@ macro_rules! conditions {
                     },)*
                 }
             }
+
+            /// The severity of the cause's condition: error for every 1.0
+            /// condition (D28).
+            pub fn severity(self) -> Severity {
+                Severity::Error
+            }
         }
 
-        /// Every migrated cause must be reached by the diagnostic integration tests.
+        /// Every migrated cause must be reached by the diagnostic integration tests,
+        /// which render the message of each record a cause makes there.
         pub const CONDITIONS: &[ConditionCode] = &[$(ConditionCode::$code,)*];
     };
 }
@@ -567,5 +597,10 @@ impl Diagnostic {
     /// The rule the cause cites, absent only for implementation refusals.
     pub fn rule(&self) -> Option<&'static str> {
         self.definition().rule
+    }
+
+    /// The severity of the cause's condition.
+    pub fn severity(&self) -> Severity {
+        self.code.severity()
     }
 }

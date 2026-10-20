@@ -294,24 +294,32 @@ impl Declaration {
                 return Ok(None);
             }
             let mut edges = Vec::new();
-            let expression = derivations::bind_row(
+            let expression = BindContext {
+                scope: binder::Scope {
+                    template: context
+                        .row
+                        .map_or(binder::Template::Any, binder::Template::Row),
+                    phase: context.phase,
+                    driver: context.driver,
+                    available: None,
+                },
+                donors: binder::Donors {
+                    named: context.named,
+                    secondary: context.secondary,
+                    items: context.intermediates,
+                },
+                catalog,
+                output: context.output,
+                project: context.project,
+                tree: context.tree,
+                edges: &mut edges,
+                findings: &mut *findings,
+                reported: false,
+            }
+            .bind(
                 &branch.operation,
                 &branch.path,
                 context.output.columns().len(),
-                catalog,
-                context.driver,
-                context.row,
-                context.phase,
-                None,
-                &mut edges,
-                findings,
-                false,
-                context.output,
-                context.project,
-                context.tree,
-                context.named,
-                context.secondary,
-                context.intermediates,
             )?;
             return expression
                 .map(|expression| {

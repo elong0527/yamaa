@@ -1,4 +1,5 @@
 //! Actual aggregate preparation and joined row binding reach their new causes.
+use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as JsonValue;
@@ -194,7 +195,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             d.context["fields"],
             JsonValue::Array(vec![JsonValue::String(field.into())])
         );
-        reached.insert(d.code);
+        reached.insert(rendered(&d));
     }
     for (derive, condition, rule, context, intermediate) in [
         (
@@ -254,7 +255,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         for (key, text) in context {
             assert_eq!(d.context[key], JsonValue::String(text.into()));
         }
-        reached.insert(d.code);
+        reached.insert(rendered(&d));
     }
     for (grouped, rule) in [(false, "FORMULA-9"), (true, "FORMULA-9")] {
         let ds = findings(document(
@@ -276,7 +277,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             d.context["identifier"],
             JsonValue::String("SECOND.V".into())
         );
-        reached.insert(d.code);
+        reached.insert(rendered(&d));
     }
     reached
 }

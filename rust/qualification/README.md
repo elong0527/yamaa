@@ -86,3 +86,22 @@ The comparison commands above gate on the current directories alone: every
 active case must pass on that host, including a newly added directory. No
 prior observations are consulted, so adding a benchmark needs no registry
 edit. Expected data remains unchanged.
+
+## Command-line conformance
+
+`rust/tests/public_conformance_cli.py` is the command line's runner, still a
+skeleton (#3060). It runs the plan's command-line calls through a `yamaa`
+binary in staged copies of the cases, without `expected/`: `yamaa run SPEC`,
+or `yamaa run PROJECT --spec NAME` for a call with a project, the calls the
+Python and R entries make. For the command line, the plan excludes each
+benchmark whose project supplies project functions: the binary has no
+project-function implementation, so a specification that calls one fails
+before it reads data (#3030 section 2.3). Each excluded case still gets a
+record that names the reason. Until `run` prints its results, the binary
+refuses it as not implemented and the runner records that; the comparator
+does not judge command-line records yet.
+
+```sh
+python -I rust/tests/public_conformance_cli.py --plan /tmp/public-plan --fixtures benchmarks \
+  --binary rust/target/debug/yamaa --output /tmp/public-cli --source-revision REVISION
+```

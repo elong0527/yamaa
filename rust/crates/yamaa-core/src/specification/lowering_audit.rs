@@ -50,7 +50,11 @@ impl PreparedSpecification {
                 .mismatches
                 .push(format!("{path}: lowered as unsupported"));
         }
-        for (column, declaration) in self.declarations.iter().enumerate() {
+        let (declarations, templates) = match &self.rows {
+            rows::Rows::Implicit(implicit) => (implicit.declarations(), None),
+            rows::Rows::Templates(templates) => (&[][..], Some(templates)),
+        };
+        for (column, declaration) in declarations.iter().enumerate() {
             match spec.columns.get(column).and_then(|c| c.derivation.as_ref()) {
                 Some(derivation) => {
                     audit.operation(&declaration.path, &declaration.operation, derivation.expr)
@@ -58,7 +62,7 @@ impl PreparedSpecification {
                 None => audit.missing(&declaration.path),
             }
         }
-        for (value, path, branch) in self.rows.iter().flat_map(|rows| rows.audit_entries()) {
+        for (value, path, branch) in templates.into_iter().flat_map(|rows| rows.audit_entries()) {
             match lowered.expression(value) {
                 Some(expr) => {
                     audit.path(path, expr);

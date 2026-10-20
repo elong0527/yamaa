@@ -647,8 +647,7 @@ impl<P: Ports> Application<P> {
                 .map_err(|error| published_boundary_failure(error, dataset.id(), written))?;
             Ok(Held::Parquet(table))
         } else {
-            Err(Failure::Metadata(vec![Finding::cause(
-                ConditionCode::ApplicationUnsupported,
+            Err(Failure::Metadata(vec![Finding::unsupported(
                 written,
                 "published_dataset_format",
             )]))

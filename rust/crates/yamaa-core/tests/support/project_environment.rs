@@ -1,3 +1,4 @@
+use crate::support::diagnostic::rendered;
 use crate::support::roots::{Codelist, External, Item, Source, Standard};
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as JsonValue;
@@ -68,7 +69,7 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.context[key], JsonValue::String(value.into()));
     }
     assert_eq!(finding.context.len(), 3);
-    BTreeSet::from([finding.code])
+    BTreeSet::from([rendered(&finding)])
 }
 /// CT-12: a text codelist names a character format, so its `format_name`
 /// begins with `$`; the compliant list beside it passes.
@@ -117,7 +118,7 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
     assert_eq!(finding.context.len(), 3);
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
-    BTreeSet::from([finding.code])
+    BTreeSet::from([rendered(&finding)])
 }
 /// FUNC-2, FUNC-3 (P-FN-2): a finding in a 1.0 function file fails as
 /// `function_file_invalid` at that file's own path, and a lock whose kind is
@@ -196,7 +197,7 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
                 .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
                 .collect()
         );
-        reached.insert(finding.code);
+        reached.insert(rendered(finding));
     }
     // A value the declared type cannot read fails as its file does, keeping
     // the text it is written as.
@@ -214,6 +215,7 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
     assert_eq!(scalar[0].spec_paths, ["tests[0].result"]);
     assert_eq!(scalar[0].context["reason"], "invalid_date");
     assert_eq!(scalar[0].context["value"], "2024-02-30");
+    reached.insert(rendered(&scalar[0]));
     reached
 }
 /// A project that links a Python environment file with no functions and
@@ -361,7 +363,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.spec_paths, [path]);
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
-        reached.insert(finding.code);
+        reached.insert(rendered(&finding));
     }
     // The `environments` key states the language, so only the captured lock
     // syntax can disagree with it.
@@ -391,7 +393,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert_eq!(finding.context["actual_lock_kind"], "renv");
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
-    reached.insert(finding.code);
+    reached.insert(rendered(&finding));
     for (failure, cause) in [
         (
             project_environment_diagnostics::ReadFailure::Missing,
@@ -420,7 +422,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
-        reached.insert(finding.code);
+        reached.insert(rendered(&finding));
     }
     reached
 }

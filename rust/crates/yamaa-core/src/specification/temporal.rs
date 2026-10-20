@@ -298,17 +298,13 @@ pub(super) fn prepare(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Each operand binds as the scope decides, then its type must be one the
+/// operation accepts: a lookup read's from its selector's donor, any other
+/// read's from the catalog.
 pub(super) fn bind(
     operation: &Temporal,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
     for (index, source) in operation.sources().iter().enumerate() {
@@ -321,110 +317,17 @@ pub(super) fn bind(
             });
             continue;
         }
-        if let Some(expression) = rounding::bind_operand(
-            source,
-            &path,
-            column,
-            keys,
-            catalog,
-            declarations,
-            secondary,
-            intermediates,
-            edges,
-            findings,
-        )? {
-            if let Some(actual) =
-                types::CapturedTypes::new(declarations, catalog, secondary, intermediates)
-                    .kind(source)
-            {
-                let (kind, name) = match actual {
-                    crate::value::ValueType::Str => (ColumnType::Str, "str"),
-                    crate::value::ValueType::Int => (ColumnType::Int, "int"),
-                    crate::value::ValueType::Float => (ColumnType::Float, "float"),
-                    crate::value::ValueType::Date => (ColumnType::Date, "date"),
-                    crate::value::ValueType::DateTime => (ColumnType::DateTime, "datetime"),
-                    _ => return Err(BindError::Internal),
-                };
-                if !operation.accepts(index, kind) {
-                    findings.push(BindFinding::Temporal(
-                        operation.operand_diagnostic(index, name),
-                    ));
-                    continue;
-                }
-            }
-            operands.push(Assignment {
-                column,
-                expression,
-                path,
-            });
-        }
-    }
-    Ok(
-        (operands.len() == operation.sources().len()).then(|| Expression::Temporal {
-            operands,
-            operation: operation.clone(),
-        }),
-    )
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &Temporal,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    let mut operands = Vec::new();
-    for (index, source) in operation.sources().iter().enumerate() {
-        let path = operation.operand_path(index).ok_or(BindError::Internal)?;
-        if let Some(value) = operation.literal(index) {
-            operands.push(Assignment {
-                column,
-                expression: Expression::Literal(value.clone()),
-                path,
-            });
-            continue;
-        }
-        if let Some(expression) = self_relations::bind_operand(
-            source,
-            &path,
-            catalog,
-            driver,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            output,
-            named,
-            secondary,
-            intermediates,
-        )? {
+        if let Some(expression) = cx.operand(source, &path)? {
             let column_type = if let Expression::Intermediate { index, column } = &expression {
-                intermediates[*index]
+                cx.donors.items[*index]
                     .as_ref()
-                    .and_then(|item| item.source_kind(secondary, *column))
+                    .and_then(|item| item.source_kind(cx.donors.secondary, *column))
             } else {
-                catalog.type_of(source)
+                cx.catalog.type_of(source)
             };
             if let Some(column_type) = column_type.filter(|&kind| !operation.accepts(index, kind)) {
-                let actual = match column_type {
-                    ColumnType::Str => "str",
-                    ColumnType::Int => "int",
-                    ColumnType::Float => "float",
-                    ColumnType::DateTime => "datetime",
-                    ColumnType::Date => "date",
-                };
-                findings.push(BindFinding::Temporal(
-                    operation.operand_diagnostic(index, actual),
+                cx.findings.push(BindFinding::Temporal(
+                    operation.operand_diagnostic(index, checks::type_name(column_type)),
                 ));
                 continue;
             }

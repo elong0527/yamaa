@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use crate::support::project_call_compiler as support;
 pub(crate) use support::{specification, Tree};
 pub(crate) use yamaa_core::{
@@ -54,12 +55,12 @@ pub fn reached() -> std::collections::BTreeSet<C> {
         flag("ABSENT = 1", Some(Tree::text("N")), None),
     )])
     .into_iter()
-    .map(|d| d.code)
+    .map(|d| rendered(&d))
     .collect::<std::collections::BTreeSet<_>>();
     reached.extend(
         diagnostics(vec![("F", "str", flag("EXTRA = 1", None, None))])
             .into_iter()
-            .map(|d| d.code),
+            .map(|d| rendered(&d)),
     );
     pub(crate) struct IntPort;
     impl yamaa_core::expression::Resolver for IntPort {
@@ -79,7 +80,7 @@ pub fn reached() -> std::collections::BTreeSet<C> {
     )
     .unwrap();
     assert_eq!(finding.definition().rule, Some("FORMULA-5"));
-    reached.insert(finding.code);
+    reached.insert(rendered(&finding));
     assert_eq!(
         reached,
         [

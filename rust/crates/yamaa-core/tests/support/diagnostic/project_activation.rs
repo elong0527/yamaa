@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use crate::support::project_call_compiler as support;
 pub(crate) use std::{collections::BTreeSet, rc::Rc};
 pub(crate) use yamaa_core::{
@@ -101,7 +102,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             panic!("borrowed function")
         };
         assert!(std::ptr::eq(name.as_ptr(), failure.identity.name.as_ptr()));
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     let function = support::function("id");
     let definitions = [DefinitionSource {
@@ -119,7 +120,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     .unwrap();
     assert_eq!(binding[0].code, ConditionCode::ProjectEnvironmentInvalid);
     assert_eq!(binding[0].spec_path, "functions.id.function");
-    reached.insert(binding[0].code);
+    reached.insert(rendered(&binding[0]));
     // A 1.0 function file names the host's callable under `implementations`,
     // and a callable that cannot be bound fails as its file does (FUNC-2).
     let file = yamaa_core::project_function::Function::admit(
@@ -142,7 +143,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     .unwrap();
     assert_eq!(binding[0].code, ConditionCode::FunctionFileInvalid);
     assert_eq!(binding[0].spec_path, "functions[0].implementations.python");
-    reached.insert(binding[0].code);
+    reached.insert(rendered(&binding[0]));
     let actual = Value::Int(8);
     let failures: [TestFailure<Rc<&str>>; 1] = [TestFailure::Result {
         function: 0,
@@ -164,6 +165,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     assert!(
         matches!(&failures[0], TestFailure::Result { actual, .. } if std::ptr::eq(held, actual))
     );
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     reached
 }

@@ -145,6 +145,14 @@ rule, grammar, or fixture:
   not list or a spelling it reserves.
 - Register every expression in an `expressions` registry and every verification
   in its applicable verification registry before an example uses it.
+- Register a condition in `conditions.yaml` with its phases and its message:
+  one plain clause that starts in lower case or with a placeholder and names
+  only context keys every cause of the condition records (`{spec_path}` is the
+  first spec path). Then regenerate the table the engine renders messages from
+  with `uv run --project python --no-sync python -m
+  tools.packaging.generate_message_templates --write`. `make quick` refuses a
+  stale table, and the Rust test that reaches every registry cause fails when
+  a message names a key some cause does not record.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.

@@ -258,14 +258,6 @@ impl Declaration {
             filter,
         })
     }
-    pub fn bind(
-        &self,
-        catalog: &Catalog,
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<crate::dataset::Expression>, BindError> {
-        self.bind_available(catalog, None, None, edges, findings)
-    }
     /// Each variable the window names, with the path of the operand that
     /// names it, in authored order: the operation's own operands, then every
     /// `window.group_by` and `window.order_by` entry.

@@ -1,3 +1,4 @@
+use super::rendered;
 use crate::support::roots::{Codelist, CodelistType, Item, Source};
 use std::collections::BTreeSet;
 use yamaa_core::{
@@ -71,7 +72,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ),
             ("validation", condition, Some(rule))
         );
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     // The redundant declaration is the verification, and the binding that
     // already states its value set is named beside it.

@@ -16,8 +16,8 @@ is declared, and a declared one that Rust lacks fails too. The constant must be 
 at the facade's crate root, where an embedder finds it.
 
 ``records`` and ``cli`` are validated against their grammar alone: no record
-is declared today, and ``cli`` stays empty until the command line exists
-(#3060).
+is declared today, and ``cli`` stays empty until the command line's commands
+are implemented (#3060).
 """
 
 import re

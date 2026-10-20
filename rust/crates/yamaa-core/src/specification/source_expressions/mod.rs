@@ -10,7 +10,7 @@ use crate::{
     value::Value,
 };
 mod row_sources;
-pub(super) use row_sources::bind as bind_row;
+pub(super) use row_sources::bind as bind_template;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {
@@ -228,16 +228,6 @@ impl Declaration {
     }
     /// Scope checks precede source field resolution. Every occurrence is admitted,
     /// including identifiers behind a short-circuiting predicate branch.
-    pub(crate) fn bind_filter(
-        &self,
-        path: &str,
-        source: &SourceDeclaration,
-        schema: &TableSchema,
-        intermediates: &intermediates::Declarations,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<BoundPredicate>, BindError> {
-        self.bind_filter_named(path, &source.name, schema, intermediates, findings)
-    }
     pub fn bind_filter_named(
         &self,
         path: &str,
@@ -664,53 +654,89 @@ impl FirstAvailable {
     }
 }
 
-/// Bind scalar source behavior once using actual immutable input schemas.
-#[allow(clippy::too_many_arguments)]
+/// Bind a structured source in this scope: the implicit template's rules,
+/// or a row template's ([`row_sources::bind`]).
 pub(super) fn bind(
-    prepared: &PreparedSpecification,
+    cx: &mut BindContext<'_, '_>,
     declaration: &Declaration,
     column: usize,
     path: &str,
-    catalog: &Catalog,
-    driver: &TableSchema,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
-    if declaration.report_declaration(findings) {
+    match cx.implicit() {
+        Some(implicit) => bind_implicit_source(cx, implicit, declaration, column, path),
+        None => row_sources::bind(cx, declaration, column, path),
+    }
+}
+
+/// The implicit template's structured source, on the captured schemas: a
+/// lookup read takes its selector's record; another input's field joins on
+/// the output keys its fields name; a driver field reads a key's one record
+/// and otherwise collects the distinct readings of the row's records.
+fn bind_implicit_source(
+    cx: &mut BindContext<'_, '_>,
+    implicit: binder::Implicit<'_>,
+    declaration: &Declaration,
+    column: usize,
+    path: &str,
+) -> Result<Option<Expression>, BindError> {
+    if declaration.report_declaration(cx.findings) {
         return Ok(None);
     }
+    let catalog = cx.catalog;
+    let binder::Donors {
+        named,
+        secondary,
+        items,
+    } = cx.donors;
+    let base = cx.scope.driver;
+    let base_fields = catalog
+        .fields(base)
+        .map(|fields| {
+            TableSchema::new(
+                fields
+                    .into_iter()
+                    .map(|field| crate::table::Column {
+                        name: field.name.into(),
+                        kind: field.column_type,
+                    })
+                    .collect(),
+            )
+        })
+        .transpose()
+        .map_err(|_| BindError::Internal)?
+        .ok_or(BindError::Internal)?;
     let name = &declaration.variable;
     let mut variable_absent = false;
-    let expression = if let Some((index, field)) = prepared.intermediates.reference(name) {
-        if let Some(item) = &intermediates[index] {
+    let expression = if let Some((index, field)) = named.reference(name) {
+        if let Some(item) = &items[index] {
             // A filtered-source operand naming one intermediate record cannot filter it again.
-            declaration.bind_filter(
+            declaration.bind_filter_named(
                 path,
-                prepared.source(),
+                base,
                 item.source_schema(secondary).ok_or(BindError::Internal)?,
-                &prepared.intermediates,
-                findings,
+                named,
+                cx.findings,
             )?;
             if let Some(column) = item.source_column(secondary, field) {
-                edges.extend(row_intermediates::dependencies(index, intermediates)?);
+                cx.edges
+                    .extend(row_intermediates::dependencies(index, items)?);
                 Some(Expression::Intermediate { index, column })
             } else if declaration.absent.is_some() && !item.source.is_self() {
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {
-                findings.push(BindFinding::Lookup(LookupFinding::reference(
-                    path,
-                    name,
-                    None,
-                    ReferenceCause::Value,
-                    None,
-                )));
+                cx.findings
+                    .push(BindFinding::Lookup(LookupFinding::reference(
+                        path,
+                        name,
+                        None,
+                        ReferenceCause::Value,
+                        None,
+                    )));
                 None
             }
         } else {
-            findings.push(BindFinding::UnknownReference {
+            cx.findings.push(BindFinding::UnknownReference {
                 path: path.into(),
                 name: name.clone(),
             });
@@ -722,26 +748,16 @@ pub(super) fn bind(
             .enumerate()
             .find(|(_, source)| source.name == dataset)
         {
-            let source_declaration = prepared
-                .sources
-                .iter()
-                .find(|s| s.name == dataset)
-                .ok_or(BindError::Internal)?;
-            let filter = declaration.bind_filter(
-                path,
-                source_declaration,
-                &source.schema,
-                &prepared.intermediates,
-                findings,
-            )?;
-            let selection = declaration.bind_selection(path, dataset, &source.schema, findings);
+            let filter =
+                declaration.bind_filter_named(path, dataset, &source.schema, named, cx.findings)?;
+            let selection = declaration.bind_selection(path, dataset, &source.schema, cx.findings);
             if let Some(source_column) =
                 source.schema.columns().iter().position(|c| c.name == field)
             {
-                let key_names = prepared
+                let key_names = implicit
                     .keys
                     .iter()
-                    .map(|&column| prepared.output.columns()[column].name.as_str())
+                    .map(|&column| cx.output.columns()[column].name.as_str())
                     .collect::<Vec<_>>();
                 let donor_fields = source
                     .schema
@@ -759,14 +775,14 @@ pub(super) fn bind(
                         let keys = keys
                             .into_iter()
                             .map(|key| {
-                                let output_column = prepared.keys[key];
+                                let output_column = implicit.keys[key];
                                 let source_column = source
                                     .schema
                                     .columns()
                                     .iter()
                                     .position(|field| field.name == key_names[key])
                                     .expect("inferred applicable field");
-                                edges.push(output_column);
+                                cx.edges.push(output_column);
                                 crate::dataset::MatchKey {
                                     source_column,
                                     output_column,
@@ -778,12 +794,12 @@ pub(super) fn bind(
                                 &source.schema,
                                 catalog,
                                 secondary,
-                                intermediates,
+                                items,
                                 None,
                                 None,
                                 None,
-                                edges,
-                                findings,
+                                cx.edges,
+                                cx.findings,
                             )?
                             .map(|range| Expression::SourceLookup {
                                 lookup: crate::dataset::Lookup {
@@ -798,7 +814,7 @@ pub(super) fn bind(
                             })
                     }
                     crate::key_relation::Inference::NoApplicableKeys => {
-                        findings.push(BindFinding::Source(SourceFinding(
+                        cx.findings.push(BindFinding::Source(SourceFinding(
                             lookup::no_applicable_keys(path, dataset, &key_names, false),
                         )));
                         None
@@ -808,13 +824,14 @@ pub(super) fn bind(
                         expected,
                         actual,
                     } => {
-                        findings.push(BindFinding::Source(SourceFinding(lookup::key_type(
-                            path,
-                            Owner::Unnamed,
-                            key_names[key],
-                            expected.into(),
-                            actual.into(),
-                        ))));
+                        cx.findings
+                            .push(BindFinding::Source(SourceFinding(lookup::key_type(
+                                path,
+                                Owner::Unnamed,
+                                key_names[key],
+                                expected.into(),
+                                actual.into(),
+                            ))));
                         None
                     }
                     crate::key_relation::Inference::UndeclaredOutput { .. } => {
@@ -825,24 +842,18 @@ pub(super) fn bind(
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {
-                findings.push(BindFinding::UnknownReference {
+                cx.findings.push(BindFinding::UnknownReference {
                     path: path.into(),
                     name: name.clone(),
                 });
                 None
             }
-        } else if dataset == prepared.source().name {
-            let filter = declaration.bind_filter(
-                path,
-                prepared.source(),
-                driver,
-                &prepared.intermediates,
-                findings,
-            )?;
-            let selection = declaration.bind_selection(path, dataset, driver, findings);
-            let fields = catalog.bind(name);
-            if let Some(reference_binding::Binding::Dataset { field, .. }) = fields {
-                if prepared.keys.contains(&column) && filter.is_none() && selection.is_none() {
+        } else if dataset == base {
+            let filter =
+                declaration.bind_filter_named(path, base, &base_fields, named, cx.findings)?;
+            let selection = declaration.bind_selection(path, dataset, &base_fields, cx.findings);
+            if let Some(reference_binding::Binding::Dataset { field, .. }) = catalog.bind(name) {
+                if implicit.key && filter.is_none() && selection.is_none() {
                     Some(Expression::Source(field))
                 } else {
                     Some(Expression::Collect {
@@ -856,14 +867,14 @@ pub(super) fn bind(
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {
-                findings.push(BindFinding::UnknownReference {
+                cx.findings.push(BindFinding::UnknownReference {
                     path: path.into(),
                     name: name.clone(),
                 });
                 None
             }
         } else {
-            findings.push(BindFinding::UnknownReference {
+            cx.findings.push(BindFinding::UnknownReference {
                 path: path.into(),
                 name: name.clone(),
             });
@@ -875,7 +886,7 @@ pub(super) fn bind(
             .map_err(BindError::Catalog)?
         {
             if declaration.absent.is_none() {
-                findings.push(BindFinding::OutputReference {
+                cx.findings.push(BindFinding::OutputReference {
                     path: path.into(),
                     name: name.clone(),
                     row: None,
@@ -884,21 +895,15 @@ pub(super) fn bind(
                 return Ok(None);
             }
         }
-        declaration.bind_filter(
-            path,
-            prepared.source(),
-            driver,
-            &prepared.intermediates,
-            findings,
-        )?;
+        declaration.bind_filter_named(path, base, &base_fields, named, cx.findings)?;
         if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
-            edges.push(column);
+            cx.edges.push(column);
             Some(Expression::Column(column))
         } else if declaration.absent.is_some() {
             variable_absent = true;
             Some(Expression::Literal(Value::Missing))
         } else {
-            findings.push(BindFinding::UnknownReference {
+            cx.findings.push(BindFinding::UnknownReference {
                 path: path.into(),
                 name: name.clone(),
             });
@@ -906,8 +911,8 @@ pub(super) fn bind(
         }
     };
     if expression.as_ref().is_some_and(|expression| {
-        declaration.refuse_require_match(path, expression, findings)
-            | declaration.refuse_range(path, expression, findings)
+        declaration.refuse_require_match(path, expression, cx.findings)
+            | declaration.refuse_range(path, expression, cx.findings)
     }) {
         return Ok(None);
     }

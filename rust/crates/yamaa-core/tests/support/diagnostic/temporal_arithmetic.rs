@@ -1,3 +1,4 @@
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::{
     dataset::{ElapsedUnit as U, Temporal, TemporalKind as K},
@@ -110,7 +111,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
         );
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached
 }

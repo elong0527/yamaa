@@ -1376,6 +1376,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "yamaa-cli"
+version = "0.5.0"
+dependencies = [
+ "yamaa",
+]
+
+[[package]]
 name = "yamaa-core"
 version = "0.5.0"
 dependencies = [

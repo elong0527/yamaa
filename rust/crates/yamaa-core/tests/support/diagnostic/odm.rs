@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -35,7 +36,7 @@ pub(crate) fn check(
             .map(|(name, value)| (name.into(), value))
             .collect()
     );
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();

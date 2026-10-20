@@ -1,0 +1,23 @@
+[package]
+name = "yamaa-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+# The `yamaa` command line (#3030 D12, section 2.8). Its rustdoc would share
+# the facade library's output name, so only the facade is documented.
+[[bin]]
+name = "yamaa"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+# The facade alone, as every host depends on it (#3030 section 2.10), with its
+# default formats: every shipped binary reads all of them.
+yamaa = { path = "../yamaa" }
+
+[lints]
+workspace = true

@@ -1,5 +1,6 @@
 //! Actual binder, scope and dependency failures reach the canonical cause registry.
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -40,7 +41,7 @@ pub(crate) fn check(
     );
     assert_eq!(d.source_span, None);
     assert_eq!(d.operand_route, None);
-    d.code
+    rendered(&d)
 }
 pub(crate) fn source() -> SourceDeclaration {
     SourceDeclaration {

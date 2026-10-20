@@ -52,6 +52,11 @@ impl Finding {
             ),
         )
     }
+    /// An admitted operation the implementation does not support at `path`,
+    /// naming the operation as every such refusal does (COLUMN-15).
+    pub fn unsupported(path: &str, operation: &str) -> Self {
+        Self::refused(path, issue::unsupported(operation, None))
+    }
     /// Retain display detail without using it to classify the failure.
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.context

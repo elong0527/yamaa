@@ -243,7 +243,7 @@ mod diagnostics {
                 publication.context["path"],
                 JsonValue::String("generated/producer.csv".into())
             );
-            reached.insert(publication.code);
+            reached.insert(rendered(&publication));
             for (finding, phase, condition, context) in [
                 (
                     yamaa_core::application_issue::unsupported("environment", Some("environment")),
@@ -269,7 +269,7 @@ mod diagnostics {
                 for &(name, value) in context {
                     assert_eq!(finding.context[name], JsonValue::String(value.into()));
                 }
-                reached.insert(finding.code);
+                reached.insert(rendered(&finding));
             }
             for (expression, phase, condition, rule) in [
                 ("MISSING", "validation", "unknown_field", "FORMULA-9"),
@@ -308,7 +308,7 @@ mod diagnostics {
                     diagnostic.context["expr"],
                     JsonValue::String(expression.into())
                 );
-                reached.insert(diagnostic.code);
+                reached.insert(rendered(&diagnostic));
             }
             for (source, target, rule) in [
                 (Value::Bool(true), ColumnType::Int, "VALUE-3"),
@@ -330,7 +330,7 @@ mod diagnostics {
                 assert_eq!(diagnostic.spec_paths, ["columns.X"]);
                 assert_eq!(diagnostic.source_span, None);
                 assert_eq!(diagnostic.operand_route, None);
-                reached.insert(diagnostic.code);
+                reached.insert(rendered(&diagnostic));
             }
             for (cause, condition, rule) in [
                 (
@@ -380,7 +380,7 @@ mod diagnostics {
                     JsonValue::String("input/data.csv".into())
                 );
                 assert_eq!(diagnostic.context.len(), 2);
-                reached.insert(diagnostic.code);
+                reached.insert(rendered(&diagnostic));
             }
             let changed = yamaa_core::resource::ResourceFailure::ContentChanged
                 .diagnostic("SRC", "../authored/data.csv");
@@ -396,7 +396,7 @@ mod diagnostics {
                 JsonValue::String("../authored/data.csv".into())
             );
             assert_eq!(changed.context["dataset"], JsonValue::String("SRC".into()));
-            reached.insert(changed.code);
+            reached.insert(rendered(&changed));
             reached.extend(submission::reached());
             reached.extend(schema::reached());
             reached.extend(yaml_source::reached());
@@ -422,7 +422,7 @@ mod diagnostics {
             );
             assert_eq!(lock.spec_paths, ["lock"]);
             assert_eq!(lock.context["package"], JsonValue::String("project".into()));
-            reached.insert(lock.code);
+            reached.insert(rendered(&lock));
             reached.extend(project_codelist_binding::reached());
             reached.extend(preflight::reached());
             reached.extend(preflight::self_reached());
@@ -483,7 +483,7 @@ mod diagnostics {
             ])
             .diagnostic("unused".into(), "V".into())
             .is_none());
-            reached.insert(diagnostic.code);
+            reached.insert(rendered(&diagnostic));
             for (check, values, offending, condition, rule) in [
                 (
                     yamaa_core::dataset::Check::Mandatory(None),
@@ -577,7 +577,7 @@ mod diagnostics {
                     0
                 )
                 .is_none());
-                reached.insert(diagnostic.code);
+                reached.insert(rendered(&diagnostic));
             }
             // A row two value-level entries select fails; an entry that
             // selects no row is a warning (SUB-13).
@@ -622,7 +622,7 @@ mod diagnostics {
                     ("verification", condition, Some("SUB-13"))
                 );
                 assert_eq!(diagnostic.spec_paths, [path]);
-                reached.insert(diagnostic.code);
+                reached.insert(rendered(&diagnostic));
             }
             let pattern = yamaa_core::portable_regex::Pattern::compile("b").unwrap();
             let rows = yamaa_core::dataset_checks::matches_offenders(
@@ -654,7 +654,7 @@ mod diagnostics {
                 diagnostic.context["failure_count"],
                 JsonValue::Number(("1").parse().expect("canonical integer"))
             );
-            reached.insert(diagnostic.code);
+            reached.insert(rendered(&diagnostic));
             assert!(matches!(
                 yamaa_core::portable_regex::Pattern::compile("("),
                 Err(yamaa_core::portable_regex::CompileError::Invalid { .. })
@@ -674,7 +674,7 @@ mod diagnostics {
             assert_eq!(diagnostic.context.len(), 1);
             assert_eq!(diagnostic.context["pattern"], JsonValue::String("(".into()));
             assert_eq!(diagnostic.source_span, None);
-            reached.insert(diagnostic.code);
+            reached.insert(rendered(&diagnostic));
             reached.extend(dataset::reached());
             reached.extend(aggregate::reached());
             reached.extend(verification::reached());
@@ -702,7 +702,7 @@ mod diagnostics {
             assert_eq!(diagnostic.context.len(), 3);
             assert_eq!(diagnostic.source_span, None);
             assert_eq!(diagnostic.operand_route, None);
-            reached.insert(diagnostic.code);
+            reached.insert(rendered(&diagnostic));
             reached.extend(preflight::temporal_reached());
             reached.extend(temporal_imputation::reached());
             reached.extend(text_case::reached());
@@ -742,7 +742,7 @@ mod diagnostics {
                 ("verification", "allowed_values_failed", Some("CT-7"))
             );
             assert_eq!(finding.context["codelist"], JsonValue::String("SEX".into()));
-            reached.insert(finding.code);
+            reached.insert(rendered(&finding));
             let extreme = yamaa_core::scalar_language::incomparable_diagnostic(
                 &["DTHDT".into(), "DAY".into()],
                 &[ColumnType::Date, ColumnType::Int],
@@ -764,12 +764,50 @@ mod diagnostics {
                     JsonValue::String("int".into())
                 ])
             );
-            reached.insert(extreme.code);
+            reached.insert(rendered(&extreme));
             assert_eq!(reached, CONDITIONS.iter().copied().collect());
             assert_eq!(
                 CONDITIONS.len(),
                 reached.len(),
                 "registry causes are unique"
+            );
+            // Every cause renders its registered message from a record it
+            // made, with each placeholder filled from that record (P-MSG-1).
+            let rendered = rendered_causes();
+            let unrendered = CONDITIONS
+                .iter()
+                .filter(|code| !rendered.contains(code))
+                .collect::<Vec<_>>();
+            assert!(
+                unrendered.is_empty(),
+                "causes reached without rendering a message: {unrendered:?}"
+            );
+        }
+
+        /// A composition refusal of an unsupported operation names the
+        /// operation, as every such refusal does (COLUMN-15), so its message
+        /// can say which.
+        #[test]
+        fn composition_refusals_name_the_unsupported_operation() {
+            let finding = yamaa_core::submission_composition::Finding::unsupported(
+                "datasets.DM.artifact",
+                "published_dataset_format",
+            );
+            assert_eq!(
+                finding.code,
+                yamaa_core::diagnostic::ConditionCode::ApplicationUnsupported
+            );
+            assert_eq!(
+                finding.context,
+                [(
+                    "operation".into(),
+                    JsonValue::String("published_dataset_format".into())
+                )]
+                .into()
+            );
+            assert_eq!(
+                finding.record().message(),
+                "published_dataset_format is not supported by this engine"
             );
         }
 

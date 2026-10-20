@@ -1,3 +1,4 @@
+use super::rendered;
 use crate::support::producer as support;
 use std::collections::BTreeSet;
 use support::{consumer, document, link, links, producer, Tree};
@@ -26,7 +27,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.spec_paths, paths);
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
-        finding.code
+        rendered(&finding)
     };
     let source = producer();
     reached.insert(check(

@@ -1,3 +1,4 @@
+use super::rendered;
 use crate::support::project_call_compiler as support;
 use std::collections::BTreeSet;
 use support::{call, definition, function, specification, specification_with_rows, Tree};
@@ -77,7 +78,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         } else {
             assert_eq!(diagnostic.context.len(), 1);
         }
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     // A supplied project that names no environment file for the host reports
     // each call against that absent environment rather than the function name.
@@ -128,7 +129,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     );
     assert_eq!(diagnostic.source_span, None);
     assert_eq!(diagnostic.operand_route, None);
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     // A 1.0 function file that names no callable for the host language is
     // admitted, and each call of it fails before any data is read (FUNC-1).
     let unimplemented = Environment::admit(
@@ -174,7 +175,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ]
         .into()
     );
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     let source = Tree::map(vec![(
         "source",
         Tree::map(vec![("variable", Tree::text("SRC.ID"))]),
@@ -239,7 +240,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(diagnostic.context[key], JsonValue::String(value.into()));
     }
     assert_eq!(diagnostic.context.len(), 6);
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     reached
 }
 
@@ -369,5 +370,5 @@ pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
         ]
         .into()
     );
-    BTreeSet::from([diagnostic.code])
+    BTreeSet::from([rendered(&diagnostic)])
 }

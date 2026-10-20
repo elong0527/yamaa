@@ -80,6 +80,12 @@ fn unknown_source_column_arrives_as_a_typed_record() {
         assert_eq!(diagnostic.rule.as_deref(), Some("NAME-3"));
         // Ordered spec-path segments, not a joined string.
         assert_eq!(diagnostic.spec_path, ["columns.VALUE.derivation.source"]);
+        // The message renders the registry's template; a condition shared
+        // by causes with different context names the spec path.
+        assert_eq!(
+            diagnostic.message,
+            "there is an unknown field or reference at columns.VALUE.derivation.source"
+        );
         // Structured context, never a formatted string.
         assert_eq!(
             diagnostic.context.get("identifier"),
@@ -112,6 +118,7 @@ fn evaluation_failures_carry_recorded_geometry() {
         assert_eq!(diagnostic.phase, "derivation");
         assert_eq!(diagnostic.code, "division_by_zero");
         assert_eq!(diagnostic.rule.as_deref(), Some("FORMULA-15"));
+        assert_eq!(diagnostic.message, "VALUE / ZERO divides by zero");
         assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation.compute"]);
         assert_eq!(
             diagnostic.context.get("expr"),
@@ -141,6 +148,10 @@ fn integer_tokens_beyond_sixty_four_bits_stay_exact_numbers() {
         let diagnostic = &report.diagnostics[0];
         assert_eq!(diagnostic.phase, "validation");
         assert_eq!(diagnostic.code, "integer_overflow");
+        assert_eq!(
+            diagnostic.message,
+            "an int value is outside the range -9223372036854775808 to 9223372036854775807"
+        );
         assert_eq!(
             diagnostic.context.get("actual"),
             Some(&ContextValue::Wide(
