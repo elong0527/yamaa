@@ -38,17 +38,17 @@ class ToolchainTest(unittest.TestCase):
         )
 
     def test_the_declaration_names_only_what_a_source_build_needs(self):
-        # The R source package carries rust-toolchain.toml unchanged, and rustup
-        # installs every component it lists for a build inside its bundled
-        # workspace.
+        # rustup installs every component that rust-toolchain.toml lists for
+        # every build in rust/; repository checks add theirs (install_command).
+        # No source package carries the file (#3030 D55).
         self.assertEqual(
             toolchain.declaration(),
             {"channel": toolchain.channel(), "profile": "minimal"},
         )
 
     def test_the_r_package_states_the_rust_its_build_uses(self):
-        # The R build runs Cargo outside the bundled workspace, so it compiles
-        # with the caller's toolchain, whose Cargo and rustc must each meet the
+        # The R package carries no toolchain file, so it compiles with the
+        # caller's toolchain, whose Cargo and rustc must each meet the
         # rust-version; the field uses the wording of CRAN's guidance for
         # packages using Rust, with both versions, since the two can be
         # packaged separately. configure reads the rust-version itself

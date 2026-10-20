@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from tools.commands.check_r import check
+from tools.packaging.check_cargo_lock import check_bundle_archive
 from tools.paths import ROOT
 from tools.staging.stage_r_package import stage
 
@@ -44,6 +45,9 @@ def install(work):
     archives = list(work.glob("yamaa_*.tar.gz"))
     if len(archives) != 1:
         raise RuntimeError("R build did not produce one source archive")
+    # The archive carries the verified R engine bundle and no toolchain file.
+    _, kept = check_bundle_archive(archives[0])
+    print(f"{archives[0].name}: R engine bundle with {len(kept)} lock packages")
     subprocess.run(
         ["R", "CMD", "INSTALL", f"--library={library}", str(archives[0])],
         cwd=work,

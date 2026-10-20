@@ -9,17 +9,17 @@ installation and admits no binary executable code in a source package.
     python3 vendor_crates.py <workspace> <archive>
 
 runs `cargo vendor --locked --versioned-dirs` in the workspace, leaves out the
-reviewed prebuilt binaries that PREBUILT lists, refuses any other binary, and
-writes the crates as a reproducible xz-compressed tar whose one top-level
-directory is `vendor/`. A build unpacks the archive beside a Cargo home whose
-config.toml holds CONFIG, so Cargo reads every crate from it and never from
-the network.
+reviewed prebuilt binaries that PREBUILT lists and every Rust toolchain file,
+refuses any other binary, and writes the crates as a reproducible
+xz-compressed tar whose one top-level directory is `vendor/`. A build unpacks
+the archive beside a Cargo home whose config.toml holds CONFIG, so Cargo reads
+every crate from it and never from the network.
 
 The script uses only the Python standard library, so the R source package
 carries it unchanged as tools/vendor_crates.py, the script that wrote its
 src/rust/vendor.tar.xz. Cargo's `.cargo-checksum.json` files are the packaging
 tool's own records, like the checksums in Cargo.lock: the archive keeps them
-as Cargo wrote them, except that the entries of the left-out binaries are
+as Cargo wrote them, except that the entries of the left-out files are
 dropped. The script computes no digest of its own.
 """
 
@@ -64,6 +64,11 @@ PREBUILT = {
         "wasi-cli@0.2.0.wasm",
     ),
 }
+# rustup reads a toolchain file in the directory that a command runs in and
+# in its parents, and Cargo runs a crate's build script in that crate's
+# directory. A crate's own file there could make rustup select another
+# toolchain, which an offline build cannot download, so every one is left out.
+TOOLCHAIN_FILES = ("rust-toolchain", "rust-toolchain.toml")
 # Leading bytes of executable or linkable code: ELF, Mach-O and universal
 # binaries (the last shared with Java classes), ar archives (static libraries)
 # and WebAssembly modules. PE files are recognized by their DOS and PE headers.
@@ -112,13 +117,8 @@ def package(crate):
     return manifest["package"]["name"], manifest["package"]["version"]
 
 
-def leave_out_prebuilt(crate, name, label):
-    """Remove a crate's reviewed prebuilt binaries; refuse any other binary.
-
-    Returns the removed paths. Their entries leave the crate's checksum file,
-    which Cargo reads when it builds the crate, so the remaining records stay
-    complete.
-    """
+def prebuilt(crate, name, label):
+    """Return a crate's reviewed prebuilt binaries; refuse any other binary."""
     listed = set(PREBUILT.get(name, ()))
     found = []
     for path in sorted(crate.rglob("*")):
@@ -135,18 +135,40 @@ def leave_out_prebuilt(crate, name, label):
         raise ValueError(
             f"{label} no longer ships the listed binary {missing[0]}; review PREBUILT"
         )
-    if found:
-        checksums = crate / CHECKSUMS
-        record = json.loads(checksums.read_text(encoding="utf-8"))
-        for relative in found:
-            (crate / relative).unlink()
-            del record["files"][relative]
-        # Cargo writes this record as compact JSON with sorted keys.
-        checksums.write_text(
-            json.dumps(record, separators=(",", ":"), sort_keys=True),
-            encoding="utf-8",
-        )
     return found
+
+
+def toolchain_files(crate):
+    """Return the Rust toolchain files anywhere in a crate."""
+    return [
+        path.relative_to(crate).as_posix()
+        for path in sorted(crate.rglob("*"))
+        if path.is_file() and path.name in TOOLCHAIN_FILES
+    ]
+
+
+def leave_out(crate, paths, label):
+    """Remove files from a crate, with their entries in its checksum record.
+
+    Cargo checks every file that the record lists when it builds the crate,
+    so the remaining entries stay complete. The package checksum, which Cargo
+    compares with Cargo.lock, stays as Cargo wrote it.
+    """
+    if not paths:
+        return
+    checksums = crate / CHECKSUMS
+    record = json.loads(checksums.read_text(encoding="utf-8"))
+    for relative in paths:
+        if relative not in record["files"]:
+            raise ValueError(f"{label}: {CHECKSUMS} does not list {relative}")
+    for relative in paths:
+        (crate / relative).unlink()
+        del record["files"][relative]
+    # Cargo writes this record as compact JSON with sorted keys.
+    checksums.write_text(
+        json.dumps(record, separators=(",", ":"), sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def vendor(workspace, directory):
@@ -174,7 +196,9 @@ def vendor(workspace, directory):
         name, version = package(crate)
         if crate.name != f"{name}-{version}":
             raise ValueError(f"vendored crate {crate.name} declares {name} {version}")
-        crates.append((name, version, leave_out_prebuilt(crate, name, crate.name)))
+        left_out = sorted(prebuilt(crate, name, crate.name) + toolchain_files(crate))
+        leave_out(crate, left_out, crate.name)
+        crates.append((name, version, left_out))
     unused = set(PREBUILT) - {name for name, _, _ in crates}
     if unused:
         raise ValueError(f"PREBUILT lists {sorted(unused)[0]}, which is not vendored")

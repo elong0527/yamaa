@@ -9,9 +9,9 @@
 # writes nothing outside this tree and the temporary directory. It runs at
 # most two jobs: -j 2, with MAKEFLAGS cleared, because Cargo otherwise joins
 # the jobserver of a parallel make and runs as many jobs as make allows.
-# RUSTUP_AUTO_INSTALL=0 stops rustup from installing a toolchain that a
-# rust-toolchain.toml in a parent directory names, and Cargo runs from here
-# rather than from rust/, so the bundled rust-toolchain.toml selects nothing.
+# The package carries no rust-toolchain.toml, so the build uses the caller's
+# toolchain, and RUSTUP_AUTO_INSTALL=0 stops rustup from installing a
+# toolchain that such a file in a parent directory names.
 # Paths are relative to this directory, where make and Cargo run.
 CARGO = @CARGO@
 RUSTC = @RUSTC@
