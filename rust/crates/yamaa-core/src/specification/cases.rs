@@ -208,7 +208,9 @@ pub(super) fn bind(
         };
         let implicit = cx.implicit().is_some();
         let expression = match branch.operation.as_ref() {
-            Operation::Compute(compiled) if implicit => cx.branch_formula(compiled, &branch.path)?,
+            Operation::Compute(compiled) if implicit => {
+                cx.branch_formula(compiled, &branch.path)?
+            }
             Operation::FirstAvailable(selection) if implicit => {
                 cx.first_available(selection, &branch.path, column)?
             }

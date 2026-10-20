@@ -148,11 +148,13 @@ pub(in crate::specification) fn bind(
                             )
                             .map_err(BindError::Catalog)?
                             .into_iter()
-                            .map(|finding| BindFinding::QualifiedReference {
-                                path: format!("{path}.between.value"),
-                                name: value.into(),
-                                row: row.map(String::from),
-                                finding,
+                            .map(|finding| {
+                                BindFinding::QualifiedReference {
+                                    path: format!("{path}.between.value"),
+                                    name: value.into(),
+                                    row: row.map(String::from),
+                                    finding,
+                                }
                             }),
                         );
                     }

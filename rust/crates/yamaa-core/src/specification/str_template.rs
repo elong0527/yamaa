@@ -123,9 +123,15 @@ pub(super) fn bind(
         let at = cx.findings.len();
         let path = format!("{}.template", operation.path());
         let expression = cx.operand(source, &path)?;
-        if let Some(expression) =
-            finish(operation, source, index, expression, at, cx.catalog, cx.findings)?
-        {
+        if let Some(expression) = finish(
+            operation,
+            source,
+            index,
+            expression,
+            at,
+            cx.catalog,
+            cx.findings,
+        )? {
             operands.push(Assignment {
                 column,
                 path,

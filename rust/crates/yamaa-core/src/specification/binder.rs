@@ -9,12 +9,14 @@
 //!
 //! The implicit template's rows are its keys' distinct combinations of the
 //! base driver's records, or the records themselves when a window derives a
-//! key ([`Implicit`]). Its reads keep the no-rows rules the scope and the
-//! template decide: a driver field of a non-key column collects the distinct
-//! readings of a row's records; another input's field joins on the output
-//! keys its fields name; a lookup read takes the selector's own record; a
-//! formula reports its qualified names first; and a `case` result's formula
-//! and `first_available` bind as case branches always have there.
+//! key ([`Implicit`]). Its reads keep the rules a spec without `rows` has
+//! always bound by: a driver field read by a non-key column collects the
+//! distinct readings of the row's records; another input's field joins on
+//! the output keys its own fields name; a lookup read takes the selector's
+//! record without a row template's checks of its keys; a formula reports its
+//! qualified names first; a `case` predicate is typed and may suggest the
+//! input that stores an unknown name; and a formula or `first_available` in
+//! a `case` result binds as those results did before.
 use super::*;
 use crate::{
     dataset::{Intermediate, SecondarySource},
@@ -22,8 +24,10 @@ use crate::{
     reference_scope::{self, Phase, Reach},
 };
 
-/// The rows a binding is for, as the declarations alone decide them. Binding
-/// and `check()` read the same scopes; no source schema is needed.
+/// The rows a binding is for, as the declarations alone decide them
+/// ([`rows::TemplatePhase::scope`], [`rows::Templates::column_bindings`],
+/// [`rows::Implicit::scope`]), so `check()` reads the scopes binding binds
+/// in without a source schema.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Scope<'a> {
     pub template: Template<'a>,
@@ -352,17 +356,14 @@ impl<'a> BindContext<'a, '_> {
             .map_err(BindError::Catalog)?;
             if !scoped.is_empty() {
                 let row = self.row();
-                self.findings
-                    .extend(
-                        scoped
-                            .into_iter()
-                            .map(|finding| BindFinding::QualifiedReference {
-                                path: path.clone(),
-                                name: name.into(),
-                                row: row.map(String::from),
-                                finding,
-                            }),
-                    );
+                self.findings.extend(scoped.into_iter().map(|finding| {
+                    BindFinding::QualifiedReference {
+                        path: path.clone(),
+                        name: name.into(),
+                        row: row.map(String::from),
+                        finding,
+                    }
+                }));
                 return Ok(None);
             }
         } else if let Some(finding) = catalog
@@ -701,37 +702,40 @@ impl<'a> BindContext<'a, '_> {
         let mut operands = Vec::new();
         for (index, source) in selection.sources.iter().enumerate() {
             let path = format!("{path}.sources[{index}]");
-            let read = source_expressions::bind_row(self, source, column, &path)?.map(
-                |expression| match expression {
-                    Expression::Source(column) if collect => {
-                        crate::dataset::SelectionRead::Collect {
-                            column,
-                            identifier: source.variable.clone(),
-                            filter: None,
+            let read =
+                source_expressions::bind_template(self, source, column, &path)?.map(|expression| {
+                    match expression {
+                        Expression::Source(column) if collect => {
+                            crate::dataset::SelectionRead::Collect {
+                                column,
+                                identifier: source.variable.clone(),
+                                filter: None,
+                            }
                         }
+                        Expression::Source(column) => crate::dataset::SelectionRead::Source(column),
+                        Expression::Column(column) => crate::dataset::SelectionRead::Column(column),
+                        expression => crate::dataset::SelectionRead::Expression(
+                            std::boxed::Box::new(Assignment {
+                                column,
+                                expression,
+                                path: path.clone(),
+                            }),
+                        ),
                     }
-                    Expression::Source(column) => crate::dataset::SelectionRead::Source(column),
-                    Expression::Column(column) => crate::dataset::SelectionRead::Column(column),
-                    expression => crate::dataset::SelectionRead::Expression(std::boxed::Box::new(
-                        Assignment {
-                            column,
-                            expression,
-                            path: path.clone(),
-                        },
-                    )),
-                },
-            );
+                });
             if let Some(read) = read {
                 operands.push(crate::dataset::SelectionSource { path, read });
             }
         }
-        Ok((self.findings.len() == before).then_some(Expression::FirstAvailable(
-            std::boxed::Box::new(crate::dataset::FirstAvailable::new(
-                path.into(),
-                operands,
-                selection.missing.clone(),
+        Ok(
+            (self.findings.len() == before).then_some(Expression::FirstAvailable(
+                std::boxed::Box::new(crate::dataset::FirstAvailable::new(
+                    path.into(),
+                    operands,
+                    selection.missing.clone(),
+                )),
             )),
-        )))
+        )
     }
 
     /// The implicit template's `first_available` binds each source as its

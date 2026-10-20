@@ -175,17 +175,13 @@ pub(super) fn bind(
         let joined = name
             .split_once('.')
             .is_some_and(|(dataset, _)| cx.catalog.joined(dataset).is_some());
-        let read = if let Some((index, field)) =
-            implicit.and(cx.donors.named.reference(name))
-        {
+        let read = if let Some((index, field)) = implicit.and(cx.donors.named.reference(name)) {
             let Some(item) = &cx.donors.items[index] else {
                 cx.findings.push(unknown(path, name));
                 continue;
             };
-            cx.edges.extend(row_intermediates::dependencies(
-                index,
-                cx.donors.items,
-            )?);
+            cx.edges
+                .extend(row_intermediates::dependencies(index, cx.donors.items)?);
             match item.source_column(cx.donors.secondary, field) {
                 Some(column) => Some(FlagRead::Read(Read::Intermediate { index, column })),
                 None => {

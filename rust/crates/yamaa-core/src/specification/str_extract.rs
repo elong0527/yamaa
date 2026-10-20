@@ -189,10 +189,7 @@ pub(super) fn bind(
     cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
     let start = cx.findings.len();
-    let source = cx.operand(
-        operation.source(),
-        &format!("{}.source", operation.path()),
-    )?;
+    let source = cx.operand(operation.source(), &format!("{}.source", operation.path()))?;
     finish(operation, source, start, cx.catalog, cx.findings, column)
 }
 fn replaced(expression: Expression, operation: &StringReplace) -> Expression {

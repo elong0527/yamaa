@@ -398,6 +398,8 @@ pub struct PreparedSpecification {
     output_decimals: Option<String>,
     output_order: Vec<(String, bool, bool)>,
     keys: Vec<usize>,
+    /// How the rows are built: the implicit template of a spec without
+    /// `rows`, or its row templates.
     rows: rows::Rows,
     verifications: verifications::Verifications,
     column_verifications: Vec<verifications::Verifications>,
@@ -1449,8 +1451,8 @@ impl PreparedSpecification {
         self.bind_sources(&[source])
     }
     /// Schemas follow authored input order, independently of the selected driver.
-    /// Every bound plan, on the rows and the no-rows route alike, resolves once
-    /// into its slot graph and passes the resolution check. Binding returns that
+    /// Every bound plan, of the implicit template or of row templates, resolves
+    /// once into its slot graph and passes the resolution check. Binding returns that
     /// resolved plan for runs to execute and drops the bound plan it lowered.
     pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<ResolvedPlan, BindError> {
         if schemas.len() != self.sources.len() {

@@ -10,7 +10,7 @@ use crate::{
     value::Value,
 };
 mod row_sources;
-pub(super) use row_sources::bind as bind_row;
+pub(super) use row_sources::bind as bind_template;
 
 #[derive(Clone, Debug)]
 pub(super) struct Declaration {

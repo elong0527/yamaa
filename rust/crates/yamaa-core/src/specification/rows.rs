@@ -106,7 +106,7 @@ pub(super) struct Implicit {
     /// Each column's derivation, in declaration order.
     declarations: Vec<Declaration>,
     /// The root filter, which reads only the base driver (ROW-9).
-    filter: Option<root_filter::RootFilter>,
+    filter: Option<std::boxed::Box<root_filter::RootFilter>>,
 }
 /// The row templates, and the derivations the column phase completes.
 #[derive(Debug)]
@@ -181,7 +181,7 @@ impl Implicit {
     ) -> Self {
         Self {
             declarations,
-            filter,
+            filter: filter.map(std::boxed::Box::new),
         }
     }
     /// Each column's derivation, in declaration order.
@@ -198,6 +198,26 @@ impl Implicit {
                 .is_some_and(|declaration| matches!(declaration.operation, Operation::Window(_)))
         })
     }
+    /// The scope the derivation of `column` binds in: the base driver's
+    /// rows, in the column phase without grouping; a key reads one base
+    /// record (COLUMN-7).
+    pub(super) fn scope<'a>(
+        &self,
+        keys: &'a [usize],
+        base: &'a str,
+        column: usize,
+    ) -> binder::Scope<'a> {
+        binder::Scope {
+            template: binder::Template::Implicit(binder::Implicit {
+                keys,
+                key: keys.contains(&column),
+                records: self.record_rows(keys),
+            }),
+            phase: Phase::Column { groups: &[] },
+            driver: base,
+            available: None,
+        }
+    }
     /// Bind each column in declaration order, then order the columns
     /// (COLUMN-5, COLUMN-6, COLUMN-7), bind the root filter and the dataset
     /// verifications, and admit what every row reads from its lookups.
@@ -211,8 +231,8 @@ impl Implicit {
     ) -> Result<DatasetPlan, BindError> {
         let base = prepared.source().name.as_str();
         let keys = &prepared.keys;
-        let catalog = row_drivers::joined_catalog(&prepared.output, source, base, keys, &secondary)?;
-        let records = self.record_rows(keys);
+        let catalog =
+            row_drivers::joined_catalog(&prepared.output, source, base, keys, &secondary)?;
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
@@ -228,16 +248,7 @@ impl Implicit {
             let mut edges = Vec::new();
             let start = findings.len();
             let expression = BindContext {
-                scope: binder::Scope {
-                    template: binder::Template::Implicit(binder::Implicit {
-                        keys,
-                        key: keys.contains(&column),
-                        records,
-                    }),
-                    phase: Phase::Column { groups: &[] },
-                    driver: base,
-                    available: None,
-                },
+                scope: self.scope(keys, base, column),
                 donors: binder::Donors {
                     named: &prepared.intermediates,
                     secondary: &secondary,
@@ -882,6 +893,7 @@ fn bind_template_filter(
 #[allow(clippy::too_many_arguments)]
 fn bind_template(
     template: &Template,
+    declared: &TemplatePhase<'_>,
     index: usize,
     source: &TableSchema,
     name: &str,
@@ -999,18 +1011,6 @@ fn bind_template(
             });
         }
     }
-    let group_names = template
-        .groups
-        .as_ref()
-        .map(|g| g.iter().map(String::as_str).collect::<Vec<_>>());
-    let phase = Phase::Row {
-        group_by: group_names.as_deref(),
-    };
-    let available = template
-        .declarations
-        .iter()
-        .map(|d| d.column)
-        .collect::<Vec<_>>();
     let mut graph = std::vec![Vec::new(); output.columns().len()];
     let mut assignments = BTreeMap::new();
     // Reference planning validates one complete row template's authored
@@ -1030,12 +1030,7 @@ fn bind_template(
             }
         }
     }
-    let scope = binder::Scope {
-        template: binder::Template::Row(&template.id),
-        phase,
-        driver: &template.driver,
-        available: Some(&available),
-    };
+    let scope = declared.scope();
     let donors = binder::Donors {
         named,
         secondary,
@@ -1101,7 +1096,7 @@ fn bind_template(
         secondary,
         intermediates,
         &row_catalog,
-        &available,
+        &declared.available,
         row_source,
         &assignments,
         output,
@@ -1156,14 +1151,42 @@ fn prepare_row_filters(
         .collect::<Result<Vec<_>, PrepareError>>()
 }
 
-/// One row template as the checks read it: its id, driver, `group_by`, the
-/// document node of each derivation it evaluates in the row phase (with the
-/// column and whether it declares `unconvertible`), in construction order.
+/// One row template as binding and the checks read it: its id, driver,
+/// `group_by` and the derivations it evaluates in the row phase (each with
+/// its column, the document node of its operation and whether it declares
+/// `unconvertible`), in construction order. Its [`scope`](Self::scope) is
+/// what those derivations bind in, decided by the declarations alone.
 pub(super) struct TemplatePhase<'a> {
     pub id: &'a str,
     pub driver: &'a str,
     pub groups: Option<Vec<&'a str>>,
     pub derivations: Vec<PhaseDerivation>,
+    /// The columns the template derives during row construction, which its
+    /// row-phase derivations may read.
+    pub available: Vec<usize>,
+}
+
+impl TemplatePhase<'_> {
+    /// The scope the template's row-phase derivations bind in.
+    pub(super) fn scope(&self) -> binder::Scope<'_> {
+        binder::Scope {
+            template: binder::Template::Row(self.id),
+            phase: Phase::Row {
+                group_by: self.groups.as_deref(),
+            },
+            driver: self.driver,
+            available: Some(&self.available),
+        }
+    }
+}
+
+/// One binding of a column-phase derivation (#2829): whose records its
+/// driver reads address, that driver, and the row templates whose rows it
+/// completes, ascending.
+pub(super) struct ColumnPhaseBinding<'a> {
+    pub scope: ColumnScope,
+    pub driver: &'a str,
+    pub templates: Vec<usize>,
 }
 
 /// A derivation one phase evaluates: its column, the document node of its
@@ -1192,6 +1215,11 @@ impl Templates {
                     .iter()
                     .map(|declaration| declaration.phase())
                     .collect(),
+                available: template
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.column)
+                    .collect(),
             })
             .collect()
     }
@@ -1202,30 +1230,51 @@ impl Templates {
             .map(|declaration| declaration.phase())
             .collect()
     }
-    /// The driver of each binding [`Rows::bind`] makes of a column-phase
-    /// derivation of `column`: `primary` when it holds a qualified aggregate
-    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
-    /// that leave the column to this phase, in construction order.
-    pub(super) fn column_drivers_of<'a>(
+    /// The bindings a column-phase derivation of `column` gets, from the
+    /// declarations alone: one over the whole dataset through `primary` when
+    /// it holds a qualified aggregate, which reduces a declared input through
+    /// the primary port (LOOKUP-18); otherwise one per distinct driver of the
+    /// row templates that leave the column to this phase, in construction
+    /// order. Its qualifier reads the record that built each row (LOOKUP-1),
+    /// another input joins on the output keys it carries, and a named lookup
+    /// matches through its key.
+    pub(super) fn column_bindings<'a>(
         &'a self,
         column: usize,
         aggregates: bool,
         primary: &'a str,
-    ) -> Vec<&'a str> {
+    ) -> Vec<ColumnPhaseBinding<'a>> {
+        let leaving = self
+            .templates
+            .iter()
+            .enumerate()
+            .filter(|(_, template)| {
+                !template
+                    .declarations
+                    .iter()
+                    .any(|derived| derived.column == column)
+            })
+            .map(|(index, _)| index);
         if aggregates {
-            return vec![primary];
+            return vec![ColumnPhaseBinding {
+                scope: ColumnScope::Dataset,
+                driver: primary,
+                templates: leaving.collect(),
+            }];
         }
-        let mut drivers = Vec::new();
-        for template in &self.templates {
-            let leaves = !template
-                .declarations
-                .iter()
-                .any(|derived| derived.column == column);
-            if leaves && !drivers.contains(&template.driver.as_str()) {
-                drivers.push(template.driver.as_str());
+        let mut bindings: Vec<ColumnPhaseBinding<'a>> = Vec::new();
+        for index in leaving {
+            let driver = self.templates[index].driver.as_str();
+            match bindings.iter_mut().find(|binding| binding.driver == driver) {
+                Some(binding) => binding.templates.push(index),
+                None => bindings.push(ColumnPhaseBinding {
+                    scope: ColumnScope::Template,
+                    driver,
+                    templates: vec![index],
+                }),
             }
         }
-        drivers
+        bindings
     }
 }
 
@@ -1245,21 +1294,6 @@ impl Templates {
         self.templates
             .iter()
             .map(|template| template.driver.as_str())
-    }
-    /// Each grouped row template's driver with its `group_by`, in
-    /// construction order: the column phase checks a read of a driver
-    /// against the groups of that driver's templates (NAME-4).
-    fn column_groups(&self) -> Vec<(&str, Vec<&str>)> {
-        self.templates
-            .iter()
-            .filter_map(|template| {
-                let group = template.groups.as_ref()?;
-                Some((
-                    template.driver.as_str(),
-                    group.iter().map(String::as_str).collect(),
-                ))
-            })
-            .collect()
     }
     pub(super) fn self_columns(&self) -> Vec<usize> {
         self.templates[0]
@@ -1578,17 +1612,24 @@ impl Templates {
             // stored source uses its captured port and output keys.
             catalog = row_drivers::extend_catalog(catalog, source, name, keys, &secondary, "")?;
         }
-        let groups = self.column_groups();
-        let column_groups = groups
+        // Each template's scope and the column phase's grouping come from the
+        // declarations alone, as `check()` reads them: the column phase checks
+        // a read of a driver against the groups of that driver's templates
+        // (NAME-4).
+        let phases = self.phases();
+        let column_groups = phases
             .iter()
-            .map(|(driver, group)| (*driver, group.as_slice()))
+            .filter_map(|phase| Some((phase.driver, phase.groups.as_deref()?)))
             .collect::<Vec<_>>();
         let mut templates = Vec::new();
-        // The declared template behind each bound one, by position.
+        // The declared template behind each bound one, by position, and the
+        // bound position of each declared template.
         let mut declared = Vec::new();
+        let mut positions = Vec::new();
         for (index, template) in self.templates.iter().enumerate() {
-            if let Some(bound) = bind_template(
+            let bound = bind_template(
                 template,
+                &phases[index],
                 index,
                 source,
                 name,
@@ -1600,21 +1641,13 @@ impl Templates {
                 output,
                 project,
                 &mut findings,
-            )? {
+            )?;
+            positions.push(bound.as_ref().map(|_| templates.len()));
+            if let Some(bound) = bound {
                 templates.push(bound);
                 declared.push(template);
             }
         }
-        // A column derivation evaluates only for the rows of the bound
-        // templates that leave the column to the column phase. A template
-        // whose driver intermediate failed to bind was skipped with its own
-        // findings, and so are its rows here.
-        let leaves = |template: &Template, column: usize| {
-            !template
-                .declarations
-                .iter()
-                .any(|declaration| declaration.column == column)
-        };
         let mut odm_contexts: Option<std::sync::Arc<[crate::dataset::OdmTemplateScope]>> = None;
         let mut columns: Vec<ColumnBinding> = Vec::new();
         let mut dependencies = std::vec![None; output.columns().len()];
@@ -1624,45 +1657,31 @@ impl Templates {
                     str_pad::declaration_findings(operation, &mut findings);
                 }
             }
-            let needing = declared
-                .iter()
-                .enumerate()
-                .filter(|(_, template)| leaves(template, declaration.column))
-                .map(|(index, _)| index)
+            // A column derivation evaluates only for the rows of the bound
+            // templates that leave the column to the column phase. A template
+            // whose driver intermediate failed to bind was skipped with its
+            // own findings, and so are its rows here.
+            let mut scopes = self
+                .column_bindings(declaration.column, declaration.aggregates(), name)
+                .into_iter()
+                .filter_map(|binding| {
+                    let members = binding
+                        .templates
+                        .iter()
+                        .filter_map(|&template| positions[template])
+                        .collect::<Vec<_>>();
+                    (!members.is_empty()).then_some((binding.scope, binding.driver, members))
+                })
                 .collect::<Vec<_>>();
-            if needing.is_empty() {
+            scopes.sort_by_key(|(_, _, members)| members[0]);
+            if scopes.is_empty() {
                 dependencies[declaration.column] = Some(Vec::new());
                 continue;
             }
-            let scopes: Vec<(ColumnScope, Vec<usize>)> = if declaration.aggregates() {
-                // A qualified aggregate reduces a declared input through the
-                // primary port (LOOKUP-18), so its column keeps the
-                // whole-dataset scope, whichever driver builds the rows that
-                // evaluate it. Preparation has refused that column's reads of
-                // a driver intermediate.
-                std::vec![(ColumnScope::Dataset, needing)]
-            } else {
-                // Every driver binds the column once, for the templates it
-                // drives: its qualifier reads the record that built the row
-                // (LOOKUP-1), another input joins on the output keys it
-                // carries, and a named lookup matches through its key.
-                let mut scopes: Vec<(ColumnScope, Vec<usize>)> = Vec::new();
-                for index in needing {
-                    let driver = &declared[index].driver;
-                    match scopes
-                        .iter_mut()
-                        .find(|(_, members)| declared[members[0]].driver == *driver)
-                    {
-                        Some((_, members)) => members.push(index),
-                        None => scopes.push((ColumnScope::Template, std::vec![index])),
-                    }
-                }
-                scopes
-            };
             let bound = scopes.len();
             let start = findings.len();
             let mut edges = Vec::new();
-            for (scope, members) in scopes {
+            for (scope, driver, members) in scopes {
                 let column_catalog;
                 let (catalog_ref, column_driver, port) = match scope {
                     ColumnScope::Dataset => (&catalog, name, 0),
@@ -1671,7 +1690,6 @@ impl Templates {
                         // input's stored schema or the intermediate's visible
                         // fields, without the row joins, so another input
                         // still joins on the output keys.
-                        let driver = declared[members[0]].driver.as_str();
                         let (port, driver_source, named_driver) = row_drivers::select(
                             source,
                             name,
@@ -2205,5 +2223,90 @@ mod tests {
                 assert!(!std::sync::Arc::ptr_eq(declaration, again));
             }
         }
+    }
+
+    /// Templates a (SRC, derives column 0), b (ALT, derives 0 and 1) and c
+    /// (SRC grouped by SRC.ID, derives 0). Column 2 is left to the column
+    /// phase by every template.
+    fn scoped_templates() -> Templates {
+        let template = |id: &str, driver: &str, groups: Option<&str>, columns: &[usize]| Template {
+            id: id.into(),
+            driver: driver.into(),
+            groups: groups.map(|group| vec![group.to_string()]),
+            declarations: columns
+                .iter()
+                .map(|&column| {
+                    SharedDeclaration::new(RowDeclaration {
+                        handler: None,
+                        column,
+                        path: format!("rows.{id}.{column}"),
+                        value: 0,
+                        operation: RowOperation::Output("ID".into()),
+                    })
+                })
+                .collect(),
+            filter: None,
+        };
+        Templates {
+            templates: vec![
+                template("a", "SRC", None, &[0]),
+                template("b", "ALT", None, &[0, 1]),
+                template("c", "SRC", Some("SRC.ID"), &[0]),
+            ],
+            columns: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn column_phase_bindings_follow_the_templates_that_leave_the_column() {
+        let rows = scoped_templates();
+        let summary = |bindings: Vec<ColumnPhaseBinding<'_>>| {
+            bindings
+                .into_iter()
+                .map(|binding| (binding.scope, binding.driver.to_string(), binding.templates))
+                .collect::<Vec<_>>()
+        };
+        // Only a and c leave column 1; both are driven by SRC.
+        assert_eq!(
+            summary(rows.column_bindings(1, false, "SRC")),
+            [(ColumnScope::Template, "SRC".to_string(), vec![0, 2])]
+        );
+        // Every template leaves column 2: one binding per distinct driver, in
+        // construction order, each completing its own driver's templates.
+        assert_eq!(
+            summary(rows.column_bindings(2, false, "SRC")),
+            [
+                (ColumnScope::Template, "SRC".to_string(), vec![0, 2]),
+                (ColumnScope::Template, "ALT".to_string(), vec![1]),
+            ]
+        );
+        // A qualified aggregate keeps the whole-dataset scope through the
+        // primary port, for every template that leaves the column.
+        assert_eq!(
+            summary(rows.column_bindings(2, true, "PRIMARY")),
+            [(ColumnScope::Dataset, "PRIMARY".to_string(), vec![0, 1, 2])]
+        );
+        // No template leaves column 0.
+        assert!(summary(rows.column_bindings(0, false, "SRC")).is_empty());
+    }
+
+    #[test]
+    fn a_template_scope_is_its_row_phase_from_the_declarations() {
+        let rows = scoped_templates();
+        let phases = rows.phases();
+        let scope = phases[1].scope();
+        assert!(matches!(scope.template, binder::Template::Row("b")));
+        assert_eq!(scope.driver, "ALT");
+        assert_eq!(scope.available, Some(&[0, 1][..]));
+        assert!(matches!(scope.phase, Phase::Row { group_by: None }));
+        let grouped = phases[2].scope();
+        assert!(matches!(grouped.template, binder::Template::Row("c")));
+        assert!(matches!(
+            grouped.phase,
+            Phase::Row {
+                group_by: Some(["SRC.ID"])
+            }
+        ));
+        assert_eq!(grouped.available, Some(&[0][..]));
     }
 }

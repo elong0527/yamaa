@@ -38,4 +38,3 @@ pub(super) fn template_references(
     }
     Ok(())
 }
-

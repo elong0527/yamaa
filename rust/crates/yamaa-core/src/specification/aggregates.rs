@@ -1650,7 +1650,11 @@ fn bind_derivations(
             findings: &mut *findings,
             reported: false,
         }
-        .bind(&binding.branch.operation, &binding.branch.path, width + index)?;
+        .bind(
+            &binding.branch.operation,
+            &binding.branch.path,
+            width + index,
+        )?;
         // VALUE-24: a binding converts to its declared type like a column.
         if expression.is_some() && findings.len() == start && binding.handler.is_none() {
             findings.extend(
