@@ -11,8 +11,6 @@
 //! template names, which the tests that reach every cause check; at run time
 //! a key a record lacks renders as `null`, the way a missing value does.
 
-#[cfg(test)]
-use super::Severity;
 use super::{ConditionCode, Diagnostic};
 use crate::json::Value;
 
@@ -72,24 +70,22 @@ fn render(diagnostic: &Diagnostic, strict: bool) -> Result<String, UnresolvedPla
             rest = after;
         } else if let Some(close) = tail.strip_prefix('{').and_then(|body| body.find('}')) {
             let key = &tail[1..=close];
-            let value = if key == "spec_path" {
-                diagnostic
-                    .spec_paths
-                    .first()
-                    .map(|path| Some(path.as_str()))
+            let filled = if key == "spec_path" {
+                diagnostic.spec_paths.first().map(|path| out.push_str(path))
             } else {
-                diagnostic.context.get(key).map(|_| None)
+                diagnostic
+                    .context
+                    .get(key)
+                    .map(|value| write_value(value, &mut out))
             };
-            match value {
-                Some(Some(path)) => out.push_str(path),
-                Some(None) => write_value(&diagnostic.context[key], &mut out),
-                None if strict => {
+            if filled.is_none() {
+                if strict {
                     return Err(UnresolvedPlaceholder {
                         condition: diagnostic.definition().condition,
                         key: key.into(),
-                    })
+                    });
                 }
-                None => out.push_str("null"),
+                out.push_str("null");
             }
             rest = &tail[close + 2..];
         } else {
@@ -179,7 +175,7 @@ fn write_json_string(text: &str, out: &mut String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::json::Number;
+    use crate::{diagnostic::Severity, json::Number};
 
     fn record(code: ConditionCode, spec_paths: &[&str], context: &[(&str, Value)]) -> Diagnostic {
         Diagnostic {
