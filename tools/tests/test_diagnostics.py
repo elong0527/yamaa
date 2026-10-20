@@ -1,9 +1,11 @@
 """Diagnostic guard mutations preserve vocabulary and registry-owned literals."""
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
+from tools.paths import ROOT
 from tools.validation import check_diagnostics as guard
 
 
@@ -1281,6 +1283,96 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(self.errors(), [])
 
+    def test_a_raw_identifier_module_loads_its_plain_named_file(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        for relative in ("reader.rs", "nested/reader.rs"):
+            self.write(
+                f"{crate}/{relative}",
+                'fn fixture() { crate::json_wire::decode("{}"); }\n',
+            )
+        loader = (
+            '#[cfg(test)]\n#[path = "reader.rs"]\nmod tests;\n'
+            '#[cfg(test)]\n#[path = "nested/reader.rs"]\nmod nested_tests;\n'
+        )
+        self.write(f"{crate}/lib.rs", loader)
+        self.assertEqual(self.errors(), [])
+        for live, relative in (
+            ("mod r#reader;\n", "reader.rs"),
+            ("mod r#nested {\n    mod r#reader;\n}\n", "nested/reader.rs"),
+        ):
+            with self.subTest(live=live):
+                self.write(f"{crate}/lib.rs", loader + live)
+                self.assertEqual(
+                    self.errors(),
+                    [f"{crate}/{relative}:1: JSON text decoded outside a codec"],
+                )
+
+    def test_a_bracket_in_an_attribute_string_hides_no_path_attribute(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/fixtures.rs",
+            'fn fixture() { crate::json_wire::decode("{}"); }\n',
+        )
+        loader = '#[cfg(test)]\n#[path = "fixtures.rs"]\nmod tests;\n'
+        self.write(f"{crate}/lib.rs", loader)
+        self.assertEqual(self.errors(), [])
+        self.write(
+            f"{crate}/lib.rs",
+            loader + '#[path = "fixtures.rs"]\n#[doc = "see [fixtures]"]\nmod live;\n',
+        )
+        self.assertEqual(
+            self.errors(),
+            [f"{crate}/fixtures.rs:1: JSON text decoded outside a codec"],
+        )
+
+    def test_a_path_on_an_inline_module_names_its_children_directory(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/fixtures/data.rs",
+            'fn fixture() { crate::json_wire::decode("{}"); }\n',
+        )
+        loader = '#[cfg(test)]\n#[path = "fixtures/data.rs"]\nmod tests;\n'
+        self.write(f"{crate}/lib.rs", loader)
+        self.assertEqual(self.errors(), [])
+        live = '#[path = "fixtures"]\nmod live {\n    mod data;\n}\n'
+        for root, reader in (
+            (live, None),
+            (
+                live.replace(
+                    '#[path = "fixtures"]', '#[cfg_attr(unix, path = "fixtures")]'
+                ),
+                None,
+            ),
+            (live.replace("mod data;", '#[path = "data.rs"]\n    mod renamed;'), None),
+            # In a file that is not a mod-rs file, the attribute stays
+            # relative to the file's own directory.
+            ("mod reader;\n", live),
+        ):
+            with self.subTest(root=root, reader=reader):
+                self.write(f"{crate}/lib.rs", loader + root)
+                if reader is not None:
+                    self.write(f"{crate}/reader.rs", reader)
+                self.assertEqual(
+                    self.errors(),
+                    [f"{crate}/fixtures/data.rs:1: JSON text decoded outside a codec"],
+                )
+
+    def test_a_file_a_path_attribute_loads_declares_its_children_beside_it(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/child.rs", 'fn fixture() { crate::json_wire::decode("{}"); }\n'
+        )
+        self.write(f"{crate}/other.rs", "mod child;\n")
+        loader = "#[cfg(test)]\nmod child;\n"
+        # Loaded by its own name, other.rs would hold its child in other/.
+        self.write(f"{crate}/lib.rs", loader + "mod other;\n")
+        self.assertEqual(self.errors(), [])
+        self.write(f"{crate}/lib.rs", loader + '#[path = "other.rs"]\nmod renamed;\n')
+        self.assertEqual(
+            self.errors(),
+            [f"{crate}/child.rs:1: JSON text decoded outside a codec"],
+        )
+
     def test_json_decoders_reached_by_alias_glob_or_serde_route_are_refused(self):
         self.write(
             "rust/crates/yamaa-adapters/src/rows.rs",
@@ -1316,6 +1408,8 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                 # The glob already exposes readers, even in encode-only code.
                 "rust/crates/yamaa/src/encode_only.rs:1: JSON text decoded outside a codec",
                 "rust/crates/yamaa/src/glob.rs:1: JSON text decoded outside a codec",
+                # A decoder the glob brings in is a decoder named bare.
+                "rust/crates/yamaa/src/glob.rs:3: JSON text decoded outside a codec",
                 "rust/crates/yamaa-adapters/src/rows.rs:3: JSON text decoded outside a codec",
                 "rust/crates/yamaa-adapters/src/rows.rs:4: JSON text decoded outside a codec",
                 "rust/crates/yamaa-adapters/src/rows.rs:5: JSON text decoded outside a codec",
@@ -1323,6 +1417,191 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
                 "rust/crates/yamaa-adapters/src/rows.rs:11: JSON text decoded outside a codec",
             ],
         )
+
+    def test_json_wire_renames_are_followed_into_other_sources(self):
+        def hook(attribute):
+            return (
+                "#[derive(Deserialize)]\nstruct Held {\n"
+                f"    #[serde({attribute})]\n    value: Value,\n}}\n"
+            )
+
+        rows = "yamaa-adapters/src/rows.rs"
+        for root, sources, sites in (
+            # A public rename at the crate root, named from a module file.
+            (
+                "pub use json_wire as wire;\n",
+                {rows: "fn read(t: &str) { crate::wire::decode(t); }\n"},
+                [f"{rows}:1"],
+            ),
+            (
+                "pub(crate) use crate::json_wire::{self as codec};\n",
+                {rows: "use crate::codec::decode_slice as read;\n"},
+                [f"{rows}:1"],
+            ),
+            # A private rename is visible to every child module file.
+            (
+                "use json_wire as wire;\n",
+                {rows: "fn read(t: &str) { super::wire::decode(t); }\n"},
+                [f"{rows}:1"],
+            ),
+            (
+                "use json_wire as wire;\n",
+                {rows: "use super::*;\nfn read(t: &str) { wire::decode_array(t); }\n"},
+                [f"{rows}:2"],
+            ),
+            (
+                "use json_wire as wire;\n",
+                {
+                    rows: "use crate::wire::*;\n"
+                    + hook('deserialize_with = "deserialize_value"')
+                },
+                [f"{rows}:1", f"{rows}:4"],
+            ),
+            (
+                "use json_wire as wire;\n",
+                {rows: hook('deserialize_with = "crate::wire::deserialize_value"')},
+                [f"{rows}:3"],
+            ),
+            (
+                "use json_wire as wire;\n",
+                {rows: hook('with = "super::wire"')},
+                [f"{rows}:3"],
+            ),
+            # A rename of a rename, and a rename inside an inline module.
+            (
+                "pub use json_wire as wire;\nmod helpers;\n",
+                {
+                    "yamaa-adapters/src/helpers.rs": "pub use crate::wire as codec;\n",
+                    rows: "fn read(t: &str) { crate::helpers::codec::decode(t); }\n",
+                },
+                [f"{rows}:1"],
+            ),
+            (
+                "mod helpers {\n    pub use crate::json_wire as codec;\n}\n",
+                {rows: "fn read(t: &str) { crate::helpers::codec::decode(t); }\n"},
+                [f"{rows}:1"],
+            ),
+            # Another crate names a public rename through the crate.
+            (
+                "pub use json_wire as wire;\n",
+                {
+                    "yamaa/src/api.rs": (
+                        "fn read(t: &str) { yamaa_adapters::wire::decode(t); }\n"
+                    )
+                },
+                ["yamaa/src/api.rs:1"],
+            ),
+        ):
+            with self.subTest(root=root, sources=sources):
+                self.write(
+                    "rust/crates/yamaa-adapters/src/lib.rs",
+                    "pub mod json_wire;\nmod rows;\n" + root,
+                )
+                written = [
+                    self.write(f"rust/crates/{relative}", text)
+                    for relative, text in sources.items()
+                ]
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        f"rust/crates/{site}: JSON text decoded outside a codec"
+                        for site in sites
+                    ],
+                )
+                for path in written:
+                    path.unlink()
+
+    def test_a_json_wire_rename_in_a_function_or_test_stays_local(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        # The module's own `wire` is not the wire module, and encoding through
+        # a rename reads no JSON text.
+        self.write(
+            f"{crate}/rows.rs",
+            "mod wire {\n    pub fn decode(_: &str) {}\n}\n"
+            "fn read(t: &str) { wire::decode(t); }\n"
+            "fn write(v: &Value) -> String { crate::codec::encode(v) }\n",
+        )
+        for root, tests in (
+            (
+                "fn encode(v: &Value) -> String {\n"
+                "    use crate::json_wire as wire;\n    wire::encode(v)\n}\n",
+                None,
+            ),
+            (
+                "#[cfg(test)]\nmod tests {\n    pub use crate::json_wire as wire;\n}\n",
+                None,
+            ),
+            ("#[cfg(test)]\nmod tests;\n", "pub use crate::json_wire as wire;\n"),
+            ("pub use json_wire as codec;\n", None),
+        ):
+            with self.subTest(root=root):
+                self.write(f"{crate}/lib.rs", "pub mod json_wire;\nmod rows;\n" + root)
+                if tests is not None:
+                    self.write(f"{crate}/tests.rs", tests)
+                self.assertEqual(self.errors(), [])
+                (self.root / crate / "tests.rs").unlink(missing_ok=True)
+
+    def test_a_json_wire_glob_makes_its_decoders_bare_names(self):
+        source = (
+            "use crate::json_wire::*;\n"
+            "#[derive(Deserialize)]\n"
+            "struct Held {\n"
+            '    #[serde(deserialize_with = "deserialize_value")]\n'
+            "    value: Value,\n"
+            "}\n"
+            "fn read(t: &str) -> Value { decode(t).unwrap() }\n"
+            "fn owned(r: Reader) { WireValueOwned::deserialize(r); }\n"
+            "fn write(v: &Value) -> String { encode(v) }\n"
+            "mod child { use super::*; fn read(t: &str) { decode_slice(t); } }\n"
+            "fn shadowed(t: &str) { use other::decode; decode(t); }\n"
+            "mod unrelated { fn read(t: &str) { decode(t); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [1, 4, 7, 8, 10])
+
+    def test_json_wire_routes_name_only_its_public_decoders(self):
+        for name in ("decoder", "decoded_len", "decode_admitted", "decode_value"):
+            for source, sites in (
+                (f"fn read() {{ crate::json_wire::{name}(text); }}", []),
+                (f"use crate::json_wire::{{{name}, encode}};", []),
+                (f"use crate::json_wire::*;\nfn read() {{ {name}(text); }}", [1]),
+            ):
+                with self.subTest(source=source):
+                    self.assertEqual(guard.json_decodes(source), sites)
+        for name in (
+            "decode",
+            "decode_slice",
+            "decode_array",
+            "deserialize_value",
+            "WireValueOwned",
+        ):
+            for source, sites in (
+                (f"fn read() {{ crate::json_wire::{name}(text); }}", [1]),
+                (f"use crate::json_wire::*;\nfn read() {{ {name}(text); }}", [1, 2]),
+            ):
+                with self.subTest(source=source):
+                    self.assertEqual(guard.json_decodes(source), sites)
+
+    def test_json_wire_readers_are_the_wire_modules_public_readers(self):
+        # A new decoder that other modules can name must join the guard's list.
+        source = (ROOT / "rust/crates/yamaa-adapters/src/json_wire.rs").read_text(
+            encoding="utf-8"
+        )
+        public = set(
+            re.findall(
+                r"(?m)^pub(?:\([^)]*\))?\s+(?:fn|struct|enum|type)\s+(\w+)", source
+            )
+        )
+        readers = {
+            name for name in public if name.startswith(("decode", "deserialize"))
+        } | set(
+            re.findall(
+                r"\bimpl\s*(?:<[^>]*>)?\s*(?:serde\s*::\s*)?Deserialize\s*<[^>]*>"
+                r"\s*for\s+(\w+)",
+                source,
+            )
+        )
+        self.assertEqual(readers, guard.JSON_WIRE_READERS)
+        self.assertLessEqual(guard.JSON_WIRE_READERS, public)
 
     def test_a_module_file_declared_under_a_test_gate_is_test_code(self):
         decode = 'fn fixture() -> Value { crate::json_wire::decode("{}").unwrap() }\n'
@@ -1451,11 +1730,31 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
 
     def test_unit_source_reused_by_production_alias_remains_production(self):
         self.publication_unit_module()
-        self.write(
-            "rust/crates/yamaa-adapters/src/lib.rs",
-            '#[path = "file_define/publication_failure_tests.rs"]\nmod exposed;\n',
+        unit = self.root / guard.PRIVATE_TEST_MODULE
+        unit.write_text(
+            unit.read_text()
+            + 'fn decoded() -> Value { crate::json_wire::decode("{}").unwrap() }\n'
+            + 'fn row() -> Issue { Issue { condition: "not_registered".into() } }\n'
         )
-        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
+        # Under its test gate alone, the module holds fixtures.
+        self.assertEqual(self.errors(), [])
+        relative = guard.PRIVATE_TEST_MODULE.as_posix()
+        for alias in (
+            '#[path = "file_define/publication_failure_tests.rs"]\nmod exposed;\n',
+            # An alias that never spells the file's name.
+            '#[path = "file_define"]\nmod live {\n    mod publication_failure_tests;\n}\n',
+        ):
+            with self.subTest(alias=alias):
+                self.write("rust/crates/yamaa-adapters/src/lib.rs", alias)
+                self.assertEqual(
+                    self.errors(),
+                    [
+                        f"{relative}:2: new diagnostic literal site outside core: "
+                        "invalid_value, invalid_value",
+                        f"{relative}:3: JSON text decoded outside a codec",
+                        f"{relative}:4: unregistered condition literal not_registered",
+                    ],
+                )
 
     def test_private_unit_assertions_still_require_defined_requirements(self):
         self.publication_unit_module()
