@@ -322,9 +322,10 @@ RUSTFLAGS='-D warnings' cargo +1.82.0 test --manifest-path rust/tests/embedder/C
 ```
 
 It also builds the facade with no optional formats and with YAML + Parquet.
-These two builds run only the focused adapter capability tests, verify the
-facade's dependency graph and linked native symbols, and check the core's
-dependency isolation once. Ordinary workspace tests cover all default formats.
+These two builds compile the adapter's unit tests, run only the focused
+adapter capability tests, verify the facade's dependency graph and linked
+native symbols, and check the core's dependency isolation once. Ordinary
+workspace tests cover all default formats.
 Run both minimal builds from the repository root with the minimum toolchain:
 
 ```sh
