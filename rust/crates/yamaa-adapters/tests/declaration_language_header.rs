@@ -2,12 +2,14 @@
 //! The 1.x header (SCHEMA-2, LAYER-4, P-VER-1).
 //!
 //! A root that declares `schema_version` keeps the 0.5 path; a root that
-//! declares `yamaa` is a 1.x document. Until the engine reads 1.0 files
-//! (#3030 D76) every public read refuses one as `unsupported_language_version`,
-//! at the place it is read. The 1.0 path, which only tests reach, reads the
-//! header before choosing a closure, admits each document at the version it
-//! declares and each specification layer at its own, and checks the file
-//! every referencing field names.
+//! declares `yamaa` is a 1.x document. The engine reads language version 1.0
+//! (#3030 D76): a public call reads each file it is given by the header it
+//! declares, and refuses a newer version as `unsupported_language_version`.
+//! The 1.0 path reads the header before choosing a closure, admits each
+//! document at the version it declares and each specification layer at its
+//! own, and checks the file every referencing field names. A 0.5 file reads
+//! its parent layer, environment files and codelist files under the rules at
+//! the `yamaa-v0.5.0` tag (D75), so a `yamaa` there is no header.
 mod declaration {
     mod language_header {
         use std::fs;
@@ -104,33 +106,24 @@ mod declaration {
         }
 
         #[test]
-        fn a_public_check_refuses_a_1_x_specification_it_reads() {
+        fn a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one() {
             let study = Study::new();
-            // The engine reads no 1.x version until the switch (D76), so even
-            // the version this engine implements is refused, at `yamaa`.
+            // The engine reads 1.0 (D76).
             study.write("spec.yaml", SPEC);
-            refused(
-                only(&study.check("spec.yaml", None)),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": []}),
-            );
-            // An entry that names a parent is refused before the parent is read.
+            assert_eq!(study.check("spec.yaml", None), []);
+            // A missing parent fails where the 1.0 entry names it (LAYER-2).
             study.write("spec.yaml", &format!("{SPEC}parent: missing.yaml\n"));
-            refused(
-                only(&study.check("spec.yaml", None)),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": [],
-                    "source": study.path("spec.yaml"), "entry": study.path("spec.yaml")}),
-            );
-            // Any declared version, whatever the rest of the file holds.
+            let issue = only(&study.check("spec.yaml", None)).clone();
+            assert_eq!(issue.condition(), "parent_not_found");
+            assert_eq!(issue.spec_paths, ["parent"]);
+            assert_eq!(issue.context["source"], study.path("spec.yaml"));
+            // A newer version, whatever the rest of the file holds, at `yamaa`.
             study.write("spec.yaml", "yamaa: \"1.4\"\nanything: [1, 2]\n");
             refused(
                 only(&study.check("spec.yaml", None)),
                 "SCHEMA-2",
                 "yamaa",
-                json!({"version": "1.4", "language_versions": []}),
+                json!({"version": "1.4", "language_versions": ["1.0"]}),
             );
             // An unquoted version is a YAML float and no version (SCHEMA-4).
             study.write("spec.yaml", "yamaa: 1.0\ntype: spec\n");
@@ -162,99 +155,81 @@ mod declaration {
         }
 
         #[test]
-        fn a_0_5_chain_refuses_a_1_x_parent_at_the_parent_naming_it() {
+        fn a_0_5_chain_reads_a_1_x_parent_under_the_0_5_rules() {
             let study = Study::new();
             study.write("base.yaml", SPEC);
             study.write(
                 "spec.yaml",
                 "schema_version: '1.0'\nparent: base.yaml\ndomain: TEST\n",
             );
-            refused(
-                only(&study.check("spec.yaml", None)),
-                "LAYER-4",
-                "parent",
-                json!({"version": "1.0", "language_versions": [],
-                    "source": study.path("base.yaml"), "entry": study.path("spec.yaml")}),
+            // Inheritance never migrates a layer between the languages: the
+            // 0.5 chain admits the parent as a 0.5 layer, which declares no
+            // `schema_version` and whose `yamaa` and `type` are unknown (D75).
+            let issues = study.check("spec.yaml", None);
+            let found = issues
+                .iter()
+                .map(|issue| (issue.condition(), issue.spec_paths.clone()))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                found,
+                [
+                    ("schema_version_mismatch", vec!["schema_version".to_string()]),
+                    ("unknown_field", vec!["yamaa".to_string()]),
+                    ("unknown_field", vec!["type".to_string()]),
+                ]
             );
-            // A parent whose version is unquoted fails in that layer.
-            study.write("base.yaml", "yamaa: 1.0\n");
-            let issue = only(&study.check("spec.yaml", None)).clone();
-            assert_eq!(issue.condition(), "invalid_field_type");
-            assert_eq!(issue.spec_paths, ["yamaa"]);
-            assert_eq!(issue.context["source"], study.path("base.yaml"));
+            for issue in &issues {
+                assert_eq!(issue.context["source"], study.path("base.yaml"));
+                assert_eq!(issue.context["entry"], study.path("spec.yaml"));
+            }
         }
 
         #[test]
-        fn a_0_5_schema_link_refuses_a_1_x_producer() {
+        fn a_0_5_schema_link_reads_a_1_0_producer_by_its_header() {
             let study = Study::new();
-            study.write("producer.yaml", SPEC);
+            // A link reads only the producer's output contract, whatever its
+            // language: its labelled columns type the stored artifact.
+            let producer = SPEC.replace("path: output.csv", "path: produced.csv");
+            study.write(
+                "producer.yaml",
+                &producer.replace("type: int, derivation", "type: int, label: Identifier, derivation"),
+            );
             study.write(
                 "spec.yaml",
                 &LEGACY.replace(
                     "input: {SRC: input.csv}",
-                    "input: {SRC: {path: output.csv, schema: producer.yaml}}",
+                    "input: {SRC: {path: produced.csv, schema: producer.yaml}}",
                 ),
             );
-            // A producer's findings keep their own paths, as every 0.5
-            // producer finding does.
-            refused(
-                only(&study.check("spec.yaml", None)),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": []}),
-            );
+            assert_eq!(study.check("spec.yaml", None), []);
+            // A producer without labels has no contract, in 1.0 as in 0.5.
+            study.write("producer.yaml", &producer);
+            let issue = only(&study.check("spec.yaml", None)).clone();
+            assert_eq!(issue.condition(), "invalid_producer_contract");
+            assert_eq!(issue.spec_paths, ["input.SRC.schema.columns.ID.label"]);
         }
 
         #[test]
-        fn a_0_5_project_refuses_each_1_x_file_it_reads() {
+        fn a_0_5_project_reads_its_files_under_the_0_5_rules() {
             let study = Study::new();
             study.write("input.csv", "ID\n1\n");
             study.write("spec.yaml", LEGACY);
-            // The project file a call names.
+            // The project file a call names is read by its own header.
             study.write("project.yaml", "yamaa: \"1.0\"\ntype: project\n");
-            refused(
-                only(&study.check("spec.yaml", Some("project.yaml"))),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": [],
-                    "source": study.path("project.yaml"), "entry": study.path("project.yaml"),
-                    "environment_path": "$"}),
-            );
-            // The environment file the project links, a function file it
-            // lists and a codelist file the project lists: each at its own
-            // `yamaa`, naming the field that read it.
+            assert_eq!(study.check("spec.yaml", Some("project.yaml")), []);
+            // A 0.5 project reads the environment file it links and a
+            // codelist file it lists under the 0.5 rules (D75): a 1.x file
+            // there declares no `schema_version`, and its `yamaa` is unknown.
             study.write(
                 "project.yaml",
                 "schema_version: '1.0'\nenvironments: {python: python/environment.yaml}\n",
             );
             study.write("python/environment.yaml", "yamaa: \"1.0\"\n");
-            refused(
-                only(&study.check("spec.yaml", Some("project.yaml"))),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": [],
-                    "source": study.path("python/environment.yaml"),
-                    "entry": study.path("project.yaml"),
-                    "environment_path": "environments.python"}),
-            );
-            study.write(
-                "python/environment.yaml",
-                "schema_version: '1.0'\nlock: uv.lock\nfunctions: {bmi: bmi.yaml}\n",
-            );
-            study.write("python/uv.lock", "version = 1\npackage = []\n");
-            study.write(
-                "python/bmi.yaml",
-                "yamaa: \"1.0\"\ntype: function\nname: bmi\n",
-            );
-            refused(
-                only(&study.check("spec.yaml", Some("project.yaml"))),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": [],
-                    "source": study.path("python/bmi.yaml"),
-                    "entry": study.path("project.yaml"),
-                    "environment_path": "functions.bmi"}),
-            );
+            let issue = only(&study.check("spec.yaml", Some("project.yaml"))).clone();
+            assert_eq!(issue.condition(), "schema_version_mismatch");
+            assert_eq!(issue.spec_paths, ["schema_version"]);
+            assert_eq!(issue.context["source"], study.path("python/environment.yaml"));
+            assert_eq!(issue.context["environment_path"], "environments.python");
             study.write(
                 "project.yaml",
                 "schema_version: '1.0'\ncodelists: [ct.yaml]\n",
@@ -263,18 +238,23 @@ mod declaration {
                 "ct.yaml",
                 "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n",
             );
-            refused(
-                only(&study.check("spec.yaml", Some("project.yaml"))),
-                "SCHEMA-2",
-                "yamaa",
-                json!({"version": "1.0", "language_versions": [],
-                    "source": study.path("ct.yaml"),
-                    "entry": study.path("project.yaml"),
-                    "environment_path": "codelists[0]"}),
+            let issues = study.check("spec.yaml", Some("project.yaml"));
+            let fields = issues
+                .iter()
+                .map(|issue| (issue.condition(), issue.context["field"].clone()))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                fields,
+                [
+                    ("unknown_field", Value::String("yamaa".into())),
+                    ("unknown_field", Value::String("type".into())),
+                ]
             );
+            assert_eq!(issues[0].context["source"], study.path("ct.yaml"));
+            assert_eq!(issues[0].context["environment_path"], "codelists[0]");
         }
 
-        // -- The 1.0 path, reached only by tests until the switch --------------
+        // -- The 1.0 path -------------------------------------------------------
 
         /// Files resolved beside their declaring file.
         struct Files;
@@ -392,7 +372,7 @@ mod declaration {
                 );
                 document.admit().unwrap();
             }
-            // Before the switch a public call reads no 1.x version.
+            // A decoder that reads no 1.x version refuses every one.
             let error =
                 document::decode(source("spec.yaml", SPEC), FileType::Spec, None, &closures)
                     .unwrap_err();

@@ -147,34 +147,28 @@ fn dictionary_failure_ref<'a, T>(
     })
 }
 
-/// Borrow rejected preparation so a public carrier can retain its exact sources
-/// and opaque resource payload beside the complete projected findings. Source
-/// provenance is resolved here; no host interprets context occurrence IDs.
-pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
-    let (schema, error) = match error {
-        InheritanceError::Entry(error) => return Ok(capture_failure(error)),
-        InheritanceError::Dictionary { document, error } => {
-            return dictionary_failure_ref(document, error)
-        }
-        InheritanceError::Preparation { schema, error, .. } => (schema.structure(), error.as_ref()),
-    };
+/// The refusal of a traversal of either language's layers (LAYER-2, LAYER-4).
+fn traversal<'a, T>(
+    schema: &SchemaStructure,
+    error: &'a graph::Error<SourceFailure<T>>,
+) -> Result<Rejection, &'a T> {
     Ok(match error {
-        E::Path(error) | E::Traversal(graph::Error::Host(error)) => match error {
+        graph::Error::Host(error) => match error {
             SourceFailure::Host(error) => return Err(error),
             SourceFailure::Admission(error) => capture_failure(error),
         },
-        E::Traversal(graph::Error::Layer {
+        graph::Error::Layer {
             source,
             entry,
             input,
             error,
-        }) => normalized(
+        } => normalized(
             schema,
             Some(input),
             error.clone(),
             &[("source", source), ("entry", entry)],
         ),
-        E::Traversal(error) => match traversal_finding(error) {
+        error => match traversal_finding(error) {
             Ok(Some(rejection)) => rejection,
             Err(error) => context_failure(error),
             Ok(None) => {
@@ -193,6 +187,72 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
                 traversal_outcome(schema, error).unwrap_or_else(|()| rejected(Fault::Transport))
             }
         },
+    })
+}
+
+/// The refusal of a specification that declares the 1.x header (#3030 D76),
+/// whose entry file is `entry`: a finding in the entry or the resolved
+/// specification, a layer's traversal, a clear finding in the layer that
+/// writes it, or a 1.0 feature the engine does not build yet.
+fn versioned_failure_ref<'a, T>(
+    schema: &SchemaStructure,
+    entry: &str,
+    error: &'a crate::document::SpecificationError<T>,
+) -> Result<Rejection, &'a T> {
+    use crate::document::SpecificationError as V;
+    Ok(match error {
+        V::Entry(error) => capture_failure(error),
+        V::Traversal(error) => return traversal(schema, error),
+        V::Path(error) => match error {
+            SourceFailure::Host(error) => return Err(error),
+            SourceFailure::Admission(error) => capture_failure(error),
+        },
+        V::Clear {
+            source,
+            document,
+            findings,
+        } => normalized(
+            schema,
+            Some(document),
+            NormalizationError::Invalid(findings.clone()),
+            &[("source", &source.identity), ("entry", entry)],
+        ),
+        V::Unsupported(features) => Rejection::Unsupported(
+            features
+                .iter()
+                .map(|feature| {
+                    yamaa_core::application_issue::unsupported(
+                        &feature.operation,
+                        Some(&feature.path),
+                    )
+                })
+                .collect(),
+        ),
+    })
+}
+
+/// Borrow rejected preparation so a public carrier can retain its exact sources
+/// and opaque resource payload beside the complete projected findings. Source
+/// provenance is resolved here; no host interprets context occurrence IDs.
+pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
+    let (schema, error) = match error {
+        InheritanceError::Entry(error) => return Ok(capture_failure(error)),
+        InheritanceError::Dictionary { document, error } => {
+            return dictionary_failure_ref(document, error)
+        }
+        InheritanceError::Preparation { schema, error, .. } => (schema.structure(), error.as_ref()),
+        InheritanceError::Versioned {
+            schema,
+            entry,
+            error,
+        } => return versioned_failure_ref(schema.structure(), entry, error),
+    };
+    Ok(match error {
+        E::Path(error) => match error {
+            SourceFailure::Host(error) => return Err(error),
+            SourceFailure::Admission(error) => capture_failure(error),
+        },
+        E::Traversal(error) => return traversal(schema, error),
         E::ParentRequired => rejected(Fault::ParentRequired),
         E::Document(error) => {
             errors::document(*error, Stage::Prepare).unwrap_or_else(|_| rejected(Fault::Document))

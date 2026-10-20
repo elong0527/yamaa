@@ -25,9 +25,8 @@ pub struct ProjectSchemas {
     pub project: Arc<CapturedSchema>,
     pub environment: Arc<CapturedSchema>,
     /// The 1.0 closures and the newest 1.x version a preparation reads, or
-    /// none for one that reads no 1.x file. Public calls read none until the
-    /// engine reads 1.0 files (#3030 D76): `shipped_schema::capture_project`
-    /// holds the one setting the switch (P1-9) changes.
+    /// none for one that reads no 1.x file. Public calls read 1.0 files
+    /// (#3030 D76): `shipped_schema::capture_project` sets this.
     pub versioned: Option<(Closures, LanguageVersion)>,
 }
 impl ProjectSchemas {
@@ -358,8 +357,7 @@ impl application::ProjectDecodePort for Decoder {
 
 /// Decode through the captured schema codecs; the engine owns ordering and
 /// admission. A 1.0 project is read only by schemas that read 1.x files
-/// ([`ProjectSchemas::reading`]); public calls read none until the engine
-/// reads 1.0 files (#3030 D76, P1-9).
+/// ([`ProjectSchemas::reading`]), as public calls do (#3030 D76).
 pub fn prepare<P: ProjectCapturePort>(
     schemas: ProjectSchemas,
     source: Source,

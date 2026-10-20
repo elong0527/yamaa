@@ -44,7 +44,6 @@ type Typing<'a> = dyn Fn(&str, &str) -> Option<ResultType> + 'a;
 
 /// An intermediate's donor record as a check types it.
 struct Donor<'s> {
-    index: usize,
     item: &'s ast::Intermediate,
     /// Whether the record is a completed row of the rows being built.
     self_rows: bool,
@@ -317,7 +316,14 @@ impl Checks<'_> {
                     }
                 }
             }
-            ExprKind::Formula(formula) if formula.context == ExpressionContext::Compute => {
+            // A row formula: 0.5's `compute` text, or 1.0's derivation text,
+            // which binding compiles alike (FORMULA-27).
+            ExprKind::Formula(formula)
+                if matches!(
+                    formula.context,
+                    ExpressionContext::Compute | ExpressionContext::Derivation
+                ) =>
+            {
                 if let Err(error @ CompileError::Invalid { .. }) = &formula.compiled {
                     findings.push(BindFinding::Numeric {
                         path: render(spec, formula.text.meta),
@@ -1062,10 +1068,13 @@ impl Checks<'_> {
             } else {
                 return;
             };
-        let mut finding = LookupFinding::new(
-            &format!("{}.{operand}", path(spec, e)),
-            C::WindowBaselineInputType,
-        );
+        // A 1.0 operand's path is the field its surface writes (P-OP-2).
+        let at = match spec.header.surface {
+            ast::Surface::V0_5 => format!("{}.{operand}", path(spec, e)),
+            ast::Surface::V1 { .. } if operand == "date" => spec.cite(date.meta),
+            ast::Surface::V1 { .. } => spec.cite(spec.expr(reference).meta),
+        };
+        let mut finding = LookupFinding::new(&at, C::WindowBaselineInputType);
         for (field, value) in [
             ("operation", "baseline_flag"),
             ("source", name(spec, source).unwrap_or_default()),
@@ -1299,7 +1308,6 @@ impl Checks<'_> {
             };
             let dataset = item.dataset.name.as_str();
             let mut donor = Donor {
-                index,
                 item,
                 self_rows: dataset == "SELF" && has_rows(spec),
                 results: Vec::new(),
@@ -1405,7 +1413,7 @@ impl Checks<'_> {
         };
         let donors = self.donors(&stored, &current)?;
         for (position, donor) in donors.iter().enumerate() {
-            let (index, item) = (donor.index, donor.item);
+            let item = donor.item;
             let identifier = item.id.name.as_str();
             if let Some(filter) = item.filter {
                 self.grammar(filter, findings)?;
@@ -1460,7 +1468,7 @@ impl Checks<'_> {
                 };
                 if !expected.comparable(actual.into()) {
                     findings.push(BindFinding::Lookup(LookupFinding::key_type(
-                        &format!("intermediates[{index}].key"),
+                        &format!("{}.key", spec.cite(item.meta)),
                         identifier,
                         &display,
                         expected,
@@ -1502,7 +1510,7 @@ impl Checks<'_> {
                     {
                         findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
                             types
-                                .diagnostic(&format!("intermediates[{index}].between"), identifier),
+                                .diagnostic(&format!("{}.between", spec.cite(item.meta)), identifier),
                         )));
                     }
                 }
@@ -1559,7 +1567,7 @@ impl Checks<'_> {
             }
             self.derivation(root, Some(scope), true, findings)?;
             if let ExprKind::Formula(ast::Formula {
-                context: ExpressionContext::Compute,
+                context: ExpressionContext::Compute | ExpressionContext::Derivation,
                 compiled: Ok(compiled),
                 text,
                 ..

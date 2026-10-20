@@ -1,14 +1,15 @@
-//! Public calls refuse a file that declares the 1.x header (SCHEMA-2): the
-//! engine reads no 1.x language version until it reads 1.0 files (#3030 D76),
-//! so a `yamaa:` file fails as `unsupported_language_version` wherever a call
-//! reads it, and every 0.5 file runs as before.
+//! Public calls read language version 1.0 (SCHEMA-2, #3030 D76): a file that
+//! declares `yamaa: "1.0"` passes `check`, `run`, `resolve`, `submission` and
+//! `lint` beside the 0.5 files, which keep their meaning. A newer version
+//! fails as `unsupported_language_version`, and a 1.0 feature the engine does
+//! not build yet as `unsupported_operation`, naming it.
 #![cfg(feature = "yaml")]
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use arrow_array::{Array, ListArray, StringArray};
-use yamaa::{CancellationToken, Engine, EngineOptions, HostLanguage, Table};
+use yamaa::{CancellationToken, ContextValue, Engine, EngineOptions, HostLanguage, Table};
 use yamaa_core::json::Value;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -28,6 +29,9 @@ impl Study {
         let path = self.0.join(name);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, contents).unwrap();
+    }
+    fn read(&self, name: &str) -> Vec<u8> {
+        std::fs::read(self.0.join(name)).unwrap()
     }
     fn path(&self, name: &str) -> String {
         let path = self.0.join(name).to_str().unwrap().to_owned();
@@ -87,46 +91,62 @@ fn rows(table: &Table) -> Vec<(String, Option<String>, Vec<String>, Value)> {
     rows
 }
 
-/// The refusal each call reports for a 1.x file it reads.
-fn refused(table: &Table) {
-    let rows = rows(table);
-    assert_eq!(rows.len(), 1, "{rows:?}");
-    let (condition, rule, paths, context) = &rows[0];
-    assert_eq!(condition, "unsupported_language_version");
-    assert_eq!(rule.as_deref(), Some("SCHEMA-2"));
-    assert_eq!(paths, &["yamaa"]);
-    assert_eq!(context["version"], Value::String("1.0".into()));
-    assert_eq!(context["language_versions"], Value::Array(Vec::new()));
+const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: SITE, type: str, label: Site, derivation: \"'S01'\"}\noutput: {path: dm.csv, columns: [USUBJID, SITE]}\n";
+/// [`SPEC`] written for 0.5.
+const LEGACY: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: SITE, type: str, label: Site, derivation: {literal: S01}}\noutput: {path: dm.csv, columns: [USUBJID, SITE]}\n";
+
+/// The value at `key` of a resolved tree's map.
+fn field<'a>(value: &'a ContextValue, key: &str) -> &'a ContextValue {
+    let ContextValue::Map(map) = value else {
+        panic!("a map: {value:?}")
+    };
+    &map[key]
 }
 
-const SPEC: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, derivation: RAW.USUBJID}\noutput: {path: dm.csv, columns: [USUBJID]}\n";
-
 #[test]
-fn every_specification_call_refuses_a_1_x_specification() {
+fn every_specification_call_reads_a_1_0_specification() {
     let study = Study::new();
-    study.write("raw.csv", "USUBJID\nS1\n");
+    study.write("raw.csv", "USUBJID\nP1\nP2\n");
     study.write("spec.yaml", SPEC);
     let spec = study.path("spec.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    refused(&engine.spec_check(&spec, None, &token).unwrap().issues());
-    let run = engine.spec_run(&spec, None, &token).unwrap();
-    assert!(run.output().is_none());
-    refused(&run.issues());
-    refused(&engine.spec_resolve(&spec, None).unwrap_err().issues);
-    // The same file written for 0.5 runs.
-    study.write(
-        "spec.yaml",
-        &SPEC.replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: '1.0'\n"),
+    assert_eq!(rows(&engine.spec_check(&spec, None, &token).unwrap().issues()), []);
+    let mut run = engine.spec_run(&spec, None, &token).unwrap();
+    assert_eq!(rows(&run.issues()), []);
+    assert_eq!(run.output().unwrap().rows(), 2);
+    assert_eq!(run.save().unwrap(), [study.path("dm.csv")]);
+    let written = study.read("dm.csv");
+    assert_eq!(written, b"USUBJID,SITE\nP1,S01\nP2,S01\n");
+    // The resolved artifact records the language version, never
+    // `schema_version` (D84).
+    let resolved = engine.spec_resolve(&spec, None).unwrap();
+    let ContextValue::List(entries) = field(&resolved, "entries") else {
+        panic!("entries")
+    };
+    let entry = &entries[0];
+    assert_eq!(field(entry, "language_version"), &ContextValue::Text("1.0".into()));
+    let ContextValue::Map(entry_fields) = entry else {
+        panic!("an entry")
+    };
+    assert!(!entry_fields.contains_key("schema_version"));
+    assert_eq!(
+        field(field(entry, "specification"), "yamaa"),
+        &ContextValue::Text("1.0".into())
     );
-    let run = engine.spec_run(&spec, None, &token).unwrap();
-    assert!(rows(&run.issues()).is_empty());
-    assert_eq!(run.output().unwrap().rows(), 1);
+    // The same specification written for 0.5 writes the same bytes.
+    study.write("spec.yaml", LEGACY);
+    let mut run = engine.spec_run(&spec, None, &token).unwrap();
+    assert_eq!(rows(&run.issues()), []);
+    run.save().unwrap();
+    assert_eq!(study.read("dm.csv"), written);
 }
 
 #[test]
-fn every_project_call_refuses_a_1_x_project_file() {
+fn every_project_call_reads_a_1_0_project() {
     let study = Study::new();
+    study.write("raw.csv", "USUBJID\nP1\n");
+    study.write("dm.yaml", SPEC);
     study.write(
         "project.yaml",
         "yamaa: \"1.0\"\ntype: project\nsdtm: {specs: [dm.yaml]}\n",
@@ -134,38 +154,209 @@ fn every_project_call_refuses_a_1_x_project_file() {
     let project = study.path("project.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    refused(&engine.project_check(&project, &token).unwrap().issues());
-    refused(&engine.project_run(&project, None, &token).unwrap().issues());
-    refused(
-        &engine
-            .project_submission(&project, None, None, "0", &token)
-            .unwrap()
-            .issues(),
-    );
-    refused(&engine.project_spec(&project, "DM").unwrap_err().issues);
+    assert_eq!(rows(&engine.project_check(&project, &token).unwrap().issues()), []);
+    let run = engine.project_run(&project, None, &token).unwrap();
+    assert_eq!(rows(&run.issues()), []);
+    assert_eq!(engine.project_spec(&project, "DM").unwrap(), study.path("dm.yaml"));
+    // A 0.5 project lists a 1.0 specification, which is read by its own header.
+    study.write("project.yaml", "schema_version: '1.0'\nsdtm: {specs: [dm.yaml]}\n");
+    assert_eq!(rows(&engine.project_check(&project, &token).unwrap().issues()), []);
 }
 
 #[test]
-fn a_0_5_project_refuses_a_1_x_specification_it_lists() {
+fn a_newer_language_version_fails_at_yamaa() {
     let study = Study::new();
-    study.write("raw.csv", "USUBJID\nS1\n");
-    study.write("dm.yaml", SPEC);
-    study.write(
-        "project.yaml",
-        "schema_version: '1.0'\nsdtm: {specs: [dm.yaml]}\n",
-    );
-    let engine = engine();
-    let token = CancellationToken::new();
-    let rows = rows(
-        &engine
-            .project_check(&study.path("project.yaml"), &token)
+    study.write("spec.yaml", &SPEC.replace("\"1.0\"", "\"1.1\""));
+    let issues = rows(
+        &engine()
+            .spec_check(&study.path("spec.yaml"), None, &CancellationToken::new())
             .unwrap()
             .issues(),
     );
-    assert_eq!(rows.len(), 1, "{rows:?}");
-    let (condition, rule, paths, context) = &rows[0];
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
     assert_eq!(condition, "unsupported_language_version");
     assert_eq!(rule.as_deref(), Some("SCHEMA-2"));
     assert_eq!(paths, &["yamaa"]);
-    assert_eq!(context["entry"], Value::String(study.path("dm.yaml")));
+    assert_eq!(context["version"], Value::String("1.1".into()));
+    assert_eq!(
+        context["language_versions"],
+        Value::Array(vec![Value::String("1.0".into())])
+    );
+}
+
+#[test]
+fn lint_reads_a_1_0_file() {
+    let study = Study::new();
+    study.write("spec.yaml", SPEC);
+    let lint = yamaa::lint(&[study.path("spec.yaml")], false).unwrap();
+    assert_eq!(lint.files(), 1);
+}
+
+/// The `unsupported_operation` refusals of a check of `spec`, with `project`.
+fn refusals(study: &Study, spec: &str, project: Option<&str>) -> Vec<(String, Vec<String>)> {
+    let project = project.map(|project| study.path(project));
+    rows(
+        &engine()
+            .spec_check(
+                &study.path(spec),
+                project.as_deref(),
+                &CancellationToken::new(),
+            )
+            .unwrap()
+            .issues(),
+    )
+    .into_iter()
+    .map(|(condition, rule, paths, context)| {
+        assert_eq!(condition, "unsupported_operation", "{spec}: {paths:?} {context:?}");
+        assert_eq!(rule, None);
+        let Value::String(operation) = &context["operation"] else {
+            panic!("an operation: {context:?}")
+        };
+        (operation.clone(), paths)
+    })
+    .collect()
+}
+
+fn refusal(operation: &str, path: &str) -> (String, Vec<String>) {
+    (operation.into(), vec![path.into()])
+}
+
+#[test]
+fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
+    let study = Study::new();
+    let submission = "\n    submission:\n      core: Req\n      length: 8\n      origins:\n        - {type: Assigned, source: Sponsor}\n";
+    let spec = |columns: &str| {
+        format!("yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\noutput: {{path: dm.csv, columns: [USUBJID]}}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID{columns}")
+    };
+    // A copy entry, before the layers compose (P1-12).
+    study.write(
+        "spec.yaml",
+        &format!("{}\n  - copy: {{dataset: RAW, columns: [AGE]}}\n", spec("")),
+    );
+    assert_eq!(refusals(&study, "spec.yaml", None), [refusal("copy", "columns[1]")]);
+    // Several origins (P1-13).
+    study.write(
+        "spec.yaml",
+        &spec(&format!("{submission}        - {{type: Predecessor, description: RAW.USUBJID}}\n")),
+    );
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal("multiple_origins", "columns.USUBJID.submission.origins")]
+    );
+    // A dataset's standard (P1-13).
+    study.write(
+        "spec.yaml",
+        &format!(
+            "{}submission: {{label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false, standard: SDTMIG}}\n",
+            spec(submission)
+        ),
+    );
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal("submission_standard", "submission.standard")]
+    );
+    // A value-level comparator (P1-14).
+    study.write(
+        "spec.yaml",
+        &spec(&format!(
+            "{submission}      value_level:\n        - {{id: OTHER, where: {{USUBJID: {{comparator: NE, values: [P1]}}}}}}\n"
+        )),
+    );
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal(
+            "value_level_comparator",
+            "columns.USUBJID.submission.value_level.OTHER.where.USUBJID.comparator"
+        )]
+    );
+    // An ODM XML input (P1-15).
+    study.write("spec.yaml", &spec("").replace("raw.csv", "raw.xml"));
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal("odm_xml_input", "input.RAW.path")]
+    );
+    // Submission metadata without the model it needs (P1-10).
+    study.write("spec.yaml", &spec(submission).replace("model: SDTM\n", ""));
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal("model_check", "model")]
+    );
+    // A codelist or a project function a specification run without its
+    // project binds (P1-11).
+    study.write(
+        "spec.yaml",
+        &spec(&format!("{submission}      codelist: CL_SUBJECT\n")),
+    );
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal(
+            "project_binding",
+            "columns.USUBJID.submission.codelist"
+        )]
+    );
+    study.write(
+        "spec.yaml",
+        &format!(
+            "{}\n  - {{name: BMI, type: float, label: BMI, derivation: {{function: {{name: bmi, args: {{weight: RAW.WEIGHT}}}}}}}}\n",
+            spec("")
+        )
+        .replace("columns: [USUBJID]", "columns: [USUBJID, BMI]"),
+    );
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal("project_binding", "columns.BMI.derivation.function")]
+    );
+}
+
+/// A 1.0 project whose `sdtm` section composes one dataset, published as
+/// `dm.csv`. Every benchmark's Define documents, converted to 1.0, are
+/// compared with their expected bytes by `make check-conversion`.
+fn define_study() -> Study {
+    let study = Study::new();
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: S01, description: Example study, protocol_name: S01}\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [dm.yaml]\n  define: define.xml\n",
+    );
+    study.write(
+        "dm.yaml",
+        "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [STUDYID]\ninput: {RAW: raw.csv}\noutput: {path: dm.csv, columns: [STUDYID]}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: STUDYID\n    type: str\n    label: Study Identifier\n    derivation: RAW.STUDYID\n    submission:\n      core: Req\n      role: Identifier\n      length: 8\n      origins:\n        - {type: Protocol, source: Sponsor}\n",
+    );
+    study.write("dm.csv", "STUDYID\nS01\n");
+    study
+}
+
+#[test]
+fn a_1_0_project_composes_its_submission() {
+    let study = define_study();
+    let project = study.path("project.yaml");
+    let engine = engine();
+    let token = CancellationToken::new();
+    let submit = || {
+        engine
+            .project_submission(&project, Some("sdtm"), Some("2026-09-11T00:00:00"), "0.4.0", &token)
+            .unwrap()
+    };
+    let mut submission = submit();
+    assert_eq!(rows(&submission.issues()), []);
+    assert_eq!(submission.save().unwrap(), [study.path("define.xml")]);
+    let define = String::from_utf8(study.read("define.xml")).unwrap();
+    assert!(define.contains("Name=\"DM\""), "{define}");
+    assert!(define.contains("Origin Type=\"Protocol\""), "{define}");
+    // A listed 1.0 specification whose model is not its section's is
+    // refused until P1-10 checks it.
+    study.write(
+        "dm.yaml",
+        &String::from_utf8(study.read("dm.yaml"))
+            .unwrap()
+            .replace("model: SDTM", "model: ADaM"),
+    );
+    let issues = rows(&submit().issues());
+    let [(condition, _, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "unsupported_operation");
+    assert_eq!(paths, &["sdtm.specs[0]"]);
+    assert_eq!(context["operation"], Value::String("model_check".into()));
 }

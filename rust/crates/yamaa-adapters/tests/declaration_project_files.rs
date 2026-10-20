@@ -6,8 +6,7 @@
 //! lock; a function file names its function and the callable of each host it
 //! implements; a codelist file holds one codelist source. Each lowers into the
 //! roots a 0.5 project, environment and codelist file lower into, and a
-//! project prepares through them. Until the engine reads 1.0 files (#3030
-//! D76) only tests reach this path.
+//! project prepares through them, on every public route (#3030 D76).
 mod declaration {
     mod project_files {
         use std::fmt::Debug;
@@ -751,8 +750,8 @@ mod declaration {
     }
 
     /// Public reads of a 1.0 project's dependencies: the route every public
-    /// call prepares a project through, given schemas that read 1.x files, as
-    /// the switch (P1-9) gives every public call (#3030 D76). A listed file or
+    /// call prepares a project through, whose shipped schemas read 1.x files
+    /// (#3030 D76). A listed file or
     /// lock that cannot be read fails as any file a run reads, at the field
     /// that names it (FUNC-2, FILE-11); a listed file whose header the engine
     /// does not read fails at that field (SCHEMA-2); and a function file's
@@ -780,8 +779,9 @@ mod declaration {
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::function_invocation::{Argument, HostError};
         use yamaa_core::function_signature::{LogicalSignature, ProjectFunctionIdentity};
+        use std::sync::Arc;
         use yamaa_core::json::Value;
-        use yamaa_core::language::LANGUAGE_VERSION;
+        use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_activation::{ActivationPort, Failure};
         use yamaa_core::project_environment::{LockKind, LockReference};
         use yamaa_core::project_function::Language;
@@ -792,12 +792,11 @@ mod declaration {
         const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/id.yaml]\nenvironments:\n  python: {lock: uv.lock}\n  r: {lock: renv.lock}\ncodelists: [ct.yaml]\n";
         const FUNCTION: &str = "yamaa: \"1.0\"\ntype: function\nname: id\ndescription: Integer identity.\nparams: [{name: x, type: int, accepts_missing: true}]\nreturns: int\nmay_return_missing: true\nimplementations: {python: program.id, r: program::id}\ntests:\n  - {id: normal, covers: [normal, boundary], args: {x: 7}, result: 7}\n  - {id: missing, covers: ['accepted-missing:x', nullable-output], args: {x: null}, result: null}\n";
         const CODELISTS: &str = "yamaa: \"1.0\"\ntype: codelists\ncodelists: [{id: SEX, name: Sex, items: [{value: F}, {value: M}]}]\n";
-        /// A 0.5 specification calling the project's function; specifications
-        /// keep the 0.5 route until the switch.
+        /// A 0.5 specification calling the project's function, which a 1.0
+        /// project supplies as it supplies a 1.0 specification.
         const DOMAIN: &str = "schema_version: '1.0'\ndomain: TEST\ninput: {SRC: {path: input.csv, types: {ID: int}}}\nkeys: [ID]\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {function: {name: id, args: {x: SRC.ID}}}}\noutput: {path: output.csv, columns: [ID, VALUE]}\n";
 
-        /// The shipped project schemas, reading 1.x files as the switch makes
-        /// them.
+        /// The shipped project schemas, which read 1.x files.
         fn reading() -> ProjectSchemas {
             shipped_schema::capture_project()
                 .unwrap()
@@ -918,31 +917,24 @@ mod declaration {
         }
 
         #[test]
-        fn public_calls_read_no_1_0_project_until_its_schemas_read_1_x_files() {
+        fn public_calls_read_a_1_0_project_and_only_the_files_it_names() {
             let study = Study::new();
-            // The shipped schemas read no 1.x file (D76): the project file is
-            // refused at its own `yamaa`.
-            let Err(error) =
-                study.prepare(shipped_schema::capture_project().unwrap(), Language::Python)
-            else {
-                panic!("public calls refuse a 1.0 project")
+            // The shipped schemas read 1.x files (D76), as `reading` does.
+            let shipped = shipped_schema::capture_project().unwrap();
+            let Some((closures, reads)) = &shipped.versioned else {
+                panic!("public calls read 1.x files")
             };
-            let issues = project_application::failure(&project_application::Error::Project(error));
-            let [issue] = issues.as_slice() else {
-                panic!("one issue: {issues:?}")
-            };
-            assert_eq!(
-                (issue.condition(), issue.spec_paths.as_slice()),
-                (
-                    "unsupported_language_version",
-                    ["yamaa".to_string()].as_slice()
-                )
-            );
-            // Reading 1.x files, the same route reads the project, the
-            // host's lock, its function file and its codelist file, and only
-            // those (PROJECT-2).
+            assert_eq!(*reads, LANGUAGE_VERSION);
+            assert!(Arc::ptr_eq(
+                closures.get(FileType::Project),
+                Closures::shipped().unwrap().get(FileType::Project)
+            ));
+            // The public route reads the project, the host's lock, its
+            // function file and its codelist file, and only those (PROJECT-2).
             for (host, lock) in [(Language::Python, "uv.lock"), (Language::R, "renv.lock")] {
-                let project = study.prepare(reading(), host).unwrap();
+                let project = study
+                    .prepare(shipped_schema::capture_project().unwrap(), host)
+                    .unwrap();
                 assert!(project.run().check_diagnostics().is_empty());
                 // The entry, the project file, the lock, the function file
                 // and the codelist file.

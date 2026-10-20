@@ -368,9 +368,9 @@ class StagingTests(unittest.TestCase):
                     row["expected"] = json.loads(row["expected"])
             self.assertEqual(historical, normative)
 
-    def test_shared_grammar_inputs_leave_out_only_the_derivation_context(self):
-        """The hosts replay every case a public field reads; no field reads
-        the derivation context until the engine reads 1.0 files."""
+    def test_shared_grammar_inputs_cover_every_context(self):
+        """The hosts replay every case, the derivation context's in a 1.0
+        expression field, since the engine reads 1.0 files (D76)."""
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "grammar-original"
             grammar.stage(destination)
@@ -378,18 +378,27 @@ class StagingTests(unittest.TestCase):
                 encoding="utf-8", newline=""
             ) as stream:
                 staged = list(csv.DictReader(stream, delimiter="\t"))
+            headers = {
+                (written["yamaa"], written["type"])
+                for row in staged
+                if row["context"] == "derivation"
+                for written in [
+                    json.loads(
+                        (destination / row["specification"]).read_text(encoding="utf-8")
+                    )
+                ]
+            }
+        self.assertEqual(headers, {("1.0", "spec")})
         documents = dict(grammar.documents())
         declared = documents["expression"]["contexts"]
         self.assertEqual(list(grammar.CONTEXTS), declared)
         self.assertEqual(
             {row["context"] for row in staged if row["contract"] == "expression"},
-            set(declared) - {"derivation"},
+            set(declared),
         )
         every = [case for document in documents.values() for case in document["cases"]]
         every += grammar.expansions(documents["expression"])
-        unread = [case for case in every if case.get("context") == "derivation"]
-        self.assertTrue(unread)
-        self.assertEqual(len(staged), len(every) - len(unread))
+        self.assertEqual(len(staged), len(every))
 
     def test_unread_inputs_follow_gitignore_order_and_refuse_stale_patterns(self):
         with tempfile.TemporaryDirectory() as directory:

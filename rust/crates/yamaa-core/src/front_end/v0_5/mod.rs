@@ -184,10 +184,14 @@ impl<'d> Lower<'d> {
     }
     /// Which of `fields` `owner` writes with a value, in written order.
     pub(super) fn written(&self, owner: usize, fields: &[&'static str]) -> Written {
+        // A 0.5 null leaves a field unwritten; a 1.0 null is the missing
+        // value written in a value or expression field (D18), so `absent:
+        // null` declares an absence answer (LOOKUP-24).
+        let v1 = self.v1();
         Written(
             self.entries(owner)
                 .iter()
-                .filter(|&&(_, value)| !matches!(self.node(value), N::Null))
+                .filter(|&&(_, value)| v1 || !matches!(self.node(value), N::Null))
                 .filter_map(|&(key, _)| {
                     let key = self.text(key)?;
                     fields.iter().copied().find(|&field| field == key)

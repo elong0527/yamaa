@@ -315,7 +315,20 @@ impl SchemaStructure {
         input: &SpecificationDocument,
         dictionaries: &[AdmittedMappingDictionary],
     ) -> Result<SpecificationDocument, NormalizationError> {
-        let references = self.mapping_dictionary_references(input.document())?;
+        let (document, _) = self.materialize_mapping_dictionary_document(input.document(), dictionaries)?;
+        SpecificationDocument::admit(document)?.map_err(NormalizationError::Invalid)
+    }
+
+    /// [`SchemaStructure::materialize_mapping_dictionaries`] for a resolved
+    /// specification of either language, held as a document. Beside the
+    /// derived document, each of its nodes names the node of `input` it
+    /// copies, or, for a node of a dictionary, the reference that read it.
+    pub fn materialize_mapping_dictionary_document(
+        &self,
+        input: &Document,
+        dictionaries: &[AdmittedMappingDictionary],
+    ) -> Result<(Document, Vec<usize>), NormalizationError> {
+        let references = self.mapping_dictionary_references(input)?;
         if references.len() != dictionaries.len() {
             return Err(ValidationError::InvalidDescriptor.into());
         }
@@ -334,23 +347,28 @@ impl SchemaStructure {
         let mut run = Materialize {
             replacements,
             nodes: Vec::new(),
+            sources: Vec::new(),
         };
-        let original = input.document();
-        let root = run.copy(original, original.root(), true, 0)?;
+        let root = run.copy(input, input.root(), None, 0)?;
         let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
-        SpecificationDocument::admit(document)?.map_err(NormalizationError::Invalid)
+        Ok((document, run.sources))
     }
 }
 struct Materialize<'a> {
     replacements: BTreeMap<usize, &'a Document>,
     nodes: Vec<N>,
+    /// Parallel to `nodes`: the input node each copies, or the reference
+    /// node whose dictionary holds it.
+    sources: Vec<usize>,
 }
 impl Materialize<'_> {
+    /// Copy `value` of `input`, the specification when `reference` is none
+    /// and otherwise the dictionary that reference node reads.
     fn copy(
         &mut self,
         input: &Document,
         value: usize,
-        replace: bool,
+        reference: Option<usize>,
         depth: usize,
     ) -> Result<usize, NormalizationError> {
         let limit = crate::limits::Limits::SEMANTIC_DEPTH;
@@ -360,9 +378,9 @@ impl Materialize<'_> {
                 limit,
             });
         }
-        if replace {
+        if reference.is_none() {
             if let Some(dictionary) = self.replacements.get(&value).copied() {
-                return self.copy(dictionary, dictionary.root(), false, depth + 1);
+                return self.copy(dictionary, dictionary.root(), Some(value), depth + 1);
             }
         }
         let node = match &input.nodes()[value] {
@@ -370,7 +388,7 @@ impl Materialize<'_> {
             N::Sequence(items) => {
                 let mut copied = Vec::with_capacity(items.len());
                 for &item in items {
-                    copied.push(self.copy(input, item, replace, depth + 1)?);
+                    copied.push(self.copy(input, item, reference, depth + 1)?);
                 }
                 N::Sequence(copied)
             }
@@ -378,8 +396,8 @@ impl Materialize<'_> {
                 let mut copied = Vec::with_capacity(items.len());
                 for &(key, item) in items {
                     copied.push((
-                        self.copy(input, key, replace, depth + 1)?,
-                        self.copy(input, item, replace, depth + 1)?,
+                        self.copy(input, key, reference, depth + 1)?,
+                        self.copy(input, item, reference, depth + 1)?,
                     ));
                 }
                 N::Mapping(copied)
@@ -388,6 +406,7 @@ impl Materialize<'_> {
         };
         let id = self.nodes.len();
         self.nodes.push(node);
+        self.sources.push(reference.unwrap_or(value));
         Ok(id)
     }
 }

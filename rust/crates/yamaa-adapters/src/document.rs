@@ -10,17 +10,18 @@
 //! needs the newest (P-VER-1), and the layers compose into one resolved
 //! specification, each layer's `clear` applied before it (LAYER-9).
 //!
-//! Until the engine reads 1.0 files (#3030 D76, P1-9) public calls read no 1.x
-//! version: every 0.5 read refuses a 1.x header through the same header reader
-//! (`yamaa_core::language::refusal`), so only tests reach the 1.0 path here.
-//! Rewrite 3 routes every document read through this decoder and retires the
-//! decode ports each read site has today.
+//! The engine reads language version 1.0 (#3030 D76, P1-9): every public call
+//! decodes the files it reads here, and a specification that declares the
+//! header is prepared by [`VersionedDocument::prepare_specification`]. A 1.0
+//! feature the engine does not build yet is refused as `unsupported_operation`
+//! before binding or rendering. Rewrite 3 routes every document read through
+//! this decoder and retires the decode ports each read site has today.
 use crate::shipped_schema;
 use crate::specification_source::{
-    CapturedFindings, CapturedSchema, Error, InheritancePort, Source, SourceFailure,
+    CapturedFindings, CapturedParent, CapturedSchema, Error, InheritancePort, Source,
+    SourceFailure,
 };
 use crate::yaml_decode::{decode_yaml, DecodedYaml, SourcePosition};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use yamaa_core::ast::{FileId, FileRef, Span};
 use yamaa_core::front_end::v1::spec::{self as front_end, Lowered, Positions};
@@ -33,6 +34,7 @@ use yamaa_core::schema::{
     Document, LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument,
     SchemaDiagnostic, SchemaSource,
 };
+use yamaa_core::specification::UnsupportedFeature;
 
 /// The 1.0 closure of each file type.
 #[derive(Clone, Debug)]
@@ -99,7 +101,8 @@ pub struct VersionedDocument {
 
 /// Decode one document that a call or a referencing field reads, expecting a
 /// file of type `expected`, by an engine whose newest language version is
-/// `reads`; public calls read none until P1-9. The header is read before any
+/// `reads`; public calls read [`yamaa_core::language::LANGUAGE_VERSION`]
+/// (#3030 D76). The header is read before any
 /// closure is chosen: a version the engine does not read fails as
 /// `unsupported_language_version`, and another type as
 /// `unexpected_file_type`, at the document's own `yamaa` or `type`.
@@ -265,6 +268,28 @@ impl PreparedSpecification {
     pub fn into_lowered(self) -> Lowered {
         self.lowered
     }
+    /// Lower `materialized`, the resolved specification with each dictionary
+    /// file's admitted content in place of its path, in place of the lowering
+    /// of the resolved specification: binding reads the dictionary's entries
+    /// as it reads an inline one. Each node keeps the position of the node it
+    /// copies, and a dictionary's content the position of its `dict` path.
+    /// `locations` gives each layer's decoded positions.
+    pub fn lower_materialized<'a>(
+        &mut self,
+        materialized: &Document,
+        sources: &[usize],
+        locations: impl Fn(&graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
+    ) {
+        let resolved = positions(&self.chain, &self.resolved, locations);
+        let positions = Positions {
+            files: resolved.files,
+            nodes: sources
+                .iter()
+                .map(|&node| resolved.nodes.get(node).copied().flatten())
+                .collect(),
+        };
+        self.lowered = front_end::lower(materialized, Some(&positions));
+    }
     /// Parallel to [`PreparedSpecification::resolved`]'s nodes: the layer and
     /// occurrence each node was written at, or the schema default it came
     /// from.
@@ -322,6 +347,21 @@ pub enum SpecificationError<E> {
     },
     /// The host could not respell a layer's path from the entry (LAYER-10).
     Path(SourceFailure<E>),
+    /// The specification writes a 1.0 feature the engine does not build yet,
+    /// refused as `unsupported_operation` (COLUMN-15, #3030 D76): a copy entry
+    /// before the layers compose, and, on the public route, the others on the
+    /// lowered specification (`front_end::checks::unbuilt`).
+    Unsupported(Vec<UnsupportedFeature>),
+}
+
+/// A 1.x specification prepared with the files it was read from: the entry
+/// as captured and decoded, and each parent layer in first-capture order.
+#[derive(Debug)]
+pub struct PreparedSources {
+    pub specification: PreparedSpecification,
+    pub source: Source,
+    pub raw: DecodedYaml,
+    pub parents: Vec<CapturedParent>,
 }
 
 impl VersionedDocument {
@@ -374,6 +414,17 @@ impl VersionedDocument {
         display_path: String,
         port: &mut P,
     ) -> Result<PreparedSpecification, SpecificationError<P::Error>> {
+        self.prepare_sources(display_path, port)
+            .map(|prepared| prepared.specification)
+    }
+
+    /// [`VersionedDocument::prepare_specification`], keeping the entry as
+    /// captured and decoded and each parent layer the traversal read.
+    pub fn prepare_sources<P: InheritancePort>(
+        self,
+        display_path: String,
+        port: &mut P,
+    ) -> Result<PreparedSources, SpecificationError<P::Error>> {
         if self.header.file_type != FileType::Spec {
             let finding =
                 language::read_header(&self.raw.document, Some(self.reads), FileType::Spec)
@@ -393,7 +444,7 @@ impl VersionedDocument {
         let schema = self.schema.structure();
         let mut parents = Parents {
             port,
-            locations: BTreeMap::new(),
+            captured: Vec::new(),
         };
         let chain = graph::traverse_versioned(
             schema,
@@ -403,6 +454,17 @@ impl VersionedDocument {
             &mut parents,
         )
         .map_err(SpecificationError::Traversal)?;
+        // Composition cannot key a copy entry until P1-12, so the latest
+        // layer that writes one is refused before the layers compose (D76).
+        if let Some(copies) = chain
+            .layers
+            .iter()
+            .rev()
+            .map(|layer| front_end::checks::copy_entries(&layer.document))
+            .find(|copies| !copies.is_empty())
+        {
+            return Err(SpecificationError::Unsupported(copies));
+        }
         let resolved = match lifecycle::prepare_versioned(schema, &chain, &mut parents) {
             Ok(resolved) => resolved,
             Err(VersionedError::Clear { layer, findings }) => {
@@ -440,12 +502,9 @@ impl VersionedDocument {
         };
         // Lower once, each node located where its layer wrote it, and check
         // what the 1.0 schema cannot state before any input is read.
+        let parents = parents.captured;
         let locations = |layer: &graph::VersionedLayer| {
-            if layer.source.identity == self.source.identity {
-                Some(&self.raw.locations)
-            } else {
-                parents.locations.get(&layer.source.identity)
-            }
+            layer_locations(&self.source, &self.raw, &parents, layer)
         };
         let positions = positions(&chain, &resolved, locations);
         let lowered = front_end::lower(&resolved.document, Some(&positions));
@@ -458,22 +517,45 @@ impl VersionedDocument {
                 found,
             )));
         }
-        Ok(PreparedSpecification {
-            schema: self.schema,
-            chain,
-            resolved,
-            lowered,
+        Ok(PreparedSources {
+            specification: PreparedSpecification {
+                schema: self.schema,
+                chain,
+                resolved,
+                lowered,
+            },
+            source: self.source,
+            raw: self.raw,
+            parents,
         })
+    }
+}
+
+/// Where `layer` was decoded: `raw`, the entry read as `source`, or the
+/// parent of `parents` read under its identity.
+pub(crate) fn layer_locations<'a>(
+    source: &Source,
+    raw: &'a DecodedYaml,
+    parents: &'a [CapturedParent],
+    layer: &graph::VersionedLayer,
+) -> Option<&'a Vec<SourcePosition>> {
+    if layer.source.identity == source.identity {
+        Some(&raw.locations)
+    } else {
+        parents
+            .iter()
+            .find(|parent| parent.source().identity == layer.source.identity)
+            .map(|parent| &parent.raw().locations)
     }
 }
 
 /// Where each resolved node was written: the decoded position of the node
 /// its layer wrote, or none for a schema default or a node composition made.
 /// `locations` gives each layer's decoded positions.
-fn positions<'a>(
-    chain: &'a VersionedChain,
+fn positions<'a, 'b>(
+    chain: &'b VersionedChain,
     resolved: &ResolvedVersioned,
-    locations: impl Fn(&'a graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
+    locations: impl Fn(&'b graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
 ) -> Positions {
     let decoded = chain.layers.iter().map(locations).collect::<Vec<_>>();
     let span = |layer: usize, at: &SourcePosition| Span {
@@ -505,11 +587,11 @@ fn positions<'a>(
 }
 
 /// Parent capture through the caller's port, decoded with the shared YAML
-/// reader, keeping where each parent's nodes were decoded. Opaque host
-/// failures keep their payload.
+/// reader, keeping each parent as captured and decoded, in first-capture
+/// order. Opaque host failures keep their payload.
 struct Parents<'a, P> {
     port: &'a mut P,
-    locations: BTreeMap<String, Vec<SourcePosition>>,
+    captured: Vec<CapturedParent>,
 }
 
 fn host<E>(error: graph::SourceError<E>) -> graph::SourceError<SourceFailure<E>> {
@@ -548,9 +630,13 @@ impl<P: InheritancePort> graph::InheritanceSourcePort for Parents<'_, P> {
         let bytes = self.port.capture(source).map_err(host)?;
         decode_yaml(&bytes)
             .map(|decoded| {
-                self.locations
-                    .insert(source.identity.clone(), decoded.locations);
-                decoded.document
+                let document = decoded.document.clone();
+                let source = Source {
+                    identity: source.identity.clone(),
+                    bytes,
+                };
+                self.captured.push(CapturedParent::new(source, decoded));
+                document
             })
             .map_err(|error| {
                 graph::SourceError::Raised(SourceFailure::Admission(Error::Decode {

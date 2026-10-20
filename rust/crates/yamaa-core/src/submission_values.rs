@@ -7,7 +7,7 @@ use crate::ast::{self, CodelistType, ExprId, ExprKind, Literal};
 use crate::project_terminology::Catalogue;
 use crate::schema::{Document, DocumentNode as N};
 use crate::value::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// One where clause as written: each column and the values it admits.
 pub(crate) type Clause<'a> = Vec<(&'a str, Vec<&'a str>)>;
@@ -38,13 +38,6 @@ fn items(d: &Document, node: Option<usize>) -> &[usize] {
     }
 }
 
-impl Entry<'_> {
-    /// Whether the entry itself declares the metadata field.
-    pub(crate) fn declares(&self, d: &Document, field: &str) -> bool {
-        present(d, self.node, field).is_some()
-    }
-}
-
 /// A column's value-level entries in declaration order. A shape schema
 /// admission refuses is skipped; it never reaches a compiled specification.
 pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
@@ -61,6 +54,15 @@ pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
             let clause = terms
                 .iter()
                 .map(|&(column, values)| {
+                    // A resolved 1.0 specification holds a where condition in
+                    // its long form, `{values: [...]}`; a comparator is refused
+                    // before any composition reads it (#3030 D76, P1-14).
+                    let values = match &d.nodes()[values] {
+                        N::Mapping(_) if present(d, values, "comparator").is_none() => {
+                            present(d, values, "values").unwrap_or(values)
+                        }
+                        _ => values,
+                    };
                     Some((
                         text(d, column)?,
                         items(d, Some(values))
@@ -272,125 +274,6 @@ pub(crate) enum Reach {
     Only,
     /// Its rows may or may not be selected.
     Unknown,
-}
-
-/// The row constructions of a specification: each row template, or the one
-/// construction from column derivations when it declares none.
-pub(crate) fn constructions(d: &Document) -> Vec<Option<usize>> {
-    let rows = items(d, present(d, d.root(), "rows"));
-    if rows.is_empty() {
-        vec![None]
-    } else {
-        rows.iter().copied().map(Some).collect()
-    }
-}
-
-/// The derivation one construction gives a column: the row template's own,
-/// or the column's when the template inherits it.
-pub(crate) fn derivation(
-    d: &Document,
-    construction: Option<usize>,
-    column: usize,
-    name: &str,
-) -> Option<usize> {
-    construction
-        .and_then(|row| present(d, row, "derivations"))
-        .and_then(|derivations| present(d, derivations, name))
-        .or_else(|| present(d, column, "derivation"))
-}
-
-/// The value a derivation gives every row when it is a bare `literal`:
-/// `Some(Some(text))` for a string and `Some(None)` for missing.
-fn literal(d: &Document, derivation: usize) -> Option<Option<&str>> {
-    let node = d.field(derivation, "value").unwrap_or(derivation);
-    let N::Mapping(fields) = &d.nodes()[node] else {
-        return None;
-    };
-    let [(key, value)] = fields.as_slice() else {
-        return None;
-    };
-    if text(d, *key) != Some("literal") {
-        return None;
-    }
-    match &d.nodes()[*value] {
-        N::Text(value) => Some(Some(value)),
-        N::Null => Some(None),
-        _ => None,
-    }
-}
-
-/// What a construction proves about an entry's rows. `columns` maps each
-/// declared column name to its declaration node.
-pub(crate) fn reach(
-    d: &Document,
-    construction: Option<usize>,
-    columns: &BTreeMap<&str, usize>,
-    clause: &[(&str, Vec<&str>)],
-) -> Reach {
-    let mut every = true;
-    for (name, values) in clause {
-        let Some(&column) = columns.get(name) else {
-            every = false;
-            continue;
-        };
-        match derivation(d, construction, column, name).and_then(|node| literal(d, node)) {
-            Some(Some(value)) if values.contains(&value) => {}
-            Some(_) => return Reach::Never,
-            None => every = false,
-        }
-    }
-    if every {
-        Reach::Only
-    } else {
-        Reach::Unknown
-    }
-}
-
-/// SUB-13: the derivations of a column that can produce a row the entry
-/// selects. A construction that derives a where column as a literal outside
-/// the entry's values cannot, and every other construction may.
-pub(crate) fn entry_derivations(
-    d: &Document,
-    column: usize,
-    name: &str,
-    columns: &BTreeMap<&str, usize>,
-    entry: &Entry<'_>,
-) -> Vec<usize> {
-    constructions(d)
-        .into_iter()
-        .filter(|&construction| reach(d, construction, columns, &entry.clause) != Reach::Never)
-        .filter_map(|construction| derivation(d, construction, column, name))
-        .collect()
-}
-
-/// SUB-19: the derivations the column-level origin answers for. A
-/// construction every row of which an entry declaring its own origin selects
-/// is answered for by that entry instead.
-pub(crate) fn column_derivations(
-    d: &Document,
-    column: usize,
-    name: &str,
-    columns: &BTreeMap<&str, usize>,
-    entries: &[Entry<'_>],
-) -> Vec<usize> {
-    constructions(d)
-        .into_iter()
-        .filter(|&construction| {
-            !entries.iter().any(|entry| {
-                entry.declares(d, "origin")
-                    && reach(d, construction, columns, &entry.clause) == Reach::Only
-            })
-        })
-        .filter_map(|construction| derivation(d, construction, column, name))
-        .collect()
-}
-
-/// Every declared column name and its declaration node.
-pub(crate) fn declared_columns(d: &Document) -> BTreeMap<&str, usize> {
-    items(d, present(d, d.root(), "columns"))
-        .iter()
-        .filter_map(|&node| Some((text(d, present(d, node, "name")?)?, node)))
-        .collect()
 }
 
 /// One entry's where clause as written in the typed tree.

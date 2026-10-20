@@ -55,7 +55,7 @@ pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> 
         }
     }
     // Row shapes are admitted before filters or default expansion allocate a plan.
-    for (index, template) in spec.rows.templates.iter().enumerate() {
+    for template in &spec.rows.templates {
         for (resource, name, actual, limit) in [
             (
                 "group_keys",
@@ -75,7 +75,7 @@ pub(in crate::specification) fn limits(spec: &Spec) -> Result<(), PrepareError> 
                     resource,
                     limit,
                     Some(actual),
-                    Some(&format!("rows[{index}].{name}")),
+                    Some(&format!("{}.{name}", spec.cite(template.meta))),
                 ));
             }
         }
@@ -102,11 +102,11 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         }
     }
     let rows = &spec.rows.templates;
-    for (index, template) in rows.iter().enumerate() {
+    for template in rows {
         for (column, _) in &template.overrides {
             if !names.contains(&column.name.as_str()) {
                 findings.push(PreflightFinding::UndeclaredRowColumn {
-                    index,
+                    row_path: spec.cite(template.meta),
                     column: column.name.clone(),
                 });
             }
@@ -212,10 +212,14 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
             .iter()
             .position(|prior| prior.id.name == identity)
         {
-            let mut finding =
-                LookupFinding::new(&format!("rows[{index}].id"), C::PreflightDuplicateRow)
-                    .diagnostic();
-            finding.spec_paths.push(format!("rows[{previous}].id"));
+            let mut finding = LookupFinding::new(
+                &format!("{}.id", spec.cite(template.meta)),
+                C::PreflightDuplicateRow,
+            )
+            .diagnostic();
+            finding
+                .spec_paths
+                .push(format!("{}.id", spec.cite(rows[previous].meta)));
             finding.context.insert(
                 "identifier".into(),
                 crate::json::Value::String(identity.into()),
@@ -227,7 +231,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
             inputs.contains(&name) || spec.intermediates.iter().any(|item| item.id.name == name)
         }) {
             findings.push(PreflightFinding::RowDriverUnavailable {
-                index,
+                row_path: spec.cite(template.meta),
                 row: identity.into(),
                 dataset: driver.map(String::from),
             });
@@ -246,7 +250,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
                 .any(|(position, name)| groups[..position].contains(name))
         {
             findings.push(PreflightFinding::InvalidGroup {
-                index,
+                row_path: spec.cite(template.meta),
                 row: identity.into(),
                 groups,
             });
@@ -254,7 +258,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
             for name in groups {
                 if !name.starts_with(&format!("{driver}.")) || name.matches('.').count() != 1 {
                     findings.push(PreflightFinding::GroupReference {
-                        index,
+                        row_path: spec.cite(template.meta),
                         row: identity.into(),
                         name,
                         dataset: driver.into(),

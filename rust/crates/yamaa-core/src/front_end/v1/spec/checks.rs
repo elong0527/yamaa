@@ -1,10 +1,134 @@
 //! Rules of the 1.0 surface that its schema cannot state, checked on the
 //! lowered tree before any input is read. Their findings belong to
 //! validation, as the schema's do, and name the 1.0 paths (P-CLR-2).
+//!
+//! [`unbuilt`] lists what a 1.0 specification writes that the engine does not
+//! build yet; each is refused as `unsupported_operation` (COLUMN-15) until its
+//! pull request lands (#3030 D76).
 
-use crate::ast::{Direction, ExprId, ExprKind, ScalarOp, Spec, Window, WindowFunction};
+use crate::ast::{
+    Comparator, Direction, ExprId, ExprKind, Profile, ScalarOp, Spec, SubmissionMetadata, Window,
+    WindowFunction,
+};
 use crate::diagnostic::ConditionCode;
-use crate::schema::{SchemaContext as C, SchemaDiagnostic};
+use crate::schema::{Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
+use crate::specification::UnsupportedFeature;
+
+/// A copy entry (P-COPY-1), refused until P1-12 builds it.
+pub const COPY: &str = "copy";
+/// More than one origin on a column or a value-level entry (P-ORIGIN-1),
+/// refused until P1-13 builds them.
+pub const MULTIPLE_ORIGINS: &str = "multiple_origins";
+/// A dataset's `submission.standard` (P-STD-1), refused until P1-13.
+pub const SUBMISSION_STANDARD: &str = "submission_standard";
+/// A value-level `where` comparator, NE or NOTIN (P-VLM-1), refused until
+/// P1-14.
+pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
+/// An input whose path names an ODM XML file (P-ODMIN-1), refused until
+/// P1-15.
+pub const ODM_XML_INPUT: &str = "odm_xml_input";
+/// A specification `model` the engine cannot check yet (SUB-3), refused
+/// until P1-10.
+pub const MODEL_CHECK: &str = "model_check";
+/// A codelist or project function a specification run without its project
+/// binds (D32), refused until P1-11.
+pub const PROJECT_BINDING: &str = "project_binding";
+
+fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
+    UnsupportedFeature {
+        operation: operation.into(),
+        path,
+    }
+}
+
+/// The copy entries one admitted 1.x layer writes, each at `columns[i]`, in
+/// written order. Composition cannot key a copy entry yet, so a layer that
+/// writes one is refused before its layers compose (P1-12).
+pub fn copy_entries(layer: &Document) -> Vec<UnsupportedFeature> {
+    let Some(N::Sequence(columns)) = layer
+        .field(layer.root(), "columns")
+        .map(|node| &layer.nodes()[node])
+    else {
+        return Vec::new();
+    };
+    columns
+        .iter()
+        .enumerate()
+        .filter(|&(_, &column)| layer.field(column, COPY).is_some())
+        .map(|(index, _)| unsupported(COPY, format!("columns[{index}]")))
+        .collect()
+}
+
+/// What a lowered 1.0 specification writes that the engine does not build
+/// yet, in written order: an ODM XML input; more than one origin; a
+/// value-level comparator; a dataset's `standard`; and submission metadata
+/// without the `model` it requires (SUB-3). A specification that declares
+/// submission metadata needs `model`, which P1-10 checks; until then a
+/// declared `model` is read and not checked.
+pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
+    let mut found = Vec::new();
+    for input in &spec.inputs {
+        if input.source.profile == Some(Profile::OdmXml) {
+            found.push(unsupported(ODM_XML_INPUT, spec.cite(input.source.path.meta)));
+        }
+    }
+    let origins = |metadata: &SubmissionMetadata, at: String, found: &mut Vec<_>| {
+        if metadata.origins.len() > 1 {
+            found.push(unsupported(MULTIPLE_ORIGINS, format!("{at}.origins")));
+        }
+    };
+    let mut declares_submission = spec.submission.is_some();
+    for column in &spec.columns {
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        declares_submission = true;
+        origins(&submission.metadata, spec.cite(submission.meta), &mut found);
+        for entry in &submission.value_level {
+            for clause in &entry.conditions {
+                if clause.comparator == Comparator::NotIn {
+                    found.push(unsupported(
+                        VALUE_LEVEL_COMPARATOR,
+                        format!("{}.comparator", spec.cite(clause.meta)),
+                    ));
+                }
+            }
+            origins(&entry.metadata, spec.cite(entry.meta), &mut found);
+        }
+    }
+    if let Some(standard) = spec.submission.as_ref().and_then(|s| s.standard.as_ref()) {
+        found.push(unsupported(SUBMISSION_STANDARD, spec.cite(standard.meta)));
+    }
+    if declares_submission && spec.model.is_none() {
+        found.push(unsupported(MODEL_CHECK, "model".into()));
+    }
+    found
+}
+
+/// What a lowered 1.0 specification compiled without its project binds,
+/// which D32 refuses as `project_binding_missing` once P1-11 builds it: each
+/// codelist a column or value-level entry binds, and each project function
+/// it calls, in written order.
+pub fn project_bindings(spec: &Spec) -> Vec<UnsupportedFeature> {
+    let mut found = Vec::new();
+    for column in &spec.columns {
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        let codelists = std::iter::once(&submission.metadata)
+            .chain(submission.value_level.iter().map(|entry| &entry.metadata))
+            .filter_map(|metadata| metadata.codelist.as_ref());
+        for codelist in codelists {
+            found.push(unsupported(PROJECT_BINDING, spec.cite(codelist.meta)));
+        }
+    }
+    for expr in &spec.exprs {
+        if matches!(expr.kind, ExprKind::Call { .. }) {
+            found.push(unsupported(PROJECT_BINDING, spec.cite(expr.meta)));
+        }
+    }
+    found
+}
 
 /// The findings of a lowered 1.0 specification, in written order.
 pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
