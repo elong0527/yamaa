@@ -67,6 +67,8 @@ class HostBindings(unittest.TestCase):
             directory, manifest = crates[name]
             with self.subTest(crate=name):
                 self.assertIs(manifest["lib"]["doctest"], False)
+                # Otherwise `--all-targets` checks the library again as a bench.
+                self.assertIs(manifest["lib"]["bench"], False)
                 # `test = false` would leave any of these unrun.
                 for targets in ("tests", "benches", "examples"):
                     self.assertFalse((directory / targets).exists())
