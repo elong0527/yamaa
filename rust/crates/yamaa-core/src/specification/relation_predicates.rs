@@ -125,7 +125,7 @@ pub(super) fn bind(
             .get(column)
             .map(|column| column.kind.into())
     };
-    let type_findings = static_types::predicate_kinds(plan, kind);
+    let type_findings = types::predicate_kinds(plan, kind);
     if static_filter_types {
         findings.extend(type_findings.iter().cloned().map(BindFinding::Predicate));
     }

@@ -70,6 +70,7 @@ pub(super) fn prepare_value_with_driver(
         )?)),
         "aggregate" => Operation::Aggregate(std::boxed::Box::new(aggregates::prepare(
             d,
+            value,
             payload,
             &result_path,
             project,
@@ -82,12 +83,13 @@ pub(super) fn prepare_value_with_driver(
         "literal" => Operation::Literal(literal(d, payload, &result_path)?),
         "function" => {
             let project = project.ok_or(PrepareError::Internal)?;
+            // The tree types the call by the return its definition declares.
+            project
+                .returns
+                .get(&payload)
+                .ok_or(PrepareError::Internal)?;
             Operation::ProjectFunction {
                 call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
-                returns: *project
-                    .returns
-                    .get(&payload)
-                    .ok_or(PrepareError::Internal)?,
             }
         }
         "case" => Operation::Case(cases::prepare(
@@ -254,7 +256,7 @@ pub(super) fn prepare_value_with_driver(
         }
         _ => return Err(unsupported(&result_path, op)),
     };
-    Ok(cases::Branch::value(operation, result_path))
+    Ok(cases::Branch::value(operation, result_path, value))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -331,23 +333,10 @@ fn bind_row_compute(
             });
         }
     }
-    static_types::numeric(
-        compiled,
-        &bindings,
-        named,
-        catalog,
-        secondary,
-        intermediates,
-        findings,
-    )?;
+    let captured = types::CapturedTypes::new(named, catalog, secondary, intermediates);
+    captured.numeric(compiled, &bindings, findings);
     (findings.len() == before)
-        .then(|| {
-            BoundNumeric::new(
-                static_types::typed(compiled, named, catalog, secondary, intermediates),
-                bindings,
-            )
-            .map(Expression::Compute)
-        })
+        .then(|| BoundNumeric::new(captured.typed(compiled), bindings).map(Expression::Compute))
         .transpose()
         .map_err(BindError::InvalidNumericBinding)
 }
@@ -405,6 +394,7 @@ fn bind_row_case(
     reported: bool,
     output: &TableSchema,
     project: Option<&crate::project_calls::ProjectCalls>,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[SecondarySource],
     intermediates: &[Option<Intermediate>],
@@ -484,7 +474,8 @@ fn bind_row_case(
                 if findings.len() == before {
                     Some(
                         BoundPredicate::new_contextual(
-                            static_types::typed(plan, named, catalog, secondary, intermediates),
+                            types::CapturedTypes::new(named, catalog, secondary, intermediates)
+                                .typed(plan),
                             bindings,
                             Vec::new(),
                         )
@@ -510,6 +501,7 @@ fn bind_row_case(
             reported,
             output,
             project,
+            tree,
             named,
             secondary,
             intermediates,
@@ -542,6 +534,7 @@ pub(super) fn bind_row(
     reported: bool,
     output: &TableSchema,
     project: Option<&crate::project_calls::ProjectCalls>,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[SecondarySource],
     intermediates: &[Option<Intermediate>],
@@ -557,6 +550,7 @@ pub(super) fn bind_row(
             row,
             phase,
             output,
+            tree,
             named,
             secondary,
             intermediates,
@@ -775,6 +769,7 @@ pub(super) fn bind_row(
             reported,
             output,
             project,
+            tree,
             named,
             secondary,
             intermediates,

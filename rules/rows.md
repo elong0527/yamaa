@@ -136,7 +136,7 @@ the window pass. A grouped row template's `filter` fails when it names a
 qualified variable or a column not derived by that row template.
 
 Fails: `phase_boundary`.
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`, `rust/crates/yamaa-core/src/specification/static_types/tests.rs::a_deferred_lookup_match_has_its_authored_filter_phase_witness`.
+Evidence: `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`, `rust/crates/yamaa-core/src/specification/types/tests.rs::a_deferred_lookup_match_has_its_authored_filter_phase_witness`.
 Replaces: REQ-0068.
 
 A qualified grouped-filter reference or an unqualified filter reference outside

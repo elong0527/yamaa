@@ -223,3 +223,147 @@ fn abort_removes_only_the_staging_token_not_the_target() {
         .unwrap();
     assert_eq!(backend.staged_count(), 0);
 }
+
+/// A declaring identity and a written path.
+#[cfg(feature = "yaml")]
+type Name = (String, String);
+
+/// Serves each name under the location a Windows walk would give it, so a
+/// test on any host can place an entry on a local drive and its parent on
+/// another drive or on a network share, and records every capture.
+#[cfg(feature = "yaml")]
+#[derive(Default)]
+struct Located {
+    objects: std::collections::BTreeMap<Name, (String, Arc<[u8]>)>,
+    captures: std::sync::Mutex<Vec<Name>>,
+}
+#[cfg(feature = "yaml")]
+impl Located {
+    fn insert(&mut self, declaring: &str, written: &str, location: &str, bytes: &[u8]) {
+        self.objects.insert(
+            (declaring.into(), written.into()),
+            (location.into(), Arc::from(bytes)),
+        );
+    }
+}
+#[cfg(feature = "yaml")]
+impl Resolver for Located {
+    fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+        if !matches!(request.operation, Operation::Inspect | Operation::Capture) {
+            return Err(Failure::Rejected);
+        }
+        let (location, bytes) = self
+            .objects
+            .get(&(request.declaring.to_owned(), request.written.to_owned()))
+            .ok_or(Failure::Missing)?;
+        if request.reference.is_some_and(|held| held != location) {
+            return Err(Failure::Changed);
+        }
+        let capture = request.operation == Operation::Capture;
+        if capture {
+            self.captures
+                .lock()
+                .unwrap()
+                .push((request.declaring.into(), request.written.into()));
+        }
+        Ok(Reply {
+            bytes: capture.then(|| Arc::clone(bytes)),
+            location: Some(location.clone()),
+            ..Reply::reference(location.clone())
+        })
+    }
+}
+
+/// An entry at `entry` whose parent, written `P:/std/base.yaml`, lies at
+/// `parent`: the parent declares its input beside itself (FILE-1, LAYER-10).
+/// Folders named like the parent's share also hold that input beside the
+/// entry, where a parent step through the entry's root would lead.
+#[cfg(feature = "yaml")]
+fn parent_elsewhere(entry: &str, parent: &str) -> Located {
+    const ENTRY: &[u8] = b"schema_version: '1.0'\nparent: P:/std/base.yaml\ndomain: CHILD\n";
+    const PARENT: &[u8] = b"schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: input/src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    let mut resolver = Located::default();
+    resolver.insert("/", "child.yaml", entry, ENTRY);
+    resolver.insert(entry, "P:/std/base.yaml", parent, PARENT);
+    for climb in ["..", "../.."] {
+        let written = format!("{climb}/server/share/std/input/src.csv");
+        resolver.insert(
+            entry,
+            &written,
+            "C:/server/share/std/input/src.csv",
+            b"ID\n999\n",
+        );
+    }
+    resolver
+}
+
+#[cfg(feature = "yaml")]
+#[test]
+fn a_parent_on_another_drive_reads_its_input_beside_itself() {
+    for entry in ["C:/study/child.yaml", "//server/share/study/child.yaml"] {
+        let mut resolver = parent_elsewhere(entry, "D:/std/base.yaml");
+        resolver.insert(
+            entry,
+            "D:/std/input/src.csv",
+            "D:/std/input/src.csv",
+            b"ID\n7\n",
+        );
+        let resolver = Arc::new(resolver);
+        let resources = Resources::with_resolver(resolver.clone(), "child.yaml");
+        let prepared =
+            yamaa_adapters::file_preparation::FileSpecification::prepare(resources, "child.yaml")
+                .unwrap();
+        // No relative path climbs from the entry's root to `D:`, so the
+        // location is written whole.
+        assert_eq!(prepared.run().source().path, "D:/std/input/src.csv");
+        let mut run = prepared.run_scope(None);
+        let attempt = prepared.build(&mut run, yamaa_core::application_observer::Scope::default());
+        assert!(attempt.result.is_ok());
+        assert_eq!(
+            resolver.captures.lock().unwrap().last(),
+            Some(&(entry.to_owned(), "D:/std/input/src.csv".to_owned()))
+        );
+    }
+}
+
+#[cfg(feature = "yaml")]
+#[test]
+fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
+    for (entry, parent) in [
+        // The entry on a local drive, the parent on a share it maps.
+        ("C:/study/child.yaml", "//server/share/std/base.yaml"),
+        // The entry on one share, the parent on another.
+        (
+            "//other/share/study/child.yaml",
+            "//server/share/std/base.yaml",
+        ),
+    ] {
+        let resolver = Arc::new(parent_elsewhere(entry, parent));
+        let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
+            yamaa_core::build::Request {
+                specification: "child.yaml",
+                environment: None,
+            },
+            yamaa_core::project_function::Language::Python,
+            resolver.clone(),
+        ) else {
+            panic!("a parent at {parent} was rebased onto the root of {entry}");
+        };
+        let issues = yamaa_adapters::project_application::selection_failure(&error);
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        // A registered refusal, as any opaque preparation failure reports.
+        assert_eq!(issues[0].condition, "engine_rejected", "{issues:?}");
+        assert_eq!(issues[0].phase, "engine", "{issues:?}");
+        // Only the two specifications were read: nothing under folders named
+        // like the parent's share, in its input's place.
+        let captures = resolver.captures.lock().unwrap();
+        assert_eq!(
+            captures
+                .iter()
+                .map(|(_, written)| written.as_str())
+                .collect::<Vec<_>>(),
+            ["child.yaml", "P:/std/base.yaml"],
+            "{entry} {parent}"
+        );
+    }
+}

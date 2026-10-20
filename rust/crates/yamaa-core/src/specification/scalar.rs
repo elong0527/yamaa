@@ -37,17 +37,6 @@ impl Declaration {
     pub(super) fn sources(&self) -> &[String] {
         &self.sources
     }
-    /// EXPR-14: the type the sources share.
-    pub(super) fn result_type(
-        &self,
-        input: &dyn Fn(&str) -> crate::result_type::ResultType,
-    ) -> crate::result_type::ResultType {
-        self.sources
-            .iter()
-            .fold(crate::result_type::ResultType::MISSING, |kind, source| {
-                kind.or(input(source))
-            })
-    }
 }
 /// VALUE-19's comparability of two declared operand types.
 fn comparable(a: ColumnType, b: ColumnType) -> bool {
@@ -56,14 +45,14 @@ fn comparable(a: ColumnType, b: ColumnType) -> bool {
 /// Known declared types reject incompatible extremes before source activation.
 pub(super) fn declaration_findings(
     d: &Document,
-    output: &TableSchema,
+    declared: &types::DeclaredTypes<'_>,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
     fn visit(
         d: &Document,
         id: usize,
         path: &str,
-        output: &TableSchema,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
     ) -> Result<(), PrepareError> {
@@ -83,15 +72,8 @@ pub(super) fn declaration_findings(
                     .collect::<Result<Vec<_>, _>>()?;
                 let types = sources
                     .iter()
-                    .map(|name| {
-                        Ok(output
-                            .columns()
-                            .iter()
-                            .find(|column| column.name == *name)
-                            .map(|c| c.kind)
-                            .or(temporal::declared_source_type(d, name)?))
-                    })
-                    .collect::<Result<Vec<_>, PrepareError>>()?;
+                    .map(|name| declared.operand(name).column_type())
+                    .collect::<Vec<_>>();
                 let known = types.iter().flatten().copied().collect::<Vec<_>>();
                 if known
                     .first()
@@ -116,7 +98,7 @@ pub(super) fn declaration_findings(
                             d,
                             child,
                             &format!("{path}.case[{index}].{name}"),
-                            output,
+                            declared,
                             findings,
                             depth + 1,
                         )?;
@@ -135,7 +117,7 @@ pub(super) fn declaration_findings(
                 d,
                 value,
                 &format!("columns.{}.derivation", text(d, field(d, column, "name")?)?),
-                output,
+                declared,
                 findings,
                 0,
             )?;
@@ -153,7 +135,7 @@ pub(super) fn declaration_findings(
                             d,
                             value,
                             &format!("rows[{index}].derivations.{}", text(d, name)?),
-                            output,
+                            declared,
                             findings,
                             0,
                         )?;
@@ -163,7 +145,7 @@ pub(super) fn declaration_findings(
         }
     }
     match_values::visit_keys(d, &mut |value, path| {
-        visit(d, value, path, output, findings, 0)
+        visit(d, value, path, declared, findings, 0)
     })?;
     Ok(())
 }

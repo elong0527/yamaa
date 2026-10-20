@@ -152,51 +152,89 @@ fn is_absolute_spelling(path: &str) -> bool {
             && path.as_bytes()[1] == b':'
             && path.as_bytes()[2] == b'/')
 }
-/// Lexical only: preparation never inspects or opens a study/output path.
+/// Respell the path `written` that the layer `layer` declares so that it names
+/// the same location from the entry `entry` (LAYER-10). Lexical only:
+/// preparation never inspects or opens a study/output path.
+///
+/// Each identity's directory is one root and its segments: `/`, a drive
+/// (`C:`) or a network share (`//server/share`, D15) is one root. On the
+/// entry's root, the path is respelled relative to the entry's directory, a
+/// parent step at the root staying there (FILE-6). No relative path leaves
+/// the entry's root, so a location on another root is written whole, as
+/// LAYER-10 writes a location the entry cannot reach relatively: below `/` or
+/// a drive, its absolute path, which file resolution walks from that root.
+/// A location on another network share fails closed: no written path names a
+/// share (FILE-4), and a parent step through the entry's root would walk a
+/// local folder of the same name instead.
 fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceError> {
-    let layer = directory(layer)?;
-    let entry = directory(entry)?;
-    let drive_rooted = written
-        .as_bytes()
-        .first()
-        .is_some_and(u8::is_ascii_alphabetic)
-        && written.as_bytes().get(1) == Some(&b':')
-        && written.as_bytes().get(2) == Some(&b'/');
-    if written.starts_with('/') || drive_rooted || layer == entry {
+    let layer = rebase_directory(layer)?;
+    let entry = rebase_directory(entry)?;
+    if is_absolute_spelling(written) || same_directory(&layer, &entry) {
         return Ok(written.into());
     }
-    let mut target = layer
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
+    let mut target = layer;
     for part in written.split('/') {
         match part {
             "." | "" => {}
             ".." => {
-                target.pop();
+                if target.len() > 1 {
+                    target.pop();
+                }
             }
-            part => target.push(part),
+            part => target.push(part.to_owned()),
         }
     }
-    let entry = entry
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-    let common = target
+    if !same_root(&target[0], &entry[0]) {
+        if target[0].starts_with("//") {
+            return Err(ResourceError::OutsideRoots);
+        }
+        return Ok(format!("{}/{}", target[0], target[1..].join("/")));
+    }
+    let common = 1 + target[1..]
         .iter()
-        .zip(&entry)
-        .take_while(|(a, b)| a == b)
+        .zip(&entry[1..])
+        .take_while(|(target, entry)| crate::file_resources::same_location(target, entry))
         .count();
     let result = std::iter::repeat_n("..", entry.len() - common)
-        .chain(target[common..].iter().copied())
+        .chain(target[common..].iter().map(String::as_str))
         .collect::<Vec<_>>()
         .join("/");
-    let result = if result.is_empty() {
+    Ok(if result.is_empty() {
         ".".into()
     } else {
         result
-    };
-    Ok(result)
+    })
+}
+/// The root and segments of the directory that holds the file a declaring
+/// identity names. A network share is one root on every host: rebasing is
+/// lexical, and only a Windows walk gives an identity a share root.
+fn rebase_directory(identity: &str) -> Result<Vec<String>, ResourceError> {
+    let mut segments =
+        crate::file_resolver::split_rooted(identity, true).ok_or(ResourceError::InvalidPath)?;
+    if segments.len() > 1 {
+        segments.pop();
+    }
+    if segments[1..]
+        .iter()
+        .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return Err(ResourceError::InvalidPath);
+    }
+    Ok(segments)
+}
+/// Whether two roots are one. Windows names drives and shares
+/// case-insensitively; a host without them still compares a lexical drive or
+/// share root that way, and `/` equals only itself.
+fn same_root(left: &str, right: &str) -> bool {
+    left.eq_ignore_ascii_case(right) || crate::file_resources::same_location(left, right)
+}
+fn same_directory(left: &[String], right: &[String]) -> bool {
+    left.len() == right.len()
+        && same_root(&left[0], &right[0])
+        && left[1..]
+            .iter()
+            .zip(&right[1..])
+            .all(|(left, right)| crate::file_resources::same_location(left, right))
 }
 
 impl ProjectCapturePort for Reader<'_> {
@@ -284,5 +322,165 @@ mod spelling_tests {
             .unwrap(),
             "input/lb.csv"
         );
+    }
+
+    #[test]
+    fn rebase_respells_layers_on_the_entry_root_relative_to_the_entry() {
+        for (layer, entry, written, rebased) in [
+            (
+                "/common/spec.yaml",
+                "/study/spec.yaml",
+                "dm.csv",
+                "../common/dm.csv",
+            ),
+            ("/a/b/spec.yaml", "/a/spec.yaml", "../c/dm.csv", "c/dm.csv"),
+            // A parent step at the root stays there (FILE-6).
+            (
+                "/common/spec.yaml",
+                "/study/spec.yaml",
+                "../../../dm.csv",
+                "../dm.csv",
+            ),
+            (
+                "C:/common/spec.yaml",
+                "C:/study/spec.yaml",
+                "dm.csv",
+                "../common/dm.csv",
+            ),
+            (
+                "C:/common/spec.yaml",
+                "C:/study/spec.yaml",
+                "../../dm.csv",
+                "../dm.csv",
+            ),
+            // A drive letter is one root, whatever its case.
+            (
+                "c:/common/spec.yaml",
+                "C:/study/spec.yaml",
+                "dm.csv",
+                "../common/dm.csv",
+            ),
+            // A network share is one root: its server and share are never
+            // folders a parent step climbs through.
+            (
+                "//server/share/common/spec.yaml",
+                "//server/share/study/spec.yaml",
+                "dm.csv",
+                "../common/dm.csv",
+            ),
+            (
+                "//server/share/common/spec.yaml",
+                "//server/share/study/spec.yaml",
+                "../../../dm.csv",
+                "../dm.csv",
+            ),
+            (
+                "//server/share/spec.yaml",
+                "//server/share/study/deep/spec.yaml",
+                "input/dm.csv",
+                "../../input/dm.csv",
+            ),
+            // One share, spelled in two cases, is one root.
+            (
+                "//SERVER/Share/common/spec.yaml",
+                "//server/share/study/spec.yaml",
+                "dm.csv",
+                "../common/dm.csv",
+            ),
+            (
+                "//SERVER/Share/study/spec.yaml",
+                "//server/share/study/spec.yaml",
+                "dm.csv",
+                "dm.csv",
+            ),
+        ] {
+            assert_eq!(
+                rebase(layer, entry, written).unwrap(),
+                rebased,
+                "{layer} {entry} {written}"
+            );
+        }
+    }
+
+    #[test]
+    fn rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it() {
+        // Below `/` or a drive, the location is written as its absolute path
+        // (LAYER-10), which file resolution walks from that root.
+        for (layer, entry, written, rebased) in [
+            (
+                "D:/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "input/dm.csv",
+                "D:/std/input/dm.csv",
+            ),
+            (
+                "D:/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "../../../dm.csv",
+                "D:/dm.csv",
+            ),
+            (
+                "C:/std/spec.yaml",
+                "//server/share/study/spec.yaml",
+                "input/dm.csv",
+                "C:/std/input/dm.csv",
+            ),
+            (
+                "/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "input/dm.csv",
+                "/std/input/dm.csv",
+            ),
+            // A rooted path names its own location from any layer.
+            (
+                "//server/share/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "D:/data/dm.csv",
+                "D:/data/dm.csv",
+            ),
+        ] {
+            assert_eq!(
+                rebase(layer, entry, written).unwrap(),
+                rebased,
+                "{layer} {entry} {written}"
+            );
+        }
+        // A location on a share is never respelled through the entry's root,
+        // where `../../server/share/...` would walk local folders of the same
+        // names, nor through another share: it fails closed, since no written
+        // path names a share (FILE-4).
+        for (layer, entry) in [
+            ("//server/share/std/spec.yaml", "C:/study/spec.yaml"),
+            ("//server/share/std/spec.yaml", "/study/spec.yaml"),
+            (
+                "//other/share/std/spec.yaml",
+                "//server/share/study/spec.yaml",
+            ),
+            (
+                "//server/other/std/spec.yaml",
+                "//server/share/study/spec.yaml",
+            ),
+        ] {
+            for written in ["input/dm.csv", "../dm.csv", "./dm.csv"] {
+                assert_eq!(
+                    rebase(layer, entry, written),
+                    Err(ResourceError::OutsideRoots),
+                    "{layer} {entry} {written}"
+                );
+            }
+        }
+        // Identities that name no rooted file are refused.
+        for (layer, entry) in [
+            ("relative/spec.yaml", "/study/spec.yaml"),
+            ("/study/spec.yaml", "//server"),
+            ("/a//spec.yaml", "/study/spec.yaml"),
+            ("/a/../spec.yaml", "/study/spec.yaml"),
+        ] {
+            assert_eq!(
+                rebase(layer, entry, "dm.csv"),
+                Err(ResourceError::InvalidPath),
+                "{layer} {entry}"
+            );
+        }
     }
 }

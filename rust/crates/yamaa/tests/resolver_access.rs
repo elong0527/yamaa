@@ -145,6 +145,12 @@ impl Case {
     /// Every distinct operation and location the resolver was asked for
     /// since the last call, with the record cleared.
     fn accesses(&self) -> BTreeSet<Access> {
+        self.requests().into_iter().collect()
+    }
+
+    /// Every request since the last call, in order and each as often as it
+    /// was made, with the record cleared.
+    fn requests(&self) -> Vec<Access> {
         std::mem::take(&mut *self.resolver.log.lock().unwrap())
             .into_iter()
             .map(|(operation, named)| {
@@ -321,21 +327,23 @@ fn read_odm_captures_its_source_once_through_the_resolver() {
 </ODM>"#;
     let case = Case::new("sdtm-dm-metadata", &[("/odm/items.xml", ODM)]);
     let result = case.engine().read_odm("odm/items.xml", &OdmOptions::new());
+    // One request each: a source read twice would log twice.
+    let once = |location: &str| vec![("capture", location.to_owned())];
     if cfg!(feature = "odm") {
         assert_eq!(result.unwrap().rows(), 1);
-        assert_eq!(case.accesses(), set(&[("capture", "/odm/items.xml")]));
+        assert_eq!(case.requests(), once("/odm/items.xml"));
         let Err(yamaa::Error::Odm(refusal)) =
             case.engine().read_odm("odm/absent.xml", &OdmOptions::new())
         else {
             panic!("a source the resolver lacks is not found");
         };
         assert_eq!(refusal.code(), "not_found");
-        assert_eq!(case.accesses(), set(&[("capture", "/odm/absent.xml")]));
+        assert_eq!(case.requests(), once("/odm/absent.xml"));
     } else {
         assert!(matches!(
             result,
             Err(yamaa::Error::Unavailable { feature: "odm" })
         ));
-        assert_eq!(case.accesses(), BTreeSet::new());
+        assert_eq!(case.requests(), Vec::new());
     }
 }

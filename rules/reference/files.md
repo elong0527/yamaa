@@ -104,7 +104,7 @@ consulted, and a malformed path fails validation. A written path is ASCII
 under [Values](../values.md), like every other repository-authored
 value.
 
-Evidence: `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-adapters/src/file_metadata.rs::absolute_spelling_covers_both_root_forms_lexically`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::parent_and_absolute_local_paths_build_and_save_held_bytes`, `rust/crates/yamaa-adapters/src/file_resolver.rs::rooted_spellings_split_into_one_root_and_their_segments_on_every_host`, `rust/crates/yamaa-adapters/tests/network_shares.rs::a_specification_on_a_network_share_builds_and_saves_through_the_share`.
+Evidence: `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-adapters/src/file_metadata.rs::absolute_spelling_covers_both_root_forms_lexically`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::parent_and_absolute_local_paths_build_and_save_held_bytes`, `rust/crates/yamaa-adapters/src/file_resolver.rs::rooted_spellings_split_into_one_root_and_their_segments_on_every_host`, `rust/crates/yamaa-adapters/tests/network_shares.rs::a_specification_on_a_network_share_builds_and_saves_through_the_share`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`.
 Replaces: REQ-0773, REQ-0774, REQ-0779.
 
 An absolute local path may name any location permitted by the operating system
@@ -116,6 +116,14 @@ network share (`\\server\share\study\spec.yaml`) or a mapped drive. A declared
 path keeps the written forms above and never names a share itself; a relative
 path, or a drive path that the operating system maps to a share, resolves on
 that share.
+
+An inherited layer's relative input and output paths name locations beside
+that layer, unless `relative_to: entry` selects the entry, and composition
+writes them from the entry ([LAYER-10](../inheritance.md#layer-10)). A
+parent step never leaves the entry's root, so a location beside a layer on
+another drive is written as its absolute path. A location beside a layer on a
+network share that the entry is not on has no written path, and its
+declaration is refused rather than resolved below the entry's root.
 
 <a id="file-5"></a>
 
@@ -207,6 +215,12 @@ rule, on a local drive and on a network share alike. Whatever resolver serves
 a name reports which kind of link it reached, and the engine refuses each from
 that report.
 
+On a network share, the walk sees a link only as the file server reports it.
+A link the server reports as a reparse point, as Windows file servers do, is
+refused. A server that resolves links itself, such as Samba with its default
+`follow symlinks = yes`, serves the link's target in its place, and the walk
+reads that target as the entry it reached.
+
 ## One snapshot per file
 
 <a id="file-9"></a>
@@ -220,17 +234,13 @@ the components the walk accepted, never the spelling a declaration used. A
 relative and a rooted spelling of one file therefore produce one key and bind
 one snapshot.
 
-Evidence: `sdtm-fa-odm-multitest`, `rust/crates/yamaa-adapters/tests/file_resources.rs::parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes`, `rust/crates/yamaa-adapters/src/file_resources.rs::repeated_alias_verification_keeps_original_bytes_and_checks_every_witness`.
+Evidence: `sdtm-fa-odm-multitest`, `rust/crates/yamaa-adapters/tests/file_resources.rs::parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes`, `rust/crates/yamaa-adapters/src/file_resources.rs::repeated_alias_verification_keeps_original_bytes_and_checks_every_witness`, `rust/crates/yamaa-adapters/src/file_resources.rs::a_hard_link_rewritten_between_captures_is_a_change`.
 Replaces: REQ-0786, REQ-0787.
 
 Several dataset identifiers may resolve to one physical file. The declarations
 remain distinct, each with its own identifier and its own
 [Inputs](../inputs.md) field types, but they share the one
 snapshot, and no two of them observe different bytes.
-
-A file's numeric identity, such as its inode, is not a key: two hard links to
-one file are two canonical paths and so two snapshots, each verified at its
-own path.
 
 <a id="file-10"></a>
 
