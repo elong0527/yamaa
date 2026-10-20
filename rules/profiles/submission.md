@@ -473,6 +473,8 @@ fails with `value_level_where_invalid` at `<entry>.where.<where column>`, or at
 `<entry>.where` for a clause without columns, reporting the column, the entry,
 the where column and the `reason`: `no_columns`, `self`, `undeclared`,
 `not_output`, `not_str`, `no_values`, `duplicate_value` or `not_in_codelist`.
+With `not_in_codelist` it also reports, in `values`, the listed values that
+none of the where column's codelists admits, in their declared order.
 A schema-valid `id` is an identifier; two entries of one column with the same
 `id` fail with `duplicate_identifier` at `<entry>.id`.
 

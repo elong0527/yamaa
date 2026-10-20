@@ -58,23 +58,25 @@ whether or not a document is generated: a name outside the list fails with
 
 <a id="ct-12"></a>
 
-### CT-12. A `text` codelist's `format_name` begins with `$`
+### CT-12. A codelist's `format_name` begins with `$` exactly when the codelist is `text`
 
 `format_name` is optional and names the SAS format a reader applies to a
 codelist's coded values; [DEFINE-20](define-xml.md#define-20) writes it as
 `SASFormatName`. A `text` codelist's `format_name` names a character format and
-begins with `$`. A `text` codelist declaring a `format_name` that does not
-begin with `$` fails validation.
+begins with `$`, and an `integer` or `float` codelist's names a numeric format
+and does not. A `text` codelist declaring a `format_name` that does not begin
+with `$`, or an `integer` or `float` codelist declaring one that does, fails
+validation.
 
 Fails: `value_not_permitted`.
-Evidence: `negative-format-name-without-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::text_format_names_begin_with_a_dollar_sign`, `rust/crates/yamaa-core/tests/support/project_environment.rs::format_name_reached`.
+Evidence: `negative-format-name-without-dollar`, `negative-numeric-format-name-with-dollar`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::format_names_begin_with_a_dollar_sign_exactly_for_text_codelists`, `rust/crates/yamaa-core/tests/support/project_environment.rs::format_name_reached`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written`.
 
-A `text` codelist's `format_name` that does not begin with `$` fails with
-`value_not_permitted` at the codelist's `format_name`, reporting the codelist,
-the value and the data type. It is checked wherever the project's codelists
-are validated, in every context and before any data is read, as
-[CT-6](#ct-6)'s checks are: a domain build refuses it although only a
-generated document carries the name.
+A `text` codelist's `format_name` that does not begin with `$`, or an
+`integer` or `float` codelist's that does, fails with `value_not_permitted` at
+the codelist's `format_name`, reporting the codelist, the value and the data
+type. It is checked wherever the project's codelists are validated, in every
+context and before any data is read, as [CT-6](#ct-6)'s checks are: a domain
+build refuses it although only a generated document carries the name.
 
 ## Values
 

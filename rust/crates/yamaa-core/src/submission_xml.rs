@@ -392,14 +392,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
         let mut code = Element::new("CodeList", &format!("codelists.{}", c.id.name))
             .attr("OID", format!("CL.{}", c.id.name))
             .attr("Name", &c.name.text)
-            .attr(
-                "DataType",
-                match c.data_type {
-                    ast::CodelistType::Text => "text",
-                    ast::CodelistType::Integer => "integer",
-                    ast::CodelistType::Float => "float",
-                },
-            )
+            .attr("DataType", c.data_type.name())
             .optional(
                 "def:StandardOID",
                 list.standard.as_ref().map(|id| format!("STD.{id}")),

@@ -420,12 +420,12 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
             project.context(&mut d, "field", "name")?;
             project.context(&mut d, "name", &list.name.text)?;
         }
-        // Only a text codelist's format name is checked for its prefix.
+        // A text codelist's format name without `$`, or a numeric one's with it.
         Fault::FormatNamePrefix => {
             project.append(&mut d, ".format_name")?;
             let format = &list.format_name.as_ref().ok_or(Error::InvalidIndex)?.text;
             project.context(&mut d, "value", format)?;
-            project.context(&mut d, "data_type", "text")?;
+            project.context(&mut d, "data_type", list.data_type.name())?;
         }
         Fault::InvalidShape => {}
         Fault::PartialDecode => project.context(&mut d, "field", "decode")?,

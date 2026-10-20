@@ -171,13 +171,11 @@ pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
             if !names.insert(&list.name.text) {
                 push(Fault::DuplicateName);
             }
-            // A text codelist's SAS format is a character format (CT-12).
-            if list.data_type == CodelistType::Text
-                && list
-                    .format_name
-                    .as_ref()
-                    .is_some_and(|name| !name.text.starts_with('$'))
-            {
+            // A text codelist's SAS format is a character format, whose name
+            // begins with `$`, and a numeric codelist's is not (CT-12).
+            if list.format_name.as_ref().is_some_and(|name| {
+                name.text.starts_with('$') != (list.data_type == CodelistType::Text)
+            }) {
                 push(Fault::FormatNamePrefix);
             }
             if list.items.is_some() == list.external.is_some() {

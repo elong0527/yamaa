@@ -81,8 +81,8 @@ pub(crate) fn path(column: &str, id: &str) -> String {
 }
 
 /// Why a where clause cannot select rows (SUB-12).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum WhereFault {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum WhereFault<'a> {
     /// The clause names no column.
     NoColumns,
     /// The clause names the column whose entry it is.
@@ -97,11 +97,12 @@ pub(crate) enum WhereFault {
     NoValues,
     /// A clause column lists one value twice.
     DuplicateValue,
-    /// A clause column lists a value its codelists do not admit.
-    NotInCodelist,
+    /// A clause column lists values its codelists do not admit: those
+    /// values, in declared order.
+    NotInCodelist(Vec<&'a str>),
 }
-impl WhereFault {
-    pub(crate) fn reason(self) -> &'static str {
+impl<'a> WhereFault<'a> {
+    pub(crate) fn reason(&self) -> &'static str {
         match self {
             Self::NoColumns => "no_columns",
             Self::Itself => "self",
@@ -110,7 +111,15 @@ impl WhereFault {
             Self::NotText => "not_str",
             Self::NoValues => "no_values",
             Self::DuplicateValue => "duplicate_value",
-            Self::NotInCodelist => "not_in_codelist",
+            Self::NotInCodelist(_) => "not_in_codelist",
+        }
+    }
+    /// The listed values the fault refuses, which only `not_in_codelist`
+    /// reports.
+    pub(crate) fn values(&self) -> Option<&[&'a str]> {
+        match self {
+            Self::NotInCodelist(values) => Some(values),
+            _ => None,
         }
     }
 }
@@ -124,7 +133,7 @@ pub(crate) enum Finding<'a> {
     Where {
         id: &'a str,
         column: Option<&'a str>,
-        fault: WhereFault,
+        fault: WhereFault<'a>,
     },
     /// The where clauses of `other`, declared first, and `id` can select one row.
     Overlap { id: &'a str, other: &'a str },
@@ -220,9 +229,13 @@ where
                     .then_some(WhereFault::DuplicateValue)
             })
             .or_else(|| {
-                codelist
-                    .is_some_and(|admitted| values.iter().any(|value| !admitted.contains(*value)))
-                    .then_some(WhereFault::NotInCodelist)
+                let admitted = codelist?;
+                let refused = values
+                    .iter()
+                    .copied()
+                    .filter(|value| !admitted.contains(*value))
+                    .collect::<Vec<_>>();
+                (!refused.is_empty()).then_some(WhereFault::NotInCodelist(refused))
             });
             if let Some(fault) = fault {
                 findings.push(Finding::Where {
@@ -592,9 +605,9 @@ mod tests {
             entry("G", clause(&[("AVISIT", &[])])),
             entry("H", clause(&[("AVISIT", &["V1", "V1"])])),
             entry("I", clause(&[("PARAMCD", &["X"]), ("AVISIT", &["V1"])])),
-            // A value outside the codelists fails; a repeated value is
-            // reported first.
-            entry("J", clause(&[("PARAMCD", &["Y", "Z"])])),
+            // Values outside the codelists fail, named in declared order; a
+            // repeated value is reported first.
+            entry("J", clause(&[("PARAMCD", &["Z", "Y", "W"])])),
             entry("K", clause(&[("PARAMCD", &["Z", "Z"])])),
             // A where column without a codelist admits any value.
             entry("L", clause(&[("AVISIT", &["V2"])])),
@@ -619,7 +632,11 @@ mod tests {
                     id: "I",
                     other: "A"
                 },
-                fault("J", Some("PARAMCD"), WhereFault::NotInCodelist),
+                fault(
+                    "J",
+                    Some("PARAMCD"),
+                    WhereFault::NotInCodelist(vec!["Z", "W"])
+                ),
                 fault("K", Some("PARAMCD"), WhereFault::DuplicateValue),
             ]
         );
