@@ -2,11 +2,12 @@
 
 src/rust holds the R engine bundle of tools/staging/engine_bundle.py (#3030
 D55): the engine crates and the R binding crate, with a lock trimmed from the
-canonical one and verified against it, and no tests or toolchain file. The
-package builds offline: src/rust/vendor.tar.xz carries the crates.io crates
-that the trimmed lock selects, written by tools/vendor_crates.py, which the
-package carries too, and the Makevars that configure writes point Cargo at
-them through src/rust/vendor-config.toml, the bundle's Cargo configuration.
+canonical one and verified against it, the selftest cases that the facade
+embeds (D108), and no tests or toolchain file. The package builds offline:
+src/rust/vendor.tar.xz carries the crates.io crates that the trimmed lock
+selects, written by tools/vendor_crates.py, which the package carries too,
+and the Makevars that configure writes point Cargo at them through
+src/rust/vendor-config.toml, the bundle's Cargo configuration.
 configure reads the minimum Cargo and rustc from the rust-version of the
 bundle's workspace manifest. inst/AUTHORS names every bundled crate's authors
 and license, as CRAN's Repository Policy asks.
