@@ -226,3 +226,55 @@ pub fn publication_failed(target: &str) -> Diagnostic {
         operand_route: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn snake_case(text: &str) -> bool {
+        !text.is_empty()
+            && !text.starts_with('_')
+            && !text.ends_with('_')
+            && !text.contains("__")
+            && text.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+    }
+
+    #[test]
+    fn stages_and_faults_are_closed_lists_of_distinct_codes() {
+        for spellings in [
+            Stage::ALL
+                .iter()
+                .map(|stage| stage.as_str())
+                .collect::<Vec<_>>(),
+            Fault::ALL
+                .iter()
+                .map(|fault| fault.as_str())
+                .collect::<Vec<_>>(),
+        ] {
+            assert!(spellings.iter().all(|spelling| snake_case(spelling)));
+            let distinct = spellings.iter().collect::<BTreeSet<_>>();
+            assert_eq!(distinct.len(), spellings.len(), "{spellings:?}");
+        }
+    }
+
+    #[test]
+    fn an_engine_fault_names_its_stage_and_code_and_cites_no_rule() {
+        for &stage in Stage::ALL {
+            for &fault in Fault::ALL {
+                let finding = rejected(stage, fault);
+                assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+                assert_eq!(finding.requirement(), None);
+                assert!(finding.spec_paths.is_empty());
+                assert_eq!(
+                    finding.context,
+                    [
+                        ("code".into(), JsonValue::String(fault.as_str().into())),
+                        ("stage".into(), JsonValue::String(stage.as_str().into())),
+                    ]
+                    .into()
+                );
+            }
+        }
+    }
+}

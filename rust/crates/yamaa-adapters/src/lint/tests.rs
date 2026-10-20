@@ -1141,6 +1141,24 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
         (
             Error::Write {
                 file: "spec.yaml".into(),
+                error: crate::file_publication::Error::Host(
+                    crate::host_resources::Failure::Cancelled,
+                ),
+            },
+            crate::json!({"stage":"output", "code":"host_publication_failure"}),
+        ),
+        (
+            Error::Write {
+                file: "spec.yaml".into(),
+                error: crate::file_publication::Error::Host(
+                    crate::host_resources::Failure::Cleanup,
+                ),
+            },
+            crate::json!({"stage":"output", "code":"host_publication_failure"}),
+        ),
+        (
+            Error::Write {
+                file: "spec.yaml".into(),
                 error: crate::file_publication::Error::Limit(yamaa_core::limits::LimitExceeded {
                     resource: "output_bytes",
                     limit: 1024,

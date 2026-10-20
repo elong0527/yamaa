@@ -58,19 +58,17 @@ impl Write for Writer<'_> {
     }
 }
 impl Writer<'_> {
-    fn failure(&self, cause: io::Error) -> Finding {
-        if let Some(limit) = cause
+    /// A write into the held buffer fails only at the output bound; any other
+    /// failure is a byte projection the writer could not complete.
+    fn failure(&self, error: io::Error) -> Finding {
+        match error
             .get_ref()
-            .and_then(|error| error.downcast_ref::<LimitExceeded>())
+            .and_then(|cause| cause.downcast_ref::<LimitExceeded>())
         {
-            Finding::resource_rejected(Stage::Output, Fault::OutputLimit, self.path, *limit)
-        } else {
-            Finding::rejected(
-                Stage::Output,
-                Fault::OutputProjection,
-                self.path,
-                &cause.to_string(),
-            )
+            Some(bound) => Finding::limit(self.path, Stage::Define, Fault::OutputLimit, *bound)
+                .with_detail(bound.to_string()),
+            None => Finding::fault(self.path, Stage::Define, Fault::OutputProjection)
+                .with_detail(error.to_string()),
         }
     }
     fn text(&mut self, text: &str) -> Result<(), Finding> {
@@ -78,6 +76,7 @@ impl Writer<'_> {
             .map_err(|error| self.failure(error))
     }
     fn string(&mut self, text: &str) -> Result<(), Finding> {
+        // serde_json hands an I/O failure back as the original error.
         serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error.into()))
     }
     fn cell(&mut self, value: ValueRef<'_>) -> Result<(), Finding> {
@@ -222,7 +221,7 @@ mod tests {
             assert_eq!(finding.code, ConditionCode::ApplicationRejected);
             assert_eq!(finding.definition().requirement, None);
             assert_eq!(finding.path, "datasets.DM.transport");
-            assert_eq!(finding.context["stage"], "output");
+            assert_eq!(finding.context["stage"], "define");
             assert_eq!(finding.context["code"], "output_limit");
             assert_eq!(finding.context["resource"], "output_bytes");
             assert_eq!(finding.context["limit"], Limits::OUTPUT_BYTES);
@@ -232,7 +231,7 @@ mod tests {
             );
         }
         let other = writer.failure(io::Error::other("opaque projection failure"));
-        assert_eq!(other.context["stage"], "output");
+        assert_eq!(other.context["stage"], "define");
         assert_eq!(other.context["code"], "output_projection");
         assert_eq!(other.context["detail"], "opaque projection failure");
         assert!(!other.context.contains_key("resource"));
@@ -263,6 +262,59 @@ mod tests {
             writer.cell(ValueRef::from(&value)).unwrap();
             assert_eq!(writer.output, expected.as_bytes());
         }
+    }
+    /// The output bound reaches the finding with its resource facts, written
+    /// directly or through serde_json; any other failure is a projection fault.
+    #[test]
+    fn a_refused_write_names_the_output_bound_or_a_projection_fault() {
+        use yamaa_core::json::Value as V;
+        struct Refusing;
+        impl Write for Refusing {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(io::Error::other(LimitExceeded {
+                    resource: "output_bytes",
+                    limit: Limits::OUTPUT_BYTES,
+                    actual: Some(Limits::OUTPUT_BYTES + 1),
+                }))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let writer = Writer {
+            output: Vec::new(),
+            path: "datasets.DM.transport",
+        };
+        let text = |value: &str| V::String(value.into());
+        let bound: yamaa_core::diagnostic::Context = [
+            ("actual".into(), V::from(Limits::OUTPUT_BYTES + 1)),
+            ("code".into(), text("output_limit")),
+            (
+                "detail".into(),
+                text("output_bytes: required Some(10737418241), limit 10737418240"),
+            ),
+            ("limit".into(), V::from(Limits::OUTPUT_BYTES)),
+            ("resource".into(), text("output_bytes")),
+            ("stage".into(), text("define")),
+        ]
+        .into();
+        let direct = writer.failure(Refusing.write(b"x").unwrap_err());
+        let serialized = writer.failure(serde_json::to_writer(Refusing, "x").unwrap_err().into());
+        for finding in [direct, serialized] {
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.path, "datasets.DM.transport");
+            assert_eq!(finding.context, bound);
+        }
+        let other = writer.failure(io::Error::other("not a bound"));
+        assert_eq!(
+            other.context,
+            [
+                ("code".into(), text("output_projection")),
+                ("detail".into(), text("not a bound")),
+                ("stage".into(), text("define")),
+            ]
+            .into()
+        );
     }
     #[test]
     fn float_cells_use_the_portable_float_text() {

@@ -141,13 +141,12 @@ fn published_csv_failure<E, PE>(
     dataset: &str,
     written: &str,
 ) -> Failure<E, PE> {
-    if let crate::csv_source::Error::Limit {
-        resource,
-        limit,
-        actual,
-    } = *error
-    {
-        return published_boundary_failure(
+    match *error {
+        crate::csv_source::Error::Limit {
+            resource,
+            limit,
+            actual,
+        } => published_boundary_failure(
             crate::limits::LimitExceeded {
                 resource,
                 limit,
@@ -155,17 +154,20 @@ fn published_csv_failure<E, PE>(
             },
             dataset,
             written,
-        );
-    }
-    published_source_failure(
-        error.finding(dataset, written),
-        Finding::rejected(
-            Stage::Define,
-            Fault::SourceBoundary,
-            written,
-            "published CSV admission",
         ),
-    )
+        crate::csv_source::Error::Profile {
+            cause,
+            record,
+            ref field,
+        } => Failure::Diagnostic(vec![crate::diagnostic::SourceFinding::Csv {
+            cause,
+            record,
+            field,
+            dataset,
+            path: written,
+        }
+        .diagnostic()]),
+    }
 }
 fn published_typed_csv_failure<E, PE>(
     error: &crate::typed_csv::Error,
@@ -847,6 +849,8 @@ pub fn resource_diagnostic(
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PublicationFailure {
+    /// The target was refused before any byte was written, for the reason
+    /// the adapter classified from its typed cause.
     #[error("define target admission")]
     TargetAdmission(Fault),
     #[error("define publication")]
@@ -873,10 +877,12 @@ pub fn publication_diagnostic(
         },
     };
     diagnostic.spec_paths = vec!["define".into()];
-    diagnostic.context.extend([
-        (String::from("artifact"), JsonValue::from(index)),
-        (String::from("cause"), JsonValue::String(cause)),
-    ]);
+    for (key, value) in [
+        ("artifact", JsonValue::from(index)),
+        ("cause", JsonValue::String(cause)),
+    ] {
+        diagnostic.context.insert(key.into(), value);
+    }
     diagnostic
 }
 

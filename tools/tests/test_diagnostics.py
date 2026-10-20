@@ -524,6 +524,9 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             'use crate::json_wire as wire;\n#[serde(deserialize_with = "wire::deserialize_value")]\nvalue: Value,',
             'use serde_json as json;\n#[serde(deserialize_with = "json::Value::deserialize")]\nvalue: Value,',
             '#[serde(deserialize_with = r#"crate :: json_wire :: deserialize_value"#)]\nvalue: Value,',
+            '#[serde(with = "crate::json_wire")]\nvalue: Value,',
+            'use crate::json_wire as wire;\n#[serde(with = "wire")]\nvalue: Value,',
+            'use crate::json_wire as wire;\n#[serde(with = r#"wire"#)]\nvalue: Value,',
         ]
         for source in sources:
             with self.subTest(source=source):
@@ -698,6 +701,18 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(guard.json_decodes(source), [6, 9])
 
+    def test_serde_with_resolves_the_module_deserializer_in_attribute_scope(self):
+        source = (
+            "use crate::json_wire as wire;\n"
+            "mod unrelated { use other as wire; struct Record {\n"
+            '    #[serde(with = "wire")] value: Value,\n'
+            "} }\n"
+            "mod reader { use super::wire as owned; struct Record {\n"
+            '    #[serde(with = "owned")] value: Value,\n'
+            "} }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [6])
+
     def test_value_glob_resolves_self_super_and_aliases_inside_inline_modules(self):
         for modules, imports, closing in (
             (
@@ -850,6 +865,92 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             reader.read_text().replace("mod nested", "#[cfg(test)]\nmod nested")
         )
         self.assertEqual(self.errors(), [])
+
+    def test_json_decoders_reached_by_alias_glob_or_serde_route_are_refused(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/rows.rs",
+            "use crate::json_wire as wire;\n"
+            "use crate::json_wire::{self as codec, encode};\n"
+            "use crate::json_wire::decode as parse;\n"
+            "fn read(t: &str) { wire::decode(t); codec::decode_slice(t); }\n"
+            "fn owned(t: &str) { serde_json::from_str::<json_wire::WireValueOwned>(t); }\n"
+            "#[derive(Deserialize, Serialize)]\n"
+            "struct Held {\n"
+            '    #[serde(serialize_with = "crate::json_wire::serialize_value",\n'
+            '        deserialize_with = "crate::json_wire::deserialize_value")]\n'
+            "    value: Value,\n"
+            '    #[serde(deserialize_with = "wire::deserialize_value")]\n'
+            "    other: Value,\n"
+            "}\n"
+            "fn write(v: &Value) -> String { wire::encode(v) + &codec::encode(v) }\n",
+        )
+        self.write(
+            "rust/crates/yamaa/src/glob.rs",
+            "use yamaa_adapters::json_wire::*;\n"
+            "fn write(v: &Value) -> String { encode(v) }\n"
+            "fn read(t: &str) -> Value { decode(t).unwrap() }\n",
+        )
+        self.write(
+            "rust/crates/yamaa/src/encode_only.rs",
+            "use yamaa_adapters::json_wire::*;\n"
+            "fn write(v: &Value) -> String { encode(v) }\n",
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                # The glob already exposes readers, even in encode-only code.
+                "rust/crates/yamaa/src/encode_only.rs:1: JSON text decoded outside a codec",
+                "rust/crates/yamaa/src/glob.rs:1: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:3: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:4: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:5: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:9: JSON text decoded outside a codec",
+                "rust/crates/yamaa-adapters/src/rows.rs:11: JSON text decoded outside a codec",
+            ],
+        )
+
+    def test_a_module_file_declared_under_a_test_gate_is_test_code(self):
+        decode = 'fn fixture() -> Value { crate::json_wire::decode("{}").unwrap() }\n'
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/rows.rs",
+            "#[cfg(test)]\nmod tests;\nmod helpers;\n#[cfg(not(test))]\nmod live;\n",
+        )
+        self.write(f"{crate}/rows/tests.rs", decode + "mod nested;\n")
+        self.write(f"{crate}/rows/tests/nested.rs", decode)
+        self.write(f"{crate}/rows/helpers.rs", decode)
+        self.write(f"{crate}/rows/live.rs", decode)
+        self.write(
+            f"{crate}/reader/mod.rs",
+            '#[cfg(all(test, feature = "yaml"))]\n'
+            '#[path = "fixtures.rs"]\n'
+            "pub(crate) mod probe;\n",
+        )
+        self.write(f"{crate}/reader/fixtures.rs", decode)
+        self.assertEqual(
+            self.errors(),
+            [
+                f"{crate}/rows/helpers.rs:1: JSON text decoded outside a codec",
+                f"{crate}/rows/live.rs:1: JSON text decoded outside a codec",
+            ],
+        )
+
+    def test_unregistered_condition_fixture_requires_every_loader_to_be_test_only(self):
+        crate = "rust/crates/yamaa-adapters/src"
+        self.write(
+            f"{crate}/fixtures.rs",
+            'fn fixture() { let row = Issue { condition: "not_registered".into() }; }\n',
+        )
+        loader = self.write(
+            f"{crate}/lib.rs",
+            '#[cfg(test)]\n#[path = "fixtures.rs"]\nmod fixtures;\n',
+        )
+        self.assertEqual(self.errors(), [])
+        loader.write_text(loader.read_text() + '#[path = "fixtures.rs"]\nmod live;\n')
+        self.assertEqual(
+            self.errors(),
+            [f"{crate}/fixtures.rs:1: unregistered condition literal not_registered"],
+        )
 
     def test_registered_condition_literal_is_reported_once_as_a_new_site(self):
         self.write(

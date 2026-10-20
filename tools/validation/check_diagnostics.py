@@ -481,7 +481,7 @@ def json_decodes(source: str) -> list[int]:
                 return bool(tail) and (
                     tail[0] == "*"
                     or tail[0].startswith("decode")
-                    or tail[0] in {"deserialize_value", "WireValueOwned"}
+                    or tail[0] in {"deserialize", "deserialize_value", "WireValueOwned"}
                 )
             return bool(tail) and (
                 tail in {("*",), ("de", "*")}
@@ -523,10 +523,17 @@ def json_decodes(source: str) -> list[int]:
             if (
                 kind == "string"
                 and attribute.end() <= start < end
-                and re.search(
-                    r"\bdeserialize_with\s*=\s*$", code[attribute.end() : start]
+                and (
+                    hook := re.search(
+                        r"\b(deserialize_with|with)\s*=\s*$",
+                        code[attribute.end() : start],
+                    )
                 )
-                and reader(tuple(re.split(r"\s*::\s*", value.strip())), start)
+                and reader(
+                    tuple(re.split(r"\s*::\s*", value.strip()))
+                    + (("deserialize",) if hook[1] == "with" else ()),
+                    start,
+                )
             ):
                 sites.add(start)
     return sorted({source.count("\n", 0, offset) + 1 for offset in sites})
@@ -1112,7 +1119,11 @@ def violations(root: Path) -> list[str]:
         if Path(relative) not in JSON_CODECS and path not in json_tests:
             for number in json_decodes(source):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
-        if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or test_only:
+        if (
+            Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
+            or test_only
+            or path in json_tests
+        ):
             continue
         # A registered literal is already a new site above; an unregistered
         # one names a condition that no registry, card or host knows.

@@ -90,17 +90,9 @@ impl Element {
     }
     fn write(&self, level: usize, out: &mut String) -> Result<(), Finding> {
         let append = |out: &mut String, text: &str| -> Result<(), Finding> {
-            Limits::output_extension(out.len(), text.len()).map_err(|error| {
-                let mut finding = Finding::resource_rejected(
-                    Stage::Output,
-                    Fault::OutputLimit,
-                    &self.path,
-                    error,
-                );
-                finding
-                    .context
-                    .insert("detail".into(), "render_byte_limit".into());
-                finding
+            Limits::output_extension(out.len(), text.len()).map_err(|bound| {
+                Finding::limit(&self.path, Stage::Define, Fault::OutputLimit, bound)
+                    .with_detail("render_byte_limit")
             })?;
             out.push_str(text);
             Ok(())

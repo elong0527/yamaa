@@ -77,22 +77,35 @@ struct Writer<'a> {
     path: &'a str,
 }
 impl Writer<'_> {
+    /// A held cell the writer cannot read or the record layout cannot carry.
+    /// Admission already refused every authored one, so this is a byte
+    /// projection the writer could not complete.
     fn failure(&self, detail: &str) -> Finding {
-        Finding::rejected(Stage::Output, Fault::OutputProjection, self.path, detail)
+        Finding::fault(self.path, Stage::Define, Fault::OutputProjection).with_detail(detail)
     }
-    fn limit(&self, error: LimitExceeded) -> Finding {
-        let mut finding =
-            Finding::resource_rejected(Stage::Output, Fault::OutputLimit, self.path, error);
-        if error.actual.is_none() {
-            finding
-                .context
-                .insert("detail".into(), "output byte limit".into());
-        }
-        finding
+    fn limit(&self, bound: LimitExceeded) -> Finding {
+        let detail = if bound.actual.is_none() {
+            "output byte limit".into()
+        } else {
+            bound.to_string()
+        };
+        Finding::limit(self.path, Stage::Define, Fault::OutputLimit, bound).with_detail(detail)
+    }
+    /// Admit `required` output bytes against the shared output bound; a size
+    /// with no representation exceeds it.
+    fn admit(&self, required: Option<usize>) -> Result<usize, Finding> {
+        required
+            .ok_or(LimitExceeded {
+                resource: "output_bytes",
+                limit: Limits::OUTPUT_BYTES,
+                actual: None,
+            })
+            .and_then(|required| Limits::output_bytes(required).map(|()| required))
+            .map_err(|bound| self.limit(bound))
     }
     fn bytes(&mut self, bytes: &[u8]) -> Result<(), Finding> {
         Limits::output_extension(self.output.len(), bytes.len())
-            .map_err(|error| self.limit(error))?;
+            .map_err(|bound| self.limit(bound))?;
         self.output.extend_from_slice(bytes);
         Ok(())
     }
@@ -118,14 +131,7 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
         output: Vec::new(),
         path: &document.path,
     };
-    let capacity = usize::try_from(size).map_err(|_| {
-        writer.limit(LimitExceeded {
-            resource: "output_bytes",
-            limit: Limits::OUTPUT_BYTES,
-            actual: None,
-        })
-    })?;
-    Limits::output_bytes(capacity).map_err(|error| writer.limit(error))?;
+    let capacity = writer.admit(usize::try_from(size).ok())?;
     writer.output.reserve_exact(capacity);
     let created = &document.created;
     // XPT-2, XPT-3: library header, first and second real headers.
@@ -273,7 +279,7 @@ mod tests {
         let finding = render(&document, &Oversized).unwrap_err();
         assert_eq!(finding.code, ConditionCode::ApplicationRejected);
         assert_eq!(finding.path, "datasets.DM.transport");
-        assert_eq!(finding.context["stage"], "output");
+        assert_eq!(finding.context["stage"], "define");
         assert_eq!(finding.context["code"], "output_limit");
         assert_eq!(finding.context["resource"], "output_bytes");
         assert_eq!(finding.context["limit"], Limits::OUTPUT_BYTES);
@@ -286,7 +292,7 @@ mod tests {
             path: "datasets.DM.transport",
         };
         let projection = writer.number(f64::INFINITY).unwrap_err();
-        assert_eq!(projection.context["stage"], "output");
+        assert_eq!(projection.context["stage"], "define");
         assert_eq!(projection.context["code"], "output_projection");
         assert_eq!(
             projection.context["detail"],
@@ -333,5 +339,60 @@ mod tests {
         assert_eq!(ibm(f64::MIN_POSITIVE / 2.0), None);
         let largest = f64::powi(2.0, 252) * (1.0 - f64::EPSILON / 2.0);
         assert_eq!(hex(ibm(largest).unwrap()), "7FFFFFFFFFFFFFF8");
+    }
+
+    /// A size past the output bound, or with no representation, is the bound;
+    /// a held number with no IBM double is a projection fault.
+    #[test]
+    fn refusals_name_the_output_bound_or_a_projection_fault() {
+        use yamaa_core::{diagnostic::ConditionCode, json::Value as V};
+        let mut writer = Writer {
+            output: Vec::new(),
+            path: "datasets.DM.transport",
+        };
+        let text = |value: &str| V::String(value.into());
+        assert_eq!(
+            writer.admit(Some(Limits::OUTPUT_BYTES)),
+            Ok(Limits::OUTPUT_BYTES)
+        );
+        for (required, actual) in [
+            (
+                Some(Limits::OUTPUT_BYTES + 1),
+                Some(Limits::OUTPUT_BYTES + 1),
+            ),
+            (None, None),
+        ] {
+            let finding = writer.admit(required).unwrap_err();
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.path, "datasets.DM.transport");
+            let mut expected: yamaa_core::diagnostic::Context = [
+                ("code".into(), text("output_limit")),
+                ("limit".into(), V::from(Limits::OUTPUT_BYTES)),
+                ("resource".into(), text("output_bytes")),
+                ("stage".into(), text("define")),
+            ]
+            .into();
+            if let Some(actual) = actual {
+                expected.insert("actual".into(), V::from(actual));
+                expected.insert(
+                    "detail".into(),
+                    text("output_bytes: required Some(10737418241), limit 10737418240"),
+                );
+            } else {
+                expected.insert("detail".into(), text("output byte limit"));
+            }
+            assert_eq!(finding.context, expected);
+        }
+        let finding = writer.number(f64::MAX).unwrap_err();
+        assert_eq!(
+            finding.context,
+            [
+                ("code".into(), text("output_projection")),
+                ("detail".into(), text("number outside IBM double range")),
+                ("stage".into(), text("define")),
+            ]
+            .into()
+        );
+        assert!(writer.output.is_empty());
     }
 }

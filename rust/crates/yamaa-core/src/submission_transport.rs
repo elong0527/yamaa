@@ -173,8 +173,9 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
     let path = format!("datasets.{}.transport", dataset.id);
     let transport = study.transport();
     let xpt = transport == Some(Transport::Xpt);
-    Limits::table(table.row_count(), dataset.columns.len()).map_err(|error| {
-        Finding::resource_rejected(Stage::Output, Fault::TableLimit, &path, error)
+    Limits::table(table.row_count(), dataset.columns.len()).map_err(|bound| {
+        Finding::limit(&path, Stage::Define, Fault::ResourceLimit, bound)
+            .with_detail(bound.to_string())
     })?;
     validate_artifact(study, dataset, table)?;
     for row in 0..table.row_count() {

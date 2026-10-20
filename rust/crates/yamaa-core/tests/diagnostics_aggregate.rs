@@ -1113,9 +1113,24 @@ mod diagnostics {
                     submission_transport::admit(&study, &study.datasets()[0], &table).unwrap_err();
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
                 assert_eq!(finding.path, "datasets.D0.transport");
-                let detail = finding.context["detail"].as_str().unwrap();
-                assert!(detail.contains("table_rows"));
-                assert!(detail.contains("10000001"));
+                // An engine fault names its stage, closed code and bound.
+                assert_eq!(
+                    finding.context,
+                    [
+                        ("stage".into(), JsonValue::String("define".into())),
+                        ("code".into(), JsonValue::String("resource_limit".into())),
+                        (
+                            "detail".into(),
+                            JsonValue::String(
+                                "table_rows: required Some(10000001), limit 10000000".into(),
+                            ),
+                        ),
+                        ("resource".into(), JsonValue::String("table_rows".into())),
+                        ("limit".into(), JsonValue::from(10_000_000)),
+                        ("actual".into(), JsonValue::from(10_000_001)),
+                    ]
+                    .into()
+                );
             }
         }
         mod verification {

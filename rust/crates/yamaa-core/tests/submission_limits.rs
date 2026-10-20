@@ -26,8 +26,12 @@ fn oversized_published_table_refuses_before_schema_or_cell_access() {
     assert_eq!(finding.code, ConditionCode::ApplicationRejected);
     assert_eq!(finding.definition().requirement, None);
     assert_eq!(finding.path, "datasets.D0.transport");
-    assert_eq!(finding.context["stage"], "output");
-    assert_eq!(finding.context["code"], "table_limit");
+    assert_eq!(finding.context["stage"], "define");
+    assert_eq!(finding.context["code"], "resource_limit");
+    assert_eq!(
+        finding.context["detail"],
+        "table_rows: required Some(10000001), limit 10000000"
+    );
     assert_eq!(finding.context["resource"], "table_rows");
     assert_eq!(finding.context["limit"], 10_000_000usize);
     assert_eq!(finding.context["actual"], 10_000_001usize);

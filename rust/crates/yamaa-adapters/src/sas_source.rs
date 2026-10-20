@@ -87,21 +87,22 @@ mod tests {
             };
             assert!(matches!(error, Error::Unavailable));
             assert!(error.finding("RAW", path).is_none());
-            let crate::specification_diagnostics::Rejection::Fault(finding) =
+            let crate::specification_diagnostics::Rejection::Fault(issue) =
                 crate::specification_diagnostics::failure(
                     &crate::specification_run::Error::SasSource(error),
                     Some(&source),
                 )
             else {
-                panic!("an omitted SAS reader must remain an engine fault");
+                panic!("an omitted SAS reader is an engine fault");
             };
             assert_eq!(
-                finding.code,
+                issue.code,
                 yamaa_core::diagnostic::ConditionCode::ApplicationRejected
             );
+            assert_eq!(issue.context["stage"].as_str(), Some("ingest"));
             assert_eq!(
-                yamaa_core::json::Value::Object(finding.context),
-                crate::json!({"stage":"ingest", "code":"sas_reader_unavailable"})
+                issue.context["code"].as_str(),
+                Some("sas_reader_unavailable")
             );
         }
     }

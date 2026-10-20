@@ -131,6 +131,7 @@ fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Di
     };
     yamaa_core::application_issue::rejected(stage, code)
 }
+/// The closed code a refused publication reports, selected from its typed cause.
 pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault {
     use crate::file_publication::Error as E;
     match error {
