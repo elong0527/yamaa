@@ -175,9 +175,9 @@ def authors_text(metadata, crates, listed, locked):
 
     `crates` are the vendored crates, `locked` the (name, version, source)
     packages of the bundle's trimmed lock and `listed` the (name, version)
-    pairs that LICENSE-THIRD-PARTY.txt covers. The vendored crates must be
-    exactly the crates.io crates of that lock, and every bundled crate needs a
-    notice entry.
+    pairs that the package's LICENSE-THIRD-PARTY.txt covers. The vendored
+    crates must be exactly the crates.io crates of that lock, and the notices
+    must have an entry for exactly the bundled crates.
     """
     members = set(metadata["workspace_members"])
     bundled = [
@@ -201,6 +201,13 @@ def authors_text(metadata, crates, listed, locked):
         raise ValueError(
             f"{name} {version}: the vendored crates differ from the locked "
             "crates.io crates"
+        )
+    unbundled = listed - {(package["name"], package["version"]) for package in bundled}
+    if unbundled:
+        name, version = sorted(unbundled)[0]
+        raise ValueError(
+            f"{name} {version}: LICENSE-THIRD-PARTY.txt lists it, but the package "
+            "does not bundle it"
         )
     title = "Rust crates in the yamaa R source package"
     lines = [title, "=" * len(title), ""]

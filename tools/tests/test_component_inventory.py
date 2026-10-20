@@ -216,6 +216,50 @@ class ComponentsTest(Checkout):
         with self.assertRaisesRegex(ValueError, "must name the vendored release"):
             self.rows()
 
+    def test_binary_packages_name_the_standard_library_that_they_link(self):
+        rows = self.rows()
+        linked = inventory.components(
+            self.checkout.kept(), self.checkout.metadata(), PURPOSES, "1.99.1"
+        )
+        (added,) = set(linked) - set(rows)
+        self.assertEqual(
+            (added.name, added.version, added.license, added.source),
+            (
+                "rust-std",
+                "1.99.1",
+                "MIT OR Apache-2.0",
+                "https://github.com/rust-lang/rust at 1.99.1",
+            ),
+        )
+        self.assertIn("the Rust standard library", added.purpose)
+        self.assertEqual(
+            [row.name for row in linked],
+            sorted((row.name for row in linked), key=str.casefold),
+        )
+        # Only a pinned release names the standard library that a package links.
+        with self.assertRaisesRegex(ValueError, "pins 'stable', not a Rust release"):
+            inventory.components(
+                self.checkout.kept(), self.checkout.metadata(), PURPOSES, "stable"
+            )
+
+    def test_the_source_archive_leaves_out_the_standard_library_row(self):
+        wheels = inventory.render(
+            inventory.components(
+                self.checkout.kept(), self.checkout.metadata(), PURPOSES, "1.99.1"
+            )
+        )
+        self.assertEqual(
+            inventory.source_inventory(wheels), inventory.render(self.rows())
+        )
+        for text in (inventory.render(self.rows()), wheels + wheels.split("\n", 1)[1]):
+            with (
+                self.subTest(rows=text.count("\nrust-std\t")),
+                self.assertRaisesRegex(
+                    ValueError, "the wheels' inventory must hold one rust-std row"
+                ),
+            ):
+                inventory.source_inventory(text)
+
     def test_unsupported_sources_and_names_stop_generation(self):
         zstd = next(p for p in self.checkout.packages if p["name"] == "zstd-sys")
         zstd["version"] = "2.1.2"
@@ -433,6 +477,22 @@ class GraphTest(unittest.TestCase):
                 ((zstd, _, bundled),) = rows["libzstd"]
                 self.assertEqual(zstd_sys.partition("+zstd.")[2], zstd)
                 self.assertEqual(bundled, f"bundled in zstd-sys {zstd_sys}")
+                # The wheels link the pinned toolchain's standard library; the
+                # R source package links whichever toolchain builds it.
+                if host == "python":
+                    release = inventory.toolchain.channel()
+                    self.assertEqual(
+                        rows["rust-std"],
+                        [
+                            (
+                                release,
+                                "MIT OR Apache-2.0",
+                                f"https://github.com/rust-lang/rust at {release}",
+                            )
+                        ],
+                    )
+                else:
+                    self.assertNotIn("rust-std", rows)
 
 
 if __name__ == "__main__":
