@@ -975,6 +975,69 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
     );
 }
 
+/// Every member runs through the engine's one host-functions port. An engine
+/// configured without project functions, as the command line is, runs every
+/// build that calls no project function through an empty port, with or
+/// without a project, exactly as a host builds it; a build that calls one is
+/// refused before it reads data.
+#[test]
+fn an_engine_without_functions_runs_every_build_that_calls_no_project_function() {
+    let study = study();
+    let bare = Engine::new(EngineOptions::new(
+        HostLanguage::Python,
+        "project-test".into(),
+        "0".into(),
+    ));
+    let token = CancellationToken::new();
+    let project = study.project();
+    let dm = study.path("sdtm/dm.yaml");
+    let alone = bare.spec_run(&dm, None, &token).unwrap();
+    let member = bare.spec_run(&dm, Some(&project), &token).unwrap();
+    let hosted = engine().spec_run(&dm, Some(&project), &token).unwrap();
+    for run in [&alone, &member, &hosted] {
+        assert_eq!(run.issues().rows(), 0);
+        assert_eq!(run.status(), Status::Succeeded);
+    }
+    let output = |run: &yamaa::Run| run.output().unwrap().ipc().unwrap();
+    assert_eq!(output(&member), output(&alone));
+    assert_eq!(output(&member), output(&hosted));
+    assert_eq!(
+        member.report().unwrap().ipc().unwrap(),
+        hosted.report().unwrap().ipc().unwrap()
+    );
+    let runs = bare.project_run(&project, None, &token).unwrap();
+    assert_eq!(runs.status(), Status::Succeeded);
+    assert_eq!(runs.names(), ["DM", "AE", "ADSL"]);
+
+    let study = Study::new();
+    study.write("raw.csv", "ID,V\n1,2\n");
+    study.write(
+        "environment.yaml",
+        "schema_version: '1.0'\nfunctions:\n  double:\n    function: pkg.double\n    description: Double the value.\n    params: [{name: x, type: int}]\n    returns: int\n    tests:\n      - {id: normal, covers: [normal], args: {x: 1}, result: 2}\n      - {id: zero, covers: [boundary], args: {x: 0}, result: 0}\n      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    );
+    study.write(
+        "one.yaml",
+        "schema_version: '1.0'\ndomain: ONE\nkeys: [ID]\ninput: {RAW: {path: raw.csv, types: {ID: int, V: int}}}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: RAW.ID}\n  - {name: W, type: int, label: Doubled, derivation: {function: {name: double, args: {x: RAW.V}}}}\noutput: {path: one.csv, columns: [ID, W]}\n",
+    );
+    study.write(
+        "project.yaml",
+        "schema_version: '1.0'\nenvironments: {python: environment.yaml}\nadam: {specs: [one.yaml]}\n",
+    );
+    let calls = bare
+        .spec_run(&study.path("one.yaml"), Some(&study.project()), &token)
+        .unwrap();
+    assert_eq!(calls.status(), Status::Failed);
+    assert!(calls.output().is_none());
+    assert!(calls.report().is_none());
+    let found = rows(&calls.issues());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].condition, "unsupported_operation");
+    assert_eq!(
+        found[0].context.get("operation"),
+        Some(&text("environment"))
+    );
+}
+
 fn define_study() -> Study {
     let study = Study::new();
     let fixture =

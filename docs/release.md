@@ -24,10 +24,21 @@ open gates live in GitHub issues and pull requests, not here.
   that a release publishes and runs the conformance corpus with it: its
   `native-offline-source` job. No `R CMD check --as-cran` runs on aarch64,
   and no lane there uses R 4.4 or the minimum Rust.
-- Other runtimes and architectures, macOS x86_64 among them (#3030 D49),
-  free-threaded Python, musl and R binary packages are not supported. R is
-  distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
-  [CRAN submission](#cran-submission) describes.
+- R binary packages for R-release and R-oldrel, today R 4.6 and R 4.5, on
+  Windows x64 and macOS arm64, as CRAN builds them (#3030 D48). Each is built
+  for one R series and works only with R of that series;
+  `install.packages()` installs it with no Rust, Rtools or network. With any
+  other R series, R 4.4 among them, and on Linux, which gets no binary
+  packages (D54), users install from source: the R source package of the
+  GitHub release, which builds with its vendored crates and a Rust
+  toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without Rust
+  1.82 or later, the offline toolchain route, which carries Rust in from its
+  standalone installers without rustup or a network (#3107).
+- Other runtimes and architectures, macOS x86_64 among them (#3030 D49;
+  CRAN may still build the R package there), free-threaded Python and musl
+  are not supported. R is distributed as a GitHub source tarball and binary
+  packages, and from 1.0.0 on CRAN, as [CRAN submission](#cran-submission)
+  describes.
 
 Source builds compile the Rust workspace, so they need Rust 1.82.0 or later
 with Cargo and a C compiler. Both source packages carry the locked crates and
@@ -53,6 +64,19 @@ archive in the manylinux_2_28 image, whose glibc 2.28 is RHEL 8's, and the R
 package in the `rocker/r-ver` image of R 4.6.1. On macOS and Windows they run
 behind a proxy that refuses every connection. Each installed package then
 runs the conformance corpus without a network.
+
+The native run builds the R binary packages that a release publishes from
+the R source package that it publishes, with `R CMD INSTALL --build` and
+each covered R series: its `native-r-binary` jobs, behind the same refusing
+proxy, on Windows with Rtools45 and the GNU Rust target. Its
+`native-r-binary-install` jobs then install each binary as a user does, with
+`install.packages(path, repos = NULL)`, on a runner of its platform from
+which the image's Rust has been uninstalled and that has no Rtools; the log
+shows that neither the shell nor R finds a Rust tool or an Rtools directory.
+The installation, the conformance corpus and the installed R suites run
+behind the refusing proxy, and the cohort comparison reads each binary's
+reports beside those of its platform's wheel: on Windows the wheel is built
+with MSVC and the binary with Rtools' GNU toolchain.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
@@ -314,8 +338,9 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs among them, shared Rust/math, complete cohort comparisons,
-strict R package checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
+source installs and the R binary installs among them, the R binary builds,
+shared Rust/math, complete cohort comparisons, strict R package checks and
+CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named
@@ -335,6 +360,18 @@ equal to it:
 | Python wheel for Linux aarch64 | `yamaa-<Python version>-cp312-abi3-manylinux_2_28_aarch64.whl` | `native-python-ubuntu-24.04-arm-3.14` |
 | Python source archive | `yamaa-<Python version>.tar.gz` | `native-python-ubuntu-24.04-3.14` |
 | R source package | `yamaa_<R version>.tar.gz` | `native-r-ubuntu-24.04` |
+| R binary package for macOS arm64, R 4.6 | `yamaa_<R version>-4.6.tgz` | `native-r-binary-macos-15-4.6.1` |
+| R binary package for macOS arm64, R 4.5 | `yamaa_<R version>-4.5.tgz` | `native-r-binary-macos-15-4.5.3` |
+| R binary package for Windows x64, R 4.6 | `yamaa_<R version>-4.6.zip` | `native-r-binary-windows-2025-4.6.1` |
+| R binary package for Windows x64, R 4.5 | `yamaa_<R version>-4.5.zip` | `native-r-binary-windows-2025-4.5.3` |
+
+`R CMD INSTALL --build` names a binary package `yamaa_<R version>.zip` on
+Windows and `yamaa_<R version>.tgz` on macOS. The two R series' binaries of
+one platform go in one release, so their asset names add the series after a
+hyphen. `install.packages(path, repos = NULL)` takes the package name from
+what comes before the underscore, and the version from the package itself,
+so it installs these files as they are. The selector also requires each
+binary's `Built` field to name the R version and platform of its lane.
 
 Each native artifact holds exactly the assets listed for it, so a release
 publishes every asset that the native run built, or nothing: a missing,
@@ -383,12 +420,13 @@ python -m tools.ci.select_release_artifacts --repository elong0527/yamaa \
 
 From the 1.0.0 candidates on, PyPI receives each release's Python packages:
 the wheels and the Python source archive of the asset table above. No other
-asset goes to PyPI: the R source package stays a GitHub release asset, and
-goes to CRAN too for a final release, as [CRAN submission](#cran-submission)
-describes. No workflow holds a PyPI credential: once `release.yml` has created
-the GitHub release, the owner uploads its Python packages with the owner's own
-PyPI credentials (#3030 D57). Nothing is rebuilt, so PyPI serves the bytes
-that native qualification tested.
+asset goes to PyPI: the R source and binary packages stay GitHub release
+assets, and the source package goes to CRAN too for a final release, as
+[CRAN submission](#cran-submission) describes. No workflow holds a PyPI
+credential: once `release.yml` has created the GitHub release, the owner
+uploads its Python packages with the owner's own PyPI credentials
+(#3030 D57). Nothing is rebuilt, so PyPI serves the bytes that native
+qualification tested.
 
 Download the wheels and the source archive by asset name from the GitHub
 release that the tag created, into a new directory:
@@ -586,9 +624,9 @@ reads, which neither route carries.
 
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
-root, and the R source package in `inst/`, which R installs at the package
-root. `LICENSE.txt` is the project's MIT license. `LICENSE-THIRD-PARTY.txt`
-reproduces the license, copyright and NOTICE texts of every third-party crate
+root, the R source package in `inst/`, which R installs at the package
+root, and each R binary package at that root. `LICENSE.txt` is the project's
+MIT license. `LICENSE-THIRD-PARTY.txt` reproduces the license, copyright and NOTICE texts of every third-party crate
 in the normal and build dependency closure of its host's binding crate, for
 every platform, and names the license relied on where a crate offers a
 choice: the Python packages' copy covers the Python binding's crates, and the
@@ -614,21 +652,23 @@ notice entry in its host's copy, when `rustc` in `rust/` is not the pinned
 toolchain, and when the committed section differs from that toolchain's
 notice. Staging the R source package fails while its notices name a crate
 that it does not bundle, or miss one that it does. Native qualification and
-the release selector require every wheel and source package to carry its own
-host's notices unchanged.
+the release selector require every wheel, source package and R binary
+package to carry its own host's notices unchanged.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the
-Python inventory, and the R source package the R inventory, which R installs
-with the notices. It lists every package of the host's trimmed lock,
-including the crates that only build scripts and procedural macros use and
+Python inventory, and the R source and binary packages the R inventory,
+which R installs with the notices. It lists every package of the host's
+trimmed lock, including the crates that only build scripts and procedural macros use and
 those that no supported target compiles, and the C code that those crates
 compile from sources that they carry: ReadStat in `yamaa-adapters` and the
 zstd library that `zstd-sys` bundles. The wheels' inventory also lists
 `rust-std`, the Rust standard library of the pinned toolchain that builds
 them, which they link. A source archive links the standard library of
 whatever toolchain builds it, so the Python source archive carries the
-wheels' inventory without that row, and the R inventory has none. Each
+wheels' inventory without that row, and the R inventory has none: the R
+binary packages, which link the pinned toolchain's standard library, carry
+the source package's inventory as R installs it. Each
 inventory is tab-separated text with a header row and one row per component,
 giving its name and version; its license, the SPDX expression that a crate's
 manifest declares, with Cargo's legacy `/` written as `OR`, or the upstream

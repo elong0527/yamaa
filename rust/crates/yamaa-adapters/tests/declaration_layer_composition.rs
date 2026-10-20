@@ -544,34 +544,41 @@ columns:
             );
             // A member a layer leaves incomplete is completed by no layer:
             // the resolved specification names it by identity, and a value
-            // written bare by its shorthand (P-CLR-2).
-            study.write(
-                "spec.yaml",
-                &ROWS
-                    .replace("dataset: SRC, key: [ID], other: 1", "key: [ID]")
-                    .replace(", other: 1}", "}")
-                    .replace(
-                        "derivation: SRC.ID}",
-                        "derivation: {mapping: {dict: {A: B}}}}",
-                    ),
+            // written bare by its shorthand (P-CLR-2). Requiredness applies
+            // after pruning (LAYER-12), so an unread intermediate is pruned
+            // with its fault, and a read one reports it.
+            let incomplete = ROWS
+                .replace("dataset: SRC, key: [ID], other: 1", "key: [ID]")
+                .replace(", other: 1}", "}")
+                .replace(
+                    "derivation: SRC.ID}",
+                    "derivation: {mapping: {dict: {A: B}}}}",
+                );
+            let required = |text: &str| {
+                study.write("spec.yaml", text);
+                resolved_findings(prepare(&study.path("spec.yaml")).unwrap_err())
+                    .into_iter()
+                    .filter(|(code, ..)| *code == ConditionCode::SchemaMissingRequiredField)
+                    .map(|(_, path, _)| path)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                required(&incomplete),
+                ["columns.ID.derivation.mapping.source"]
             );
-            let found = resolved_findings(prepare(&study.path("spec.yaml")).unwrap_err());
-            let paths = found
-                .iter()
-                .map(|(code, path, _)| (*code, path.as_str()))
-                .collect::<Vec<_>>();
+            let read = incomplete
+                .replace("columns: [ID]}", "columns: [ID, V]}")
+                .replace(
+                    "columns:\n",
+                    "columns:\n  - {name: V, type: str, derivation: FIRST.CODE}\n",
+                );
+            let paths = required(&read);
             assert!(
-                paths.contains(&(
-                    ConditionCode::SchemaMissingRequiredField,
-                    "intermediates.FIRST.dataset"
-                )),
+                paths.contains(&"intermediates.FIRST.dataset".to_string()),
                 "{paths:?}"
             );
             assert!(
-                paths.contains(&(
-                    ConditionCode::SchemaMissingRequiredField,
-                    "columns.ID.derivation.mapping.source"
-                )),
+                paths.contains(&"columns.ID.derivation.mapping.source".to_string()),
                 "{paths:?}"
             );
         }
@@ -585,7 +592,7 @@ columns:
             study.write(
                 "shared/base.yaml",
                 &format!(
-                    "{}output: {{path: out.csv, columns: [CODE]}}\n",
+                    "{}output: {{path: out.csv, columns: [CODE, REASON]}}\n",
                     BASE.replace(
                         "DS: {path: ds.csv,",
                         "DS: {path: ds.csv, relative_to: entry,"

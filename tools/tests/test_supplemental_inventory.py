@@ -1,11 +1,13 @@
 """Regression gates for honest supplemental inventories and executable evidence."""
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tools.commands import installed
 from tools.conformance import supplemental_inventory as module
 
 
@@ -28,6 +30,66 @@ class RepositoryCatalog(unittest.TestCase):
         )
         self.assertTrue(catalog["contracts"])
         self.assertTrue(catalog["support_files"])
+
+    def test_an_r_binary_installation_records_its_package_form(self):
+        # Native qualification also runs the suites through the R binary
+        # packages that a release publishes (#3059), and the evidence of
+        # those runs names the binary form.
+        root = Path(__file__).resolve().parents[2]
+        revision = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        ).strip()
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "catalog.json"
+            status = module.main(
+                [
+                    "--root",
+                    str(root),
+                    "--catalog",
+                    str(root / "rust/qualification/supplemental.json"),
+                    "--output",
+                    str(output),
+                    "--source-revision",
+                    revision,
+                    "--package-form",
+                    "binary",
+                    "--evidence",
+                    "https://github.com/elong0527/yamaa/actions/runs/1",
+                ]
+            )
+            self.assertEqual(status, 0)
+            evidence = json.loads(output.read_text(encoding="utf-8"))["evidence"]
+        self.assertEqual(evidence["package_form"], "binary")
+        # The installed-checks command passes the form through.
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(installed.subprocess, "run") as run,
+            patch.dict(installed.os.environ, {"R_LIBS": directory}),
+            patch(
+                "sys.argv",
+                [
+                    "installed",
+                    "run",
+                    "--runtime",
+                    "r",
+                    "--staged-root",
+                    directory,
+                    "--output",
+                    str(Path(directory) / "qualification"),
+                    "--source-revision",
+                    revision,
+                    "--package-form",
+                    "binary",
+                    "--artifact-reference",
+                    "github-actions:1/attempt-1/native-r-binary/yamaa_1.0.0-4.6.zip",
+                    "--evidence",
+                    "https://github.com/elong0527/yamaa/actions/runs/1",
+                ],
+            ),
+        ):
+            installed.main()
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--package-form") + 1], "binary")
 
     def test_reference_consumers_cannot_reenter_installed_qualification(self):
         for source in (

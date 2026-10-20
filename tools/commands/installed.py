@@ -95,7 +95,9 @@ def main():
     running.add_argument("--staged-root", type=Path, required=True)
     running.add_argument("--output", type=Path, required=True)
     running.add_argument("--source-revision", required=True)
-    running.add_argument("--package-form", choices=("wheel", "source"), required=True)
+    running.add_argument(
+        "--package-form", choices=("wheel", "source", "binary"), required=True
+    )
     running.add_argument("--artifact-reference", required=True)
     running.add_argument("--host-artifact-reference")
     running.add_argument("--evidence", required=True)

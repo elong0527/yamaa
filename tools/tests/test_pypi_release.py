@@ -137,8 +137,8 @@ class PypiComparison(unittest.TestCase):
                 services = Services(identity, release(identity), packages(identity))
                 names = list(packages(identity))
                 self.assertEqual(self.compare(services), names)
-                # Each package is read once from each side; the R source
-                # package, which PyPI does not receive, is never read.
+                # Each package is read once from each side; the R source and
+                # binary packages, which PyPI does not receive, are never read.
                 self.assertEqual(services.downloads, {"github": names, "pypi": names})
 
     def test_a_package_pypi_lacks_or_any_other_file_there_fails(self):
@@ -146,13 +146,21 @@ class PypiComparison(unittest.TestCase):
         sdist = list(expected)[-1]
         without_sdist = {name: expected[name] for name in list(expected)[:-1]}
         other_wheel = f"yamaa-{CANDIDATE.python}-cp313-abi3-win_amd64.whl"
-        [r_source] = set(release(CANDIDATE)) - set(expected)
+        # The R source and binary packages, which PyPI does not receive.
+        r_packages = sorted(set(release(CANDIDATE)) - set(expected))
+        self.assertEqual(
+            len(r_packages),
+            sum(asset.kind in ("r-source", "r-binary") for asset in ASSETS),
+        )
         for served, messages in [
             (without_sdist, [f"PyPI does not serve {sdist}"]),
             ({**expected, other_wheel: b"other"}, [f"PyPI also serves {other_wheel}"]),
-            (
-                {**expected, r_source: release(CANDIDATE)[r_source]},
-                [f"PyPI also serves {r_source}"],
+            *(
+                (
+                    {**expected, name: release(CANDIDATE)[name]},
+                    [f"PyPI also serves {name}"],
+                )
+                for name in r_packages
             ),
             (
                 {**without_sdist, other_wheel: b"other"},

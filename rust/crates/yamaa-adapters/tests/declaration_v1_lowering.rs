@@ -4,8 +4,9 @@
 //! compares the converted corpus with its 0.5 originals; these cases hold
 //! the forms the corpus lacks: text that holds one literal, the refusal of a
 //! function argument that is no leaf (FUNC-6), the stored `model`, keys and
-//! ODM profile, the position of a node a child layer wrote (P-ISSUE-1), and
-//! the absence answer of D67.
+//! ODM profile, the position of a node a child layer wrote (P-ISSUE-1), the
+//! absence answer of D67, several origins, a dataset's standard, a
+//! value-level comparator, and a month rule without a day rule (TIME-10).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,7 +16,7 @@ use yamaa_adapters::document::{
 };
 use yamaa_adapters::specification_source::{Error, InheritancePort, Source};
 use yamaa_core::ast::{
-    ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec, Surface,
+    Comparator, ExprId, ExprKind, JoinKey, KeyDecl, Literal, ModelKind, Profile, Spec, Surface,
 };
 use yamaa_core::diagnostic::ConditionCode;
 use yamaa_core::expression::Context;
@@ -418,4 +419,116 @@ fn a_check_that_declares_no_field_is_written_as_its_bare_keyword() {
             ("shorthand", C::Text("not_missing".into()))
         ]
     );
+}
+
+#[test]
+fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_follow() {
+    let mut text = spec(&[
+        "{name: CODE, type: str, derivation: SRC.CODE}",
+        "{name: AVAL, type: float, derivation: SRC.AVAL, submission: {origins: \
+         [{type: Collected, source: Investigator}, {type: Derived}], value_level: \
+         [{id: OTHER, where: {CODE: {comparator: NE, values: [X]}}}, \
+         {id: LISTED, where: {CODE: [X, Y]}}]}}",
+    ]);
+    text.push_str(
+        "submission: {label: Test, class: FINDINGS, structure: One record per test, \
+         repeating: true, standard: SDTMIG}\n",
+    );
+    let spec = lowered(&text);
+    let standard = spec.submission.as_ref().unwrap().standard.as_ref().unwrap();
+    assert_eq!(
+        (standard.name.as_str(), spec.cite(standard.meta).as_str()),
+        ("SDTMIG", "submission.standard")
+    );
+    let column = spec.columns.iter().find(|c| c.name.name == "AVAL").unwrap();
+    let submission = column.submission.as_ref().unwrap();
+    // Each declared origin lowers, at its position in `origins` (P-ORIGIN-1).
+    let origins = submission
+        .metadata
+        .origins
+        .iter()
+        .map(|origin| (origin.kind.text.as_str(), spec.cite(origin.meta)))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        origins,
+        [
+            (
+                "Collected",
+                "columns.AVAL.submission.origins[0]".to_string()
+            ),
+            ("Derived", "columns.AVAL.submission.origins[1]".to_string()),
+        ]
+    );
+    // A comparator class selects no listed value; a bare list selects one
+    // of them (P-VLM-1).
+    let clauses = submission
+        .value_level
+        .iter()
+        .flat_map(|level| &level.conditions)
+        .map(|clause| {
+            (
+                clause.comparator,
+                clause
+                    .values
+                    .iter()
+                    .map(|value| (value.text.as_str(), spec.cite(value.meta)))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        clauses,
+        [
+            (
+                Comparator::NotIn,
+                vec![(
+                    "X",
+                    "columns.AVAL.submission.value_level.OTHER.where.CODE.values[0]".to_string()
+                )]
+            ),
+            (
+                Comparator::In,
+                vec![
+                    (
+                        "X",
+                        "columns.AVAL.submission.value_level.LISTED.where.CODE[0]".to_string()
+                    ),
+                    (
+                        "Y",
+                        "columns.AVAL.submission.value_level.LISTED.where.CODE[1]".to_string()
+                    ),
+                ]
+            ),
+        ]
+    );
+}
+
+#[test]
+fn a_month_rule_without_a_day_rule_fails_at_the_impute() {
+    let study = Study::new(&[(
+        "spec.yaml",
+        &spec(&[
+            "{name: ADT, type: date, derivation: {impute: {type: date, source: SRC.DTC, month: 6}}}",
+        ]),
+    )]);
+    let Err(SpecificationError::Entry(Error::Findings(captured))) = prepare(&study, "spec.yaml")
+    else {
+        panic!("refused");
+    };
+    let [finding] = captured.findings() else {
+        panic!("one finding");
+    };
+    let definition = finding.code.definition();
+    assert_eq!(
+        (definition.phase, definition.condition, definition.rule),
+        ("validation", "missing_required_field", Some("TIME-10"))
+    );
+    assert_eq!(finding.path, "columns.ADT.derivation.impute");
+    assert_eq!(finding.context, [("field", C::Text("day".into()))]);
+    // With a day rule, or with neither rule, the impute is admitted.
+    for rules in ["month: 6, day: 15", "day: first", ""] {
+        lowered(&spec(&[&format!(
+            "{{name: ADT, type: date, derivation: {{impute: {{type: date, source: SRC.DTC, {rules}}}}}}}"
+        )]));
+    }
 }

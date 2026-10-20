@@ -306,6 +306,22 @@ def required_jobs(coverage):
     for platform in coverage["offline_source"]["os"]:
         for host in coverage["offline_source"]["host"]:
             jobs[f"native-offline-source ({platform}, {host})"] = offline_steps[host]
+    # Each R binary package that a release publishes, built from the R source
+    # archive that it publishes, then installed on a runner with no Rust, no
+    # Rtools and no network, where it runs the conformance corpus and the
+    # installed R suites.
+    for platform in coverage["r_binary"]["os"]:
+        for version in coverage["r_binary"]["r"]:
+            jobs[f"native-r-binary ({platform}, R {version})"] = (
+                "Build the R binary package",
+                "Check the R binary package",
+            )
+            jobs[f"native-r-binary-install ({platform}, R {version})"] = (
+                "Remove Rust and Rtools from the runner",
+                "Install the R binary package without a network",
+                "Report installed R public benchmark conformance",
+                "Run installed R supplemental suites outside checkout",
+            )
     return jobs
 
 
@@ -399,10 +415,12 @@ def package_version(payload, version):
 
 def archive_payloads(path):
     wanted = {"METADATA", "PKG-INFO", "DESCRIPTION"}
-    if path.suffix == ".whl":
+    # A wheel and a Windows R binary package are ZIP archives; the source
+    # archives and a macOS R binary package are gzipped tar archives.
+    if path.suffix in {".whl", ".zip"}:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
-            require(len(names) == len(set(names)), "duplicate wheel member")
+            require(len(names) == len(set(names)), "duplicate archive member")
             return {
                 name: archive.read(name)
                 for name in names
@@ -432,13 +450,25 @@ def check_package(asset, path, identity, root):
         ]
         require(len(metadata) == 1, "Python package metadata is missing or ambiguous")
         package_version(metadata[0], identity.python)
-    elif asset.kind == "r-source":
+    elif asset.kind in {"r-source", "r-binary"}:
+        # R may write an installed DESCRIPTION with CRLF line ends on Windows.
         description = payloads.get("yamaa/DESCRIPTION", b"").decode("utf-8")
+        description = description.replace("\r\n", "\n")
         require(
             re.findall(r"(?m)^Package: (.+)$", description) == ["yamaa"]
             and re.findall(r"(?m)^Version: (.+)$", description) == [identity.r],
             "R DESCRIPTION name/version differs",
         )
+        # R CMD INSTALL --build records the R and the platform that built a
+        # binary package, as `R 4.6.1; aarch64-apple-darwin20; <time>; unix`.
+        built = re.findall(r"(?m)^Built: (.+)$", description)
+        if asset.kind == "r-source":
+            require(not built, "the R source package is a built package")
+        else:
+            require(
+                len(built) == 1 and built[0].startswith(asset.built),
+                f"R binary package was not built with {asset.built}",
+            )
     else:
         raise ValueError(f"{asset.title}: no content check for {asset.kind} assets")
     # Each package carries the project license and every notice at its own
