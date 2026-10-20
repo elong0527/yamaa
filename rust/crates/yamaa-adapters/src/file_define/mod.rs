@@ -477,7 +477,9 @@ fn issues(failure: &Failure) -> Vec<Diagnostic> {
         }
         Failure::TargetAdmission { index, error } => vec![service::publication_diagnostic(
             *index,
-            service::PublicationFailure::TargetAdmission,
+            service::PublicationFailure::TargetAdmission(
+                crate::file_application::publication_fault(error),
+            ),
             error.message(),
         )],
         Failure::Publication { index, error } => vec![service::publication_diagnostic(

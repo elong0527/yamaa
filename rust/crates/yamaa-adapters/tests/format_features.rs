@@ -19,6 +19,21 @@ fn source(profile: SourceProfile) -> SourceDeclaration {
     }
 }
 
+/// An omitted reader is an engine fault naming its stage and closed code.
+#[cfg(not(all(feature = "yaml", feature = "parquet")))]
+fn assert_fault(
+    rejection: yamaa_adapters::specification_diagnostics::Rejection,
+    stage: &str,
+    code: &str,
+) {
+    let yamaa_adapters::specification_diagnostics::Rejection::Fault(issue) = &rejection else {
+        panic!("an omitted reader is an engine fault: {rejection:?}");
+    };
+    assert_eq!(issue.condition(), "engine_rejected", "{issue:?}");
+    assert_eq!(issue.context["stage"].as_str(), Some(stage), "{issue:?}");
+    assert_eq!(issue.context["code"].as_str(), Some(code), "{issue:?}");
+}
+
 fn csv_table() -> ArrowTable {
     let table = yamaa_adapters::typed_csv::parse(b"ID,TEXT\n1,alpha\n2,beta\n", &[]).unwrap();
     assert_eq!(table.row_count(), 2);
@@ -72,11 +87,11 @@ fn yaml_capability_is_explicit_at_document_admission() {
                 ..
             }
         ));
-        let reply: serde_json::Value = serde_json::from_str(
-            &yamaa_adapters::specification_diagnostics::capture_failure(&error),
-        )
-        .unwrap();
-        assert_eq!(reply["outcome"]["code"], "yaml_reader_unavailable");
+        assert_fault(
+            yamaa_adapters::specification_diagnostics::capture_failure(&error),
+            "capture",
+            "yaml_reader_unavailable",
+        );
     }
 }
 
@@ -111,13 +126,14 @@ fn parquet_source_and_artifact_share_one_capability() {
         let error = yamaa_adapters::specification_run::Error::ParquetSource(
             parquet_source::Error::ReaderUnavailable,
         );
-        let reply: serde_json::Value =
-            serde_json::from_str(&yamaa_adapters::specification_diagnostics::failure(
+        assert_fault(
+            yamaa_adapters::specification_diagnostics::failure(
                 &error,
                 Some(&source(SourceProfile::Parquet)),
-            ))
-            .unwrap();
-        assert_eq!(reply["outcome"]["code"], "parquet_reader_unavailable");
+            ),
+            "ingest",
+            "parquet_reader_unavailable",
+        );
     }
 }
 

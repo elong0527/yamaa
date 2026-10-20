@@ -17,12 +17,16 @@ value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
 miss an issue row built with a condition the registry does not have.
 A diagnostic record crosses Rust modules typed, so JSON text is decoded only
-in a codec that owns its format: a `json_wire` decode anywhere else, outside
-the items that compile only for tests, is refused.
+in a codec that owns its format: a `json_wire` decoder anywhere else, outside
+the items that compile only for tests, is refused, whether it is named by path,
+through a grouped, aliased or glob import, or as a serde route (the owned wire
+value a serde decoder fills, or a `deserialize_with` hook). A module file that
+a test gate declares out of line compiles only for tests as a whole.
 """
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -71,8 +75,20 @@ CONDITION_SITE = re.compile(
     r"|(?i:\bcondition)\s*(?::[^=;{}()]*)?=\s*)\Z"
 )
 CONDITION_KEY = re.compile(r'"condition"\s*:\s*("(?:[^"\\]|\\.)*")')
-# A `json_wire` decode, called by path or imported by name.
-JSON_DECODE = re.compile(r"\bjson_wire::(?:decode\w*|\{[^}]*\bdecode\w*)")
+# The `json_wire` items that read JSON text: its decoders, the serde hook that
+# deserializes a field and the owned wire value a serde decoder fills.
+JSON_DECODER = r"(?:decode\w*|deserialize_value|WireValueOwned)\b"
+# A local name for the `json_wire` module: `json_wire as name` or a grouped
+# `self as name`.
+JSON_MODULE_ALIAS = re.compile(
+    r"\bjson_wire\s+as\s+(\w+)|\bjson_wire\s*::\s*\{[^}]*\bself\s+as\s+(\w+)"
+)
+# The code just before a string attribute value that names a serde function.
+SERDE_HOOK = re.compile(r"\b(?:deserialize_with|with)\s*=\s*\Z")
+# An out-of-line module declaration, after any attributes and visibility.
+MODULE_FILE = re.compile(r"\bmod\s+(\w+)\s*;")
+VISIBILITY = re.compile(r"\bpub(?:\s*\([^)]*\))?\s*\Z")
+PATH_ATTRIBUTE = re.compile(r'#\[\s*path\s*=\s*"([^"]*)"\s*\]\Z')
 # The codecs that read JSON text they own: the wire module itself, the
 # package-lock reader, the stored report rows and the resolved artifact.
 JSON_CODECS = {
@@ -447,15 +463,109 @@ def condition_literals(source: str) -> list[tuple[int, str]]:
 
 
 def json_decodes(source: str) -> list[int]:
-    """The lines that decode JSON text, outside items that compile only for
-    tests; comments and literals never count."""
-    code = blank(source, list(rust_tokens(source)), {"comment", "character", "string"})
+    """The lines that decode JSON text through `json_wire`, outside items that
+    compile only for tests: a decoder named by path or a grouped import under
+    the module or a local alias of it, a decoder named bare where the module
+    is glob imported, and a serde hook naming one. Comments never count, and
+    other literals count only as a serde hook's value."""
+    tokens = list(rust_tokens(source))
+    code = blank(source, tokens, {"comment", "character", "string"})
     tests = cfg_test_items(code)
-    return [
-        code.count("\n", 0, match.start()) + 1
-        for match in JSON_DECODE.finditer(code)
-        if not any(low <= match.start() < high for low, high in tests)
+    modules = {"json_wire"}
+    for match in JSON_MODULE_ALIAS.finditer(code):
+        modules.update(alias for alias in match.groups() if alias)
+    module = "(?:" + "|".join(sorted(map(re.escape, modules))) + ")"
+    routes = [
+        re.compile(rf"\b{module}\s*::\s*(?:{JSON_DECODER}|\{{[^}}]*\b{JSON_DECODER})")
     ]
+    if re.search(rf"\b{module}\s*::\s*\*", code):
+        routes.append(re.compile(rf"(?<![\w:.]){JSON_DECODER}"))
+    offsets = [match.start() for route in routes for match in route.finditer(code)]
+    hook = re.compile(rf"(?:\A|::){module}(?:::{JSON_DECODER})?\Z")
+    commented = blank(source, tokens, {"comment"})
+    offsets.extend(
+        start
+        for kind, start, _, _, text in tokens
+        if kind == "string"
+        and SERDE_HOOK.search(commented[max(0, start - 40) : start])
+        and hook.search(text)
+    )
+    return sorted(
+        {
+            code.count("\n", 0, offset) + 1
+            for offset in offsets
+            if not any(low <= offset < high for low, high in tests)
+        }
+    )
+
+
+def module_files(source: str) -> list[tuple[str, str | None, bool]]:
+    """Every module the source declares out of line: its name, the file a
+    ``#[path]`` attribute names (None for the default location) and whether a
+    test gate among its attributes compiles it for tests only."""
+    tokens = list(rust_tokens(source))
+    code = blank(source, tokens, {"comment", "character", "string"})
+    kept = blank(source, tokens, {"comment"})
+    found = []
+    for match in MODULE_FILE.finditer(code):
+        start = match.start()
+        visibility = VISIBILITY.search(code, 0, start)
+        if visibility is not None:
+            start = visibility.start()
+        attributes = []
+        while (end := len(code[:start].rstrip())) and code[end - 1] == "]":
+            depth = 0
+            for opening in range(end - 1, -1, -1):
+                depth += (code[opening] == "]") - (code[opening] == "[")
+                if not depth:
+                    break
+            if depth or opening == 0 or code[opening - 1] != "#":
+                break
+            attributes.append(kept[opening - 1 : end])
+            start = opening - 1
+        path = next(
+            (
+                attribute[1]
+                for text in attributes
+                if (attribute := PATH_ATTRIBUTE.fullmatch(text)) is not None
+            ),
+            None,
+        )
+        found.append((match[1], path, any(map(is_test_gate, attributes))))
+    return found
+
+
+def test_module_files(sources: list[Path]) -> set[Path]:
+    """The module files that compile only for tests: each declared out of line
+    under a test gate, or by such a file, at the default location for its
+    declaring file or at the file its ``#[path]`` attribute names."""
+    children = {}
+    for path in sources:
+        for name, written, gated in module_files(path.read_text(encoding="utf-8")):
+            if written is not None:
+                candidates = [path.parent / written]
+            else:
+                base = (
+                    path.parent
+                    if path.name in {"lib.rs", "main.rs", "mod.rs"}
+                    else path.with_suffix("")
+                )
+                candidates = [base / f"{name}.rs", base / name / "mod.rs"]
+            children.setdefault(path, []).append(
+                ([Path(os.path.normpath(each)) for each in candidates], gated)
+            )
+    tests = set()
+    pending = list(sources)
+    while pending:
+        parent = pending.pop()
+        for candidates, gated in children.get(parent, []):
+            if not (gated or parent in tests):
+                continue
+            for candidate in candidates:
+                if candidate.is_file() and candidate not in tests:
+                    tests.add(candidate)
+                    pending.append(candidate)
+    return tests
 
 
 def embedded_json_strings(source: str) -> list[str]:
@@ -710,6 +820,7 @@ def violations(root: Path) -> list[str]:
     )
     errors.extend(rule_vocabulary_errors(root, registered))
     requirement = rules.identifier
+    test_files = test_module_files(sources)
     for path in sources:
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
@@ -738,10 +849,14 @@ def violations(root: Path) -> list[str]:
                 )
                 + ", ".join(literals)
             )
-        if Path(relative) not in JSON_CODECS:
+        if Path(relative) not in JSON_CODECS and path not in test_files:
             for number in json_decodes(source):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
-        if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or test_only:
+        if (
+            Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
+            or test_only
+            or path in test_files
+        ):
             continue
         # A registered literal is already a new site above; an unregistered
         # one names a condition that no registry, card or host knows.
