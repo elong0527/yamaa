@@ -149,17 +149,18 @@ specification or resolving to the same artifact path fail with
 
 ### DEFINE-6. The section's implementation guide binds every dataset and belongs to the section's family
 
-The selected section's `standard` binds every represented dataset to the same
-implementation guide of type `IG`, and its name must belong to the selected
-section's family. The `sdtm`, `adam` and `send` sections produce separate
+The first entry of the selected section's `standards` binds every represented
+dataset to the same implementation guide of type `IG`, and its name must
+belong to the selected section's family. The `sdtm`, `adam` and `send` sections produce separate
 documents, and each document carries the controlled-terminology standards cited
 by its bound codelists' sources.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guide_by_its_place_in_standards`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
 
 [SUB-3](submission.md#sub-3) reads each dataset's family from the bound
-standard's name.
+standard's name. A project file that declares `schema_version` writes this
+guide as `standard`, reported at `<section>.standard.name`.
 
 <a id="define-7"></a>
 
