@@ -163,6 +163,8 @@ def example_name(asset, identity):
 def downloads(root, identity=IDENTITY):
     """Write each release artifact as the native run uploads it."""
     licenses = {name: (ROOT / "python" / name).read_bytes() for name in NOTICES}
+    # The R package's notices are the same, apart from its component inventory.
+    r_licenses = {name: (ROOT / "R/yamaa/inst" / name).read_bytes() for name in NOTICES}
     python, r = identity.python, identity.r
     metadata = f"Metadata-Version: 2.4\nName: yamaa\nVersion: {python}\n\n".encode()
     for asset in release_assets.declared(MATRIX.coverage()):
@@ -203,7 +205,7 @@ def downloads(root, identity=IDENTITY):
                     ),
                     **{
                         f"yamaa/inst/{name}": payload
-                        for name, payload in licenses.items()
+                        for name, payload in r_licenses.items()
                     },
                 },
             )

@@ -110,6 +110,19 @@ any more. From `rust/`,
 `cargo tree --locked --offline --workspace --target all -i <crate>` shows what
 pulls a crate in.
 
+Every package also ships `COMPONENTS.tsv` beside the notices: an inventory,
+without digests, of the components that its host's packages are built from.
+`tools.packaging.generate_component_inventory` writes `python/COMPONENTS.tsv`
+and `R/yamaa/inst/COMPONENTS.tsv` from each host's trimmed lock, the crates'
+declared licenses, those purposes and the provenance that the vendored YAML
+parser, ReadStat and zstd record. `make check-repository` fails while either
+differs from what they give. After changing the lock, a purpose or a vendored
+component, regenerate both and commit the results:
+
+```sh
+uv run --project python --no-sync python -m tools.packaging.generate_component_inventory --write
+```
+
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
