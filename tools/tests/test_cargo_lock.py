@@ -503,7 +503,10 @@ class RLinkStepTests(unittest.TestCase):
             "\n"
             "# Link the target.\n"
             "\t# strip $(SHLIB)\n"
-            "\tln -s target link\n",
+            "\tln -s target link\n"
+            # Other tools' commands that strip nothing.
+            "\tinstall -d dir && ln -s target dir/link\n"
+            "\tobjcopy -O binary $(SHLIB) yamaa.bin\n",
         )
 
     def test_each_way_to_strip_at_the_link_step_refuses(self):
@@ -534,6 +537,15 @@ class RLinkStepTests(unittest.TestCase):
             ('PKG_LIBS = -Wl,"-s"\n', "-Wl,-s strips"),
             # A linker option strips whatever a recipe links too.
             (recipe + "$(SHLIB_LINK) -o $(SHLIB) -Wl,-s\n", "a recipe runs -Wl,-s;"),
+            # Recipe tools that strip without the word strip.
+            (recipe + "objcopy -g $(SHLIB)\n", "a recipe runs objcopy -g;"),
+            (recipe + "$(OBJCOPY) -S $(SHLIB)\n", "a recipe runs $(OBJCOPY) -S;"),
+            (
+                recipe + "@x86_64-w64-mingw32-objcopy -x $(SHLIB)\n",
+                "a recipe runs @x86_64-w64-mingw32-objcopy -x;",
+            ),
+            (recipe + "objcopy --discard-all $(SHLIB)\n", "a recipe runs objcopy --"),
+            (recipe + "install -s $(SHLIB) yamaa.so\n", "a recipe runs install -s;"),
         ):
             with self.subTest(text=text):
                 with self.assertRaisesRegex(
@@ -596,6 +608,38 @@ class RLinkStepTests(unittest.TestCase):
                     ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
                 ):
                     guard.check_r_link("src/Makevars.in", text)
+
+    def test_comments_and_continuations_end_where_make_ends_them(self):
+        for text, problem in (
+            # A colon in a directive's trailing comment, as in a URL, opens no
+            # rule, so the tab-led line after it is an assignment.
+            (
+                "ifeq ($(OS),Windows_NT)\n\texport FOO # see: https://example.org\n"
+                "\tPKG_LIBS += -s\nendif\n",
+                "-s strips",
+            ),
+            (
+                "ifeq ($(OS),Windows_NT)\n\tunexport MAKEFLAGS # see: https://example.org\n"
+                "\tPKG_LIBS += -s\nendif\n",
+                "-s strips",
+            ),
+            ("$(info building) # note: x\n\tPKG_LIBS += -s\n", "-s strips"),
+            # make continues a line only after an odd number of backslashes.
+            ("# end \\\\\nPKG_LIBS += -Wl,-s\n", "-Wl,-s strips"),
+            ("post: $(SHLIB)\n# end \\\\\n\tstrip $(SHLIB)\n", "a recipe runs strip;"),
+            ("post: $(SHLIB)\n\techo done \\\\\nPKG_LIBS += -s\n", "-s strips"),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+        # An escaped # and a rule line's comment leave its rule open, and three
+        # backslashes continue a comment.
+        guard.check_r_link(
+            "src/Makevars.in",
+            "link\\#1: $(SHLIB) # note: y\n\tln -s a b\n# end \\\\\\\nPKG_LIBS += -s\n",
+        )
 
 
 if __name__ == "__main__":
