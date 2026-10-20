@@ -1,4 +1,5 @@
 //! Demand-driven inheritance traversal; filesystem identity and bytes remain host ports.
+use crate::language::{self, FileType, HeaderFault, LanguageVersion};
 use crate::schema::{Document, DocumentNode as N, NormalizationError, SchemaStructure};
 use std::vec;
 
@@ -63,6 +64,14 @@ pub enum Error<E> {
         actual: String,
         is_entry: bool,
     },
+    /// A layer declares a 1.x header this traversal does not read: a version
+    /// the engine does not read, or a type other than `spec` (SCHEMA-2, LAYER-4).
+    Header {
+        source: String,
+        entry: String,
+        mismatch: HeaderMismatch,
+        is_entry: bool,
+    },
     Layer {
         source: String,
         entry: String,
@@ -76,6 +85,15 @@ pub enum Error<E> {
     },
     InvalidIdentity,
 }
+/// What a layer's 1.x header declares that its traversal does not read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HeaderMismatch {
+    /// A version the engine does not read, beside the versions it reads.
+    Version { version: String, reads: Vec<String> },
+    /// A type other than `spec`.
+    FileType { file_type: String },
+}
+
 impl<E> From<crate::limits::LimitExceeded> for Error<E> {
     fn from(error: crate::limits::LimitExceeded) -> Self {
         Self::Resource(error)
@@ -112,6 +130,29 @@ impl<E> Error<E> {
                 actual,
                 is_entry: *is_entry,
             },
+            Self::Header {
+                source,
+                entry,
+                mismatch: HeaderMismatch::Version { version, reads },
+                is_entry,
+            } => F::LanguageVersion {
+                source,
+                entry,
+                version,
+                reads,
+                is_entry: *is_entry,
+            },
+            Self::Header {
+                source,
+                entry,
+                mismatch: HeaderMismatch::FileType { file_type },
+                is_entry,
+            } => F::FileType {
+                source,
+                entry,
+                file_type,
+                is_entry: *is_entry,
+            },
             _ => return Ok(None),
         }
         .diagnostic()
@@ -119,8 +160,10 @@ impl<E> Error<E> {
     }
 }
 
-struct Frame {
-    layer: Layer,
+/// One admitted layer and the parent it names, if any.
+struct Frame<L> {
+    identity: String,
+    layer: L,
     parent: Option<String>,
 }
 
@@ -164,12 +207,41 @@ fn text_field<'a>(document: &'a Document, name: &str) -> Option<&'a str> {
         })
 }
 
+/// The traversal error a refused 1.x header gives: a malformed header is a
+/// finding in the layer, and a version or type the traversal does not read
+/// names the layer and the entry.
+fn header_error<E>(fault: HeaderFault, entry: &str, source: Source, input: Document) -> Error<E> {
+    let is_entry = source.identity == entry;
+    let mismatch = match fault {
+        HeaderFault::Shape(finding) => {
+            return Error::Layer {
+                source: source.identity,
+                entry: entry.into(),
+                input,
+                error: NormalizationError::Invalid(vec![finding]),
+            };
+        }
+        HeaderFault::Version { version, reads, .. } => HeaderMismatch::Version { version, reads },
+        HeaderFault::FileType { file_type, .. } => HeaderMismatch::FileType { file_type },
+    };
+    Error::Header {
+        source: source.identity,
+        entry: entry.into(),
+        mismatch,
+        is_entry,
+    }
+}
+
 fn admit<E>(
     schema: &SchemaStructure,
     entry: &str,
     source: Source,
     input: Document,
-) -> Result<Frame, Error<E>> {
+) -> Result<(Layer, Option<String>), Error<E>> {
+    // The 0.5 chain reads no 1.x layer (SCHEMA-2, #3030 D76).
+    if let Some(fault) = language::refusal(&input) {
+        return Err(header_error(fault, entry, source, input));
+    }
     let normalized = match schema.normalize_layer(&input) {
         Ok(value) => value,
         Err(error) => {
@@ -212,14 +284,14 @@ fn admit<E>(
             })
         }
     };
-    Ok(Frame {
-        layer: Layer {
+    Ok((
+        Layer {
             source,
             document: normalized.document,
             origins: normalized.origins,
         },
         parent,
-    })
+    ))
 }
 
 /// Follow each layer's single parent from the entry, admitting each layer before
@@ -232,20 +304,42 @@ pub fn traverse<P: InheritanceSourcePort>(
     entry_document: Document,
     port: &mut P,
 ) -> Result<Vec<Layer>, Error<P::Error>> {
+    walk(entry, entry_document, port, |entry, source, input| {
+        admit(schema, entry, source, input)
+    })
+}
+
+/// The traversal both languages share. `admit` admits one layer, given the
+/// entry identity, the layer's source and its document, and returns the layer
+/// with the parent it names.
+fn walk<L, P: InheritanceSourcePort>(
+    entry: Source,
+    entry_document: Document,
+    port: &mut P,
+    mut admit: impl FnMut(&str, Source, Document) -> Result<(L, Option<String>), Error<P::Error>>,
+) -> Result<Vec<L>, Error<P::Error>> {
     if entry.identity.is_empty() || entry.display_path.is_empty() {
         return Err(Error::InvalidIdentity);
     }
     let entry_identity = entry.identity.clone();
-    let mut chain = vec![admit(schema, &entry_identity, entry, entry_document)?];
+    let mut frame = |source: Source, input: Document| {
+        let identity = source.identity.clone();
+        admit(&entry_identity, source, input).map(|(layer, parent)| Frame {
+            identity,
+            layer,
+            parent,
+        })
+    };
+    let mut chain = vec![frame(entry, entry_document)?];
     let mut parent_occurrences = 0;
     loop {
-        let frame = chain.last_mut().expect("chain holds the entry");
-        let Some(written) = frame.parent.take() else {
+        let frame_ref = chain.last_mut().expect("chain holds the entry");
+        let Some(written) = frame_ref.parent.take() else {
             break;
         };
         parent_occurrences += 1;
         crate::limits::Limits::parent_occurrences(parent_occurrences)?;
-        let declaring = frame.layer.source.identity.clone();
+        let declaring = frame_ref.identity.clone();
         if !is_local_parent(&written) {
             return Err(Error::InvalidParent {
                 declaring,
@@ -265,13 +359,10 @@ pub fn traverse<P: InheritanceSourcePort>(
         if source.identity.is_empty() || source.display_path.is_empty() {
             return Err(Error::InvalidIdentity);
         }
-        if let Some(first) = chain
-            .iter()
-            .position(|f| f.layer.source.identity == source.identity)
-        {
+        if let Some(first) = chain.iter().position(|f| f.identity == source.identity) {
             let mut path = Vec::new();
             for frame in &chain[first..] {
-                path.push(frame.layer.source.identity.clone());
+                path.push(frame.identity.clone());
             }
             let returns_to_entry = source.identity == entry_identity;
             path.push(source.identity);
@@ -290,9 +381,95 @@ pub fn traverse<P: InheritanceSourcePort>(
             }
             Err(SourceError::Raised(error)) => return Err(Error::Host(error)),
         };
-        chain.push(admit(schema, &entry_identity, source, input)?);
+        chain.push(frame(source, input)?);
     }
     Ok(chain.into_iter().rev().map(|frame| frame.layer).collect())
+}
+
+/// One admitted 1.x specification layer: its source, its document as written
+/// and the language version it declares.
+#[derive(Debug, PartialEq)]
+pub struct VersionedLayer {
+    pub source: Source,
+    pub document: Document,
+    pub version: LanguageVersion,
+}
+
+/// The layers of a 1.x specification in contribution order, the root ancestor
+/// first and the entry last, and the version the chain needs: the newest any
+/// layer declares (P-VER-1).
+#[derive(Debug, PartialEq)]
+pub struct VersionedChain {
+    pub layers: Vec<VersionedLayer>,
+    pub version: LanguageVersion,
+}
+
+/// Follow a 1.x specification's parents as [`traverse`] does, admitting each
+/// layer against the view of `schema`, the 1.0 specification closure, at the
+/// version that layer declares (LAYER-4, P-VER-1). `reads` is the newest
+/// version the engine reads. Every layer declares `type: spec`; a layer that
+/// declares a version the engine does not read, or another type, fails before
+/// its parent is read, at the entry's header or at the `parent` naming it.
+/// Composition is not part of this traversal.
+pub fn traverse_versioned<P: InheritanceSourcePort>(
+    schema: &SchemaStructure,
+    reads: LanguageVersion,
+    entry: Source,
+    entry_document: Document,
+    port: &mut P,
+) -> Result<VersionedChain, Error<P::Error>> {
+    let layers = walk(entry, entry_document, port, |entry, source, input| {
+        admit_versioned(schema, reads, entry, source, input)
+    })?;
+    let version = layers
+        .iter()
+        .map(|layer| layer.version)
+        .max()
+        .expect("a chain holds its entry");
+    Ok(VersionedChain { layers, version })
+}
+
+fn admit_versioned<E>(
+    schema: &SchemaStructure,
+    reads: LanguageVersion,
+    entry: &str,
+    source: Source,
+    input: Document,
+) -> Result<(VersionedLayer, Option<String>), Error<E>> {
+    let header = match language::read_header(&input, Some(reads), FileType::Spec) {
+        Ok(header) => header,
+        Err(fault) => return Err(header_error(fault, entry, source, input)),
+    };
+    let findings = schema.at_version(header.version).validate_layer(&input);
+    let error = match findings {
+        Ok(findings) if findings.is_empty() => None,
+        Ok(findings) => Some(NormalizationError::Invalid(findings)),
+        Err(error) => Some(NormalizationError::Validation(error)),
+    };
+    if let Some(error) = error {
+        return Err(Error::Layer {
+            source: source.identity,
+            entry: entry.into(),
+            input,
+            error,
+        });
+    }
+    // The admitted layer writes `parent` only as a nonempty path.
+    let parent = match input
+        .field(input.root(), "parent")
+        .map(|node| &input.nodes()[node])
+    {
+        Some(N::Text(parent)) => Some(parent.clone()),
+        _ => None,
+    };
+    Ok((
+        VersionedLayer {
+            source,
+            document: input,
+            version: header.version,
+        },
+        parent,
+    ))
 }
 
 impl<E: std::fmt::Debug> std::fmt::Display for Error<E> {

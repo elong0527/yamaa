@@ -181,6 +181,8 @@ conditions:
   transport_path_collision: {phases: [validation]}
   transport_text_invalid: {phases: [output]}
   undeclared_column: {phases: [validation]}
+  # SCHEMA-2, LAYER-4
+  unexpected_file_type: {phases: [validation]}
   ungrouped_driver_field: {phases: [validation]}
   unique_failed: {phases: [verification]}
   unknown_artifact_profile: {phases: [validation]}
@@ -205,6 +207,8 @@ conditions:
   unmatched_pattern: {phases: [mapping]}
   unpaired_fields: {phases: [validation]}
   unresolvable_name: {phases: [validation]}
+  # SCHEMA-2, LAYER-4
+  unsupported_language_version: {phases: [validation]}
   unsupported_operation: {phases: [planning]}
   untransportable_text: {phases: [validation]}
   value_level_multiple_matches: {phases: [verification]}

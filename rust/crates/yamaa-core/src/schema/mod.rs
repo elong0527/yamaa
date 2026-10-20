@@ -16,6 +16,7 @@ mod path_render;
 mod printable_data;
 mod type_expression;
 mod validation;
+mod versioned_layer;
 mod windows;
 
 pub use bundle::safe_include as schema_include_name;
@@ -26,7 +27,9 @@ pub use bundle::{
 };
 pub use composition::{ComposedValue, CompositionOrigin};
 pub use constraints::ConstraintViolation;
-pub use descriptor::{Descriptor, DescriptorError, DescriptorIssue, DescriptorReport};
+pub use descriptor::{
+    Descriptor, DescriptorError, DescriptorIssue, DescriptorReport, DescriptorSite, FIELD_KINDS,
+};
 pub use diagnostic_projection::{
     admit_schema_diagnostics, schema_diagnostic_kind_label, ResolvedSchemaDiagnostic,
     SchemaDiagnosticContext, SchemaDiagnosticError, SchemaDiagnosticReport, SchemaDiagnosticValue,

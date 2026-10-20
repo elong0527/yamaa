@@ -10,20 +10,22 @@ derived and where, and the bytes its source may hold.
 
 ### SPEC-1. A specification derives one output dataset from the root fields it declares
 
-A specification names the schema bundle it is written against in
-`schema_version` and derives the one output dataset `domain` names. Its other
-root fields declare the row identity (`keys`), the input datasets it reads
-(`input`), how output rows are built (`base`, `filter`, `rows`), the values
-derived for them (`windows`, `intermediates`, `columns`), the artifact
-(`output`), the assertions over the completed dataset (`verifications`) and
-the metadata carried with it (`submission`, `metadata`).
+A specification declares `yamaa` and `type: spec`
+([SCHEMA-2](reference/schema-language.md#schema-2)), may name its CDISC model
+in `model` ([SUB-3](profiles/submission.md#sub-3)), and derives the one output
+dataset `domain` names. Its other root fields declare the row identity
+(`keys`), the input datasets it reads (`input`), how output rows are built
+(`base`, `filter`, `rows`), the values derived for them (`windows`,
+`intermediates`, `columns`), the artifact (`output`), the assertions over the
+completed dataset (`verifications`) and the metadata carried with it
+(`submission`, `metadata`).
 
 Replaces: REQ-1042, REQ-1045.
 
 Each root field's schema description states its meaning.
-[Schema language](reference/schema-language.md) requires `schema_version` to
-match the bundle exactly, and [Inheritance](inheritance.md) resolves `parent`
-before validation and execution. `filter` and `rows` exclude each other under
+[SCHEMA-2](reference/schema-language.md#schema-2) governs the header, and
+[Inheritance](inheritance.md) resolves `parent` before validation and
+execution. `filter` and `rows` exclude each other under
 [Row construction](rows.md). `columns` are declared in the
 dependency order [Column derivation](columns.md) requires, and
 `output.columns` alone sets the artifact's column order
