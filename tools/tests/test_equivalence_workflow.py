@@ -12,7 +12,7 @@ from tools.validation._repository_yaml import UniqueKeyLoader
 
 
 class EquivalenceWorkflowTests(unittest.TestCase):
-    def decide(self, path, *, event="pull_request", base_path=None):
+    def decide(self, path, *, event="pull_request", base_path=None, merge=False):
         workflow = yaml.load(
             (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
             Loader=UniqueKeyLoader,
@@ -49,6 +49,19 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             if base_path:
                 git("checkout", "--quiet", "--detach", base)
                 base = commit(base_path)
+            checkout = head
+            if merge:
+                checkout = git(
+                    "commit-tree",
+                    git("rev-parse", f"{head}^{{tree}}"),
+                    "-p",
+                    base,
+                    "-p",
+                    head,
+                    "-m",
+                    "Synthetic merge",
+                )
+            git("checkout", "--quiet", "--detach", checkout)
             output = work / "github-output"
             result = subprocess.run(
                 [
@@ -88,6 +101,17 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             "tools/migrate/example.py",
             "tools/conformance/example.py",
             "tools/commands/equivalence.py",
+            "tools/commands/r_tests.py",
+            "tools/commands/check_r.py",
+            "tools/commands/python_tests.py",
+            "tools/commands/setup.py",
+            "tools/staging/stage_r_package.py",
+            "tools/staging/engine_bundle.py",
+            "tools/packaging/check_cargo_lock.py",
+            "tools/ci/toolchain.py",
+            "tools/benchmark.py",
+            "tools/paths.py",
+            "pyproject.toml",
             "Makefile",
             ".github/workflows/ci.yml",
             ".github/actions/setup/action.yml",
@@ -111,6 +135,12 @@ class EquivalenceWorkflowTests(unittest.TestCase):
         self.assertEqual(
             self.decide("CONTRIBUTING.md", event="workflow_dispatch")[0], "run=true"
         )
+
+    def test_a_synthetic_merge_cannot_pass_as_exact_head_evidence(self):
+        with self.assertRaises(subprocess.CalledProcessError) as stopped:
+            self.decide("python/pyproject.toml", merge=True)
+        self.assertIn("::error::", stopped.exception.stdout)
+        self.assertIn("pull-request head", stopped.exception.stdout)
 
 
 if __name__ == "__main__":

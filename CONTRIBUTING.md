@@ -216,11 +216,13 @@ A change to the executor, such as rewrite 1 (#2785), must leave every result
 unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
 exact head, and says so in the PR. CI's `equivalence` job runs the gate on a
 pull request whose diff reaches `rust/`, `yaml/`, `benchmarks/`, the host
-packages (including Python build metadata and its lock), the converter or
-the gate's command, workflow and setup, and passes without running it
+packages (including Python build metadata and its lock), repository tools or
+the gate's Makefile, workflow and setup, and passes without running it
 otherwise; the command stays the local route. The gate builds the Python and
-R packages from the checkout and installs both outside it. On each host it
-runs public benchmark conformance: every active benchmark must reproduce its expected
+R packages from the exact pull-request head and installs both outside the
+checkout. The tools' root `pyproject.toml` also triggers the gate, so packaging
+and setup changes cannot skip it. On each host it runs public benchmark
+conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
 rule and specification paths. A repeat pass runs each entry's spec
 object a second time and requires it to reuse what the first run compiled,

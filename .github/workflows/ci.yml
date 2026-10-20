@@ -60,10 +60,10 @@ jobs:
     # The engine gate: fresh builds of both hosts must reproduce every
     # benchmark's expected bytes and every negative benchmark's first issue.
     # It runs when a pull request's diff reaches the engine, the schemas,
-    # the hosts, the converter, the benchmarks or this gate's setup;
-    # otherwise the job passes
-    # without running, so branch protection can require it on every pull
-    # request. Scheduled runs leave it out: the gate rebuilds both hosts.
+    # the hosts, the repository tools, the benchmarks or this gate's setup;
+    # otherwise the job passes without running, so branch protection can
+    # require it on every pull request. Scheduled runs leave it out: the gate
+    # rebuilds both hosts.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -72,6 +72,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Decide whether the diff reaches the gate's paths
         id: paths
         env:
@@ -83,10 +84,13 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::The equivalence gate must run on the pull-request head."
+            exit 1
+          fi
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           changed=$(git diff --name-only "$base" "$HEAD_SHA" -- \
-            rust yaml benchmarks python R/yamaa \
-            tools/migrate tools/conformance tools/commands/equivalence.py \
+            rust yaml benchmarks python R/yamaa tools pyproject.toml \
             Makefile .github/workflows/ci.yml .github/actions/setup)
           if [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
