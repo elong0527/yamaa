@@ -50,12 +50,12 @@ reporting the declaring file and path. A `parent` written as null is absent:
 the layer has no parent, and an entry file whose `parent` is null is a
 composition of one layer.
 
-A local `parent` keeps the written form of every declared path
+A non-empty local `parent` keeps the written form of every declared path
 ([FILE-4](reference/files.md#file-4), [FILE-5](reference/files.md#file-5)).
-A `\`, an empty segment or a trailing separator, as in `std//base.yaml`,
-`base.yaml/` or a network share's `//server/share/base.yaml`, fails with
-`resource_path_not_normalized` at `parent`, naming the path as written,
-before the parent is resolved.
+A `\`, an empty segment or a trailing separator in it, as in
+`std//base.yaml`, `base.yaml/` or a network share's
+`//server/share/base.yaml`, fails with `resource_path_not_normalized` at
+`parent`, naming the path as written, before the parent is resolved.
 
 <a id="layer-3"></a>
 

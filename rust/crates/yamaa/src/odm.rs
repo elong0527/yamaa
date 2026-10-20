@@ -142,9 +142,10 @@ impl Engine {
     /// so the per-file source bound of 10 GiB applies first: a larger source
     /// fails with the code `limit` and the message `ODM source exceeds
     /// 10737418240 bytes`, and a plain XML source over `max_expanded_bytes`
-    /// is refused only once it is held. [`read_odm`] streams a local file
-    /// instead: it never holds an archive whole and refuses a plain XML file
-    /// over `max_expanded_bytes` before reading it.
+    /// is refused only once it is held. [`read_odm`] reads a local file in
+    /// place instead: it streams an archive, never holding it whole, and
+    /// refuses a plain XML file over `max_expanded_bytes` before reading it,
+    /// then holds that file whole, at most `max_expanded_bytes`.
     ///
     /// # Example
     ///

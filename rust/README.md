@@ -339,9 +339,10 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 - `read_odm` through a resolver captures the source once and holds it whole,
   under the 10 GiB per-file source bound (code `limit`, `ODM source exceeds
   10737418240 bytes`), before `max_expanded_bytes` applies: the resolver
-  protocol has no streaming read. Without a resolver, a local file is
-  streamed: an archive is never held whole, and a plain XML file over
-  `max_expanded_bytes` is refused before it is read.
+  protocol has no streaming read. Without a resolver, a local archive is
+  streamed and never held whole, and a local plain XML file over
+  `max_expanded_bytes` is refused before it is read; one within that bound
+  is held whole.
 - `resolve_specification` stays public, as decided for 0.4.0 in #2725. The
   facade type is `ResolvedSpecification`; the internal `ResolvedArtifact`
   (above) is its implementation and wire format, not a public type.
