@@ -20,6 +20,7 @@ use std::{collections::BTreeMap, vec};
 mod compiler_limits;
 pub use compiler_limits::CompilerLimit;
 mod binding_diagnostics;
+mod checks;
 mod intermediate_admission;
 mod intermediate_derivations;
 mod intermediate_range;
@@ -29,7 +30,6 @@ mod lookup_range;
 mod lowering_audit;
 mod match_values;
 mod relation_predicates;
-mod static_checks;
 mod types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
@@ -335,15 +335,6 @@ impl SourceDeclaration {
     pub fn text_is_missing(&self, value: &str) -> bool {
         !self.empty_string_present && value.is_empty()
     }
-    /// A stored field's type before its schema is captured: the declared
-    /// type. An undeclared field's type, and whether it exists at all, is
-    /// known only once capture reads the stored schema (INPUT-5).
-    pub(crate) fn declared_type(&self, field: &str) -> Option<ColumnType> {
-        self.types
-            .iter()
-            .find(|(name, _)| name == field)
-            .map(|&(_, kind)| kind)
-    }
 }
 #[derive(Clone, Debug)]
 enum Operation {
@@ -579,425 +570,6 @@ fn optional_features(
             )
         }
     }
-}
-
-/// Preserve the reference preflight order and collect all independent findings.
-fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, PrepareError> {
-    let d = spec.document();
-    let root = d.root();
-    let mut findings = Vec::new();
-    let columns = sequence(d, field(d, root, "columns")?)?;
-    let names = columns
-        .iter()
-        .map(|&id| text(d, field(d, id, "name")?))
-        .collect::<Result<Vec<_>, _>>()?;
-    for (position, &name) in names.iter().enumerate() {
-        if names[..position].contains(&name) {
-            let mut finding = LookupFinding::new(
-                &format!("columns[{position}].name"),
-                crate::diagnostic::ConditionCode::PreflightDuplicateColumn,
-            );
-            finding.text("identifier", name);
-            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
-        }
-    }
-    let rows = d
-        .field(root, "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| sequence(d, id))
-        .transpose()?
-        .unwrap_or(&[]);
-    for (index, &row) in rows.iter().enumerate() {
-        for &(name, _) in mapping(d, field(d, row, "derivations")?)? {
-            let column = text(d, name)?;
-            if !names.contains(&column) {
-                findings.push(PreflightFinding::UndeclaredRowColumn {
-                    index,
-                    column: column.into(),
-                });
-            }
-        }
-    }
-    if !rows.is_empty() {
-        for (&id, &name) in columns.iter().zip(&names) {
-            if let Some(default) = d
-                .field(id, "derivation")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let value = field(d, default, "value")?;
-                // Aggregate column results belong to the completed dataset and
-                // cannot be promoted into row-local defaults (REQ-1260).
-                if d.field(value, "aggregate").is_some() {
-                    let mut overridden = Vec::new();
-                    for &row in rows {
-                        if d.field(field(d, row, "derivations")?, name).is_some() {
-                            overridden.push(text(d, field(d, row, "id")?)?.into());
-                        }
-                    }
-                    if !overridden.is_empty() {
-                        findings.push(PreflightFinding::DuplicateRowDefault {
-                            column: name.into(),
-                            rows: overridden,
-                            not_row_local: "aggregate".into(),
-                        });
-                    }
-                }
-            } else {
-                let mut missing = Vec::new();
-                for &row in rows {
-                    if d.field(field(d, row, "derivations")?, name).is_none() {
-                        missing.push(text(d, field(d, row, "id")?)?.into());
-                    }
-                }
-                if !missing.is_empty() {
-                    findings.push(PreflightFinding::MissingRowDerivation {
-                        column: name.into(),
-                        rows: missing,
-                    });
-                }
-            }
-        }
-    } else {
-        for (&id, &name) in columns.iter().zip(&names) {
-            if !present(d, id, "derivation") {
-                findings.push(PreflightFinding::MissingDerivation {
-                    column: name.into(),
-                });
-            }
-        }
-    }
-    let inputs = mapping(d, field(d, root, "input")?)?;
-    let input_names = inputs
-        .iter()
-        .map(|&(id, _)| text(d, id))
-        .collect::<Result<Vec<_>, _>>()?;
-    let domain = text(d, field(d, root, "domain")?)?;
-    if input_names.contains(&domain) {
-        findings.push(PreflightFinding::DomainInputCollision {
-            domain: domain.into(),
-        });
-    }
-    let keys = sequence(d, field(d, root, "keys")?)?;
-    if keys.is_empty() {
-        let mut finding =
-            LookupFinding::new("keys", crate::diagnostic::ConditionCode::PreflightEmptyKeys);
-        finding.text("expected", "at least one key column");
-        finding.text("actual", "empty list");
-        findings.push(PreflightFinding::Scalar(finding.diagnostic()));
-    }
-    for (position, &id) in keys.iter().enumerate() {
-        let name = text(d, id)?;
-        if keys[..position]
-            .iter()
-            .any(|&previous| text(d, previous).is_ok_and(|value| value == name))
-        {
-            let mut finding = LookupFinding::new(
-                &format!("keys[{position}]"),
-                crate::diagnostic::ConditionCode::PreflightDuplicateKey,
-            );
-            finding.text("identifier", name);
-            findings.push(PreflightFinding::Scalar(finding.diagnostic()));
-        }
-        if !names.contains(&name) {
-            findings.push(PreflightFinding::UndeclaredKey {
-                position,
-                column: name.into(),
-            });
-        }
-    }
-    if rows.is_empty() && spec.default_driver().is_none() {
-        findings.push(PreflightFinding::DriverUnavailable { dataset: None });
-    }
-    if let Some(id) = d
-        .field(root, "base")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        let base = text(d, id)?;
-        if !input_names.contains(&base) {
-            findings.push(PreflightFinding::DriverUnavailable {
-                dataset: Some(base.into()),
-            });
-        }
-    }
-    if !rows.is_empty() && present(d, root, "filter") {
-        findings.push(PreflightFinding::ConflictingRowConstruction);
-    }
-    let intermediate_names = d
-        .field(root, "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| {
-            sequence(d, id)?
-                .iter()
-                .map(|&id| text(d, field(d, id, "id")?))
-                .collect::<Result<Vec<_>, PrepareError>>()
-        })
-        .transpose()?
-        .unwrap_or_default();
-    for (index, &row) in rows.iter().enumerate() {
-        let identity = text(d, field(d, row, "id")?)?;
-        if let Some(previous) = rows[..index].iter().position(|&row| {
-            d.field(row, "id")
-                .is_some_and(|id| text(d, id).is_ok_and(|name| name == identity))
-        }) {
-            let mut finding = LookupFinding::new(
-                &format!("rows[{index}].id"),
-                crate::diagnostic::ConditionCode::PreflightDuplicateRow,
-            )
-            .diagnostic();
-            finding.spec_paths.push(format!("rows[{previous}].id"));
-            finding.context.insert(
-                "identifier".into(),
-                crate::json::Value::String(identity.into()),
-            );
-            findings.push(PreflightFinding::Scalar(finding));
-        }
-        let driver = d
-            .field(row, "dataset")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| text(d, id))
-            .transpose()?
-            .or_else(|| (input_names.len() == 1).then(|| input_names[0]));
-        if !driver
-            .is_some_and(|name| input_names.contains(&name) || intermediate_names.contains(&name))
-        {
-            findings.push(PreflightFinding::RowDriverUnavailable {
-                index,
-                row: identity.into(),
-                dataset: driver.map(String::from),
-            });
-        }
-        if let Some(group) = d
-            .field(row, "group_by")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            let groups = sequence(d, group)?
-                .iter()
-                .map(|&id| text(d, id).map(String::from))
-                .collect::<Result<Vec<_>, _>>()?;
-            if groups.is_empty()
-                || groups
-                    .iter()
-                    .enumerate()
-                    .any(|(i, name)| groups[..i].contains(name))
-            {
-                findings.push(PreflightFinding::InvalidGroup {
-                    index,
-                    row: identity.into(),
-                    groups,
-                });
-            } else if let Some(driver) = driver {
-                for name in groups {
-                    if !name.starts_with(&format!("{driver}.")) || name.matches('.').count() != 1 {
-                        findings.push(PreflightFinding::GroupReference {
-                            index,
-                            row: identity.into(),
-                            name,
-                            dataset: driver.into(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-    Ok(findings)
-}
-
-fn check_prepare_limits(d: &Document) -> Result<(), PrepareError> {
-    let root = d.root();
-    for (field_name, limit) in [
-        ("columns", crate::limits::Limits::COLUMNS),
-        ("keys", crate::limits::Limits::KEYS),
-    ] {
-        let actual = sequence(d, field(d, root, field_name)?)?.len();
-        if actual > limit {
-            return Err(PrepareError::limit(
-                field_name,
-                limit,
-                Some(actual),
-                Some(field_name),
-            ));
-        }
-    }
-    let actual = mapping(d, field(d, root, "input")?)?.len();
-    if actual > crate::limits::Limits::INPUTS {
-        return Err(PrepareError::limit(
-            "inputs",
-            crate::limits::Limits::INPUTS,
-            Some(actual),
-            Some("input"),
-        ));
-    }
-    let output = field(d, root, "output")?;
-    let actual = sequence(d, field(d, output, "columns")?)?.len();
-    if actual > crate::limits::Limits::COLUMNS {
-        return Err(PrepareError::limit(
-            "projected_columns",
-            crate::limits::Limits::COLUMNS,
-            Some(actual),
-            Some("output.columns"),
-        ));
-    }
-    for &column in sequence(d, field(d, root, "columns")?)? {
-        let value = d
-            .field(column, "derivation")
-            .and_then(|id| d.field(id, "value"));
-        let operands = value
-            .and_then(|id| d.field(id, "first_available"))
-            .and_then(|id| d.field(id, "sources"))
-            .map(|id| sequence(d, id))
-            .transpose()?
-            .unwrap_or(&[]);
-        if operands.len() > crate::limits::Limits::SOURCE_OPERANDS {
-            let name = text(d, field(d, column, "name")?)?;
-            return Err(PrepareError::limit(
-                "source_operands",
-                crate::limits::Limits::SOURCE_OPERANDS,
-                Some(operands.len()),
-                Some(&format!(
-                    "columns.{name}.derivation.first_available.sources"
-                )),
-            ));
-        }
-    }
-    // Own row-shape admission before filters or default expansion allocate a plan.
-    if let Some(rows) = d
-        .field(root, "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-            for (resource, name, actual, maximum) in [
-                (
-                    "group_keys",
-                    "group_by",
-                    d.field(row, "group_by")
-                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                        .map(|id| sequence(d, id).map(<[_]>::len))
-                        .transpose()?
-                        .unwrap_or(0),
-                    crate::limits::Limits::KEYS,
-                ),
-                (
-                    "row_columns",
-                    "derivations",
-                    mapping(d, field(d, row, "derivations")?)?.len(),
-                    crate::limits::Limits::COLUMNS,
-                ),
-            ] {
-                if actual > maximum {
-                    return Err(PrepareError::limit(
-                        resource,
-                        maximum,
-                        Some(actual),
-                        Some(&format!("rows[{index}].{name}")),
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn collect_source_findings<'a>(
-    d: &'a Document,
-    inputs: &[(usize, usize)],
-    odm_inputs: &std::collections::BTreeSet<&'a str>,
-) -> Result<Vec<PreflightFinding>, PrepareError> {
-    let mut source_findings = Vec::new();
-    for &(name, id) in inputs {
-        let prefix = format!("input.{}", text(d, name)?);
-        let written = text(d, field(d, id, "path")?)?;
-        if let Some(failure) = crate::resource::written_path_failure(written) {
-            source_findings.push(PreflightFinding::Scalar(
-                failure.diagnostic(text(d, name)?, written),
-            ));
-            continue;
-        }
-        let profile = SourceProfile::from_path(text(d, field(d, id, "path")?)?);
-        let sas = matches!(
-            profile,
-            Some(SourceProfile::Xport | SourceProfile::Sas7bdat)
-        );
-        let encoding = d
-            .field(id, "encoding")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null));
-        if sas != encoding.is_some() {
-            source_findings.push(PreflightFinding::Scalar(crate::diagnostic::Diagnostic {
-                code: crate::diagnostic::ConditionCode::SasSourceEncoding,
-                spec_paths: vec![format!("{prefix}.encoding")],
-                context: crate::diagnostic::Context::from([(
-                    "dataset".into(),
-                    crate::json::Value::String(text(d, name)?.into()),
-                )]),
-                source_span: None,
-                operand_route: None,
-            }));
-        }
-        if profile == Some(SourceProfile::Csv)
-            && d.field(id, "empty_string")
-                .is_some_and(|id| !matches!(&d.nodes()[id],N::Text(v) if v=="missing"))
-        {
-            source_findings.push(PreflightFinding::EmptyStringPresentUnsupported {
-                dataset: text(d, name)?.into(),
-            });
-        }
-        if profile.is_none() {
-            source_findings.push(PreflightFinding::UnknownSourceProfile {
-                dataset: text(d, name)?.into(),
-                path: text(d, field(d, id, "path")?)?.into(),
-            });
-        }
-        if odm_inputs.contains(text(d, name)?) {
-            let declared = [
-                ("types", crate::diagnostic::OdmDeclared::Types),
-                ("schema", crate::diagnostic::OdmDeclared::Schema),
-                ("ordinal", crate::diagnostic::OdmDeclared::Ordinal),
-            ]
-            .into_iter()
-            .find(|(field, _)| present(d, id, field));
-            if let Some((_, declared)) = declared {
-                source_findings.push(PreflightFinding::Odm(
-                    crate::diagnostic::OdmFinding::Declared {
-                        dataset: text(d, name)?,
-                        declared,
-                    }
-                    .diagnostic(),
-                ));
-            }
-            continue;
-        }
-        if profile == Some(SourceProfile::Parquet) {
-            if let Some(types) = d
-                .field(id, "types")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let fields = mapping(d, types)?;
-                if fields.len() > crate::limits::Limits::COLUMNS {
-                    return Err(PrepareError::limit(
-                        "source_fields",
-                        crate::limits::Limits::COLUMNS,
-                        Some(fields.len()),
-                        Some(&format!("input.{}.types", text(d, name)?)),
-                    ));
-                }
-                for &(field_name, kind) in fields {
-                    let kind = match text(d, kind)? {
-                        "str" => ColumnType::Str,
-                        "int" => ColumnType::Int,
-                        "float" => ColumnType::Float,
-                        "date" => ColumnType::Date,
-                        "datetime" => ColumnType::DateTime,
-                        _ => return Err(PrepareError::Internal),
-                    };
-                    source_findings.push(PreflightFinding::RedundantSourceType {
-                        dataset: text(d, name)?.into(),
-                        field: text(d, field_name)?.into(),
-                        kind,
-                    });
-                }
-            }
-        }
-    }
-    Ok(source_findings)
 }
 
 type BuiltSources = (
@@ -1336,11 +908,11 @@ impl PreparedSpecification {
     ) -> Result<Self, PrepareError> {
         let d = spec.document();
         let root = d.root();
-        check_prepare_limits(d)?;
         // The typed tree of the same admitted document. Project calls are
         // analysed on it; every other declaration is still compiled from
         // the document below.
         let lowered = crate::front_end::v0_5::lower(spec, None);
+        checks::root::limits(lowered.spec())?;
         // Link admission precedes every other declaration finding: a refused
         // type authority or contract leaves nothing to compile against.
         let contracts = crate::producer_contract::admit(spec, links).map_err(|error| {
@@ -1356,8 +928,8 @@ impl PreparedSpecification {
             }
         })?;
         match_values::declaration_admission(d)?;
-        let mut findings = preflight(spec)?;
-        findings.extend(odm::context_findings(spec)?);
+        let mut findings = checks::root::findings(lowered.spec());
+        findings.extend(checks::odm::context_findings(lowered.spec())?);
         let columns = sequence(d, field(d, root, "columns")?)?;
         if findings.iter().any(|finding| {
             matches!(finding,
@@ -1413,13 +985,10 @@ impl PreparedSpecification {
                 .iter()
                 .map(|(dataset, contract)| (dataset.as_str(), contract)),
         );
-        rounding::declaration_findings(d, columns, &output, &mut findings)?;
-        temporal::declaration_findings(d, columns, &output, &declared, &mut findings)?;
-        imputation::declaration_findings(d, columns, &output, &declared, &mut findings)?;
-        str_case::declaration_findings(d, columns, &output, &declared, &mut findings)?;
-        scalar::declaration_findings(d, &declared, &mut findings)?;
-        let extraction = str_extract::Prepared::new(d, &declared, &mut findings)?;
-        let templates = str_template::Prepared::new(d, &output, &declared, &mut findings)?;
+        let checks::verbs::Text {
+            extraction,
+            templates,
+        } = checks::verbs::findings(d, &lowered, &declared, &mut findings)?;
         drop(declared);
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
@@ -1434,9 +1003,9 @@ impl PreparedSpecification {
         optional_features(d, root, &["parent"], "", &mut extra);
         let root_filter = root_filter::RootFilter::prepare(d)?;
         let inputs = mapping(d, field(d, root, "input")?)?;
-        let odm_inputs = odm::inputs(d)?;
+        let odm_inputs = checks::odm::inputs(lowered.spec())?;
         let driver = if has_rows {
-            row_intermediates::common_driver(d, inputs)?
+            checks::lookups::common_driver(lowered.spec())?
         } else {
             match spec.default_driver() {
                 Some(driver) => driver,
@@ -1448,7 +1017,7 @@ impl PreparedSpecification {
             .iter()
             .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
             .ok_or(PrepareError::Internal)?;
-        let source_findings = collect_source_findings(d, inputs, &odm_inputs)?;
+        let source_findings = checks::root::source_findings(lowered.spec(), &odm_inputs)?;
         if !source_findings.is_empty() {
             return Err(PrepareError::Invalid(source_findings));
         }
@@ -1476,6 +1045,7 @@ impl PreparedSpecification {
         } = prepare_output_declarations(lowered.spec(), &output, &column_verifications)?;
         let intermediates = intermediates::Declarations::prepare(
             d,
+            lowered.spec(),
             &sources,
             driver_index,
             &output,
@@ -1531,8 +1101,7 @@ impl PreparedSpecification {
                 column_verifications,
                 tree,
             }
-            .finish_checks()
-            .map(Self::audit_lowering);
+            .finish(d);
         }
         let declarations = prepare_column_declarations(
             d,
@@ -1573,8 +1142,54 @@ impl PreparedSpecification {
             column_verifications,
             tree,
         }
-        .finish_checks()
-        .map(Self::audit_lowering)
+        .finish(d)
+    }
+    /// Keep the declaration findings `check()` reports, then audit the
+    /// lowered tree in debug builds.
+    fn finish(mut self, d: &Document) -> Result<Self, PrepareError> {
+        let findings = checks::declared::findings(&self, d).map_err(|error| match error {
+            BindError::ExpressionPolicy(error) => PrepareError::expression(error, None),
+            _ => PrepareError::Internal,
+        })?;
+        for finding in findings {
+            let diagnostics = finding
+                .diagnostics(self.source())
+                .ok_or(PrepareError::Internal)?;
+            self.check_expressions.extend(diagnostics);
+        }
+        Ok(self.audit_lowering())
+    }
+    /// All intrinsically known declaration findings, without study binding.
+    /// Actual dataset fields and values remain a build-time responsibility.
+    pub fn check_declaration_findings(
+        &self,
+    ) -> impl Iterator<Item = VerificationDeclarationFinding<'_>> {
+        self.check_expressions
+            .iter()
+            .map(VerificationDeclarationFinding::Diagnostic)
+            .chain(self.verification_declaration_findings())
+    }
+    pub fn check_declaration_diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        // Output-declaration findings are intrinsically known too, so `check`
+        // reports the same findings `domain` reaches at its output stage.
+        // They follow the declaration findings, matching build order: output
+        // declaration checks come after derivation, key checks and
+        // verification, so a first issue agrees between the two routes.
+        let mut diagnostics = self
+            .check_declaration_findings()
+            .map(VerificationDeclarationFinding::diagnostic)
+            .collect::<Vec<_>>();
+        diagnostics.extend(self.output_findings().iter().map(OutputFinding::diagnostic));
+        diagnostics
+    }
+    /// Captured declaration types can refuse a donor filter even when source
+    /// schemas are unavailable. Other declaration checkpoints remain separate.
+    pub fn intermediate_filter_type_diagnostics(
+        &self,
+    ) -> impl Iterator<Item = &crate::diagnostic::Diagnostic> {
+        self.check_expressions
+            .iter()
+            .filter(|finding| self.intermediates.owns_filter_type_finding(finding))
     }
     pub fn source(&self) -> &SourceDeclaration {
         &self.sources[self.driver]
@@ -1983,7 +1598,7 @@ impl PreparedSpecification {
         for (column, declaration) in self.declarations.iter().enumerate() {
             // A key that reads other records than its one base record has no
             // key-phase value to bind (COLUMN-7).
-            let refused = self.key_record_findings(column);
+            let refused = checks::declared::key_record(self, column);
             if !refused.is_empty() {
                 findings.extend(refused);
                 dependencies.push(Some(Vec::new()));
@@ -2266,72 +1881,6 @@ impl PreparedSpecification {
             crate::reference_scope::Phase::Column { groups: &[] }
         }
     }
-    /// Without row templates, each key is computed from one base record
-    /// before any key combination exists (COLUMN-7). Unless record rows make
-    /// every record its own row, an aggregate, which reduces the records of a
-    /// key combination, and an `odm` read, which reads them, fail as
-    /// `key_dependency` at the operation, also inside a `case` branch.
-    ///
-    /// With record rows, a key is derived as any column is, but during row
-    /// construction: an unqualified aggregate, which reduces the constructed
-    /// rows, is not supported there yet and fails as `unsupported_operation`.
-    pub(super) fn key_record_findings(&self, column: usize) -> Vec<BindFinding> {
-        fn visit<'a>(operation: &'a Operation, found: &mut Vec<(&'static str, &'a str, bool)>) {
-            match operation {
-                Operation::Aggregate(aggregate) => {
-                    found.push(("aggregate", aggregate.path(), aggregate.reduces_output()))
-                }
-                Operation::Odm(odm) => found.push(("odm", odm.path(), false)),
-                Operation::Case(branches) => {
-                    for branch in branches {
-                        visit(&branch.operation, found);
-                    }
-                }
-                _ => (),
-            }
-        }
-        if self.rows.is_some() || !self.keys.contains(&column) {
-            return Vec::new();
-        }
-        let Some(declaration) = self.declarations.get(column) else {
-            return Vec::new();
-        };
-        let mut found = Vec::new();
-        visit(&declaration.operation, &mut found);
-        if self.record_rows() {
-            return found
-                .into_iter()
-                .filter(|&(_, _, output)| output)
-                .map(|(_, path, _)| {
-                    BindFinding::Scalar(crate::application_issue::unsupported(
-                        "output_aggregate_key",
-                        Some(path),
-                    ))
-                })
-                .collect();
-        }
-        let name = &self.output.columns()[column].name;
-        found
-            .into_iter()
-            .map(|(operation, path, _)| {
-                BindFinding::Scalar(crate::diagnostic::Diagnostic {
-                    code: crate::diagnostic::ConditionCode::ColumnKeyRecordRead,
-                    spec_paths: vec![path.into()],
-                    context: [
-                        ("column".into(), crate::json::Value::String(name.clone())),
-                        (
-                            "operation".into(),
-                            crate::json::Value::String(operation.into()),
-                        ),
-                    ]
-                    .into(),
-                    source_span: None,
-                    operand_route: None,
-                })
-            })
-            .collect()
-    }
-
     fn bind_project_function(
         &self,
         call: usize,
@@ -2491,7 +2040,7 @@ impl PreparedSpecification {
             };
             // The reference emits expression-local qualification findings first,
             // then validates bare references, preserving written occurrence order.
-            static_checks::qualified_numeric_findings(
+            checks::declared::qualified_numeric_findings(
                 compiled,
                 &reference_path,
                 &self.intermediates,

@@ -1147,7 +1147,7 @@ mod declaration {
                 ),
                 (
                     "",
-                    "{row_value: {source: V, offset: 0, window: {order_by: [ID]}}}",
+                    "{row_value: {source: ID, offset: 0, window: {order_by: [ID]}}}",
                     "zero_offset",
                     "columns.V.derivation.row_value.offset",
                 ),

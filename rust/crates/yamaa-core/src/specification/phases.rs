@@ -336,18 +336,6 @@ impl<'a> Phases<'a> {
         }
     }
 
-    fn reads_odm(&self, root: ExprId) -> bool {
-        let mut found = false;
-        self.spec.walk(root, Scope::Row, |at, _| {
-            if matches!(self.spec.expr(at).kind, ExprKind::Odm(_)) {
-                found = true;
-                return Step::Stop;
-            }
-            Step::Continue
-        });
-        found
-    }
-
     /// The columns every template's row phase starts from: the donor fields
     /// of the SELF lookups, the defaults that read ODM items, which own each
     /// template's item scope and row identity, and the defaults that read
@@ -357,7 +345,7 @@ impl<'a> Phases<'a> {
         for column in 0..self.spec.columns.len() {
             if self
                 .default(column)
-                .is_some_and(|root| self.reads_odm(root))
+                .is_some_and(|root| super::checks::odm::reads_odm(self.spec, root))
             {
                 shared.insert(column);
             }

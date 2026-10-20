@@ -19,6 +19,23 @@ pub struct RelationRangeTypes {
     pub upper: Option<ValueType>,
 }
 impl RelationRangeTypes {
+    /// The types of a range whose value has no common order with a typed
+    /// bound (LOOKUP-9), if it has none.
+    pub fn incomparable(
+        value: ValueType,
+        lower: Option<ValueType>,
+        upper: Option<ValueType>,
+    ) -> Option<Self> {
+        [lower, upper]
+            .into_iter()
+            .flatten()
+            .any(|kind| !comparable(value, kind))
+            .then_some(Self {
+                value,
+                lower,
+                upper,
+            })
+    }
     pub fn diagnostic(&self, path: &str, intermediate: &str) -> crate::diagnostic::Diagnostic {
         self.diagnostic_for(path, Some(intermediate))
     }
@@ -115,18 +132,14 @@ impl RelationRange {
         {
             return Err(RelationRangeError::InvalidMetadata);
         }
-        if let Some(value) = value_kind {
-            if [&lower, &upper]
-                .iter()
-                .filter_map(|bound| bound.as_ref().and_then(|bound| bound.kind))
-                .any(|kind| !comparable(value, kind))
-            {
-                return Err(RelationRangeError::Incomparable(RelationRangeTypes {
-                    value,
-                    lower: lower.as_ref().and_then(|bound| bound.kind),
-                    upper: upper.as_ref().and_then(|bound| bound.kind),
-                }));
-            }
+        if let Some(types) = value_kind.and_then(|value| {
+            RelationRangeTypes::incomparable(
+                value,
+                lower.as_ref().and_then(|bound| bound.kind),
+                upper.as_ref().and_then(|bound| bound.kind),
+            )
+        }) {
+            return Err(RelationRangeError::Incomparable(types));
         }
         Ok(Self {
             path,

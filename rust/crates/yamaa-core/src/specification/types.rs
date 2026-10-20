@@ -102,10 +102,12 @@ impl TypeEnv for Env<'_> {
 /// Names typed before capture, in preflight and in `check()`: an output
 /// column by its declared type, and a stored field by its input's type
 /// authority. A schema link's producer types every field of the artifact
-/// (INPUT-10), whatever its storage profile; otherwise `types` declares a
-/// field of a delimited file and narrows a SAS or Transport one (INPUT-5).
-/// Any other name is not known until binding: an undeclared stored field
-/// may not exist until its schema is captured (EXPR-14).
+/// (INPUT-10), whatever its storage profile. Otherwise `types` declares a
+/// field of a delimited file, every field it leaves undeclared is `str`
+/// (INPUT-5), and `types` narrows a field of a SAS or Transport file. Any
+/// other name is not known until binding: an undeclared field of a
+/// self-describing or SAS file has the type its captured schema gives
+/// (EXPR-14).
 #[derive(Default)]
 pub(super) struct DeclaredTypes<'a> {
     columns: Vec<(&'a str, ColumnType)>,
@@ -152,16 +154,8 @@ impl<'a> DeclaredTypes<'a> {
             .collect();
         Self { columns, inputs }
     }
+    /// The type of `name`, a column or a qualified stored field.
     pub(super) fn name(&self, name: &str) -> ResultType {
-        self.typed(name, false)
-    }
-    /// A preflight operand check's type for `name`: [`Self::name`]'s, except
-    /// that a field of a delimited file that `types` leaves undeclared is
-    /// `str`, the type every such field has if it exists (INPUT-5).
-    pub(super) fn operand(&self, name: &str) -> ResultType {
-        self.typed(name, true)
-    }
-    fn typed(&self, name: &str, typeless: bool) -> ResultType {
         let Some((owner, field)) = name.split_once('.') else {
             return ResultType::declared(
                 self.columns
@@ -184,12 +178,8 @@ impl<'a> DeclaredTypes<'a> {
                     .find(|stored| stored.name == field)
                     .map(|stored| stored.kind),
             ),
-            Some((_, Stored::Typeless(types))) if typeless => {
-                declared(types).unwrap_or(ResultType::STR)
-            }
-            Some((_, Stored::Typeless(types) | Stored::Narrowed(types))) => {
-                declared(types).unwrap_or(ResultType::UNKNOWN)
-            }
+            Some((_, Stored::Typeless(types))) => declared(types).unwrap_or(ResultType::STR),
+            Some((_, Stored::Narrowed(types))) => declared(types).unwrap_or(ResultType::UNKNOWN),
             Some((_, Stored::Captured)) | None => ResultType::UNKNOWN,
         }
     }

@@ -92,7 +92,7 @@ expression's type is one type. Key matching, intermediate fields and drivers,
 derive bindings, range bounds, inferred keys, operand checks, extremes and
 column conversion all read that type.
 
-Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
+Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/src/specification/types/tests.rs::declared_types_follow_each_inputs_type_authority`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
 
 | Expression | Class | Result type |
 | --- | --- | --- |
@@ -117,9 +117,16 @@ Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_resul
 A variable's type is its column's declared type, a stored field's type under
 [INPUT-5](inputs.md#input-5), or an intermediate field's: a typed
 derivation's declared type and an untyped one's result type
-([LOOKUP-15](lookup.md#lookup-15)). An undeclared stored field may not exist
-until its schema is captured, so before capture, as `yamaa check` reads a
-specification, its type and every type taken from it are not yet known.
+([LOOKUP-15](lookup.md#lookup-15)). Before capture, as `yamaa check` reads a
+specification and as every operand check does, a stored field has the type
+its input declares: its producer's type for a linked input
+([INPUT-10](inputs.md#input-10)), its `types` entry, and `str` for every
+other field of a delimited input, as INPUT-5 types each such field. Any other
+undeclared field, of a SAS, Transport or self-describing input, has only the
+type its captured schema gives, so before capture its type and every type
+taken from it are not yet known. So is a name a lookup reads from the current
+record that another intermediate over the same input derives: the record of
+the intermediate that reads the lookup holds that field.
 
 The selecting expressions are `source`, `row_value`, `locf`, `literal`,
 `first_available`, `greatest`, `least`, `case`, `mapping` and `flag`. Each

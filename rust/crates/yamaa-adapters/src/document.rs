@@ -21,7 +21,9 @@ use crate::specification_source::{
 use crate::yaml_decode::{decode_yaml, DecodedYaml};
 use std::sync::Arc;
 use yamaa_core::inheritance::{self as graph, VersionedChain};
-use yamaa_core::language::{self, FileType, Header, LanguageVersion, Reference, ReferenceFault};
+use yamaa_core::language::{
+    self, FileType, Header, LanguageVersion, PathBase, Reference, ReferenceFault,
+};
 use yamaa_core::schema::{Document, NormalizationError, NormalizedDocument, SchemaDiagnostic};
 
 /// The 1.0 closure of each file type.
@@ -376,16 +378,20 @@ pub struct RefusedReference {
 }
 
 /// Check the header of each file a 1.x document's referencing fields name,
-/// in document order, by an engine whose newest version is `reads`
-/// (SCHEMA-2): an input's `schema` names a specification, and a project's
-/// `functions`, `codelists` and section `specs` name function files,
-/// codelist files and specifications. Each file is resolved from
-/// `declaring`, the referencing document's identity, and read through
-/// `port`; the first refused file stops the check.
+/// in the order the fields are written, by an engine whose newest version is
+/// `reads` (SCHEMA-2): an input's `schema` names a specification, and a
+/// project's `functions`, `codelists` and section `specs` name function
+/// files, codelist files and specifications. Each file is resolved from the
+/// base its field selects (FILE-2): `declaring`, the identity of the
+/// document that writes the field, or, for an input with
+/// `relative_to: entry`, `entry`, the identity of the specification's entry
+/// file, which is `declaring` itself for an entry or a project file. Each is
+/// read through `port`; the first refused file stops the check.
 pub fn check_references<P: InheritancePort>(
     document: &Document,
     file_type: FileType,
     declaring: &str,
+    entry: &str,
     reads: LanguageVersion,
     port: &mut P,
 ) -> Result<Vec<CheckedReference>, ReferenceError<P::Error>> {
@@ -395,7 +401,11 @@ pub fn check_references<P: InheritancePort>(
             graph::SourceError::Unavailable => ReferenceError::Unavailable { reference },
             graph::SourceError::Raised(error) => ReferenceError::Host { reference, error },
         };
-        let source = match port.canonicalize(declaring, &reference.written) {
+        let base = match reference.base {
+            PathBase::Declaring => declaring,
+            PathBase::Entry => entry,
+        };
+        let source = match port.canonicalize(base, &reference.written) {
             Ok(source) => source,
             Err(error) => return Err(failed(error, reference)),
         };
