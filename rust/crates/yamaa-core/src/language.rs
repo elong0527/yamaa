@@ -4,9 +4,9 @@
 //! A root that declares `schema_version`, or no `yamaa`, is read by the 0.5
 //! language at the `yamaa-v0.5.0` tag (#3030 D75). A root that declares `yamaa`
 //! is a 1.x document: its header is read here, before any schema closure is
-//! chosen, and the declared type then selects the 1.0 closure. Until the engine
-//! reads 1.0 files (#3030 D76, P1-9) the 0.5 path refuses a 1.x document with
-//! [`refusal`], so only tests reach the 1.0 path.
+//! chosen, and the declared type then selects the 1.0 closure. The engine
+//! reads language version 1.0 ([`LANGUAGE_VERSION`], #3030 D76): every public
+//! call routes a file it reads by the header the file declares.
 use crate::diagnostic::{ConditionCode, Context, Diagnostic};
 use crate::json::Value as JsonValue;
 use crate::schema::{Document, DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
@@ -236,22 +236,6 @@ pub fn read_header(
             expected,
         })?;
     Ok(Header { version, file_type })
-}
-
-/// The refusal a 0.5 path gives a document that declares the 1.x header,
-/// which it does not read: until P1-9 the engine reads no 1.x version
-/// (#3030 D76), so every declared version fails as
-/// `unsupported_language_version`, and an unquoted `yamaa` as
-/// `invalid_field_type`. `None` for every other document, which the 0.5 path
-/// reads unchanged.
-pub fn refusal(document: &Document) -> Option<HeaderFault> {
-    if !declares_header(document) {
-        return None;
-    }
-    // A root that declares the header is a mapping holding `yamaa`, and an
-    // engine that reads no version refuses that value before `type` is read,
-    // so the expected type is never consulted.
-    read_header(document, None, FileType::Spec).err()
 }
 
 impl HeaderFault {
@@ -557,7 +541,6 @@ mod tests {
             ("yamaa", T::text("1.0")),
         ]));
         assert!(!declares_header(&both));
-        assert_eq!(refusal(&both), None);
         let legacy = document(T::map(vec![("schema_version", T::text("1.0"))]));
         assert!(!declares_header(&legacy));
         // A header-less 0.5 function or codelist file, or a scalar root.
@@ -690,33 +673,35 @@ mod tests {
     }
 
     #[test]
-    fn the_0_5_path_refuses_every_declared_version_before_the_switch() {
-        for tree in [
-            T::map(vec![("yamaa", T::text("1.0")), ("type", T::text("spec"))]),
-            T::map(vec![
+    fn an_engine_reads_1_0_and_refuses_a_newer_version_at_yamaa() {
+        // The engine reads 1.0 (D76): a 1.0 file of any type is read, and a
+        // newer version fails at its own `yamaa`, naming the versions read.
+        for kind in FileType::ALL {
+            let read = document(T::map(vec![
                 ("yamaa", T::text("1.0")),
-                ("type", T::text("project")),
-            ]),
-            T::map(vec![("yamaa", T::text("1.7"))]),
-        ] {
-            let refused = document(tree);
-            let fault = refusal(&refused).unwrap();
-            let finding = fault.finding();
-            assert_eq!(finding.code, ConditionCode::HeaderLanguageVersion);
-            assert_eq!(finding.path, "yamaa");
-            let node = refused.field(refused.root(), "yamaa").unwrap();
+                ("type", T::text(kind.name())),
+            ]));
             assert_eq!(
-                finding.context,
-                [
-                    ("version", C::InputValue(node)),
-                    ("language_versions", C::TextList(Vec::new())),
-                ]
+                read_header(&read, Some(LANGUAGE_VERSION), kind),
+                Ok(Header {
+                    version: LanguageVersion::new(0),
+                    file_type: kind,
+                })
             );
         }
-        let unquoted = document(T::map(vec![("yamaa", T::float(1.0))]));
+        let newer = document(T::map(vec![("yamaa", T::text("1.7"))]));
+        let finding = read_header(&newer, Some(LANGUAGE_VERSION), FileType::Spec)
+            .unwrap_err()
+            .finding();
+        assert_eq!(finding.code, ConditionCode::HeaderLanguageVersion);
+        assert_eq!(finding.path, "yamaa");
+        let node = newer.field(newer.root(), "yamaa").unwrap();
         assert_eq!(
-            refusal(&unquoted).unwrap().finding().code,
-            ConditionCode::SchemaInvalidFieldType
+            finding.context,
+            [
+                ("version", C::InputValue(node)),
+                ("language_versions", C::TextList(vec!["1.0".into()])),
+            ]
         );
     }
 

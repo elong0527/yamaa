@@ -400,16 +400,47 @@ fn inheritance_issues<'a>(
             E::Dependencies(error) => matches!(**error, D::Invalid(_)),
             _ => false,
         },
+        I::Versioned { error, .. } => {
+            use crate::document::SpecificationError as V;
+            match error.as_ref() {
+                V::Entry(S::Findings(_)) | V::Clear { .. } | V::Unsupported(_) => true,
+                V::Entry(S::Decode { error, .. }) => matches!(
+                    error,
+                    DecodeFailure::NonAscii(_)
+                        | DecodeFailure::InvalidYaml { .. }
+                        | DecodeFailure::InvalidText(_)
+                ),
+                V::Entry(S::Dependencies(error)) => matches!(error, D::Invalid(_)),
+                V::Traversal(
+                    G::Unavailable { .. }
+                    | G::InvalidParent { .. }
+                    | G::Cycle { .. }
+                    | G::Version { .. }
+                    | G::Header { .. },
+                ) => true,
+                V::Traversal(G::Layer {
+                    error: N::Invalid(_),
+                    ..
+                }) => true,
+                _ => false,
+            }
+        }
         _ => false,
     };
     if !supported {
         return Err(IssueError::Original(owner));
     }
     // Typed cause selection precedes projection; only language findings are
-    // kept, and any other refusal stays with its original owner.
+    // kept, with a 1.x specification's refusal of a feature the engine does
+    // not build yet, and any other refusal stays with its original owner.
     match diagnostics::inheritance_failure_ref(cause) {
-        Ok(Rejection::Invalid(findings)) if findings.is_empty() => Err(invalid()),
+        Ok(Rejection::Invalid(findings) | Rejection::Unsupported(findings))
+            if findings.is_empty() =>
+        {
+            Err(invalid())
+        }
         Ok(Rejection::Invalid(findings)) => Ok(findings),
+        Ok(Rejection::Unsupported(issues)) if matches!(cause, I::Versioned { .. }) => Ok(issues),
         _ => Err(IssueError::Original(owner)),
     }
 }

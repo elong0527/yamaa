@@ -470,7 +470,7 @@ fn read_listing(
                 written: origin.written.to_owned(),
             })
     };
-    let model = document.model().document();
+    let model = document.document();
     listed.identity = Some(document.source().identity.clone());
     listed.name = model
         .field(model.root(), "domain")

@@ -55,6 +55,11 @@ pub struct CapturedParent<R> {
     raw: R,
 }
 impl<R> CapturedParent<R> {
+    /// A parent captured as `source` and decoded as `raw`, as a 1.x chain's
+    /// traversal records each parent it reads.
+    pub fn new(source: Source, raw: R) -> Self {
+        Self { source, raw }
+    }
     pub fn source(&self) -> &Source {
         &self.source
     }

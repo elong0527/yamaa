@@ -129,15 +129,9 @@ pub fn prepare<P: StructuralDecodePort>(
         document,
         locations,
     } = decoder.decode(&source).map_err(Error::Decode)?;
-    // A root that declares the 1.x header is refused before the 0.5 closure
-    // reads it (SCHEMA-2, #3030 D76).
-    if let Some(fault) = crate::language::refusal(&document) {
-        return Err(Error::Findings(Box::new(Findings {
-            source,
-            document,
-            findings: vec![fault.finding()],
-        })));
-    }
+    // The 0.5 closure reads every root it is given under the rules at the
+    // `yamaa-v0.5.0` tag (#3030 D75): a caller routes a root that declares the
+    // 1.x header to the 1.0 closures first.
     let normalized = match selection {
         Selection::StructuralRoot => schema.normalize_document(&document),
         Selection::NamedClass(_) => {

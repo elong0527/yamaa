@@ -311,7 +311,7 @@ pub(crate) fn capture_links(
 ) -> Result<Vec<crate::specification_source::LinkedSpecification>, Error> {
     use crate::specification_source::LinkedSpecification;
     use yamaa_core::schema::DocumentNode as N;
-    let d = document.model().document();
+    let d = document.document();
     let Some(N::Mapping(entries)) = d.field(d.root(), "input").map(|id| &d.nodes()[id]) else {
         return Ok(Vec::new());
     };
