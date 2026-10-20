@@ -71,8 +71,8 @@ see the [contributor guide](../../CONTRIBUTING.md).
 | --- | --- | --- |
 | `R/`, `man/`, `NAMESPACE`, `DESCRIPTION` | R facade, help, native registration and package metadata | Yes; R converts code and help to its installed formats |
 | `src/` | C entry point, build rules, and in `rust/` the engine and R binding crates with their workspace manifest and trimmed Cargo lock, the locked crates.io crates in `rust/vendor.tar.xz` with their source replacement, the vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
-| `inst/` | License notices, `AUTHORS`, and the specification, grammar, project, Define-XML and host test fixtures | Yes; copied to the package root |
-| `tests/` | Installed-host regression scripts | Used by `R CMD check`; not ordinarily installed |
+| `inst/` | License notices and `AUTHORS` | Yes; copied to the package root |
+| `tests/` | Installed-host regression scripts, beside the specification, grammar, project, Define-XML and host test fixtures that they read | Used by `R CMD check`; not ordinarily installed |
 | `configure`, `configure.win`, `cleanup`, `cleanup.win` | Run `tools/configure.R` to find and check Cargo and rustc and write `src/Makevars` from `src/Makevars.in` (or the Windows pair); remove what it writes | No |
 | `tools/` | `configure.R`, and `vendor_crates.py`, the script that wrote `src/rust/vendor.tar.xz` | No |
 
@@ -131,8 +131,7 @@ an ordinary panic and returns it as an R error.
 Review the archive and installed library against the
 [CRAN policies](https://cran.r-project.org/web/packages/policies.html),
 particularly source size, copyright coverage of linked dependencies, build
-time, and test time. `inst/` fixtures remain installed for every user; moving
-test-only resources under `tests/` is a possible further size reduction.
+time, and test time.
 
 ## Learn more
 

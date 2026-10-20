@@ -7,7 +7,7 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
-root <- system.file("specification-original",package="yamaa",mustWork=TRUE)
+root <- normalizePath("specification-original",winslash="/",mustWork=TRUE)
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 # The report counts input bytes, so inputs end lines with LF on every
 # platform: writeLines would write CRLF on Windows.

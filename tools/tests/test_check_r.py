@@ -25,12 +25,9 @@ Size of tarball: 14539245 bytes
 """
 SIZE = """\
 * checking installed package size ... {status}
-  installed size is 35.4Mb
+  installed size is 24.2Mb
   sub-directories of 1Mb or more:
-    grammar-original         2.1Mb
-    host-fixtures            1.2Mb
-    libs                    26.5Mb
-    specification-original   4.1Mb
+    libs  23.6Mb
 """
 TAIL = """\
 * checking Rust compilation ... OK
@@ -98,6 +95,15 @@ class FindingsTests(unittest.TestCase):
                     status="2 NOTEs",
                 ),
                 "NOTE: checking installed package size: doc ",
+            ),
+            # Test inputs that R installed would be a regression (#3105).
+            (
+                log(
+                    HEAD,
+                    SIZE.format(status="NOTE") + "    specification-original   4.1Mb\n",
+                    status="2 NOTEs",
+                ),
+                "NOTE: checking installed package size: specification-original",
             ),
             (
                 log(HEAD, BASHISMS, status="1 WARNING, 1 NOTE"),

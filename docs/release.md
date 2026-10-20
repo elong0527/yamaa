@@ -529,9 +529,14 @@ bundles its declared authors, license and repository, and names the files
 left out; `DESCRIPTION` credits those authors, and the authors of the bundled
 ReadStat C sources, as contributors and copyright holders.
 
-The installed R package carries only the test inputs that its installed suites
-read, and each third-party SAS fixture keeps its license beside it.
-`tools/staging/stage_r_package.py` lists the staged inputs it leaves out.
+The R source package carries the inputs that its tests read in `tests/`,
+beside the suites: `R CMD check` copies that directory and runs the suites
+from it, and R never installs it, so the installed package holds no test
+inputs (#3105). Its `inst/` holds `AUTHORS` and the license notices. Native
+qualification stages the same inputs beside the installed suites that it
+runs, as it stages the Python suites' inputs, and each third-party SAS
+fixture keeps its license beside it. `tools/staging/stage_r_package.py` lists
+the staged inputs that no R suite reads, which neither route carries.
 
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
