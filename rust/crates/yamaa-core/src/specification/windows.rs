@@ -108,153 +108,100 @@ impl Declaration {
             }
         }
     }
-    pub fn prepare(
-        d: &Document,
-        payload: usize,
-        op: &str,
-        path: &str,
-    ) -> Result<Self, PrepareError> {
-        let name = |field_name| text(d, field(d, payload, field_name)?).map(String::from);
-        let kind = match op {
-            "row_number" => Kind::RowNumber,
-            "rank" => match d
-                .field(payload, "method")
-                .map(|id| text(d, id))
-                .transpose()?
-                .unwrap_or("competition")
-            {
-                "competition" => Kind::Competition,
-                "dense" => Kind::Dense,
-                _ => return Err(PrepareError::Internal),
-            },
-            "row_value" => {
-                let N::Integer(value) = &d.nodes()[field(d, payload, "offset")?] else {
-                    return Err(PrepareError::Internal);
-                };
-                // Execution admits at most i64::MAX context rows. Every larger
-                // magnitude is therefore observationally an absent neighbor;
-                // its signed endpoint preserves that behavior without coercing
-                // the authored arbitrary-width integer through binary64.
-                let offset = value.parse().unwrap_or_else(|_| {
-                    if value.starts_with('-') {
-                        i64::MIN
-                    } else {
-                        i64::MAX
-                    }
-                });
-                Kind::RowValue {
-                    source: name("source")?,
-                    offset,
-                }
-            }
-            "locf" => Kind::Locf {
-                source: name("source")?,
-                include_current: match d.field(payload, "include_current").map(|id| &d.nodes()[id])
-                {
-                    Some(N::Boolean(value)) => *value,
-                    None => true,
-                    _ => return Err(PrepareError::Internal),
-                },
-            },
-            "baseline_flag" => {
-                let mut tie_break = Vec::new();
-                if let Some(terms) = d
-                    .field(payload, "tie_break")
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                {
-                    let items = sequence(d, terms)?;
-                    if items.len() > crate::limits::Limits::COLUMNS {
-                        return Err(PrepareError::limit(
-                            "window_order",
-                            crate::limits::Limits::COLUMNS,
-                            Some(items.len()),
-                            Some(&format!("{path}.tie_break")),
-                        ));
-                    }
-                    for &term in items {
-                        tie_break.push(order_term(d, term)?);
-                    }
-                }
-                Kind::BaselineFlag {
-                    date: name("date")?,
-                    reference_date: name("reference_date")?,
-                    value: name("value")?,
-                    inclusive: match d.field(payload, "inclusive").map(|id| &d.nodes()[id]) {
-                        Some(N::Boolean(value)) => *value,
-                        None => true,
-                        _ => return Err(PrepareError::Internal),
-                    },
-                    tie_break,
-                }
-            }
-            _ => return Err(PrepareError::Internal),
+    /// The window at `e`: its function and operands, partitions, order and
+    /// filter. A baseline's date and tie-break terms are the tree's order;
+    /// its written `window.order_by`, which is refused, is the window's own.
+    pub fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Self, PrepareError> {
+        use ast::{RankMethod, Slot, WindowFunction};
+        let ExprKind::Window(window) = &spec.expr(e).kind else {
+            return Err(PrepareError::Internal);
         };
-        let mut groups = Vec::new();
-        let mut order: Vec<(String, bool, bool)> = Vec::new();
-        let mut filter = None;
-        if let Some(window) = d
-            .field(payload, "window")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            // Shared schema admission already expanded named windows, preserving
-            // their origin links; this compiler only consumes their admitted data.
-            if let Some(group) = d
-                .field(window, "group_by")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let items = sequence(d, group)?;
-                if items.len() > crate::limits::Limits::KEYS {
-                    return Err(PrepareError::limit(
-                        "window_groups",
-                        crate::limits::Limits::KEYS,
-                        Some(items.len()),
-                        Some(&format!("{path}.window.group_by")),
-                    ));
-                }
-                groups = items
-                    .iter()
-                    .map(|&id| text(d, id).map(String::from))
-                    .collect::<Result<_, _>>()?;
+        let name = |e| {
+            checks::name(spec, e)
+                .map(String::from)
+                .ok_or(PrepareError::Internal)
+        };
+        let operand = |slot| checks::operand(&window.operands, slot).ok_or(PrepareError::Internal);
+        let (kind, operation, order) = match &window.function {
+            WindowFunction::RowNumber => (Kind::RowNumber, "row_number", &window.order_by[..]),
+            WindowFunction::Rank { method } => (
+                match method {
+                    RankMethod::Competition => Kind::Competition,
+                    RankMethod::Dense => Kind::Dense,
+                },
+                "rank",
+                &window.order_by[..],
+            ),
+            WindowFunction::RowValue { offset } => (
+                Kind::RowValue {
+                    source: name(operand(Slot::Source)?)?,
+                    // Execution admits at most i64::MAX context rows, so every
+                    // larger magnitude is an absent neighbor.
+                    offset: offset.parse().unwrap_or_else(|_| {
+                        if offset.starts_with('-') {
+                            i64::MIN
+                        } else {
+                            i64::MAX
+                        }
+                    }),
+                },
+                "row_value",
+                &window.order_by[..],
+            ),
+            WindowFunction::Locf { include_current } => (
+                Kind::Locf {
+                    source: name(operand(Slot::Source)?)?,
+                    include_current: *include_current,
+                },
+                "locf",
+                &window.order_by[..],
+            ),
+            WindowFunction::BaselineFlag {
+                inclusive,
+                window_order_by,
+            } => {
+                let (date, tie_break) = window
+                    .order_by
+                    .split_first()
+                    .ok_or(PrepareError::Internal)?;
+                (
+                    Kind::BaselineFlag {
+                        date: name(date.variable)?,
+                        reference_date: name(operand(Slot::Reference)?)?,
+                        value: name(operand(Slot::Source)?)?,
+                        inclusive: *inclusive,
+                        tie_break: tie_break
+                            .iter()
+                            .map(|term| tree_order_term(spec, term))
+                            .collect::<Result<_, _>>()?,
+                    },
+                    "baseline_flag",
+                    &window_order_by[..],
+                )
             }
-            if let Some(terms) = d
-                .field(window, "order_by")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let items = sequence(d, terms)?;
-                if items.len() > crate::limits::Limits::COLUMNS {
-                    return Err(PrepareError::limit(
-                        "window_order",
-                        crate::limits::Limits::COLUMNS,
-                        Some(items.len()),
-                        Some(&format!("{path}.window.order_by")),
-                    ));
+        };
+        let filter = window
+            .filter
+            .map(|filter| match &spec.expr(filter).kind {
+                ExprKind::Formula(formula) => {
+                    Ok((formula.text.text.clone(), formula.compiled.clone()))
                 }
-                for &term in items {
-                    order.push(order_term(d, term)?);
-                }
-            }
-            if let Some(id) = d
-                .field(window, "filter")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let expression = text(d, id)?;
-                let filter_path = format!("{path}.window.filter");
-                let compiled = compile(expression, ExpressionContext::Predicate, &filter_path);
-                match &compiled {
-                    Ok(_) | Err(CompileError::Invalid { .. }) => {}
-                    Err(error) => {
-                        return Err(PrepareError::expression(error.clone(), Some(&filter_path)))
-                    }
-                }
-                filter = Some((expression.into(), compiled));
-            }
-        }
+                _ => Err(PrepareError::Internal),
+            })
+            .transpose()?;
         Ok(Self {
             kind,
-            operation: op.into(),
-            path: path.into(),
-            groups,
-            order,
+            operation: operation.into(),
+            path: checks::path(spec, e),
+            groups: window
+                .group_by
+                .iter()
+                .map(|&group| name(group))
+                .collect::<Result<_, _>>()?,
+            order: order
+                .iter()
+                .map(|term| tree_order_term(spec, term))
+                .collect::<Result<_, _>>()?,
             filter,
         })
     }
@@ -601,20 +548,62 @@ impl Declaration {
 /// (EXPR-3). `drivers` are the row templates' distinct drivers in
 /// construction order, and `records` each dataset whose records build rows.
 pub(super) fn column_driver_findings(
-    operation: &Operation,
+    spec: &ast::Spec,
+    root: ExprId,
     drivers: &[&str],
     records: &[&str],
     findings: &mut Vec<crate::diagnostic::Diagnostic>,
-) {
-    match operation {
-        Operation::Window(window) => window.driver_findings(drivers, records, findings),
-        Operation::Case(branches) => {
-            for branch in branches {
-                column_driver_findings(&branch.operation, drivers, records, findings);
-            }
+) -> Result<(), PrepareError> {
+    for e in checks::positions(spec, root) {
+        if matches!(spec.expr(e).kind, ExprKind::Window(_)) {
+            Declaration::from_tree(spec, e)?.driver_findings(drivers, records, findings);
         }
-        _ => (),
     }
+    Ok(())
+}
+
+/// Admit the window at `e`: its tie-break terms, partitions and order
+/// within their limits, and its filter within the expression compiler's.
+pub(super) fn admit(spec: &ast::Spec, e: ExprId) -> Result<(), PrepareError> {
+    use crate::limits::Limits;
+    let ExprKind::Window(window) = &spec.expr(e).kind else {
+        return Err(PrepareError::Internal);
+    };
+    let path = checks::path(spec, e);
+    let (tie_break, order) = match &window.function {
+        ast::WindowFunction::BaselineFlag {
+            window_order_by, ..
+        } => (
+            window.order_by.len().saturating_sub(1),
+            window_order_by.len(),
+        ),
+        _ => (0, window.order_by.len()),
+    };
+    if tie_break > Limits::COLUMNS {
+        return Err(PrepareError::limit(
+            "window_order",
+            Limits::COLUMNS,
+            Some(tie_break),
+            Some(&format!("{path}.tie_break")),
+        ));
+    }
+    if window.group_by.len() > Limits::KEYS {
+        return Err(PrepareError::limit(
+            "window_groups",
+            Limits::KEYS,
+            Some(window.group_by.len()),
+            Some(&format!("{path}.window.group_by")),
+        ));
+    }
+    if order > Limits::COLUMNS {
+        return Err(PrepareError::limit(
+            "window_order",
+            Limits::COLUMNS,
+            Some(order),
+            Some(&format!("{path}.window.order_by")),
+        ));
+    }
+    derivations::predicate_limits(spec, window.filter)
 }
 
 fn type_name(kind: ColumnType) -> &'static str {

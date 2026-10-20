@@ -43,39 +43,50 @@ impl Declaration {
         }
     }
 }
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    path: &str,
-) -> Result<Declaration, PrepareError> {
-    let expression = text(d, field(d, payload, "condition")?)?;
-    let condition_path = format!("{path}.condition");
-    let compiled = match compile(expression, ExpressionContext::Predicate, &condition_path) {
-        Ok(plan) => Ok(plan),
-        // The flag's public context carries the original predicate and its
-        // character position, as every predicate field's does.
-        Err(CompileError::Invalid {
-            position, failure, ..
-        }) => Err(failure.diagnostic(
-            ExpressionContext::Predicate,
-            &condition_path,
-            expression,
-            position.character,
-        )),
-        Err(error) => return Err(PrepareError::expression(error, Some(&condition_path))),
-    };
-    let branch = |name: &str| {
-        d.field(payload, name)
-            .map(|id| literal(d, id, &format!("{path}.{name}")))
-            .transpose()
-    };
-    Ok(Declaration {
-        condition: compiled,
-        path: path.into(),
-        true_value: branch("true_value")?.unwrap_or(crate::value::Value::Str("Y".into())),
-        false_value: branch("false_value")?,
-        missing: branch("missing")?,
-    })
+impl Declaration {
+    /// The flag at `e`: its condition as compiled, or the grammar finding
+    /// that keeps it from binding, and its three values.
+    pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Self, PrepareError> {
+        let ExprKind::Flag {
+            condition,
+            true_value,
+            false_value,
+            missing,
+        } = &spec.expr(e).kind
+        else {
+            return Err(PrepareError::Internal);
+        };
+        let ExprKind::Formula(formula) = &spec.expr(*condition).kind else {
+            return Err(PrepareError::Internal);
+        };
+        let condition_path = checks::render(spec, formula.text.meta);
+        let condition = match &formula.compiled {
+            Ok(plan) => Ok(plan.clone()),
+            // The flag's public context carries the original predicate and its
+            // character position, as every predicate field's does.
+            Err(CompileError::Invalid {
+                position, failure, ..
+            }) => Err(failure.diagnostic(
+                ExpressionContext::Predicate,
+                &condition_path,
+                &formula.text.text,
+                position.character,
+            )),
+            Err(error) => {
+                return Err(PrepareError::expression(
+                    error.clone(),
+                    Some(&condition_path),
+                ))
+            }
+        };
+        Ok(Self {
+            condition,
+            path: checks::path(spec, e),
+            true_value: constant(&true_value.value, &checks::render(spec, true_value.meta))?,
+            false_value: checks::handler(spec, false_value.as_ref())?,
+            missing: checks::handler(spec, missing.as_ref())?,
+        })
+    }
 }
 fn unknown(path: &str, name: &str) -> BindFinding {
     BindFinding::Predicate(finding(

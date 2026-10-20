@@ -5,122 +5,105 @@ use super::*;
 use crate::text_extract::{AdmissionError, StringExtract};
 use crate::text_replace::StringReplace;
 
-#[derive(Debug)]
-pub(super) struct Prepared {
-    searches: BTreeMap<usize, StringExtract>,
-    replacements: BTreeMap<usize, StringReplace>,
-}
-impl Prepared {
-    pub(super) fn get(&self, payload: usize) -> Result<StringExtract, PrepareError> {
-        self.searches
-            .get(&payload)
-            .cloned()
-            .ok_or(PrepareError::Internal)
-    }
-    pub(super) fn replacement(&self, payload: usize) -> Result<StringReplace, PrepareError> {
-        self.replacements
-            .get(&payload)
-            .cloned()
-            .ok_or(PrepareError::Internal)
-    }
-    /// Admit each `str_extract` and `str_replace` payload at its path, in
-    /// order, with whether a bare name it reads is left to binding (`rows`).
-    pub(super) fn new(
-        d: &Document,
-        nodes: Vec<(usize, String, bool)>,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<PreflightFinding>,
-    ) -> Result<Self, PrepareError> {
-        let mut searches = BTreeMap::new();
-        let mut replacements = BTreeMap::new();
-        for (payload, path, rows) in nodes {
-            let path = path.as_str();
-            let source = text(d, field(d, payload, "source")?)?;
-            let pattern = text(d, field(d, payload, "pattern")?)?;
-            let missing = d
-                .field(payload, "missing")
-                .map(|id| literal(d, id, &format!("{path}.missing")))
-                .transpose()?;
-            let replacement = d.field(payload, "replacement");
-            let admitted = match replacement {
-                Some(replacement) => StringReplace::new(
-                    source.into(),
-                    path.into(),
-                    pattern.into(),
-                    text(d, replacement)?.into(),
-                    missing,
-                )
-                .map(Admitted::Replace),
-                None => StringExtract::new(
-                    source.into(),
-                    path.into(),
-                    pattern.into(),
-                    group(d, payload)?.into(),
-                    missing,
-                    d.field(payload, "no_match")
-                        .map(|id| literal(d, id, &format!("{path}.no_match")))
-                        .transpose()?,
-                )
-                .map(Admitted::Search),
-            }
-            .map_err(|error| match error {
-                AdmissionError::Shape => PrepareError::Internal,
-                AdmissionError::Regex(crate::portable_regex::CompileError::Limit {
-                    resource,
-                    limit,
-                }) => PrepareError::limit(
-                    compiler_limits::regex_resource(resource),
-                    limit,
-                    None,
-                    Some(&format!("{path}.pattern")),
-                ),
-                // An invalid pattern is a deferred finding, never an admission error.
-                AdmissionError::Regex(crate::portable_regex::CompileError::Invalid { .. }) => {
-                    PrepareError::Internal
-                }
-            })?;
-            let operation = match &admitted {
-                Admitted::Search(operation) => operation,
-                Admitted::Replace(operation) => operation.search(),
-            };
-            // Row availability/group scope belongs to binding. Declared columns
-            // and stored fields have their declared types in the no-rows model.
-            let kind = (!rows)
-                .then(|| declared.name(source).column_type())
-                .flatten();
-            if let Some(kind) = kind.filter(|kind| *kind != ColumnType::Str) {
-                findings.push(PreflightFinding::TextExtract(
-                    operation.input_diagnostic(kind_name(kind)),
-                ));
-            } else if kind == Some(ColumnType::Str) {
-                if let Some(diagnostic) = operation.declaration_diagnostic() {
-                    findings.push(PreflightFinding::TextExtract(diagnostic.clone()));
-                }
-            }
-            match admitted {
-                Admitted::Search(operation) => {
-                    searches.insert(payload, operation);
-                }
-                Admitted::Replace(operation) => {
-                    replacements.insert(payload, operation);
-                }
+/// Admit each `str_extract` and `str_replace` at `sites`, in order, with
+/// whether a bare name it reads is left to binding (`rows`). Without `rows`
+/// a declared column or stored field it reads must be text, and only then
+/// is its pattern and group checked.
+pub(super) fn findings(
+    spec: &ast::Spec,
+    sites: Vec<(ExprId, bool)>,
+    declared: &types::DeclaredTypes<'_>,
+    findings: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    for (e, rows) in sites {
+        let admitted = from_tree(spec, e)?;
+        let operation = admitted.search();
+        // Row availability/group scope belongs to binding. Declared columns
+        // and stored fields have their declared types in the no-rows model.
+        let kind = (!rows)
+            .then(|| declared.name(operation.source()).column_type())
+            .flatten();
+        if let Some(kind) = kind.filter(|kind| *kind != ColumnType::Str) {
+            findings.push(PreflightFinding::TextExtract(
+                operation.input_diagnostic(kind_name(kind)),
+            ));
+        } else if kind == Some(ColumnType::Str) {
+            if let Some(diagnostic) = operation.declaration_diagnostic() {
+                findings.push(PreflightFinding::TextExtract(diagnostic.clone()));
             }
         }
-        Ok(Self {
-            searches,
-            replacements,
-        })
     }
+    Ok(())
 }
-enum Admitted {
+pub(super) enum Admitted {
     Search(StringExtract),
     Replace(StringReplace),
 }
-fn group(d: &Document, payload: usize) -> Result<&str, PrepareError> {
-    match d.field(payload, "group").map(|id| &d.nodes()[id]) {
-        Some(N::Integer(text)) => Ok(text),
-        None => Ok("0"),
-        _ => Err(PrepareError::Internal),
+impl Admitted {
+    /// The search a replacement shares with extraction.
+    pub(super) fn search(&self) -> &StringExtract {
+        match self {
+            Self::Search(operation) => operation,
+            Self::Replace(operation) => operation.search(),
+        }
+    }
+}
+/// The executor's extraction or replacement for the verb at `e`. A pattern
+/// beyond a regular-expression limit is refused at its own path; an invalid
+/// one is the operation's deferred finding.
+pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Admitted, PrepareError> {
+    let ExprKind::Scalar {
+        op,
+        operands,
+        handlers,
+    } = &spec.expr(e).kind
+    else {
+        return Err(PrepareError::Internal);
+    };
+    let source =
+        checks::operand_name(spec, operands, ast::Slot::Source).ok_or(PrepareError::Internal)?;
+    let path = checks::path(spec, e);
+    let missing = checks::handler(spec, handlers.missing.as_ref())?;
+    match op {
+        ast::ScalarOp::StrExtract { pattern, group } => StringExtract::new(
+            source.into(),
+            path.clone(),
+            pattern.clone(),
+            group.clone(),
+            missing,
+            checks::handler(spec, handlers.no_match.as_ref())?,
+        )
+        .map(Admitted::Search),
+        ast::ScalarOp::StrReplace {
+            pattern,
+            replacement,
+        } => StringReplace::new(
+            source.into(),
+            path.clone(),
+            pattern.clone(),
+            replacement.clone(),
+            missing,
+        )
+        .map(Admitted::Replace),
+        _ => return Err(PrepareError::Internal),
+    }
+    .map_err(|error| admission_error(error, &path))
+}
+fn admission_error(error: AdmissionError, path: &str) -> PrepareError {
+    match error {
+        AdmissionError::Shape => PrepareError::Internal,
+        AdmissionError::Regex(crate::portable_regex::CompileError::Limit { resource, limit }) => {
+            PrepareError::limit(
+                compiler_limits::regex_resource(resource),
+                limit,
+                None,
+                Some(&format!("{path}.pattern")),
+            )
+        }
+        // An invalid pattern is a deferred finding, never an admission error.
+        AdmissionError::Regex(crate::portable_regex::CompileError::Invalid { .. }) => {
+            PrepareError::Internal
+        }
     }
 }
 fn kind_name(kind: ColumnType) -> &'static str {

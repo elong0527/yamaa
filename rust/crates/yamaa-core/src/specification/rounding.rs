@@ -2,27 +2,19 @@
 use super::*;
 use crate::dataset::Rounding;
 
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    path: &str,
-    _driver: Option<&str>,
-    _intermediates: Option<&intermediates::Declarations>,
-    extra: &mut Vec<UnsupportedFeature>,
-) -> Result<Rounding, PrepareError> {
-    // Schema admission checks the written source/digits fields before this
-    // compiler. Keep its integer declaration, including widths beyond i64.
-    for &(name, _) in mapping(d, payload)? {
-        let name = text(d, name)?;
-        if !["source", "digits"].contains(&name) {
-            reject(extra, name, format!("{path}.{name}"));
-        }
-    }
-    let N::Integer(digits) = &d.nodes()[field(d, payload, "digits")?] else {
+/// The executor's rounding for the verb at `e`.
+pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Rounding, PrepareError> {
+    let ExprKind::Scalar {
+        op: ast::ScalarOp::Round { digits },
+        operands,
+        ..
+    } = &spec.expr(e).kind
+    else {
         return Err(PrepareError::Internal);
     };
-    let source = text(d, field(d, payload, "source")?)?;
-    Rounding::new(source, path, digits).map_err(|_| PrepareError::Internal)
+    let source =
+        checks::operand_name(spec, operands, ast::Slot::Source).ok_or(PrepareError::Internal)?;
+    Rounding::new(source, &checks::path(spec, e), digits).map_err(|_| PrepareError::Internal)
 }
 
 /// The source operand binds as the scope decides ([`BindContext::operand`]).
