@@ -258,13 +258,15 @@ tryCatch({
   if (nrow(runs$issues) || any(missing_output)) stop("Study run incomplete")
   runs$save()
 }, yamaa_error = function(error) {
-  saveRDS(error$issues, file.path(reports, "failure-issues.rds"))
+  saveRDS(list(message = conditionMessage(error), issues = error$issues),
+          file.path(reports, "failure.rds"))
   stop(error)
 })
 ```
 
-Use `readRDS()` to inspect the saved R issue tables and engine report; RDS
-preserves list columns and diagnostic locations without another package.
+Use `readRDS()` to inspect the saved R issue tables, engine report, and failure
+details; RDS preserves list columns and diagnostic locations without another
+package. Retain the condition message even when an R error has no issue rows.
 Retain each attempt's logs, issue tables, and reports before
 retrying; isolate output directories or archive previous attempts so stale
 outputs cannot pass comparison after a failed run. Time generation and
