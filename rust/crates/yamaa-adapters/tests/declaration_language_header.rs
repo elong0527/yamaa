@@ -737,8 +737,8 @@ mod declaration {
         }
 
         /// LAYER-2 and SCHEMA-12: an empty `parent` fails schema admission in
-        /// its layer, as a `path` shorter than one, before any parent is
-        /// resolved.
+        /// its layer, being shorter than a `path`'s minimum length of one,
+        /// before any parent is resolved.
         #[test]
         fn an_empty_parent_fails_schema_admission_in_its_layer() {
             let study = Study::new();
