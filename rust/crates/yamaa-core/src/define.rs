@@ -3,6 +3,7 @@
 //! observe file geometry and codecs without interpreting submission declarations.
 use crate::json::Value as JsonValue;
 use crate::{
+    application_issue::{Fault, Stage},
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
     project_terminology::Catalogue,
@@ -796,8 +797,8 @@ pub fn resource_diagnostic(
     use ResourceObservation as R;
     if let R::Limit(error) = observation {
         let mut diagnostic = crate::application_issue::resource_rejected(
-            "define",
-            "resource_limit",
+            Stage::Define,
+            Fault::ResourceLimit,
             error.resource,
             error.limit,
             error.actual,
@@ -813,31 +814,32 @@ pub fn resource_diagnostic(
         R::Missing => ConditionCode::ResourceMissing,
         R::NotRegularFile => ConditionCode::ResourceNotRegularFile,
         R::Changed => ConditionCode::ResourceContentChanged,
-        _ => ConditionCode::ApplicationRejected,
+        _ => {
+            let fault = match observation {
+                R::Unreadable => Fault::ResourceUnreadable,
+                R::InvalidRoot => Fault::ResourceRoot,
+                R::InvalidBase => Fault::ResourceBase,
+                R::InvalidPath => Fault::ResourcePath,
+                R::InvalidLock => Fault::InvalidPackagingLock,
+                R::OutsideRoots => Fault::ResourceOutsideRoots,
+                R::Symlink => Fault::ResourceLink,
+                R::Limit(_) => unreachable!("fixed boundary projected above"),
+                R::Missing | R::NotRegularFile | R::Changed => {
+                    unreachable!("normative resource cause selected")
+                }
+            };
+            let mut diagnostic = crate::application_issue::rejected(Stage::Define, fault);
+            diagnostic.spec_paths = vec![path.into()];
+            diagnostic
+                .context
+                .insert("path".into(), JsonValue::String(written.into()));
+            return diagnostic;
+        }
     };
-    let mut context: crate::diagnostic::Context =
-        [(String::from("path"), JsonValue::String(written.into()))].into();
-    if code == ConditionCode::ApplicationRejected {
-        let classification = match observation {
-            R::Unreadable => "resource_unreadable",
-            R::InvalidRoot => "resource_root",
-            R::InvalidBase => "resource_base",
-            R::InvalidPath => "resource_path",
-            R::InvalidLock => "invalid_packaging_lock",
-            R::OutsideRoots => "resource_outside_roots",
-            R::Symlink => "resource_link",
-            R::Limit(_) => unreachable!("fixed boundary projected above"),
-            R::Missing | R::NotRegularFile | R::Changed => {
-                unreachable!("normative resource cause selected")
-            }
-        };
-        context.insert("stage".into(), JsonValue::String("define".into()));
-        context.insert("code".into(), JsonValue::String(classification.into()));
-    }
     Diagnostic {
         code,
         spec_paths: vec![path.into()],
-        context,
+        context: [(String::from("path"), JsonValue::String(written.into()))].into(),
         source_span: None,
         operand_route: None,
     }
@@ -868,7 +870,7 @@ pub fn publication_diagnostic(
     if stage == PublicationFailure::TargetAdmission {
         context.insert(
             "stage".into(),
-            JsonValue::String("publication_target_admission".into()),
+            JsonValue::String(Stage::PublicationTargetAdmission.as_str().into()),
         );
     }
     Diagnostic {

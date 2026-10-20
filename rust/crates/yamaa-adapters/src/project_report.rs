@@ -1,13 +1,13 @@
 //! Complete project reports borrow one owned attempt. Only explicit ordinary
 //! host facts are portable; original opaque payloads and interrupts stay held.
-use crate::json;
 use crate::{
-    issue_rows::Issue,
     project_activation_diagnostics::{self as activation, DefinitionSource},
     project_function_diagnostics::{self as invocation, HostDetails},
     project_run::{Attempt, BoundaryFailure, PreparedRun},
     specification_report::{self as report, BuildResult, Identity},
 };
+use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
 use yamaa_core::{
     dataset::{CheckRecord, ExecutionError},
@@ -79,14 +79,14 @@ impl<C, E> Error<'_, C, E> {
     /// The public refusal for a project result this attempt could not build.
     pub fn refusal(&self) -> crate::file_application::BuildRefusal {
         let (code, limit) = match self {
-            Self::Opaque(_) => ("opaque_host", None),
-            Self::Boundary(_) => ("activation_boundary", None),
-            Self::Source(_) => ("source_boundary", None),
-            Self::Execution(_) => ("execution_boundary", None),
+            Self::Opaque(_) => (Fault::OpaqueHost, None),
+            Self::Boundary(_) => (Fault::ActivationBoundary, None),
+            Self::Source(_) => (Fault::SourceBoundary, None),
+            Self::Execution(_) => (Fault::ExecutionBoundary, None),
             Self::Report(report::Error::ResourceLimit(limit)) => {
-                ("output_limit", Some(limit.clone()))
+                (Fault::OutputLimit, Some(limit.clone()))
             }
-            Self::Report(_) => ("report_refusal", None),
+            Self::Report(_) => (Fault::ReportRefusal, None),
         };
         crate::file_application::BuildRefusal { code, limit }
     }
@@ -112,10 +112,6 @@ fn invocation_host<'a, E>(
         _ => None,
     }
 }
-pub(crate) fn diagnostic(issue: Issue) -> Result<Value, report::Error> {
-    Ok(issue.as_value())
-}
-
 fn project_error<C, E>(error: invocation::Error<'_, E>) -> Error<'_, C, E> {
     match error {
         invocation::Error::Opaque(error) => Error::Opaque(error),
@@ -127,7 +123,7 @@ pub(crate) fn checked_records(
     records: &[CheckRecord],
     phase: &str,
     id: &Identity<'_>,
-) -> Result<(Vec<Value>, Vec<Value>), report::Error> {
+) -> Result<(Vec<Value>, Vec<Diagnostic>), report::Error> {
     crate::project_codelist_diagnostics::codelist_issues(run.compiled(), records)
         .map_err(|_| report::Error::InvalidObservation)?;
     let phase = match phase {
@@ -296,9 +292,9 @@ pub(crate) fn validate_activation<E>(
 pub(crate) fn activation_origins(
     run: &dyn crate::project_activation_observations::ActivationView,
     paths: &[String],
-    issues: Vec<Issue>,
+    issues: Vec<Diagnostic>,
     functions: impl Iterator<Item = usize> + Clone,
-) -> Result<Vec<Value>, report::Error> {
+) -> Result<Vec<Diagnostic>, report::Error> {
     let captured = run.captured_environment();
 
     let functions = functions.collect::<Vec<_>>();
@@ -346,27 +342,25 @@ pub(crate) fn activation_origins(
     issues
         .into_iter()
         .zip(metadata)
-        .map(|(issue, (source, declaration, external))| {
-            let mut finding = diagnostic(issue)?;
+        .map(|(mut finding, (source, declaration, external))| {
             if external {
-                let paths = finding["spec_paths"]
-                    .as_array_mut()
-                    .ok_or(report::Error::InvalidObservation)?;
-                for path in paths {
+                for path in &mut finding.spec_paths {
                     let suffix = path
-                        .as_str()
-                        .and_then(|path| path.strip_prefix(declaration))
+                        .strip_prefix(declaration.as_str())
                         .and_then(|suffix| suffix.strip_prefix('.'))
                         .ok_or(report::Error::InvalidObservation)?;
-                    *path = json!(suffix);
+                    *path = suffix.to_owned();
                 }
             }
-            let context = finding["context"]
-                .as_object_mut()
-                .ok_or(report::Error::InvalidObservation)?;
-            context.insert("source".into(), json!(source));
-            context.insert("entry".into(), json!(entry));
-            context.insert("environment_path".into(), json!(declaration));
+            for (key, value) in [
+                ("source", source),
+                ("entry", entry),
+                ("environment_path", declaration.as_str()),
+            ] {
+                finding
+                    .context
+                    .insert(key.into(), Value::String(value.into()));
+            }
             Ok(finding)
         })
         .collect()
@@ -380,7 +374,7 @@ fn activation_failure_result<'a, C, E>(
     boundary: &'a BoundaryFailure<E>,
     supplied: &FactMap<'a, '_, E>,
     id: &Identity<'_>,
-    diagnostics: &mut Vec<Value>,
+    diagnostics: &mut Vec<Diagnostic>,
 ) -> Result<crate::report_storage::StoredReport, Error<'a, C, E>> {
     let BoundaryFailure::Activation(failure) = boundary else {
         return Err(Error::Boundary(boundary));
@@ -417,9 +411,6 @@ fn activation_failure_result<'a, C, E>(
             }
             crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
                 .map_err(|_| invalid())?
-                .into_iter()
-                .map(diagnostic)
-                .collect::<Result<Vec<_>, _>>()?
         }
         Failure::Bindings(failures) => {
             let details = failures
@@ -547,7 +538,7 @@ pub fn build_result<'a, C, E>(
                             path,
                             error,
                             identity,
-                        } => diagnostics.push(diagnostic(
+                        } => diagnostics.push(
                             invocation::invocation(
                                 path,
                                 error,
@@ -556,7 +547,7 @@ pub fn build_result<'a, C, E>(
                                 invocation_host(&supplied, &error.kind),
                             )
                             .map_err(project_error)?,
-                        )?),
+                        ),
                         ExecutionError::KeyFailures(records)
                         | ExecutionError::VerificationFailures(records) => {
                             let phase = if matches!(error.as_ref(), ExecutionError::KeyFailures(_))
@@ -587,34 +578,32 @@ pub fn build_result<'a, C, E>(
                                 run.compiled().sources(),
                                 run.compiled().driver_index(),
                             ) {
-                                diagnostics.push(refusal.value("execute", "execution_limit"));
+                                diagnostics.push(
+                                    refusal.diagnostic(Stage::Execute, Fault::ExecutionLimit),
+                                );
                             } else {
-                                let outcome = crate::dataset_result::semantic_condition(other)
-                                    .map_err(|_| Error::Execution(other))?;
-                                if outcome["status"] != "condition" {
+                                let crate::dataset_result::Outcome::Condition(found) =
+                                    crate::dataset_result::semantic_condition(other)
+                                        .map_err(|_| Error::Execution(other))?
+                                else {
                                     return Err(Error::Execution(other));
-                                }
-                                diagnostics.push(report::condition(run, &outcome)?);
+                                };
+                                diagnostics.push(report::condition(run, &found)?);
                             }
                         }
                     },
                 }
-                report::set_handler_counts(
-                    &mut result,
-                    &json!({"handler_counts":dataset.handler_counts.iter().map(|count| json!({"spec_path":count.spec_path,"handler":count.handler.name(),"count":count.count.to_string()})).collect::<Vec<_>>()}),
-                )?;
+                report::set_handler_counts(&mut result, &dataset.handler_counts);
             }
             Err(error) => {
                 let finding = |source: &yamaa_core::specification::SourceDeclaration,
                                failure: yamaa_core::resource::ResourceFailure|
-                 -> Result<Value, report::Error> {
+                 -> Result<Diagnostic, report::Error> {
                     let written = run
                         .document()
                         .written_source_path(&source.name)
                         .ok_or(report::Error::InvalidObservation)?;
-                    Ok(crate::specification_diagnostics::portable_diagnostic(
-                        failure.diagnostic(&source.name, written),
-                    ))
+                    Ok(failure.diagnostic(&source.name, written))
                 };
                 match error {
                     PortError::Capture(_) => {
@@ -684,18 +673,14 @@ pub fn build_result<'a, C, E>(
                                     run.compiled().sources(),
                                 )
                                 .map_err(report::Error::from)?
-                                .map(|findings| {
-                                    findings
-                                        .into_iter()
-                                        .map(crate::specification_diagnostics::portable_diagnostic)
-                                        .collect()
-                                })
                             }
                             _ => crate::resource_diagnostics::run_limit(
                                 failure,
                                 run.compiled().sources(),
                             )
-                            .map(|refusal| vec![refusal.value("ingest", "source_limit")]),
+                            .map(|refusal| {
+                                vec![refusal.diagnostic(Stage::Ingest, Fault::SourceLimit)]
+                            }),
                         }
                         .ok_or(Error::Source(error))?;
                         diagnostics.extend(findings);
@@ -705,8 +690,8 @@ pub fn build_result<'a, C, E>(
             }
         }
     }
-    report::set_diagnostics(&mut result, diagnostics);
-    result["verifications"] = json!(verifications);
+    result.set_diagnostics(diagnostics);
+    result["verifications"] = Value::Array(verifications);
     result["activation"] = activation;
     let facts = crate::run_report::RunFacts::captured(
         &attempt.dataset.sources,

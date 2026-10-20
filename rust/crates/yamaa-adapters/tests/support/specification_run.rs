@@ -38,12 +38,19 @@ pub(crate) fn fixture_bytes(value: &yamaa_core::json::Value) -> Vec<u8> {
         .collect()
 }
 
+/// The findings of a refused specification as the run report renders them.
 pub(crate) fn spec_findings(
     error: &yamaa_adapters::specification_run::Error,
     source: Option<&yamaa_core::specification::SourceDeclaration>,
 ) -> Option<Vec<yamaa_core::json::Value>> {
     yamaa_adapters::specification_diagnostics::findings(error, source)
         .expect("valid authored source finding context")
+        .map(|findings| {
+            findings
+                .iter()
+                .map(yamaa_adapters::report_storage::diagnostic_value)
+                .collect()
+        })
 }
 
 pub(crate) fn text(d: &Document, id: usize) -> &str {

@@ -1,26 +1,20 @@
 //! Resolve shared inherited findings while preserving opaque host failures.
-use super::{capture_failure, captured_schema};
-use crate::json;
+use super::{bound, capture_failure, captured_schema, fault, Rejection};
 use crate::{
     schema_outcomes as errors,
     specification_source::{InheritanceError, SourceFailure},
 };
+use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::json::Value;
 use yamaa_core::schema::{Document, NormalizationError, SchemaStructure};
 use yamaa_core::{inheritance as graph, inheritance_preparation::Error as E};
 
-fn source<E>(error: SourceFailure<E>) -> Result<String, E> {
-    match error {
-        SourceFailure::Host(error) => Err(error),
-        SourceFailure::Admission(error) => Ok(capture_failure(&error)),
-    }
+fn rejected(code: Fault) -> Rejection {
+    fault(Stage::Inheritance, code)
 }
-fn rejected(code: &str) -> Value {
-    json!({"status":"rejected","stage":"inheritance","code":code})
-}
-fn context_failure(error: captured_schema::Error) -> Value {
+fn context_failure(error: captured_schema::Error) -> Rejection {
     rejected(match error {
-        captured_schema::Error::InvalidContext => "diagnostic_context",
+        captured_schema::Error::InvalidContext => Fault::DiagnosticContext,
     })
 }
 fn normalized(
@@ -28,55 +22,48 @@ fn normalized(
     input: Option<&Document>,
     error: NormalizationError,
     source_context: &[(&str, &str)],
-) -> Value {
+) -> Rejection {
     match error {
         NormalizationError::Invalid(findings) => {
             match captured_schema::schema_findings(schema, input, &findings, source_context) {
-                Ok(diagnostics) => json!({"status":"invalid","diagnostics":diagnostics}),
+                Ok(diagnostics) => Rejection::Invalid(diagnostics),
                 Err(error) => context_failure(error),
             }
         }
-        error => errors::normalization(error).unwrap_or_else(|_| rejected("normalization")),
+        error => errors::normalization(error, Stage::Prepare)
+            .unwrap_or_else(|_| rejected(Fault::Normalization)),
     }
 }
-fn literal(outcome: Value) -> Value {
-    captured_schema::literal_outcome(outcome).unwrap_or_else(context_failure)
-}
-fn traversal_finding<E>(error: &graph::Error<E>) -> Result<Option<Value>, captured_schema::Error> {
+fn traversal_finding<E>(
+    error: &graph::Error<E>,
+) -> Result<Option<Rejection>, captured_schema::Error> {
     let finding = error
         .diagnostic()
         .map_err(|_| captured_schema::Error::InvalidContext)?;
-    let Some(finding) = finding else {
-        return Ok(None);
-    };
-    Ok(Some(
-        json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding)]}),
-    ))
+    Ok(finding.map(|finding| Rejection::Invalid(vec![finding])))
 }
-// The engine classifies the typed error. This boundary only serializes its
-// already-owned fields; no source request or JSON reply crosses a host callback.
-fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Result<Value, E> {
+// The engine classifies the typed error. This boundary only represents its
+// already-owned fields; no source request or reply crosses a host callback.
+fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Result<Rejection, E> {
     use yamaa_core::inheritance_outcome::{self, Outcome};
     let error = match inheritance_outcome::traversal_outcome(error) {
-        Ok(Outcome::Diagnostic(finding)) => {
-            return Ok(
-                json!({"status":"invalid", "diagnostics":[super::portable_diagnostic(finding)]}),
-            );
-        }
+        Ok(Outcome::Diagnostic(finding)) => return Ok(Rejection::Invalid(vec![finding])),
         Ok(Outcome::Original(error)) => error,
-        Err(_) => return Ok(rejected("diagnostic_context")),
+        Err(_) => return Ok(rejected(Fault::DiagnosticContext)),
     };
     Ok(match error {
         graph::Error::Host(error) => return Err(error),
-        graph::Error::Resource(error) => {
-            let mut outcome = json!({"status":"resource_limit", "phase":"inheritance", "resource":error.resource, "limit":error.limit});
-            if let Some(actual) = error.actual {
-                outcome["actual"] = json!(actual);
-            }
-            outcome
-        }
-        graph::Error::UnsupportedControlField { source, field } => {
-            json!({"status":"unsupported", "feature":"inheritance_control_field", "source":source, "field":field})
+        graph::Error::Resource(error) => bound(
+            Stage::Prepare,
+            "inheritance",
+            error.resource,
+            error.limit,
+            error.actual,
+        ),
+        // An unsupported control field reports the projection fault of the
+        // preparation stage it has always reported.
+        graph::Error::UnsupportedControlField { .. } => {
+            fault(Stage::Prepare, Fault::IssueProjection)
         }
         graph::Error::Layer {
             source,
@@ -89,7 +76,7 @@ fn traversal_outcome<E>(schema: &SchemaStructure, error: graph::Error<E>) -> Res
             error,
             &[("source", &source), ("entry", &entry)],
         ),
-        _ => rejected("transport"),
+        _ => rejected(Fault::Transport),
     })
 }
 fn dictionary_failure_ref<'a, T>(
@@ -99,22 +86,24 @@ fn dictionary_failure_ref<'a, T>(
         crate::specification_source::Error,
         crate::yaml_decode::DecodedYaml,
     >,
-) -> Result<String, &'a T> {
+) -> Result<Rejection, &'a T> {
+    use crate::yaml_decode::DecodeFailure;
     use yamaa_core::dictionary_preparation::Cause;
-    let outcome = match &error.cause {
+    Ok(match &error.cause {
         Cause::Capture {
             reference,
             error,
             failure,
         } => {
             if let Some(failure) = failure {
-                let finding = failure.field_diagnostic(reference.path(), reference.written());
-                json!({"status":"invalid","diagnostics":[super::portable_diagnostic(finding)]})
+                Rejection::Invalid(vec![
+                    failure.field_diagnostic(reference.path(), reference.written())
+                ])
             } else {
                 match error {
                     graph::SourceError::Raised(error) => return Err(error),
                     graph::SourceError::Unavailable => {
-                        json!({"status":"rejected","stage":"dictionary","code":"resource_unavailable"})
+                        fault(Stage::Dictionary, Fault::ResourceUnavailable)
                     }
                 }
             }
@@ -126,18 +115,19 @@ fn dictionary_failure_ref<'a, T>(
                 return Ok(capture_failure(error));
             };
             if let Some(mut rows) = crate::yaml_diagnostics::semantic_diagnostics(error) {
-                for row in &mut rows {
-                    if matches!(error, crate::yaml_decode::DecodeFailure::NonAscii(_)) {
-                        row["context"]["path"] = json!(reference.written());
+                if matches!(error, DecodeFailure::NonAscii(_)) {
+                    for row in &mut rows {
+                        row.context
+                            .insert("path".into(), Value::String(reference.written().into()));
                     }
                 }
-                json!({"status":"invalid","diagnostics":rows})
-            } else if let crate::yaml_decode::DecodeFailure::Unavailable = error {
-                json!({"status":"rejected","stage":"dictionary","code":"yaml_reader_unavailable"})
-            } else if let crate::yaml_decode::DecodeFailure::Limit(limit) = error {
-                super::decoder_limit(limit, "dictionary")
+                Rejection::Invalid(rows)
+            } else if let DecodeFailure::Unavailable = error {
+                fault(Stage::Dictionary, Fault::YamlReaderUnavailable)
+            } else if let DecodeFailure::Limit(limit) = error {
+                super::decoder_limit(limit, Stage::Dictionary)
             } else {
-                json!({"status":"rejected","stage":"dictionary","code":"yaml_decode"})
+                fault(Stage::Dictionary, Fault::YamlDecode)
             }
         }
         Cause::Admission {
@@ -153,20 +143,14 @@ fn dictionary_failure_ref<'a, T>(
         Cause::Materialize(error) => {
             normalized(document.schema().structure(), None, error.clone(), &[])
         }
-        Cause::MissingOrigin(_) => {
-            json!({"status":"rejected","stage":"dictionary","code":"declaring_origin"})
-        }
-    };
-    Ok(super::capture_response(outcome))
+        Cause::MissingOrigin(_) => fault(Stage::Dictionary, Fault::DeclaringOrigin),
+    })
 }
 
 /// Borrow rejected preparation so a public carrier can retain its exact sources
-/// and opaque resource payload beside the complete projected findings.
-pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
-    let source_ref = |error: &SourceFailure<T>| match error {
-        SourceFailure::Host(_) => None,
-        SourceFailure::Admission(error) => Some(capture_failure(error)),
-    };
+/// and opaque resource payload beside the complete projected findings. Source
+/// provenance is resolved here; no host interprets context occurrence IDs.
+pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<Rejection, &T> {
     let (schema, error) = match error {
         InheritanceError::Entry(error) => return Ok(capture_failure(error)),
         InheritanceError::Dictionary { document, error } => {
@@ -174,13 +158,11 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
         }
         InheritanceError::Preparation { schema, error, .. } => (schema.structure(), error.as_ref()),
     };
-    let outcome = match error {
-        E::Path(error) | E::Traversal(graph::Error::Host(error)) => {
-            if let SourceFailure::Host(error) = error {
-                return Err(error);
-            }
-            return Ok(source_ref(error).expect("admission or host"));
-        }
+    Ok(match error {
+        E::Path(error) | E::Traversal(graph::Error::Host(error)) => match error {
+            SourceFailure::Host(error) => return Err(error),
+            SourceFailure::Admission(error) => capture_failure(error),
+        },
         E::Traversal(graph::Error::Layer {
             source,
             entry,
@@ -192,42 +174,38 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
             error.clone(),
             &[("source", source), ("entry", entry)],
         ),
-        E::Traversal(error) => {
-            match traversal_finding(error) {
-                Ok(Some(outcome)) => outcome,
-                Err(error) => context_failure(error),
-                Ok(None) => {
-                    let error: graph::Error<()> = match error {
-                        graph::Error::Resource(error) => graph::Error::Resource(*error),
-                        graph::Error::UnsupportedControlField { source, field } => {
-                            graph::Error::UnsupportedControlField {
-                                source: source.clone(),
-                                field,
-                            }
+        E::Traversal(error) => match traversal_finding(error) {
+            Ok(Some(rejection)) => rejection,
+            Err(error) => context_failure(error),
+            Ok(None) => {
+                let error: graph::Error<()> = match error {
+                    graph::Error::Resource(error) => graph::Error::Resource(*error),
+                    graph::Error::UnsupportedControlField { source, field } => {
+                        graph::Error::UnsupportedControlField {
+                            source: source.clone(),
+                            field,
                         }
-                        // Classified findings were handled above. A contradictory
-                        // cycle carrier remains a transport refusal.
-                        _ => graph::Error::InvalidIdentity,
-                    };
-                    match traversal_outcome(schema, error) {
-                        Ok(value) => literal(value),
-                        Err(_) => rejected("transport"),
                     }
-                }
+                    // Classified findings were handled above. A contradictory
+                    // cycle carrier remains a transport refusal.
+                    _ => graph::Error::InvalidIdentity,
+                };
+                traversal_outcome(schema, error).unwrap_or_else(|()| rejected(Fault::Transport))
             }
+        },
+        E::ParentRequired => rejected(Fault::ParentRequired),
+        E::Document(error) => {
+            errors::document(*error, Stage::Prepare).unwrap_or_else(|_| rejected(Fault::Document))
         }
-        E::ParentRequired => rejected("parent_required"),
-        E::Document(error) => errors::document(*error).unwrap_or_else(|_| rejected("document")),
         E::Normalize(failure) => {
             normalized(schema, failure.input.as_ref(), failure.error.clone(), &[])
         }
-        E::Validation(error) => {
-            errors::validation(*error).unwrap_or_else(|_| rejected("validation_policy"))
+        E::Validation(error) => errors::validation(*error, Stage::Prepare)
+            .unwrap_or_else(|_| rejected(Fault::ValidationPolicy)),
+        E::Dependencies(error) => {
+            errors::inheritance_dependencies(error.as_ref().clone(), Stage::Prepare)
+                .unwrap_or_else(|_| rejected(Fault::DependencyPolicy))
         }
-        E::Dependencies(error) => literal(
-            errors::inheritance_dependencies(error.as_ref().clone())
-                .unwrap_or_else(|_| rejected("dependency_policy")),
-        ),
         E::Model(findings) => normalized(
             schema,
             None,
@@ -240,66 +218,7 @@ pub fn failure_ref<T>(error: &InheritanceError<T>) -> Result<String, &T> {
             error.error.clone(),
             &[],
         ),
-    };
-    Ok(super::capture_response(outcome))
-}
-/// Both document forms return portable issue records, with source provenance
-/// resolved by the shared adapter. No host interprets context occurrence IDs.
-pub fn failure<T>(error: InheritanceError<T>) -> Result<String, T> {
-    let (schema, error) = match error {
-        InheritanceError::Entry(error) => return Ok(capture_failure(&error)),
-        InheritanceError::Dictionary { document, error } => {
-            match dictionary_failure_ref(&document, &error) {
-                Ok(value) => return Ok(value),
-                Err(_) => match error.cause {
-                    yamaa_core::dictionary_preparation::Cause::Capture {
-                        error: graph::SourceError::Raised(error),
-                        ..
-                    } => return Err(error),
-                    _ => unreachable!("only original raised capture failures are opaque"),
-                },
-            }
-        }
-        InheritanceError::Preparation { schema, error, .. } => (schema, *error),
-    };
-    let schema = schema.structure();
-    let outcome = match error {
-        E::Path(error) => return source(error),
-        E::Traversal(graph::Error::Layer {
-            source,
-            entry,
-            input,
-            error,
-        }) => normalized(
-            schema,
-            Some(&input),
-            error,
-            &[("source", &source), ("entry", &entry)],
-        ),
-        E::Traversal(error) => match traversal_finding(&error) {
-            Ok(Some(outcome)) => outcome,
-            Err(error) => context_failure(error),
-            Ok(None) => match traversal_outcome(schema, error) {
-                Ok(value) => literal(value),
-                Err(error) => return source(error),
-            },
-        },
-        E::ParentRequired => rejected("parent_required"),
-        E::Document(error) => errors::document(error).unwrap_or_else(|_| rejected("document")),
-        E::Normalize(failure) => normalized(schema, failure.input.as_ref(), failure.error, &[]),
-        E::Validation(error) => {
-            errors::validation(error).unwrap_or_else(|_| rejected("validation_policy"))
-        }
-        E::Dependencies(error) => literal(
-            errors::inheritance_dependencies(*error)
-                .unwrap_or_else(|_| rejected("dependency_policy")),
-        ),
-        E::Model(findings) => normalized(schema, None, NormalizationError::Invalid(findings), &[]),
-        E::Composition(error) => {
-            normalized(schema, error.context_document.as_ref(), error.error, &[])
-        }
-    };
-    Ok(super::capture_response(outcome))
+    })
 }
 
 #[cfg(test)]
@@ -307,21 +226,28 @@ mod tests {
     use super::*;
     #[test]
     fn traversal_preserves_the_complete_long_failure_and_original_owner() {
-        let expected =
-            yamaa_core::diagnostic::ConditionCode::InheritanceParentUnavailable.definition();
         let path = "x".repeat(3_000_000);
         let error = graph::Error::<()>::Unavailable {
             declaring: "entry".into(),
             path,
         };
         for _ in 0..2 {
-            let projected = traversal_finding(&error).unwrap().unwrap();
+            let Rejection::Invalid(findings) = traversal_finding(&error).unwrap().unwrap() else {
+                panic!("an unavailable parent is a finding");
+            };
             assert_eq!(
-                projected,
-                json!({"status":"invalid", "diagnostics":[{
-                    "phase":expected.phase, "condition":expected.condition, "requirement":expected.requirement,
-                    "spec_paths":["parent"], "context":{"source":"entry", "path":"x".repeat(3_000_000)}
-                }]})
+                findings,
+                [yamaa_core::diagnostic::Diagnostic {
+                    code: yamaa_core::diagnostic::ConditionCode::InheritanceParentUnavailable,
+                    spec_paths: vec!["parent".into()],
+                    context: [
+                        ("source".into(), Value::String("entry".into())),
+                        ("path".into(), Value::String("x".repeat(3_000_000))),
+                    ]
+                    .into(),
+                    source_span: None,
+                    operand_route: None,
+                }]
             );
         }
         let graph::Error::Unavailable { path, .. } = error else {

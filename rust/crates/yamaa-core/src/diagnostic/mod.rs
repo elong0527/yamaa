@@ -519,8 +519,15 @@ conditions! {
 /// JSON context retains arbitrary-width integer numbers and ordered sequences.
 pub type Context = BTreeMap<String, crate::json::Value>;
 
-/// Owned semantic data from the failure site. Missing optional geometry means
-/// unavailable, not zero; ordered paths/routes preserve the original evaluation.
+/// The one diagnostic record, from the failure site to the edge: the
+/// registered cause, the specification paths in authored order, the
+/// structured context and, when recorded, the span and operand route.
+///
+/// Phase, condition and requirement are not stored: each is a pure function
+/// of `code` in this registry. Missing geometry means unavailable, never
+/// zero: a present `start == end == 0` span and a present empty route are
+/// recorded facts. The context is an owned JSON tree whose numbers keep their
+/// exact spelling; JSON text is made only at the edge that renders it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagnostic {
     pub code: ConditionCode,
@@ -533,5 +540,20 @@ pub struct Diagnostic {
 impl Diagnostic {
     pub fn definition(&self) -> Definition {
         self.code.definition()
+    }
+
+    /// The lifecycle phase of the cause.
+    pub fn phase(&self) -> &'static str {
+        self.definition().phase
+    }
+
+    /// The public condition of the cause.
+    pub fn condition(&self) -> &'static str {
+        self.definition().condition
+    }
+
+    /// The rule the cause cites, absent only for implementation refusals.
+    pub fn requirement(&self) -> Option<&'static str> {
+        self.definition().requirement
     }
 }

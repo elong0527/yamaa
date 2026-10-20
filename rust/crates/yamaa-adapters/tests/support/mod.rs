@@ -38,3 +38,58 @@ pub fn table_schema(columns: &[(&str, ColumnType)]) -> TableSchema {
 pub mod document;
 
 pub mod specification_run;
+
+/// Diagnostics as the run report renders them, for comparison with authored
+/// rows.
+pub fn rows(issues: &[yamaa_core::diagnostic::Diagnostic]) -> Vec<yamaa_core::json::Value> {
+    issues
+        .iter()
+        .map(yamaa_adapters::report_storage::diagnostic_value)
+        .collect()
+}
+
+/// The report rows of a refusal's language findings, as authored fixtures
+/// record them; any other refusal fails the test.
+pub fn findings(
+    rejection: yamaa_adapters::specification_diagnostics::Rejection,
+) -> yamaa_core::json::Value {
+    match rejection {
+        yamaa_adapters::specification_diagnostics::Rejection::Invalid(findings) => {
+            yamaa_core::json::Value::Array(rows(&findings))
+        }
+        other => panic!("expected language findings: {other:?}"),
+    }
+}
+
+/// The report rows of a native preparation refusal's language findings.
+pub fn preparation_findings(
+    error: yamaa_adapters::file_preparation::Error,
+) -> yamaa_core::json::Value {
+    use yamaa_adapters::{file_preparation::Error, specification_diagnostics};
+    findings(match error {
+        Error::Preparation(error) => {
+            specification_diagnostics::inheritance_failure_ref(&error).expect("semantic report")
+        }
+        Error::ResourceFinding { diagnostic, .. }
+        | Error::PreparationFinding { diagnostic, .. } => {
+            specification_diagnostics::Rejection::Invalid(vec![*diagnostic])
+        }
+        Error::Compile(error) => specification_diagnostics::failure(&error, None),
+        error => panic!("unexpected native rejection: {error:?}"),
+    })
+}
+
+/// The message of the resource error a native preparation refusal retains.
+pub fn retained_resource_message(error: yamaa_adapters::file_preparation::Error) -> String {
+    use yamaa_adapters::{file_preparation::Error, specification_diagnostics};
+    match error {
+        Error::Resource(error) => error.message().into(),
+        Error::Preparation(error) => {
+            match specification_diagnostics::inheritance_failure_ref(&error) {
+                Err(resource) => resource.message().into(),
+                Ok(rejection) => panic!("expected a retained resource error: {rejection:?}"),
+            }
+        }
+        error => panic!("expected a retained resource error: {error:?}"),
+    }
+}

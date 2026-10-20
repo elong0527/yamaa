@@ -1,16 +1,15 @@
 //! Resolve held lock origins and represent core-owned classified diagnostic facts.
-use crate::{issue_rows::Issue, project_lock::Finding, project_source::CapturedEnvironment};
-use yamaa_core::diagnostic::{lock_diagnostics, LockDiagnosticError, LockOrigins};
+use crate::{project_lock::Finding, project_source::CapturedEnvironment};
+use yamaa_core::diagnostic::{lock_diagnostics, Diagnostic, LockDiagnosticError, LockOrigins};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidContext,
-    Projection,
 }
 pub fn issues(
     environment: &CapturedEnvironment,
     findings: &[Finding],
-) -> Result<Vec<Issue>, Error> {
+) -> Result<Vec<Diagnostic>, Error> {
     // The linked environment file declares the lock, and its path resolves there.
     let origins = environment.lock().and_then(|lock| {
         let file = environment.environment_file()?;
@@ -29,16 +28,7 @@ pub fn issues(
             written,
         })
     });
-    let diagnostics = lock_diagnostics(origins, findings).map_err(|error| match error {
+    lock_diagnostics(origins, findings).map_err(|error| match error {
         LockDiagnosticError::InvalidContext => Error::InvalidContext,
-    })?;
-    if diagnostics.is_empty() {
-        return Ok(Vec::new());
-    }
-    let result = diagnostics
-        .into_iter()
-        .map(Issue::from_core)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| Error::Projection)?;
-    Ok(result)
+    })
 }

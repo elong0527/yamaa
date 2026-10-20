@@ -1076,12 +1076,16 @@ mod execution {
                 let error =
                     yamaa_adapters::specification_run::PreparedRun::prepare(prepare(&schema, &raw))
                         .unwrap_err();
-                let actual: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
-                    &yamaa_adapters::specification_diagnostics::failure(&error, None),
-                )
-                .unwrap();
                 let expected: yamaa_core::json::Value = row["expected"].clone();
-                assert_eq!(actual, expected, "{}", row["case"].as_str().unwrap());
+                assert_eq!(expected["outcome"]["status"], "invalid");
+                assert_eq!(
+                    crate::support::findings(yamaa_adapters::specification_diagnostics::failure(
+                        &error, None
+                    )),
+                    expected["outcome"]["diagnostics"],
+                    "{}",
+                    row["case"].as_str().unwrap()
+                );
                 count += 1;
             }
             assert_eq!(count, 8);
@@ -1154,8 +1158,10 @@ mod execution {
                     yamaa_adapters::specification_run::PreparedRun::prepare(document).unwrap();
                 for _ in 0..2 {
                     assert_eq!(
-                        yamaa_adapters::specification_check::issues(&run).unwrap(),
-                        yamaa_adapters::json_wire::encode(&row["expected"]),
+                        yamaa_core::json::Value::Array(crate::support::rows(
+                            &yamaa_adapters::specification_check::issues(&run)
+                        )),
+                        row["expected"],
                         "{}",
                         row["case"].as_str().unwrap()
                     );
@@ -1426,12 +1432,10 @@ mod execution {
                     bytes: raw.to_vec(),
                 })
                 .unwrap_err();
-            let finding: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
-                &yamaa_adapters::specification_diagnostics::capture_failure(&error),
-            )
-            .unwrap();
-            assert_eq!(finding["outcome"]["status"], "invalid");
-            assert!(finding["outcome"]["diagnostics"]
+            let findings = crate::support::findings(
+                yamaa_adapters::specification_diagnostics::capture_failure(&error),
+            );
+            assert!(findings
                 .as_array()
                 .unwrap()
                 .iter()
