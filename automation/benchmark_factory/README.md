@@ -29,8 +29,29 @@ Useful source entry points are [CDISC standards](https://www.cdisc.org/standards
 [admiralonco](https://pharmaverse.github.io/admiralonco/),
 [PHUSE scripts](https://github.com/phuse-org/phuse-scripts) and the
 [synthetic submission pilot](https://github.com/RConsortium/submissions-pilot7-synthetic-data).
-Cite the specific material actually used in the issue; this repository does not
-maintain a parallel bibliography or dated gap report.
+Cite the specific material actually used in the issue. Recheck proposals in the
+recovered gap report against current benchmarks and the issue backlog.
+
+## Recovered factory materials
+
+The following files preserve the factory workflow from before the contributor
+guide consolidation. Their contents are restored as they were before removal.
+
+| File | Contents |
+| --- | --- |
+| [task-spec.md](task-spec.md) | Work item types, fixed rules and human direction template. |
+| [proposer.md](proposer.md) | Proposal and revision instructions for the research agent. |
+| [judges.md](judges.md) | Review criteria, verdict format and maintenance checks. |
+| [references.md](references.md) | Curated external grounding sources. |
+| [gap-report.md](gap-report.md) | Historical coverage proposals to reassess against the current suite. |
+| [factory.sh](factory.sh) | Original scaffolding, validation and review packet helper. |
+
+These recovered files describe an earlier repository layout. In particular,
+`factory.sh` expects per-case runners and retired test paths, so it is retained
+for reference rather than supported validation. Use [benchmarks/AGENTS.md](../../benchmarks/AGENTS.md)
+for current metadata and fixture requirements, the
+[contributor guide](../../CONTRIBUTING.md) for supported commands, and the
+[prompt recipe](../../evaluations/harbor/prompts/recipe.md) for prompt authoring.
 
 ## Draft and validate
 
