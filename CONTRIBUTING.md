@@ -248,8 +248,9 @@ item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
 the gate lists each one. CI's `conversion` job runs the gate on Python for a
 pull request whose diff reaches the 1.0 front end
 (`rust/crates/yamaa-core/src/front_end/`), the converter (`tools/migrate/`),
-the 1.0 schemas (`yaml/v1/`) or the gate itself, and otherwise passes with a
-notice; a weekly schedule and a dispatch run it on both hosts.
+the 1.0 schemas (`yaml/v1/`) or the gate itself, with the conformance planner
+and runner it drives, and otherwise passes with a notice; a weekly schedule
+and a dispatch run it on both hosts.
 The repository tools that read benchmarks read each file by its own header,
 as the engine does (`tools/surface.py`): the benchmark runner, project and
 input staging, the conformance planner, the dashboard renderer and the
