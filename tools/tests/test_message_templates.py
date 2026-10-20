@@ -9,7 +9,9 @@ from tools.paths import ROOT
 
 class MessageTemplateTests(unittest.TestCase):
     def test_generated_table_matches_the_registry(self):
-        self.assertEqual(generator.TARGET.read_text(encoding="ascii"), generator.render())
+        self.assertEqual(
+            generator.TARGET.read_text(encoding="ascii"), generator.render()
+        )
 
     def test_every_registered_condition_has_one_row_in_order(self):
         registry = yaml.safe_load((ROOT / "yaml/conditions.yaml").read_text("utf-8"))
