@@ -3686,7 +3686,7 @@ codelist_class:
         type: str
         required: false
         min_length: 1
-        description: Transport format name carried for a reader.
+        description: Transport format name carried for a reader (CT-12).
     - items:
         type: "list[codelist_item_class]"
         required: false
