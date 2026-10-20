@@ -1,7 +1,8 @@
 //! Represent core-admitted schema findings without reparsing source YAML.
 use crate::json;
 use crate::specification_source::CapturedFindings;
-use yamaa_core::json::{Map, Number, Value};
+use yamaa_core::diagnostic::Diagnostic;
+use yamaa_core::json::{Number, Value};
 pub(crate) use yamaa_core::schema::SchemaDiagnosticError as Error;
 use yamaa_core::schema::{
     admit_schema_diagnostics, Document, SchemaDiagnostic, SchemaDiagnosticValue as V,
@@ -22,7 +23,7 @@ fn value(value: V<'_>) -> Value {
         V::TextList(values) => json!(values),
     }
 }
-pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Value>, Error> {
+pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Diagnostic>, Error> {
     schema_findings(
         captured.schema().structure(),
         captured.document(),
@@ -30,42 +31,27 @@ pub(super) fn findings(captured: &CapturedFindings) -> Result<Vec<Value>, Error>
         &[],
     )
 }
+/// Each finding keeps its registered cause; its context resolves against the
+/// exact schema and pass input, then the caller's source provenance.
 pub(super) fn schema_findings(
     schema: &SchemaStructure,
     document: Option<&Document>,
     findings: &[SchemaDiagnostic],
     source_context: &[(&str, &str)],
-) -> Result<Vec<Value>, Error> {
+) -> Result<Vec<Diagnostic>, Error> {
     let report = admit_schema_diagnostics(schema, document, findings, source_context)?;
     Ok(report
         .iter()
-        .map(|finding| {
-            let context = finding
+        .zip(report.findings())
+        .map(|(resolved, finding)| Diagnostic {
+            code: finding.code,
+            spec_paths: vec![resolved.path.to_owned()],
+            context: resolved
                 .context
                 .map(|(name, field)| (name.into(), value(field)))
-                .collect::<Map<_, _>>();
-            crate::issue_rows::report(
-                finding.phase,
-                finding.condition,
-                finding.requirement,
-                vec![finding.path.to_owned()],
-                context.into(),
-            )
+                .collect(),
+            source_span: None,
+            operand_route: None,
         })
         .collect())
-}
-
-/// Admit already projected core findings in the same portable diagnostic shape
-/// (geometry keys are admitted only when a finding recorded geometry).
-pub(super) fn literal_outcome(outcome: Value) -> Result<Value, Error> {
-    if outcome["status"] == "invalid" {
-        let findings = outcome["diagnostics"]
-            .as_array()
-            .ok_or(Error::InvalidContext)?;
-        for finding in findings {
-            crate::issue_rows::Issue::from_diagnostic(finding.clone())
-                .map_err(|_| Error::InvalidContext)?;
-        }
-    }
-    Ok(outcome)
 }

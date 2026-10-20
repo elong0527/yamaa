@@ -7,7 +7,6 @@ mod arrow_bridge;
 mod context_values;
 mod function_callback;
 mod project_activation;
-mod style;
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("_CORE_VERSION", yamaa::VERSION)?;
@@ -26,6 +25,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(api_entry::_project_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_submission, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_read_odm, module)?)?;
-    module.add_function(wrap_pyfunction!(style::_style_same_value, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_lint, module)?)?;
     Ok(())
 }

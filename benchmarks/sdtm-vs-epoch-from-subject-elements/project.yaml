@@ -36,4 +36,8 @@ sdtm:
     description: Tabulation data definitions for YAMAA-01
   originator: Example Sponsor
   source_system_version: '1.0'
-  documents: []
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form

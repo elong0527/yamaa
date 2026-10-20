@@ -1,8 +1,8 @@
-//! Encode an already admitted borrowed core context tree into the issue envelope.
-use crate::issue_rows::{InvalidIssue, Issue};
+//! Materialize an admitted borrowed core context tree as the owned diagnostic record.
 use crate::json;
-use yamaa_core::json::{Map, Value as Json};
-use yamaa_core::project_diagnostics::{Diagnostic, Fact};
+use yamaa_core::diagnostic::Diagnostic;
+use yamaa_core::json::Value as Json;
+use yamaa_core::project_diagnostics::{self, Fact};
 
 pub(crate) fn fact(value: Fact<'_>) -> Json {
     match value {
@@ -25,32 +25,17 @@ pub(crate) fn fact(value: Fact<'_>) -> Json {
         ),
     }
 }
-pub(crate) fn value(diagnostic: Diagnostic<'_>) -> Json {
-    let mapping = diagnostic.code.definition();
-    let context: Map<_, _> = diagnostic
-        .context
-        .into_iter()
-        .map(|(name, value)| (name.to_owned(), fact(value)))
-        .collect();
-    crate::issue_rows::report(
-        mapping.phase,
-        mapping.condition,
-        mapping.requirement,
-        vec![diagnostic.spec_path.to_owned()],
-        context.into(),
-    )
-}
-pub(crate) fn issue(diagnostic: Diagnostic<'_>) -> Result<Issue, InvalidIssue> {
-    Issue::from_diagnostic(value(diagnostic))
-}
-pub(crate) fn finish<'a, E>(
-    diagnostics: Vec<Diagnostic<'_>>,
-) -> Result<Vec<Issue>, yamaa_core::project_diagnostics::Error<'a, E>> {
-    use yamaa_core::project_diagnostics::Error;
-    let issues = diagnostics
-        .into_iter()
-        .map(issue)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| Error::InvalidContext)?;
-    Ok(issues)
+/// The owned record of one borrowed core diagnostic; it records no geometry.
+pub(crate) fn owned(diagnostic: project_diagnostics::Diagnostic<'_>) -> Diagnostic {
+    Diagnostic {
+        code: diagnostic.code,
+        spec_paths: vec![diagnostic.spec_path],
+        context: diagnostic
+            .context
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), fact(value)))
+            .collect(),
+        source_span: None,
+        operand_route: None,
+    }
 }

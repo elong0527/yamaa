@@ -1,0 +1,747 @@
+//! Authoring lints that read the specification's value, not only its layout.
+//!
+//! `repeated_row_derivation`, `redundant_intermediate` and `missing_label`
+//! name departures that leave the parsed value unchanged only when the author
+//! rewrites them: a uniform row-template derivation that belongs at column
+//! level, a named intermediate equivalent to the implicit join, and an output
+//! column without a label. A finding is not a validation diagnostic; the
+//! specification stays valid and runs the same way. No fix is offered: moving
+//! a derivation, removing an intermediate or writing a label changes the
+//! written text of a value, so its author corrects it.
+//!
+//! The value is the file's YAML 1.2 value as the style guide's reference
+//! reader resolved it: a plain scalar is null, a Boolean, a 64-bit integer
+//! (decimal, `0x` or `0o`), a float (an integer too wide for 64 bits among
+//! them) or text. Mappings compare and look up keys by value, as that reader's
+//! dictionaries do.
+
+use std::collections::{BTreeSet, HashSet};
+
+use super::checks::{sort, Departure};
+use super::document::{Document, Style, Value};
+
+const DATASET_LEVEL_OPERATIONS: [&str; 6] = [
+    "aggregate",
+    "row_number",
+    "rank",
+    "row_value",
+    "locf",
+    "baseline_flag",
+];
+
+/// One resolved value. A mapping keeps its keys in written order, each once.
+#[derive(Clone, Debug)]
+enum Data {
+    Null,
+    Boolean(bool),
+    Integer(i64),
+    Float(f64),
+    Text(String),
+    List(Vec<Data>),
+    Map(Vec<(Data, Data)>),
+}
+
+impl Data {
+    fn text(&self) -> Option<&str> {
+        match self {
+            Self::Text(text) => Some(text),
+            _ => None,
+        }
+    }
+
+    fn map(&self) -> Option<&[(Data, Data)]> {
+        match self {
+            Self::Map(entries) => Some(entries),
+            _ => None,
+        }
+    }
+
+    fn list(&self) -> Option<&[Data]> {
+        match self {
+            Self::List(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
+    }
+
+    /// The value a mapping holds under the text key `name`.
+    fn get(&self, name: &str) -> Option<&Data> {
+        lookup(self.map()?, &Data::Text(name.to_owned()))
+    }
+
+    /// The kind `values_equal` requires both sides to share.
+    fn kind(&self) -> u8 {
+        match self {
+            Self::Null => 0,
+            Self::Boolean(_) => 1,
+            Self::Integer(_) => 2,
+            Self::Float(_) => 3,
+            Self::Text(_) => 4,
+            Self::List(_) => 5,
+            Self::Map(_) => 6,
+        }
+    }
+
+    fn number(&self) -> Option<Number> {
+        match *self {
+            Self::Boolean(value) => Some(Number::Integer(i64::from(value))),
+            Self::Integer(value) => Some(Number::Integer(value)),
+            Self::Float(value) => Some(Number::Float(value)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Number {
+    Integer(i64),
+    Float(f64),
+}
+
+/// Equality as the reference reader's values compare: Booleans, integers and
+/// floats by numeric value, text with text, lists item by item and mappings
+/// by keys and values.
+fn equal(first: &Data, second: &Data) -> bool {
+    match (first, second) {
+        (Data::Null, Data::Null) => true,
+        (Data::Text(a), Data::Text(b)) => a == b,
+        (Data::List(a), Data::List(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| equal(a, b))
+        }
+        (Data::Map(a), Data::Map(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(key, value)| lookup(b, key).is_some_and(|other| equal(value, other)))
+        }
+        _ => match (first.number(), second.number()) {
+            (Some(Number::Integer(a)), Some(Number::Integer(b))) => a == b,
+            (Some(Number::Float(a)), Some(Number::Float(b))) => a == b,
+            (Some(Number::Integer(a)), Some(Number::Float(b)))
+            | (Some(Number::Float(b)), Some(Number::Integer(a))) => integral_equal(a, b),
+            _ => false,
+        },
+    }
+}
+
+/// An integer equals a float only when the float is that exact integer.
+fn integral_equal(integer: i64, float: f64) -> bool {
+    // Every float in [-2^63, 2^63) converts to an i64 exactly when integral.
+    let low = i64::MIN as f64;
+    float.is_finite()
+        && float.fract() == 0.0
+        && (low..-low).contains(&float)
+        && float as i64 == integer
+}
+
+fn lookup<'a>(entries: &'a [(Data, Data)], key: &Data) -> Option<&'a Data> {
+    entries
+        .iter()
+        .find(|(candidate, _)| equal(candidate, key))
+        .map(|(_, value)| value)
+}
+
+/// Kind-strict equality: `1`, `1.0` and `true` stay apart at every depth.
+fn values_equal(first: &Data, second: &Data) -> bool {
+    if first.kind() != second.kind() {
+        return false;
+    }
+    match (first, second) {
+        (Data::Map(a), Data::Map(b)) => {
+            same_keys(a, b)
+                && a.iter().all(|(key, value)| {
+                    lookup(b, key).is_some_and(|other| values_equal(value, other))
+                })
+        }
+        (Data::List(a), Data::List(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| values_equal(a, b))
+        }
+        _ => equal(first, second),
+    }
+}
+
+fn same_keys(a: &[(Data, Data)], b: &[(Data, Data)]) -> bool {
+    a.len() == b.len() && a.iter().all(|(key, _)| lookup(b, key).is_some())
+}
+
+/// A plain scalar's value under the reference reader's YAML 1.2 resolution.
+fn resolve(text: &str) -> Data {
+    if let Some(digits) = text.strip_prefix("0x") {
+        if let Ok(value) = i64::from_str_radix(digits, 16) {
+            return Data::Integer(value);
+        }
+    } else if let Some(digits) = text.strip_prefix("0o") {
+        if let Ok(value) = i64::from_str_radix(digits, 8) {
+            return Data::Integer(value);
+        }
+    } else if let Some(digits) = text.strip_prefix('+') {
+        if let Ok(value) = digits.parse::<i64>() {
+            return Data::Integer(value);
+        }
+    }
+    match text {
+        "" | "~" | "null" | "Null" | "NULL" => return Data::Null,
+        "true" | "True" | "TRUE" => return Data::Boolean(true),
+        "false" | "False" | "FALSE" => return Data::Boolean(false),
+        _ => {}
+    }
+    if let Ok(value) = text.parse::<i64>() {
+        return Data::Integer(value);
+    }
+    let float = match text {
+        ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Some(f64::INFINITY),
+        "-.inf" | "-.Inf" | "-.INF" => Some(f64::NEG_INFINITY),
+        ".nan" | ".NaN" | ".NAN" => Some(f64::NAN),
+        // Requiring a digit keeps words such as `inf` text.
+        _ if text.bytes().any(|byte| byte.is_ascii_digit()) => text.parse::<f64>().ok(),
+        _ => None,
+    };
+    float.map_or_else(|| Data::Text(text.to_owned()), Data::Float)
+}
+
+fn data(document: &Document, id: usize) -> Data {
+    match &document.node(id).value {
+        Value::Scalar {
+            text,
+            style: Style::Plain,
+        } => resolve(text),
+        Value::Scalar { text, .. } => Data::Text(text.clone()),
+        Value::Sequence { items, .. } => {
+            Data::List(items.iter().map(|&item| data(document, item)).collect())
+        }
+        Value::Mapping { pairs, .. } => {
+            let mut entries: Vec<(Data, Data)> = Vec::with_capacity(pairs.len());
+            for &(key, value) in pairs {
+                let (key, value) = (data(document, key), data(document, value));
+                // A later equal key replaces the value and keeps the place.
+                match entries
+                    .iter_mut()
+                    .find(|(existing, _)| equal(existing, &key))
+                {
+                    Some(entry) => entry.1 = value,
+                    None => entries.push((key, value)),
+                }
+            }
+            Data::Map(entries)
+        }
+    }
+}
+
+/// Every text in a value, mapping keys included, in written order.
+fn strings(value: &Data) -> Vec<&str> {
+    fn visit<'a>(value: &'a Data, out: &mut Vec<&'a str>) {
+        match value {
+            Data::Text(text) => out.push(text),
+            Data::Map(entries) => {
+                for (key, item) in entries {
+                    visit(key, out);
+                    visit(item, out);
+                }
+            }
+            Data::List(items) => items.iter().for_each(|item| visit(item, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    visit(value, &mut out);
+    out
+}
+
+fn is_word(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+fn starts_name(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+/// Conservative names written in a filter, for the hoisting lint: each run of
+/// word characters that starts at a word boundary with a letter or `_`. Extra
+/// names can only retain a row derivation, never change behavior.
+fn filter_identifiers(predicate: Option<&Data>) -> HashSet<String> {
+    let Some(text) = predicate.and_then(Data::text) else {
+        return HashSet::new();
+    };
+    let bytes = text.as_bytes();
+    let mut names = HashSet::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if !is_word(bytes[index]) {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < bytes.len() && is_word(bytes[index]) {
+            index += 1;
+        }
+        if starts_name(bytes[start]) {
+            names.insert(text[start..index].to_owned());
+        }
+    }
+    names
+}
+
+/// Identifiers `text` reads bare, not as part of a qualified name: a
+/// predicate or flag string reads the columns it names (`"AGG > 0"` reads
+/// AGG), while a token beside a `.` is a dataset or a qualified column.
+fn bare_identifiers(text: &str) -> HashSet<&str> {
+    let bytes = text.as_bytes();
+    let mut names = HashSet::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if !starts_name(bytes[index]) {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        index += 1;
+        while index < bytes.len() && is_word(bytes[index]) {
+            index += 1;
+        }
+        if (start == 0 || bytes[start - 1] != b'.') && bytes.get(index) != Some(&b'.') {
+            names.insert(&text[start..index]);
+        }
+    }
+    names
+}
+
+/// True when `text` reads `IDENTIFIER.` at an identifier boundary, so
+/// `ADSL.AGE` reads ADSL, never an intermediate named DSL.
+fn reads_qualified_name(text: &str, identifier: &str) -> bool {
+    let bytes = text.as_bytes();
+    let wanted = identifier.as_bytes();
+    let width = identifier.len();
+    (0..bytes.len().saturating_sub(width)).any(|start| {
+        (start == 0 || !is_word(bytes[start - 1]))
+            && bytes[start..].starts_with(wanted)
+            && bytes.get(start + width) == Some(&b'.')
+    })
+}
+
+fn uses_dataset_operation(value: &Data) -> bool {
+    match value {
+        Data::Map(entries) => entries.iter().any(|(key, item)| {
+            key.text()
+                .is_some_and(|key| DATASET_LEVEL_OPERATIONS.contains(&key))
+                || uses_dataset_operation(item)
+        }),
+        Data::List(items) => items.iter().any(uses_dataset_operation),
+        _ => false,
+    }
+}
+
+fn reads_intermediate(value: &Data, intermediates: &BTreeSet<&str>) -> bool {
+    !intermediates.is_empty()
+        && strings(value).into_iter().any(|text| {
+            intermediates
+                .iter()
+                .any(|identifier| reads_qualified_name(text, identifier))
+        })
+}
+
+/// True when `value` is a literal derivation, driver-independent.
+fn is_literal(value: &Data) -> bool {
+    value
+        .map()
+        .is_some_and(|entries| entries.len() == 1 && entries[0].0.text() == Some("literal"))
+}
+
+/// Column names whose column-level derivations are not row-local: a
+/// derivation that uses a dataset-level operation, reads a named
+/// intermediate, or reads another column that is not row-local.
+fn blocked_columns<'a>(columns: &[&'a Data], intermediates: &BTreeSet<&str>) -> HashSet<&'a str> {
+    let mut reads: Vec<(&'a str, HashSet<&'a str>)> = Vec::new();
+    let mut blocked = HashSet::new();
+    for entry in columns {
+        let (Some(name), Some(derivation)) = (
+            entry.get("name").and_then(Data::text),
+            entry.get("derivation").filter(|value| !value.is_null()),
+        ) else {
+            continue;
+        };
+        if uses_dataset_operation(derivation) || reads_intermediate(derivation, intermediates) {
+            blocked.insert(name);
+        }
+        let bare = strings(derivation)
+            .into_iter()
+            .flat_map(bare_identifiers)
+            .collect::<HashSet<_>>();
+        match reads.iter_mut().find(|(existing, _)| *existing == name) {
+            Some(entry) => entry.1 = bare,
+            None => reads.push((name, bare)),
+        }
+    }
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (name, names) in &reads {
+            if !blocked.contains(name) && names.iter().any(|read| blocked.contains(read)) {
+                blocked.insert(*name);
+                changed = true;
+            }
+        }
+    }
+    blocked
+}
+
+/// The mapping entries of a list field.
+fn entries<'a>(value: &'a Data, field: &str) -> Vec<&'a Data> {
+    indexed(value, field)
+        .into_iter()
+        .map(|(_, entry)| entry)
+        .collect()
+}
+
+/// (raw index, entry) for the mapping entries of a list field. A stray entry
+/// that is not a mapping keeps its place, so node lookups name the entry as
+/// written.
+fn indexed<'a>(value: &'a Data, field: &str) -> Vec<(usize, &'a Data)> {
+    value
+        .get(field)
+        .and_then(Data::list)
+        .map(|items| {
+            items
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| entry.map().is_some())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The mapping node at `index` of the root list `field`.
+fn mapping_at(document: &Document, field: &str, index: usize) -> Option<usize> {
+    let sequence = document.member(document.root, field)?;
+    let item = *document.items(sequence)?.get(index)?;
+    document.pairs(item).map(|_| item)
+}
+
+/// The position of an entry's `name` (or `id`) key, else of the entry itself.
+fn entry_key(
+    document: &Document,
+    field: &str,
+    index: usize,
+    key: &str,
+) -> Option<(usize, usize, String)> {
+    let mapping = mapping_at(document, field, index)?;
+    let start = match document.key(Some(mapping), key) {
+        Some(key) => document.node(key).start,
+        None => document.node(mapping).start,
+    };
+    Some((start.line, start.column, format!("{field}[{index}]")))
+}
+
+fn row_derivation_key(
+    document: &Document,
+    row: usize,
+    column: &str,
+) -> Option<(usize, usize, String)> {
+    let mapping = mapping_at(document, "rows", row)?;
+    let derivations = document.member(Some(mapping), "derivations")?;
+    let key = document.key(Some(derivations), column)?;
+    let start = document.node(key).start;
+    Some((
+        start.line,
+        start.column,
+        format!("rows[{row}].derivations.{column}"),
+    ))
+}
+
+/// `missing_label`: every output column declares `label:`.
+fn missing_labels(document: &Document, value: &Data) -> Vec<Departure> {
+    let mut found = Vec::new();
+    let Some(output) = value.get("output").filter(|output| output.map().is_some()) else {
+        return found;
+    };
+    if value.get("parent").is_some_and(|parent| !parent.is_null()) {
+        // A child layer inherits labels; only a standalone file owns them.
+        return found;
+    }
+    let Some(output_columns) = output.get("columns").and_then(Data::list) else {
+        return found;
+    };
+    let mut by_name: Vec<(&str, usize, &Data)> = Vec::new();
+    for (index, entry) in indexed(value, "columns") {
+        if let Some(name) = entry.get("name").and_then(Data::text) {
+            if !by_name.iter().any(|(existing, _, _)| *existing == name) {
+                by_name.push((name, index, entry));
+            }
+        }
+    }
+    let mut seen = HashSet::new();
+    for name in output_columns {
+        // One column has one label departure, however often the output
+        // list repeats it.
+        let Some(name) = name.text().filter(|name| seen.insert(*name)) else {
+            continue;
+        };
+        // Undeclared output columns fail validation; the lint stays silent.
+        let Some(&(_, index, entry)) = by_name.iter().find(|(existing, _, _)| *existing == name)
+        else {
+            continue;
+        };
+        if entry
+            .get("label")
+            .and_then(Data::text)
+            .is_some_and(|label| !label.is_empty())
+        {
+            continue;
+        }
+        let Some((line, column, spec_path)) = entry_key(document, "columns", index, "name") else {
+            continue;
+        };
+        found.push(Departure::new(
+            "missing_label",
+            line,
+            column,
+            spec_path,
+            format!("output column `{name}` has no label; declare `label:`"),
+        ));
+    }
+    found
+}
+
+/// `repeated_row_derivation`: a uniform row-template derivation belongs at
+/// column level. Only row-local derivations are reported; a derivation
+/// reading a driver dataset stays when the templates build from different
+/// datasets, and a column a row filter reads stays, since filters resolve
+/// only columns their own template derives.
+fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure> {
+    let mut found = Vec::new();
+    let rows = entries(value, "rows");
+    if rows.len() < 2 {
+        return found;
+    }
+    let columns = entries(value, "columns");
+    let column_derivations = columns
+        .iter()
+        .filter(|entry| {
+            entry
+                .get("derivation")
+                .is_some_and(|value| !value.is_null())
+        })
+        .filter_map(|entry| entry.get("name").and_then(Data::text))
+        .collect::<HashSet<_>>();
+    let intermediates = entries(value, "intermediates")
+        .into_iter()
+        .filter_map(|entry| entry.get("id").and_then(Data::text))
+        .collect::<BTreeSet<_>>();
+    let blocked = blocked_columns(&columns, &intermediates);
+    let null = Data::Null;
+    let datasets = rows
+        .iter()
+        .map(|row| row.get("dataset").unwrap_or(&null))
+        .collect::<Vec<_>>();
+    let uniform_driver = datasets[1..]
+        .iter()
+        .all(|dataset| equal(dataset, datasets[0]));
+    let mut filter_reads = HashSet::new();
+    for row in &rows {
+        filter_reads.extend(filter_identifiers(row.get("filter")));
+    }
+    if rows
+        .iter()
+        .any(|row| row.get("derivations").and_then(Data::map).is_none())
+    {
+        return found;
+    }
+    let first_index = indexed(value, "rows")[0].0;
+    let Some(first) = rows[0].get("derivations").and_then(Data::map) else {
+        return found;
+    };
+    for (column, _) in first {
+        let Some(column) = column.text() else {
+            continue;
+        };
+        // A column-level default already exists; row overrides stay.
+        if column_derivations.contains(column) {
+            continue;
+        }
+        if filter_reads.contains(column) {
+            continue;
+        }
+        let values = rows
+            .iter()
+            .map(|row| {
+                row.get("derivations")
+                    .and_then(|derivations| derivations.get(column))
+            })
+            .collect::<Option<Vec<_>>>();
+        let Some(values) = values else {
+            continue;
+        };
+        if !values[1..].iter().all(|item| values_equal(values[0], item)) {
+            continue;
+        }
+        let derivation = values[0];
+        if uses_dataset_operation(derivation) || reads_intermediate(derivation, &intermediates) {
+            continue;
+        }
+        // Different drivers bind different records; only a literal is
+        // driver-independent.
+        if !uniform_driver && !is_literal(derivation) {
+            continue;
+        }
+        if strings(derivation).into_iter().any(|text| {
+            bare_identifiers(text)
+                .iter()
+                .any(|name| blocked.contains(name))
+        }) {
+            continue;
+        }
+        let Some((line, column_position, spec_path)) =
+            row_derivation_key(document, first_index, column)
+        else {
+            continue;
+        };
+        found.push(Departure::new(
+            "repeated_row_derivation",
+            line,
+            column_position,
+            spec_path,
+            format!(
+                "derivation of `{column}` is identical in every row template; \
+                 move it to columns[].derivation"
+            ),
+        ));
+    }
+    found
+}
+
+/// True when an explicit key states exactly the output keys.
+fn key_equals_output_keys(key: &Data, output_keys: &[&str]) -> bool {
+    let wanted = output_keys.iter().copied().collect::<HashSet<_>>();
+    if let Some(items) = key.list() {
+        let texts = items.iter().map(Data::text).collect::<Option<HashSet<_>>>();
+        return texts.is_some_and(|texts| texts == wanted);
+    }
+    if let Some(entries) = key.map() {
+        let names = entries
+            .iter()
+            .map(|(name, _)| name.text())
+            .collect::<Option<HashSet<_>>>();
+        return names.is_some_and(|names| names == wanted)
+            && entries
+                .iter()
+                .all(|(column, item)| item.text().is_some() && column.text() == item.text());
+    }
+    false
+}
+
+/// `redundant_intermediate`: a named intermediate equal to the implicit join.
+/// A simple intermediate with no filter, selection, custom key or handler
+/// that changes behavior reads what `DATASET.COLUMN` already reads; only an
+/// explicit key that restates the output keys is reported.
+fn redundant_intermediates(document: &Document, value: &Data) -> Vec<Departure> {
+    let mut found = Vec::new();
+    let Some(keys) = value
+        .get("keys")
+        .and_then(Data::list)
+        .and_then(|keys| keys.iter().map(Data::text).collect::<Option<Vec<_>>>())
+    else {
+        return found;
+    };
+    let Some(raw_intermediates) = value.get("intermediates").and_then(Data::list) else {
+        return found;
+    };
+    let required = value
+        .get("input")
+        .and_then(Data::map)
+        .map(|inputs| {
+            inputs
+                .iter()
+                .filter(|(_, declaration)| {
+                    declaration
+                        .get("require_match")
+                        .is_some_and(|flag| matches!(flag, Data::Boolean(true)))
+                })
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    for (index, entry) in indexed(value, "intermediates") {
+        let (Some(identifier), Some(dataset)) = (
+            entry.get("id").and_then(Data::text),
+            entry.get("dataset").and_then(Data::text),
+        ) else {
+            continue;
+        };
+        let dataset_value = Data::Text(dataset.to_owned());
+        if dataset == "SELF" || required.iter().any(|name| equal(name, &dataset_value)) {
+            continue;
+        }
+        if [
+            "filter",
+            "between",
+            "order_by",
+            "keep",
+            "derivations",
+            "verifications",
+            "columns",
+        ]
+        .iter()
+        .any(|field| entry.get(field).is_some_and(|value| !value.is_null()))
+        {
+            continue;
+        }
+        let raw = raw_intermediates
+            .get(index)
+            .filter(|raw| raw.map().is_some());
+        let field = |name: &str| raw.and_then(|raw| raw.get(name));
+        // A required match fails where the join yields missing, and another
+        // literal answers there. Omitted, cleared by a bare null or
+        // `{literal: null}`, the answer is the join's missing value.
+        let cleared = Data::Map(vec![(Data::Text("literal".into()), Data::Null)]);
+        if field("require_match").is_some_and(|flag| matches!(flag, Data::Boolean(true)))
+            || field("no_match").is_some_and(|answer| !answer.is_null() && !equal(answer, &cleared))
+        {
+            continue;
+        }
+        // An omitted key is a rename that validation owns.
+        let Some(key) = entry.get("key").filter(|key| !key.is_null()) else {
+            continue;
+        };
+        if !key_equals_output_keys(key, &keys) {
+            continue;
+        }
+        if !strings(value)
+            .into_iter()
+            .any(|text| reads_qualified_name(text, identifier))
+        {
+            continue;
+        }
+        let Some((line, column, spec_path)) = entry_key(document, "intermediates", index, "id")
+        else {
+            continue;
+        };
+        found.push(Departure::new(
+            "redundant_intermediate",
+            line,
+            column,
+            spec_path,
+            format!(
+                "intermediate `{identifier}` reads exactly what the implicit \
+                 join to `{dataset}` reads; read `{dataset}` directly"
+            ),
+        ));
+    }
+    found
+}
+
+/// Every authoring departure in `document`; none when its root is not a mapping.
+pub(super) fn check(document: &Document) -> Vec<Departure> {
+    let Some(root) = document.root else {
+        return Vec::new();
+    };
+    let value = data(document, root);
+    if value.map().is_none() {
+        return Vec::new();
+    }
+    let mut found = missing_labels(document, &value);
+    found.extend(repeated_row_derivations(document, &value));
+    found.extend(redundant_intermediates(document, &value));
+    sort(&mut found);
+    found
+}

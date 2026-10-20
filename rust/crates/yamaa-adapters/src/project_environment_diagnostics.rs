@@ -1,7 +1,6 @@
 //! Project only retained static admission, restoring each captured source origin.
 //! Capture failures and opaque host payloads remain in the rejected environment.
 use crate::{
-    issue_rows::Issue,
     project_source::{CaptureFailure, Origin, RejectedEnvironment},
     specification_source::{
         CapturedDocument, CapturedFindings, CapturedSchema, Error as SourceError,
@@ -32,22 +31,15 @@ fn projection_error(error: projection::Error) -> Error {
         projection::Error::InvalidOrigin => Error::InvalidOrigin,
     }
 }
-fn issues(diagnostics: Vec<Diagnostic>) -> Result<Vec<Issue>, Error> {
-    let issues = diagnostics
-        .into_iter()
-        .map(|diagnostic| Issue::from_core(diagnostic).map_err(|_| Error::Projection))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(issues)
-}
 /// Resolve failed inline scalars from the exact held project root, preserving
 /// full paths.
 pub fn scalar_root(
     root_document: &CapturedDocument,
     findings: &[yamaa_core::project_function_document::Finding],
-) -> Result<Vec<Issue>, Error> {
+) -> Result<Vec<Diagnostic>, Error> {
     let report =
         projection::admit_root_scalars(root(root_document), findings).map_err(projection_error)?;
-    issues(report.diagnostics().map_err(projection_error)?)
+    report.diagnostics().map_err(projection_error)
 }
 /// The projection origin of one captured dependency. A lock carries no document.
 fn origin(origin: &Origin) -> Option<projection::Origin<'_>> {
@@ -82,7 +74,7 @@ fn same_schema<E>(
 }
 /// Independent failed external scalars retain their own captured arenas. Other
 /// capture failures remain available to their typed boundary projections.
-pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Error> {
+pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagnostic>, Error> {
     for source in &rejected.sources {
         let CaptureFailure::Scalar { document, .. } = &source.error else {
             continue;
@@ -110,14 +102,14 @@ pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>
         sources,
     )
     .map_err(projection_error)?;
-    issues(report.diagnostics().map_err(projection_error)?)
+    report.diagnostics().map_err(projection_error)
 }
 
 fn schema_issues(
     captured: &CapturedFindings,
     entry: &str,
     declaration: &str,
-    issues: &mut Vec<Issue>,
+    issues: &mut Vec<Diagnostic>,
 ) -> Result<(), Error> {
     let rows = crate::specification_diagnostics::captured_findings(
         captured,
@@ -132,20 +124,18 @@ fn schema_issues(
             Error::Projection
         }
     })?;
-    for row in rows {
-        issues.push(Issue::from_diagnostic(row).map_err(|_| Error::Projection)?);
-    }
+    issues.extend(rows);
     Ok(())
 }
 /// Resolve root schema findings against their actual retained validation input.
-pub fn schema_root(captured: &CapturedFindings) -> Result<Vec<Issue>, Error> {
+pub fn schema_root(captured: &CapturedFindings) -> Result<Vec<Diagnostic>, Error> {
     let mut issues = Vec::new();
     schema_issues(captured, &captured.source().identity, "$", &mut issues)?;
     Ok(issues)
 }
 /// Project independent failed source schemas against their retained arenas.
 /// Opaque errors, decoding failures and limits retain their original typed forms.
-pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Error> {
+pub fn schema_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagnostic>, Error> {
     let mut issues = Vec::new();
     for source in &rejected.sources {
         let CaptureFailure::Structural(SourceError::Findings(captured)) = &source.error else {
@@ -231,7 +221,7 @@ fn read_issue(
     entry: &str,
     written: &str,
     declaration: &str,
-) -> Result<Issue, Error> {
+) -> Result<Diagnostic, Error> {
     use crate::file_resources::Error as E;
     let cause = match error {
         E::Host(_) => "host_resource_failure",
@@ -262,13 +252,13 @@ fn read_issue(
     ] {
         diagnostic.context.insert(key.into(), value.into());
     }
-    Issue::from_core(diagnostic).map_err(|_| Error::Projection)
+    Ok(diagnostic)
 }
 
 pub(crate) fn root_resource(
     error: &crate::file_resources::Error,
     written: &str,
-) -> Result<Vec<Issue>, Error> {
+) -> Result<Vec<Diagnostic>, Error> {
     Ok(vec![read_issue(error, written, written, "environment")?])
 }
 
@@ -277,7 +267,7 @@ fn decode_issues(
     entry: &str,
     written: &str,
     declaration: &str,
-) -> Result<Vec<Issue>, Error> {
+) -> Result<Vec<Diagnostic>, Error> {
     if let Some(bound) = source_limit(error) {
         return Err(resource_limit(bound, declaration));
     }
@@ -290,25 +280,21 @@ fn decode_issues(
     ) {
         return Err(Error::Projection);
     }
-    let message = crate::specification_diagnostics::capture_failure(error);
-    let mut rows = crate::file_application::preparation_failure(message);
+    let mut rows = crate::specification_diagnostics::capture_failure(error).into_issues();
     for row in &mut rows {
-        if !row.context.is_object() {
-            return Err(Error::Projection);
-        }
         for (key, value) in [
             ("entry", entry),
             ("path", written),
             ("environment_path", declaration),
         ] {
-            row.context[key] = value.into();
+            row.context.insert(key.into(), value.into());
         }
     }
     Ok(rows)
 }
 
 /// Project a root decoder failure with the caller's explicit environment path.
-pub(crate) fn root_boundary(error: &SourceError, written: &str) -> Result<Vec<Issue>, Error> {
+pub(crate) fn root_boundary(error: &SourceError, written: &str) -> Result<Vec<Diagnostic>, Error> {
     decode_issues(error, written, written, "$")
 }
 
@@ -320,7 +306,7 @@ pub(crate) fn root_limit(error: &SourceError) -> Option<Error> {
 /// A fixed resource boundary refuses the whole projection beside its original owner.
 pub(crate) fn capture_sources(
     rejected: &RejectedEnvironment<crate::file_resources::Error>,
-) -> Result<Vec<Issue>, Error> {
+) -> Result<Vec<Diagnostic>, Error> {
     let mut rows = Vec::new();
     for source in &rejected.sources {
         if matches!(
@@ -349,7 +335,7 @@ pub(crate) fn capture_sources(
 /// Return admission issues in their original order. This borrows the rejected
 /// draft and held capture records; it never reads, decodes or activates anything.
 /// Resource-limit failures have no fabricated semantic condition.
-pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Error> {
+pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagnostic>, Error> {
     let Some(findings) = &rejected.admission else {
         return Ok(vec![]);
     };
@@ -379,7 +365,7 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Issue>, Err
         findings,
     )
     .map_err(projection_error)?;
-    issues(report.diagnostics().map_err(projection_error)?)
+    report.diagnostics().map_err(projection_error)
 }
 
 #[cfg(all(test, feature = "yaml"))]

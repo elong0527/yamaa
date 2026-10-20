@@ -16,6 +16,9 @@ A condition written as a literal must also name a registered condition: the
 value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
 miss an issue row built with a condition the registry does not have.
+A diagnostic record crosses Rust modules typed, so JSON text is decoded only
+in a codec that owns its format: a `json_wire` decode anywhere else, outside
+the items that compile only for tests, is refused.
 """
 
 import argparse
@@ -68,6 +71,16 @@ CONDITION_SITE = re.compile(
     r"|(?i:\bcondition)\s*(?::[^=;{}()]*)?=\s*)\Z"
 )
 CONDITION_KEY = re.compile(r'"condition"\s*:\s*("(?:[^"\\]|\\.)*")')
+# A `json_wire` decode, called by path or imported by name.
+JSON_DECODE = re.compile(r"\bjson_wire::(?:decode\w*|\{[^}]*\bdecode\w*)")
+# The codecs that read JSON text they own: the wire module itself, the
+# package-lock reader, the stored report rows and the resolved artifact.
+JSON_CODECS = {
+    Path("rust/crates/yamaa-adapters/src/json_wire.rs"),
+    Path("rust/crates/yamaa-adapters/src/project_lock.rs"),
+    Path("rust/crates/yamaa-adapters/src/report_storage.rs"),
+    Path("rust/crates/yamaa-adapters/src/resolved_artifact/model.rs"),
+}
 SPACE = re.compile(r"\s*")
 
 
@@ -433,6 +446,18 @@ def condition_literals(source: str) -> list[tuple[int, str]]:
     return found
 
 
+def json_decodes(source: str) -> list[int]:
+    """The lines that decode JSON text, outside items that compile only for
+    tests; comments and literals never count."""
+    code = blank(source, list(rust_tokens(source)), {"comment", "character", "string"})
+    tests = cfg_test_items(code)
+    return [
+        code.count("\n", 0, match.start()) + 1
+        for match in JSON_DECODE.finditer(code)
+        if not any(low <= match.start() < high for low, high in tests)
+    ]
+
+
 def embedded_json_strings(source: str) -> list[str]:
     """Inspect JSON data, including format templates; ignore arbitrary prose."""
     try:
@@ -713,6 +738,9 @@ def violations(root: Path) -> list[str]:
                 )
                 + ", ".join(literals)
             )
+        if Path(relative) not in JSON_CODECS:
+            for number in json_decodes(source):
+                errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
         if Path(relative) in (REGISTRY, SHIPPED_SCHEMA) or test_only:
             continue
         # A registered literal is already a new site above; an unregistered

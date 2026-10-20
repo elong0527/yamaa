@@ -49,30 +49,6 @@ impl Error {
             error => error,
         }
     }
-    pub fn into_message(self) -> String {
-        match self {
-            Self::Resource(error) => error.message().into(),
-            Self::Inventory(_) => crate::json_wire::encode(&crate::json!({
-                "protocol": "specification/prototype",
-                "outcome": { "status": "rejected", "stage": "prepare", "code": "inventory" },
-            })),
-            Self::Preparation(error) => {
-                crate::specification_diagnostics::inheritance_failure(error)
-                    .unwrap_or_else(|error| error.message().into())
-            }
-            Self::ResourceFinding { diagnostic, .. }
-            | Self::PreparationFinding { diagnostic, .. } => {
-                crate::json_wire::encode(&crate::json!({
-                    "protocol": "specification/prototype",
-                    "outcome": {
-                        "status": "invalid",
-                        "diagnostics": [crate::specification_diagnostics::portable_diagnostic(*diagnostic)],
-                    },
-                }))
-            }
-            Self::Compile(error) => crate::specification_diagnostics::failure(&error, None),
-        }
-    }
 }
 
 /// The prepared model and its compile-time metadata authority. Study inputs,
@@ -749,15 +725,15 @@ mod dispatch_policy_tests {
         else {
             panic!("changed dictionary keeps original preparation error");
         };
-        let message = crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap();
-        let finding = &crate::json_wire::decode(&message).unwrap()["outcome"]["diagnostics"][0];
-        let definition = yamaa_core::diagnostic::ConditionCode::ResourceContentChanged.definition();
+        let crate::specification_diagnostics::Rejection::Invalid(findings) =
+            crate::specification_diagnostics::inheritance_failure_ref(&error).unwrap()
+        else {
+            panic!("a changed dictionary is a finding");
+        };
         assert_eq!(
-            finding,
-            &crate::json!({
-                "phase":definition.phase, "condition":definition.condition, "requirement":definition.requirement,
-                "spec_paths":["columns.ID.derivation.mapping.dict"], "context":{"path":"dict.yaml"},
-            })
+            findings,
+            [yamaa_core::resource::ResourceFailure::ContentChanged
+                .field_diagnostic("columns.ID.derivation.mapping.dict", "dict.yaml")]
         );
         let InheritanceError::Dictionary { error, .. } = error else {
             panic!("dictionary owner missing");
@@ -891,7 +867,10 @@ mod inventory_rejection_tests {
         }));
         assert_eq!(
             crate::project_application::selection_failure(&rejected),
-            crate::file_application::preparation_failure(error().into_message())
+            crate::file_application::rejected(
+                yamaa_core::application_issue::Stage::Prepare,
+                yamaa_core::application_issue::Fault::Inventory,
+            )
         );
     }
 }

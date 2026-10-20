@@ -17,6 +17,7 @@ SDTM and ADaM datasets and define.xml files.
 | Run report | `run$report` | `run.report` |
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
+| Lint specifications | `yamaa_lint(paths)` | `yamaa.lint(paths)` |
 
 Examples in R and Python are shown in tabs, R first; pick a language once and
 every tab on the page follows. Both packages run the same Rust engine, so the
@@ -349,6 +350,29 @@ specifications' `input` reads it.
     ```python
     odm = yamaa.read_odm("edc/odm.xml")
     odm.write_parquet("raw/odm.parquet")
+    ```
+
+## Lint specifications
+
+`lint()` checks specification files against the
+[style guide](style.md) and returns one row per finding: the file, the line
+and column where the departure starts, the finding, its spec path and a
+message. A directory names the specification files beneath it. With `fix`,
+it first applies the proved layout fixes, replacing a file only when it reads
+as the same values with the same comments, and returns what remains.
+
+=== "R"
+
+    ```r
+    findings <- yamaa_lint(c("sdtm/dm.yaml", "adam/"))
+    remaining <- yamaa_lint("sdtm/dm.yaml", fix = TRUE)
+    ```
+
+=== "Python"
+
+    ```python
+    findings = yamaa.lint(["sdtm/dm.yaml", "adam/"])
+    remaining = yamaa.lint("sdtm/dm.yaml", fix=True)
     ```
 
 ## Inputs, outputs and paths

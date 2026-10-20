@@ -155,6 +155,26 @@ class NativeWorkflowContract(unittest.TestCase):
             with self.subTest(artifact=artifact):
                 self.assertEqual(uploaders.get(artifact), [producer])
 
+    def test_each_rust_lane_runs_only_the_optimized_workspace_tests(self):
+        # Pull request and scheduled CI run the development-profile workspace
+        # tests and Clippy on Linux, so native runs the workspace tests once,
+        # with the release-test profile, on each platform (#3106).
+        for lane in self.coverage["rust"]["include"]:
+            job = "native-rust ({os}, {python})".format(**lane)
+            commands = [
+                line.strip()
+                for step in self.jobs[job]["definitions"]
+                for line in step.get("run", "").splitlines()
+            ]
+            tests = [command for command in commands if "cargo test" in command]
+            with self.subTest(job=job):
+                self.assertTrue(tests)
+                for command in tests:
+                    self.assertIn("--profile release-test", command)
+                for command in commands:
+                    self.assertNotIn("cargo clippy", command)
+                    self.assertNotIn("tools.commands.rust_tests", command)
+
     def test_only_the_source_platform_keeps_its_python_source_archive(self):
         # A release artifact holds exactly its declared assets, so the other
         # Python build lanes drop the source archive they built as a check.

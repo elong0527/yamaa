@@ -19,6 +19,7 @@ pub mod submission_xpt;
 
 pub mod scalar_bytes;
 
+pub mod lint;
 pub mod style_values;
 pub mod yaml_decode;
 #[cfg(feature = "yaml")]
@@ -45,7 +46,6 @@ mod source_ordinal;
 pub mod specification_diagnostics;
 
 pub mod diagnostic_record;
-pub mod issue_rows;
 pub(crate) mod run_report;
 pub mod specification_check;
 pub mod specification_report;
@@ -111,6 +111,3 @@ pub mod ipc_table;
 mod report_scalar;
 mod schema_outcomes;
 mod yaml_diagnostics;
-
-#[cfg(test)]
-mod test_diagnostic_truth;

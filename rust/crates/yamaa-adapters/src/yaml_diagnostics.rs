@@ -1,18 +1,10 @@
-//! Authored YAML findings and complete retained report encoding.
-use crate::json;
+//! Authored YAML findings as diagnostic records.
 use crate::yaml_decode::DecodeFailure;
-use yamaa_core::json::Value;
-
-pub(crate) fn encode_outcome(protocol: &str, outcome: Value) -> String {
-    crate::json_wire::encode(&json!({"protocol":protocol,"outcome":outcome}))
-}
+use yamaa_core::diagnostic::Diagnostic;
 
 /// Semantic source findings are shared by byte probes and document preparation.
 /// Resource refusals and internal defects are never fabricated language findings.
-fn source_diagnostics<'a>(
-    error: &'a DecodeFailure,
-    identity: Option<&'a str>,
-) -> Option<Vec<yamaa_core::project_diagnostics::Diagnostic<'a>>> {
+fn source_diagnostics(error: &DecodeFailure, identity: Option<&str>) -> Option<Vec<Diagnostic>> {
     use yamaa_core::yaml_diagnostics::Failure;
     let failure = match error {
         DecodeFailure::NonAscii(position) => Failure::NonAscii {
@@ -29,21 +21,19 @@ fn source_diagnostics<'a>(
             return None
         }
     };
-    Some(yamaa_core::yaml_diagnostics::diagnostics(failure, identity))
-}
-pub(crate) fn capture_diagnostics(error: &DecodeFailure, identity: &str) -> Option<Vec<Value>> {
     Some(
-        source_diagnostics(error, Some(identity))?
+        yamaa_core::yaml_diagnostics::diagnostics(failure, identity)
             .into_iter()
-            .map(crate::project_diagnostic_projection::value)
+            .map(crate::project_diagnostic_projection::owned)
             .collect(),
     )
 }
-pub(crate) fn semantic_diagnostics(error: &DecodeFailure) -> Option<Vec<Value>> {
-    Some(
-        source_diagnostics(error, None)?
-            .into_iter()
-            .map(crate::project_diagnostic_projection::value)
-            .collect(),
-    )
+pub(crate) fn capture_diagnostics(
+    error: &DecodeFailure,
+    identity: &str,
+) -> Option<Vec<Diagnostic>> {
+    source_diagnostics(error, Some(identity))
+}
+pub(crate) fn semantic_diagnostics(error: &DecodeFailure) -> Option<Vec<Diagnostic>> {
+    source_diagnostics(error, None)
 }
