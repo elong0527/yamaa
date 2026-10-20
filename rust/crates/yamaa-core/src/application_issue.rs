@@ -80,6 +80,8 @@ vocabulary! {
         OpaqueHost => "opaque_host",
         OutputLimit => "output_limit",
         OutputProjection => "output_projection",
+        /// The lint's publication I/O refusal, retaining its public fault code.
+        OutputPublicationFailed => "output_publication_failed",
         OutputSchema => "output_schema",
         ParentRequired => "parent_required",
         ParquetBoundary => "parquet_boundary",
@@ -132,6 +134,7 @@ vocabulary! {
         UnknownSection => "unknown_section",
         ValidationPolicy => "validation_policy",
         VersionedRootRequired => "versioned_root_required",
+        YamlAdmission => "yaml_admission",
         YamlDecode => "yaml_decode",
         YamlReaderUnavailable => "yaml_reader_unavailable",
     }

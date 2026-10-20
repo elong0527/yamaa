@@ -58,6 +58,7 @@ const FAULT_SPELLINGS: &[(Fault, &str)] = &[
     (Fault::OpaqueHost, "opaque_host"),
     (Fault::OutputLimit, "output_limit"),
     (Fault::OutputProjection, "output_projection"),
+    (Fault::OutputPublicationFailed, "output_publication_failed"),
     (Fault::OutputSchema, "output_schema"),
     (Fault::ParentRequired, "parent_required"),
     (Fault::ParquetBoundary, "parquet_boundary"),
@@ -112,6 +113,7 @@ const FAULT_SPELLINGS: &[(Fault, &str)] = &[
     (Fault::UnknownSection, "unknown_section"),
     (Fault::ValidationPolicy, "validation_policy"),
     (Fault::VersionedRootRequired, "versioned_root_required"),
+    (Fault::YamlAdmission, "yaml_admission"),
     (Fault::YamlDecode, "yaml_decode"),
     (Fault::YamlReaderUnavailable, "yaml_reader_unavailable"),
 ];
@@ -119,7 +121,7 @@ const FAULT_SPELLINGS: &[(Fault, &str)] = &[
 #[test]
 fn stage_and_fault_spellings_match_the_frozen_public_vocabulary() {
     assert_eq!(STAGE_SPELLINGS.len(), 16);
-    assert_eq!(FAULT_SPELLINGS.len(), 78);
+    assert_eq!(FAULT_SPELLINGS.len(), 80);
     assert_eq!(Stage::ALL.len(), STAGE_SPELLINGS.len());
     assert_eq!(Fault::ALL.len(), FAULT_SPELLINGS.len());
     for &stage in Stage::ALL {
