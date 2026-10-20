@@ -97,6 +97,7 @@ ReadStat	1.1.9	MIT	rust/crates/yamaa-adapters/vendor/readstat, from https://gith
 regex	1.13.1	MIT OR Apache-2.0	crates.io	linear-time matching for the portable regex subset (yamaa-core)
 regex-automata	0.4.18	MIT OR Apache-2.0	crates.io	transitive dependency of regex: its matching engines
 regex-syntax	0.8.11	MIT OR Apache-2.0	crates.io	transitive dependency of regex: its pattern parser
+rust-std	1.99.1	MIT OR Apache-2.0	https://github.com/rust-lang/rust at 1.99.1	the Rust standard library (core, alloc and std) of the pinned toolchain that builds this package, statically linked into its native code; LICENSE-THIRD-PARTY.txt reproduces its notice
 rustc_version	0.4.1	MIT OR Apache-2.0	crates.io	build script: the compiler version check of flatbuffers
 rustix	1.1.5	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
 rustversion	1.0.23	MIT OR Apache-2.0	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
