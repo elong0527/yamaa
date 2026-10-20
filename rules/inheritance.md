@@ -40,7 +40,7 @@ parent path. Two spellings that reach the same file, after symbolic links are
 resolved, are one layer.
 
 Fails: `invalid_parent_path`, `parent_not_found`.
-Evidence: `negative-remote-parent`, `schema-inheritance-project-root`.
+Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`.
 Replaces: REQ-0617, REQ-0618, REQ-0619, REQ-0653, REQ-0654.
 
 A URL, URI, empty path or other non-local reference fails with
@@ -49,6 +49,13 @@ missing, unreadable or non-regular parent fails with `parent_not_found`,
 reporting the declaring file and path. A `parent` written as null is absent:
 the layer has no parent, and an entry file whose `parent` is null is a
 composition of one layer.
+
+A local `parent` keeps the written form of every declared path
+([FILE-4](reference/files.md#file-4), [FILE-5](reference/files.md#file-5)).
+A `\`, an empty segment or a trailing separator, as in `std//base.yaml`,
+`base.yaml/` or a network share's `//server/share/base.yaml`, fails with
+`resource_path_not_normalized` at `parent`, naming the path as written,
+before the parent is resolved.
 
 <a id="layer-3"></a>
 

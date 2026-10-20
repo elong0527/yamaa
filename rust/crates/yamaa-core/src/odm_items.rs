@@ -241,6 +241,10 @@ pub enum Limit {
     ExpandedBytes(u64),
     #[error("ODM XML exceeds {0} bytes")]
     XmlBytes(u64),
+    /// A source a caller's resolver serves holds more than the per-file
+    /// source bound, which applies before it is read as XML or TAR.
+    #[error("ODM source exceeds {0} bytes")]
+    SourceBytes(u64),
     #[error("XML depth exceeds {0}")]
     Depth(usize),
     #[error("XML {token} exceeds {limit} bytes")]

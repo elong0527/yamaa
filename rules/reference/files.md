@@ -137,7 +137,7 @@ prohibited. A `project_path` must not contain `\`, an empty segment or a
 trailing separator; an empty path has one empty segment and is invalid.
 
 Fails: `resource_path_uri_scheme`, `resource_path_not_normalized`.
-Evidence: `negative-path-url`, `rust/crates/yamaa-adapters/tests/file_resources.rs::public_check_and_build_validate_written_paths_before_source_profiles`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::uri_grammar_preserves_local_absolute_parent_and_windows_drive_paths`.
+Evidence: `negative-path-url`, `rust/crates/yamaa-adapters/tests/file_resources.rs::public_check_and_build_validate_written_paths_before_source_profiles`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::uri_grammar_preserves_local_absolute_parent_and_windows_drive_paths`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`.
 Replaces: REQ-0775, REQ-0776, REQ-0777.
 
 A URI scheme, including `file:` and `https:`, fails with
@@ -236,7 +236,7 @@ the components the walk accepted, never the spelling a declaration used. A
 relative and a rooted spelling of one file therefore produce one key and bind
 one snapshot.
 
-Evidence: `sdtm-fa-odm-multitest`, `rust/crates/yamaa-adapters/tests/file_resources.rs::parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes`, `rust/crates/yamaa-adapters/src/file_resources.rs::repeated_alias_verification_keeps_original_bytes_and_checks_every_witness`, `rust/crates/yamaa-adapters/src/file_resources.rs::a_hard_link_rewritten_between_captures_is_a_change`.
+Evidence: `sdtm-fa-odm-multitest`, `rust/crates/yamaa-adapters/tests/file_resources.rs::parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes`, `rust/crates/yamaa-adapters/src/file_resources.rs::repeated_alias_verification_keeps_original_bytes_and_checks_every_witness`, `rust/crates/yamaa-adapters/src/file_resources.rs::a_hard_link_rewritten_between_captures_is_a_change`, `rust/crates/yamaa-adapters/src/file_resources.rs::a_hard_link_rewritten_after_its_captured_name_is_renamed_is_a_change`.
 Replaces: REQ-0786, REQ-0787.
 
 Several dataset identifiers may resolve to one physical file. The declarations

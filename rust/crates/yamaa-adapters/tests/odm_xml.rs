@@ -1806,23 +1806,40 @@ mod inputs {
 
     /// A source over the capture's bound is over the read's limit, not an
     /// I/O failure, whether the local file resolver or a caller's resolver
-    /// refuses it.
+    /// refuses it. A caller's resolver holds a source whole under the
+    /// per-file source bound, whose limit names the source, XML or archive,
+    /// and that bound; a local plain XML file is refused at
+    /// `max_expanded_bytes`.
     #[test]
     fn a_capture_over_its_bound_reports_the_limit() {
         use std::sync::Arc;
         use yamaa_adapters::host_resources::{Failure, Reply, Request, Resolver};
         struct Oversized;
         impl Resolver for Oversized {
-            fn request(&self, _: Request<'_>) -> Result<Reply, Failure> {
+            fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+                assert_eq!(
+                    request.limit,
+                    Some(yamaa_core::limits::Limits::SOURCE_BYTES)
+                );
                 Err(Failure::Limit(Some(u64::MAX)))
             }
         }
-        let result =
-            odm_xml::read_with_resolver(Arc::new(Oversized), "edc/odm.xml", &Options::default());
-        let Err(Error::Read(error)) = result else {
-            panic!("an oversized source was not refused: {result:?}");
-        };
-        assert_eq!(error.code(), "limit", "{error}");
+        for source in ["edc/odm.xml", "edc/odm.tar.gz"] {
+            let result =
+                odm_xml::read_with_resolver(Arc::new(Oversized), source, &Options::default());
+            let Err(Error::Read(error)) = result else {
+                panic!("an oversized source was not refused: {result:?}");
+            };
+            assert_eq!(error.code(), "limit", "{error}");
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "ODM source exceeds {} bytes",
+                    yamaa_core::limits::Limits::SOURCE_BYTES
+                ),
+                "{source}"
+            );
+        }
         // A sparse plain XML file over the ten-gigabyte source bound is
         // refused at its own limit before any of it is read.
         #[cfg(unix)]
@@ -2105,8 +2122,11 @@ mod archives {
     }
 
     /// A local archive streams from its file: only the members a pass
-    /// reaches are read, so a sparse archive over the ten-gigabyte source
-    /// bound, whose tail is the zero blocks that end it, reads its one member.
+    /// reaches are read, so an archive extended past the ten-gigabyte source
+    /// bound reads its one member. The sparse tail lies after the block that
+    /// ends the archive, which no pass reads past: in a plain archive, more
+    /// zero blocks; after a gzip stream, bytes that are never decoded. A
+    /// reader that holds the file whole refuses both.
     #[cfg(unix)]
     #[test]
     fn local_archives_stream_without_a_source_bound() {
@@ -2114,14 +2134,12 @@ mod archives {
             let archive = Tar::new().file("odm.xml", ODM_13.as_bytes()).finish();
             let scratch = Scratch::new("sparse-tar");
             let path = scratch.write(name, if gzipped { gzip(&archive) } else { archive });
-            if !gzipped {
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .open(&path)
-                    .unwrap()
-                    .set_len(yamaa_core::limits::Limits::SOURCE_BYTES as u64 + 1)
-                    .unwrap();
-            }
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_len(yamaa_core::limits::Limits::SOURCE_BYTES as u64 + 1)
+                .unwrap();
             // The bytes the member, its header and the archive's end take.
             let small = Options {
                 max_expanded_bytes: (512 + ODM_13.len().next_multiple_of(512) + 1024) as u64,

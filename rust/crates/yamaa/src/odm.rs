@@ -138,6 +138,14 @@ impl Engine {
     /// under that name: one capture, as an input. Without a resolver,
     /// `source` is a local path read exactly as [`read_odm`] reads it.
     ///
+    /// A resolver's source is held whole before it is read as XML or TAR,
+    /// so the per-file source bound of 10 GiB applies first: a larger source
+    /// fails with the code `limit` and the message `ODM source exceeds
+    /// 10737418240 bytes`, and a plain XML source over `max_expanded_bytes`
+    /// is refused only once it is held. [`read_odm`] streams a local file
+    /// instead: it never holds an archive whole and refuses a plain XML file
+    /// over `max_expanded_bytes` before reading it.
+    ///
     /// # Example
     ///
     /// ```
