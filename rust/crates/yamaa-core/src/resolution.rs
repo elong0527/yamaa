@@ -519,7 +519,7 @@ impl<'a> Live<'a> {
 
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing reads what the implicit join reads (LOOKUP-4).
-fn rename_only(item: &Intermediate) -> bool {
+pub(crate) fn rename_only(item: &Intermediate) -> bool {
     !matches!(
         item.key,
         Some(JoinKey::Columns { .. } | JoinKey::Pairs { .. })
