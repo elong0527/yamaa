@@ -542,7 +542,11 @@ directory. The recipe passes the target directory to Cargo, so a
 moves Cargo's build, its home and the unpacked crates there, where the next
 installation reuses them. CI's `r` job points it at the Rust cache that the job
 restores, so the installation in `R CMD check` reuses the build of the one
-before it; CRAN, users and the native R lanes leave it unset. The Makevars
+before it; CRAN, users and the native R lanes leave it unset. Unset, the
+recipe also keeps Cargo's build directory in the target directory and runs no
+rustc wrapper, whatever the environment or a `.cargo/config.toml` in a parent
+directory sets (`CARGO_BUILD_BUILD_DIR` or `build.build-dir`, and
+`RUSTC_WRAPPER`, `RUSTC_WORKSPACE_WRAPPER` or their `build.` keys). The Makevars
 build the release profile, which strips nothing, so the shared object keeps
 its symbols: CRAN's Repository Policy asks a package not to remove diagnostic
 information such as symbols in shared objects. `check_cargo_lock` refuses an
