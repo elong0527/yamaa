@@ -63,9 +63,11 @@ and Rust 1.82 or later from 0.5.0 on, with Cargo, a C compiler and GNU make:
 python -m pip install ./yamaa-0.4.0.tar.gz
 ```
 
-The build downloads the locked Rust crates from crates.io, and pip's build
-isolation fetches `maturin`. To build offline, fill the Cargo cache first,
-install `maturin` 1.9.6 and pass `--no-build-isolation`.
+From 1.0.0 on, the source archive carries the locked Rust crates, so the build
+reads nothing from crates.io; pip's build isolation still fetches `maturin`.
+To build offline, install `maturin` 1.9.6 and pass `--no-build-isolation`. The
+0.4.0 and 0.5.0 source archives download the locked crates from crates.io, so
+building them offline also needs the Cargo cache filled first.
 
 To set up the development version from GitHub, install uv, the pinned Rust
 toolchain and a C compiler, then run:
