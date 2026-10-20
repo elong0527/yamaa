@@ -30,17 +30,17 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          r: runtime
       - name: Add the LLVM coverage component to the workspace toolchain
         run: rustup component add llvm-tools-preview
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-llvm-cov
+      # The workspace tests that `make test-rust` runs: the two host bindings
+      # have no Rust tests, and the installed Python and R suites test them.
       - name: Measure workspace coverage
         run: |
-          export PYO3_PYTHON="$(uv run --project python --no-sync python -c 'import sys; print(sys.executable)')"
           cargo llvm-cov --locked --manifest-path rust/Cargo.toml --workspace \
+            --exclude yamaa-python --exclude yamaa-r \
             --lcov --output-path coverage-rust.lcov
       - uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         with:

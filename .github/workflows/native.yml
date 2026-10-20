@@ -56,15 +56,6 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - name: Keep the selected Python interpreter for Rust bindings
-        run: python -c 'import os, sys; print(f"PYO3_PYTHON={sys.executable}", file=open(os.environ["GITHUB_ENV"], "a", encoding="utf-8"))'
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
-        with:
-          r-version: '4.6.1'
-          use-public-rspm: true
-      - name: Prepare the R import library for MSVC
-        if: runner.os == 'Windows'
-        run: python -m tools.ci.r_import_library
       - name: Install repository tools
         run: |
           python -m pip install --no-deps -e .
@@ -84,6 +75,8 @@ jobs:
       # CI runs the development-profile workspace tests and Clippy on Linux, for
       # every pull request and on main's schedule; this lane runs the workspace
       # tests with the optimized release-test profile alone, on each platform.
+      # Like `make test-rust`, they leave out the two host bindings, which have
+      # no Rust tests, so this job needs no R and no R import library.
       - name: Test shared workspace
         id: shared_crates
         run: |
@@ -93,7 +86,7 @@ jobs:
             python -m tools.packaging.check_shared_release_versions
             cargo fmt --manifest-path rust/Cargo.toml --all --check
             python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies"
-            (cd rust && cargo test --locked --workspace --profile release-test)
+            (cd rust && cargo test --locked --workspace --exclude yamaa-python --exclude yamaa-r --profile release-test)
             python -m tools.packaging.generate_schema_printable
             python -m tools.packaging.generate_shipped_schema
             python -m tools.packaging.generate_bindings

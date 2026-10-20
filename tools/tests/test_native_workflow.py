@@ -15,6 +15,7 @@ from unittest.mock import patch
 import yaml
 from tools.ci import native, release_assets
 from tools.ci import select_release_artifacts as release
+from tools.commands import rust_tests
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
@@ -174,6 +175,32 @@ class NativeWorkflowContract(unittest.TestCase):
                 for command in commands:
                     self.assertNotIn("cargo clippy", command)
                     self.assertNotIn("tools.commands.rust_tests", command)
+
+    def test_each_rust_lane_leaves_out_the_host_bindings_and_installs_no_r(self):
+        # The bindings have no Rust tests. The workspace tests leave them out,
+        # as `make test-rust` does, so no step builds PyO3 or extendr, and the
+        # job installs no R and sets no interpreter for PyO3 (#3106).
+        for lane in self.coverage["rust"]["include"]:
+            job = "native-rust ({os}, {python})".format(**lane)
+            steps = self.jobs[job]["definitions"]
+            tests = [
+                line.strip()
+                for step in steps
+                for line in step.get("run", "").splitlines()
+                if "cargo test" in line
+            ]
+            with self.subTest(job=job):
+                self.assertTrue(tests)
+                for command in tests:
+                    self.assertEqual(
+                        re.findall(r"--exclude (\S+)", command),
+                        list(rust_tests.BINDINGS),
+                    )
+                self.assertNotIn(
+                    "r-lib/actions/setup-r",
+                    [step.get("uses", "").split("@")[0] for step in steps],
+                )
+                self.assertNotIn("PYO3_PYTHON", yaml.safe_dump(steps))
 
     def test_only_the_source_platform_keeps_its_python_source_archive(self):
         # A release artifact holds exactly its declared assets, so the other

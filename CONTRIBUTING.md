@@ -107,34 +107,33 @@ After Rust changes, rerun `make setup`: it rebuilds the Python extension wheneve
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
 Before a push, run `make quick` and the tests nearest the change. It runs lint
-and the repository checks, leaving out only the R binding's Clippy, and no test
-suite, so it needs no R. Pull request CI runs the complete `make check`; when a
-job fails, reproduce it with that job's own target below. Run `make setup` again
-after changing `rust/` or `python/src/` before Python tests, which import the
-installed package.
+and the repository checks, which leave the R binding's Clippy to `make test-r`,
+and no test suite, so it needs no R. Pull request CI runs the complete
+`make check`; when a job fails, reproduce it with that job's own target below.
+Run `make setup` again after changing `rust/` or `python/src/` before Python
+tests, which import the installed package.
 
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
-| `make quick` | Run lint without the R binding and the repository checks, before a push. |
+| `make quick` | Run lint and the repository checks, before a push. |
 | `make check` | Run the checks required by ordinary CI. |
-| `make check-lint` | Check formatting and lint across Python and Rust. |
+| `make check-lint` | Check formatting and lint across Python and Rust, except the R binding. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
-| `make test-rust` | Run `cargo test --locked --workspace`, including both host bindings. |
+| `make test-rust` | Run `cargo test --locked --workspace` without the two host bindings. |
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
-| `make test-r` | Build, install and strictly check a fresh R source package. |
+| `make test-r` | Lint the R binding, then build, install and strictly check a fresh R source package. |
 | `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
 | `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
-The workspace test command needs Python and R 4.6.1 installed because it builds
-and links both binding test targets. `make test-rust` selects its development
-Python interpreter for PyO3. On Windows, run
-`python -m tools.ci.r_import_library` after installing R and the MSVC build tools
-to create the required import library. The Python extension feature belongs to
-maturin packaging; enabling every feature would select extension linking instead of
-normal Python linking for these Cargo tests. Ordinary CI runs them in the
+The workspace test command leaves out the two host bindings, which have no Rust
+tests (`test = false` in their manifests): the installed Python suites and the
+R package check test them. The workspace tests therefore build neither PyO3 nor
+extendr, and need no R and, on Windows, no R import library. `make check-lint`
+runs Clippy over the Python binding as well; building the R binding runs R, so
+its Clippy runs in `make test-r`. Ordinary CI runs the workspace tests in the
 development profile, with Clippy, on Linux; native qualification runs them on
 Linux, macOS and Windows with the optimized `release-test` profile alone.
 Cargo discovers integration tests in each crate's `tests/*.rs` files. Add a

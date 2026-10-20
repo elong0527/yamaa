@@ -10,6 +10,9 @@ publish.workspace = true
 [lib]
 name = "yamaa_r"
 crate-type = ["staticlib"]
+# No Rust tests: R CMD check and the installed R suites test the binding, and
+# a test harness would link against R.
+test = false
 doctest = false
 
 [dependencies]

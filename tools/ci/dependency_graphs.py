@@ -294,8 +294,7 @@ def run_graph(source, destination, graph, python, prepare_only=False):
                 text=True,
             )
         )
-        environment["PYO3_PYTHON"] = interpreter
-        run("cargo", "test", "--locked", "--workspace", cwd=rust)
+        run(interpreter, "-m", "tools.commands.rust_tests")
         run(
             "cargo",
             "test",
