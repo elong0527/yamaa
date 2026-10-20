@@ -63,6 +63,10 @@ The package follows "Using Rust in CRAN packages":
   The Cargo home is below `src/rust/target`, which is removed after linking
   with the rest of the build tree, so the installation uses at most two jobs
   and writes nothing outside the build directory and the temporary directory.
+  The Makevars pass that directory to Cargo, so a `CARGO_TARGET_DIR` set for
+  other projects does not move the build; only `YAMAA_R_CARGO_TARGET_DIR`,
+  which the project's CI sets so that its installations share one Cargo
+  build, names another.
 - `Authors@R` credits the authors of the bundled crates and of the bundled
   ReadStat C sources as contributors and copyright holders. `inst/AUTHORS`
   lists each crate with the authors, license and repository that it declares,

@@ -138,6 +138,31 @@ make_path <- function(path) {
   gsub("$", "$$", gsub("\\", "/", path, fixed = TRUE), fixed = TRUE)
 }
 
+# The directory where Cargo builds, keeps its home and unpacks the crates, as
+# the Makevars name it: CARGO_TARGET_DIR, and UNTAR_DIR for untar() on
+# Windows. It is the package's own src/rust/target, which the Makevars remove
+# after linking. YAMAA_R_CARGO_TARGET_DIR names another, absolute directory
+# that installations share, as the project's CI does. Cargo's own
+# CARGO_TARGET_DIR, which may serve other projects, is never read: the
+# Makevars pass this directory to Cargo themselves.
+target_directories <- function(windows) {
+  directory <- Sys.getenv("YAMAA_R_CARGO_TARGET_DIR")
+  if (!nzchar(directory)) {
+    return(c(CARGO_TARGET_DIR = if (windows) "$(CURDIR)/rust/target" else "rust/target",
+             UNTAR_DIR = "rust/target"))
+  }
+  # make and the shell read the path as written, so it may not hold spaces,
+  # quotes or other characters that they interpret.
+  if (!grepl("^([A-Za-z]:)?[/\\\\][-A-Za-z0-9._+~/\\\\]*$", directory)) {
+    stop_with(
+      sprintf("YAMAA_R_CARGO_TARGET_DIR is '%s'.", directory),
+      "It must be an absolute path of letters, digits and . _ - + ~ / \\ only."
+    )
+  }
+  cat(sprintf("Cargo builds in %s, which YAMAA_R_CARGO_TARGET_DIR names\n", directory))
+  c(CARGO_TARGET_DIR = make_path(directory), UNTAR_DIR = make_path(directory))
+}
+
 main <- function(windows = .Platform$OS.type == "windows",
                  darwin = Sys.info()[["sysname"]] == "Darwin") {
   Sys.setenv(RUSTUP_AUTO_INSTALL = "0")
@@ -164,7 +189,7 @@ main <- function(windows = .Platform$OS.type == "windows",
   makevars <- file.path("src", if (windows) "Makevars.win" else "Makevars")
   lines <- readLines(paste0(makevars, ".in"), warn = FALSE)
   values <- c(CARGO = make_path(cargo$path), RUSTC = make_path(rustc$path),
-              CARGO_ENV = environment)
+              CARGO_ENV = environment, target_directories(windows))
   for (name in names(values)) {
     lines <- gsub(sprintf("@%s@", name), values[[name]], lines, fixed = TRUE)
   }

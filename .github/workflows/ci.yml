@@ -91,4 +91,11 @@ jobs:
           tar -xzf "$RUNNER_TEMP/nanoarrow-bridge.tar.gz" -C "$RUNNER_TEMP"
           R CMD INSTALL "$RUNNER_TEMP/arrow-nanoarrow-apache-arrow-nanoarrow-0.8.0/r"
           Rscript --vanilla -e 'stopifnot(as.character(packageVersion("nanoarrow")) == "0.8.0")'
+      # The package's two installations, R CMD INSTALL and the one in R CMD
+      # check, build the engine in the directory that the Rust cache restores,
+      # so the second reuses the first's build, and a scheduled run on main
+      # saves the compiled crates for later runs. Unset, as on CRAN and in the
+      # native R lanes, the build stays inside the package.
       - run: make test-r
+        env:
+          YAMAA_R_CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target
