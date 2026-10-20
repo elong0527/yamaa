@@ -1427,7 +1427,10 @@ jobs:
           install.packages(packages, lib = Sys.getenv("R_LIBS"), type = "binary")
           stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
           RS
-      # GitHub's images ship Rust through rustup, and setup-r says that its
+      # GitHub's images ship Rust through rustup, which uninstalls itself on
+      # Windows; the macOS image installs it with Homebrew, whose build of
+      # rustup cannot, so there the step deletes rustup's toolchains and
+      # Cargo's home and Homebrew removes rustup. setup-r says that its
       # Windows runners may carry an Rtools. R for Windows looks for Rtools in
       # the directories that its PATH names, C:/rtools45 unless RTOOLS45_HOME
       # says otherwise. On Windows the image's own MinGW and Git's also carry
@@ -1440,7 +1443,15 @@ jobs:
       - name: Remove Rust and Rtools from the runner
         working-directory: ${{ runner.temp }}
         run: |
-          if command -v rustup; then rustup self uninstall -y; fi
+          if [ "${RUNNER_OS}" = macOS ]; then
+            if command -v rustup; then rm -rf "$(rustup show home)"; fi
+            if brew list --formula rustup > /dev/null 2>&1; then
+              HOMEBREW_NO_AUTO_UPDATE=1 brew uninstall --force --ignore-dependencies rustup
+            fi
+            rm -rf "${CARGO_HOME:-${HOME}/.cargo}"
+          elif command -v rustup; then
+            rustup self uninstall -y
+          fi
           tools=(cargo rustc rustup cargo.exe rustc.exe rustup.exe)
           if [ "${RUNNER_OS}" = Windows ]; then
             shopt -s nocaseglob nullglob
