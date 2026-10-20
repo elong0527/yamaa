@@ -1,0 +1,397 @@
+"""Stage the engine source bundle that a host's source archive builds from.
+
+A host's bundle is the Rust workspace that its source archive compiles (#3030
+D55): the engine crates and that host's binding crate, a workspace manifest
+whose members are only those crates, a lock trimmed from the canonical
+rust/Cargo.lock and
+verified crate by crate against it, the vendored YAML parser and ReadStat
+sources, and the crates.io crates of that lock as `cargo vendor` writes them,
+with the Cargo configuration that reads them instead of the network. It holds
+no tests, examples, benchmark fixtures, public-api.txt or rust-toolchain.toml.
+
+    python -m tools.staging.engine_bundle sdist <directory>
+
+writes the Python source archive to <directory>: maturin's output over the
+bundle, staged beside the Python package files, so that pip builds it with
+Cargo's `--locked` and no network. It runs the `maturin` on the PATH, which
+must be the release that python/pyproject.toml requires.
+
+    python -m tools.staging.engine_bundle bundle {python,r} <new directory>
+
+writes a host's bundle alone: the workspace in rust/, the vendored crates in
+vendor/ and the configuration in .cargo/config.toml. The R source package moves
+onto it next; until then tools/staging/stage_r_package.py copies the whole
+workspace.
+"""
+
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import tomllib
+from pathlib import Path
+
+from tools.paths import ROOT, WORKSPACE
+from tools.staging import vendor_crates
+
+ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa")
+BINDINGS = {"python": "yamaa-python", "r": "yamaa-r"}
+MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
+# Cargo reads its configuration from the directory it runs in and its parents.
+# pip builds a Python source archive from its root, so the archive carries this
+# file there, beside the vendored crates in vendor/; offline stops any Cargo
+# command in the archive from reaching the network.
+CARGO_CONFIG = vendor_crates.CONFIG + "\n[net]\noffline = true\n"
+PYTHON_MANIFEST_PATH = "crates/yamaa-python/Cargo.toml"
+
+
+def members(host):
+    """The workspace members of a host's bundle."""
+    return (*ENGINE, BINDINGS[host])
+
+
+def member_sources(member_root: Path):
+    """Yield a member's manifest, build script, license files and Rust sources."""
+    manifest = member_root / MANIFEST
+    build_script = member_root / "build.rs"
+    sources = member_root / "src"
+    if member_root.parent.is_symlink() or member_root.is_symlink():
+        raise ValueError("workspace members must not be symlinks")
+    if not manifest.is_file():
+        raise ValueError(f"workspace member {member_root.name} is missing Cargo.toml")
+    for path in (manifest, build_script, sources):
+        if path.is_symlink():
+            raise ValueError("workspace member sources must not be symlinks")
+    yield manifest
+    if build_script.is_file():
+        yield build_script
+    for path in sorted(member_root.glob("LICENSE*")):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("workspace member licenses must be regular files")
+        yield path
+    for path in sorted(sources.rglob("*")):
+        if path.is_symlink():
+            raise ValueError("workspace member sources must not be symlinks")
+        if path.is_file() and path.suffix == ".rs":
+            yield path
+    # ReadStat is compiled from this exact licensed vendored source tree.
+    vendor = member_root / "vendor" / "readstat"
+    if (member_root / "vendor").is_symlink():
+        raise ValueError("native vendor sources must not be symlinks")
+    if vendor.exists():
+        if member_root.name != "yamaa-adapters" or vendor.is_symlink():
+            raise ValueError("unreviewed native vendor source tree")
+        for path in sorted(vendor.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("native vendor sources must not be symlinks")
+            if path.is_file():
+                if path.suffix not in {".c", ".h", ".md"} and path.name != "LICENSE":
+                    raise ValueError("unreviewed native vendor source input")
+                yield path
+
+
+def vendored_sources(workspace: Path):
+    """Retain complete, regular vendored crate sources and licensing notices.
+
+    Workspace members depend on each crate under `vendor/` by path, which
+    reaches every graph that builds them, including a project that embeds the
+    facade. A `[patch]` applies only when this workspace is the root, so such
+    a project would silently build without it (#2929): the workspace declares
+    none.
+    """
+    if "patch" in tomllib.loads((workspace / "Cargo.toml").read_text()):
+        raise ValueError(
+            "the workspace must not declare [patch]; depend on vendored crates by path"
+        )
+    vendor = workspace / "vendor"
+    if vendor.is_symlink():
+        raise ValueError("vendored crates must not be symlinks")
+    if not vendor.exists():
+        return
+    if not vendor.is_dir():
+        raise ValueError("vendored crates must sit in a vendor directory")
+    for root in sorted(vendor.iterdir()):
+        if root.is_symlink():
+            raise ValueError("vendored crates must not be symlinks")
+        if not root.is_dir() or not re.fullmatch(r"[a-z0-9_-]+", root.name):
+            raise ValueError(f"invalid vendored crate directory: {root.name}")
+        for name in (
+            "Cargo.toml",
+            "LICENSE",
+            "README.md",
+            "PROVENANCE.md",
+            "src/lib.rs",
+        ):
+            if not (root / name).is_file():
+                raise ValueError(f"vendored crate is missing {name}")
+        for path in sorted(root.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("vendored crate sources must not be symlinks")
+            if any(
+                part in {"target", ".git", "__pycache__"}
+                for part in path.relative_to(root).parts
+            ):
+                raise ValueError("vendored crate contains build or cache files")
+            if path.name == "Cargo.lock" or path.suffix == ".pyc":
+                raise ValueError("vendored crate contains build or cache files")
+            if path.is_file():
+                yield path
+
+
+def sources(host, workspace=WORKSPACE):
+    """Yield (path in the bundle workspace, checkout file) for each copied source.
+
+    The YAML parser keeps its provenance, patch and licenses but not its tests.
+    """
+    for member in members(host):
+        root = workspace / "crates" / member
+        for path in member_sources(root):
+            yield f"crates/{member}/{path.relative_to(root).as_posix()}", path
+    for path in vendored_sources(workspace):
+        relative = path.relative_to(workspace)
+        if relative.parts[2] != "tests":
+            yield relative.as_posix(), path
+
+
+def workspace_manifest(workspace=WORKSPACE):
+    """The canonical workspace manifest, with the members that a bundle carries.
+
+    A bundle holds only its host's crates, so `crates/*` names exactly them.
+    maturin 1.9.6 would rewrite an explicit list to name only the crate that it
+    builds, leaving the engine crates to join as path dependencies; it keeps
+    this one unchanged.
+    """
+    text = (workspace / MANIFEST).read_text(encoding="utf-8")
+    lines = [
+        'members = ["crates/*"]\n' if line.startswith("members = ") else line
+        for line in text.splitlines(keepends=True)
+        if not line.startswith("default-members = ")
+    ]
+    manifest = "".join(lines)
+    expected = tomllib.loads(text)
+    expected["workspace"]["members"] = ["crates/*"]
+    expected["workspace"].pop("default-members", None)
+    try:
+        rewritten = tomllib.loads(manifest)
+    except tomllib.TOMLDecodeError:
+        rewritten = None
+    if rewritten != expected:
+        raise ValueError(
+            "rust/Cargo.toml: write the workspace members and default-members "
+            "on one line each"
+        )
+    return manifest
+
+
+def lock_packages(text, label):
+    """Return a lock's format version and its packages by (name, version, source)."""
+    lock = tomllib.loads(text)
+    packages = {}
+    for package in lock.get("package", []):
+        key = (package["name"], package["version"], package.get("source"))
+        if key in packages:
+            raise ValueError(f"{label}: {key[0]} {key[1]} is locked twice")
+        packages[key] = package
+    return lock.get("version"), packages
+
+
+def dependency_edges(packages, label):
+    """Resolve each package's dependency entries to the packages they name.
+
+    Cargo writes an entry as `name`, adding the version, and then the source
+    in parentheses, only where a shorter entry would be ambiguous in that lock.
+    """
+    edges = {}
+    for key, package in packages.items():
+        resolved = set()
+        for entry in package.get("dependencies", []):
+            name, *rest = entry.split(" ")
+            found = [
+                other
+                for other in packages
+                if other[0] == name
+                and (not rest or other[1] == rest[0])
+                and (len(rest) < 2 or rest[1] == f"({other[2]})")
+            ]
+            if len(found) != 1:
+                raise ValueError(
+                    f"{label}: {key[0]} {key[1]} names the dependency {entry}, "
+                    "which matches no single locked package"
+                )
+            resolved.add(found[0])
+        edges[key] = resolved
+    return edges
+
+
+def verify_lock(trimmed, canonical, roots):
+    """Check a trimmed lock against the canonical lock, crate by crate.
+
+    Every retained package must be the canonical entry, with the same version,
+    source and Cargo checksum, and depend only on packages that its canonical
+    entry depends on. The retained packages must be exactly those that the
+    `roots`, the bundle's members, reach through the trimmed lock's own
+    dependencies. Returns the retained packages.
+    """
+    label = "trimmed Cargo.lock"
+    version, kept = lock_packages(trimmed, label)
+    canonical_version, locked = lock_packages(canonical, "canonical Cargo.lock")
+    if version != canonical_version:
+        raise ValueError(f"{label}: lock format {version} is not the canonical one")
+    kept_edges = dependency_edges(kept, label)
+    locked_edges = dependency_edges(locked, "canonical Cargo.lock")
+
+    def entry(package):
+        return {
+            field: value for field, value in package.items() if field != "dependencies"
+        }
+
+    for key, package in sorted(kept.items(), key=lambda item: str(item[0])):
+        if key not in locked or entry(package) != entry(locked[key]):
+            raise ValueError(
+                f"{label}: {key[0]} {key[1]} differs from the canonical lock"
+            )
+        for name, version_, _ in sorted(kept_edges[key] - locked_edges[key], key=str):
+            raise ValueError(
+                f"{label}: {key[0]} {key[1]} depends on {name} {version_}, "
+                "which the canonical lock does not record"
+            )
+    start = [key for key in kept if key[2] is None and key[0] in roots]
+    missing = set(roots) - {key[0] for key in start}
+    if missing:
+        raise ValueError(
+            f"{label}: the bundle member {sorted(missing)[0]} is not locked"
+        )
+    reached = set()
+    while start:
+        key = start.pop()
+        if key not in reached:
+            reached.add(key)
+            start.extend(kept_edges[key])
+    for name, version_, _ in sorted(set(kept) - reached, key=str):
+        raise ValueError(
+            f"{label}: {name} {version_} is outside the dependency closure of "
+            + ", ".join(roots)
+        )
+    return kept
+
+
+def trim_lock(workspace: Path, canonical: str) -> str:
+    """Let Cargo drop the canonical packages that the workspace does not reach.
+
+    Cargo resolves the staged workspace starting from a copy of the canonical
+    lock, which holds every version it needs, and writes the lock that the
+    bundle's members alone resolve to.
+    """
+    (workspace / LOCK).write_bytes(canonical.encode("utf-8"))
+    subprocess.run(
+        ["cargo", "metadata", "--format-version", "1"],
+        cwd=workspace,
+        stdout=subprocess.DEVNULL,
+        check=True,
+    )
+    return (workspace / LOCK).read_bytes().decode("utf-8")
+
+
+def stage_workspace(host, destination: Path, workspace=WORKSPACE):
+    """Write a host's bundle workspace, with its verified trimmed lock, to a new
+    directory. Returns the retained lock packages."""
+    if not (workspace / LOCK).is_file():
+        raise FileNotFoundError("canonical Cargo.lock is missing")
+    canonical = (workspace / LOCK).read_bytes().decode("utf-8")
+    destination.mkdir(parents=True)
+    (destination / MANIFEST).write_bytes(workspace_manifest(workspace).encode("utf-8"))
+    for relative, path in sources(host, workspace):
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
+    trimmed = trim_lock(destination, canonical)
+    return verify_lock(trimmed, canonical, members(host))
+
+
+def stage(host, destination: Path, workspace=WORKSPACE):
+    """Write a host's bundle to a new directory: the workspace in rust/, the
+    crates.io crates of its lock in vendor/ and the configuration that makes
+    Cargo read them in .cargo/config.toml. Returns the vendored crates."""
+    if destination.exists():
+        raise FileExistsError(f"{destination} already exists")
+    stage_workspace(host, destination / "rust", workspace)
+    # Cargo would read the source replacement while vendoring, so it is
+    # written last.
+    crates = vendor_crates.vendor(
+        destination / "rust", destination / vendor_crates.DIRECTORY
+    )
+    (destination / ".cargo").mkdir()
+    (destination / ".cargo/config.toml").write_bytes(CARGO_CONFIG.encode("utf-8"))
+    return crates
+
+
+def python_project(destination: Path, project=ROOT / "python"):
+    """Copy the Python package files beside a bundle, pointing maturin at it."""
+    pyproject = (project / "pyproject.toml").read_bytes().decode("utf-8")
+    old = f'manifest-path = "../rust/{PYTHON_MANIFEST_PATH}"'
+    if pyproject.count(old) != 1:
+        raise ValueError(f"python/pyproject.toml must declare {old} once")
+    new = old.replace("../rust/", "rust/")
+    (destination / "pyproject.toml").write_bytes(
+        pyproject.replace(old, new).encode("utf-8")
+    )
+    declared = tomllib.loads(pyproject)["project"]
+    for name in (declared["readme"], *declared["license-files"]):
+        shutil.copyfile(project / name, destination / name)
+    shutil.copytree(project / "src", destination / "src")
+
+
+def python_archive(output: Path) -> Path:
+    """Build the Python source archive from the bundle into `output`."""
+    pyproject = tomllib.loads(
+        (ROOT / "python/pyproject.toml").read_text(encoding="utf-8")
+    )
+    [requirement] = pyproject["build-system"]["requires"]
+    found = subprocess.run(
+        ["maturin", "--version"], capture_output=True, text=True, check=True
+    ).stdout.split()
+    if requirement != f"maturin=={found[-1]}":
+        raise ValueError(f"maturin {found[-1]} is not the build system's {requirement}")
+    project = pyproject["project"]
+    archive = output / f"{project['name']}-{project['version']}.tar.gz"
+    if archive.exists():
+        raise FileExistsError(f"{archive} already exists")
+    output.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="yamaa-python-bundle-") as scratch:
+        root = Path(scratch) / "yamaa"
+        stage("python", root)
+        python_project(root)
+        # maturin lists each crate's files with `cargo package --list`, which
+        # can create a target directory inside the crate it lists.
+        environment = dict(os.environ, CARGO_TARGET_DIR=str(Path(scratch) / "target"))
+        subprocess.run(
+            ["maturin", "sdist", "--out", str(output.resolve())],
+            cwd=root,
+            env=environment,
+            check=True,
+        )
+    if not archive.is_file():
+        raise ValueError(f"maturin did not write {archive.name}")
+    return archive
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    sdist = commands.add_parser("sdist", help="build the Python source archive")
+    sdist.add_argument("directory", type=Path)
+    bundle = commands.add_parser("bundle", help="write a host's bundle")
+    bundle.add_argument("host", choices=sorted(BINDINGS))
+    bundle.add_argument("destination", type=Path)
+    arguments = parser.parse_args()
+    if arguments.command == "sdist":
+        print(python_archive(arguments.directory))
+    else:
+        crates = stage(arguments.host, arguments.destination.resolve())
+        print(f"{arguments.destination}: {len(crates)} vendored crates")
+
+
+if __name__ == "__main__":
+    main()
