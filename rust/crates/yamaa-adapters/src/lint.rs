@@ -106,23 +106,23 @@ impl Error {
     /// admitted, and the publication refusal for a file that cannot be
     /// replaced.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        use yamaa_core::application_issue::{rejected, resource_rejected};
+        use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
         match self {
-            Self::Unavailable => vec![rejected("prepare", "yaml_reader_unavailable")],
+            Self::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
             Self::Read { file, error } => vec![read_diagnostic(file, error)],
             Self::Source { file, failure } => source_diagnostics(file, failure),
             Self::Write { error, .. } => {
                 if let crate::file_publication::Error::Limit(limit) = error {
                     return vec![resource_rejected(
-                        "output",
-                        "publication_limit",
+                        Stage::Output,
+                        Fault::PublicationLimit,
                         limit.resource,
                         limit.limit,
                         limit.actual,
                         Vec::new(),
                     )];
                 }
-                vec![rejected("output", write_code(error))]
+                vec![rejected(Stage::Output, write_code(error))]
             }
         }
     }
@@ -132,12 +132,12 @@ impl Error {
 /// failure stays an opaque resource refusal.
 fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnostic {
     use crate::file_resources::Error as E;
-    use yamaa_core::application_issue::{rejected, resource_rejected};
+    use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
     use yamaa_core::resource::ResourceFailure;
     match crate::file_resources::resource_failure(error) {
         Some(ResourceFailure::Boundary(limit)) => resource_rejected(
-            "prepare",
-            "resource_limit",
+            Stage::Prepare,
+            Fault::ResourceLimit,
             limit.resource,
             limit.limit,
             limit.actual,
@@ -155,15 +155,15 @@ fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnost
             operand_route: None,
         },
         None => rejected(
-            "prepare",
+            Stage::Prepare,
             match error {
-                E::Host(_) => "host_resource_failure",
-                E::Unreadable => "resource_unreadable",
-                E::InvalidRoot => "resource_root",
-                E::InvalidBase => "resource_base",
-                E::OutsideRoots => "resource_outside_roots",
-                E::InvalidLock => "invalid_packaging_lock",
-                _ => "resource_path",
+                E::Host(_) => Fault::HostResourceFailure,
+                E::Unreadable => Fault::ResourceUnreadable,
+                E::InvalidRoot => Fault::ResourceRoot,
+                E::InvalidBase => Fault::ResourceBase,
+                E::OutsideRoots => Fault::ResourceOutsideRoots,
+                E::InvalidLock => Fault::InvalidPackagingLock,
+                _ => Fault::ResourcePath,
             },
         ),
     }
@@ -171,7 +171,7 @@ fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnost
 
 /// The findings document admission gives a specification's own text.
 fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
-    use yamaa_core::application_issue::{rejected, resource_rejected};
+    use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
     use yamaa_core::diagnostic::ConditionCode;
     use yamaa_core::json::Value;
     let finding = |code, spec_path: String, context: Vec<(&str, Value)>| Diagnostic {
@@ -220,29 +220,30 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
             })
             .collect(),
         DecodeFailure::Limit(limit) => vec![resource_rejected(
-            "prepare",
-            "resource_limit",
+            Stage::Prepare,
+            Fault::ResourceLimit,
             limit.resource,
             limit.limit,
             limit.actual,
             Vec::new(),
         )],
-        DecodeFailure::Unavailable => vec![rejected("prepare", "yaml_reader_unavailable")],
-        DecodeFailure::Internal => vec![rejected("prepare", "yaml_admission")],
+        DecodeFailure::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
+        DecodeFailure::Internal => vec![rejected(Stage::Prepare, Fault::YamlDecode)],
     }
 }
 
-fn write_code(error: &crate::file_publication::Error) -> &'static str {
+fn write_code(error: &crate::file_publication::Error) -> yamaa_core::application_issue::Fault {
     use crate::file_publication::Error as E;
+    use yamaa_core::application_issue::Fault;
     match error {
-        E::Host(_) => "host_publication_failure",
-        E::InvalidTarget => "invalid_target",
-        E::PathMismatch => "path_mismatch",
-        E::Limit(_) => "publication_limit",
-        E::StagingCollision => "staging_collision",
-        E::Changed => "target_changed",
-        E::Io(_) => "output_publication_failed",
-        E::Cleanup { .. } => "cleanup_incomplete",
+        E::Host(_) => Fault::HostPublicationFailure,
+        E::InvalidTarget => Fault::InvalidTarget,
+        E::PathMismatch => Fault::PathMismatch,
+        E::Limit(_) => Fault::PublicationLimit,
+        E::StagingCollision => Fault::StagingCollision,
+        E::Changed => Fault::TargetChanged,
+        E::Io(_) => Fault::PublicationFailed,
+        E::Cleanup { .. } => Fault::CleanupIncomplete,
     }
 }
 

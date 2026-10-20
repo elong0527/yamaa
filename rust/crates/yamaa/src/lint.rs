@@ -59,14 +59,7 @@ pub fn lint(paths: &[String], fix: bool) -> Result<Table, Failure> {
 }
 
 fn refusal(error: &yamaa_adapters::lint::Error) -> Failure {
-    let issues = error
-        .diagnostics()
-        .into_iter()
-        .map(|diagnostic| {
-            yamaa_adapters::issue_rows::Issue::from_core(diagnostic)
-                .expect("a registered finding is portable")
-        })
-        .collect::<Vec<_>>();
+    let issues = error.diagnostics();
     let message = match error.file() {
         Some(file) => format!("cannot lint {file}; see issues"),
         None => "cannot lint: this build has no YAML reader; see issues".to_owned(),
