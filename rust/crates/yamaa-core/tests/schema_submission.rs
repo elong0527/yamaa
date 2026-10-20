@@ -2243,6 +2243,10 @@ mod schema {
                 "internal column" => vec![entry("GLUC", "LBNAM", &["GLUC"], "Vendor"), creat],
                 "numeric column" => vec![entry("GLUC", "LBSEQ", &["1"], "Vendor"), creat],
                 "own column" => vec![entry("GLUC", "LBORRESU", &["mg/dL"], "Vendor"), creat],
+                "codelist misspelt" => vec![
+                    entry("GLUC", "LBTESTCD", &["GLUC", "GLUCOSE"], "Vendor"),
+                    creat,
+                ],
                 _ => vec![gluc, creat],
             }
         }
@@ -2300,6 +2304,11 @@ mod schema {
                 let core = a.text("Exp");
                 let length = a.node(N::Integer("8".into()));
                 let mut metadata = vec![("core", core), ("length", length), ("origin", origin)];
+                // The test codes bind the project's LBTESTCD codelist.
+                if name == "LBTESTCD" && case.starts_with("codelist") {
+                    let codelist = a.text("LBTESTCD");
+                    metadata.push(("codelist", codelist));
+                }
                 if name == "LBORRESU" {
                     let mut entries = Vec::new();
                     for written in written(case) {
@@ -2382,6 +2391,12 @@ mod schema {
             a.finish(root)
         }
         fn compose(document: &Document) -> Result<Study, Vec<submission_composition::Finding>> {
+            compose_with(document, &Catalogue::admit(vec![]).unwrap())
+        }
+        fn compose_with(
+            document: &Document,
+            catalogue: &Catalogue,
+        ) -> Result<Study, Vec<submission_composition::Finding>> {
             let project = project();
             let declared = sections(&project).unwrap();
             let section = &declared.sections[0];
@@ -2392,7 +2407,7 @@ mod schema {
             )?;
             submission_composition::compose(
                 required,
-                &Catalogue::admit(vec![]).unwrap(),
+                catalogue,
                 &[Input {
                     document,
                     source: "spec.yaml",
@@ -2603,6 +2618,68 @@ mod schema {
             // Clauses over columns neither of which contains the other are
             // admitted; the build fails a row both select.
             assert!(compose(&specification("conjunction")).is_ok());
+        }
+        /// SUB-12: composition refuses a where value that the where column's
+        /// codelists do not admit at that where column, as the domain build
+        /// does; an external dictionary admits every value.
+        #[test]
+        fn where_values_outside_the_where_columns_codelists_fail_composition() {
+            use crate::support::roots as rt;
+            use yamaa_core::{ast::CodelistType, value::Value};
+            let catalogue = |external: bool| {
+                let item = |code: &str| rt::Item {
+                    value: Value::Str(code.into()),
+                    decode: None,
+                    rank: None,
+                    alias: None,
+                    extended: false,
+                };
+                Catalogue::admit(vec![rt::Source {
+                    standard: None,
+                    codelists: vec![rt::Codelist {
+                        id: "LBTESTCD".into(),
+                        name: "Laboratory test codes".into(),
+                        data_type: CodelistType::Text,
+                        extensible: false,
+                        alias: None,
+                        format_name: None,
+                        items: (!external).then(|| vec![item("GLUC"), item("CREAT"), item("ALB")]),
+                        external: external.then(|| rt::External {
+                            dictionary: "LOINC".into(),
+                            version: "2.77".into(),
+                            href: None,
+                        }),
+                    }],
+                }
+                .root()])
+                .unwrap()
+            };
+            assert!(compose_with(&specification("codelist"), &catalogue(false)).is_ok());
+            let findings =
+                compose_with(&specification("codelist misspelt"), &catalogue(false)).unwrap_err();
+            assert_eq!(findings.len(), 1, "{findings:?}");
+            let finding = &findings[0];
+            assert_eq!(
+                (finding.definition().condition, finding.definition().rule),
+                ("value_level_where_invalid", Some("SUB-12"))
+            );
+            assert_eq!(
+                finding.path,
+                "sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"
+            );
+            for (key, value) in [
+                ("column", "LBORRESU"),
+                ("entry", "GLUC"),
+                ("reason", "not_in_codelist"),
+                ("where_column", "LBTESTCD"),
+            ] {
+                assert_eq!(
+                    finding.context[key],
+                    yamaa_core::json::Value::String(value.into()),
+                    "{key}"
+                );
+            }
+            assert!(compose_with(&specification("codelist misspelt"), &catalogue(true)).is_ok());
         }
         #[test]
         fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {
