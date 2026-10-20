@@ -14,7 +14,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
 struct Fixture(PathBuf);
@@ -45,7 +46,7 @@ impl Fixture {
             base_directory: ".",
         }
     }
-    fn domain(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();
         file_application::domain(
             yamaa_core::project_function::Language::Python,
@@ -56,7 +57,7 @@ impl Fixture {
             Self::identity(&specification),
         )
     }
-    fn check(&self) -> Vec<Issue> {
+    fn check(&self) -> Vec<Diagnostic> {
         let specification = self.specification();
         file_application::check(
             yamaa_core::project_function::Language::Python,
@@ -80,12 +81,13 @@ impl Fixture {
         );
     }
     /// The one issue `domain` reports, whether preparation or the build fails.
-    fn issue(&self) -> Issue {
+    fn issue(&self) -> Diagnostic {
         let issues = match self.domain() {
             Ok(domain) => domain.issues(),
             Err(issues) => issues,
         };
-        let [issue] = <[Issue; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
+        let [issue] =
+            <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
         issue
     }
     /// `check` agrees with `domain`, which refuses as an unsupported operation
@@ -94,7 +96,7 @@ impl Fixture {
         let issue = self.issue();
         assert_eq!(self.check(), std::slice::from_ref(&issue));
         assert_eq!(
-            (issue.phase.as_str(), issue.condition.as_str()),
+            (issue.phase(), issue.condition()),
             ("planning", "unsupported_operation")
         );
         assert_eq!(issue.spec_paths, [path]);
@@ -209,7 +211,7 @@ fn window_orders_the_driver_records() {
 fn columns_list_limits_the_driver_fields() {
     let issue = Fixture::new(&serious("columns: [USUBJID, AESEQ]", "str", "SER.AETERM")).issue();
     assert_eq!(
-        (issue.condition.as_str(), issue.spec_paths.as_slice()),
+        (issue.condition(), issue.spec_paths.as_slice()),
         (
             "unknown_field",
             ["columns.R.derivation.source".to_owned()].as_slice()
@@ -252,8 +254,8 @@ fn grouped_driver_field_outside_the_groups_fails_validation() {
     let issue = Fixture::new(&grouped("SER.AETERM")).issue();
     assert_eq!(
         (
-            issue.condition.as_str(),
-            issue.requirement.as_deref(),
+            issue.condition(),
+            issue.requirement(),
             issue.spec_paths.as_slice()
         ),
         (
@@ -352,8 +354,8 @@ fn grouped_intermediate_rows_read_only_its_group_keys() {
     let issue = Fixture::new(&grouped_mixed("SER.AETERM", "all")).issue();
     assert_eq!(
         (
-            issue.condition.as_str(),
-            issue.requirement.as_deref(),
+            issue.condition(),
+            issue.requirement(),
             issue.spec_paths.as_slice()
         ),
         (
@@ -363,7 +365,7 @@ fn grouped_intermediate_rows_read_only_its_group_keys() {
         )
     );
     assert_eq!(
-        issue.context,
+        yamaa_core::json::Value::Object(issue.context.clone()),
         yamaa_adapters::json!({"identifier": "SER.AETERM", "dataset": "SER"})
     );
 }
@@ -449,7 +451,7 @@ fn aggregate_never_reduces_the_intermediate() {
     ))
     .issue();
     assert_eq!(
-        (issue.condition.as_str(), issue.spec_paths.as_slice()),
+        (issue.condition(), issue.spec_paths.as_slice()),
         (
             "unknown_field",
             ["columns.R.derivation.aggregate.expr".to_owned()].as_slice()
@@ -528,7 +530,7 @@ fn failed_driver_intermediate_reports_only_its_own_finding() {
     )
     .issue();
     assert_eq!(
-        (issue.condition.as_str(), issue.spec_paths.as_slice()),
+        (issue.condition(), issue.spec_paths.as_slice()),
         (
             "unknown_field",
             ["intermediates[0].filter".to_owned()].as_slice()

@@ -5,11 +5,12 @@
 //! time; this module reads only the project file and specification metadata.
 use crate::{
     file_resources::{same_location, Error as ResourceError, Resources},
-    issue_rows::Issue,
     public_table::PublicTable,
     resource_publication::Publisher,
 };
 use std::sync::Arc;
+use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
 use yamaa_core::project_environment::Submission;
 use yamaa_core::project_function::Language;
@@ -45,7 +46,7 @@ pub struct Listed {
     output: Option<Located>,
     report: Option<Located>,
     /// Findings that fail the listing before its specification is read.
-    failure: Vec<Issue>,
+    failure: Vec<Diagnostic>,
 }
 impl Listed {
     /// The specification file, as checks and builds receive it.
@@ -77,7 +78,7 @@ impl Listed {
         self.output.as_ref().map(|output| output.location.as_str())
     }
     /// Findings that fail the listing before its specification is read.
-    pub fn failure(&self) -> &[Issue] {
+    pub fn failure(&self) -> &[Diagnostic] {
         &self.failure
     }
     fn key_matches(&self, key: &str) -> bool {
@@ -94,27 +95,22 @@ pub struct Project {
     listed: Vec<Listed>,
 }
 
-fn issue(diagnostic: yamaa_core::diagnostic::Diagnostic) -> Issue {
-    Issue::from_core(diagnostic).expect("project findings are portable")
-}
-
 /// Name `entry` as the listed specification an issue belongs to, and as the
 /// document it comes from when the issue names none, as multi-specification
 /// checks do.
-pub fn identify(issues: &mut [Issue], entry: &str) {
+pub fn identify(issues: &mut [Diagnostic], entry: &str) {
     for issue in issues {
-        if let Value::Object(context) = &mut issue.context {
-            for key in ["source", "entry"] {
-                context
-                    .entry(key.to_owned())
-                    .or_insert_with(|| Value::String(entry.into()));
-            }
+        for key in ["source", "entry"] {
+            issue
+                .context
+                .entry(key.to_owned())
+                .or_insert_with(|| Value::String(entry.into()));
         }
     }
 }
 
-fn identified(diagnostic: yamaa_core::diagnostic::Diagnostic, entry: &str) -> Issue {
-    let mut issues = [issue(diagnostic)];
+fn identified(diagnostic: Diagnostic, entry: &str) -> Diagnostic {
+    let mut issues = [diagnostic];
     identify(&mut issues, entry);
     let [issue] = issues;
     issue
@@ -127,14 +123,16 @@ fn text(document: &Document, node: usize) -> Option<&str> {
     }
 }
 
-fn listing_failure(listing: &str, written: &str, error: &ResourceError) -> Vec<Issue> {
+fn listing_failure(listing: &str, written: &str, error: &ResourceError) -> Vec<Diagnostic> {
     if let ResourceError::WrittenForm(failure) = error {
-        return vec![issue(failure.field_diagnostic(listing, written))];
+        return vec![failure.field_diagnostic(listing, written)];
     }
-    let mut issues = crate::file_application::resource_failure("prepare", error);
+    let mut issues = crate::file_application::resource_failure(Stage::Prepare, error);
     for issue in &mut issues {
         issue.spec_paths = vec![listing.into()];
-        issue.context["path"] = crate::json!(written);
+        issue
+            .context
+            .insert("path".into(), Value::String(written.into()));
     }
     issues
 }
@@ -149,7 +147,7 @@ impl Project {
         project: &str,
         host: Language,
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
-    ) -> Result<Self, Vec<Issue>> {
+    ) -> Result<Self, Vec<Diagnostic>> {
         let crate::file_workflow::CapturedProject {
             mut resources,
             environment,
@@ -159,8 +157,10 @@ impl Project {
         let root = environment.root();
         let identity = root.source().identity.clone();
         let document = &root.normalized().document;
-        let located = yamaa_core::submission_document::locate(document, document.root())
-            .map_err(|_| crate::file_application::rejected("project", "project_sections"))?;
+        let located =
+            yamaa_core::submission_document::locate(document, document.root()).map_err(|_| {
+                crate::file_application::rejected(Stage::Project, Fault::ProjectSections)
+            })?;
         let mut sections = Vec::new();
         let mut written = Vec::new();
         for section in scope::SECTIONS {
@@ -183,7 +183,7 @@ impl Project {
             };
             for (index, &spec) in specs.iter().enumerate() {
                 let path = text(document, spec).ok_or_else(|| {
-                    crate::file_application::rejected("project", "project_sections")
+                    crate::file_application::rejected(Stage::Project, Fault::ProjectSections)
                 })?;
                 written.push((section, index, path.to_owned()));
             }
@@ -222,7 +222,7 @@ impl Project {
     }
 
     /// One finding for each name that two or more listings share.
-    pub fn duplicates(&self) -> Vec<Issue> {
+    pub fn duplicates(&self) -> Vec<Diagnostic> {
         let mut names = self
             .listed
             .iter()
@@ -239,8 +239,10 @@ impl Project {
                 .map(|listed| (listed.listing(), listed.identity().to_owned()))
                 .collect::<Vec<_>>();
             if listings.len() > 1 {
-                let mut finding = issue(scope::duplicate_name(name, &listings));
-                finding.context["source"] = crate::json!(self.identity);
+                let mut finding = scope::duplicate_name(name, &listings);
+                finding
+                    .context
+                    .insert("source".into(), Value::String(self.identity.clone()));
                 issues.push(finding);
             }
         }
@@ -249,7 +251,7 @@ impl Project {
 
     /// The listing named `name`, or the finding that lists the names the
     /// project defines.
-    pub fn find(&self, name: &str) -> Result<&Listed, Vec<Issue>> {
+    pub fn find(&self, name: &str) -> Result<&Listed, Vec<Diagnostic>> {
         self.listed
             .iter()
             .find(|listed| listed.name.as_deref() == Some(name))
@@ -259,8 +261,10 @@ impl Project {
                     .iter()
                     .filter_map(|listed| listed.name.as_deref())
                     .collect::<Vec<_>>();
-                let mut finding = issue(scope::unknown_name(name, &available));
-                finding.context["source"] = crate::json!(self.identity);
+                let mut finding = scope::unknown_name(name, &available);
+                finding
+                    .context
+                    .insert("source".into(), Value::String(self.identity.clone()));
                 vec![finding]
             })
     }
@@ -275,7 +279,7 @@ impl Project {
     /// The project findings a project check adds to its specifications'
     /// findings: shared names, inputs that read a listed artifact without a
     /// link, and files that two listed specifications would both write.
-    pub fn check_findings(&self) -> Vec<Issue> {
+    pub fn check_findings(&self) -> Vec<Diagnostic> {
         let all = self.scope(None);
         let mut issues = self.duplicates();
         for &index in &all {
@@ -285,7 +289,7 @@ impl Project {
         issues
     }
 
-    fn unlinked(&self, index: usize, members: &[usize]) -> Vec<Issue> {
+    fn unlinked(&self, index: usize, members: &[usize]) -> Vec<Diagnostic> {
         let listed = &self.listed[index];
         let mut issues = Vec::new();
         for input in listed.inputs.iter().filter(|input| input.schema.is_none()) {
@@ -310,7 +314,7 @@ impl Project {
         issues
     }
 
-    fn collisions(&self, members: &[usize]) -> Vec<Issue> {
+    fn collisions(&self, members: &[usize]) -> Vec<Diagnostic> {
         use yamaa_core::specification::ReportFinding;
         let mut seen: Vec<(usize, &'static str, &str)> = Vec::new();
         let mut issues = Vec::new();
@@ -336,8 +340,13 @@ impl Project {
                         .diagnostic(),
                         listed.identity(),
                     );
-                    finding.context["specifications"] =
-                        crate::json!([self.listed[other].identity(), listed.identity()]);
+                    finding.context.insert(
+                        "specifications".into(),
+                        Value::Array(vec![
+                            Value::String(self.listed[other].identity().into()),
+                            Value::String(listed.identity().into()),
+                        ]),
+                    );
                     issues.push(finding);
                 }
                 seen.push((member, field, &located.location));
@@ -521,7 +530,7 @@ pub struct Step {
     listed: usize,
     /// In-scope producer links: the consuming input and the producer listing.
     producers: Vec<(String, usize)>,
-    refused: Vec<Issue>,
+    refused: Vec<Diagnostic>,
 }
 impl Step {
     /// The listing this step runs.
@@ -529,7 +538,7 @@ impl Step {
         self.listed
     }
     /// Findings that fail the specification before it builds.
-    pub fn refused(&self) -> &[Issue] {
+    pub fn refused(&self) -> &[Diagnostic] {
         &self.refused
     }
     /// The run-scope producers this specification reads, by listing.
@@ -538,7 +547,7 @@ impl Step {
     }
     /// One `producer_not_completed` finding for each link whose producer
     /// `failed` reports, naming the consumer as their entry.
-    pub fn blocked(&self, project: &Project, failed: impl Fn(usize) -> bool) -> Vec<Issue> {
+    pub fn blocked(&self, project: &Project, failed: impl Fn(usize) -> bool) -> Vec<Diagnostic> {
         let consumer = project.listed[self.listed].identity();
         self.producers
             .iter()
@@ -558,13 +567,13 @@ impl Step {
 #[derive(Clone, Debug)]
 pub struct Plan {
     steps: Vec<Step>,
-    refusal: Vec<Issue>,
+    refusal: Vec<Diagnostic>,
 }
 impl Plan {
     pub fn steps(&self) -> &[Step] {
         &self.steps
     }
-    pub fn refusal(&self) -> &[Issue] {
+    pub fn refusal(&self) -> &[Diagnostic] {
         &self.refusal
     }
 }
@@ -586,15 +595,18 @@ impl Preflight {
         &mut self,
         domain: &crate::file_application::Domain,
         report_only: bool,
-    ) -> Result<(), Vec<Issue>> {
+    ) -> Result<(), Vec<Diagnostic>> {
         self.admit(domain.publishers(report_only)?)
     }
     /// Admit the files a submission section would write, so no two sections
     /// write one file.
-    pub fn admit_define(&mut self, define: &crate::file_define::Define) -> Result<(), Vec<Issue>> {
+    pub fn admit_define(
+        &mut self,
+        define: &crate::file_define::Define,
+    ) -> Result<(), Vec<Diagnostic>> {
         self.admit(define.publishers())
     }
-    fn admit(&mut self, publishers: Vec<Publisher>) -> Result<(), Vec<Issue>> {
+    fn admit(&mut self, publishers: Vec<Publisher>) -> Result<(), Vec<Diagnostic>> {
         for publisher in publishers {
             for prior in &self.publishers {
                 match publisher.same_target(prior) {
@@ -615,8 +627,8 @@ impl Preflight {
 
 /// Stack run reports in the given order into one table with the run report's
 /// columns; no report gives the columns without rows.
-pub fn stack_reports(reports: &[&PublicTable]) -> Result<PublicTable, Vec<Issue>> {
-    let refused = || crate::file_application::rejected("report", "report_stack");
+pub fn stack_reports(reports: &[&PublicTable]) -> Result<PublicTable, Vec<Diagnostic>> {
+    let refused = || crate::file_application::rejected(Stage::Report, Fault::ReportStack);
     let Some(first) = reports.first() else {
         return crate::run_report::empty_table().map_err(|_| refused());
     };

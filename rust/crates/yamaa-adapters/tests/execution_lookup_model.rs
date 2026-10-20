@@ -8,7 +8,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
 struct Fixture(PathBuf);
@@ -27,7 +28,7 @@ impl Fixture {
         }
         Self(root)
     }
-    fn run(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn run(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
         file_application::domain(
@@ -70,16 +71,23 @@ impl Fixture {
             Ok(domain) => {
                 let issues = domain.issues();
                 assert!(!issues.is_empty(), "the run succeeded");
-                issues[0].as_value()
+                yamaa_adapters::report_storage::diagnostic_value(&issues[0])
             }
-            Err(issues) => issues[0].as_value(),
+            Err(issues) => yamaa_adapters::report_storage::diagnostic_value(&issues[0]),
         }
     }
     /// Every issue of the run, from validation or from the run itself.
     fn issues(&self) -> Vec<Value> {
         match self.run() {
-            Ok(domain) => domain.issues().iter().map(Issue::as_value).collect(),
-            Err(issues) => issues.iter().map(Issue::as_value).collect(),
+            Ok(domain) => domain
+                .issues()
+                .iter()
+                .map(yamaa_adapters::report_storage::diagnostic_value)
+                .collect(),
+            Err(issues) => issues
+                .iter()
+                .map(yamaa_adapters::report_storage::diagnostic_value)
+                .collect(),
         }
     }
     /// Every issue `check` reports from the declarations alone.
@@ -102,7 +110,7 @@ impl Fixture {
             },
         )
         .iter()
-        .map(Issue::as_value)
+        .map(yamaa_adapters::report_storage::diagnostic_value)
         .collect()
     }
 }

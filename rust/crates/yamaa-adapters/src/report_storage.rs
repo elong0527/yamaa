@@ -11,7 +11,8 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use yamaa_core::json::Value;
+use yamaa_core::diagnostic::Diagnostic;
+use yamaa_core::json::{Map, Value};
 use yamaa_core::table::{TableAccess, ValueRef};
 
 struct WireCell<'a>(ValueRef<'a>);
@@ -117,16 +118,74 @@ pub(crate) struct StoredTable {
     pub(crate) rows: Arc<RawValue>,
 }
 
+/// The report's form of one diagnostic: phase, condition, requirement,
+/// paths and context, with `source_span` and `operand_route` only when
+/// recorded, so an absent span stays distinct from a zero-width one.
+pub fn diagnostic_value(diagnostic: &Diagnostic) -> Value {
+    let definition = diagnostic.definition();
+    let mut object = Map::new();
+    object.insert("phase".into(), Value::String(definition.phase.into()));
+    object.insert(
+        "condition".into(),
+        Value::String(definition.condition.into()),
+    );
+    object.insert(
+        "requirement".into(),
+        definition
+            .requirement
+            .map_or(Value::Null, |requirement| Value::String(requirement.into())),
+    );
+    object.insert(
+        "spec_paths".into(),
+        Value::Array(
+            diagnostic
+                .spec_paths
+                .iter()
+                .map(|path| Value::String(path.clone()))
+                .collect(),
+        ),
+    );
+    object.insert("context".into(), Value::Object(diagnostic.context.clone()));
+    if let Some(span) = diagnostic.source_span {
+        object.insert(
+            "source_span".into(),
+            Value::Object(
+                [
+                    ("start".into(), Value::from(span.start)),
+                    ("end".into(), Value::from(span.end)),
+                ]
+                .into(),
+            ),
+        );
+    }
+    if let Some(route) = &diagnostic.operand_route {
+        object.insert(
+            "operand_route".into(),
+            Value::Array(
+                route
+                    .iter()
+                    .map(|step| Value::String(step.clone()))
+                    .collect(),
+            ),
+        );
+    }
+    Value::Object(object)
+}
+
 /// The row blocks are private, validated JSON arrays. Metadata retains the
 /// existing reserved rows field; serialization supplies the immutable block.
+/// The report holds its diagnostics as typed records and renders them into
+/// the metadata it serializes.
 #[derive(Clone, Debug)]
 pub struct StoredReport {
     metadata: Value,
     rows: Vec<Arc<RawValue>>,
+    diagnostics: Vec<Diagnostic>,
 }
 impl PartialEq for StoredReport {
     fn eq(&self, other: &Self) -> bool {
         self.metadata == other.metadata
+            && self.diagnostics == other.diagnostics
             && self.rows.len() == other.rows.len()
             && self
                 .rows
@@ -147,7 +206,23 @@ impl StoredReport {
                 })
                 .collect(),
         );
-        Self { metadata, rows }
+        Self {
+            metadata,
+            rows,
+            diagnostics: Vec::new(),
+        }
+    }
+    /// The diagnostics the report records, in authored order.
+    pub(crate) fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+    /// Record `diagnostics` and render them into the report's diagnostics
+    /// and its node's.
+    pub(crate) fn set_diagnostics(&mut self, diagnostics: Vec<Diagnostic>) {
+        let rendered = Value::Array(diagnostics.iter().map(diagnostic_value).collect());
+        self.metadata["diagnostics"] = rendered;
+        self.metadata["nodes"][0]["diagnostics"] = self.metadata["diagnostics"].clone();
+        self.diagnostics = diagnostics;
     }
     pub(crate) fn push_table(&mut self, table: StoredTable) -> Result<(), Error> {
         self.metadata["tables"]
@@ -171,6 +246,7 @@ impl StoredReport {
         Ok(Self {
             metadata,
             rows: self.rows.clone(),
+            diagnostics: self.diagnostics.clone(),
         })
     }
     pub fn observations_json(&self, build: bool) -> String {
@@ -288,6 +364,79 @@ impl Serialize for TableView<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yamaa_core::diagnostic::ConditionCode;
+    use yamaa_core::expression::SourceSpan;
+
+    fn record() -> Diagnostic {
+        Diagnostic {
+            code: ConditionCode::SourceUnknownReference,
+            spec_paths: vec!["input.SRC".into()],
+            context: Map::new(),
+            source_span: None,
+            operand_route: None,
+        }
+    }
+
+    /// Frozen pre-migration wire expectations, independent of registry construction.
+    fn truth(name: &str) -> Value {
+        let truth = crate::json_wire::decode(include_str!(
+            "../tests/fixtures/diagnostic_literal_truth.json"
+        ))
+        .unwrap();
+        truth.get(name).expect("known diagnostic fixture").clone()
+    }
+
+    #[test]
+    fn a_rendered_record_keeps_the_frozen_portable_shape() {
+        assert_eq!(diagnostic_value(&record()), truth("unknown-input-field"));
+    }
+
+    #[test]
+    fn rendered_geometry_is_present_only_when_recorded() {
+        let absent = diagnostic_value(&record());
+        assert!(absent.get("source_span").is_none());
+        assert!(absent.get("operand_route").is_none());
+        let zero = diagnostic_value(&Diagnostic {
+            source_span: Some(SourceSpan { start: 0, end: 0 }),
+            operand_route: Some(Vec::new()),
+            ..record()
+        });
+        assert_eq!(zero["source_span"], crate::json!({"start": 0, "end": 0}));
+        assert_eq!(zero["operand_route"], crate::json!([]));
+        let located = diagnostic_value(&Diagnostic {
+            source_span: Some(SourceSpan { start: 3, end: 9 }),
+            operand_route: Some(vec!["operand".into(), "root".into()]),
+            ..record()
+        });
+        assert_eq!(located["source_span"], crate::json!({"start": 3, "end": 9}));
+        assert_eq!(located["operand_route"], crate::json!(["operand", "root"]));
+    }
+
+    #[test]
+    fn a_rendered_context_keeps_wide_numbers_unicode_and_nesting() {
+        let text = r#"{"maximum":9223372036854775807,"minimum":-9223372036854775808,"nested":{"empty":{},"list":[null,true,"é🙂",{"deep":[1.0]}]},"wide":[18446744073709551616,-18446744073709551617,92233720368547758081234567890]}"#;
+        let Value::Object(context) = crate::json_wire::decode(text).unwrap() else {
+            panic!("object fixture")
+        };
+        let rendered = diagnostic_value(&Diagnostic {
+            context,
+            ..record()
+        });
+        assert_eq!(crate::json_wire::encode(&rendered["context"]), text);
+    }
+
+    #[test]
+    fn diagnostics_render_into_the_report_and_its_node() {
+        let mut report = StoredReport::with_tables(
+            crate::json!({"diagnostics":[],"nodes":[{"diagnostics":[]}]}),
+            Vec::new(),
+        );
+        report.set_diagnostics(vec![record()]);
+        assert_eq!(report.diagnostics(), [record()]);
+        let rendered = crate::json!([diagnostic_value(&record())]);
+        assert_eq!(report["diagnostics"], rendered);
+        assert_eq!(report["nodes"][0]["diagnostics"], rendered);
+    }
     #[test]
     fn encoded_cells_preserve_all_scalar_tags_exact_bits_and_civil_values() {
         use yamaa_core::value::FiniteFloat;

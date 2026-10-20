@@ -62,6 +62,18 @@ pub fn encode(value: &Value) -> String {
     serde_json::to_string(&WireValue(value)).expect("owned JSON tree serializes")
 }
 
+/// Encode an owned JSON object to the text `encode` writes for the object
+/// value holding it, without building that value.
+pub fn encode_object(values: &Map<String, Value>) -> String {
+    struct WireObject<'a>(&'a Map<String, Value>);
+    impl Serialize for WireObject<'_> {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.collect_map(self.0.iter().map(|(key, value)| (key, WireValue(value))))
+        }
+    }
+    serde_json::to_string(&WireObject(values)).expect("owned JSON tree serializes")
+}
+
 /// Decode JSON text into the owned tree, admitting exact number tokens and
 /// the wire recursion budget.
 pub fn decode(text: &str) -> Result<Value, Error> {
@@ -398,6 +410,22 @@ mod tests {
         }
         assert_ne!(decode("1").unwrap(), decode("1.0").unwrap());
         assert_eq!("1e9999".parse::<Number>().unwrap().as_f64(), None);
+    }
+
+    #[test]
+    fn an_object_encodes_as_the_value_that_holds_it() {
+        for text in [
+            "{}",
+            r#"{"b":[1.0,-18446744073709551617,null],"a":{"é🙂":"\n"},"c":true}"#,
+        ] {
+            let Value::Object(values) = decode(text).unwrap() else {
+                panic!("object fixture")
+            };
+            assert_eq!(
+                encode_object(&values),
+                encode(&Value::Object(values.clone()))
+            );
+        }
     }
 
     #[test]

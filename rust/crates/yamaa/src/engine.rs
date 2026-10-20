@@ -432,7 +432,7 @@ impl Engine {
 
     /// A project-run specification that did not build, with the findings
     /// that explain why.
-    pub(crate) fn refused_build(&self, issues: Vec<yamaa_adapters::issue_rows::Issue>) -> Build {
+    pub(crate) fn refused_build(&self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) -> Build {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         measurements.complete(false);
         Build::from_outcome(BuildOutcome::Refused { issues }, measurements, &self.shared)
@@ -662,8 +662,8 @@ impl Build {
         &self.report
     }
 
-    /// The build's issue rows, live from its current state.
-    pub(crate) fn issue_rows(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+    /// The build's issues, live from its current state.
+    pub(crate) fn issues(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
         crate::internal::outcome_issues(&self.state)
     }
 
@@ -685,7 +685,7 @@ impl Build {
         &self,
         preflight: &mut yamaa_adapters::project_scope::Preflight,
         report_only: bool,
-    ) -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>> {
+    ) -> Result<(), Vec<yamaa_core::diagnostic::Diagnostic>> {
         match &self.state {
             BuildOutcome::Plain { result: Ok(domain) }
             | BuildOutcome::Project {
@@ -914,7 +914,7 @@ impl DefineBuild {
     pub(crate) fn preflight(
         &self,
         preflight: &mut yamaa_adapters::project_scope::Preflight,
-    ) -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>> {
+    ) -> Result<(), Vec<yamaa_core::diagnostic::Diagnostic>> {
         preflight.admit_define(&self.inner)
     }
 
@@ -952,6 +952,13 @@ impl ResolvedSpecification {
     /// Serialize the artifact as compact UTF-8 JSON.
     pub fn to_json(&self) -> Result<String, Error> {
         self.inner.to_json().map_err(|_| Error::Internal {
+            code: "resolved_serialization",
+        })
+    }
+
+    /// The facts `to_json` writes, as one owned tree.
+    pub(crate) fn to_value(&self) -> Result<yamaa_core::json::Value, Error> {
+        self.inner.to_value().map_err(|_| Error::Internal {
             code: "resolved_serialization",
         })
     }

@@ -395,10 +395,10 @@ mod root_read_tests {
         assert_eq!(issues.len(), 1);
         let definition =
             yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentMissing.definition();
-        assert_eq!(issues[0].condition, definition.condition);
-        assert_eq!(issues[0].requirement.as_deref(), definition.requirement);
+        assert_eq!(issues[0].condition(), definition.condition);
+        assert_eq!(issues[0].requirement(), definition.requirement);
         assert_eq!(
-            issues[0].context,
+            yamaa_core::json::Value::Object(issues[0].context.clone()),
             crate::json!({"cause":"unreadable", "path":path})
         );
 

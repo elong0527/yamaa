@@ -36,10 +36,10 @@ use yamaa_adapters::{
     file_application::{self, Domain, RuntimePort},
     file_preparation::FileSpecification,
     host_resources::{MemoryResolver, ResourceKind},
-    issue_rows::Issue,
     specification_report::Identity,
     yaml_decode::decode_yaml,
 };
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
     application_observer::Scope,
     domain_entry,
@@ -931,7 +931,7 @@ impl ActivationPort for NoActivation {
 struct Built(Domain);
 
 impl Built {
-    fn issues(&self) -> Vec<Issue> {
+    fn issues(&self) -> Vec<Diagnostic> {
         self.0.issues()
     }
 
@@ -1020,7 +1020,7 @@ impl RuntimePort for MemoryRuntime<'_> {
 
 enum Outcome {
     Built(Box<Built>),
-    Failed(Vec<Issue>),
+    Failed(Vec<Diagnostic>),
 }
 
 /// Run one planned entry through the shared application with every
@@ -1867,8 +1867,8 @@ fn context_subset(want: &Sj, got: &Sj) -> bool {
 
 /// One build issue as the decoded diagnostic record the runner compares
 /// (its `context` JSON text parsed back into a value).
-fn issue_record(issue: &Issue) -> Sj {
-    let mut record = sj(&issue.as_value());
+fn issue_record(issue: &Diagnostic) -> Sj {
+    let mut record = sj(&yamaa_adapters::report_storage::diagnostic_value(issue));
     if let Some(Sj::String(text)) = record.get("context").cloned() {
         let parsed = serde_json::from_str(&text).unwrap_or(Sj::Null);
         record["context"] = if parsed.is_null() {
@@ -1890,10 +1890,13 @@ fn brief_record(record: &Sj) -> String {
     )
 }
 
-fn brief_issue(issue: &Issue) -> String {
+fn brief_issue(issue: &Diagnostic) -> String {
     format!(
         "phase={} condition={} requirement={:?} spec_paths={:?}",
-        issue.phase, issue.condition, issue.requirement, issue.spec_paths
+        issue.phase(),
+        issue.condition(),
+        issue.requirement(),
+        issue.spec_paths
     )
 }
 
@@ -1930,7 +1933,7 @@ fn matches_path(actual: &str, expected: &str) -> bool {
 
 enum EntryOutcome {
     Built(Box<Built>),
-    Failed(Vec<Issue>),
+    Failed(Vec<Diagnostic>),
     Panicked(String),
 }
 

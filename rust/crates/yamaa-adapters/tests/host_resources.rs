@@ -341,21 +341,17 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
     ] {
         // LAYER-10's finding, never the opaque engine refusal: the parent,
         // the path it writes beside itself and both roots.
-        let refused = |issues: &[yamaa_adapters::issue_rows::Issue], route: &str| {
+        let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str| {
             assert_eq!(issues.len(), 1, "{entry} {route}: {issues:?}");
             let issue = &issues[0];
             assert_eq!(
-                (
-                    issue.phase.as_str(),
-                    issue.condition.as_str(),
-                    issue.requirement.as_deref()
-                ),
+                (issue.phase(), issue.condition(), issue.requirement()),
                 ("validation", "parent_on_another_share", Some("LAYER-10")),
                 "{entry} {route}"
             );
             assert_eq!(issue.spec_paths, ["parent"], "{entry} {route}");
             assert_eq!(
-                issue.context,
+                yamaa_core::json::Value::Object(issue.context.clone()),
                 yamaa_adapters::json!({
                     "source": PARENT,
                     "path": "input/src.csv",
@@ -425,9 +421,6 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         else {
             panic!("{entry}: the refusal lost its finding");
         };
-        refused(
-            &[yamaa_adapters::issue_rows::Issue::from_core(*diagnostic).unwrap()],
-            "prepare",
-        );
+        refused(&[*diagnostic], "prepare");
     }
 }

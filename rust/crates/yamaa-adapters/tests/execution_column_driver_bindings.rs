@@ -12,7 +12,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
 struct Fixture(PathBuf);
@@ -44,7 +45,7 @@ impl Fixture {
             base_directory: ".",
         }
     }
-    fn domain(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.specification();
         file_application::domain(
             yamaa_core::project_function::Language::Python,
@@ -55,7 +56,7 @@ impl Fixture {
             Self::identity(&specification),
         )
     }
-    fn check(&self) -> Vec<Issue> {
+    fn check(&self) -> Vec<Diagnostic> {
         let specification = self.specification();
         file_application::check(
             yamaa_core::project_function::Language::Python,
@@ -79,12 +80,13 @@ impl Fixture {
         );
     }
     /// The one issue `domain` reports, whether preparation or the build fails.
-    fn issue(&self) -> Issue {
+    fn issue(&self) -> Diagnostic {
         let issues = match self.domain() {
             Ok(domain) => domain.issues(),
             Err(issues) => issues,
         };
-        let [issue] = <[Issue; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
+        let [issue] =
+            <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
         issue
     }
 }
@@ -255,8 +257,8 @@ fn another_drivers_records_still_join_on_the_output_keys() {
     let issue = fixture.issue();
     assert_eq!(
         (
-            issue.phase.as_str(),
-            issue.condition.as_str(),
+            issue.phase(),
+            issue.condition(),
             issue.spec_paths.as_slice()
         ),
         (
@@ -285,11 +287,11 @@ fn column_bindings_run_one_driver_after_another() {
     ));
     let issue = fixture.issue();
     assert_eq!(
-        (issue.phase.as_str(), issue.condition.as_str()),
+        (issue.phase(), issue.condition()),
         ("convert", "conversion_failed")
     );
     assert_eq!(
-        issue.context,
+        yamaa_core::json::Value::Object(issue.context.clone()),
         yamaa_adapters::json!({
             "from": "str",
             "keys": [{"SEQ": 0, "SRC": "B", "USUBJID": "S2"}],
@@ -369,8 +371,8 @@ fn a_field_an_intermediate_driver_derives_is_refused_beside_another_driver() {
     assert_eq!(fixture.check(), std::slice::from_ref(&issue));
     assert_eq!(
         (
-            issue.phase.as_str(),
-            issue.condition.as_str(),
+            issue.phase(),
+            issue.condition(),
             issue.spec_paths.as_slice()
         ),
         (

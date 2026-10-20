@@ -121,6 +121,7 @@ nav:
           - CDISC alignment: design/interface-1.0/cdisc.md
           - Rules: design/interface-1.0/rules.md
           - Card text beyond D71: design/interface-1.0/card-text.md
+          - Card text beyond D78: design/interface-1.0/card-text-2.md
           - API and command line: design/interface-1.0/api.md
           - Stability contract: design/interface-1.0/stability.md
           - Converted examples: design/interface-1.0/examples.md

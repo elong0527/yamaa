@@ -35,10 +35,10 @@ are duplicate exports and operation references to absent exports.
 facade constant it names; ``tools/packaging/bindings_public.py`` checks
 ``public`` and renders the public layers from it. The ``records`` import is
 role-based: each role must resolve to the actual public symbol delivered by
-its owner in ``yamaa_adapters::diagnostic_record`` (``BOUNDARY_VERSION``,
-``DiagnosticRecord``, ``ResultRecord``, ``PlanRecord``); an unresolved role is
-a generation error, and neither output embeds a separately maintained
-boundary version. Generation also reconciles the definition against the
+its owner, ``yamaa_adapters::diagnostic_record`` (``BOUNDARY_VERSION``,
+``ResultRecord``, ``PlanRecord``), except the diagnostic record, which is core's
+``yamaa_core::diagnostic::Diagnostic``; an unresolved role is a generation
+error, and neither output embeds a separately maintained boundary version. Generation also reconciles the definition against the
 handwritten PyO3 surface (``#[pyclass]`` names, ``#[pymethods]`` method sets,
 ``#[pyfunction]`` functions and ``create_exception!`` exceptions in the
 binding crate): an omitted class method or private export is drift, not a
@@ -70,6 +70,7 @@ from tools.paths import ROOT, WORKSPACE
 
 DEFINITION = WORKSPACE / "interface" / "bindings.yaml"
 ADAPTERS = WORKSPACE / "crates" / "yamaa-adapters" / "src"
+CORE = WORKSPACE / "crates" / "yamaa-core" / "src"
 PYI_TARGET = ROOT / "python" / "src" / "yamaa" / "_native.pyi"
 RUST_TARGET = WORKSPACE / "crates" / "yamaa-python" / "src" / "lib.rs"
 R_SOURCE = WORKSPACE / "crates" / "yamaa-r" / "src"
@@ -114,11 +115,12 @@ _TOP_LEVEL_KEYS = {
     "operations",
     "host_only",
 }
+# Each record role and the source file and public symbol that deliver it.
 _RECORD_ROLES = {
-    "boundary_version": "BOUNDARY_VERSION",
-    "diagnostic": "DiagnosticRecord",
-    "result": "ResultRecord",
-    "plan": "PlanRecord",
+    "boundary_version": (ADAPTERS / "diagnostic_record.rs", "BOUNDARY_VERSION"),
+    "diagnostic": (CORE / "diagnostic" / "mod.rs", "Diagnostic"),
+    "result": (ADAPTERS / "diagnostic_record.rs", "ResultRecord"),
+    "plan": (ADAPTERS / "diagnostic_record.rs", "PlanRecord"),
 }
 _SCALAR_TYPES = {
     "text": "str",
@@ -272,14 +274,14 @@ def _resolve_records_import(definition):
     lib_rs = (ADAPTERS / "lib.rs").read_text(encoding="utf-8")
     if "pub mod diagnostic_record;" not in lib_rs:
         raise ValueError("yamaa-adapters does not declare diagnostic_record")
-    source = (ADAPTERS / "diagnostic_record.rs").read_text(encoding="utf-8")
     for role in roles:
-        symbol = _RECORD_ROLES[role]
+        path, symbol = _RECORD_ROLES[role]
+        source = path.read_text(encoding="utf-8")
         pattern = rf"pub (?:const|struct) {symbol}\b"
         if not re.search(pattern, source):
             raise ValueError(
                 f"records role {role} does not resolve to {symbol} "
-                "in yamaa_adapters::diagnostic_record"
+                f"in {path.relative_to(WORKSPACE).as_posix()}"
             )
     if definition["handshake"].get("version") != "records.boundary_version":
         raise ValueError("handshake version must be records.boundary_version")

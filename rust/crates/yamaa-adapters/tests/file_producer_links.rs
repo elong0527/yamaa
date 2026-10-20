@@ -15,9 +15,9 @@ mod file {
         };
         use yamaa_adapters::{
             file_application::{self, Domain},
-            issue_rows::Issue,
             specification_report::Identity,
         };
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -58,7 +58,7 @@ mod file {
                 )
                 .unwrap_or_else(|issues| panic!("{entry}: {issues:?}"))
             }
-            fn check(&self, entry: &str) -> Vec<Issue> {
+            fn check(&self, entry: &str) -> Vec<Diagnostic> {
                 let path = self.path(entry);
                 file_application::check(
                     yamaa_core::project_function::Language::Python,
@@ -125,7 +125,7 @@ mod file {
                 assert!(early.output().is_none());
                 let issues = early.issues();
                 assert_eq!(issues.len(), 1, "{profile}: {issues:?}");
-                assert_eq!(issues[0].condition, "resource_path_missing");
+                assert_eq!(issues[0].condition(), "resource_path_missing");
                 assert_eq!(issues[0].spec_paths, ["input.FIRST.path"]);
                 assert!(!study.0.join("generated").exists());
 
@@ -186,7 +186,7 @@ mod file {
                 .err()
                 .expect("the collision refuses the build");
                 assert_eq!(issues.len(), 1, "{issues:?}");
-                assert_eq!(issues[0].condition, "artifact_path_collision");
+                assert_eq!(issues[0].condition(), "artifact_path_collision");
                 assert_eq!(issues[0].spec_paths, ["output.path", field]);
                 assert_eq!(study.read("generated/producer.csv"), b"ID,VALUE\n1,7\n");
             }
@@ -226,13 +226,13 @@ mod file {
                 assert!(result.output().is_none());
                 let issues = result.issues();
                 assert_eq!(issues.len(), 1, "{issues:?}");
-                assert_eq!(issues[0].condition, "producer_contract_mismatch");
-                assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0535"));
+                assert_eq!(issues[0].condition(), "producer_contract_mismatch");
+                assert_eq!(issues[0].requirement(), Some("REQ-0535"));
                 assert_eq!(
                     issues[0].spec_paths,
                     ["input.FIRST.schema", "input.FIRST.path"]
                 );
-                let context: yamaa_core::json::Value = issues[0].context.clone();
+                let context = yamaa_core::json::Value::Object(issues[0].context.clone());
                 assert_eq!(context["dataset"], "FIRST");
                 assert_eq!(context["expected"], yamaa_adapters::json!(["ID", "VALUE"]));
                 assert_eq!(context["reordered"], reordered);
@@ -261,8 +261,8 @@ mod file {
             assert!(result.output().is_none());
             let issues = result.issues();
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "producer_contract_mismatch");
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            assert_eq!(issues[0].condition(), "producer_contract_mismatch");
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["reordered"], false);
             assert_eq!(
                 context["expected_types"],
@@ -294,9 +294,9 @@ mod file {
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
                 (
-                    issues[0].phase.as_str(),
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
+                    issues[0].phase(),
+                    issues[0].condition(),
+                    issues[0].requirement()
                 ),
                 ("validation", "ordinal_field_collision", Some("REQ-1294"))
             );

@@ -8,8 +8,9 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use yamaa_adapters::issue_rows::Issue;
 use yamaa_adapters::project_scope::identify;
+use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::project_environment::Submission as Section;
 
 use crate::cancel::CancellationToken;
@@ -42,17 +43,13 @@ impl Failure {
         }
     }
 
-    fn from_issues(message: impl Into<String>, issues: &[Issue]) -> Self {
+    fn from_issues(message: impl Into<String>, issues: &[Diagnostic]) -> Self {
         Self::new(message, &Report::from_issues(issues))
     }
 
     /// A refusal that one registered finding explains.
-    fn from_finding(
-        message: impl Into<String>,
-        finding: yamaa_core::diagnostic::Diagnostic,
-    ) -> Self {
-        let issue = Issue::from_core(finding).expect("a registered finding is portable");
-        Self::from_issues(message, &[issue])
+    fn from_finding(message: impl Into<String>, finding: Diagnostic) -> Self {
+        Self::from_issues(message, std::slice::from_ref(&finding))
     }
 }
 
@@ -252,25 +249,23 @@ impl Engine {
         let resolved = self
             .resolve_specification(&request(specification, project))
             .map_err(|error| Failure::from_error("cannot resolve the specification", &error))?;
-        resolved_value(resolved.to_json())
+        resolved_value(resolved.to_value())
     }
 }
 
-/// The resolved tree read back from the artifact's JSON text. Facts the
-/// engine cannot write or read back are an engine fault, refused with
-/// `engine_rejected`.
-fn resolved_value(text: Result<String, Error>) -> Result<ContextValue, Failure> {
-    let refused = |message: String| {
+/// The resolved tree as the artifact's codec reads it. Facts the engine
+/// cannot represent are an engine fault, refused with `engine_rejected`.
+fn resolved_value(tree: Result<yamaa_core::json::Value, Error>) -> Result<ContextValue, Failure> {
+    let tree = tree.map_err(|error| {
         Failure::from_issues(
-            message,
-            &yamaa_adapters::file_application::rejected("resolve", "artifact_representation"),
+            format!("cannot resolve the specification: {error}"),
+            &yamaa_adapters::file_application::rejected(
+                Stage::Resolve,
+                Fault::ArtifactRepresentation,
+            ),
         )
-    };
-    let text =
-        text.map_err(|error| refused(format!("cannot resolve the specification: {error}")))?;
-    let value = yamaa_adapters::json_wire::decode(&text)
-        .map_err(|_| refused("cannot resolve the specification: invalid resolved facts".into()))?;
-    Ok(context_value_from_core(&value))
+    })?;
+    Ok(context_value_from_core(&tree))
 }
 
 /// The section a caller names: `sdtm`, `adam` or `send`; any other text is a
@@ -282,7 +277,8 @@ fn section(section: Option<&str>) -> Result<Option<Section>, Error> {
     yamaa_core::project_scope::section(key)
         .map(Some)
         .ok_or_else(|| {
-            let mut finding = yamaa_core::application_issue::rejected("project", "unknown_section");
+            let mut finding =
+                yamaa_core::application_issue::rejected(Stage::Project, Fault::UnknownSection);
             finding.context.insert(
                 "section".into(),
                 yamaa_core::json::Value::String(key.into()),
@@ -300,8 +296,7 @@ fn section(section: Option<&str>) -> Result<Option<Section>, Error> {
                         .collect(),
                 ),
             );
-            let issue = Issue::from_core(finding).expect("an application refusal is portable");
-            Error::Rejected(Report::from_issues(&[issue]))
+            Error::Rejected(Report::from_issues(&[finding]))
         })
 }
 
@@ -319,8 +314,8 @@ fn label(step: &ProjectStep) -> &str {
 }
 
 /// A step's issues, each naming its specification as its entry.
-fn step_issues(step: &ProjectStep) -> Vec<Issue> {
-    let mut issues = step.run.build.issue_rows();
+fn step_issues(step: &ProjectStep) -> Vec<Diagnostic> {
+    let mut issues = step.run.build.issues();
     identify(&mut issues, &step.identity);
     issues
 }
@@ -329,11 +324,11 @@ fn step_issues(step: &ProjectStep) -> Vec<Issue> {
 pub struct ProjectRun {
     steps: Vec<ProjectStep>,
     /// Project findings that refused the run before any specification built.
-    refusal: Vec<Issue>,
+    refusal: Vec<Diagnostic>,
 }
 
 impl ProjectRun {
-    fn refused(refusal: Vec<Issue>) -> Self {
+    fn refused(refusal: Vec<Diagnostic>) -> Self {
         Self {
             steps: Vec::new(),
             refusal,
@@ -473,7 +468,7 @@ impl ProjectRun {
 pub struct Submission {
     sections: Vec<(Section, DefineBuild)>,
     /// Project findings that refused the submission before any section.
-    refusal: Vec<Issue>,
+    refusal: Vec<Diagnostic>,
 }
 
 impl Submission {
@@ -866,44 +861,43 @@ mod tests {
             .collect()
     }
 
-    /// Resolved facts the engine cannot write or read back are refused as the
-    /// registered engine fault, each refusal keeping its message.
+    /// Resolved facts the engine cannot represent are refused as the
+    /// registered engine fault, keeping the message of the failure.
     #[test]
     fn unrepresentable_resolved_facts_are_an_engine_fault() {
         let fault = yamaa_core::diagnostic::ConditionCode::ApplicationRejected.definition();
         let unwritten = Error::Internal {
             code: "resolved_serialization",
         };
-        for (text, message) in [
-            (
-                Ok("not json".to_owned()),
-                "cannot resolve the specification: invalid resolved facts".to_owned(),
-            ),
-            (
-                Err(unwritten.clone()),
-                format!("cannot resolve the specification: {unwritten}"),
-            ),
-        ] {
-            let failure = resolved_value(text).unwrap_err();
-            assert_eq!(failure.message, message);
-            assert_eq!(
-                cells(&failure.issues, "phase"),
-                [Some(fault.phase.to_owned())]
-            );
-            assert_eq!(
-                cells(&failure.issues, "condition"),
-                [Some(fault.condition.to_owned())]
-            );
-            assert_eq!(cells(&failure.issues, "requirement"), [None]);
-            assert_eq!(
-                cells(&failure.issues, "context"),
-                [Some(
-                    r#"{"code":"artifact_representation","stage":"resolve"}"#.to_owned()
-                )]
-            );
-        }
+        let failure = resolved_value(Err(unwritten.clone())).unwrap_err();
         assert_eq!(
-            resolved_value(Ok(r#"{"entry":"spec.yaml"}"#.to_owned())).unwrap(),
+            failure.message,
+            format!("cannot resolve the specification: {unwritten}")
+        );
+        assert_eq!(
+            cells(&failure.issues, "phase"),
+            [Some(fault.phase.to_owned())]
+        );
+        assert_eq!(
+            cells(&failure.issues, "condition"),
+            [Some(fault.condition.to_owned())]
+        );
+        assert_eq!(cells(&failure.issues, "requirement"), [None]);
+        assert_eq!(
+            cells(&failure.issues, "context"),
+            [Some(
+                r#"{"code":"artifact_representation","stage":"resolve"}"#.to_owned()
+            )]
+        );
+        let tree = yamaa_core::json::Value::Object(
+            [(
+                "entry".to_owned(),
+                yamaa_core::json::Value::String("spec.yaml".to_owned()),
+            )]
+            .into(),
+        );
+        assert_eq!(
+            resolved_value(Ok(tree)).unwrap(),
             ContextValue::Map(
                 [(
                     "entry".to_owned(),

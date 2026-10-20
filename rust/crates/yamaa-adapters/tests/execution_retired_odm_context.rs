@@ -13,7 +13,8 @@ mod execution {
             sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::json;
-        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
@@ -31,7 +32,7 @@ mod execution {
                 fs::write(root.join("odm.csv"), input).unwrap();
                 Self(root)
             }
-            fn run(&self) -> Result<file_application::Domain, Vec<Issue>> {
+            fn run(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
                 let specification = self.0.join("spec.yaml");
                 let specification = specification.to_str().unwrap();
                 file_application::domain(
@@ -73,13 +74,13 @@ mod execution {
         "schema_version: '1.0'\ndomain: OUT\nkeys: [{key}]\ninput: {{ODM: {input}}}\noutput: {{path: out.csv, columns: [{key}, VALUE]}}\ncolumns:\n  - {{name: {key}, type: str, derivation: ODM.{key}}}\n  - {{name: VALUE, type: {kind}, derivation: {expression}}}\n"
     )
         }
-        fn issue_rows(issues: &[Issue]) -> Value {
+        fn issue_rows(issues: &[Diagnostic]) -> Value {
             Value::Array(
                 issues
                     .iter()
                     .map(|issue| {
-                        let mut value = issue.as_value();
-                        value["context"] = issue.context.clone();
+                        let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
+                        value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
                         value
                     })
                     .collect(),
@@ -408,11 +409,11 @@ mod execution {
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
+        fn issues(rows: &[yamaa_core::diagnostic::Diagnostic]) -> yamaa_core::json::Value {
             yamaa_adapters::json!(rows
                 .iter()
                 .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
+                    "phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),
                     "spec_paths":row.spec_paths,"context":row.context.clone()
                 }))
                 .collect::<Vec<_>>())
@@ -564,7 +565,7 @@ mod execution {
                 )
                 .unwrap_or_else(|issues| panic!("preparation {issues:?}"))
             }
-            fn check(&self) -> Vec<yamaa_adapters::issue_rows::Issue> {
+            fn check(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::check(
                     yamaa_core::project_function::Language::Python,
@@ -596,7 +597,7 @@ mod execution {
         }
         fn attempt(
             fixture: &Fixture,
-        ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
+        ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
             let specification = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
             file_application::domain(
                 yamaa_core::project_function::Language::Python,
@@ -702,12 +703,12 @@ mod execution {
                     let mut result = fixture.run();
                     assert_eq!(result.issues().len(), 1, "{reducer}: {:?}", result.issues());
                     let issue = &result.issues()[0];
-                    assert_eq!(issue.phase, "validation");
-                    assert_eq!(issue.condition, "incompatible_input_type");
-                    assert_eq!(issue.requirement.as_deref(), Some("REQ-0510"));
+                    assert_eq!(issue.phase(), "validation");
+                    assert_eq!(issue.condition(), "incompatible_input_type");
+                    assert_eq!(issue.requirement(), Some("REQ-0510"));
                     assert_eq!(issue.spec_paths, ["rows[0].derivations.VALUE.aggregate"]);
                     assert_eq!(
-                        issue.context.clone(),
+                        yamaa_core::json::Value::Object(issue.context.clone()),
                         yamaa_adapters::json!({"expr": format!("{reducer}(SRC.V)"),
                     "reducer": reducer, "source": "SRC.V", "expected": "numeric", "actual": "str"})
                     );
@@ -730,7 +731,7 @@ mod execution {
             let issues =
                 attempt(&f).map_or_else(|issues| issues, |result| result.issues().to_vec());
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "ungrouped_driver_field");
+            assert_eq!(issues[0].condition(), "ungrouped_driver_field");
             assert!(!f.0.join("output.csv").exists());
             let columns="  - {name: VALUE, type: int, derivation: SRC.I}\n  - {name: SEQ, type: int}\n  - {name: AFTER, type: int}\n";
             let rows="  - id: one\n    filter: AFTER > 0\n    derivations:\n      SECTION: {literal: one}\n      SEQ: {row_number: {window: {order_by: [VALUE]}}}\n      AFTER: {compute: {expr: 'SEQ + 1'}}\n";
@@ -741,7 +742,7 @@ mod execution {
             let issues =
                 attempt(&f).map_or_else(|issues| issues, |result| result.issues().to_vec());
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "phase_boundary");
+            assert_eq!(issues[0].condition(), "phase_boundary");
             assert_eq!(
                 issues[0].context.clone()["available_phase"],
                 "window_derivation"
@@ -765,8 +766,8 @@ mod execution {
             let mut result = f.run();
             assert!(result.output().is_none());
             assert!(result.save().is_err());
-            assert_eq!(result.issues()[0].condition, "multiple_matches");
-            assert_eq!(result.issues()[0].requirement.as_deref(), Some("REQ-0127"));
+            assert_eq!(result.issues()[0].condition(), "multiple_matches");
+            assert_eq!(result.issues()[0].requirement(), Some("REQ-0127"));
         }
         #[test]
         fn unchanged_vs_units_benchmark_runs_row_cases_and_numeric_branches() {
@@ -892,8 +893,9 @@ rows:
         use yamaa_adapters::json;
         use yamaa_adapters::{
             file_application, file_preparation::FileSpecification, file_resources::Resources,
-            issue_rows::Issue, specification_report::Identity,
+            specification_report::Identity,
         };
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
@@ -921,12 +923,12 @@ rows:
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn issues(rows: &[Issue]) -> Value {
+        fn issues(rows: &[Diagnostic]) -> Value {
             Value::Array(
                 rows.iter()
                     .map(|issue| {
-                        let mut value = issue.as_value();
-                        value["context"] = issue.context.clone();
+                        let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
+                        value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
                         value
                     })
                     .collect(),
@@ -1173,7 +1175,7 @@ rows:
             let study = Study::new(&source);
             let issues = study.run().issues();
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "unknown_field");
+            assert_eq!(issues[0].condition(), "unknown_field");
             assert_eq!(
                 issues[0].spec_paths,
                 ["columns.X.derivation.str_extract.source"]
@@ -1188,7 +1190,8 @@ rows:
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
-        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -1198,9 +1201,9 @@ rows:
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn rows(issues: &[Issue]) -> yamaa_core::json::Value {
+        fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
             issues.iter().map(|row| yamaa_adapters::json!({
-        "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
+        "phase": row.phase(), "condition": row.condition(), "requirement": row.requirement(),
         "spec_paths": row.spec_paths, "context": row.context.clone()
     })).collect()
         }
@@ -1376,9 +1379,9 @@ rows:
             assert!(result.output().is_none());
             let issues = result.issues();
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "row_count_failed");
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0385"));
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            assert_eq!(issues[0].condition(), "row_count_failed");
+            assert_eq!(issues[0].requirement(), Some("REQ-0385"));
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["failure_count"], 2);
             assert_eq!(context["counts"], yamaa_adapters::json!([2, 0]));
             assert_eq!(context["keys"].as_array().unwrap().len(), 2);
@@ -1560,7 +1563,7 @@ verifications:
                 assert!(result.output().is_none());
                 assert!(
                     result.issues().iter().any(|issue| {
-                        issue.condition == "unknown_field"
+                        issue.condition() == "unknown_field"
                             && issue.spec_paths.iter().any(|path| path == expected_path)
                     }),
                     "{:?}",
@@ -1721,10 +1724,10 @@ columns:
         let mut result = study.build();
         let issues = result.issues();
         assert_eq!(issues.len(), 1, "{issues:?}");
-        assert_eq!(issues[0].condition, "missing_key");
+        assert_eq!(issues[0].condition(), "missing_key");
         assert_eq!(issues[0].spec_paths, ["keys[1]"]);
         assert_eq!(
-            issues[0].context.clone(),
+ yamaa_core::json::Value::Object(issues[0].context.clone()),
             yamaa_adapters::json!({"column": "A", "missing_count": 1,
                 "keys": [{"B": "present", "A": null}]})
         );
@@ -1949,7 +1952,8 @@ rows:
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
-        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -1970,15 +1974,15 @@ rows:
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn assert_issues(issues: &[Issue], expected: &yamaa_core::json::Value, name: &str) {
+        fn assert_issues(issues: &[Diagnostic], expected: &yamaa_core::json::Value, name: &str) {
             if expected.is_null() {
                 assert!(issues.is_empty(), "{name}: {issues:?}");
             } else {
                 assert!(
                     issues.iter().any(|issue| {
-                        issue.phase == expected["phase"].as_str().unwrap()
-                            && issue.condition == expected["condition"].as_str().unwrap()
-                            && issue.requirement.as_deref() == expected["requirement"].as_str()
+                        issue.phase() == expected["phase"].as_str().unwrap()
+                            && issue.condition() == expected["condition"].as_str().unwrap()
+                            && issue.requirement() == expected["requirement"].as_str()
                             && issue.spec_paths == [expected["spec_path"].as_str().unwrap()]
                     }),
                     "{name}: {issues:?}"
@@ -2081,7 +2085,7 @@ rows:
             }
             fn run(
                 &self,
-            ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>>
+            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
@@ -2144,15 +2148,15 @@ rows:
                 );
                 if let Some(condition) = case["check_condition"].as_str() {
                     assert!(
-                        issues.iter().any(|issue| issue.condition == condition),
+                        issues.iter().any(|issue| issue.condition() == condition),
                         "{name}: {issues:?}"
                     );
                     if condition == "incompatible_input_type" {
                         let issue = issues
                             .iter()
-                            .find(|issue| issue.condition == condition)
+                            .find(|issue| issue.condition() == condition)
                             .unwrap();
-                        assert_eq!(issue.requirement.as_deref(), Some("LOOKUP-9"));
+                        assert_eq!(issue.requirement(), Some("LOOKUP-9"));
                         assert_eq!(issue.spec_paths, ["intermediates[0].key"]);
                     }
                 } else {
@@ -2169,7 +2173,7 @@ rows:
                         let issues = domain.issues();
                         if let Some(condition) = case["run_condition"].as_str() {
                             assert!(
-                                issues.iter().any(|issue| issue.condition == condition),
+                                issues.iter().any(|issue| issue.condition() == condition),
                                 "{name}: {issues:?}"
                             );
                         } else {
@@ -2193,7 +2197,7 @@ rows:
                     Err(issues) => {
                         let condition = case["run_condition"].as_str().unwrap();
                         assert!(
-                            issues.iter().any(|issue| issue.condition == condition),
+                            issues.iter().any(|issue| issue.condition() == condition),
                             "{name}: {issues:?}"
                         );
                     }
@@ -2257,7 +2261,7 @@ rows:
                         domain
                             .issues()
                             .iter()
-                            .any(|issue| issue.condition == "conversion_failed"
+                            .any(|issue| issue.condition() == "conversion_failed"
                                 && issue.spec_paths
                                     == ["intermediates[0].derivations.PICK.unconvertible"]),
                         "{:?}",

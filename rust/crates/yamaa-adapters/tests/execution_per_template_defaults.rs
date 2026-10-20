@@ -10,7 +10,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::Request;
 
 struct Fixture(PathBuf);
@@ -29,7 +30,7 @@ impl Fixture {
         }
         Self(root)
     }
-    fn run(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn run(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
         file_application::domain(
