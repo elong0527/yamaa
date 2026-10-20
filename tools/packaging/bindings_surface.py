@@ -10,9 +10,9 @@ Each vocabulary in ``values`` and each table in ``tables`` names the facade
 constant that owns it, as ``rust: yamaa::NAME``. The constant is read from the
 facade sources under ``rust/crates/yamaa/src``, following an alias such as
 ``pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;`` into
-the core crate, and the declaration must list exactly its strings, in order. A
-value or column added in Rust therefore fails generation until it is declared,
-and a declared one that Rust lacks fails too. The constant must be reachable
+the core or adapters crate, and the declaration must list exactly its strings,
+in order. A value or column added in Rust therefore fails generation until it
+is declared, and a declared one that Rust lacks fails too. The constant must be reachable
 at the facade's crate root, where an embedder finds it.
 
 ``records`` and ``cli`` are validated against their grammar alone: no record
@@ -26,6 +26,7 @@ from tools.paths import WORKSPACE
 
 FACADE = WORKSPACE / "crates" / "yamaa" / "src"
 CORE = WORKSPACE / "crates" / "yamaa-core" / "src"
+ADAPTERS = WORKSPACE / "crates" / "yamaa-adapters" / "src"
 REGISTRY_VALUES = "yaml/conditions.yaml"
 
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*")
@@ -133,14 +134,16 @@ def _strings(source, value, crate, seen):
                 raise ValueError(f"unsupported constant element: {element}")
         return result
     path = value.split("::")
-    if len(path) >= 3 and path[0] == "yamaa_core" and _CONSTANT.fullmatch(path[-1]):
+    # The crates a facade constant may alias, by their Rust names.
+    crates = {"yamaa_core": CORE, "yamaa_adapters": ADAPTERS}
+    if len(path) >= 3 and path[0] in crates and _CONSTANT.fullmatch(path[-1]):
         if value in seen:
             raise ValueError(f"constant alias cycle at {value}")
-        target = _module_source(CORE, path[1:-1])
+        target = _module_source(crates[path[0]], path[1:-1])
         found = _definitions(target).get(path[-1])
         if found is None:
             raise ValueError(f"{value} does not resolve to a constant")
-        return _strings(target, found, "yamaa_core", seen | {value})
+        return _strings(target, found, path[0], seen | {value})
     raise ValueError(f"unsupported constant value in {crate}: {value}")
 
 

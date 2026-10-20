@@ -312,6 +312,31 @@ fn read_odm(
     })
 }
 
+/// Each element of a list of raw UTF-8 vectors as text.
+fn texts(value: &Robj) -> std::result::Result<Vec<String>, Refusal> {
+    let list = value
+        .as_list()
+        .ok_or_else(|| Refusal::from("expected a list of raw UTF-8 paths"))?;
+    list.values()
+        .map(|item| {
+            let raw = item
+                .as_raw()
+                .ok_or_else(|| Refusal::from("expected a list of raw UTF-8 paths"))?;
+            text(&raw)
+        })
+        .collect()
+}
+
+/// The lint table of every file `paths` names, fixing them first when `fix`
+/// is true; a file that cannot be read or admitted refuses with its issues.
+#[extendr]
+fn lint(paths: Robj, fix: bool) -> List {
+    reply(|| {
+        let table = yamaa::lint(&texts(&paths)?, fix).map_err(Refusal::Failure)?;
+        Ok(crate::public_table::frame(&table)?)
+    })
+}
+
 #[extendr]
 fn run_output(handle: Robj) -> List {
     reply(|| {

@@ -69,6 +69,8 @@ class PythonPackageHygiene(unittest.TestCase):
             "runtime/context.py",
             "schema/__init__.py",
             "specification/__init__.py",
+            "style/__main__.py",
+            "style/_fields.json",
             "submission/schema.xsd",
             "verification/__init__.py",
         )
@@ -174,8 +176,8 @@ class PythonPackageHygiene(unittest.TestCase):
                         for name in (
                             "yamaa/_odm/readers.py",
                             "yamaa/_odm/parquet.py",
-                            "yamaa/style/__main__.py",
-                            "yamaa/style/_fields.json",
+                            "yamaa/_support.py",
+                            "yamaa/_locked_functions.py",
                             "yamaa/_native.pyi",
                             "yamaa/__init__.py",
                         )
