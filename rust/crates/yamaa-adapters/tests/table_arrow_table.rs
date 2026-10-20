@@ -894,7 +894,6 @@ mod table {
     }
     #[cfg(feature = "yaml")]
     mod csv_precision {
-        use crate::support::ipc_snapshot;
         use std::{convert::Infallible, sync::Arc};
         use yamaa_adapters::{
             specification_report::{self, Identity},
@@ -903,6 +902,7 @@ mod table {
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::specification::{PreparedSpecification, SourceDeclaration};
+        use yamaa_core::value::Value;
         use yamaa_core::{
             specification_output::SaveError, specification_run::SpecificationSourcePort,
         };
@@ -984,22 +984,23 @@ mod table {
             let run = prepared("2", "output.csv", "VALUE + VALUE");
             let mut study = Study(0);
             let attempt = run.execute(&mut study, Scope::default());
-            // The checked table of the same execution keeps the unrounded
+            // The attempt's own checked dataset keeps the unrounded
             // derivation; only the saved bytes round.
-            let response = run
-                .execute_csv(b"ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n")
-                .unwrap();
-            let table = response.table.as_ref().unwrap();
-            let snapshot: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(table)).unwrap();
-            assert_eq!(
-                snapshot["rows"][1][1],
-                yamaa_adapters::json!({"float": "3ff3be76c8b43958"})
-            );
-            assert_eq!(
-                snapshot["rows"][1][2],
-                yamaa_adapters::json!({"float": "4003be76c8b43958"})
-            );
+            let dataset = &attempt
+                .dataset
+                .result
+                .as_ref()
+                .unwrap()
+                .result
+                .as_ref()
+                .unwrap()
+                .dataset;
+            let bits = |column: usize| match &dataset.rows()[1][column] {
+                Value::Float(value) => value.get().to_bits(),
+                other => panic!("a float cell, not {other:?}"),
+            };
+            assert_eq!(bits(1), 0x3ff3_be76_c8b4_3958);
+            assert_eq!(bits(2), 0x4003_be76_c8b4_3958);
             let result =
                 specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
             assert_eq!(
