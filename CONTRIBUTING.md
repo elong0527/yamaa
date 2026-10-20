@@ -250,6 +250,12 @@ pull request whose diff reaches the 1.0 front end
 (`rust/crates/yamaa-core/src/front_end/`), the converter (`tools/migrate/`),
 the 1.0 schemas (`yaml/v1/`) or the gate itself, and otherwise passes with a
 notice; a weekly schedule and a dispatch run it on both hosts.
+The repository tools that read benchmarks read each file by its own header,
+as the engine does (`tools/surface.py`): the benchmark runner, project and
+input staging, the conformance planner, the dashboard renderer and the
+vocabulary coverage check. `tools/tests/test_both_surfaces.py` converts the
+corpus and requires each of them to read the original and the conversion
+alike, so the corpus can move to 1.0 one prefix at a time (P2-5 to P2-8).
 `make probe-executor` times one specification at 10,000, 100,000 and
 1,000,000 rows, with and without one keyed intermediate lookup;
 `examples/executor_probe.rs` in the `yamaa` crate documents its shapes and
