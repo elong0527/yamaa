@@ -20,14 +20,20 @@ class PackageNotices(unittest.TestCase):
         (self.root / "tools/packaging/release.toml").write_text('version = "0.4.0"\n')
         (self.root / "python/pyproject.toml").write_text(
             '[project]\nversion = "0.4.0"\n'
-            'license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt"]\n'
+            'license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt", '
+            '"COMPONENTS.tsv"]\n'
         )
-        self.notices = {
-            "LICENSE.txt": b"project\n",
-            "LICENSE-THIRD-PARTY.txt": b"crates\n",
-        }
-        for name, payload in self.notices.items():
-            (self.root / "python" / name).write_bytes(payload)
+        # The hosts share their notices but not their component inventories.
+        shared = {"LICENSE.txt": b"project\n", "LICENSE-THIRD-PARTY.txt": b"crates\n"}
+        self.notices = dict(shared, **{"COMPONENTS.tsv": b"name\npyo3\n"})
+        self.r_notices = dict(shared, **{"COMPONENTS.tsv": b"name\nextendr-api\n"})
+        for directory, notices in (
+            ("python", self.notices),
+            ("R/yamaa/inst", self.r_notices),
+        ):
+            (self.root / directory).mkdir(parents=True, exist_ok=True)
+            for name, payload in notices.items():
+                (self.root / directory / name).write_bytes(payload)
 
     def tar(self, name, members):
         path = self.root / name
@@ -49,11 +55,31 @@ class PackageNotices(unittest.TestCase):
         )
         r_source = self.tar(
             "yamaa_0.4.0.tar.gz",
-            {f"yamaa/inst/{name}": payload for name, payload in self.notices.items()},
+            {f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
         )
         for path in (wheel, sdist, r_source):
             with self.subTest(archive=path.name):
-                self.assertEqual(len(packages.check_archive(path, self.root)), 2)
+                self.assertEqual(len(packages.check_archive(path, self.root)), 3)
+
+    def test_each_package_carries_its_own_hosts_component_inventory(self):
+        # The R source archive with the Python inventory, and a wheel with the
+        # R one, carry the other host's components.
+        r_source = self.tar(
+            "yamaa_0.4.0.tar.gz",
+            {f"yamaa/inst/{name}": data for name, data in self.notices.items()},
+        )
+        with self.assertRaisesRegex(
+            ValueError, "differs or is missing: yamaa/inst/COMPONENTS.tsv"
+        ):
+            packages.check_archive(r_source, self.root)
+        wheel = self.root / "yamaa-0.4.0-cp312-abi3-win_amd64.whl"
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name, payload in self.r_notices.items():
+                archive.writestr(f"yamaa-0.4.0.dist-info/licenses/{name}", payload)
+        with self.assertRaisesRegex(
+            ValueError, "missing: yamaa-0.4.0.dist-info/licenses/COMPONENTS.tsv"
+        ):
+            packages.check_archive(wheel, self.root)
 
     def test_misplaced_changed_or_foreign_packages_fail(self):
         misplaced = self.tar(
@@ -90,11 +116,11 @@ class PackageNotices(unittest.TestCase):
         )
         r_source = self.tar(
             "yamaa_1.0.0.tar.gz",
-            {f"yamaa/inst/{name}": data for name, data in self.notices.items()},
+            {f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
         )
         for path in (wheel, sdist, r_source):
             with self.subTest(archive=path.name):
-                self.assertEqual(len(packages.check_archive(path, self.root)), 2)
+                self.assertEqual(len(packages.check_archive(path, self.root)), 3)
         for name in ("yamaa_1.0.0rc1.tar.gz", "yamaa-1.0.0.tar.gz"):
             other = self.tar(name, {})
             with (

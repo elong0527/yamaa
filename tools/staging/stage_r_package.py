@@ -11,9 +11,10 @@ configure reads the minimum Cargo and rustc from the rust-version of the
 bundle's workspace manifest. inst/AUTHORS names every bundled crate's authors
 and license, as CRAN's Repository Policy asks.
 
-inst/ holds only AUTHORS and the license notices, which R installs with the
-package. The inputs that the R suites read sit beside them in tests/, which
-R CMD check copies and runs from but R never installs (#3105).
+inst/ holds only AUTHORS, the license notices and the component inventory of
+the R bundle (tools/packaging/generate_component_inventory.py), which R
+installs with the package. The inputs that the R suites read sit in tests/,
+which R CMD check copies and runs from but R never installs (#3105).
 stage_test_inputs stages them there, and tools.commands.installed stages the
 same inputs beside the suites that native qualification runs.
 """

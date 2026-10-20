@@ -81,7 +81,8 @@ class StagingTests(unittest.TestCase):
                 ],
                 [],
             )
-            # The installed R package carries the Python package notices.
+            # The installed R package carries the Python package notices, with
+            # the component inventory of its own bundle.
             notices = tomllib.loads(
                 (staging.REPOSITORY / "python/pyproject.toml").read_text(
                     encoding="utf-8"
@@ -89,11 +90,18 @@ class StagingTests(unittest.TestCase):
             )["project"]["license-files"]
             self.assertIn("LICENSE.txt", notices)
             self.assertIn("LICENSE-THIRD-PARTY.txt", notices)
+            self.assertIn("COMPONENTS.tsv", notices)
             for name in notices:
+                host = "R/yamaa/inst" if name == "COMPONENTS.tsv" else "python"
                 self.assertEqual(
                     (destination / "inst" / name).read_bytes(),
-                    (staging.REPOSITORY / "python" / name).read_bytes(),
+                    (staging.REPOSITORY / host / name).read_bytes(),
                 )
+            inventory = (destination / "inst/COMPONENTS.tsv").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("\nyamaa-r\t", inventory)
+            self.assertNotIn("\nyamaa-python\t", inventory)
             self.assertEqual(
                 (destination / "inst/LICENSE.txt").read_bytes(),
                 (staging.REPOSITORY / "LICENSE").read_bytes(),

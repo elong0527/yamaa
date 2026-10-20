@@ -236,6 +236,10 @@ components are tracked by hand:
   wheels bundle libxml2 2.11.9, an end-of-life branch that lxml describes as
   security-patched.
 
+The first three are also rows of the component inventory that every package
+ships, with the versions and sources that their provenance records give
+(see [source package contents](#source-package-contents)).
+
 ## Release checklist
 
 Before pushing the release tag, confirm on the final commit:
@@ -540,11 +544,12 @@ ReadStat C sources, as contributors and copyright holders.
 The R source package carries the inputs that its tests read in `tests/`,
 beside the suites: `R CMD check` copies that directory and runs the suites
 from it, and R never installs it, so the installed package holds no test
-inputs (#3105). Its `inst/` holds `AUTHORS` and the license notices. Native
-qualification stages the same inputs beside the installed suites that it
-runs, as it stages the Python suites' inputs, and each third-party SAS
-fixture keeps its license beside it. `tools/staging/stage_r_package.py` lists
-the staged inputs that no R suite reads, which neither route carries.
+inputs (#3105). Its `inst/` holds `AUTHORS`, the license notices and the
+component inventory. Native qualification stages the same inputs beside the
+installed suites that it runs, as it stages the Python suites' inputs, and
+each third-party SAS fixture keeps its license beside it.
+`tools/staging/stage_r_package.py` lists the staged inputs that no R suite
+reads, which neither route carries.
 
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
@@ -573,6 +578,27 @@ matching notice entry, when `rustc` in `rust/` is not the pinned toolchain, and
 when the committed section differs from that toolchain's notice.
 Native qualification and the release selector require every wheel and source
 package to carry each notice unchanged.
+
+Every package also carries `COMPONENTS.tsv` beside the notices, the component
+inventory of its host: the wheels and the Python source archive carry the
+Python inventory, and the R source package the R inventory, which R installs
+with the notices. It lists every package of the host's trimmed lock,
+including the crates that only build scripts and procedural macros use and
+those that no supported target compiles, and the C code that those crates
+compile from sources that they carry: ReadStat in `yamaa-adapters` and the
+zstd library that `zstd-sys` bundles. It is tab-separated text with a header
+row and one row per component, giving its name and version; its license, the
+SPDX expression that a crate's manifest declares, with Cargo's legacy `/`
+written as `OR`, or the C code's upstream license; its source, `crates.io`
+or the component's directory in this repository, with the upstream
+repository and commit of vendored code, or the crate that bundles it; and its
+purpose, from `tools/packaging/crate_purposes.toml`. It records no digests.
+Packages that pip or R install beside yamaa, such as Polars, are not among
+its components. `tools.packaging.generate_component_inventory` writes both
+inventories, and the repository check fails while one differs from what its
+host's trimmed lock, the crates' manifests, the purposes and the vendored
+sources' provenance give. The package notice checks require each package to
+carry its own host's inventory unchanged.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary

@@ -12,7 +12,9 @@ requires-python = ">=3.12"
 # also link Apache-2.0, BSD-3-Clause and Zlib crates.
 # tools.packaging.generate_third_party_notices derives this expression.
 license = "MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0 AND Zlib"
-license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt", "LICENSE-UNICODE.txt", "LICENSE-READSTAT.txt", "LICENSE-YAML.txt"]
+# The component inventory, COMPONENTS.tsv, ships beside the notices; the R
+# package's copy lists the R bundle's components instead.
+license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt", "LICENSE-UNICODE.txt", "LICENSE-READSTAT.txt", "LICENSE-YAML.txt", "COMPONENTS.tsv"]
 authors = [
   { name = "Yilong Zhang", email = "elong0527@gmail.com" },
   { name = "Ming-Chun Chen" },
@@ -122,6 +124,7 @@ cache-keys = [
   { file = "LICENSE-READSTAT.txt" },
   { file = "LICENSE-UNICODE.txt" },
   { file = "LICENSE-YAML.txt" },
+  { file = "COMPONENTS.tsv" },
   { file = "src/**" },
   { file = "../rust/Cargo.toml" },
   { file = "../rust/Cargo.lock" },

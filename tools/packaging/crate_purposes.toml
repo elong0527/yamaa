@@ -26,6 +26,10 @@
 # tools/packaging/check_crate_purposes.py, which `make check-repository`
 # runs, fails while a crate of either host's trimmed lock has no purpose, a
 # purpose names a crate that neither host ships, or a purpose is empty.
+#
+# Every package ships these purposes in its component inventory,
+# COMPONENTS.tsv; after changing one, regenerate the inventories with
+# `python -m tools.packaging.generate_component_inventory --write`.
 
 [crates]
 adler2 = "transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams"
@@ -173,7 +177,7 @@ yamaa-adapters = "the engine's codecs, storage formats, physical IO and filesyst
 yamaa-core = "the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering"
 yamaa-python = "the Python binding: the native extension module of the Python package"
 yamaa-r = "the R binding: the static library that the R package links"
-yamaa-saphyr-parser = "the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix, vendored in rust/vendor"
+yamaa-saphyr-parser = "the YAML parser (the yaml feature): saphyr-parser 0.2.1 with the reviewed compact-flow fix and 0.2.2's raw NUL fix, vendored in rust/vendor"
 zerocopy = "transitive dependency of ahash and half: checked byte-level conversions"
 zerocopy-derive = "procedural macro: zerocopy's derives, which half enables"
 zlib-rs = "transitive dependency of flate2: the DEFLATE backend that parquet's flate2 feature selects, which flate2 prefers"

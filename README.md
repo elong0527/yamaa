@@ -145,4 +145,5 @@ publication are later distribution work.
 This project is licensed under the terms of the MIT license. The Python and R
 packages also include third-party code under its own licenses; each package
 carries those notices in `LICENSE-THIRD-PARTY.txt` and the other files listed
-in the [release guidance](docs/release.md#source-package-contents).
+in the [release guidance](docs/release.md#source-package-contents), with an
+inventory of its components in `COMPONENTS.tsv`.

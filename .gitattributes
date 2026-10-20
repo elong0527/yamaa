@@ -7,6 +7,9 @@ python/LICENSE.txt text eol=lf
 R/yamaa/inst/LICENSE.txt text eol=lf
 python/LICENSE-THIRD-PARTY.txt text eol=lf
 R/yamaa/inst/LICENSE-THIRD-PARTY.txt text eol=lf
+# So are the generated component inventories, with what each host's bundle gives.
+python/COMPONENTS.tsv text eol=lf
+R/yamaa/inst/COMPONENTS.tsv text eol=lf
 # Keep the generated schema Unicode table's byte-exact reproduction portable.
 rust/crates/yamaa-core/src/schema/printable_data.rs text eol=lf
 # Keep the committed facade API inventory byte-identical on every platform.
