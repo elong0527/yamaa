@@ -1,33 +1,26 @@
 //! Borrow complete static compiler findings from the actual retained project.
 //! Unsupported vocabulary and policy/resource failures remain typed boundaries.
-use crate::{
-    issue_rows::Issue,
-    project_run::{PreparedRun, RejectedRun},
-};
-use yamaa_core::specification::PrepareError;
+use crate::project_run::{PreparedRun, RejectedRun};
+use yamaa_core::{diagnostic::Diagnostic, specification::PrepareError};
 
 #[derive(Debug)]
 pub enum Error<'a> {
     Compile(&'a PrepareError),
-    Projection(crate::specification_check::Error),
+    /// A rejected compilation that names no finding.
+    Projection,
 }
-pub fn prepared(run: &PreparedRun) -> Result<Vec<Issue>, Error<'_>> {
-    crate::specification_check::issue_rows(run).map_err(Error::Projection)
+pub fn prepared(run: &PreparedRun) -> Vec<Diagnostic> {
+    crate::specification_check::issues(run)
 }
-pub fn rejected(run: &RejectedRun) -> Result<Vec<Issue>, Error<'_>> {
+pub fn rejected(run: &RejectedRun) -> Result<Vec<Diagnostic>, Error<'_>> {
     let PrepareError::Invalid(findings) = &run.rejection.error else {
         return Err(Error::Compile(&run.rejection.error));
     };
     if findings.is_empty() {
-        return Err(Error::Projection(
-            crate::specification_check::Error::InvalidContext,
-        ));
+        return Err(Error::Projection);
     }
-    findings
+    Ok(findings
         .iter()
-        .map(|finding| {
-            Issue::from_core(finding.diagnostic())
-                .map_err(|_| Error::Projection(crate::specification_check::Error::InvalidContext))
-        })
-        .collect()
+        .map(|finding| finding.diagnostic())
+        .collect())
 }

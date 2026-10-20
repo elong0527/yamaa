@@ -1293,8 +1293,8 @@ mod files {
                 assert_eq!(
                     error.diagnostics(),
                     [yamaa_core::application_issue::rejected(
-                        "prepare",
-                        "resource_unreadable"
+                        yamaa_core::application_issue::Stage::Prepare,
+                        yamaa_core::application_issue::Fault::ResourceUnreadable,
                     )]
                 );
             }
@@ -1327,8 +1327,8 @@ mod files {
             assert_eq!(
                 error.diagnostics(),
                 [yamaa_core::application_issue::rejected(
-                    "prepare",
-                    "resource_unreadable"
+                    yamaa_core::application_issue::Stage::Prepare,
+                    yamaa_core::application_issue::Fault::ResourceUnreadable,
                 )]
             );
         }

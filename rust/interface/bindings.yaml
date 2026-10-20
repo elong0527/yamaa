@@ -21,8 +21,9 @@ contract: README.md
 
 # Roles are imports, not declarations of a second record schema. The generator
 # resolves each role to its public symbol in yamaa_adapters::diagnostic_record
-# (BOUNDARY_VERSION, DiagnosticRecord, ResultRecord, PlanRecord); an unresolved
-# role is a generation error.
+# (BOUNDARY_VERSION, ResultRecord, PlanRecord), and the diagnostic role to
+# core's yamaa_core::diagnostic::Diagnostic; an unresolved role is a generation
+# error.
 imports:
   records:
     owner: https://github.com/elong0527/yamaa/issues/2674

@@ -22,10 +22,11 @@ mod declaration {
             }) else {
                 return Vec::new();
             };
-            let report: Value =
-                yamaa_adapters::json_wire::decode(&capture_failure(&error)).unwrap();
-            match &report["outcome"]["diagnostics"] {
-                Value::Array(items) => items.clone(),
+            match capture_failure(&error) {
+                yamaa_adapters::specification_diagnostics::Rejection::Invalid(findings) => findings
+                    .iter()
+                    .map(yamaa_adapters::report_storage::diagnostic_value)
+                    .collect(),
                 other => panic!("expected diagnostics, got {other:?}"),
             }
         }
@@ -264,12 +265,13 @@ mod declaration {
             ) else {
                 return Vec::new();
             };
-            let report: Value = yamaa_adapters::json_wire::decode(
-                &yamaa_adapters::specification_diagnostics::inheritance_failure(error).unwrap(),
-            )
-            .unwrap();
-            match &report["outcome"]["diagnostics"] {
-                Value::Array(items) => items.clone(),
+            match yamaa_adapters::specification_diagnostics::inheritance_failure_ref(&error)
+                .unwrap()
+            {
+                yamaa_adapters::specification_diagnostics::Rejection::Invalid(findings) => findings
+                    .iter()
+                    .map(yamaa_adapters::report_storage::diagnostic_value)
+                    .collect(),
                 other => panic!("expected diagnostics, got {other:?}"),
             }
         }

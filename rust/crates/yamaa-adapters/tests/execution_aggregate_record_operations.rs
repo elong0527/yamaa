@@ -36,7 +36,7 @@ mod execution {
             }
             fn run(
                 &self,
-            ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>>
+            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml").to_str().unwrap().to_owned();
                 file_application::domain(
@@ -186,7 +186,7 @@ mod execution {
         fs::write(fixture.0.join("b.csv"),b"ID,N,USE\na,2,Y\n").unwrap();
         fs::write(fixture.0.join("spec.yaml"),specification(operation)).unwrap();
         let issues=match fixture.run(){Ok(mut domain)=>{assert!(domain.output().is_none());assert!(domain.save().is_err());domain.issues()},Err(issues)=>issues};
-        assert!(issues.iter().any(|issue|issue.condition==condition && issue.requirement.as_deref()==Some(requirement)),"{issues:?}");
+        assert!(issues.iter().any(|issue|issue.condition()==condition && issue.requirement()==Some(requirement)),"{issues:?}");
         assert!(!fixture.0.join("result.csv").exists());
     }
         }
@@ -220,7 +220,7 @@ mod execution {
                 };
                 Err(issues
                     .iter()
-                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase, "condition": issue.condition, "requirement": issue.requirement, "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
+                    .map(|issue| yamaa_adapters::json!({"phase": issue.phase(), "condition": issue.condition(), "requirement": issue.requirement(), "spec_paths": issue.spec_paths, "context": issue.context.clone()}))
                     .collect::<Vec<_>>())
             };
             let refused = |identifier: &str| {
@@ -291,8 +291,8 @@ mod execution {
             assert!(
                 issues
                     .iter()
-                    .any(|issue| issue.condition == "invalid_derive_step"
-                        && issue.requirement.as_deref() == Some("REQ-1242")),
+                    .any(|issue| issue.condition() == "invalid_derive_step"
+                        && issue.requirement() == Some("REQ-1242")),
                 "{issues:?}"
             );
         }
@@ -377,8 +377,8 @@ mod execution {
                 .iter()
                 .map(|issue| {
                     yamaa_adapters::json!({
-                        "phase": issue.phase, "condition": issue.condition,
-                        "requirement": issue.requirement, "spec_paths": issue.spec_paths,
+                        "phase": issue.phase(), "condition": issue.condition(),
+                        "requirement": issue.requirement(), "spec_paths": issue.spec_paths,
                         "context": issue.context.clone()
                     })
                 })
@@ -606,7 +606,7 @@ S1,002,2024-06
             fixture
         }
 
-        fn original_derive_issues(fixture: &Fixture) -> Vec<yamaa_adapters::issue_rows::Issue> {
+        fn original_derive_issues(fixture: &Fixture) -> Vec<yamaa_core::diagnostic::Diagnostic> {
             match fixture.run() {
                 Ok(mut domain) => {
                     assert!(domain.output().is_none());
@@ -626,8 +626,8 @@ S1,002,2024-06
                 ORIGINAL_QS,
             );
             let issues = original_derive_issues(&fixture);
-            assert_eq!(issues[0].condition, "invalid_derive_step");
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            assert_eq!(issues[0].condition(), "invalid_derive_step");
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert!(context["reason"].as_str().unwrap().contains("unique"));
 
             let fixture = original_derive_fixture(
@@ -636,8 +636,8 @@ S1,002,2024-06
                 ORIGINAL_QS,
             );
             let issues = original_derive_issues(&fixture);
-            assert_eq!(issues[0].condition, "unknown_derive_variable");
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            assert_eq!(issues[0].condition(), "unknown_derive_variable");
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["variable"], "QSNUM");
         }
 
@@ -673,7 +673,7 @@ S1,002,2024-06
                 ORIGINAL_QS_WITH_TEXT,
             );
             assert_eq!(
-                original_derive_issues(&fixture)[0].condition,
+                original_derive_issues(&fixture)[0].condition(),
                 "conversion_failed"
             );
         }
@@ -703,7 +703,7 @@ S1,002,2024-06
             let issues = original_derive_issues(&fixture);
             assert!(issues
                 .iter()
-                .any(|issue| issue.condition == "invalid_derive_step"));
+                .any(|issue| issue.condition() == "invalid_derive_step"));
 
             let fixture = original_derive_fixture(
         "- name: A\n  type: float\n  derivation: QS.QSORRES\n- name: B\n  type: float\n  derivation: XX.YY\n- name: CAPNUM\n  type: float\n  derivation: CAP.DSNUM",
@@ -714,10 +714,10 @@ S1,002,2024-06
             let issues = original_derive_issues(&fixture);
             let issue = issues
                 .iter()
-                .find(|issue| issue.condition == "invalid_derive_step")
+                .find(|issue| issue.condition() == "invalid_derive_step")
                 .unwrap();
-            assert_eq!(issue.requirement.as_deref(), Some("REQ-1191"));
-            let context: yamaa_core::json::Value = issue.context.clone();
+            assert_eq!(issue.requirement(), Some("REQ-1191"));
+            let context = yamaa_core::json::Value::Object(issue.context.clone());
             assert_eq!(context["relations"], yamaa_adapters::json!(["QS", "XX"]));
 
             for (source, requirement) in
@@ -732,11 +732,11 @@ S1,002,2024-06
                 let issues = original_derive_issues(&fixture);
                 let unknown = issues
                     .iter()
-                    .filter(|issue| issue.condition == "unknown_field")
+                    .filter(|issue| issue.condition() == "unknown_field")
                     .collect::<Vec<_>>();
                 assert_eq!(unknown.len(), 1, "{issues:?}");
-                assert_eq!(unknown[0].requirement.as_deref(), Some(requirement));
-                let context: yamaa_core::json::Value = unknown[0].context.clone();
+                assert_eq!(unknown[0].requirement(), Some(requirement));
+                let context = yamaa_core::json::Value::Object(unknown[0].context.clone());
                 assert_eq!(context["identifier"], source);
             }
 
@@ -749,11 +749,11 @@ S1,002,2024-06
             let issues = original_derive_issues(&fixture);
             let invalid = issues
                 .iter()
-                .filter(|issue| issue.condition == "invalid_derive_step")
+                .filter(|issue| issue.condition() == "invalid_derive_step")
                 .collect::<Vec<_>>();
             assert_eq!(invalid.len(), 1, "{issues:?}");
-            assert_eq!(invalid[0].requirement.as_deref(), Some("REQ-1242"));
-            let context: yamaa_core::json::Value = invalid[0].context.clone();
+            assert_eq!(invalid[0].requirement(), Some("REQ-1242"));
+            let context = yamaa_core::json::Value::Object(invalid[0].context.clone());
             assert_eq!(context["intermediate"], "CAP");
         }
 
@@ -788,11 +788,11 @@ S1,002,2024-06
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn issues(rows: &[yamaa_adapters::issue_rows::Issue]) -> yamaa_core::json::Value {
+        fn issues(rows: &[yamaa_core::diagnostic::Diagnostic]) -> yamaa_core::json::Value {
             yamaa_adapters::json!(rows
                 .iter()
                 .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase,"condition":row.condition,"requirement":row.requirement,
+                    "phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),
                     "spec_paths":row.spec_paths,"context":row.context.clone()
                 }))
                 .collect::<Vec<_>>())
@@ -887,7 +887,8 @@ S1,002,2024-06
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
-        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::{domain_entry::Request, json::Value};
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -932,13 +933,13 @@ S1,002,2024-06
             }
         }
 
-        fn rows(issues: &[Issue]) -> Value {
+        fn rows(issues: &[Diagnostic]) -> Value {
             Value::Array(
                 issues
                     .iter()
                     .map(|row| {
                         yamaa_adapters::json!({
-                            "phase": row.phase, "condition": row.condition, "requirement": row.requirement,
+                            "phase": row.phase(), "condition": row.condition(), "requirement": row.requirement(),
                             "spec_paths": row.spec_paths, "context": row.context.clone()
                         })
                     })
@@ -1110,8 +1111,8 @@ S1,002,2024-06
             }
         }
 
-        fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+        fn issue(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
 
         fn expected(path: &Path) -> yamaa_core::json::Value {
@@ -2389,8 +2390,8 @@ S1,002,2024-06
                 }
             }
         }
-        fn issue(issue: &yamaa_adapters::issue_rows::Issue) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+        fn issue(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn expected(path: &Path) -> yamaa_core::json::Value {
             let text = fs::read_to_string(path).unwrap();
@@ -2558,7 +2559,7 @@ S1,002,2024-06
                 independent(spec, "ID\n1\n", Some("ID,X\n1,9223372036854775807\n"));
             let mut result = result.unwrap();
             assert_eq!(result.issues().len(), 1);
-            assert_eq!(result.issues()[0].condition, "integer_overflow");
+            assert_eq!(result.issues()[0].condition(), "integer_overflow");
             assert!(result.issues()[0].spec_paths[0]
                 .starts_with("intermediates[0].derivations.NEXT.compute"));
             assert!(result.save().is_err());
@@ -2575,7 +2576,7 @@ S1,002,2024-06
             assert_eq!(
                 result
                     .iter()
-                    .map(|issue| (issue.condition.as_str(), issue.spec_paths[0].as_str()))
+                    .map(|issue| (issue.condition(), issue.spec_paths[0].as_str()))
                     .collect::<Vec<_>>(),
                 vec![
                     (
@@ -2798,7 +2799,7 @@ S1,002,2024-06
                 .err()
                 .expect("the first template is refused at preparation");
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "phase_boundary");
+            assert_eq!(issues[0].condition(), "phase_boundary");
             assert_eq!(issues[0].spec_paths, ["rows[0].derivations.VALUE.source"]);
             assert!(!fixture.0.join("out.csv").exists());
         }
@@ -3221,7 +3222,8 @@ S1,002,2024-06
             path::PathBuf,
             sync::atomic::{AtomicUsize, Ordering},
         };
-        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         struct Fixture(PathBuf);
@@ -3230,12 +3232,12 @@ S1,002,2024-06
                 fs::remove_dir_all(&self.0).unwrap();
             }
         }
-        fn issues(rows: &[Issue]) -> yamaa_core::json::Value {
+        fn issues(rows: &[Diagnostic]) -> yamaa_core::json::Value {
             yamaa_core::json::Value::Array(
                 rows.iter()
                     .map(|issue| {
-                        let mut value = issue.as_value();
-                        value["context"] = issue.context.clone();
+                        let mut value = yamaa_adapters::report_storage::diagnostic_value(issue);
+                        value["context"] = yamaa_core::json::Value::Object(issue.context.clone());
                         value
                     })
                     .collect(),
@@ -3349,7 +3351,7 @@ S1,002,2024-06
             fn run(
                 &self,
                 body: &str,
-            ) -> Result<file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>>
+            ) -> Result<file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>>
             {
                 let specification = self.0.join("spec.yaml");
                 fs::write(&specification, body).unwrap();

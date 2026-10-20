@@ -15,7 +15,7 @@
       "family": "diagnostics",
       "level": "component",
       "consumers": [
-        "rust/crates/yamaa-adapters/src/test_diagnostic_truth.rs"
+        "rust/crates/yamaa-adapters/src/report_storage.rs"
       ]
     },
     {

@@ -13,10 +13,10 @@ use yamaa_adapters::{
     file_application::{self, Domain},
     file_resources::HeldArtifacts,
     file_workflow,
-    issue_rows::Issue,
     project_scope::{Preflight, Project},
     specification_report::Identity,
 };
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
     json::Value, project_environment::Submission, project_function::Language,
     specification_run::SourceOrigin,
@@ -115,11 +115,8 @@ fn names(project: &Project, steps: impl IntoIterator<Item = usize>) -> Vec<Strin
         .collect()
 }
 
-fn condition(issues: &[Issue]) -> Vec<&str> {
-    issues
-        .iter()
-        .map(|issue| issue.condition.as_str())
-        .collect()
+fn condition(issues: &[Diagnostic]) -> Vec<&str> {
+    issues.iter().map(|issue| issue.condition()).collect()
 }
 
 #[test]
@@ -304,7 +301,7 @@ fn unlinked_inputs_cycles_and_collisions_are_project_findings() {
 fn saved_build(
     study: &Study,
     held: Option<HeldArtifacts>,
-) -> (bool, Option<SourceOrigin>, Vec<Issue>) {
+) -> (bool, Option<SourceOrigin>, Vec<Diagnostic>) {
     let yamaa_core::build::Prepared::Plain(prepared) = file_workflow::select_request(
         yamaa_core::build::Request {
             specification: &study.path("adam/adsl.yaml"),

@@ -35,20 +35,21 @@ mod diagnostics {
 
         #[test]
         fn fixed_refusals_preserve_exact_resource_facts_and_authored_paths() {
-            for (stage, code) in [
-                ("capture", "resource_limit"),
-                ("prepare", "compiler_limit"),
-                ("check", "compiler_limit"),
-                ("ingest", "source_limit"),
-                ("bind", "source_limit"),
-                ("execute", "execution_limit"),
-                ("build", "source_boundary"),
-                ("build", "execution_boundary"),
-                ("output", "resource_limit"),
+            use yamaa_core::application_issue::{Fault, Stage};
+            for (stage, fault, code) in [
+                (Stage::Capture, Fault::ResourceLimit, "resource_limit"),
+                (Stage::Prepare, Fault::CompilerLimit, "compiler_limit"),
+                (Stage::Check, Fault::CompilerLimit, "compiler_limit"),
+                (Stage::Ingest, Fault::SourceLimit, "source_limit"),
+                (Stage::Bind, Fault::SourceLimit, "source_limit"),
+                (Stage::Execute, Fault::ExecutionLimit, "execution_limit"),
+                (Stage::Build, Fault::SourceBoundary, "source_boundary"),
+                (Stage::Build, Fault::ExecutionBoundary, "execution_boundary"),
+                (Stage::Output, Fault::ResourceLimit, "resource_limit"),
             ] {
                 let finding = yamaa_core::application_issue::resource_rejected(
                     stage,
-                    code,
+                    fault,
                     "bytes",
                     7,
                     Some(8),
@@ -60,7 +61,7 @@ mod diagnostics {
                 assert_eq!(
                     finding.context,
                     [
-                        ("stage".into(), JsonValue::String(stage.into())),
+                        ("stage".into(), JsonValue::String(stage.as_str().into())),
                         ("code".into(), JsonValue::String(code.into())),
                         ("resource".into(), JsonValue::String("bytes".into())),
                         ("limit".into(), JsonValue::from(7)),
@@ -72,8 +73,8 @@ mod diagnostics {
                 assert_eq!(finding.operand_route, None);
             }
             let finding = yamaa_core::application_issue::resource_rejected(
-                "execute",
-                "execution_limit",
+                Stage::Execute,
+                Fault::ExecutionLimit,
                 "table_cells",
                 640_000_000,
                 None,
@@ -91,12 +92,131 @@ mod diagnostics {
             );
             assert_eq!(finding.spec_paths, ["columns"]);
             assert_eq!(
-                yamaa_core::application_issue::rejected("capture", "changed").context,
+                yamaa_core::application_issue::rejected(Stage::Capture, Fault::ResourceChanged)
+                    .context,
                 [
                     ("stage".into(), JsonValue::String("capture".into())),
-                    ("code".into(), JsonValue::String("changed".into())),
+                    ("code".into(), JsonValue::String("resource_changed".into())),
                 ]
                 .into()
+            );
+        }
+
+        /// The engine fault vocabulary is public context: every `stage` and
+        /// `code` spelling is frozen here, in declaration order, so renaming a
+        /// variant cannot move what a refusal reports.
+        #[test]
+        fn engine_fault_stages_and_codes_keep_their_spellings() {
+            use yamaa_core::application_issue::{Fault, Stage};
+            assert_eq!(
+                Stage::ALL
+                    .iter()
+                    .map(|stage| stage.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "bind",
+                    "build",
+                    "capture",
+                    "check",
+                    "define",
+                    "dictionary",
+                    "environment",
+                    "execute",
+                    "ingest",
+                    "inheritance",
+                    "output",
+                    "prepare",
+                    "project",
+                    "publication_target_admission",
+                    "report",
+                    "resolve",
+                ]
+            );
+            assert_eq!(
+                Fault::ALL
+                    .iter()
+                    .map(|fault| fault.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "activation_boundary",
+                    "artifact_representation",
+                    "cleanup_incomplete",
+                    "compilation_boundary",
+                    "compiler_limit",
+                    "csv_limit",
+                    "declaring_origin",
+                    "dependencies",
+                    "dependency_policy",
+                    "diagnostic_context",
+                    "document",
+                    "environment_boundary",
+                    "execution_boundary",
+                    "execution_limit",
+                    "host_publication_failure",
+                    "host_resource_failure",
+                    "inheritance_required",
+                    "internal",
+                    "invalid_packaging_lock",
+                    "invalid_target",
+                    "inventory",
+                    "issue_projection",
+                    "normalization",
+                    "numeric_policy",
+                    "odm_projection_boundary",
+                    "opaque_host",
+                    "output_limit",
+                    "output_projection",
+                    "output_schema",
+                    "parent_required",
+                    "parquet_boundary",
+                    "parquet_codec_unavailable",
+                    "parquet_limit",
+                    "parquet_reader_unavailable",
+                    "path_mismatch",
+                    "producer_contract",
+                    "producer_metadata",
+                    "project_sections",
+                    "publication_cancelled",
+                    "publication_failed",
+                    "publication_limit",
+                    "publication_report_limit",
+                    "publication_unwind",
+                    "reference_catalog",
+                    "report_refusal",
+                    "report_stack",
+                    "resource_base",
+                    "resource_changed",
+                    "resource_limit",
+                    "resource_link",
+                    "resource_missing",
+                    "resource_not_regular",
+                    "resource_outside_roots",
+                    "resource_path",
+                    "resource_root",
+                    "resource_unavailable",
+                    "resource_unreadable",
+                    "result_projection",
+                    "sas_boundary",
+                    "sas_limit",
+                    "sas_reader_unavailable",
+                    "schema_bundle",
+                    "shipped_schema",
+                    "source_boundary",
+                    "source_collection_boundary",
+                    "source_count",
+                    "source_limit",
+                    "source_ordinal_boundary",
+                    "staging_collision",
+                    "table_limit",
+                    "target_changed",
+                    "transport",
+                    "unknown_class",
+                    "unknown_section",
+                    "validation_policy",
+                    "versioned_root_required",
+                    "yaml_decode",
+                    "yaml_reader_unavailable",
+                ]
             );
         }
 
@@ -132,10 +252,13 @@ mod diagnostics {
                     [("operation", "environment")].as_slice(),
                 ),
                 (
-                    yamaa_core::application_issue::rejected("capture", "changed"),
+                    yamaa_core::application_issue::rejected(
+                        yamaa_core::application_issue::Stage::Capture,
+                        yamaa_core::application_issue::Fault::ResourceChanged,
+                    ),
                     "engine",
                     "engine_rejected",
-                    [("code", "changed"), ("stage", "capture")].as_slice(),
+                    [("code", "resource_changed"), ("stage", "capture")].as_slice(),
                 ),
             ] {
                 let definition = finding.definition();

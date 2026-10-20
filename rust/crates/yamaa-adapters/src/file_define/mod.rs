@@ -2,7 +2,6 @@
 use crate::{
     file_configuration, file_preparation, file_project, file_publication,
     file_resources::{self, Resources},
-    issue_rows::Issue,
     project_application,
     project_source::OwnedEnvironment,
     specification_source::PreparedDocument,
@@ -42,7 +41,7 @@ pub struct Define {
     ports: NativePorts,
     application: service::Application<NativePorts>,
     failure: Option<Failure>,
-    issues: Vec<Issue>,
+    issues: Vec<Diagnostic>,
 }
 #[derive(Debug)]
 pub struct SaveError;
@@ -89,10 +88,10 @@ impl Define {
         result
     }
     fn refuse(&mut self, failure: Failure) {
-        self.issues = crate::issue_rows::collect(issues(&failure));
+        self.issues = crate::file_application::collect(issues(&failure));
         self.failure = Some(failure);
     }
-    pub fn issues(&self) -> &[Issue] {
+    pub fn issues(&self) -> &[Diagnostic] {
         &self.issues
     }
     pub fn failure(&self) -> Option<&Failure> {
@@ -434,32 +433,29 @@ fn resource(path: &str, written: &str, error: file_resources::Error) -> Failure 
         error,
     }
 }
-fn issues(failure: &Failure) -> Vec<Issue> {
+fn issues(failure: &Failure) -> Vec<Diagnostic> {
     match failure {
         Failure::Project(error) => project_application::failure(error),
+        // Submission findings record no geometry of their own.
         Failure::Metadata(findings) => findings
             .iter()
-            .map(|f| {
-                Issue::from_definition(f.definition(), vec![f.path.clone()], f.context.clone())
-                    .expect("admitted shared submission finding")
+            .map(|finding| Diagnostic {
+                code: finding.code,
+                spec_paths: vec![finding.path.clone()],
+                context: finding.context.clone(),
+                source_span: None,
+                operand_route: None,
             })
             .collect(),
-        Failure::Diagnostic(findings) => findings
-            .iter()
-            .cloned()
-            .map(|finding| Issue::from_core(finding).expect("admitted shared diagnostic"))
-            .collect(),
-        Failure::ClassifiedResource { diagnostic, .. } => {
-            vec![Issue::from_core(diagnostic.clone()).expect("classified Define resource finding")]
-        }
+        Failure::Diagnostic(findings) => findings.clone(),
+        Failure::ClassifiedResource { diagnostic, .. } => vec![diagnostic.clone()],
         Failure::Resource {
             path,
             written,
             error,
         } => {
             if let file_resources::Error::WrittenForm(failure) = error {
-                return vec![Issue::from_core(failure.field_diagnostic(path, written))
-                    .expect("admitted Define resource finding")];
+                return vec![failure.field_diagnostic(path, written)];
             }
             use file_resources::Error as E;
             use service::ResourceObservation as R;
@@ -477,27 +473,20 @@ fn issues(failure: &Failure) -> Vec<Issue> {
                 E::Changed => R::Changed,
                 E::Limit(error) => R::Limit(*error),
             };
-            vec![
-                Issue::from_core(service::resource_diagnostic(path, written, observation))
-                    .expect("admitted Define resource finding"),
-            ]
+            vec![service::resource_diagnostic(path, written, observation)]
         }
-        Failure::TargetAdmission { index, error } => {
-            vec![Issue::from_core(service::publication_diagnostic(
-                *index,
-                service::PublicationFailure::TargetAdmission,
-                error.message(),
-            ))
-            .expect("admitted Define publication target finding")]
-        }
-        Failure::Publication { index, error } => {
-            vec![Issue::from_core(service::publication_diagnostic(
-                *index,
-                service::PublicationFailure::Publication,
-                error.message(),
-            ))
-            .expect("admitted Define publication finding")]
-        }
+        Failure::TargetAdmission { index, error } => vec![service::publication_diagnostic(
+            *index,
+            service::PublicationFailure::TargetAdmission(
+                crate::file_application::publication_fault(error),
+            ),
+            error.message(),
+        )],
+        Failure::Publication { index, error } => vec![service::publication_diagnostic(
+            *index,
+            service::PublicationFailure::Publication,
+            error.message(),
+        )],
     }
 }
 fn read_parquet(

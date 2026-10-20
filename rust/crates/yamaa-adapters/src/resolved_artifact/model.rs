@@ -152,6 +152,11 @@ impl ResolvedArtifact {
     pub fn to_json(&self) -> Result<String, Error> {
         Ok(serde_json::to_string(self)?)
     }
+    /// The artifact as one owned tree, exactly as its JSON text reads, so
+    /// wide numbers keep their spelling.
+    pub fn to_value(&self) -> Result<Value, Error> {
+        Ok(crate::json_wire::decode(&self.to_json()?)?)
+    }
     /// Validate the distinct format without opening sources, resolving locations,
     /// compiling expressions, invoking callbacks or changing the stored facts.
     pub fn from_json(text: &str) -> Result<Self, Error> {
