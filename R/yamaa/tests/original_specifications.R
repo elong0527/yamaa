@@ -1672,7 +1672,9 @@ local({
     directory <- tempfile("key-expressions-"); dir.create(directory)
     entry <- file.path(directory,"spec.yaml")
     writeBin(charToRaw(truth$specification),entry)
-    if (length(truth$check_issues)) {
+    # A refusal binding decides from the declarations is reported by the
+    # build only once it has captured the inputs.
+    if (length(truth$check_issues) && !isTRUE(truth$check_after_capture)) {
       assert_key_issues(check_spec(entry)$issues,truth$check_issues)
       assert_key_issues(run_spec(entry)$issues,truth$check_issues)
     }

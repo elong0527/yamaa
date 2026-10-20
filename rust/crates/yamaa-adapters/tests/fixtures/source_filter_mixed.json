@@ -138,7 +138,21 @@
           }
         }
       ],
-      "check_issues": []
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "ungrouped_driver_field",
+          "rule": "ROW-5",
+          "spec_paths": [
+            "columns.VALUE.derivation.case[0].then.source"
+          ],
+          "context": {
+            "identifier": "SRC.SEQ",
+            "dataset": "SRC",
+            "row": "grouped"
+          }
+        }
+      ]
     }
   }
 }

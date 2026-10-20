@@ -19,10 +19,21 @@
 //!   and `derive` is `derivations` (P-HND-1, P-BIND-1);
 //! - `model` and the header, and the context that tells `compute` text from
 //!   expression-field text (FORMULA-27);
-//! - join keys, which P1-6 declares: an input's `key`, and the key a 0.5
-//!   lookup infers against the one its conversion declares (D23, D63);
+//! - where a declared intermediate `key` falls among the intermediate's
+//!   written fields;
 //! - a written `minimum_source_precision` that the month and day rules
 //!   already imply (D61).
+//!
+//! Join keys are compared directly (P1-6, D23, D63). Each key the 0.5 tree
+//! infers is computed as the engine infers it, the output keys the relation
+//! stores ([`yamaa_core::key_relation::infer`]), over the fields the
+//! engine's own readers give each input, and written into the 0.5 tree as
+//! 1.0 declares it: an input read by an implicit join or a keyless qualified
+//! aggregate declares it as its `key` (an input a rename-only intermediate
+//! reads does too, for LOOKUP-4), an intermediate without `key` that drives
+//! no row template declares it as its own, and a keyless qualified aggregate
+//! matches on its input's (`FromInput`). The two trees must then be equal,
+//! so each declared key equals the key the engine infers today.
 //!
 //! Every specification whose trees still differ is listed in [`EXPECTED`]
 //! with the reason, and the test fails when the list is wrong in either
@@ -37,17 +48,21 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use yamaa_adapters::document::{self, Closures, Decoded};
 use yamaa_adapters::shipped_schema;
-use yamaa_adapters::specification_source::{InheritancePort, Source};
+use yamaa_adapters::specification_source::{InheritancePort, PreparedDocument, Source};
 use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::ast::{
-    Comparator, Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec,
-    Step, Written,
+    Comparator, Constant, ExprId, ExprKind, Filtered, Input, JoinKey, KeyDecl, Literal, Meta,
+    Named, Notation, Owner, Precision, Role, ScalarOp, Segment, Span, Spec, Step, Written,
 };
 use yamaa_core::expression::Context;
 use yamaa_core::front_end::v0_5::lower;
 use yamaa_core::inheritance::{Source as GraphSource, SourceError};
+use yamaa_core::key_relation::{self, Inference};
 use yamaa_core::language::{FileType, LANGUAGE_VERSION};
+use yamaa_core::reference_binding::{Catalog, Field};
 use yamaa_core::schema::{Document, DocumentNode as N};
+use yamaa_core::table::TableAccess;
+use yamaa_core::value::ColumnType;
 
 /// Each specification whose trees differ, with the reason.
 const EXPECTED: &[(&str, &str)] = &[
@@ -70,11 +85,12 @@ const EXPECTED: &[(&str, &str)] = &[
          this negative retire",
     ),
     (
-        "negative-lookup-rename-intermediate/spec.yaml",
-        "P1-6: the converter declares the key of the intermediate CODED but not the \
-         key of its input CODING, so the 1.0 tree cannot tell that CODED only renames \
-         CODING (LOOKUP-4, D23) and prunes it unread, where 0.5 keeps it to refuse it; \
-         P1-6 writes the input's key",
+        "negative-lookup-unknown-key/spec.yaml",
+        "D23, D60: the intermediate REFRANGE reads LBRANGE, which stores none of the \
+         output keys, so 0.5 infers no key and the converter declares none; 1.0 \
+         refuses the intermediate before any input is read as missing_required_field \
+         (LOOKUP-3), where 0.5 refuses it at binding as no_applicable_keys; D60 \
+         re-authors this negative's error.yaml",
     ),
     (
         "sdtm-tr-tumor-measurements/spec.yaml",
@@ -250,13 +266,14 @@ fn refusal(debug: &str) -> String {
     }
 }
 
-/// The 0.5 front end's tree for an original specification, or why it is
+/// The 0.5 front end's tree for an original specification, with the
+/// prepared document that knows where each input was declared, or why it is
 /// refused before lowering.
-fn legacy(path: &Path) -> Result<Spec, String> {
+fn legacy(path: &Path) -> Result<(Spec, PreparedDocument), String> {
     let (source, identity) = source(path);
     let document = shipped_schema::prepare(source, identity, &mut Files)
         .map_err(|error| refusal(&format!("{error:?}")))?;
-    Ok(lower(document.model(), None).into_spec())
+    Ok((lower(document.model(), None).into_spec(), document))
 }
 
 /// The 1.0 front end's tree for a converted specification, or why it is
@@ -278,8 +295,6 @@ fn versioned(path: &Path) -> Result<Spec, String> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Normalized {
     RestatedDefault,
-    InputKey,
-    LookupKey,
     MinimumPrecision,
 }
 
@@ -287,16 +302,400 @@ impl Normalized {
     fn label(self) -> &'static str {
         match self {
             Self::RestatedDefault => "a handler restating its default (P-HND-3)",
-            Self::InputKey => "an input's declared key (P1-6)",
-            Self::LookupKey => "a lookup key 0.5 infers and 1.0 declares (P1-6)",
             Self::MinimumPrecision => "minimum_source_precision the rules imply (D61)",
         }
     }
 }
 
-/// Leave out of a tree what the comparison does not cover. `inferred`
-/// names the intermediates whose key the 0.5 tree infers.
-fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<Normalized>) {
+/// The keys one specification declares where its 0.5 tree infers them.
+#[derive(Clone, Debug, Default)]
+struct Declared {
+    /// Each input an implicit join, a keyless qualified aggregate or a
+    /// rename-only intermediate reads, with the key the engine infers.
+    inputs: Vec<(String, Vec<String>)>,
+    /// Each intermediate without `key` that drives no row template, with
+    /// the key the engine infers.
+    intermediates: Vec<(String, Vec<String>)>,
+    /// The keyless qualified aggregates, which match on their input's key.
+    aggregates: usize,
+}
+
+impl Declared {
+    fn joins(&self) -> bool {
+        !self.inputs.is_empty() || !self.intermediates.is_empty() || self.aggregates > 0
+    }
+}
+
+/// The fields `input` stores, as the engine reads them before binding: a
+/// CSV header and a Parquet schema by the source readers, a schema-linked
+/// input's producer contract, or the ODM item table; and a generated
+/// ordinal (INPUT-3, INPUT-10).
+fn stored_fields(document: &PreparedDocument, input: &Input) -> Result<Vec<String>, String> {
+    let name = &input.name.name;
+    let located = |field: &str| {
+        let origin = document
+            .written_input_origin(name, field)
+            .ok_or_else(|| format!("input {name} has no written {field}"))?;
+        Ok::<_, String>(
+            Path::new(origin.base_source)
+                .parent()
+                .unwrap()
+                .join(origin.written),
+        )
+    };
+    let mut fields = if input.source.schema.is_some() {
+        let producer = located("schema")?;
+        let (spec, _) =
+            legacy(&producer).map_err(|error| format!("producer of {name} not read: {error}"))?;
+        spec.output
+            .columns
+            .iter()
+            .map(|column| column.name.clone())
+            .collect()
+    } else {
+        let path = located("path")?;
+        let bytes = fs::read(&path).map_err(|error| format!("input {name}: {error}"))?;
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some(extension) if extension.eq_ignore_ascii_case("csv") => {
+                yamaa_core::csv_source::parse(&bytes)
+                    .map_err(|error| format!("input {name}: {error:?}"))?
+                    .names
+            }
+            Some(extension) if extension.eq_ignore_ascii_case("parquet") => {
+                yamaa_adapters::parquet_source::parse(&bytes)
+                    .map_err(|error| format!("input {name}: {error:?}"))?
+                    .schema()
+                    .columns()
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect()
+            }
+            Some(extension) if extension.eq_ignore_ascii_case("xml") => {
+                yamaa_core::odm_source::FIELDS
+                    .iter()
+                    .map(|field| field.to_string())
+                    .collect()
+            }
+            _ => {
+                return Err(format!(
+                    "input {name} is read by no reader the comparison uses"
+                ))
+            }
+        }
+    };
+    fields.extend(
+        input
+            .source
+            .ordinal
+            .iter()
+            .map(|ordinal| ordinal.name.clone()),
+    );
+    Ok(fields)
+}
+
+/// The key a relation storing `fields` matches on where the 0.5 tree infers
+/// it, as the engine infers it: the output keys, in key order, that the
+/// relation stores (LOOKUP-5 at the `yamaa-v0.5.0` tag). Types are left
+/// out: a pair whose types cannot compare fails alike on both surfaces when
+/// it binds (LOOKUP-9), and the converter writes the pair by name.
+fn applicable(spec: &Spec, fields: &[String]) -> Vec<String> {
+    let typed = |name| Field {
+        name,
+        column_type: ColumnType::Str,
+    };
+    let outputs = spec
+        .columns
+        .iter()
+        .map(|column| typed(column.name.name.as_str()))
+        .collect::<Vec<_>>();
+    let catalog = Catalog::compile(&outputs, &[]).unwrap();
+    let keys = spec
+        .keys
+        .iter()
+        .map(|key| key.name.as_str())
+        .collect::<Vec<_>>();
+    let donor = fields
+        .iter()
+        .map(|field| typed(field.as_str()))
+        .collect::<Vec<_>>();
+    match key_relation::infer(&catalog, &keys, &donor).unwrap() {
+        Inference::Keys { keys: selected } => selected
+            .into_iter()
+            .map(|key| keys[key].to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Where a qualified name read in the current row joins: the datasets whose
+/// records build the rows `owner` derives or filters, which a read of
+/// another input joins from (LOOKUP-1, NAME-4). `None` for a site whose
+/// reads never join, such as a lookup's own declarations.
+fn drivers(spec: &Spec, owner: Owner) -> Option<Vec<&str>> {
+    let base =
+        spec.rows
+            .base
+            .as_ref()
+            .map(|base| base.name.as_str())
+            .or(match spec.inputs.as_slice() {
+                [only] => Some(only.name.name.as_str()),
+                _ => None,
+            });
+    let templates = &spec.rows.templates;
+    let driver = |template: usize| {
+        templates[template]
+            .driver
+            .as_ref()
+            .map(|driver| driver.name.as_str())
+            .or(base)
+    };
+    let all = || -> Vec<&str> {
+        if templates.is_empty() {
+            base.into_iter().collect()
+        } else {
+            (0..templates.len()).filter_map(driver).collect()
+        }
+    };
+    Some(match owner {
+        Owner::Default { column } if !templates.is_empty() => {
+            let name = &spec.columns[column].name.name;
+            (0..templates.len())
+                .filter(|&template| {
+                    !templates[template]
+                        .overrides
+                        .iter()
+                        .any(|(derived, _)| derived.name == *name)
+                })
+                .filter_map(driver)
+                .collect()
+        }
+        Owner::Default { .. } | Owner::Filter(Filtered::Base) => base.into_iter().collect(),
+        Owner::Override { template, .. }
+        | Owner::Filter(Filtered::Template(template))
+        | Owner::Group { template } => driver(template).into_iter().collect(),
+        Owner::Check { .. } => all(),
+        _ => return None,
+    })
+}
+
+/// The qualified names `e` reads in the current row's scope, outside a
+/// lookup's own range, filter, order and key match values, a window's
+/// grouping and order, and an ODM read, none of which joins; and each
+/// keyless qualified aggregate below `e`, with the qualifiers its reduction
+/// reads.
+fn row_reads(
+    spec: &Spec,
+    e: ExprId,
+    names: &mut BTreeSet<String>,
+    aggregates: &mut Vec<BTreeSet<String>>,
+) {
+    let node = &spec.expr(e).kind;
+    match node {
+        ExprKind::Ref(name) => names.extend(name.owner().map(String::from)),
+        ExprKind::Odm(_) => return,
+        ExprKind::Aggregate(aggregate) => {
+            if matches!(aggregate.key, Some(JoinKey::Applicable)) {
+                let mut relation = BTreeSet::new();
+                relation_reads(spec, e, &mut relation);
+                aggregates.push(relation);
+            }
+            return;
+        }
+        _ => {}
+    }
+    for (role, child) in spec.children(e) {
+        let skipped = match role {
+            Role::Relation | Role::RangeValue | Role::RangeBound | Role::KeyValue => true,
+            Role::Group | Role::Order => matches!(node, ExprKind::Window(_) | ExprKind::Source(_)),
+            Role::Condition => matches!(node, ExprKind::Window(_)),
+            _ => false,
+        };
+        if !skipped {
+            row_reads(spec, child, names, aggregates);
+        }
+    }
+}
+
+/// The qualifiers an aggregate's reduction, filter and bindings read,
+/// outside its key match values and range.
+fn relation_reads(spec: &Spec, e: ExprId, out: &mut BTreeSet<String>) {
+    if let ExprKind::Ref(name) = &spec.expr(e).kind {
+        out.extend(name.owner().map(String::from));
+    }
+    for (role, child) in spec.children(e) {
+        if !matches!(role, Role::KeyValue | Role::RangeValue | Role::RangeBound) {
+            relation_reads(spec, child, out);
+        }
+    }
+}
+
+/// Write the keys the 0.5 tree `old` infers into it as the 1.0 tree `new`
+/// declares them, each computed as the engine infers it: an input's `key`,
+/// an intermediate's own `key`, and `FromInput` on a keyless qualified
+/// aggregate. Where an intermediate's declared `key` falls among its written
+/// fields is left out of both trees.
+fn declare_inferred(
+    old: &mut Spec,
+    new: &mut Spec,
+    document: &PreparedDocument,
+) -> Result<Declared, String> {
+    let mut declared = Declared::default();
+    let inputs = old
+        .inputs
+        .iter()
+        .map(|input| input.name.name.clone())
+        .collect::<BTreeSet<_>>();
+    let intermediates = old
+        .intermediates
+        .iter()
+        .map(|item| item.id.name.clone())
+        .collect::<BTreeSet<_>>();
+    // The inputs an implicit join or a keyless qualified aggregate reads.
+    let mut joined = BTreeSet::new();
+    for site in old.sites() {
+        let Some(drivers) = drivers(old, site.owner) else {
+            continue;
+        };
+        let mut names = BTreeSet::new();
+        let mut aggregates = Vec::new();
+        row_reads(old, site.root, &mut names, &mut aggregates);
+        for owner in names {
+            if inputs.contains(&owner)
+                && !intermediates.contains(&owner)
+                && drivers.iter().any(|driver| *driver != owner)
+            {
+                joined.insert(owner);
+            }
+        }
+        let grouped_driver = match site.owner {
+            Owner::Override { template, .. }
+            | Owner::Filter(Filtered::Template(template))
+            | Owner::Group { template }
+                if old.rows.templates[template].group_by.is_some() =>
+            {
+                drivers.first().copied()
+            }
+            _ => None,
+        };
+        for relation in aggregates {
+            let mut relation = relation.into_iter().filter(|name| inputs.contains(name));
+            if let (Some(input), None) = (relation.next(), relation.next()) {
+                if grouped_driver != Some(input.as_str()) {
+                    declared.aggregates += 1;
+                    joined.insert(input);
+                }
+            }
+        }
+    }
+    // An intermediate that only renames its input is refused in 1.0 when its
+    // key lists the input's declared key (LOOKUP-4, D71).
+    for item in &old.intermediates {
+        let renames = matches!(item.key, Some(JoinKey::Applicable))
+            && item
+                .written
+                .fields()
+                .iter()
+                .all(|field| matches!(*field, "no_match" | "require_match"))
+            && !item.require_match
+            && item
+                .absent
+                .as_ref()
+                .is_none_or(|absent| absent.value == Literal::Missing);
+        if renames && inputs.contains(&item.dataset.name) {
+            joined.insert(item.dataset.name.clone());
+        }
+    }
+    let named = |paths: &mut yamaa_core::ast::Paths, parent: Meta, names: &[String]| {
+        let key = paths.child(parent.path, Segment::Field("key"));
+        let columns = names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| Named {
+                name: name.clone(),
+                meta: Meta {
+                    path: paths.child(key, Segment::Index(index as u32)),
+                    span: Span::UNKNOWN,
+                },
+            })
+            .collect::<Vec<_>>();
+        (
+            Meta {
+                path: key,
+                span: Span::UNKNOWN,
+            },
+            columns,
+        )
+    };
+    for index in 0..old.inputs.len() {
+        let name = old.inputs[index].name.name.clone();
+        let key = if joined.contains(&name) {
+            applicable(old, &stored_fields(document, &old.inputs[index])?)
+        } else {
+            Vec::new()
+        };
+        old.inputs[index].key = if key.is_empty() {
+            KeyDecl::Undeclared
+        } else {
+            let (_, columns) = named(&mut old.paths, old.inputs[index].meta, &key);
+            declared.inputs.push((name, key));
+            KeyDecl::Declared(columns)
+        };
+    }
+    for index in 0..old.intermediates.len() {
+        if !matches!(old.intermediates[index].key, Some(JoinKey::Applicable)) {
+            continue;
+        }
+        let item = &old.intermediates[index];
+        let mut fields = if item.dataset.name == "SELF" {
+            old.columns
+                .iter()
+                .map(|column| column.name.name.clone())
+                .collect()
+        } else {
+            let input = old
+                .inputs
+                .iter()
+                .find(|input| input.name.name == item.dataset.name)
+                .ok_or_else(|| format!("intermediate {} reads no input", item.id.name))?;
+            stored_fields(document, input)?
+        };
+        fields.extend(
+            item.bindings
+                .iter()
+                .map(|binding| binding.name.name.clone()),
+        );
+        let key = applicable(old, &fields);
+        let id = item.id.name.clone();
+        let meta = item.meta;
+        old.intermediates[index].key = if key.is_empty() {
+            None
+        } else {
+            let (meta, columns) = named(&mut old.paths, meta, &key);
+            declared.intermediates.push((id.clone(), key));
+            Some(JoinKey::Columns { columns, meta })
+        };
+        for spec in [&mut *old, &mut *new] {
+            if let Some(item) = spec
+                .intermediates
+                .iter_mut()
+                .find(|item| item.id.name == id)
+            {
+                item.written.0.retain(|&field| field != "key");
+            }
+        }
+    }
+    for expr in &mut old.exprs {
+        if let ExprKind::Aggregate(aggregate) = &mut expr.kind {
+            if matches!(aggregate.key, Some(JoinKey::Applicable)) {
+                aggregate.key = Some(JoinKey::FromInput);
+            }
+        }
+    }
+    Ok(declared)
+}
+
+/// Leave out of a tree what the comparison does not cover.
+fn normalize(spec: &mut Spec, out: &mut BTreeSet<Normalized>) {
     let mut left_out = BTreeSet::new();
     // An omitted handler that gives missing and one written as missing are
     // one answer (P-HND-3).
@@ -325,20 +724,7 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
             .filter(|&field| answered || field != "absent")
             .collect();
     };
-    for input in &mut spec.inputs {
-        if matches!(input.key, KeyDecl::Declared(_)) {
-            left_out.insert(Normalized::InputKey);
-        }
-        input.key = KeyDecl::Inferred;
-    }
     for item in &mut spec.intermediates {
-        if inferred.contains(&item.id.name) {
-            if !matches!(item.key, Some(JoinKey::Applicable)) {
-                left_out.insert(Normalized::LookupKey);
-            }
-            item.key = Some(JoinKey::Applicable);
-            item.written.0.retain(|&field| field != "key");
-        }
         if restated(&mut item.absent) {
             left_out.insert(Normalized::RestatedDefault);
         }
@@ -365,14 +751,8 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
                 }
                 false
             }
-            // A keyless qualified aggregate infers its key in 0.5 and matches
-            // on its input's declared key in 1.0 (P-KEY-1).
             ExprKind::Aggregate(aggregate) => {
                 spelled(&mut aggregate.written, true);
-                if matches!(aggregate.key, Some(JoinKey::FromInput)) {
-                    aggregate.key = Some(JoinKey::Applicable);
-                    left_out.insert(Normalized::LookupKey);
-                }
                 false
             }
             ExprKind::Scalar {
@@ -699,6 +1079,7 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
     let mut refused = Vec::new();
     let mut differing = BTreeMap::new();
     let mut tally = BTreeMap::<Normalized, usize>::new();
+    let mut joins = BTreeMap::<String, Declared>::new();
     let mut failures = Vec::new();
     for case in &cases {
         let name = case.file_name().unwrap().to_string_lossy().into_owned();
@@ -706,18 +1087,19 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
             let label = format!("{name}/{entry}");
             let converted = scratch.0.join("benchmarks").join(&name).join(&entry);
             match (legacy(&case.join(&entry)), versioned(&converted)) {
-                (Ok(mut old), Ok(mut new)) => {
+                (Ok((mut old, document)), Ok(mut new)) => {
                     compared += 1;
                     check_tree(&label, &new, &mut failures);
-                    let inferred = old
-                        .intermediates
-                        .iter()
-                        .filter(|item| matches!(item.key, Some(JoinKey::Applicable)))
-                        .map(|item| item.id.name.clone())
-                        .collect::<BTreeSet<_>>();
+                    match declare_inferred(&mut old, &mut new, &document) {
+                        Ok(declared) if declared.joins() => {
+                            joins.insert(label.clone(), declared);
+                        }
+                        Ok(_) => {}
+                        Err(error) => failures.push(format!("{label}: {error}")),
+                    }
                     let mut normalized = BTreeSet::new();
-                    normalize(&mut old, &inferred, &mut normalized);
-                    normalize(&mut new, &inferred, &mut normalized);
+                    normalize(&mut old, &mut normalized);
+                    normalize(&mut new, &mut normalized);
                     for normalized in normalized {
                         *tally.entry(normalized).or_default() += 1;
                     }
@@ -742,6 +1124,25 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
     );
     for (normalized, count) in &tally {
         println!("  {count:4} with {}", normalized.label());
+    }
+    // Every key 0.5 infers, declared by the conversion as the engine infers
+    // it (D23, D63; #2844 design, section 5).
+    let count = |of: &dyn Fn(&Declared) -> usize| joins.values().map(of).sum::<usize>();
+    println!(
+        "  {:4} with joins, declaring {} input keys and {} intermediate keys, and {} keyless qualified aggregates matching on their input's key",
+        joins.len(),
+        count(&|declared| declared.inputs.len()),
+        count(&|declared| declared.intermediates.len()),
+        count(&|declared| declared.aggregates),
+    );
+    let mut keys = BTreeMap::<String, usize>::new();
+    for declared in joins.values() {
+        for (_, key) in declared.inputs.iter().chain(&declared.intermediates) {
+            *keys.entry(format!("[{}]", key.join(", "))).or_default() += 1;
+        }
+    }
+    for (key, count) in &keys {
+        println!("       {count:4} declare {key}");
     }
     for refusal in &refused {
         println!("  refused by both: {refusal}");

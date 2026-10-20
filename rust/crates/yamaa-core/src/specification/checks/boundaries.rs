@@ -1,75 +1,97 @@
-//! Phase boundaries inside row templates, from each template's phase set
-//! (#2754): a row-phase derivation reads a column its template leaves to
-//! the column phase (COLUMN-4), or reads a lookup that matches on one
-//! through its key or its range value (LOOKUP-2). Binding reports the same
-//! findings at the same sites, so `check()` and `run()` agree on them.
+//! What binding decides of each read of a row template's row phase, of the
+//! column phase and of a row template's filter from the declarations alone,
+//! at binding's sites and in binding's order (#2754, #3229):
 //!
-//! Binding keeps what the declarations alone cannot decide: a lookup whose
-//! keys are inferred from the captured schemas, one whose key value reads
-//! another input's record, one that another lookup's derivations read, and
-//! a row filter's reads.
+//! - a bare read of a column the row template leaves to the column phase
+//!   (COLUMN-4);
+//! - a read of a driver field outside the row template's `group_by`
+//!   (ROW-5), or in the column phase outside the `group_by` of a grouped
+//!   template over that driver (NAME-4);
+//! - a row template's formula, flag or `case` predicate that reads another
+//!   input, and a column formula that reads a qualified name other than a
+//!   lookup's (FORMULA-9);
+//! - a read of a lookup whose key value reads another input's record than
+//!   the driver's (LOOKUP-5), or that matches on a column the row template
+//!   leaves to the column phase, through its key or range value (LOOKUP-2);
+//! - a row filter's read of a column its template does not derive, a
+//!   grouped filter's qualified read, and an ungrouped filter's read of a
+//!   window result, directly or through a lookup's match (ROW-6).
+//!
+//! Binding keeps what the declarations alone cannot decide: a field the
+//! input does not store, a lookup whose keys are inferred from the captured
+//! schemas or that another lookup's derivations read, and the output keys an
+//! implicit join matches on.
 
 use super::*;
-use crate::ast::{Scope, Step};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::ast::Scope;
+use crate::reference_scope::Phase;
+use std::{cell::Cell, collections::BTreeSet};
 
-/// The phase boundaries of `root`, one row-phase derivation of `template`,
-/// in the order binding reports them: each read in written order. True
-/// when there is one, after which binding binds nothing more of the
-/// derivation.
-pub(super) fn derivation(
-    spec: &Spec,
-    template: &rows::TemplatePhase<'_>,
-    root: ExprId,
-    findings: &mut Vec<BindFinding>,
-) -> bool {
-    // Preparation refuses a bare read of a column outside the row phase.
-    if matches!(&spec.expr(root).kind, ExprKind::Ref(name) if name.owner().is_none()) {
-        return false;
-    }
-    let start = findings.len();
-    let phase = Phase {
-        spec,
-        template,
-        available: template
-            .derivations
-            .iter()
-            .map(|derivation| derivation.column)
-            .collect(),
-    };
-    for (path, name) in phase.reads(root) {
-        match name.split_once('.') {
-            None => {
-                if let Some(column) = phase.output(name).filter(|&c| !phase.available(c)) {
-                    findings.push(BindFinding::OutputReference {
-                        path,
-                        name: name.into(),
-                        row: Some(template.id.into()),
-                        finding: crate::reference_binding::Diagnostic::PhaseBoundary { column },
-                    });
-                }
-            }
-            // A read qualified by the template's own driver reads its record.
-            Some((owner, _)) if owner != template.driver => {
-                if let Some(lookup) = phase.lookup(owner) {
-                    phase.lookup_read(lookup, &path, findings);
-                }
-            }
-            Some(_) => {}
+/// The reads of one derivation, as binding scopes them: a row template's
+/// row phase, or the column phase for the rows of the templates its
+/// bindings complete.
+pub(super) struct Reads<'a> {
+    spec: &'a Spec,
+    prepared: &'a PreparedSpecification,
+    /// The driver of each binding the derivation gets: a row template's own,
+    /// or in the column phase each binding's.
+    drivers: &'a [&'a str],
+    phase: Phase<'a>,
+    /// A row template's id and the columns it derives in the row phase,
+    /// which its row-phase reads may read.
+    row: Option<(&'a str, &'a [usize])>,
+    /// The lookups whose key types fail, which binding does not bind: it
+    /// reports each read of one as unknown, and the read binds nothing.
+    refused: &'a BTreeSet<usize>,
+    /// Whether a read since the last [`Self::bound`] named a refused lookup.
+    unbound: Cell<bool>,
+}
+
+impl<'a> Reads<'a> {
+    /// The row phase of `template`, in the scope binding binds its
+    /// derivations in ([`rows::TemplatePhase::scope`]).
+    pub(super) fn row(
+        spec: &'a Spec,
+        prepared: &'a PreparedSpecification,
+        template: &'a rows::TemplatePhase<'a>,
+        refused: &'a BTreeSet<usize>,
+    ) -> Self {
+        let scope = template.scope();
+        Self {
+            spec,
+            prepared,
+            drivers: std::slice::from_ref(&template.driver),
+            phase: scope.phase,
+            row: Some((template.id, scope.available.unwrap_or_default())),
+            refused,
+            unbound: Cell::new(false),
         }
     }
-    findings.len() != start
-}
 
-struct Phase<'a> {
-    spec: &'a Spec,
-    template: &'a rows::TemplatePhase<'a>,
-    available: BTreeSet<usize>,
-}
+    /// The column phase, for bindings over `drivers`, with every grouped
+    /// template's driver and `group_by`.
+    pub(super) fn column(
+        spec: &'a Spec,
+        prepared: &'a PreparedSpecification,
+        drivers: &'a [&'a str],
+        groups: &'a [(&'a str, &'a [&'a str])],
+        refused: &'a BTreeSet<usize>,
+    ) -> Self {
+        Self {
+            spec,
+            prepared,
+            drivers,
+            phase: Phase::Column { groups },
+            row: None,
+            refused,
+            unbound: Cell::new(false),
+        }
+    }
 
-impl<'a> Phase<'a> {
-    fn available(&self, column: usize) -> bool {
-        self.available.contains(&column)
+    /// Whether every read since the last call bound, as far as the
+    /// declarations decide: none named a refused lookup.
+    pub(super) fn bound(&self) -> bool {
+        !self.unbound.replace(false)
     }
 
     /// An unqualified name of an output column.
@@ -84,76 +106,241 @@ impl<'a> Phase<'a> {
             .flatten()
     }
 
+    /// Whether a row-phase read may read `column`; the column phase reads any.
+    fn available(&self, column: usize) -> bool {
+        self.row
+            .is_none_or(|(_, available)| available.contains(&column))
+    }
+
+    /// The lookup `owner` names, unless it drives the rows: a read qualified
+    /// by the driver reads the row's record.
     fn lookup(&self, owner: &str) -> Option<usize> {
+        if self.drivers.contains(&owner) {
+            return None;
+        }
         self.spec
             .intermediates
             .iter()
             .position(|item| item.id.name == owner)
     }
 
-    /// The names `root` reads in the row's scope, in written order, with
-    /// where binding cites each: its own path, or a template's text for a
-    /// placeholder. An ODM item names its dataset instead.
-    fn reads(&self, root: ExprId) -> Vec<(String, &'a str)> {
-        let spec = self.spec;
-        let mut reads = Vec::new();
-        let mut items = BTreeSet::new();
-        let mut placeholders = BTreeMap::new();
-        spec.walk(root, Scope::Row, |at, scope| {
-            match &spec.expr(at).kind {
-                ExprKind::Ref(name) if scope == Scope::Row && !items.contains(&at) => {
-                    let at = placeholders.remove(&at).unwrap_or_else(|| path(spec, at));
-                    reads.push((at, name.as_str()));
-                }
-                ExprKind::Odm(read) => {
-                    items.insert(read.item);
-                }
-                ExprKind::Scalar {
-                    op: ast::ScalarOp::StrTemplate { .. },
-                    operands,
-                    ..
-                } => {
-                    let text = format!("{}.template", path(spec, at));
-                    for operand in operands {
-                        placeholders.insert(operand.expr, text.clone());
-                    }
-                }
-                _ => {}
-            }
-            Step::Continue
-        });
-        reads
+    fn input(&self, owner: &str) -> bool {
+        self.prepared
+            .sources
+            .iter()
+            .any(|source| source.name == owner)
     }
 
-    /// Each key match value of the lookup at `index` with where binding
-    /// cites it, or `None` when the declarations do not decide them: keys
-    /// inferred from the captured schemas.
+    /// Whether `owner` is another input, which joins the rows on the output
+    /// keys it stores.
+    fn joined(&self, owner: &str) -> bool {
+        self.input(owner) && !self.drivers.contains(&owner)
+    }
+
+    /// One named read, as binding reads an operand: a bare column, a lookup
+    /// through its selector, the driver's record, or another input's
+    /// through its implicit join, whose keys only its captured schema
+    /// decides.
+    pub(super) fn read(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        let Some((owner, _)) = name.split_once('.') else {
+            self.bare(path, name, findings);
+            return;
+        };
+        if let Some(index) = self.lookup(owner) {
+            if self.refused.contains(&index) {
+                self.unbound.set(true);
+            } else {
+                self.lookup_read(index, path, findings);
+            }
+        } else if self.drivers.contains(&owner) {
+            self.group(path, name, findings);
+        }
+    }
+
+    /// A bare read of a column the row template leaves to the column phase
+    /// (COLUMN-4).
+    pub(super) fn bare(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        let Some((row, _)) = self.row else {
+            return;
+        };
+        if let Some(column) = self.output(name).filter(|&column| !self.available(column)) {
+            findings.push(BindFinding::OutputReference {
+                path: path.into(),
+                name: name.into(),
+                row: Some(row.into()),
+                finding: crate::reference_binding::Diagnostic::PhaseBoundary { column },
+            });
+        }
+    }
+
+    /// A read of the driver's field `name` names one value of the row only
+    /// as a group key (ROW-5, NAME-4).
+    fn group(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        if let Some(finding) = crate::reference_scope::group_finding(name, self.phase) {
+            findings.push(BindFinding::QualifiedReference {
+                path: path.into(),
+                name: name.into(),
+                row: self.row.map(|(row, _)| row.into()),
+                finding,
+            });
+        }
+    }
+
+    /// A row template's formula, flag or `case` predicate reads only its
+    /// driver's record and lookups (FORMULA-9).
+    fn source_scope(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        let Phase::Row { group_by } = self.phase else {
+            return;
+        };
+        let mut finding = LookupFinding::new(
+            path,
+            if group_by.is_some() {
+                crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
+            } else {
+                crate::diagnostic::ConditionCode::RowNumericSourceScope
+            },
+        );
+        finding.text("identifier", name);
+        finding.texts("drivers", self.drivers);
+        findings.push(BindFinding::Lookup(finding));
+    }
+
+    /// A name of a formula's text `expression`: in a row template another
+    /// input's field, and in the column phase any qualified name but a
+    /// lookup's, fail (FORMULA-9); any other name is read as an operand.
+    pub(super) fn formula(
+        &self,
+        path: &str,
+        expression: &str,
+        name: &str,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        if let Some((owner, _)) = name.split_once('.') {
+            if self.prepared.intermediates.reference(name).is_none() {
+                match self.phase {
+                    Phase::Column { .. } => {
+                        findings.push(BindFinding::QualifiedNumericReference {
+                            path: path.into(),
+                            expression: expression.into(),
+                            identifier: name.into(),
+                        });
+                        return;
+                    }
+                    Phase::Row { .. } if self.joined(owner) => {
+                        self.source_scope(path, name, findings);
+                        return;
+                    }
+                    Phase::Row { .. } => {}
+                }
+            }
+        }
+        self.read(path, name, findings);
+    }
+
+    /// A name of a `case` predicate: in a row template another input's field
+    /// fails (FORMULA-9); any other name is read as an operand.
+    pub(super) fn predicate(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        if matches!(self.phase, Phase::Row { .. })
+            && name
+                .split_once('.')
+                .is_some_and(|(owner, _)| self.joined(owner))
+        {
+            self.source_scope(path, name, findings);
+            return;
+        }
+        self.read(path, name, findings);
+    }
+
+    /// A name of a flag's condition, which reads columns, its driver's record
+    /// and, in the column phase, another input's through its join. Binding
+    /// reports a lookup's field there as unknown.
+    pub(super) fn flag(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        match name.split_once('.') {
+            None => self.bare(path, name, findings),
+            Some((owner, _)) if self.joined(owner) => self.source_scope(path, name, findings),
+            Some((owner, _)) if self.drivers.contains(&owner) => self.group(path, name, findings),
+            Some(_) => {}
+        }
+    }
+
+    /// A project call's argument: a field of the driver's record must be a
+    /// group key (ROW-5, NAME-4). Preparation refuses a column outside the
+    /// row phase.
+    pub(super) fn argument(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+        if name
+            .split_once('.')
+            .is_some_and(|(owner, _)| self.drivers.contains(&owner))
+        {
+            self.group(path, name, findings);
+        }
+    }
+
+    /// A structured source binding's variable, read at the binding's own
+    /// path, then the range value of the implicit join it keeps
+    /// (LOOKUP-25): one naming the driver reads one value of its record
+    /// (ROW-5, NAME-4), and a bare one a column of the row (COLUMN-4).
+    pub(super) fn source(&self, e: ExprId, findings: &mut Vec<BindFinding>) {
+        let spec = self.spec;
+        let ExprKind::Source(source) = &spec.expr(e).kind else {
+            return;
+        };
+        let Some(variable) = name(spec, source.variable) else {
+            return;
+        };
+        let at = path(spec, e);
+        self.read(&at, variable, findings);
+        let joined = variable
+            .split_once('.')
+            .is_some_and(|(owner, _)| self.lookup(owner).is_none() && self.joined(owner));
+        let Some(value) = source
+            .between
+            .as_ref()
+            .filter(|_| joined)
+            .and_then(|between| name(spec, between.value))
+        else {
+            return;
+        };
+        let at = format!("{at}.between.value");
+        match value.split_once('.') {
+            Some((owner, _)) if self.drivers.contains(&owner) => self.group(&at, value, findings),
+            Some(_) => {}
+            None => self.bare(&at, value, findings),
+        }
+    }
+
+    /// Each key match value of the lookup at `index`, at the path binding
+    /// cites it, with the names it reads; `None` when the declarations do not
+    /// decide them: keys inferred from the captured schemas.
     fn keys(&self, index: usize) -> Option<Vec<(String, Vec<&'a str>)>> {
         let spec = self.spec;
-        match &spec.intermediates[index].key {
-            Some(JoinKey::Columns { columns, meta }) => Some(
-                columns
-                    .iter()
-                    .map(|column| (render(spec, *meta), vec![column.name.as_str()]))
-                    .collect(),
-            ),
-            Some(JoinKey::Pairs { pairs, meta }) => Some(
-                pairs
-                    .iter()
-                    .map(|(field, value)| {
-                        // A bare name is cited at the key, a written value at
-                        // its own entry.
-                        let at = match spec.expr(*value).kind {
-                            ExprKind::Ref(_) => *meta,
-                            _ => field.meta,
-                        };
-                        let reads = self.reads(*value).into_iter().map(|(_, name)| name);
-                        (render(spec, at), reads.collect())
-                    })
-                    .collect(),
-            ),
-            _ => None,
-        }
+        let item = &spec.intermediates[index];
+        let fields = match &item.key {
+            Some(JoinKey::Columns { columns, .. }) => columns
+                .iter()
+                .map(|column| column.name.as_str())
+                .collect::<Vec<_>>(),
+            Some(JoinKey::Pairs { pairs, .. }) => {
+                pairs.iter().map(|(field, _)| field.name.as_str()).collect()
+            }
+            _ => return None,
+        };
+        let at = render(spec, item.meta);
+        fields
+            .into_iter()
+            .map(|field| {
+                let value = self
+                    .prepared
+                    .intermediates
+                    .match_declaration(&item.id.name, field)?;
+                // A name written as the value is cited at the key, any other
+                // value at its own entry.
+                let path = match value {
+                    match_values::Declaration::Variable(_) => format!("{at}.key"),
+                    _ => format!("{at}.key.{field}"),
+                };
+                Some((path, value.references().collect()))
+            })
+            .collect()
     }
 
     /// The output columns the lookup at `index` matches on, sorted: those its
@@ -218,18 +405,13 @@ impl<'a> Phase<'a> {
         }
     }
 
-    /// The template's read at `path` of the lookup at `index` (LOOKUP-2):
-    /// a key value that reads a column the template leaves to the column
-    /// phase, then any other column the lookup matches on that the template
-    /// leaves there, naming each range value followed. One site reports a
-    /// finding once.
-    fn lookup_read(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) {
+    /// Whether another lookup's derivations read the lookup at `index`:
+    /// binding then defers its matching and refuses a read of it on other
+    /// grounds.
+    fn deferred(&self, index: usize) -> bool {
         let spec = self.spec;
         let item = &spec.intermediates[index];
-        // Another lookup's derivations read this one, so binding defers its
-        // matching and refuses this read on other grounds.
-        let deferred = spec
-            .intermediates
+        spec.intermediates
             .iter()
             .enumerate()
             .any(|(reader, other)| {
@@ -238,16 +420,35 @@ impl<'a> Phase<'a> {
                         .iter()
                         .any(|read| read.name.owner() == Some(item.id.name.as_str()))
                 })
-            });
-        let Some(keys) = self.keys(index).filter(|_| !deferred) else {
+            })
+    }
+
+    /// The read at `path` of the lookup at `index`, as binding admits it
+    /// there: each key value in order, refused when it reads a column the
+    /// row template leaves to the column phase (LOOKUP-2) or another input's
+    /// record than the driver's (LOOKUP-5); then, once its keys are admitted,
+    /// each other column it matches on that the template leaves there,
+    /// naming each range value followed (LOOKUP-2). One site reports a phase
+    /// boundary once. A value read from the primary input's record is
+    /// admitted for every row that reads the lookup once the rows are bound
+    /// ([`super::scopes`]).
+    fn lookup_read(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) {
+        let spec = self.spec;
+        let item = &spec.intermediates[index];
+        let Some(keys) = self.keys(index).filter(|_| !self.deferred(index)) else {
             return;
         };
-        // A key value that reads another input's record is driver scope,
-        // which binding decides first.
-        if keys.iter().flat_map(|(_, reads)| reads).any(|name| {
-            name.split_once('.')
-                .is_some_and(|(owner, _)| owner != self.template.driver)
-        }) {
+        let primary = self.prepared.source().name.as_str();
+        // A bare value that names no column, or a value qualified by no
+        // input, fails the lookup's own binding.
+        if keys
+            .iter()
+            .flat_map(|(_, reads)| reads)
+            .any(|name| match name.split_once('.') {
+                None => self.output(name).is_none(),
+                Some((owner, _)) => !self.input(owner),
+            })
+        {
             return;
         }
         let push = |finding: BindFinding, findings: &mut Vec<BindFinding>| {
@@ -255,25 +456,36 @@ impl<'a> Phase<'a> {
                 findings.push(finding);
             }
         };
+        let start = findings.len();
         let mut refused = false;
-        for name in keys.iter().flat_map(|(_, reads)| reads) {
-            if self
-                .output(name)
-                .is_some_and(|column| !self.available(column))
-            {
-                let finding = row_intermediates::match_phase_boundary(
-                    path,
-                    name,
-                    &item.id.name,
-                    self.template.id,
-                );
-                push(finding, findings);
-                refused = true;
+        for (at, reads) in &keys {
+            for &name in reads {
+                match (name.split_once('.'), self.output(name), self.row) {
+                    (None, Some(column), Some((row, _))) if !self.available(column) => {
+                        let finding =
+                            row_intermediates::match_phase_boundary(path, name, &item.id.name, row);
+                        push(finding, findings);
+                        refused = true;
+                    }
+                    (Some((owner, _)), _, _)
+                        if owner != primary
+                            && self.drivers.iter().any(|&driver| driver != owner) =>
+                    {
+                        findings.push(BindFinding::Lookup(LookupFinding::reference(
+                            at,
+                            name,
+                            Some(&item.id.name),
+                            ReferenceCause::OutputKey,
+                            None,
+                        )));
+                    }
+                    _ => {}
+                }
             }
         }
-        if refused {
+        let Some((row, _)) = self.row.filter(|_| !refused && findings.len() == start) else {
             return;
-        }
+        };
         let mut dependencies = BTreeSet::new();
         if self
             .dependencies(index, &mut Vec::new(), &mut dependencies)
@@ -289,7 +501,7 @@ impl<'a> Phase<'a> {
                 path,
                 &spec.columns[column].name.name,
                 &item.id.name,
-                self.template.id,
+                row,
             ) else {
                 continue;
             };
@@ -302,4 +514,305 @@ impl<'a> Phase<'a> {
             push(BindFinding::Lookup(finding), findings);
         }
     }
+
+    /// A grouped row template's filter, before its derivations bind: each
+    /// qualified name it reads, once, names no value of a group (ROW-6).
+    pub(super) fn grouped_filter(
+        &self,
+        filter: ExprId,
+        path: &str,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        let (Some((row, _)), Phase::Row { group_by: Some(_) }) = (self.row, self.phase) else {
+            return;
+        };
+        let Some(plan) = compiled(self.spec, filter) else {
+            return;
+        };
+        for identifier in plan.identifiers().filter(|name| name.contains('.')) {
+            findings.push(BindFinding::RowFilterPhase {
+                path: path.into(),
+                identifier: identifier.into(),
+                row: row.into(),
+                grouped: true,
+                qualified: true,
+            });
+        }
+    }
+
+    /// A row template's filter, after its derivations bind, each name once
+    /// (ROW-6): a bare name its template does not derive fails, and an
+    /// ungrouped filter reads a lookup as a derivation does. Once nothing
+    /// refuses it, an ungrouped filter fails at each read of a window result,
+    /// directly or through a lookup's match, which completes after the filter
+    /// runs. `deferred` holds the template's columns that complete after its
+    /// window pass; `None` when the declarations leave one undecided. True
+    /// when binding binds the filter as an ungrouped template's predicate.
+    pub(super) fn filter(
+        &self,
+        filter: ExprId,
+        path: &str,
+        deferred: Option<&[bool]>,
+        findings: &mut Vec<BindFinding>,
+    ) -> bool {
+        let (Some((row, _)), Phase::Row { group_by }) = (self.row, self.phase) else {
+            return false;
+        };
+        let Some(plan) = compiled(self.spec, filter) else {
+            return false;
+        };
+        let grouped = group_by.is_some();
+        let start = findings.len();
+        for identifier in plan.identifiers() {
+            match identifier.split_once('.') {
+                // A grouped filter's qualified names were refused before the
+                // derivations bound.
+                Some(_) if grouped => {}
+                Some((owner, _)) => {
+                    if let Some(index) = self.lookup(owner) {
+                        if self.refused.contains(&index) {
+                            self.unbound.set(true);
+                        } else {
+                            self.lookup_read(index, path, findings);
+                        }
+                    }
+                }
+                None => {
+                    if self
+                        .output(identifier)
+                        .is_none_or(|column| !self.available(column))
+                    {
+                        findings.push(BindFinding::RowFilterPhase {
+                            path: path.into(),
+                            identifier: identifier.into(),
+                            row: row.into(),
+                            grouped,
+                            qualified: false,
+                        });
+                    }
+                }
+            }
+        }
+        if grouped || findings.len() != start || !self.bound() {
+            return false;
+        }
+        let Some(deferred) = deferred else {
+            return true;
+        };
+        let mut late = Vec::new();
+        for identifier in plan.identifiers() {
+            match identifier.split_once('.') {
+                None => {
+                    if self
+                        .output(identifier)
+                        .is_some_and(|column| deferred[column])
+                    {
+                        late.push((identifier, None));
+                    }
+                }
+                Some((owner, _)) => {
+                    // A driver field is read from the row's record, and
+                    // another input's join matches on the driver's fields.
+                    let Some(index) = self.lookup(owner) else {
+                        continue;
+                    };
+                    match self.lookup_late(index, deferred) {
+                        Some((true, lookup_match)) => late.push((identifier, lookup_match)),
+                        Some((false, _)) => {}
+                        None => return true,
+                    }
+                }
+            }
+        }
+        for (identifier, lookup_match) in late {
+            let mut context: crate::diagnostic::Context = [
+                (
+                    "identifier".into(),
+                    crate::json::Value::String(identifier.into()),
+                ),
+                ("row".into(), crate::json::Value::String(row.into())),
+                (
+                    "available_phase".into(),
+                    crate::json::Value::String("window_derivation".into()),
+                ),
+                (
+                    "required_phase".into(),
+                    crate::json::Value::String("row_filter".into()),
+                ),
+            ]
+            .into();
+            if let Some(column) = lookup_match {
+                context.insert(
+                    "lookup_match".into(),
+                    crate::json::Value::String(self.spec.columns[column].name.name.clone()),
+                );
+            }
+            findings.push(BindFinding::Scalar(crate::diagnostic::Diagnostic {
+                code: crate::diagnostic::ConditionCode::RowFilterPhaseBoundary,
+                spec_paths: vec![path.into()],
+                context,
+                source_span: None,
+                operand_route: None,
+            }));
+        }
+        // A read the window pass completes refuses the filter after it bound.
+        true
+    }
+
+    /// Whether the lookup at `index` completes only after the template's
+    /// window pass, with the first column it matches on that does
+    /// (`dataset::read_requires_window`): one it matches on, a key value that
+    /// is a window, or a range value that reads a lookup derived after it.
+    /// `None` when a lookup on the way has inferred keys.
+    fn lookup_late(&self, index: usize, deferred: &[bool]) -> Option<(bool, Option<usize>)> {
+        let mut dependencies = BTreeSet::new();
+        self.dependencies(index, &mut Vec::new(), &mut dependencies)?;
+        if let Some(column) = dependencies.into_iter().find(|&column| deferred[column]) {
+            return Some((true, Some(column)));
+        }
+        let spec = self.spec;
+        let order = self.prepared.intermediates.names().collect::<Vec<_>>();
+        let position = |index: usize| {
+            order
+                .iter()
+                .position(|&name| name == spec.intermediates[index].id.name)
+        };
+        let mut pending = vec![index];
+        let mut seen = BTreeSet::new();
+        while let Some(index) = pending.pop() {
+            if !seen.insert(index) {
+                continue;
+            }
+            let item = &spec.intermediates[index];
+            if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
+                if pairs.iter().any(|&(_, value)| windowed(spec, value)) {
+                    return Some((true, None));
+                }
+            }
+            let chained = item
+                .between
+                .as_ref()
+                .and_then(|between| name(spec, between.value))
+                .and_then(|value| value.split_once('.'))
+                .and_then(|(owner, _)| self.lookup(owner));
+            if let Some(child) = chained {
+                if position(child) >= position(index) {
+                    return Some((true, None));
+                }
+                pending.push(child);
+            }
+        }
+        Some((false, None))
+    }
+
+    /// Which of a row template's columns complete after its window pass,
+    /// as `dataset::window_stages` derives them: `derivations` are the
+    /// template's derivations that bind, in dependency order, each a window,
+    /// or a reader of a later column, of a lookup that matches on one, or of
+    /// a window key. `None` when the declarations leave one undecided.
+    pub(super) fn stages(&self, derivations: &[(usize, ExprId)]) -> Option<Vec<bool>> {
+        let mut deferred = vec![false; self.spec.columns.len()];
+        for &(column, root) in derivations {
+            deferred[column] = self.late(root, &deferred)?;
+        }
+        Some(deferred)
+    }
+
+    /// Whether `e` reads a window result, as `dataset::expression_deferred`
+    /// decides it for the expression binding builds from it.
+    fn late(&self, e: ExprId, deferred: &[bool]) -> Option<bool> {
+        let spec = self.spec;
+        let any = |children: &mut dyn Iterator<Item = ExprId>| -> Option<bool> {
+            for child in children {
+                if self.late(child, deferred)? {
+                    return Some(true);
+                }
+            }
+            Some(false)
+        };
+        let names = |e: ExprId| -> Option<bool> {
+            for read in spec.reads(e, Scope::Row) {
+                if self.late_read(read.name.as_str(), deferred)? {
+                    return Some(true);
+                }
+            }
+            Some(false)
+        };
+        match &spec.expr(e).kind {
+            ExprKind::Window(_) => Some(true),
+            // A row aggregate reduces its group's records.
+            ExprKind::Literal(_)
+            | ExprKind::Odm(_)
+            | ExprKind::Aggregate(_)
+            | ExprKind::Unsupported(_) => Some(false),
+            ExprKind::Ref(name) => self.late_read(name.as_str(), deferred),
+            ExprKind::Source(source) => {
+                let variable = name(spec, source.variable).unwrap_or_default();
+                if self.late_read(variable, deferred)? {
+                    return Some(true);
+                }
+                match source.between.as_ref().and_then(|b| name(spec, b.value)) {
+                    Some(value) => self.late_read(value, deferred),
+                    None => Some(false),
+                }
+            }
+            ExprKind::Formula(_) | ExprKind::Flag { .. } => names(e),
+            ExprKind::Case(arms) => {
+                for arm in arms {
+                    if let Some(condition) = arm.condition {
+                        if names(condition)? {
+                            return Some(true);
+                        }
+                    }
+                    if self.late(arm.result, deferred)? {
+                        return Some(true);
+                    }
+                }
+                Some(false)
+            }
+            ExprKind::FirstAvailable { sources, .. } => any(&mut sources.iter().copied()),
+            ExprKind::Scalar { operands, .. } => {
+                any(&mut operands.iter().map(|operand| operand.expr))
+            }
+            ExprKind::Call { args, .. } => any(&mut args.iter().map(|&(_, value)| value)),
+        }
+    }
+
+    /// Whether a read of `name` reads a window result: a later column, or a
+    /// lookup that completes after the window pass. A driver field reads the
+    /// row's record, and another input's join matches on the driver's fields.
+    fn late_read(&self, name: &str, deferred: &[bool]) -> Option<bool> {
+        match name.split_once('.') {
+            None => Some(self.output(name).is_some_and(|column| deferred[column])),
+            Some((owner, _)) => match self.lookup(owner) {
+                Some(index) => self.lookup_late(index, deferred).map(|(late, _)| late),
+                None => Some(false),
+            },
+        }
+    }
+}
+
+/// A predicate's compiled text, unless its grammar failed.
+fn compiled(spec: &Spec, e: ExprId) -> Option<&CompiledExpression> {
+    match &spec.expr(e).kind {
+        ExprKind::Formula(ast::Formula {
+            compiled: Ok(plan), ..
+        }) => Some(plan),
+        _ => None,
+    }
+}
+
+/// Whether a key's written value is or holds a window, whose result needs
+/// the window pass of the rows that read the lookup.
+fn windowed(spec: &Spec, value: ExprId) -> bool {
+    let mut found = false;
+    spec.walk(value, Scope::Row, |e, _| {
+        found |= matches!(spec.expr(e).kind, ExprKind::Window(_));
+        if found {
+            crate::ast::Step::Stop
+        } else {
+            crate::ast::Step::Continue
+        }
+    });
+    found
 }

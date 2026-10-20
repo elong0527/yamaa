@@ -245,7 +245,7 @@ fn model_keys_and_profiles_are_stored_for_the_pull_requests_that_check_them() {
         .replace(
             "input: {SRC: src.csv, EX: ex.csv}",
             "input: {SRC: src.csv, EX: {path: ex.csv, key: [ID]}, ODM: odm.xml}\n\
-             intermediates:\n  - {id: NAMES, dataset: ODM}",
+             intermediates:\n  - {id: NAMES, dataset: ODM, key: [ID]}",
         ),
     );
     assert_eq!(spec.header.surface, Surface::V1 { minor: 0 });
@@ -261,11 +261,60 @@ fn model_keys_and_profiles_are_stored_for_the_pull_requests_that_check_them() {
     assert_eq!(spec.cite(columns[0].meta), "input.EX.key[0]");
     assert_eq!(input("ODM").source.profile, Some(Profile::OdmXml));
     // A keyless qualified aggregate matches on its input's key, and an
-    // intermediate states its own; P1-6 binds and checks both.
+    // intermediate states its own (D23, D63).
     let ExprKind::Aggregate(aggregate) = &spec.expr(derived(&spec, "DOSE")).kind else {
         panic!("an aggregate");
     };
     assert_eq!(aggregate.key, Some(JoinKey::FromInput));
+    let Some(JoinKey::Columns { columns, .. }) = &spec.intermediates[0].key else {
+        panic!("the intermediate's own key");
+    };
+    assert_eq!(spec.cite(columns[0].meta), "intermediates.NAMES.key[0]");
+}
+
+/// An intermediate states its own `key` unless it drives a row template
+/// (LOOKUP-3, ROW-2): one without `key` is refused before any input is read,
+/// at its `key`, as the schema records a missing required field (D23, D63).
+#[test]
+fn an_intermediate_without_key_is_refused_unless_it_drives_rows() {
+    let text = spec(&["{name: TERM, type: str, derivation: NAMES.TERM}"]).replace(
+        "base: SRC\n",
+        "base: SRC\nintermediates:\n  - {id: NAMES, dataset: EX, filter: \"EX.N > 0\"}\n",
+    );
+    let study = Study::new(&[("spec.yaml", &text)]);
+    let Err(SpecificationError::Entry(Error::Findings(captured))) = prepare(&study, "spec.yaml")
+    else {
+        panic!("refused");
+    };
+    let [finding] = captured.findings() else {
+        panic!("one finding");
+    };
+    let definition = finding.code.definition();
+    assert_eq!(
+        (definition.phase, definition.condition, definition.rule),
+        ("validation", "missing_required_field", Some("LOOKUP-3"))
+    );
+    assert_eq!(finding.path, "intermediates.NAMES.key");
+    assert_eq!(
+        finding.context,
+        [
+            ("field", C::Text("key".into())),
+            ("class", C::Text("intermediate_class".into())),
+        ]
+    );
+    // A row template's driver declares none.
+    let driver = text
+        .replace(
+            "  - {name: TERM, type: str, derivation: NAMES.TERM}\n",
+            "  - {name: TERM, type: str}\n",
+        )
+        .replace("base: SRC\n", "")
+        + "rows:\n  - {id: named, dataset: NAMES, derivations: {ID: NAMES.ID, TERM: NAMES.TERM}}\n";
+    let study = Study::new(&[("spec.yaml", &driver)]);
+    let spec = prepare(&study, "spec.yaml")
+        .unwrap_or_else(|error| panic!("admitted: {error:?}"))
+        .into_lowered()
+        .into_spec();
     assert_eq!(spec.intermediates[0].key, None);
 }
 
