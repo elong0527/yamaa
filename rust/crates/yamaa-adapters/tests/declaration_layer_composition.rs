@@ -735,11 +735,7 @@ columns:
             assert_eq!(found, [invalid_clear(0, "type")]);
             let definition = ConditionCode::SchemaLayerInvalidClear.definition();
             assert_eq!(
-                (
-                    definition.phase,
-                    definition.condition,
-                    definition.rule
-                ),
+                (definition.phase, definition.condition, definition.rule),
                 (legacy.phase(), legacy.condition(), legacy.rule())
             );
             // The 0.5 issue names the same field; the public projection adds
