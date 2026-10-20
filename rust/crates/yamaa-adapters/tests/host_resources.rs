@@ -610,15 +610,18 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
 /// other declared file a run reads does, never with the engine's own refusal
 /// (#3030 D73). A caller's resolver that reports a link, a junction or
 /// another reparse point for the parent is refused from that report alone
-/// (FILE-7).
+/// (FILE-7). A 0.5 entry and a 1.0 entry are refused alike (D76).
 #[cfg(feature = "yaml")]
 #[test]
 fn a_linked_parent_is_refused_at_parent_on_every_route() {
     use yamaa_adapters::file_preparation::{Error as Prepared, FileSpecification};
     use yamaa_adapters::host_resources::ResourceKind;
     use yamaa_core::project_function::Language;
-    let entry =
-        |parent: &str| format!("schema_version: '1.0'\nparent: '{parent}'\ndomain: CHILD\n");
+    const HEADERS: [(&str, &str); 2] = [
+        ("0.5", "schema_version: '1.0'\n"),
+        ("1.0", "yamaa: \"1.0\"\ntype: spec\n"),
+    ];
+    let entry = |header: &str, parent: &str| format!("{header}parent: '{parent}'\ndomain: CHILD\n");
     let identity = || yamaa_adapters::specification_report::Identity {
         runtime: "rust",
         runtime_version: "test",
@@ -668,99 +671,108 @@ fn a_linked_parent_is_refused_at_parent_on_every_route() {
         let directory = yamaa_adapters::canonical_path::canonicalize(&scratch.0).unwrap();
         let child = directory.join("child.yaml");
         let child = child.to_str().unwrap();
-        for parent in ["base.yaml", "linked/base.yaml", "dangling.yaml"] {
-            std::fs::write(child, entry(parent)).unwrap();
-            let request = || yamaa_core::build::Request {
-                specification: child,
-                environment: None,
-            };
-            let Err(error) =
-                yamaa_adapters::file_workflow::select_request(request(), Language::Python)
-            else {
-                panic!("{parent}: a linked parent was selected");
-            };
-            refused(
-                &yamaa_adapters::project_application::selection_failure(&error),
-                parent,
-                "select",
-            );
-            refused(
-                &yamaa_adapters::file_application::check(Language::Python, request(), identity()),
-                parent,
-                "check",
-            );
-            let Err(issues) =
-                yamaa_adapters::resolved_artifact::resolve(child, None, Language::Python, None)
-            else {
-                panic!("{parent}: resolved a linked parent");
-            };
-            refused(&issues, parent, "resolve");
-            let resources = Resources::for_entry(directory.to_str().unwrap()).unwrap();
-            let Err(Prepared::PreparationFinding { diagnostic, .. }) =
-                FileSpecification::prepare(resources, "child.yaml")
-            else {
-                panic!("{parent}: the refusal lost its finding");
-            };
-            refused(&[*diagnostic], parent, "prepare");
+        for (surface, header) in HEADERS {
+            for parent in ["base.yaml", "linked/base.yaml", "dangling.yaml"] {
+                let route = |name: &str| format!("{surface} {name}");
+                std::fs::write(child, entry(header, parent)).unwrap();
+                let request = || yamaa_core::build::Request {
+                    specification: child,
+                    environment: None,
+                };
+                let Err(error) =
+                    yamaa_adapters::file_workflow::select_request(request(), Language::Python)
+                else {
+                    panic!("{surface} {parent}: a linked parent was selected");
+                };
+                refused(
+                    &yamaa_adapters::project_application::selection_failure(&error),
+                    parent,
+                    &route("select"),
+                );
+                refused(
+                    &yamaa_adapters::file_application::check(
+                        Language::Python,
+                        request(),
+                        identity(),
+                    ),
+                    parent,
+                    &route("check"),
+                );
+                let Err(issues) =
+                    yamaa_adapters::resolved_artifact::resolve(child, None, Language::Python, None)
+                else {
+                    panic!("{surface} {parent}: resolved a linked parent");
+                };
+                refused(&issues, parent, &route("resolve"));
+                let resources = Resources::for_entry(directory.to_str().unwrap()).unwrap();
+                let Err(Prepared::PreparationFinding { diagnostic, .. }) =
+                    FileSpecification::prepare(resources, "child.yaml")
+                else {
+                    panic!("{surface} {parent}: the refusal lost its finding");
+                };
+                refused(&[*diagnostic], parent, &route("prepare"));
+            }
         }
     }
     // Through a caller's resolver that reports the kind of entry the parent
     // reaches.
-    for kind in [
-        ResourceKind::SymbolicLink,
-        ResourceKind::Junction,
-        ResourceKind::ReparsePoint,
-    ] {
-        let route = |name: &str| format!("{name} ({kind:?})");
-        let served = || {
-            let files = MemoryResolver::default();
-            files.insert(
-                "/",
-                "child.yaml",
-                "memory:/child.yaml",
-                Arc::from(entry("base.yaml").as_bytes()),
-            );
-            files.insert_kind("/child.yaml", "base.yaml", kind);
-            Arc::new(files)
-        };
-        let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
-            request_named("child.yaml"),
-            Language::Python,
-            served(),
-        ) else {
-            panic!("{kind:?}: a caller's resolver selected a linked parent");
-        };
-        refused(
-            &yamaa_adapters::project_application::selection_failure(&error),
-            "base.yaml",
-            &route("select"),
-        );
-        refused(
-            &yamaa_adapters::file_application::check_with_resolver(
-                Language::Python,
+    for (surface, header) in HEADERS {
+        for kind in [
+            ResourceKind::SymbolicLink,
+            ResourceKind::Junction,
+            ResourceKind::ReparsePoint,
+        ] {
+            let route = |name: &str| format!("{surface} {name} ({kind:?})");
+            let served = || {
+                let files = MemoryResolver::default();
+                files.insert(
+                    "/",
+                    "child.yaml",
+                    "memory:/child.yaml",
+                    Arc::from(entry(header, "base.yaml").as_bytes()),
+                );
+                files.insert_kind("/child.yaml", "base.yaml", kind);
+                Arc::new(files)
+            };
+            let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
                 request_named("child.yaml"),
-                identity(),
+                Language::Python,
+                served(),
+            ) else {
+                panic!("{surface} {kind:?}: a caller's resolver selected a linked parent");
+            };
+            refused(
+                &yamaa_adapters::project_application::selection_failure(&error),
+                "base.yaml",
+                &route("select"),
+            );
+            refused(
+                &yamaa_adapters::file_application::check_with_resolver(
+                    Language::Python,
+                    request_named("child.yaml"),
+                    identity(),
+                    Some(served()),
+                ),
+                "base.yaml",
+                &route("check"),
+            );
+            let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
+                "child.yaml",
+                None,
+                Language::Python,
                 Some(served()),
-            ),
-            "base.yaml",
-            &route("check"),
-        );
-        let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
-            "child.yaml",
-            None,
-            Language::Python,
-            Some(served()),
-        ) else {
-            panic!("{kind:?}: resolved a linked parent through a resolver");
-        };
-        refused(&issues, "base.yaml", &route("resolve"));
-        let Err(Prepared::PreparationFinding { diagnostic, .. }) = FileSpecification::prepare(
-            Resources::with_resolver(served(), "child.yaml"),
-            "child.yaml",
-        ) else {
-            panic!("{kind:?}: the refusal through a resolver lost its finding");
-        };
-        refused(&[*diagnostic], "base.yaml", &route("prepare"));
+            ) else {
+                panic!("{surface} {kind:?}: resolved a linked parent through a resolver");
+            };
+            refused(&issues, "base.yaml", &route("resolve"));
+            let Err(Prepared::PreparationFinding { diagnostic, .. }) = FileSpecification::prepare(
+                Resources::with_resolver(served(), "child.yaml"),
+                "child.yaml",
+            ) else {
+                panic!("{surface} {kind:?}: the refusal through a resolver lost its finding");
+            };
+            refused(&[*diagnostic], "base.yaml", &route("prepare"));
+        }
     }
 }
 

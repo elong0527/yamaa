@@ -747,6 +747,19 @@ mod declaration {
                     "parent".to_string()
                 )]
             );
+            // A public check reports it at `parent`, in the entry, as a 0.5
+            // entry's check does.
+            let issue = only(&study.check("spec.yaml", None)).clone();
+            assert_eq!(
+                (issue.phase(), issue.condition(), issue.rule()),
+                ("validation", "minimum_length", Some("SCHEMA-12"))
+            );
+            assert_eq!(issue.spec_paths, ["parent"]);
+            let entry = study.path("spec.yaml");
+            assert_eq!(
+                Value::Object(issue.context.clone()),
+                json!({"minimum": 1, "source": entry, "entry": entry})
+            );
         }
 
         /// The diagnostic at a referencing field whose file is refused.
