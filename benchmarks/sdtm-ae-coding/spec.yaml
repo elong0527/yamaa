@@ -92,7 +92,7 @@ columns:
     derivation: MEDDRA_CODING.PTNAME
     submission:
       core: Req
-      role: Record Qualifier
+      role: Synonym Qualifier
       length: 200
       codelist: MEDDRA
       origin:
