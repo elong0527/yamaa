@@ -352,8 +352,8 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         let issues = yamaa_adapters::project_application::selection_failure(&error);
         assert_eq!(issues.len(), 1, "{issues:?}");
         // A registered refusal, as any opaque preparation failure reports.
-        assert_eq!(issues[0].condition, "engine_rejected", "{issues:?}");
-        assert_eq!(issues[0].phase, "engine", "{issues:?}");
+        assert_eq!(issues[0].condition(), "engine_rejected", "{issues:?}");
+        assert_eq!(issues[0].phase(), "engine", "{issues:?}");
         // Only the two specifications were read: nothing under folders named
         // like the parent's share, in its input's place.
         let captures = resolver.captures.lock().unwrap();

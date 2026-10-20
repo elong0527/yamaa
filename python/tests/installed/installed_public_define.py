@@ -531,6 +531,7 @@ class PublicDefine(unittest.TestCase):
         self.assertEqual(result.issues["requirement"].to_list(), [None])
         context = json.loads(result.issues["context"][0])
         self.assertEqual(context["stage"], "publication_target_admission")
+        self.assertEqual(context["code"], "invalid_target")
         self.assertIn("cause", context)
 
     def test_source_version_defaults_and_schema_facet_failures(self):
