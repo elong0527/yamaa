@@ -615,7 +615,7 @@ pub(super) fn bind(
 
 /// The implicit template's structured source, on the captured schemas: a
 /// lookup read takes its selector's record; another input's field joins on
-/// the output keys its fields name; a driver field reads a key's one record
+/// its implicit join's key (LOOKUP-1); a driver field reads a key's one record
 /// and otherwise collects the distinct readings of the row's records.
 fn bind_implicit_source(
     cx: &mut BindContext<'_, '_>,
@@ -949,7 +949,7 @@ pub(super) fn bind_implicit(
 }
 
 /// The finding of an implicit join of `dataset` whose key does not resolve,
-/// at the read: no key (LOOKUP-5, and LOOKUP-1 on a 1.0 input), a declared
+/// at the read: no key (LOOKUP-1, LOOKUP-5), a declared
 /// column the input does not store or the current row has no column of
 /// (LOOKUP-5), or a pair whose types cannot compare (LOOKUP-9).
 pub(super) fn join_key_finding(

@@ -7,16 +7,17 @@
 //! columns), the lookups it may read ([`Donors`]), its catalog, and where the
 //! binding writes its column edges and findings.
 //!
-//! The implicit template's rows are its keys' distinct combinations of the
-//! base driver's records, or the records themselves when a window derives a
-//! key ([`Implicit`]). Its reads keep the rules a spec without `rows` has
-//! always bound by: a driver field read by a non-key column collects the
-//! distinct readings of the row's records; another input's field joins on
-//! the output keys its own fields name; a lookup read takes the selector's
-//! record without a row template's checks of its keys; a formula reports its
-//! qualified names first; a `case` predicate is typed and may suggest the
-//! input that stores an unknown name; and a formula or `first_available` in
-//! a `case` result binds as those results did before.
+//! The implicit template's rows are its keys' distinct combinations of the base
+//! driver's records, or the records themselves when a window derives a key
+//! ([`Implicit`]). Its reads keep the rules a spec without `rows` has always
+//! bound by: a driver field read by a non-key column collects the distinct
+//! readings of the row's records; another input's field joins on its implicit
+//! join's key, the output keys its own fields name (0.5) or its declared key
+//! (1.0); a lookup read takes the selector's record without a row template's
+//! checks of its keys; a formula reports its qualified names first; a `case`
+//! predicate is typed and may suggest the input that stores an unknown name;
+//! and a formula or `first_available` in a `case` result binds as those results
+//! did before.
 use super::*;
 use crate::{
     dataset::{Intermediate, SecondarySource},

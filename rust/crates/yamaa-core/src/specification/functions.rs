@@ -596,14 +596,14 @@ pub(super) fn bind_findings(
             let Input::Reference(name) = &argument.input else {
                 return Err(BindError::Internal);
             };
-            Ok(match error.kind {
-                crate::project_call_binding::Kind::Joined(cause)
-                    if cause.key_diagnostic(&path).is_some() =>
-                {
-                    BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
-                        cause.key_diagnostic(&path).ok_or(BindError::Internal)?,
-                    ))
+            if let crate::project_call_binding::Kind::Joined(cause) = &error.kind {
+                if let Some(diagnostic) = cause.key_diagnostic(&path) {
+                    return Ok(BindFinding::Source(
+                        source_expressions::SourceFinding::from_diagnostic(diagnostic),
+                    ));
                 }
+            }
+            Ok(match error.kind {
                 crate::project_call_binding::Kind::Joined(cause) => match cause {
                     reference_binding::JoinedFinding::UnknownField => {
                         BindFinding::UnknownReference {

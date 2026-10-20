@@ -41,7 +41,7 @@ pub enum JoinedFinding {
 }
 impl JoinedFinding {
     /// The diagnostic at the read `path` when the join's key does not
-    /// resolve: no key (LOOKUP-5; LOOKUP-1 for a 1.0 input), a declared
+    /// resolve: no key (LOOKUP-1, LOOKUP-5), a declared
     /// column (LOOKUP-5), or a pair whose types cannot compare (LOOKUP-9).
     /// Every other cause is the reading site's own.
     pub(crate) fn key_diagnostic(&self, path: &str) -> Option<crate::diagnostic::Diagnostic> {
