@@ -1,7 +1,7 @@
-"""The converter over the whole benchmark corpus, against the RFC's counts.
+"""The converter over the whole benchmark corpus, against measured counts.
 
 docs/design/interface-1.0.md and its method page measured the corpus at
-main 1758ad145; no benchmark specification has changed since. The converter
+main 1758ad145. Later additions are accounted for beside the counts below. The converter
 writes the corpus into a temporary directory and its counts are compared
 with the RFC's. Where the two differ, the expected value here is the
 converter's, and the comment beside it gives the RFC's number and the
@@ -24,11 +24,14 @@ BENCHMARKS = ROOT / "benchmarks"
 # (area, row): (occurrences, documents). "files" are YAML files, "markdown"
 # the YAML blocks of benchmarks/*/README.md, README.md and AGENTS.md.
 FOOTPRINT = {
-    ("files", "header (D4)"): (484, 484),
+    # Since the RFC: negative-format-name-without-dollar adds a specification
+    # and project; schema-linked-csv-types adds two specifications.
+    ("files", "header (D4)"): (488, 488),
     ("files", "literal (D18)"): (891, 167),
     ("files", "{literal: null} in value fields (D18)"): (156, 95),
     ("files", "intermediate no_match (P-HND-1, P-HND-3)"): (97, 68),
-    ("files", "origins (P-ORIGIN-1)"): (145, 28),
+    # The new format-name negative adds SEX's Collected origin.
+    ("files", "origins (P-ORIGIN-1)"): (146, 29),
     # Not an RFC row: the RFC counts column-level origins only, and these
     # value-level ones convert the same way.
     ("files", "value-level origins (P-ORIGIN-1)"): (5, 3),
@@ -45,7 +48,8 @@ FOOTPRINT = {
     ("files", "aggregate derive (P-BIND-1)"): (10, 7),
     ("files", "study_day.date (P-OP-1)"): (14, 11),
     ("files", "datasets (P-PRJ-1)"): (14, 14),
-    ("files", "diff.bounds and cut.right (P-ORD-2)"): (17, 14),
+    # schema-linked-csv-types/spec_adsl.yaml adds one inclusive diff.
+    ("files", "diff.bounds and cut.right (P-ORD-2)"): (18, 15),
     ("files", "tie_break (P-ORD-1)"): (2, 2),
     # Not an RFC row: the three tagged arguments of schema-non-finite.
     ("files", "tagged function arguments (D18)"): (3, 1),
@@ -74,7 +78,8 @@ FOOTPRINT = {
 # files. The converter changes 52 blocks in 50 files: it rewrites only the
 # blocks above and leaves the project block of benchmarks/AGENTS.md, whose
 # environment files it cannot merge, for manual work.
-DOCUMENTS_CHANGED = {"files": 484, "markdown": 52}
+# The four added YAML files above all receive a new header.
+DOCUMENTS_CHANGED = {"files": 488, "markdown": 52}
 
 STATISTICS = {
     # RFC: 415 entry specifications with a model and 10 without. The RFC
@@ -82,7 +87,8 @@ STATISTICS = {
     # writes `model` on negative-remote-parent's entry and on the
     # specification sdtm-lb-metadata's submission project lists, and finds
     # no model source for negative-cyclic-parent.
-    "entry specifications with a model (P-MODEL-1)": 417,
+    # The format-name negative and both linked-CSV entries add three models.
+    "entry specifications with a model (P-MODEL-1)": 420,
     "entry specifications without a model source (P-MODEL-1)": 11,
     "environment files removed (D8)": 16,
     "function files written (D8)": 8,
@@ -111,11 +117,13 @@ STATISTICS = {
     "negative specifications with keys to write (D23)": 19,
     # The method page: 196 spec paths in the 189 negative contracts, 37 of
     # them changed by P-CLR-2 and 12 by D18 and the renames; plus clear[0].
-    "negative spec paths": 196,
+    # The format-name negative adds codelists[0].codelists[0].format_name.
+    "negative spec paths": 197,
     "negative spec paths rewritten": 49,
     "negative contracts rewritten": 47,
-    # P-COPY-1: 10 benchmark columns in 4 specifications.
-    "copy candidates (P-COPY-1)": 10,
+    # P-COPY-1: the original 10 columns plus STUDYID and USUBJID in
+    # schema-linked-csv-types/spec_adsl.yaml, whose types and labels match DM.
+    "copy candidates (P-COPY-1)": 12,
     "Markdown files with converted blocks": 50,
 }
 
