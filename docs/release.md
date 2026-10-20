@@ -25,12 +25,11 @@ open gates live in GitHub issues and pull requests, not here.
   [CRAN submission](#cran-submission) describes.
 
 Source builds compile the Rust workspace, so they need Rust 1.82.0 or later
-with Cargo and a C compiler. The R source package carries the locked crates
-and builds offline, as [Source package contents](#source-package-contents)
-describes. For the Python source archive, Cargo downloads the locked crates
-from crates.io, and pip's build isolation fetches `maturin` 1.9.6. An offline
-Python build needs those crates already in the Cargo cache and `maturin`
-installed for `pip install --no-build-isolation`. Windows R builds also need
+with Cargo and a C compiler. Both source packages carry the locked crates and
+build offline, as [Source package contents](#source-package-contents)
+describes. pip's build isolation fetches `maturin` 1.9.6 for the Python source
+archive, so an offline Python build needs `maturin` installed, for
+`pip install --no-build-isolation --no-index`. Windows R builds also need
 Rtools45 and the GNU Rust target, as
 [Supported dependency combinations](#supported-dependency-combinations)
 describes.
@@ -138,9 +137,10 @@ bundled workspace, so it builds with the caller's toolchain, whose Cargo and
 rustc must each be 1.82 or later: Windows R builds need the GNU target on that
 toolchain, `rustup target add x86_64-pc-windows-gnu`. `make check-repository`
 refuses a locked package that a supported target compiles and that needs a
-newer Rust. Canonical
-release builds use `rust/Cargo.lock`, including unchanged copies in both source
-packages. Arrow and Parquet are supported at exactly 55.2.0, the newest
+newer Rust. Canonical release builds use `rust/Cargo.lock`: the R source
+package carries it unchanged, and the Python source archive carries the part
+of it that its bundle builds (#3030 D55). Arrow and Parquet are supported at
+exactly 55.2.0, the newest
 release that builds with Rust 1.82, with flatbuffers 25.12.19, so an embedder
 whose graph holds Arrow 55.2.0 builds the engine unchanged. Other Arrow and
 Parquet releases are unsupported: the adapter's version-specific APIs, confined
@@ -394,7 +394,7 @@ contract allows; the 1.0.0 GitHub release stays as published (#3030 D51).
 
 ## Source package contents
 
-Python and R source packages carry the same Rust workspace, static ReadStat
+Python and R source packages carry the same engine crates, static ReadStat
 bridge and patched YAML parser. SAS and Transport decoding runs in the shared
 adapter over captured source bytes; it needs no host reader fallback or dynamic
 ReadStat installation. The [ReadStat integration](../rust/crates/yamaa-adapters/vendor/readstat/README.md)
@@ -402,14 +402,47 @@ and [YAML parser provenance](../rust/vendor/saphyr-parser/PROVENANCE.md)
 own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
 
-Both source packages carry `rust/rust-toolchain.toml` unchanged, and neither
-installation reads it. The R package runs Cargo from `src/`, and pip builds
-the Python source archive from its root, both outside that declaration, so
-both build with the caller's default toolchain, which must be Rust 1.82 or
-later. The R build also sets `RUSTUP_AUTO_INSTALL=0`, so rustup installs no
-toolchain even where a `rust-toolchain.toml` in a parent directory names one.
-The file names Rust 1.99.1 in rustup's minimal profile and no other
-component, for builds inside the bundled workspace.
+`tools/staging/engine_bundle.py` stages each host's engine source bundle,
+from which its source package builds (#3030 D55): the Python source archive
+builds from it, and the R source package moves onto it next. The bundle holds
+the engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with that host's
+binding crate; the canonical workspace manifest with `crates/*` as its
+members, which in the bundle are exactly those crates; a lock trimmed from
+the canonical `rust/Cargo.lock`; the vendored YAML parser, without its tests,
+and the ReadStat sources; and the crates.io crates of that lock, as
+`cargo vendor --locked --versioned-dirs` writes them. It holds no tests,
+examples, benchmark fixtures, `public-api.txt` or `rust-toolchain.toml`.
+Cargo writes the trimmed lock from a copy of the canonical one, and the tool
+then verifies it crate by crate: every package that it keeps is the canonical
+entry, with the same version, source and checksum, depends only on packages
+that its canonical entry depends on, and is reached from the bundle's
+members. `make check-repository` verifies both hosts' trimmed locks, and
+`python -m tools.packaging.check_cargo_lock <archive>` checks a built Python
+source archive against the checkout: the bundle's files byte for byte, its
+lock, and each vendored crate with exactly the files that its
+`.cargo-checksum.json` lists.
+
+The Python source archive is maturin's output over the bundle, staged beside
+the Python package files; `python/pyproject.toml` names plain maturin as its
+build backend. The archive keeps the vendored crates in `vendor/` and, at its
+root, where pip runs the build, a `.cargo/config.toml` that replaces crates.io
+with them and sets Cargo's `net.offline`. maturin runs Cargo with `--locked`,
+so the build uses the trimmed lock unchanged and reads nothing from the
+network. The archive carries no toolchain file, so it builds with the
+caller's default toolchain, which must be Rust 1.82 or later. Four vendored
+crates carry the `rust-toolchain.toml` that they publish, which no build step
+reads: rustup names the caller's toolchain to every process that Cargo
+starts. Like the R package's, the vendored crates leave out the prebuilt
+binaries that `wit-bindgen` ships, as described below.
+
+Until the R source package moves onto the bundle (#3105), it carries the
+canonical workspace, lock and `rust/rust-toolchain.toml` unchanged, and its
+installation does not read the toolchain file: the R
+package runs Cargo from `src/`, outside that declaration, so it builds with
+the caller's default toolchain. The R build also sets `RUSTUP_AUTO_INSTALL=0`,
+so rustup installs no toolchain even where a `rust-toolchain.toml` in a
+parent directory names one. The file names Rust 1.99.1 in rustup's minimal
+profile and no other component, for builds inside the bundled workspace.
 
 The R source package builds offline, as CRAN's Repository Policy and its
 guidance for packages that use Rust ask. `tools/staging/stage_r_package.py`
@@ -534,9 +567,14 @@ owns decoding behavior.
   math. This promises neither universal correct rounding nor historical bit
   compatibility. The golden values live in
   [portable_math.tsv](../rust/crates/yamaa-core/tests/fixtures/portable_math.tsv).
-- Keep canonical Cargo locking and unchanged source-package copies. Runtime,
-  contract, cache and resource identities use references, canonical forms or
-  bytes; only packaging-tool lockfiles carry their own checksum fields.
+- Build each source package from a per-host workspace whose lock is trimmed
+  from the canonical `rust/Cargo.lock` and verified crate by crate against
+  it, with vendored crates and no toolchain file, tests or fixtures (#3030
+  D55). The Python source archive is built this way; the R source package
+  carries the canonical workspace and lock unchanged until it moves onto the
+  bundle (#3105). Runtime, contract, cache and resource identities use
+  references, canonical forms or bytes; only packaging-tool lockfiles and
+  Cargo's records of vendored crates carry their own checksum fields.
 - Prune every specification after composition, including an entry file that
   declares no `parent`; resolved-column ordering stays inheritance-only.
 - Ship `str_replace` with literal replacement text only. Group references,
