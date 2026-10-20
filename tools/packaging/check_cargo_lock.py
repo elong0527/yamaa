@@ -70,6 +70,11 @@ ASSIGNMENT = re.compile(
     r"(?:[^\s:#=]+\s*(?::{1,3}=|[+?!]?=)"
     r"|(?:undefine|vpath|-?include|sinclude|-?load)\b)"
 )
+# A # that no backslash escapes starts a make comment.
+COMMENT = re.compile(r"(?<!\\)#")
+# Recipe commands that strip without the word strip: objcopy's -g
+# (--strip-debug), -S (--strip-all) and -x (--discard-all), and install -s.
+TOOL_STRIP = {"objcopy": {"-g", "-S", "-x", "--discard-all"}, "install": {"-s"}}
 
 
 def makevars_profile(label, makevars):
@@ -102,12 +107,13 @@ def makevars_profile(label, makevars):
 
 
 def logical_lines(makevars):
-    """make's logical lines, each as its physical lines: a line that ends in a
-    backslash continues on the next, and make reads CRLF as LF."""
+    """make's logical lines, each as its physical lines: a line that ends in an
+    odd number of backslashes continues on the next, and make reads CRLF as
+    LF."""
     lines = [[]]
     for line in makevars.replace("\r\n", "\n").split("\n"):
         lines[-1].append(line)
-        if not line.endswith("\\"):
+        if (len(line) - len(line.rstrip("\\"))) % 2 == 0:
             lines.append([])
     return [physical for physical in lines if physical]
 
@@ -115,7 +121,14 @@ def logical_lines(makevars):
 def opens_rule(text):
     """Whether a make line, neither a recipe nor a conditional, opens a rule:
     a target line, as opposed to an assignment, a directive or a
-    target-specific variable."""
+    target-specific variable.
+
+    A trailing comment is cut first, so that a colon in it, as in a URL, does
+    not make a directive look like a rule. make reads a # inside a variable
+    reference literally; cutting there too can only close a rule early, which
+    gives the lines after it the stricter test.
+    """
+    text = COMMENT.split(text, maxsplit=1)[0]
     if ASSIGNMENT.match(text):
         return False
     depth = 0
@@ -150,8 +163,10 @@ def strips_at_link(previous, word, recipe):
 
 
 def refuse_strip(label, line, recipe):
-    """Refuse a make line that mentions strip or passes a strip option."""
-    words = MAKE_STRIP.sub(" ", line.replace('"', "").replace("'", "")).split()
+    """Refuse a make line that mentions strip or passes a strip option, or a
+    recipe command in TOOL_STRIP that strips."""
+    text = MAKE_STRIP.sub(" ", line.replace('"', "").replace("'", ""))
+    words = text.split()
     for previous, word in zip(["", *words], words):
         if "strip" in word.lower():
             shown = word
@@ -165,6 +180,18 @@ def refuse_strip(label, line, recipe):
             else f"{shown} strips the shared object at R's link step"
         )
         raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
+    if not recipe:
+        return
+    # Each shell command is named by its first word, as in @objcopy or
+    # $(OBJCOPY), or a cross tool's x86_64-w64-mingw32-objcopy.
+    for command in re.split(r"&&|\|\||[;|]", text):
+        tool, *options = command.split() or [""]
+        name = tool.strip("@+-$(){}").rsplit("/", 1)[-1].lower()
+        for key, strips in TOOL_STRIP.items():
+            if name.endswith(key) and (found := strips.intersection(options)):
+                raise ValueError(
+                    f"{label}: a recipe runs {tool} {min(found)}; {KEEPS_SYMBOLS}"
+                )
 
 
 def check_r_link(label, makevars):
@@ -175,7 +202,8 @@ def check_r_link(label, makevars):
     $(STRIP_SHARED_LIB) in a recipe, or an option such as -Wl,--strip-all. No
     line may pass a linker option in LINKER_STRIP after -Wl, or -Xlinker.
     Outside the recipes, in PKG_LIBS or a variable that it reads, no line may
-    pass the compiler driver's -s either. make's $(strip ...) function is
+    pass the compiler driver's -s either, and no recipe may run a command in
+    TOOL_STRIP with its strip option. make's $(strip ...) function is
     admitted, but not an option inside it.
 
     The lines are read as make reads them. A tab-led line is a recipe only
