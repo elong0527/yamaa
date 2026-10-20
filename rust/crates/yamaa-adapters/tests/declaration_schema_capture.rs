@@ -809,8 +809,8 @@ mod declaration {
         }
 
         #[test]
-        fn shipped_project_version_override_reaches_the_same_owned_submission_model() {
-            use yamaa_core::submission_document;
+        fn shipped_project_version_override_reaches_the_same_lowered_section() {
+            use yamaa_core::front_end::v0_5::project::project;
             let schema = shipped_schema::capture_project().unwrap().project;
             for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
                 for version in [None, Some("1.0")] {
@@ -821,13 +821,16 @@ mod declaration {
                         text.push_str(&format!("  source_system_version: '{version}'\n"));
                     }
                     let captured = schema.prepare_structural(source(&text)).unwrap();
-                    let input = &captured.normalized().document;
-                    let owned = submission_document::decode(input, input.root()).unwrap();
+                    let lowered = project(&captured.normalized().document, None).unwrap();
                     drop(captured);
-                    let selected = owned.sections()[0].source_versions("0.3.0").unwrap();
-                    assert_eq!(selected.metadata(), version.unwrap_or("0.3.0"));
-                    assert_eq!(selected.installed(), "0.3.0");
-                    assert_eq!(selected.override_origin().is_some(), version.is_some());
+                    let section = &lowered.submission.as_ref().unwrap().sections[0];
+                    assert_eq!(
+                        section
+                            .source_system_version
+                            .as_ref()
+                            .map(|version| version.text.as_str()),
+                        version
+                    );
                 }
             }
         }
@@ -1304,6 +1307,7 @@ mod declaration {
             specification_source::{CapturedSchema, Error, Source},
             yaml_decode::decode_yaml,
         };
+        use yamaa_core::ast::Notation;
         use yamaa_core::schema::{DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
 
         #[derive(Debug, PartialEq, Eq)]
@@ -1754,10 +1758,11 @@ mod declaration {
         }
 
         #[test]
-        fn captured_function_decodes_directly_to_an_admitted_versionless_core_plan() {
+        fn captured_function_lowers_directly_to_an_admitted_versionless_core_plan() {
+            use crate::support::roots::{Case, Definition, Parameter};
             use yamaa_core::{
-                project_function::{Case, Definition, Function, Language, Parameter},
-                project_function_document,
+                front_end::v0_5::project::function,
+                project_function::{Function, Language},
                 temporal::{Date, Precision},
                 value::{ColumnType, Value, ValueType},
             };
@@ -1769,11 +1774,10 @@ mod declaration {
                 .prepare_class(source("functions/identity.yaml", text))
                 .unwrap();
             let document = &captured.normalized().document;
-            let decoded =
-                project_function_document::decode(document, document.root(), "identity").unwrap();
+            let decoded = function(document, None, "identity", Language::Python).unwrap();
             let date = Value::Date(Date::new(2024, 2, 29, Precision::Day).unwrap());
             assert_eq!(
-                decoded,
+                Definition::of(&decoded),
                 Definition {
                     name: "identity".into(),
                     function: "project.identity".into(),
@@ -1813,9 +1817,10 @@ mod declaration {
         }
 
         #[test]
-        fn scalar_decoder_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
+        fn scalar_lowering_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
             use yamaa_core::{
-                project_function_document,
+                front_end::v0_5::project::function,
+                project_function::Language,
                 temporal::{Date, DateTime, Precision},
                 value::Value,
             };
@@ -1825,7 +1830,7 @@ mod declaration {
             let text="function: project.identity\ndescription: Exact defaults.\nparams:\n  - {name: integer, type: int, required: false, default: -9223372036854775808}\n  - {name: float, type: float, required: false, default: -0.0}\n  - {name: boolean, type: bool, required: false, default: false}\n  - {name: text, type: str, required: false, default: \"a\\0b\\u96ea\"}\n  - {name: date, type: date, required: false, default: {date: '2024-02-29'}}\n  - {name: datetime, type: datetime, required: false, default: {datetime: '2024-02-29T08:30'}}\n  - {name: missing, type: str, required: false, default: null, accepts_missing: true}\nreturns: str\ntests: []\n";
             let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let decoded = project_function_document::decode(doc, doc.root(), "defaults").unwrap();
+            let decoded = function(doc, None, "defaults", Language::Python).unwrap();
             let date = Date::new(2024, 2, 29, Precision::Day).unwrap();
             assert_eq!(
                 decoded
@@ -1853,14 +1858,17 @@ mod declaration {
 
         #[test]
         fn every_invalid_scalar_retains_its_node_without_exposing_a_partial_model() {
-            use yamaa_core::project_function_document::{self, Kind};
+            use yamaa_core::{
+                front_end::v0_5::project::function, project_function::Language,
+                project_function_document::Kind,
+            };
             let schema =
                 CapturedSchema::admit_root(environment_modules(), 0, "function_definition_class")
                     .unwrap();
             let text="function: project.identity\ndescription: Invalid leaves.\nparams: [{name: x, type: int, required: false, default: 9223372036854775808}]\nreturns: date\ntests:\n  - {id: invalid, covers: [normal, boundary], args: {x: -9223372036854775809}, result: {date: '2023-02-29'}}\n  - {id: invalid-time, covers: [boundary], args: {x: 1}, result: {datetime: '2024-01-01T08:30Z'}}\n";
             let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let errors = project_function_document::decode(doc, doc.root(), "invalid").unwrap_err();
+            let errors = function(doc, None, "invalid", Language::Python).unwrap_err();
             assert_eq!(
                 errors
                     .iter()
@@ -1881,25 +1889,36 @@ mod declaration {
                 doc.nodes()[errors[1].node],
                 N::Integer("-9223372036854775809".into())
             );
+            // Each finding keeps the text a diagnostic reports.
+            assert_eq!(
+                errors
+                    .iter()
+                    .map(|f| f.value.as_deref())
+                    .collect::<Vec<_>>(),
+                [
+                    Some("9223372036854775808"),
+                    Some("-9223372036854775809"),
+                    Some("2023-02-29"),
+                    Some("2024-01-01T08:30Z")
+                ]
+            );
             assert_eq!(captured.source().bytes, text.as_bytes());
         }
 
         #[test]
-        fn codelist_source_decodes_directly_with_source_standard_and_unread_external_href() {
+        fn codelist_source_lowers_directly_with_source_standard_and_unread_external_href() {
+            use crate::support::roots::{
+                Codelist, CodelistType, External, Item, Source as TerminologySource, Standard,
+            };
             use yamaa_core::{
-                project_terminology::{
-                    Catalogue, Codelist, DataType, External, Item, Source as TerminologySource,
-                    Standard,
-                },
-                project_terminology_document,
-                value::Value,
+                front_end::v0_5::project::codelists, project_terminology::Catalogue, value::Value,
             };
             let schema =
                 CapturedSchema::admit_root(project_modules(), 0, "codelist_source_class").unwrap();
             let text="standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\ncodelists:\n  - {id: SEX, name: Sex, items: [{value: F, decode: Female, rank: 1}, {value: M, decode: Male, rank: 2}]}\n  - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.0', href: '../unread/dictionary'}}\n";
             let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let source = project_terminology_document::decode(doc, doc.root()).unwrap();
+            let source = codelists(doc, None).unwrap();
             let expected = TerminologySource {
                 standard: Some(Standard {
                     name: "CDISC/NCI".into(),
@@ -1910,7 +1929,7 @@ mod declaration {
                     Codelist {
                         id: "SEX".into(),
                         name: "Sex".into(),
-                        data_type: DataType::Text,
+                        data_type: CodelistType::Text,
                         extensible: false,
                         alias: None,
                         format_name: None,
@@ -1935,7 +1954,7 @@ mod declaration {
                     Codelist {
                         id: "DICT".into(),
                         name: "Dictionary".into(),
-                        data_type: DataType::Text,
+                        data_type: CodelistType::Text,
                         extensible: false,
                         alias: None,
                         format_name: None,
@@ -1948,20 +1967,22 @@ mod declaration {
                     },
                 ],
             };
-            assert_eq!(source, expected);
+            assert_eq!(TerminologySource::of(&source), expected);
             assert!(Catalogue::admit(vec![source]).is_ok());
             assert_eq!(captured.source().bytes, text.as_bytes());
         }
 
         #[test]
-        fn source_decoder_retains_every_wide_value_and_rank_failure() {
-            use yamaa_core::{project_function_document::Kind, project_terminology_document};
+        fn source_lowering_retains_every_wide_value_and_rank_failure() {
+            use yamaa_core::{
+                front_end::v0_5::project::codelists, project_function_document::Kind,
+            };
             let schema =
                 CapturedSchema::admit_root(project_modules(), 0, "codelist_source_class").unwrap();
             let text="codelists:\n  - {id: BIG, name: Big, data_type: integer, items: [{value: 9223372036854775808, rank: -9223372036854775809}, {value: -9223372036854775809}]}\n";
             let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let errors = project_terminology_document::decode(doc, doc.root()).unwrap_err();
+            let errors = codelists(doc, None).unwrap_err();
             assert_eq!(
                 errors
                     .iter()
@@ -1976,42 +1997,69 @@ mod declaration {
         }
 
         #[test]
-        fn environment_decoder_keeps_the_lock_and_inline_or_path_function_order() {
-            use yamaa_core::project_environment_document::{self, Declaration};
+        fn environment_lowering_keeps_the_lock_and_inline_or_path_function_order() {
+            use yamaa_core::{
+                ast::FunctionSource, front_end::v0_5::project::environment,
+                project_function::Language,
+            };
+            let mut root =
+                project_root("schema_version: '1.0'\nenvironments: {python: environment.yaml}\n");
             let schema = environment_schema();
             let text="schema_version: '1.0'\nlock: ../uv.lock\nfunctions:\n  first: functions/first.yaml\n  second: {function: project.constant, description: Constant, params: [], returns: int, tests: []}\n";
             let captured = schema
                 .prepare_structural(source("environment.yaml", text))
                 .unwrap();
             let document = &captured.normalized().document;
-            let result = project_environment_document::decode(document, document.root()).unwrap();
-            assert_eq!(result.lock.as_deref(), Some("../uv.lock"));
-            let functions = result.functions.unwrap();
+            environment(document, None, Language::Python, &mut root).unwrap();
+            let linked = root.environment(Language::Python).unwrap();
+            assert_eq!(linked.file.as_ref().unwrap().text, "environment.yaml");
+            assert_eq!(linked.lock.as_ref().unwrap().text, "../uv.lock");
+            let functions = root.functions.as_ref().unwrap();
             assert_eq!(
                 functions
                     .iter()
-                    .map(|f| f.name.as_str())
+                    .map(|f| f.key.as_ref().unwrap().name.as_str())
                     .collect::<Vec<_>>(),
                 ["first", "second"]
             );
-            assert_eq!(
-                functions[0].declaration,
-                Declaration::Path("functions/first.yaml".into())
-            );
-            let Declaration::Inline(def) = &functions[1].declaration else {
+            let FunctionSource::File(path) = &functions[0].source else {
+                panic!("function file")
+            };
+            assert_eq!(path.text, "functions/first.yaml");
+            let FunctionSource::Inline(def) = &functions[1].source else {
                 panic!("inline definition")
             };
-            assert_eq!(def.name, "second");
-            assert_eq!(def.function, "project.constant");
+            assert_eq!(def.name.name, "second");
+            assert_eq!(
+                def.implementation(Language::Python).unwrap().callable.text,
+                "project.constant"
+            );
             assert_eq!(def.comparison_decimals, 4);
+            // The environment file's paths keep its own spelling.
+            assert_eq!(
+                root.paths
+                    .render(linked.lock.as_ref().unwrap().meta.path, Notation::V0_5),
+                "lock"
+            );
+            assert_eq!(
+                root.paths.render(functions[1].meta.path, Notation::V0_5),
+                "functions.second"
+            );
             assert_eq!(captured.source().bytes, text.as_bytes());
+        }
+        /// A project file, lowered with the shipped project schema.
+        fn project_root(text: &str) -> yamaa_core::ast::Project {
+            let captured = project_schema()
+                .prepare_structural(source("project.yaml", text))
+                .unwrap();
+            yamaa_core::front_end::v0_5::project::project(&captured.normalized().document, None)
+                .unwrap()
         }
 
         #[test]
-        fn project_decoder_keeps_environment_links_codelist_order_and_unread_submission_metadata() {
+        fn project_lowering_keeps_environment_links_codelist_order_and_submission_metadata() {
             use yamaa_core::{
-                project_document, project_environment_document::Declaration,
-                project_function::Language,
+                ast::CodelistSource, front_end::v0_5::project::project, project_function::Language,
             };
             let schema = project_schema();
             let text="schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists:\n  - ../terminology.yaml\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2024-03-29'}\n    codelists: [{id: EXTERNAL, name: External, external: {dictionary: Dict, version: '1', href: '../not-read.xml'}}]\nstudy: {id: Study01, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [adam/adsl.yaml], define: ../data/adam/define.xml, documents: [{id: adrg, kind: supplemental, link: 'docs/adrg.pdf', title: Guide}]}\n";
@@ -2019,55 +2067,56 @@ mod declaration {
                 .prepare_structural(source("project.yaml", text))
                 .unwrap();
             let document = &captured.normalized().document;
-            let result = project_document::decode(document, document.root()).unwrap();
-            assert_eq!(
-                result.environments.python.as_deref(),
-                Some("python/environment.yaml")
-            );
-            assert_eq!(result.environments.r.as_deref(), Some("r/environment.yaml"));
-            assert_eq!(
-                result.environments.get(Language::Python),
-                Some("python/environment.yaml")
-            );
-            assert_eq!(
-                result.environments.get(Language::R),
-                Some("r/environment.yaml")
-            );
+            let result = project(document, None).unwrap();
+            let file = |language| {
+                result
+                    .environment(language)
+                    .and_then(|environment| environment.file.as_ref())
+                    .map(|file| file.text.as_str())
+            };
+            assert_eq!(file(Language::Python), Some("python/environment.yaml"));
+            assert_eq!(file(Language::R), Some("r/environment.yaml"));
             assert_eq!(result.codelists.len(), 2);
-            assert_eq!(
-                result.codelists[0].declaration,
-                Declaration::Path("../terminology.yaml".into())
-            );
-            let Declaration::Inline(ct) = &result.codelists[1].declaration else {
+            let CodelistSource::File(path) = &result.codelists[0].source else {
+                panic!("codelist file")
+            };
+            assert_eq!(path.text, "../terminology.yaml");
+            let CodelistSource::Inline(ct) = &result.codelists[1].source else {
                 panic!("inline source")
             };
-            assert_eq!(ct.standard.as_ref().unwrap().version, "2024-03-29");
+            assert_eq!(ct.standard.as_ref().unwrap().version.text, "2024-03-29");
             assert_eq!(
-                ct.codelists[0].external.as_ref().unwrap().href.as_deref(),
-                Some("../not-read.xml")
+                ct.codelists[0]
+                    .external
+                    .as_ref()
+                    .unwrap()
+                    .href
+                    .as_ref()
+                    .unwrap()
+                    .text,
+                "../not-read.xml"
             );
-            let N::Sequence(entries) =
-                &document.nodes()[document.field(document.root(), "codelists").unwrap()]
-            else {
-                panic!("codelist sequence")
-            };
             assert_eq!(
                 result
                     .codelists
                     .iter()
-                    .map(|codelist| codelist.node)
+                    .map(|codelist| result.paths.render(codelist.meta.path, Notation::V0_5))
                     .collect::<Vec<_>>(),
-                *entries
+                ["codelists[0]", "codelists[1]"]
             );
-            // Study and section metadata stay in the document for submission composition.
-            assert!(document.field(document.root(), "study").is_some());
-            assert!(document.field(document.root(), "adam").is_some());
+            // The study and sections lower beside, for submission composition.
+            let declarations = result.submission.as_ref().unwrap();
+            assert_eq!(declarations.study.as_ref().unwrap().id.name, "Study01");
+            assert_eq!(declarations.sections[0].specs[0].text, "adam/adsl.yaml");
             assert_eq!(captured.source().bytes, text.as_bytes());
         }
 
         #[test]
-        fn environment_and_project_decoders_preserve_absent_versus_present_empty_sources() {
-            use yamaa_core::{project_document, project_environment_document};
+        fn environment_and_project_lowering_preserve_absent_versus_present_empty_sources() {
+            use yamaa_core::{
+                front_end::v0_5::project::{environment, project},
+                project_function::Language,
+            };
             let schema = environment_schema();
             for (text, present) in [
                 ("schema_version: '1.0'\n", false),
@@ -2077,11 +2126,13 @@ mod declaration {
                     .prepare_structural(source("environment.yaml", text))
                     .unwrap();
                 let document = &captured.normalized().document;
-                let result =
-                    project_environment_document::decode(document, document.root()).unwrap();
-                assert_eq!(result.functions.is_some(), present);
-                assert!(result.functions.into_iter().flatten().next().is_none());
-                assert!(result.lock.is_none());
+                let mut root = project_root(
+                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                );
+                environment(document, None, Language::Python, &mut root).unwrap();
+                assert_eq!(root.functions.is_some(), present);
+                assert!(root.functions.iter().flatten().next().is_none());
+                assert!(root.environment(Language::Python).unwrap().lock.is_none());
             }
             let schema = project_schema();
             for text in [
@@ -2092,17 +2143,19 @@ mod declaration {
                     .prepare_structural(source("project.yaml", text))
                     .unwrap();
                 let document = &captured.normalized().document;
-                let result = project_document::decode(document, document.root()).unwrap();
-                assert_eq!(result.environments, Default::default());
+                let result = project(document, None).unwrap();
+                assert!(result.environments.is_empty());
                 assert!(result.codelists.is_empty());
+                assert!(result.functions.is_none());
             }
         }
 
         #[test]
-        fn environment_and_project_decoders_collect_every_independent_inline_scalar_failure() {
+        fn environment_and_project_lowering_collect_every_independent_inline_scalar_failure() {
             use yamaa_core::json::Value as JsonValue;
             use yamaa_core::{
-                project_document, project_environment_document, project_function_document::Kind,
+                front_end::v0_5::project as lower, project_function::Language,
+                project_function_document::Kind,
             };
             let wide =
                 || JsonValue::Number("9223372036854775808".parse().expect("canonical integer"));
@@ -2119,9 +2172,13 @@ mod declaration {
             for (document, findings, expected, values) in [
                 (
                     environment_document,
-                    project_environment_document::decode(
+                    lower::environment(
                         environment_document,
-                        environment_document.root(),
+                        None,
+                        Language::Python,
+                        &mut project_root(
+                            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                        ),
                     )
                     .unwrap_err(),
                     vec![
@@ -2132,8 +2189,7 @@ mod declaration {
                 ),
                 (
                     project_document_arena,
-                    project_document::decode(project_document_arena, project_document_arena.root())
-                        .unwrap_err(),
+                    lower::project(project_document_arena, None).unwrap_err(),
                     vec![
                         (
                             "codelists[0].codelists[0].items[0].value",
@@ -2155,10 +2211,9 @@ mod declaration {
                     expected
                 );
                 assert!(findings.iter().all(|f| f.node < document.nodes().len()));
-                let projected = yamaa_core::project_environment_diagnostics::scalar_diagnostics(
-                    document, &findings,
-                )
-                .unwrap();
+                let projected =
+                    yamaa_core::project_environment_diagnostics::scalar_diagnostics(&findings)
+                        .unwrap();
                 assert_eq!(projected.len(), expected.len());
                 for (finding, value) in projected.iter().zip(values) {
                     assert_eq!(

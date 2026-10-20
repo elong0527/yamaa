@@ -290,7 +290,7 @@ fn activate_observed<P: ActivationPort>(
                 selected: language,
             });
         }
-        if !names.insert(&definition.definition().name) {
+        if !names.insert(definition.name()) {
             return Err(Failure::DuplicateSelection { function });
         }
         plans.push(
@@ -365,7 +365,11 @@ fn activate_observed<P: ActivationPort>(
     let mut test_failures = Vec::new();
     for (function, (definition, binding)) in functions.iter().zip(&mut activated).enumerate() {
         for (case, test) in definition.definition().tests.iter().enumerate() {
-            let supplied: BTreeMap<_, _> = test.args.iter().cloned().collect();
+            let supplied: BTreeMap<_, _> = test
+                .args
+                .iter()
+                .map(|(name, value)| (name.name.clone(), value.clone()))
+                .collect();
             if let Some(observations) = observations.as_deref_mut() {
                 observations.tests.push(TestObservation {
                     function,
@@ -449,7 +453,7 @@ fn activate_observed<P: ActivationPort>(
                 continue;
             }
             binding.cases.push(CaseObservation {
-                id: test.id.clone(),
+                id: test.id.text.clone(),
                 actual,
                 invoked,
             });

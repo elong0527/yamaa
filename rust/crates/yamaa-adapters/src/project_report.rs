@@ -295,20 +295,19 @@ pub(crate) fn activation_origins(
             .called_functions()
             .get(selected)
             .ok_or(report::Error::InvalidObservation)?;
-        let name = &run
+        let name = run
             .environment()
             .functions()
             .get(index)
             .ok_or(report::Error::InvalidObservation)?
-            .definition()
-            .name;
-        if captured.origins().functions.get(index) != Some(name) {
+            .name();
+        if captured.origins().functions.get(index).map(String::as_str) != Some(name) {
             return Err(report::Error::InvalidObservation);
         }
         let declaration = paths
             .get(selected)
             .ok_or(report::Error::InvalidObservation)?;
-        let external = external.get(name.as_str()).copied();
+        let external = external.get(name).copied();
         let source = external.unwrap_or(declaring);
         metadata.push((source, declaration, external.is_some()));
     }
@@ -355,12 +354,7 @@ pub(crate) fn activation_failure<'a, C, E>(
         .compiled()
         .called_functions()
         .iter()
-        .map(|&index| {
-            format!(
-                "functions.{}",
-                run.environment().functions()[index].definition().name
-            )
-        })
+        .map(|&index| format!("functions.{}", run.environment().functions()[index].name()))
         .collect::<Vec<_>>();
     let definitions = run
         .compiled()

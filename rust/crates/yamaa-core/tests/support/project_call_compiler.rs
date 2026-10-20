@@ -1,6 +1,7 @@
 pub use crate::support::document::Tree;
+use crate::support::roots::{Case, Definition, Parameter};
 use yamaa_core::{
-    project_function::{Case, Definition, Function, Language, Parameter},
+    project_function::{Function, Language},
     schema::{Document, SpecificationDocument},
     value::{ColumnType, Value, ValueType},
 };
@@ -42,7 +43,8 @@ pub fn function(name: &str) -> Function {
                     result: Value::Missing,
                 },
             ],
-        },
+        }
+        .root(Language::Python),
     )
     .unwrap()
 }

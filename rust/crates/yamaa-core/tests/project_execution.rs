@@ -675,11 +675,12 @@ mod project {
         mod project_usecase {
             use super::*;
             use yamaa_core::{
+                ast,
                 function_signature::{LogicalSignature, ProjectFunctionIdentity},
                 project_environment::{
                     Draft, Environment, ExecutionEnvironment, LockKind, LockReference,
                 },
-                project_function::{Definition, Language},
+                project_function::Language,
                 schema::DocumentNode as N,
             };
             use yamaa_core::{
@@ -768,7 +769,7 @@ mod project {
                     ))
                 }
             }
-            fn environment(functions: Option<Vec<Definition>>) -> ExecutionEnvironment {
+            fn environment(functions: Option<Vec<ast::Function>>) -> ExecutionEnvironment {
                 let present = functions.is_some();
                 Environment::admit(
                     Language::Python,
@@ -785,7 +786,7 @@ mod project {
                 .unwrap()
                 .into_execution()
             }
-            fn definitions() -> Vec<Definition> {
+            fn definitions() -> Vec<ast::Function> {
                 vec![
                     function("unused").definition().clone(),
                     function("id").definition().clone(),
@@ -1362,6 +1363,7 @@ mod project {
     }
     mod project_lock_diagnostics {
         //! Lock reporting only borrows a completed native activation rejection.
+        use crate::support::roots::{Case, Definition, Parameter};
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::{
             diagnostic::{
@@ -1369,7 +1371,7 @@ mod project {
             },
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
             project_environment::{LockKind, LockReference},
-            project_function::{Case, Definition, Function, Language, Parameter},
+            project_function::{Function, Language},
             value::{ColumnType, Value, ValueType},
         };
         use yamaa_core::{
@@ -1450,7 +1452,8 @@ mod project {
                             result: Value::Missing,
                         },
                     ],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap()
         }
@@ -1518,11 +1521,10 @@ mod project {
         }
     }
     mod project_terminology {
+        use crate::support::roots::{Codelist, CodelistType, External, Item, Source, Standard};
         use yamaa_core::{
-            project_terminology::{
-                validate, BindingFinding, Catalogue, Codelist, DataType, External, Fault, Finding,
-                Item, Source, Standard,
-            },
+            ast::Codelists,
+            project_terminology::{validate, BindingFinding, Catalogue, Fault, Finding},
             value::{ColumnType, Value},
         };
         fn item(value: Value) -> Item {
@@ -1538,7 +1540,7 @@ mod project {
             Codelist {
                 id: "SEX".into(),
                 name: "Sex".into(),
-                data_type: DataType::Text,
+                data_type: CodelistType::Text,
                 extensible: false,
                 alias: None,
                 format_name: None,
@@ -1549,18 +1551,22 @@ mod project {
                 external: None,
             }
         }
-        fn source(list: Codelist) -> Source {
+        fn source(list: Codelist) -> Codelists {
             Source {
                 standard: None,
                 codelists: vec![list],
             }
+            .root()
         }
-        fn published(mut source: Source) -> Source {
-            source.standard = Some(Standard {
-                name: "CDISC/NCI".into(),
-                publishing_set: "SDTM".into(),
-                version: "2023-12-15".into(),
-            });
+        fn published(mut source: Codelists) -> Codelists {
+            source.standard = Some(
+                Standard {
+                    name: "CDISC/NCI".into(),
+                    publishing_set: "SDTM".into(),
+                    version: "2023-12-15".into(),
+                }
+                .root(),
+            );
             source
         }
 
@@ -1663,17 +1669,17 @@ mod project {
             let named = |data_type, format: Option<&str>| {
                 let mut list = list();
                 list.data_type = data_type;
-                if data_type != DataType::Text {
+                if data_type != CodelistType::Text {
                     list.items = Some(vec![item(Value::Int(1)), item(Value::Int(2))]);
                 }
                 list.format_name = format.map(String::from);
                 validate(&[source(list)])
             };
-            assert!(named(DataType::Text, None).is_empty());
-            assert!(named(DataType::Text, Some("$SEX")).is_empty());
+            assert!(named(CodelistType::Text, None).is_empty());
+            assert!(named(CodelistType::Text, Some("$SEX")).is_empty());
             for format in ["SEX", "S$EX", " $SEX"] {
                 assert_eq!(
-                    named(DataType::Text, Some(format)),
+                    named(CodelistType::Text, Some(format)),
                     vec![Finding {
                         source: 0,
                         codelist: 0,
@@ -1681,7 +1687,7 @@ mod project {
                     }]
                 );
             }
-            for data_type in [DataType::Integer, DataType::Float] {
+            for data_type in [CodelistType::Integer, CodelistType::Float] {
                 assert!(named(data_type, Some("NY")).is_empty());
                 assert!(named(data_type, None).is_empty());
             }
@@ -1689,7 +1695,7 @@ mod project {
         #[test]
         fn numeric_equality_is_exact_at_i64_and_binary64_boundaries() {
             let mut list = list();
-            list.data_type = DataType::Float;
+            list.data_type = CodelistType::Float;
             list.items = Some(vec![
                 item(Value::Int(9_007_199_254_740_993)),
                 item(Value::float(9_007_199_254_740_992.0)),
@@ -1767,10 +1773,10 @@ mod project {
             shape.items = None;
             assert_eq!(validate(&[source(shape)])[0].fault, Fault::InvalidShape);
             for (kind, value) in [
-                (DataType::Text, Value::Missing),
-                (DataType::Integer, Value::Bool(true)),
-                (DataType::Integer, Value::float(1.5)),
-                (DataType::Float, Value::Str("1".into())),
+                (CodelistType::Text, Value::Missing),
+                (CodelistType::Integer, Value::Bool(true)),
+                (CodelistType::Integer, Value::float(1.5)),
+                (CodelistType::Float, Value::Str("1".into())),
             ] {
                 let mut list = list();
                 list.data_type = kind;

@@ -3,6 +3,9 @@
 //! Expected values in this file are authored literals, never derived from
 //! the implementation under test. Scalar equivalence is proved against the
 //! independent scalar entry point `invoke_project`.
+#[allow(dead_code)]
+mod support;
+use crate::support::roots::{Case, Definition, Parameter as DefParam};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use yamaa_core::function_batch::{
@@ -15,7 +18,7 @@ use yamaa_core::function_signature::{
 use yamaa_core::host_function_registry::{
     activate_registered, FunctionRegistry, RegistryActivationFailure, RegistryError,
 };
-use yamaa_core::project_function::{Case, Definition, Function, Language, Parameter as DefParam};
+use yamaa_core::project_function::{Function, Language};
 use yamaa_core::table::ValueRef;
 use yamaa_core::temporal::{Date, DateTime, Precision};
 use yamaa_core::value::{ColumnType, Value, ValueType};
@@ -446,7 +449,8 @@ fn definition() -> Function {
                     result: Value::Int(4),
                 },
             ],
-        },
+        }
+        .root(Language::Python),
     )
     .unwrap()
 }

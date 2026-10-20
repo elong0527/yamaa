@@ -1,6 +1,7 @@
 //! Independently authored arenas reach submission detectors and portable boundary policy.
 #![allow(unused_imports)]
 pub(crate) use crate::support::document::Tree;
+pub(crate) use crate::support::roots as rt;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
 pub(crate) use yamaa_core::json::Value as JsonValue;
 pub(crate) use yamaa_core::{
@@ -9,7 +10,7 @@ pub(crate) use yamaa_core::{
     project_environment::Submission,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
-    submission_document, submission_transport, submission_xml, submission_xpt,
+    submission_transport, submission_xml, submission_xpt,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -97,21 +98,21 @@ pub(crate) fn document_reference(id: &str, kind: &str) -> Tree {
     ])
 }
 pub(crate) fn catalogue(standard: bool, value: Value) -> ct::Catalogue {
-    ct::Catalogue::admit(vec![ct::Source {
-        standard: standard.then(|| ct::Standard {
+    ct::Catalogue::admit(vec![rt::Source {
+        standard: standard.then(|| rt::Standard {
             name: "CDISC/NCI".into(),
             publishing_set: "SDTM".into(),
             version: "2026-09-30".into(),
         }),
-        codelists: vec![ct::Codelist {
+        codelists: vec![rt::Codelist {
             id: "LIST".into(),
             name: "Independent list".into(),
-            data_type: ct::DataType::Text,
+            data_type: rt::CodelistType::Text,
             extensible: false,
             alias: None,
             format_name: None,
             external: None,
-            items: Some(vec![ct::Item {
+            items: Some(vec![rt::Item {
                 value,
                 decode: None,
                 rank: None,
@@ -119,7 +120,8 @@ pub(crate) fn catalogue(standard: bool, value: Value) -> ct::Catalogue {
                 extended: false,
             }]),
         }],
-    }])
+    }
+    .root()])
     .unwrap()
 }
 pub(crate) fn compose(
@@ -142,7 +144,7 @@ pub(crate) fn compose_study(
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
     let project = project.document();
-    let declared = submission_document::decode(&project, project.root()).unwrap();
+    let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.iter().collect();
@@ -155,8 +157,9 @@ pub(crate) fn compose_study(
             href: Some("d0.csv"),
         })
         .collect();
-    let section = &declared.sections()[0];
-    let required = composition::Required::admit(declared.study(), Some(section), section.family)?;
+    let section = &declared.sections[0];
+    let required =
+        composition::Required::admit(declared.study.as_ref(), Some(section), section.family)?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 pub(crate) fn one(
@@ -670,30 +673,31 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // list carries its NCI code, and a sponsor-extended item, which has none,
     // carries no alias.
     let epoch = |alias: Option<&str>| {
-        let item = |value: &str, alias: Option<&str>, extended| ct::Item {
+        let item = |value: &str, alias: Option<&str>, extended| rt::Item {
             value: Value::Str(value.into()),
             decode: None,
             rank: None,
             alias: alias.map(String::from),
             extended,
         };
-        ct::Catalogue::admit(vec![ct::Source {
-            standard: Some(ct::Standard {
+        ct::Catalogue::admit(vec![rt::Source {
+            standard: Some(rt::Standard {
                 name: "CDISC/NCI".into(),
                 publishing_set: "SDTM".into(),
                 version: "2026-09-30".into(),
             }),
-            codelists: vec![ct::Codelist {
+            codelists: vec![rt::Codelist {
                 id: "LIST".into(),
                 name: "Independent list".into(),
-                data_type: ct::DataType::Text,
+                data_type: rt::CodelistType::Text,
                 extensible: true,
                 alias: Some("C99079".into()),
                 format_name: None,
                 external: None,
                 items: Some(vec![item("SCREENING", alias, false), item("X", None, true)]),
             }],
-        }])
+        }
+        .root()])
         .unwrap()
     };
     let mut env = project();

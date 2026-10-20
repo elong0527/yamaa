@@ -13,8 +13,13 @@
 //! Lowering is total over every document the model admits. The model does
 //! not check operation payloads, so an operation outside the language
 //! lowers to [`ExprKind::Unsupported`], which preparation refuses as before.
+//!
+//! A project's own files lower into their roots in [`project`], and its
+//! study and sections in [`sections`].
 
 mod expressions;
+pub mod project;
+pub mod sections;
 #[cfg(test)]
 pub(crate) mod tests;
 

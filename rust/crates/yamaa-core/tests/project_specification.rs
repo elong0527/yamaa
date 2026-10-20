@@ -575,18 +575,22 @@ mod project {
 
         #[test]
         fn every_function_argument_keeps_the_complete_long_row_context() {
-            use yamaa_core::project_function::{Case, Function, Language, Parameter};
+            use crate::support::roots::{Case, Parameter};
+            use yamaa_core::project_function::{Function, Language};
             use yamaa_core::value::ValueType;
             let parameters = (0..8).map(|n| format!("p{n}")).collect::<Vec<_>>();
             let mut definition = function("id").definition().clone();
             definition.params = parameters
                 .iter()
-                .map(|name| Parameter {
-                    name: name.clone(),
-                    kind: ValueType::Int,
-                    required: false,
-                    default: Some(Value::Int(1)),
-                    accepts_missing: false,
+                .map(|name| {
+                    Parameter {
+                        name: name.clone(),
+                        kind: ValueType::Int,
+                        required: false,
+                        default: Some(Value::Int(1)),
+                        accepts_missing: false,
+                    }
+                    .root()
                 })
                 .collect();
             definition.tests = vec![
@@ -597,19 +601,24 @@ mod project {
                         .collect(),
                     args: vec![],
                     result: Value::Int(1),
-                },
+                }
+                .root(),
                 Case {
                     id: "boundary".into(),
                     covers: vec!["boundary".into()],
                     args: vec![("p0".into(), Value::Int(i64::MIN))],
                     result: Value::Int(1),
-                },
+                }
+                .root(),
             ];
-            definition.tests.extend(parameters.iter().map(|name| Case {
-                id: format!("missing-{name}"),
-                covers: vec![format!("short-circuit-missing:{name}")],
-                args: vec![(name.clone(), Value::Missing)],
-                result: Value::Missing,
+            definition.tests.extend(parameters.iter().map(|name| {
+                Case {
+                    id: format!("missing-{name}"),
+                    covers: vec![format!("short-circuit-missing:{name}")],
+                    args: vec![(name.clone(), Value::Missing)],
+                    result: Value::Missing,
+                }
+                .root()
             }));
             let function = Function::admit(Language::Python, definition).unwrap();
             let names = (0..63).map(|n| format!("C{n}")).collect::<Vec<_>>();

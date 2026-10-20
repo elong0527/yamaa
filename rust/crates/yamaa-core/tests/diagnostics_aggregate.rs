@@ -844,7 +844,7 @@ mod diagnostics {
                 let function = support::function("id");
                 let identity = ProjectFunctionIdentity {
                     name: "id".into(),
-                    call: function.definition().function.clone(),
+                    call: function.call().into(),
                 };
                 let definitions = [DefinitionSource {
                     function: &function,

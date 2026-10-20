@@ -185,6 +185,7 @@ impl NativePorts {
                 written: &self.environment_written,
                 host: self.host,
                 root: environment.root(),
+                project: environment.project()?,
                 environment_file: environment.environment_file(),
                 lock: environment.lock(),
                 captures: environment.captures(),
@@ -234,7 +235,9 @@ impl Ports for NativePorts {
     }
     fn environment(environment: &Self::Environment) -> service::EnvironmentView<'_> {
         service::EnvironmentView {
-            document: &environment.root().normalized().document,
+            project: environment
+                .project()
+                .expect("a captured environment holds its project"),
             catalogue: environment.environment().catalogue(),
             source: &environment.root().source().identity,
         }

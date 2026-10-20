@@ -1,34 +1,20 @@
-//! Pure static codelist admission and binding for environment sources.
+//! Pure static codelist admission and binding over lowered codelist sources.
 //! Source bytes and schema admission belong to captured inputs.
+use crate::ast::{Codelist, CodelistItem, CodelistType, Codelists};
 use crate::value::{compare_present, ColumnType, Value};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DataType {
-    Text,
-    Integer,
-    Float,
-}
-impl DataType {
-    pub fn column_type(self) -> ColumnType {
-        match self {
-            Self::Text => ColumnType::Str,
-            Self::Integer => ColumnType::Int,
-            Self::Float => ColumnType::Float,
+fn admits(kind: CodelistType, value: &Value) -> bool {
+    match (kind, value) {
+        (CodelistType::Text, Value::Str(_))
+        | (CodelistType::Integer, Value::Int(_))
+        | (CodelistType::Float, Value::Int(_) | Value::Float(_)) => true,
+        (CodelistType::Integer, Value::Float(float)) => {
+            let value = float.get();
+            value % 1.0 == 0.0
         }
-    }
-    fn admits(self, value: &Value) -> bool {
-        match (self, value) {
-            (Self::Text, Value::Str(_))
-            | (Self::Integer, Value::Int(_))
-            | (Self::Float, Value::Int(_) | Value::Float(_)) => true,
-            (Self::Integer, Value::Float(float)) => {
-                let value = float.get();
-                value % 1.0 == 0.0
-            }
-            _ => false,
-        }
+        _ => false,
     }
 }
 
@@ -39,9 +25,9 @@ struct ValueKey<'a> {
     value: &'a Value,
 }
 impl<'a> ValueKey<'a> {
-    fn new(kind: DataType, value: &'a Value) -> Self {
+    fn new(kind: CodelistType, value: &'a Value) -> Self {
         Self {
-            numeric: !matches!(kind, DataType::Text),
+            numeric: !matches!(kind, CodelistType::Text),
             value,
         }
     }
@@ -83,43 +69,6 @@ impl Ord for ValueKey<'_> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Item {
-    pub value: Value,
-    pub decode: Option<String>,
-    pub rank: Option<i64>,
-    pub alias: Option<String>,
-    pub extended: bool,
-}
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct External {
-    pub dictionary: String,
-    pub version: String,
-    pub href: Option<String>,
-}
-#[derive(Clone, Debug, PartialEq)]
-pub struct Codelist {
-    pub id: String,
-    pub name: String,
-    pub data_type: DataType,
-    pub extensible: bool,
-    pub alias: Option<String>,
-    pub format_name: Option<String>,
-    pub items: Option<Vec<Item>>,
-    pub external: Option<External>,
-}
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Standard {
-    pub name: String,
-    pub publishing_set: String,
-    pub version: String,
-}
-#[derive(Clone, Debug, PartialEq)]
-pub struct Source {
-    pub standard: Option<Standard>,
-    pub codelists: Vec<Codelist>,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fault {
     DuplicateId,
@@ -153,14 +102,14 @@ pub enum BindingFinding {
 /// No source overrides another; catalogue order is the authored source/list order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Catalogue {
-    sources: Vec<Source>,
+    sources: Vec<Codelists>,
 }
 impl Catalogue {
     /// Transfer the globally admitted environment's original source ownership.
-    pub(crate) fn from_admitted(sources: Vec<Source>) -> Self {
+    pub(crate) fn from_admitted(sources: Vec<Codelists>) -> Self {
         Self { sources }
     }
-    pub fn admit(sources: Vec<Source>) -> Result<Self, Vec<Finding>> {
+    pub fn admit(sources: Vec<Codelists>) -> Result<Self, Vec<Finding>> {
         let findings = validate(&sources);
         if findings.is_empty() {
             Ok(Self { sources })
@@ -168,18 +117,18 @@ impl Catalogue {
             Err(findings)
         }
     }
-    pub fn sources(&self) -> &[Source] {
+    pub fn sources(&self) -> &[Codelists] {
         &self.sources
     }
     pub fn get(&self, id: &str) -> Option<&Codelist> {
         self.sources
             .iter()
             .flat_map(|source| &source.codelists)
-            .find(|list| list.id == id)
+            .find(|list| list.id.name == id)
     }
     /// Every list that declares items, extensible or not, contributes an
     /// allowed-values column checkpoint; an external dictionary contributes none.
-    pub fn enforced_items(&self, id: &str) -> Option<&[Item]> {
+    pub fn enforced_items(&self, id: &str) -> Option<&[CodelistItem]> {
         self.get(id)?.items.as_deref()
     }
     /// `allowed_values` reports whether the bound column also declares an
@@ -203,7 +152,7 @@ impl Catalogue {
 }
 
 /// Validate every list across every captured source without resolving dictionaries.
-pub fn validate(sources: &[Source]) -> Vec<Finding> {
+pub fn validate(sources: &[Codelists]) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut ids = BTreeSet::new();
     let mut names = BTreeSet::new();
@@ -216,18 +165,18 @@ pub fn validate(sources: &[Source]) -> Vec<Finding> {
                     fault,
                 })
             };
-            if !ids.insert(&list.id) {
+            if !ids.insert(&list.id.name) {
                 push(Fault::DuplicateId);
             }
-            if !names.insert(&list.name) {
+            if !names.insert(&list.name.text) {
                 push(Fault::DuplicateName);
             }
             // A text codelist's SAS format is a character format (CT-12).
-            if list.data_type == DataType::Text
+            if list.data_type == CodelistType::Text
                 && list
                     .format_name
                     .as_ref()
-                    .is_some_and(|name| !name.starts_with('$'))
+                    .is_some_and(|name| !name.text.starts_with('$'))
             {
                 push(Fault::FormatNamePrefix);
             }
@@ -237,7 +186,7 @@ pub fn validate(sources: &[Source]) -> Vec<Finding> {
             if let Some(items) = &list.items {
                 let mut values = BTreeSet::new();
                 for (item_index, item) in items.iter().enumerate() {
-                    if !list.data_type.admits(&item.value) {
+                    if !admits(list.data_type, &item.value) {
                         push(Fault::InvalidValue { item: item_index });
                     }
                     if !values.insert(ValueKey::new(list.data_type, &item.value)) {

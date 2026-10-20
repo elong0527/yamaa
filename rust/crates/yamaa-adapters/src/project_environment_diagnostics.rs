@@ -19,11 +19,8 @@ pub enum Error {
     Projection,
 }
 
-fn root(document: &CapturedDocument) -> projection::Root<'_> {
-    projection::Root {
-        document: &document.normalized().document,
-        identity: &document.source().identity,
-    }
+fn identity(document: &CapturedDocument) -> &str {
+    &document.source().identity
 }
 fn projection_error(error: projection::Error) -> Error {
     match error {
@@ -31,14 +28,14 @@ fn projection_error(error: projection::Error) -> Error {
         projection::Error::InvalidOrigin => Error::InvalidOrigin,
     }
 }
-/// Resolve failed inline scalars from the exact held project root, preserving
-/// full paths.
+/// Report failed inline scalars of the held project file, preserving full
+/// paths.
 pub fn scalar_root(
     root_document: &CapturedDocument,
     findings: &[yamaa_core::project_function_document::Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
-    let report =
-        projection::admit_root_scalars(root(root_document), findings).map_err(projection_error)?;
+    let report = projection::admit_root_scalars(identity(root_document), findings)
+        .map_err(projection_error)?;
     report.diagnostics().map_err(projection_error)
 }
 /// The projection origin of one captured dependency. A lock carries no document.
@@ -90,18 +87,14 @@ pub fn scalar_sources<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagno
         Some(projection::ScalarSource {
             capture: projection::Capture {
                 origin: origin(&source.origin)?,
-                document: &document.normalized().document,
-                identity: &document.source().identity,
+                identity: identity(document),
             },
             findings,
         })
     });
-    let report = projection::admit_scalar_sources(
-        root(&rejected.root),
-        rejected.environment_file.as_ref().map(root),
-        sources,
-    )
-    .map_err(projection_error)?;
+    let report =
+        projection::admit_scalar_sources(&rejected.project, identity(&rejected.root), sources)
+            .map_err(projection_error)?;
     report.diagnostics().map_err(projection_error)
 }
 
@@ -349,14 +342,14 @@ pub fn admission<E>(rejected: &RejectedEnvironment<E>) -> Result<Vec<Diagnostic>
     let captures = rejected.captures.iter().filter_map(|capture| {
         Some(projection::Capture {
             origin: origin(&capture.origin)?,
-            document: &capture.document.normalized().document,
-            identity: &capture.document.source().identity,
+            identity: identity(&capture.document),
         })
     });
     let report = projection::admit_admission(
         projection::Admission {
-            root: root(&rejected.root),
-            environment: rejected.environment_file.as_ref().map(root),
+            project: &rejected.project,
+            root: identity(&rejected.root),
+            environment: rejected.environment_file.as_ref().map(identity),
             draft: &rejected.draft,
             function_origins: &rejected.origins.functions,
             codelist_origins: &rejected.origins.codelists,

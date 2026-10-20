@@ -214,10 +214,7 @@ pub(super) fn prepare(
     };
     let mut function_index = BTreeMap::new();
     for function in functions {
-        if function_index
-            .insert(function.definition().name.as_str(), function)
-            .is_some()
-        {
+        if function_index.insert(function.name(), function).is_some() {
             return Err(PrepareError::Internal);
         }
     }
@@ -362,6 +359,7 @@ pub(super) fn prepare(
                                         .params
                                         .get(parameter)
                                         .ok_or(PrepareError::Internal)?
+                                        .name
                                         .name
                                         .clone();
                                     findings.push((

@@ -187,7 +187,7 @@ mod project {
                         .as_ref()
                         .unwrap()
                         .iter()
-                        .map(|f| f.name.as_str())
+                        .map(|f| f.name.name.as_str())
                         .collect::<Vec<_>>(),
                     ["first", "inline"]
                 );
@@ -221,10 +221,10 @@ mod project {
                     prepared.lock.as_ref().unwrap().source.bytes,
                     b"version = 1\n"
                 );
-                // Study and section metadata stay in the retained project document.
-                let document = &prepared.root.normalized().document;
-                assert!(document.field(document.root(), "study").is_some());
-                assert!(document.field(document.root(), "adam").is_some());
+                // The study and sections lower beside, in the project root.
+                let declarations = prepared.project.submission.as_ref().unwrap();
+                assert!(declarations.study.is_some());
+                assert!(!declarations.sections.is_empty());
                 let root_bytes = prepared.root.source().bytes.as_ptr();
                 let environment_bytes = environment.source().bytes.as_ptr();
                 let lock_bytes = prepared.lock.as_ref().unwrap().source.bytes.as_ptr();
@@ -337,7 +337,7 @@ mod project {
                 let owned = prepared.into_owned();
                 assert_eq!(owned.environment().host(), host);
                 for function in owned.environment().functions() {
-                    assert_eq!(function.definition().function, call);
+                    assert_eq!(function.call(), call);
                 }
             }
         }
@@ -366,7 +366,7 @@ mod project {
                 assert_eq!(draft.language, None);
                 assert!(draft.lock.is_none());
                 assert!(draft.functions.is_none());
-                assert_eq!(draft.codelists[0].codelists[0].id, "SEX");
+                assert_eq!(draft.codelists[0].codelists[0].id.name, "SEX");
                 let owned = prepared.into_owned();
                 assert!(owned.environment_file().is_none());
                 assert_eq!(owned.environment().language(), None);
@@ -518,7 +518,7 @@ mod project {
             assert_eq!(rejected.draft.language, Some(Language::Python));
             assert!(rejected.draft.lock.is_none());
             assert!(rejected.draft.functions.is_none());
-            assert_eq!(rejected.draft.codelists[0].codelists[0].id, "SEX");
+            assert_eq!(rejected.draft.codelists[0].codelists[0].id.name, "SEX");
             assert!(rejected.admission.is_none());
         }
         #[test]
@@ -613,13 +613,13 @@ mod project {
             assert_eq!(
                 functions
                     .iter()
-                    .map(|f| f.name.as_str())
+                    .map(|f| f.name.name.as_str())
                     .collect::<Vec<_>>(),
                 ["first", "inline"]
             );
             assert_eq!(functions[0].tests[0].result, Value::Int(7));
             assert_eq!(functions[1].tests[0].result, Value::Int(7));
-            assert_eq!(rejected.draft.codelists[0].codelists[0].id, "SEX");
+            assert_eq!(rejected.draft.codelists[0].codelists[0].id.name, "SEX");
             assert_eq!(
                 rejected
                     .environment_file
@@ -629,10 +629,10 @@ mod project {
                     .identity,
                 PYTHON
             );
-            // Submission metadata stays in the retained project document.
-            let document = &rejected.root.normalized().document;
-            assert!(document.field(document.root(), "study").is_some());
-            assert!(document.field(document.root(), "adam").is_some());
+            // The study and sections lower beside, in the project root.
+            let declarations = rejected.project.submission.as_ref().unwrap();
+            assert!(declarations.study.is_some());
+            assert!(!declarations.sections.is_empty());
         }
 
         #[test]
