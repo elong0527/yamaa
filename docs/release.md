@@ -38,6 +38,17 @@ describes.
 combination on manual dispatch and weekly on main. A release is cut from a
 commit whose complete native run passed.
 
+The native run builds and installs both source archives that a release
+publishes with the network disabled, on Linux x86_64 and aarch64, macOS
+arm64 and Windows x64: its `native-offline-source` jobs. pip installs the
+Python source archive with `--no-build-isolation --no-index` into a Python
+that already has `maturin`, and `R CMD INSTALL` installs the R source
+package. On Linux both run in a container without a network: the Python
+archive in the manylinux_2_28 image, whose glibc 2.28 is RHEL 8's, and the R
+package in the `rocker/r-ver` image of R 4.6.1. On macOS and Windows they run
+behind a proxy that refuses every connection. Each installed package then
+runs the conformance corpus without a network.
+
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each runs `R CMD check --as-cran` through
@@ -288,9 +299,9 @@ git push origin refs/tags/<tag>
 run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
-`qualification/issue-*` push. It requires all installed lanes, shared
-Rust/math, complete cohort comparisons, strict R package checks and CRAN's
-incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
+`qualification/issue-*` push. It requires all installed lanes, the offline
+source installs among them, shared Rust/math, complete cohort comparisons,
+strict R package checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named

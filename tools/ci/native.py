@@ -15,8 +15,8 @@ PYTHON_PLATFORMS = (*PLATFORMS, "ubuntu-24.04-arm")
 PYTHONS = ("3.12", "3.13", "3.14", "3.15")
 FORMS = ("wheel", "source")
 R_PLATFORMS = PLATFORMS
-# Linux aarch64 has no R lane yet, so the complete reports of its Python lanes
-# are compared beside the R reports of Linux x86_64.
+# Linux aarch64 has no native-r lane yet, so the complete reports of its Python
+# lanes are compared beside the R reports of Linux x86_64.
 R_EVIDENCE = {"ubuntu-24.04-arm": "ubuntu-24.04"}
 # Each Linux wheel is also installed and qualified on glibc 2.28, the oldest
 # glibc that its manylinux_2_28 tag admits.
@@ -36,6 +36,13 @@ CRAN_CONTAINERS = ("gcc16",)
 # Rust.
 CRAN_NO_SUGGESTS_PLATFORMS = ("ubuntu-24.04",)
 CRAN_NO_SUGGESTS_R_VERSIONS = ("devel",)
+# The source archives of these hosts that a release publishes, built and
+# installed with the network disabled from their vendored crates (#3030 D55)
+# on every platform, then run on the conformance corpus: on Linux in a
+# container without a network, on macOS and Windows behind a proxy that
+# refuses every connection.
+OFFLINE_SOURCE_PLATFORMS = PYTHON_PLATFORMS
+OFFLINE_SOURCE_HOSTS = ("python", "r")
 
 
 def coverage():
@@ -66,6 +73,10 @@ def coverage():
         "cran_no_suggests": {
             "os": list(CRAN_NO_SUGGESTS_PLATFORMS),
             "r": list(CRAN_NO_SUGGESTS_R_VERSIONS),
+        },
+        "offline_source": {
+            "os": list(OFFLINE_SOURCE_PLATFORMS),
+            "host": list(OFFLINE_SOURCE_HOSTS),
         },
     }
 

@@ -992,6 +992,280 @@ jobs:
             ${{ steps.check.outputs.directory }}/yamaa.Rcheck/tests/*.Rout*
           if-no-files-found: ignore
 
+  offline-python:
+    name: native-offline-source (${{ matrix.os }}, python)
+    needs: dist
+    runs-on: ${{ matrix.os }}
+    # The Python source archive that a release publishes, built and installed
+    # with the network disabled from its vendored crates (#3030 D55): pip
+    # builds it with --no-build-isolation --no-index into a Python that got
+    # maturin and the package's dependencies while the network was up. On
+    # Linux the installation runs in a container without a network and with a
+    # read-only root, from the pinned manylinux_2_28 image of the runner's
+    # architecture (tools/ci/manylinux.py), whose glibc 2.28 is RHEL 8's, with
+    # the runner's Rust mounted read-only; on macOS and Windows it runs behind
+    # a proxy that refuses every connection. The installed package then runs
+    # the conformance corpus the same way.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025, ubuntu-24.04-arm]
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.13.0'
+          enable-cache: true
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+      - name: Install Rust
+        run: python -m tools.ci.toolchain --install
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-python-ubuntu-24.04-${{ env.NATIVE_BUILD_PYTHON }}
+          path: ${{ runner.temp }}/offline/native-dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-project-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          path: ${{ runner.temp }}/offline/project-dist
+      - name: Record source revision and table requirements
+        run: |
+          echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/offline/table-requirements.txt"
+      # While the network is up. The runner's Python gets the readers of the
+      # conformance plan and comparison; on macOS and Windows it is also the
+      # Python that installs the archive, so it gets maturin and the project
+      # programs that the benchmarks call. On Linux a virtual environment in
+      # the image gets the same requirements, maturin and the project programs.
+      - name: Prepare the Python that installs the archive
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          maturin=$(python -c 'from tools.ci.manylinux import maturin; print(maturin())')
+          python -m pip install --no-deps -r table-requirements.txt
+          mkdir cargo-home
+          if [ "${RUNNER_OS}" = Linux ]; then
+            mkdir home tmp
+            image=$(python -c 'import platform; from tools.ci.manylinux import IMAGES; print(IMAGES[platform.machine()])')
+            interpreter=$(python -c 'from tools.ci.manylinux import PYTHON; print(PYTHON)')
+            {
+              echo "OFFLINE_IMAGE=${image}"
+              echo "OFFLINE_RUST=$(rustc --print sysroot)"
+            } >> "${GITHUB_ENV}"
+            docker run --rm --volume "${PWD}:/work" --workdir /work \
+              --env PYTHON="${interpreter}" --env MATURIN="${maturin}" "${image}" sh -c '
+                set -e
+                "${PYTHON}" -m venv venv
+                venv/bin/python -m pip install --no-cache-dir --no-deps -r table-requirements.txt \
+                  "${MATURIN}" project-dist/*.whl'
+          else
+            python -m pip install --no-deps "${maturin}" project-dist/*.whl
+          fi
+      # A download that the build attempts fails at once. Cargo's home starts
+      # empty, so a registry or git source that Cargo reached would leave its
+      # directory there. Environment names are case-insensitive on Windows;
+      # libcurl reads only the lowercase http_proxy.
+      - name: Install the Python source archive without a network
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          CARGO_HOME: ${{ runner.temp }}/offline/cargo-home
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+              --volume "${PWD}:/work" --volume "${OFFLINE_RUST}:/opt/rust:ro" --workdir /work \
+              --env HOME=/work/home --env TMPDIR=/work/tmp --env CARGO_HOME=/work/cargo-home \
+              "${OFFLINE_IMAGE}" sh -c '
+                PATH="/work/venv/bin:/opt/rust/bin:${PATH}"
+                exec python -m pip install --no-build-isolation --no-index --no-cache-dir native-dist/yamaa-*.tar.gz'
+          else
+            python -m pip install --no-build-isolation --no-index --no-cache-dir native-dist/yamaa-*.tar.gz
+          fi
+          for source in registry git; do
+            if [ -e "cargo-home/${source}" ]; then
+              echo "The build reached a Cargo ${source} source: cargo-home/${source} exists." >&2
+              exit 1
+            fi
+          done
+      - name: Report installed Python public benchmark conformance
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          evidence="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -I -m tools.conformance.public_conformance plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          mkdir public-conformance
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+              --volume "${PWD}:/work" --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
+              --env HOME=/work/home --env TMPDIR=/work/tmp \
+              "${OFFLINE_IMAGE}" /work/venv/bin/python -I /checkout/python/tests/installed/public_conformance.py \
+              --plan public-conformance-plan --fixtures /checkout/benchmarks \
+              --python-lock /checkout/python/uv.lock --output public-conformance/observed \
+              --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source --evidence "${evidence}"
+          else
+            python -I "${GITHUB_WORKSPACE}/python/tests/installed/public_conformance.py" \
+              --plan public-conformance-plan --fixtures "${GITHUB_WORKSPACE}/benchmarks" \
+              --python-lock "${GITHUB_WORKSPACE}/python/uv.lock" --output public-conformance/observed \
+              --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source --evidence "${evidence}"
+          fi
+          python -I -m tools.conformance.public_conformance compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve Python public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-python-offline-${{ matrix.os }}
+          path: ${{ runner.temp }}/offline/public-conformance
+          if-no-files-found: error
+
+  offline-r:
+    name: native-offline-source (${{ matrix.os }}, r)
+    needs: r-dist
+    runs-on: ${{ matrix.os }}
+    # The R source package that a release publishes, built and installed with
+    # the network disabled from its vendored crates (#3030 D55): R CMD INSTALL
+    # runs its Makevars, which build them offline with two Cargo jobs. On
+    # Linux the installation runs in a container without a network and with a
+    # read-only root, from the rocker/r-ver image of R 4.6.1, with the runner's
+    # Rust mounted read-only, and leaves HOME empty; on macOS and Windows it
+    # runs behind a proxy that refuses every connection. The installed package
+    # then runs the conformance corpus the same way.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 60 || 40 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025, ubuntu-24.04-arm]
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+          python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3 pyarrow==25.0.1
+      - name: Install Rust
+        run: |
+          python -m tools.ci.toolchain --install
+          if [ "${RUNNER_OS}" = Windows ]; then
+            rustup target add x86_64-pc-windows-gnu
+          fi
+      # On Linux, R is the image's.
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        if: runner.os != 'Linux'
+        with:
+          r-version: '4.6.1'
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/offline
+      # The original benchmarks call the project programs package, which the
+      # conformance step installs from this copy.
+      - name: Prepare the installation
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          mkdir library
+          cp -R "${GITHUB_WORKSPACE}/rust/tests/project-programs/r" project-programs
+          if [ "${RUNNER_OS}" = Linux ]; then
+            mkdir home tmp
+            echo "OFFLINE_RUST=$(rustc --print sysroot)" >> "${GITHUB_ENV}"
+            docker pull docker.io/rocker/r-ver:4.6.1
+          fi
+      # Environment names are case-insensitive on Windows; libcurl reads only
+      # the lowercase http_proxy.
+      - name: Install the R source package without a network
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+              --volume "${PWD}:/work" --volume "${OFFLINE_RUST}:/opt/rust:ro" \
+              --env PATH=/opt/rust/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+              --env HOME=/work/home --env TMPDIR=/work/tmp \
+              docker.io/rocker/r-ver:4.6.1 sh -c '
+                set -e
+                R CMD INSTALL --library=/work/library /work/yamaa_*.tar.gz
+                test -z "$(ls -A /work/home)"'
+          else
+            R CMD INSTALL --library="${RUNNER_TEMP}/offline/library" yamaa_*.tar.gz
+          fi
+      - name: Report installed R public benchmark conformance
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          PUBLIC_CONFORMANCE_PACKAGE_FORM: source
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          revision=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)
+          python -I -m tools.conformance.public_conformance plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          mkdir public-conformance
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+              --volume "${PWD}:/work" --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
+              --env HOME=/work/home --env TMPDIR=/work/tmp --env R_LIBS=/work/library \
+              --env PUBLIC_CONFORMANCE_PACKAGE_FORM --env GITHUB_SERVER_URL --env GITHUB_REPOSITORY \
+              --env GITHUB_RUN_ID --env REVISION="${revision}" \
+              docker.io/rocker/r-ver:4.6.1 sh -c '
+                set -e
+                R CMD INSTALL --library=/work/library project-programs
+                Rscript --vanilla /checkout/rust/tests/public_conformance.R \
+                  public-conformance-plan /checkout/benchmarks public-conformance/observed "${REVISION}"'
+          else
+            export R_LIBS="${RUNNER_TEMP}/offline/library"
+            R CMD INSTALL --library="${R_LIBS}" project-programs
+            Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R" \
+              public-conformance-plan "${GITHUB_WORKSPACE}/benchmarks" public-conformance/observed "${revision}"
+          fi
+          python -I -m tools.conformance.public_conformance compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve R public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-r-offline-${{ matrix.os }}
+          path: ${{ runner.temp }}/offline/public-conformance
+          if-no-files-found: error
+
   public-cohort:
     name: public-cohort-complete-runs
     needs: [qualify, r]
