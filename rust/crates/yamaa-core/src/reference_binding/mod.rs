@@ -90,8 +90,15 @@ struct RowJoinScope {
 pub(crate) struct JoinedRelation {
     pub source: usize,
     pub fields: BTreeMap<String, (usize, ColumnType)>,
+    /// The column-phase match, its indices into `keys`.
     pub inference: crate::key_relation::Inference,
-    pub keys: std::vec::Vec<(String, usize)>,
+    /// The key names the join tries, each with the current row's same-named
+    /// output column: every output key, of which those the relation stores
+    /// apply (0.5), or the input's declared key, all of which apply (1.0);
+    /// `None` names a declared column the specification does not declare.
+    pub keys: std::vec::Vec<(String, Option<usize>)>,
+    /// Whether `keys` is a 1.0 input's declared key (LOOKUP-1).
+    pub declared: bool,
     pub schema: std::sync::Arc<crate::table::TableSchema>,
 }
 
@@ -233,10 +240,12 @@ impl Catalog {
         self
     }
 
-    /// Retain pure donor schemas and inferred current-output equality metadata.
+    /// Retain pure donor schemas and each relation's current-output equality
+    /// metadata: the output keys inferred applicable (0.5), or the input's
+    /// declared key (1.0), as `implied` gives it for the relation.
     pub(crate) fn with_joined(
         mut self,
-        relations: &[(usize, Dataset<'_>)],
+        relations: &[(usize, Dataset<'_>, crate::key_relation::Implied<'_>)],
         keys: &[usize],
     ) -> Result<Self, Error> {
         let outputs = self.output_names();
@@ -250,16 +259,22 @@ impl Catalog {
                     .ok_or(Error::InvalidAvailableOutput)
             })
             .collect::<Result<std::vec::Vec<_>, _>>()?;
-        let retained_keys = keys
+        let output_keys = keys
             .iter()
-            .map(|name| (name.clone(), self.outputs[name].0))
+            .map(String::as_str)
             .collect::<std::vec::Vec<_>>();
-        for (source, relation) in relations {
-            let names = keys
+        for (source, relation, implied) in relations {
+            let names = implied.names(&output_keys);
+            let inference = implied.resolve(&self, &output_keys, relation.fields)?;
+            let retained_keys = names
                 .iter()
-                .map(String::as_str)
+                .map(|&name| {
+                    (
+                        String::from(name),
+                        self.outputs.get(name).map(|&(column, _)| column),
+                    )
+                })
                 .collect::<std::vec::Vec<_>>();
-            let inference = crate::key_relation::infer(&self, &names, relation.fields)?;
             let fields = relation
                 .fields
                 .iter()
@@ -285,7 +300,8 @@ impl Catalog {
                     source: *source,
                     fields,
                     inference,
-                    keys: retained_keys.clone(),
+                    keys: retained_keys,
+                    declared: matches!(implied, crate::key_relation::Implied::Declared(_)),
                     schema,
                 },
             );

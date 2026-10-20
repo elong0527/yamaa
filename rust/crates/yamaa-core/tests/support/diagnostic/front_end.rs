@@ -1,6 +1,6 @@
-//! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10), raised by its checks
-//! on a lowered 1.0 tree and pinned to their phase, condition, rule, path
-//! and context.
+//! The 1.0 front end's own causes (FUNC-6, WINDOW-5, TIME-10, LOOKUP-3), raised
+//! by its checks on a lowered 1.0 tree and pinned to their phase, condition,
+//! rule, path and context.
 use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
@@ -10,7 +10,12 @@ use yamaa_core::schema::{Document, SchemaContext as C, SchemaDiagnostic};
 
 /// A 1.0 specification of one column, `column`, after its `ID`.
 fn spec(column: T) -> Document {
-    T::map(vec![
+    with(column, Vec::new())
+}
+
+/// [`spec`], with the further root fields `extra`.
+fn with(column: T, extra: Vec<(&str, T)>) -> Document {
+    let mut fields = vec![
         ("yamaa", T::text("1.0")),
         ("type", T::text("spec")),
         ("domain", T::text("T")),
@@ -37,8 +42,9 @@ fn spec(column: T) -> Document {
                 ("columns", T::list(vec![T::text("ID")])),
             ]),
         ),
-    ])
-    .document()
+    ];
+    fields.extend(extra);
+    T::map(fields).document()
 }
 
 fn column(name: &str, kind: &str, operation: &str, payload: T) -> T {
@@ -146,6 +152,33 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ("missing_required_field", "TIME-10"),
         "columns.ADT.derivation.impute",
         vec![("field", C::Text("day".into()))],
+    );
+    // An intermediate states its own key, unless it drives a row template,
+    // which declares none (LOOKUP-3, ROW-2; D23, D63).
+    let keyless = with(
+        T::map(vec![
+            ("name", T::text("NAME")),
+            ("type", T::text("str")),
+            ("derivation", T::map(vec![("value", T::text("NAMES.NAME"))])),
+        ]),
+        vec![(
+            "intermediates",
+            T::list(vec![T::map(vec![
+                ("id", T::text("NAMES")),
+                ("dataset", T::text("SRC")),
+                ("filter", T::text("SRC.KEEP = 'Y'")),
+            ])]),
+        )],
+    );
+    pinned(
+        &mut reached,
+        finding(&keyless),
+        ("missing_required_field", "LOOKUP-3"),
+        "intermediates.NAMES.key",
+        vec![
+            ("field", C::Text("key".into())),
+            ("class", C::Text("intermediate_class".into())),
+        ],
     );
     reached
 }

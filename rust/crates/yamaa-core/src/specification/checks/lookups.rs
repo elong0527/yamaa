@@ -79,12 +79,17 @@ pub(in crate::specification) fn driver_prohibited(
 }
 
 /// Without a relation change or `require_match`, an intermediate whose
-/// absence answer is missing, by default or as `no_match: {literal: null}`,
-/// reads what the implicit join reads (LOOKUP-4). A written field changes
-/// the relation even when it is empty, such as `derivations: {}`.
-fn rename_only(item: &ast::Intermediate) -> bool {
+/// absence answer is missing, by default or written as missing, reads what
+/// the implicit join reads (LOOKUP-4): in 0.5 one that writes no `key`, in
+/// 1.0 one whose `key` lists its input's declared key (D71). A written field
+/// changes the relation even when it is empty, such as `derivations: {}`.
+fn rename_only(spec: &Spec, item: &ast::Intermediate) -> bool {
+    let joins_as_input = if spec.header.surface.infers_join_keys() {
+        !item.written.contains("key")
+    } else {
+        spec.keys_as_input(item)
+    };
     let changes_relation = [
-        "key",
         "between",
         "filter",
         "order_by",
@@ -95,7 +100,8 @@ fn rename_only(item: &ast::Intermediate) -> bool {
     ]
     .iter()
     .any(|field| item.written.contains(field));
-    !changes_relation
+    joins_as_input
+        && !changes_relation
         && !item.require_match
         && item
             .absent
@@ -136,6 +142,15 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             finding.text("intermediate", name);
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
+        // A 1.0 intermediate states its own key, unless it drives a row
+        // template, which declares none (LOOKUP-3, ROW-2; D23, D63). The 1.0
+        // front end refuses it first; this keeps every route to binding safe.
+        if spec.lacks_key(item) {
+            findings.push(PreflightFinding::Scalar(lookup::key_required(&format!(
+                "{}.key",
+                render(spec, item.meta)
+            ))));
+        }
         let empty = match &item.key {
             Some(JoinKey::Pairs { pairs, .. }) => pairs.is_empty(),
             Some(JoinKey::Columns { columns, .. }) => columns.is_empty(),
@@ -167,8 +182,9 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 }
             }
         }
-        if rename_only(item) {
-            let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
+        if rename_only(spec, item) {
+            let mut finding =
+                LookupFinding::new(&render(spec, item.meta), C::IntermediateRenameOnly);
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));

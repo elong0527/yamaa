@@ -596,6 +596,13 @@ pub(super) fn bind_findings(
             let Input::Reference(name) = &argument.input else {
                 return Err(BindError::Internal);
             };
+            if let crate::project_call_binding::Kind::Joined(cause) = &error.kind {
+                if let Some(diagnostic) = cause.key_diagnostic(&path) {
+                    return Ok(BindFinding::Source(
+                        source_expressions::SourceFinding::from_diagnostic(diagnostic),
+                    ));
+                }
+            }
             Ok(match error.kind {
                 crate::project_call_binding::Kind::Joined(cause) => match cause {
                     reference_binding::JoinedFinding::UnknownField => {
@@ -624,27 +631,13 @@ pub(super) fn bind_findings(
                             },
                         })
                     }
-                    reference_binding::JoinedFinding::NoApplicableKeys { dataset, keys } => {
-                        let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
-                        BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
-                            crate::diagnostic::lookup::no_applicable_keys(
-                                &path, &dataset, &keys, false,
-                            ),
-                        ))
+                    reference_binding::JoinedFinding::NoApplicableKeys { .. }
+                    | reference_binding::JoinedFinding::UndeclaredKey { .. }
+                    | reference_binding::JoinedFinding::DonorKey { .. }
+                    | reference_binding::JoinedFinding::MatchValue { .. }
+                    | reference_binding::JoinedFinding::KeyType { .. } => {
+                        return Err(BindError::Internal)
                     }
-                    reference_binding::JoinedFinding::KeyType {
-                        source,
-                        expected,
-                        actual,
-                    } => BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
-                        crate::diagnostic::lookup::key_type(
-                            &path,
-                            crate::diagnostic::lookup::Owner::Unnamed,
-                            &source,
-                            expected.into(),
-                            actual.into(),
-                        ),
-                    )),
                 },
                 crate::project_call_binding::Kind::Output(
                     crate::reference_binding::Diagnostic::PhaseBoundary { .. },
