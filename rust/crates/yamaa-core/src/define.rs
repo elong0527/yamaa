@@ -25,6 +25,9 @@ pub struct EnvironmentView<'a> {
 }
 pub struct SpecificationView<'a> {
     pub document: &'a Document,
+    /// The specification lowered into the AST, in the language it is written
+    /// in, whose derivations composition reads (SUB-19, SUB-20).
+    pub tree: &'a crate::ast::Spec,
     pub source: &'a str,
     pub output: Option<WrittenPath<'a>>,
     /// Every declared input dataset and the written origin of its path; a
@@ -494,6 +497,7 @@ impl<P: Ports> Application<P> {
             .zip(&hrefs)
             .map(|((document, artifact), href)| composition::Input {
                 document: P::specification(document).document,
+                tree: P::specification(document).tree,
                 source: P::specification(document).source,
                 artifact,
                 href: href.as_deref(),

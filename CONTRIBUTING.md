@@ -161,6 +161,7 @@ tests, which import the installed package.
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
 | `make test-r` | Lint the R binding, then build, install and strictly check a fresh R source package. |
 | `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
+| `make check-conversion` | Require every benchmark, converted to 1.0, to give its expected result on a fresh build (conversion gate). |
 | `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
@@ -234,6 +235,21 @@ object a second time and requires it to reuse what the first run compiled,
 with the same issues, tables and saved bytes. On the same installs it then
 runs the installed Python suites and `R CMD check`, which carry the
 cross-host diagnostic parity truth and the host-fixture families.
+While the 0.5 and 1.0 surfaces coexist (#3030 P1-9 to P2-13), `make
+check-conversion` proves the 1.0 front end against the same truth. The
+converter (`tools/migrate`) writes every benchmark as 1.0 into a temporary
+directory, rewriting each negative's `expected/error.yaml` spec paths through
+the rename table's `paths` block and nothing else, which the gate checks
+first. It then builds the Python package from the checkout and runs public
+benchmark conformance on the conversion, as the equivalence gate does on the
+originals, and composes each Define benchmark's documents at its fixed time.
+`HOSTS=python,r` adds the R host. A benchmark whose expected files a decided
+item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
+the gate lists each one. CI's `conversion` job runs the gate on Python for a
+pull request whose diff reaches the 1.0 front end
+(`rust/crates/yamaa-core/src/front_end/`), the converter (`tools/migrate/`),
+the 1.0 schemas (`yaml/v1/`) or the gate itself, and otherwise passes with a
+notice; a weekly schedule and a dispatch run it on both hosts.
 `make probe-executor` times one specification at 10,000, 100,000 and
 1,000,000 rows, with and without one keyed intermediate lookup;
 `examples/executor_probe.rs` in the `yamaa` crate documents its shapes and

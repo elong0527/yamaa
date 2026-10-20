@@ -1,8 +1,8 @@
 //! What a column's derivation proves about its declared origin. The derivation
 //! refutes an origin and never supplies one (SUB-19), and a Predecessor names
-//! the column it copies (SUB-16, SUB-20). Shared by the domain build, which
-//! reads the typed tree, and by composition, which still reads each
-//! specification's document; no study, host or data access.
+//! the column it copies (SUB-16, SUB-20). Shared by the domain build and by
+//! composition, which both read each specification's typed tree; no study,
+//! host or data access.
 use crate::{
     ast::{self, ExprId, ExprKind, ScalarOp, Slot},
     expression::{self, NodeKind, Reducer},
@@ -71,43 +71,7 @@ pub(crate) struct Reads {
 }
 
 impl Reads {
-    pub(crate) fn of(document: &Document) -> Self {
-        let root = document.root();
-        let inputs: BTreeSet<String> =
-            match document.field(root, "input").map(|n| &document.nodes()[n]) {
-                Some(N::Mapping(entries)) => entries
-                    .iter()
-                    .filter_map(|&(key, _)| text(document, key).map(String::from))
-                    .collect(),
-                _ => BTreeSet::new(),
-            };
-        let mut plain = BTreeSet::new();
-        let mut computing = BTreeSet::new();
-        for &item in items(document, document.field(root, "intermediates")) {
-            let Some(id) = document.field(item, "id").and_then(|id| text(document, id)) else {
-                continue;
-            };
-            let derives = matches!(
-                document.field(item, "derivations").map(|n| &document.nodes()[n]),
-                Some(N::Mapping(entries)) if !entries.is_empty()
-            );
-            let over_input = document
-                .field(item, "dataset")
-                .and_then(|dataset| text(document, dataset))
-                .is_some_and(|dataset| inputs.contains(dataset));
-            if over_input && !derives {
-                plain.insert(id.to_owned());
-            } else {
-                computing.insert(id.to_owned());
-            }
-        }
-        Self {
-            inputs,
-            plain,
-            computing,
-        }
-    }
-    /// The same names, read from the typed tree.
+    /// The inputs and intermediates a specification's typed tree declares.
     pub(crate) fn of_spec(spec: &ast::Spec) -> Self {
         let inputs: BTreeSet<String> = spec
             .inputs
@@ -163,42 +127,6 @@ fn items(document: &Document, node: Option<usize>) -> &[usize] {
         _ => &[],
     }
 }
-/// The variable a `source` payload, a filtered source or a bare string names.
-fn variable(document: &Document, node: usize) -> Option<&str> {
-    text(document, node).or_else(|| text(document, document.field(node, "variable")?))
-}
-/// The one registered keyword of an expression and its payload.
-fn keyword(document: &Document, node: usize) -> Option<(&str, usize)> {
-    match &document.nodes()[node] {
-        N::Mapping(entries) => match entries.as_slice() {
-            [(key, payload)] => Some((text(document, *key)?, *payload)),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-/// The one variable an `aggregate` pivots: its `expr` is exactly
-/// `ONLY(<variable>)`, which selects one stored value and computes nothing,
-/// and it declares no `derive` bindings, which would compute the value read.
-fn pivot(document: &Document, payload: usize) -> Option<String> {
-    // A lone aggregate formula is the shorthand of the class's `expr`.
-    let expr = match text(document, payload) {
-        Some(expr) => expr,
-        None => {
-            let derives = matches!(
-                document.field(payload, "derive").map(|n| &document.nodes()[n]),
-                Some(N::Sequence(bindings)) if !bindings.is_empty()
-            );
-            if derives {
-                return None;
-            }
-            text(document, document.field(payload, "expr")?)?
-        }
-    };
-    only(expr)
-}
-
 /// The variable an aggregate formula pivots: exactly `ONLY(<variable>)`.
 fn only(expr: &str) -> Option<String> {
     let parsed = expression::parse(expr).ok()?;
@@ -215,121 +143,6 @@ fn only(expr: &str) -> Option<String> {
     (parsed.nodes()[operand].kind == NodeKind::Identifier).then(|| parsed.text(operand).into())
 }
 
-/// Classify one derivation, a column's or a row template's, by SUB-19's table.
-pub(crate) fn classify(document: &Document, node: usize, reads: &Reads) -> DerivationKind {
-    let node = document.field(node, "value").unwrap_or(node);
-    if let Some(name) = text(document, node) {
-        // A bare string derivation is the source shorthand (EXPR-5).
-        return if reads.bare(name) {
-            DerivationKind::Source
-        } else {
-            DerivationKind::Computed
-        };
-    }
-    match keyword(document, node) {
-        Some(("literal", _)) => DerivationKind::Literal,
-        Some(("odm", _)) => DerivationKind::Source,
-        Some(("source", payload)) => match variable(document, payload) {
-            Some(name) if reads.bare(name) => DerivationKind::Source,
-            _ => DerivationKind::Computed,
-        },
-        // A pivot of long records to their one value reads it as stored.
-        Some(("aggregate", payload)) => match pivot(document, payload) {
-            Some(name) if reads.bare(&name) => DerivationKind::Source,
-            _ => DerivationKind::Computed,
-        },
-        _ if recode(document, node, reads, false) => DerivationKind::Recode,
-        _ => DerivationKind::Computed,
-    }
-}
-
-/// Whether `node` is a recode verb of SUB-19 whose every read is a bare read or,
-/// when `strict`, a declared input value. A `case` is always strict: every
-/// condition and result reads only declared input values or literals.
-fn recode(document: &Document, node: usize, reads: &Reads, strict: bool) -> bool {
-    let Some((verb, payload)) = keyword(document, node) else {
-        return false;
-    };
-    let reads_variable = |field: &str| {
-        document
-            .field(payload, field)
-            .and_then(|source| variable(document, source))
-            .is_some_and(|name| reads.reads(name, strict))
-    };
-    match verb {
-        "mapping" | "str_case" | "str_pad" | "str_replace" | "str_extract" | "to_date" => {
-            reads_variable("source")
-        }
-        "first_available" => {
-            let sources = items(document, document.field(payload, "sources"));
-            !sources.is_empty()
-                && sources.iter().all(|&source| {
-                    variable(document, source).is_some_and(|name| reads.reads(name, strict))
-                })
-        }
-        // An ISO 8601 assembly of collected date parts.
-        "dtc" => {
-            let parts = crate::dataset::DATE_PARTS
-                .iter()
-                .filter_map(|name| document.field(payload, name))
-                .collect::<Vec<_>>();
-            !parts.is_empty()
-                && parts.iter().all(|&part| {
-                    variable(document, part).is_some_and(|name| reads.reads(name, strict))
-                })
-        }
-        "str_template" => {
-            let template = text(document, payload)
-                .or_else(|| text(document, document.field(payload, "template")?));
-            template.is_some_and(|template| {
-                StringTemplate::new(template.into(), "origin".into(), None).is_ok_and(|parsed| {
-                    parsed.declaration_diagnostic().is_none()
-                        && parsed
-                            .identifiers()
-                            .iter()
-                            .all(|name| reads.reads(name, strict))
-                })
-            })
-        }
-        "case" => {
-            let branches = items(document, Some(payload));
-            !branches.is_empty()
-                && branches.iter().all(|&branch| {
-                    let condition = document.field(branch, "when").map_or(Some(true), |when| {
-                        let parsed = expression::parse(text(document, when)?);
-                        Some(parsed.ok()?.identifiers().all(|name| reads.input(name)))
-                    });
-                    let result = document
-                        .field(branch, "then")
-                        .or_else(|| document.field(branch, "otherwise"));
-                    condition == Some(true)
-                        && result.is_some_and(|result| nested(document, result, reads, true))
-                })
-        }
-        _ => false,
-    }
-}
-
-/// A nested expression of a recode: a literal, a bare read, or another recode.
-fn nested(document: &Document, node: usize, reads: &Reads, strict: bool) -> bool {
-    if let Some(name) = text(document, node) {
-        // A bare string case result is the source shorthand (EXPR-5).
-        return reads.reads(name, strict);
-    }
-    match keyword(document, node) {
-        Some(("literal", _)) => true,
-        // An `odm` read identifies one record of a declared ODM input.
-        Some(("odm", _)) => true,
-        Some(("source", payload)) => {
-            variable(document, payload).is_some_and(|name| reads.reads(name, strict))
-        }
-        Some(("aggregate", payload)) => {
-            pivot(document, payload).is_some_and(|name| reads.reads(&name, strict))
-        }
-        _ => recode(document, node, reads, strict),
-    }
-}
-
 /// The variable a reference or a structured source of the typed tree reads.
 fn variable_of(spec: &ast::Spec, expr: ExprId) -> Option<&str> {
     let reference = match &spec.expr(expr).kind {
@@ -342,8 +155,9 @@ fn variable_of(spec: &ast::Spec, expr: ExprId) -> Option<&str> {
     }
 }
 
-/// The one variable an aggregate of the typed tree pivots, as [`pivot`]
-/// reads it from a document.
+/// The one variable an aggregate pivots: its `expr` is exactly
+/// `ONLY(<variable>)`, which selects one stored value and computes nothing,
+/// and it declares no bindings, which would compute the value read.
 fn pivot_of(spec: &ast::Spec, aggregate: &ast::Aggregate) -> Option<String> {
     if !aggregate.bindings.is_empty() {
         return None;
@@ -354,7 +168,7 @@ fn pivot_of(spec: &ast::Spec, aggregate: &ast::Aggregate) -> Option<String> {
     }
 }
 
-/// [`classify`] over a derivation of the typed tree.
+/// Classify one derivation, a column's or a row template's, by SUB-19's table.
 pub(crate) fn classify_expr(spec: &ast::Spec, expr: ExprId, reads: &Reads) -> DerivationKind {
     let bare = |name: Option<&str>| match name {
         Some(name) if reads.bare(name) => DerivationKind::Source,
@@ -498,33 +312,6 @@ impl CopyFailure {
 /// Check that a bare `source` derivation reads the predecessor column through
 /// the input dataset declared under the predecessor's name and, when the
 /// description writes a where clause, declares a `filter`.
-pub(crate) fn copies(
-    document: &Document,
-    node: usize,
-    predecessor: &Predecessor<'_>,
-    reads: &Reads,
-) -> Result<(), CopyFailure> {
-    let node = document.field(node, "value").unwrap_or(node);
-    let source = match keyword(document, node) {
-        Some(("source", payload)) => Some(payload),
-        _ => text(document, node).map(|_| node),
-    };
-    let named = source
-        .and_then(|source| variable(document, source))
-        .and_then(|name| name.split_once('.'));
-    // A plain lookup is a bare read, but it reads no predecessor dataset.
-    if named != Some((predecessor.dataset, predecessor.column))
-        || !reads.inputs.contains(predecessor.dataset)
-    {
-        return Err(CopyFailure::Source);
-    }
-    if predecessor.selected && source.and_then(|s| document.field(s, "filter")).is_none() {
-        return Err(CopyFailure::Filter);
-    }
-    Ok(())
-}
-
-/// [`copies`] over a derivation of the typed tree.
 pub(crate) fn copies_expr(
     spec: &ast::Spec,
     expr: ExprId,
@@ -558,11 +345,14 @@ pub(crate) fn copies_expr(
 pub(crate) fn names_predecessor(document: &Document) -> bool {
     let root = document.root();
     let predecessor = |submission: usize| {
-        document
-            .field(submission, "origin")
-            .and_then(|origin| document.field(origin, "type"))
-            .and_then(|kind| text(document, kind))
-            == Some(OriginType::Predecessor.name())
+        declared_origins(document, submission)
+            .iter()
+            .any(|&origin| {
+                document
+                    .field(origin, "type")
+                    .and_then(|kind| text(document, kind))
+                    == Some(OriginType::Predecessor.name())
+            })
     };
     let columns = items(document, document.field(root, "columns"));
     columns.iter().any(|&column| {
@@ -573,6 +363,15 @@ pub(crate) fn names_predecessor(document: &Document) -> bool {
                 .iter()
                 .any(|entry| predecessor(entry.node))
     })
+}
+
+/// The origins a submission mapping declares: 0.5's one `origin`, or each
+/// entry of 1.0's `origins` (P-ORIGIN-1).
+fn declared_origins(document: &Document, submission: usize) -> Vec<usize> {
+    match document.field(submission, "origin") {
+        Some(origin) => vec![origin],
+        None => items(document, document.field(submission, "origins")).to_vec(),
+    }
 }
 
 #[cfg(test)]
@@ -615,15 +414,8 @@ mod tests {
 
     #[test]
     fn only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot() {
-        let formula = |expr: &str| {
-            let document = Document::new(vec![N::Text(expr.into())], 0).unwrap();
-            pivot(&document, 0)
-        };
-        assert_eq!(formula("ONLY(ODM.Value)").as_deref(), Some("ODM.Value"));
-        assert_eq!(
-            formula(" ( ONLY( (LBORRES) ) ) ").as_deref(),
-            Some("LBORRES")
-        );
+        assert_eq!(only("ONLY(ODM.Value)").as_deref(), Some("ODM.Value"));
+        assert_eq!(only(" ( ONLY( (LBORRES) ) ) ").as_deref(), Some("LBORRES"));
         for computed in [
             "ONLY(ODM.Value) + 1",
             "ONLY(ODM.Value * 2)",
@@ -634,29 +426,8 @@ mod tests {
             "ODM.Value",
             "ONLY(",
         ] {
-            assert_eq!(formula(computed), None, "{computed}");
+            assert_eq!(only(computed), None, "{computed}");
         }
-        // The class form pivots its `expr` unless a derive binding computes it.
-        let class = |derive: bool| {
-            let mut nodes = vec![
-                N::Text("expr".into()),
-                N::Text("ONLY(VALUE)".into()),
-                N::Text("derive".into()),
-            ];
-            if derive {
-                nodes.push(N::Text("binding".into()));
-                nodes.push(N::Sequence(vec![3]));
-            } else {
-                nodes.push(N::Sequence(vec![]));
-            }
-            let bindings = nodes.len() - 1;
-            nodes.push(N::Mapping(vec![(0, 1), (2, bindings)]));
-            let root = nodes.len() - 1;
-            let document = Document::new(nodes, root).unwrap();
-            pivot(&document, root)
-        };
-        assert_eq!(class(false).as_deref(), Some("VALUE"));
-        assert_eq!(class(true), None);
     }
 
     #[test]

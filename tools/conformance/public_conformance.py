@@ -190,6 +190,18 @@ def key_order_texts(document):
     return control, json.dumps(permuted, indent=2, ensure_ascii=True) + "\n"
 
 
+def empty_child(document, parent):
+    """An empty child layer of `parent`, written in its parent's language: a
+    1.x parent declares `yamaa`, which its child declares too (LAYER-4)."""
+    if (
+        isinstance(document, dict)
+        and "yamaa" in document
+        and "schema_version" not in document
+    ):
+        return f'yamaa: "1.0"\ntype: spec\nparent: {parent}\n'
+    return f'schema_version: "1.0"\nparent: {parent}\n'
+
+
 def example_variants(fixtures, example):
     """Plan one example's metamorphic variants and their file contents.
 
@@ -210,17 +222,17 @@ def example_variants(fixtures, example):
     for runtime in ("python", "r"):
         for index, entry in enumerate(example["entries"][runtime]):
             spec = Path(entry["specification"])
-            child = (spec.parent / f"__child_{spec.stem}.yaml").as_posix()
-            descriptors[runtime].append(
-                {"kind": "empty_child", "entry": index, "specification": child}
-            )
-            contents[child] = f'schema_version: "1.0"\nparent: {spec.name}\n'
-            if negative:
-                continue
             try:
                 document = load_yaml(case / entry["specification"])
             except Exception:  # noqa: BLE001 -- an unreadable spec has no key-order variant
                 document = None
+            child = (spec.parent / f"__child_{spec.stem}.yaml").as_posix()
+            descriptors[runtime].append(
+                {"kind": "empty_child", "entry": index, "specification": child}
+            )
+            contents[child] = empty_child(document, spec.name)
+            if negative:
+                continue
             texts = key_order_texts(document)
             if texts is None:
                 continue

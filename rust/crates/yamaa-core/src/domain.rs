@@ -50,6 +50,19 @@ pub fn check_linked(
     })
 }
 
+/// [`check_linked`] for a 1.x specification its front end lowered into
+/// `tree`, beside its resolved `document`, which declares its linked inputs.
+pub fn check_tree_linked(
+    tree: crate::ast::Spec,
+    document: &crate::schema::Document,
+    environment: Option<&crate::project_environment::ExecutionEnvironment>,
+    links: crate::producer_contract::Links<'_>,
+) -> Result<CheckedSpecification, PrepareError> {
+    Ok(CheckedSpecification {
+        compiled: PreparedSpecification::prepare_tree_linked(tree, document, environment, links)?,
+    })
+}
+
 /// Compile against complete admitted environment metadata without host or study ports.
 pub fn check_with_environment(
     document: &SpecificationDocument,

@@ -65,6 +65,32 @@ DEFAULT_MISSING = (
     "spec.flag_class.missing",
 )
 
+# The absence answers whose declaration `require_match` reads (LOOKUP-24).
+ABSENCE_HANDLERS = (
+    "spec.intermediate_class.no_match",
+    "spec.source_binding_class.absent",
+)
+
+
+def _requires_match(node):
+    """Whether a document declares `require_match: true` anywhere: on an
+    input, an intermediate or a source binding (LOOKUP-24)."""
+    if isinstance(node, yaml.MappingNode):
+        return any(
+            (
+                isinstance(key, yaml.ScalarNode)
+                and key.value == "require_match"
+                and core_type(value) == "bool"
+                and value.value.lower() == "true"
+            )
+            or _requires_match(value)
+            for key, value in node.value
+        )
+    if isinstance(node, yaml.SequenceNode):
+        return any(_requires_match(item) for item in node.value)
+    return False
+
+
 # Keyed members are addressed by identity in a clear path (P-CLR-1).
 IDENTITY = {"columns": "name", "intermediates": "id", "rows": "id"}
 
@@ -692,6 +718,11 @@ def null_handler(converter, visit, entry):
     )
     if restates and handler_entry["id"] == "spec.flag_class.missing":
         restates = member(handler.parent, "false_value") is None
+    if restates and handler_entry["id"] in ABSENCE_HANDLERS:
+        # Beside `require_match: true` a declared absence answer is not a
+        # restatement: it conflicts with an intermediate's own require_match
+        # and exempts a read from its input's (LOOKUP-24).
+        restates = not _requires_match(converter.root)
     if restates:
         edits, _ = converter._remove(handler, keep_comments=True)
         if edits and converter.edits.add(*edits):

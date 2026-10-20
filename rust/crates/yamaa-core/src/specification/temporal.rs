@@ -83,6 +83,31 @@ fn slot(field: &str) -> Option<ast::Slot> {
     })
 }
 
+/// `operation` with each operand's path as a 1.0 tree writes it, whose
+/// operand fields differ from the executor's names (`study_day.source`,
+/// P-OP-1); a 0.5 tree writes the executor's names.
+fn surface_operands(
+    spec: &ast::Spec,
+    operands: &[ast::Operand],
+    operation: Temporal,
+) -> Result<Temporal, PrepareError> {
+    if matches!(spec.header.surface, ast::Surface::V0_5) {
+        return Ok(operation);
+    }
+    let paths = operation
+        .kind()
+        .fields()
+        .iter()
+        .map(|field| {
+            slot(field)
+                .and_then(|slot| checks::operand(operands, slot))
+                .map(|operand| spec.cite(spec.expr(operand).meta))
+                .ok_or(PrepareError::Internal)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(operation.with_operand_paths(paths))
+}
+
 /// Whether an operand of the verb is written in the field `field`.
 fn written(spec: &ast::Spec, operands: &[ast::Operand], field: &str) -> bool {
     operands.iter().any(|operand| {
@@ -228,7 +253,8 @@ pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Temporal, Prepare
         }
     }
     match Temporal::new(kind, sources, path.clone()) {
-        Ok(mut operation) => {
+        Ok(operation) => {
+            let mut operation = surface_operands(spec, operands, operation)?;
             for (index, value, meta) in literals {
                 operation =
                     operation.with_literal(index, constant(value, &checks::render(spec, meta))?);
@@ -310,6 +336,7 @@ pub(super) fn operand_findings(
         path,
     )
     .map_err(|_| PrepareError::Internal)?;
+    let witness = surface_operands(spec, operands, witness)?;
     for (index, field_name) in operation.fields().iter().enumerate() {
         let ExprKind::Ref(source) = &spec.expr(operand(field_name)?).kind else {
             if matches!(

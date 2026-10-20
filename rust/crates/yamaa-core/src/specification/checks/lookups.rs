@@ -13,11 +13,11 @@ use crate::json::Value as JsonValue;
 /// SELF is a reserved donor relation and requires row templates.
 pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
-    for (index, item) in spec.intermediates.iter().enumerate() {
+    for item in &spec.intermediates {
         if item.dataset.name != "SELF" {
             continue;
         }
-        let path = format!("intermediates[{index}].dataset");
+        let path = format!("{}.dataset", spec.cite(item.meta));
         let (code, paths, context) = if spec.inputs.iter().any(|input| input.name.name == "SELF") {
             (
                 C::IntermediateIdentifierCollision,
@@ -116,8 +116,8 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
     let mut findings = Vec::new();
     let mut identifiers = BTreeMap::<&str, String>::new();
     let inputs = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
-    for (index, item) in spec.intermediates.iter().enumerate() {
-        let path = format!("intermediates[{index}]");
+    for item in &spec.intermediates {
+        let path = spec.cite(item.meta);
         let name = item.id.name.as_str();
         let dataset = item.dataset.name.as_str();
         if let Some(previous) = identifiers.get(name).cloned().or_else(|| {
@@ -190,7 +190,8 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
         // Asserting a match and answering its absence are two absence policies.
-        // An absence answer written null states no policy.
+        // A 0.5 absence answer written null states no policy; a 1.0 null is the
+        // missing value it answers (D18), which the lowering records written.
         let answer = item.absent.as_ref().filter(|answer| {
             matches!(spec.paths.segment(answer.meta.path),
                 ast::Segment::Field(field) if item.written.contains(field))
@@ -237,7 +238,7 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
 /// not declare refuses it, as binding refuses it.
 pub(in crate::specification) fn common_driver(spec: &Spec) -> Result<&str, PrepareError> {
     let mut common = None;
-    for (index, template) in spec.rows.templates.iter().enumerate() {
+    for template in &spec.rows.templates {
         // Preflight has already refused a template without a driver.
         let name = template_driver(spec, template).ok_or(PrepareError::Internal)?;
         let input = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
@@ -255,7 +256,7 @@ pub(in crate::specification) fn common_driver(spec: &Spec) -> Result<&str, Prepa
             }
             if !prohibited.is_empty() {
                 let mut finding = LookupFinding::new(
-                    &format!("rows[{index}].dataset"),
+                    &format!("{}.dataset", spec.cite(template.meta)),
                     C::IntermediateDriverInvalid,
                 );
                 finding.text("intermediate", name);

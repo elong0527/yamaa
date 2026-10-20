@@ -35,6 +35,11 @@ pub(super) struct Declaration {
     groups: Vec<String>,
     order: Vec<(String, bool, bool)>,
     filter: Option<(String, Result<CompiledExpression, CompileError>)>,
+    /// The path of each read, in [`Declaration::operands`] order, as a 1.0
+    /// tree writes it: `baseline_flag` names its operands `source` and
+    /// `reference` and its tie-break terms in `window.order_by` (P-OP-2,
+    /// P-OP-3, P-ORD-1). A 0.5 tree's reads compose the field names below.
+    surface_reads: Option<Vec<String>>,
 }
 #[derive(Debug)]
 pub enum WindowFinding {
@@ -189,6 +194,32 @@ impl Declaration {
                 _ => Err(PrepareError::Internal),
             })
             .transpose()?;
+        let surface_reads = match spec.header.surface {
+            ast::Surface::V0_5 => None,
+            ast::Surface::V1 { .. } => {
+                let at = |e: ExprId| spec.cite(spec.expr(e).meta);
+                let mut reads = Vec::new();
+                match &kind {
+                    Kind::RowValue { .. } | Kind::Locf { .. } => {
+                        reads.push(at(operand(Slot::Source)?))
+                    }
+                    Kind::BaselineFlag { .. } => {
+                        let (date, tie_break) = window
+                            .order_by
+                            .split_first()
+                            .ok_or(PrepareError::Internal)?;
+                        reads.push(spec.cite(date.meta));
+                        reads.push(at(operand(Slot::Reference)?));
+                        reads.push(at(operand(Slot::Source)?));
+                        reads.extend(tie_break.iter().map(|term| spec.cite(term.meta)));
+                    }
+                    Kind::RowNumber | Kind::Competition | Kind::Dense => (),
+                }
+                reads.extend(window.group_by.iter().map(|&group| at(group)));
+                reads.extend(order.iter().map(|term| spec.cite(term.meta)));
+                Some(reads)
+            }
+        };
         Ok(Self {
             kind,
             operation: operation.into(),
@@ -203,6 +234,7 @@ impl Declaration {
                 .map(|term| tree_order_term(spec, term))
                 .collect::<Result<_, _>>()?,
             filter,
+            surface_reads,
         })
     }
     /// Each variable the window names, with the path of the operand that
@@ -244,6 +276,12 @@ impl Declaration {
                 name.as_str(),
                 format!("{}.window.order_by[{index}]", self.path),
             ));
+        }
+        if let Some(paths) = &self.surface_reads {
+            debug_assert_eq!(paths.len(), reads.len());
+            for ((_, path), surface) in reads.iter_mut().zip(paths) {
+                path.clone_from(surface);
+            }
         }
         reads
     }
@@ -643,8 +681,14 @@ impl Declaration {
             None
         };
         let (operand, source, expected, actual) = invalid?;
+        // A 1.0 tree's date is its first read and its reference the second.
+        let path = match (&self.surface_reads, operand) {
+            (Some(paths), "date") => paths.first()?.clone(),
+            (Some(paths), _) => paths.get(1)?.clone(),
+            (None, _) => format!("{}.{operand}", self.path),
+        };
         let mut finding = LookupFinding::new(
-            &format!("{}.{operand}", self.path),
+            &path,
             crate::diagnostic::ConditionCode::WindowBaselineInputType,
         );
         for (name, value) in [

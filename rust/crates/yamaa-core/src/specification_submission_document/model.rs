@@ -22,7 +22,7 @@ vocabulary!(FieldName {
     InventoryVocabulary => "inventory_vocabulary", Origin => "origin", Method => "method", Source => "source",
     Description => "description", Documents => "documents", Expression => "expression", Text => "text",
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
-    ValueLevel => "value_level", Where => "where"
+    ValueLevel => "value_level", Where => "where", Origins => "origins"
 });
 /// Governed fields share one vocabulary in declaration and execution admission.
 pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
@@ -240,7 +240,7 @@ pub enum Step {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Path {
-    pub(super) steps: [Option<Step>; 10],
+    pub(super) steps: [Option<Step>; 11],
     pub(super) len: usize,
 }
 impl Path {

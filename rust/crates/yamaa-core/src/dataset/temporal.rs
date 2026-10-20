@@ -78,6 +78,11 @@ pub struct Temporal {
     pub(super) path: String,
     pub(super) literals: Vec<Option<Value>>,
     pub(super) invalid: Option<Value>,
+    /// Each operand's path as its specification's surface writes it, in
+    /// [`TemporalKind::fields`] order, for a 1.0 specification whose operand
+    /// fields are renamed (P-OP-1); empty, each operand's path is the
+    /// operation's path and the executor's field name.
+    pub(super) operand_paths: Vec<String>,
 }
 impl Temporal {
     pub fn new(
@@ -102,7 +107,15 @@ impl Temporal {
             invalid: None,
             sources,
             path,
+            operand_paths: Vec::new(),
         })
+    }
+    /// This operation with each operand's path as its specification writes
+    /// it, one for each of [`TemporalKind::fields`].
+    pub fn with_operand_paths(mut self, paths: Vec<String>) -> Self {
+        debug_assert_eq!(paths.len(), self.kind.fields().len());
+        self.operand_paths = paths;
+        self
     }
     pub fn kind(&self) -> TemporalKind {
         self.kind
@@ -114,6 +127,9 @@ impl Temporal {
         &self.path
     }
     pub fn operand_path(&self, index: usize) -> Option<String> {
+        if let Some(path) = self.operand_paths.get(index) {
+            return Some(path.clone());
+        }
         self.kind
             .fields()
             .get(index)

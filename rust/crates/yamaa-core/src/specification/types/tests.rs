@@ -834,7 +834,7 @@ fn prepare_linked(
     let links = [crate::producer_contract::Link {
         dataset: "SRC",
         identity: "/producer.yaml",
-        document: producer,
+        document: producer.document(),
     }];
     PreparedSpecification::prepare_linked(
         consumer,
