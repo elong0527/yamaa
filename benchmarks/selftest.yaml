@@ -1,0 +1,15 @@
+# The selftest cases (#3030 D28, D105): existing benchmarks that every
+# package ships and `selftest` runs through the installed engine, comparing
+# each result with the case's independently authored expected bytes. Each
+# case adds to every package's size, so the list keeps the fewest cases that
+# cover the adapters, plus one negative case for the issue path.
+# tools/validation/check_selftest_cases.py checks it.
+cases:
+  - adam-adae-analysis-time
+  - adam-adsl-xpt
+  - negative-transport-empty-string
+# Adapters no listed case covers yet, by their names in `info()`'s features,
+# each with the reason. The selftest report names them.
+uncovered:
+  odm: no benchmark reads an ODM XML input until P1-15 admits one
+  readstat: no benchmark reads a .xpt or .sas7bdat input until D105's follow-up
