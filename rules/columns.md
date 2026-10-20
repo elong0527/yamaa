@@ -62,7 +62,8 @@ Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::closed_languages_r
 | Site | Collected references |
 |---|---|
 | `source` | every unqualified output variable it references |
-| a named lookup read by a qualified reference | its match values and `between.value` variable, or the applicable output keys when matching fields are omitted, under [Lookup and joins](lookup.md) |
+| a named lookup read by a qualified reference | its match values and `between.value` variable, under [Lookup and joins](lookup.md) |
+| an implicit join, or a qualified aggregate without `key` | the columns of its input's declared `key` ([LOOKUP-1](lookup.md#lookup-1), [LOOKUP-5](lookup.md#lookup-5)) |
 | `group_by`, `order_by` and other fields typed `variable` | their variables |
 | `function.args` | the variables passed as leaves |
 | fields whose type contains a nested `expression` | the variables they reference |
@@ -82,6 +83,10 @@ graph completes. Both sites read values after stages 1 to 3, as
 [Formulas](formulas.md),
 [Text](text.md) and
 [Formulas](formulas.md).
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a named lookup that omits its matching fields, and
+an implicit join, read the applicable output keys.
 
 <a id="column-4"></a>
 

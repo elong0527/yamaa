@@ -473,3 +473,94 @@ fn a_row_driver_read_as_a_lookup_is_refused_at_its_key() {
     );
     assert_eq!(diagnostic.spec_paths, ["intermediates.KEPT.key"]);
 }
+
+/// DM, keyed on `SUBJ`, a column no output, key or other column reads.
+fn keyed_on_an_internal_column(columns: Vec<Tree>) -> Tree {
+    let mut tree = spec(Some(&["SUBJ"]), columns, vec![]);
+    tree.set(
+        &["output", "columns"],
+        Tree::list(vec![text("STUDYID"), text("USUBJID"), text("AGE")]),
+    );
+    tree
+}
+
+/// Pruning counts a declared key's columns as read by the implicit joins
+/// that match on them (LAYER-11), where nothing else reads the column.
+#[test]
+fn pruning_keeps_the_columns_of_a_declared_key() {
+    let columns = |declared: Vec<Tree>| {
+        let mut all = declared;
+        all.push(column("AGE", "int", "DM.AGE"));
+        keyed_on_an_internal_column(all)
+    };
+    let live = |tree: Tree| {
+        let document = tree.document();
+        let spec = crate::front_end::v1::spec::lower(&document, None).into_spec();
+        let pruned =
+            crate::resolution::prune_lowered(&document, &spec, crate::resolution::Order::Declared)
+                .unwrap();
+        crate::front_end::v1::spec::lower(&pruned.document, None)
+            .into_spec()
+            .columns
+            .iter()
+            .map(|column| column.name.name.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        live(columns(vec![column("SUBJ", "str", "SRC.SUBJ")])),
+        ["STUDYID", "USUBJID", "SUBJ", "AGE"]
+    );
+    // Without the join, nothing reads SUBJ.
+    let mut unread = columns(vec![column("SUBJ", "str", "SRC.SUBJ")]);
+    unread.set(
+        &["columns", "3", "derivation", "value"],
+        text("SRC.STUDYID"),
+    );
+    assert_eq!(live(unread), ["STUDYID", "USUBJID", "AGE"]);
+}
+
+/// The column order a declaration check reports counts a declared key's
+/// columns as read by the implicit join, as binding does (COLUMN-5): a
+/// join declared before the column it matches on reads it forward.
+#[test]
+fn a_declared_key_s_columns_order_the_join_s_reader() {
+    let tree = keyed_on_an_internal_column(vec![
+        column("AGE", "int", "DM.AGE"),
+        column("SUBJ", "str", "SRC.SUBJ"),
+    ]);
+    let prepared = prepare(tree).unwrap();
+    let forward = prepared
+        .check_declaration_diagnostics()
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic.code == crate::diagnostic::ConditionCode::ColumnForwardReference
+        })
+        .collect::<Vec<_>>();
+    let [diagnostic] = forward.as_slice() else {
+        panic!("one forward reference: {forward:?}");
+    };
+    assert_eq!(
+        diagnostic.context,
+        context(&[("column", "AGE"), ("dependency", "SUBJ")])
+    );
+    // Binding reads the same order once both inputs store SUBJ.
+    let stored = |extra: &[(&str, ColumnType)]| {
+        let mut fields = vec![("STUDYID", ColumnType::Str), ("USUBJID", ColumnType::Str)];
+        fields.extend_from_slice(extra);
+        schema(&fields)
+    };
+    let source = stored(&[("SUBJ", ColumnType::Str)]);
+    let dm = stored(&[("SUBJ", ColumnType::Str), ("AGE", ColumnType::Int)]);
+    let Err(BindError::Invalid(findings)) = prepared.bind_sources(&[&source, &dm]) else {
+        panic!("binding is refused");
+    };
+    let bound = findings
+        .iter()
+        .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
+        .map(|diagnostic| diagnostic.code)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        bound,
+        [crate::diagnostic::ConditionCode::ColumnForwardReference]
+    );
+}
