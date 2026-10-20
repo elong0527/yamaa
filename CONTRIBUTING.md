@@ -53,8 +53,25 @@ CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update -p <crate>
 `make check-repository` fails when a locked package that a supported target
 compiles needs a newer Rust than the workspace declares, or when any locked
 package uses an edition that Rust does not read
-(`tools.packaging.check_minimum_rust`). Host source packages carry that workspace and lock.
-They carry the toolchain file too, so it names only what a build needs; add
+(`tools.packaging.check_minimum_rust`).
+
+One tool, `tools/staging/engine_bundle.py`, stages the engine source bundle
+that each host's source package builds from: the engine crates and that
+host's binding crate, a lock trimmed from the canonical one and verified crate
+by crate against it, and the crates.io crates that the lock selects, vendored,
+with no tests or toolchain file (#3030 D55). It builds the Python source
+archive, maturin's output over the bundle, with maturin 1.9.6 on the PATH:
+
+```sh
+uv run --project python --no-sync --with maturin==1.9.6 \
+  python -m tools.staging.engine_bundle sdist dist
+```
+
+`python -m tools.staging.engine_bundle bundle {python,r} <new directory>`
+writes a host's bundle alone, and `make check-repository` verifies both hosts'
+trimmed locks (`tools.packaging.check_cargo_lock`). The R source package still
+carries the workspace, lock and toolchain file unchanged until it moves onto
+the bundle (#3105), so the toolchain file names only what a build needs; add
 Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
 from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links
@@ -288,10 +305,10 @@ crate has a notice covers that graph. It then builds its own extension and runs
 workspace Rust, Python package/installed-host and strict R source-package
 checks. CI retains the resolved Cargo lock, Python requirements and Cargo
 metadata for reproduction. Neither lane updates the source checkout's locks or
-notices. Release builds and source archives continue to use the canonical
-unchanged locks, and the repository check keeps the committed notices equal to
-those generated from the canonical lock; these compatibility lanes supplement
-[native qualification](rust/qualification/README.md).
+notices. Release builds use the canonical locks, which source archives carry
+unchanged or trimmed and verified against them, and the repository check keeps
+the committed notices equal to those generated from the canonical lock; these
+compatibility lanes supplement [native qualification](rust/qualification/README.md).
 
 Before every merge into `main` or a `release/X.Y.Z` branch, run a fresh
 read-only review check with an authenticated GitHub CLI, supplying the exact
