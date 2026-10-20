@@ -28,7 +28,10 @@ What it cannot convert it lists for manual work instead:
 - a 0.5 document that does not parse as written, such as a prefix code
   completes, or whose conversion would not parse;
 - a spec path naming an intermediate or row template by index where no
-  specification beside it, or more than one, settles the member.
+  specification beside it, or more than one, settles the member, and a
+  changed spec path inside a longer string (a report row, a template that
+  builds the path);
+- a string the file converter fails on, left as written.
 
 The file converter's notes carry over at the source line they concern, except
 those an embedded document always draws: `model` (P-MODEL-1 leaves it
@@ -67,6 +70,10 @@ SILENT = frozenset({"model", "entry"})
 DOCUMENT = "document.yaml"
 HEADER = re.compile(r"schema_version\s*:")
 PATH = re.compile(r"[A-Za-z_][\w-]*(?:\.[\w-]+|\[\d+\]|\['(?:[^']|'')*'\])+")
+# A member addressed by an index a template fills in, such as rows[{i}].
+TEMPLATED_INDEX = re.compile(
+    r"(?<![\w.])(?:intermediates|rows)\[(?:\{[^{}]*\}|%s)\]" % sources.HOLE_WORD
+)
 ROOTS = frozenset(
     "parent domain keys input base filter output windows intermediates columns"
     " rows verifications submission metadata environments codelists study sdtm"
@@ -242,6 +249,14 @@ class Source:
     def count(self, name, amount=1):
         self.result.stats[name] += amount
 
+    def changes(self, text):
+        """`changes`, counting a text the file converter fails on as changing,
+        so it is listed rather than missed."""
+        try:
+            return changes(text, self.table)
+        except Exception:  # one odd string must not stop a batch run
+            return True
+
     def run(self):
         work, paths = [], []
         for group in self.extraction.groups:
@@ -260,6 +275,9 @@ class Source:
         self.mixed()
         for group in paths:
             self.rewrite_path(group)
+        for group in self.extraction.groups:
+            if group.converted is None and group not in paths:
+                self.path_inside(group)
         return self.finish()
 
     # -- reading ---------------------------------------------------------------
@@ -268,7 +286,7 @@ class Source:
         """document, fragment, path or None, listing what needs manual work."""
         if group.interpolated:
             self.count("interpolated strings read")
-            if changes(group.skeleton, self.table):
+            if self.changes(group.skeleton):
                 self.count("interpolated strings listed")
                 self.note(
                     group.start,
@@ -281,9 +299,7 @@ class Source:
         if PATH.fullmatch(text) and re.split(r"[.\[]", text, maxsplit=1)[0] in ROOTS:
             return "path"
         if group.role != "value":
-            if HEADER.search(text) or (
-                yaml_candidate(text) and changes(text, self.table)
-            ):
+            if HEADER.search(text) or (yaml_candidate(text) and self.changes(text)):
                 self.count("patterns listed")
                 self.note(
                     group.start,
@@ -297,7 +313,7 @@ class Source:
             return None
         root = parse(text)
         if root is None:
-            if "schema_version" in text and changes(text, self.table):
+            if "schema_version" in text and self.changes(text):
                 self.count("unparsed documents listed")
                 self.note(
                     group.start,
@@ -321,12 +337,24 @@ class Source:
     def convert(self, group, kind):
         """Convert one document or fragment alone."""
         text, notes = self.readable(group), []
-        if kind == "fragment":
-            converted, _ = markdown.convert_block(text, None, self.table, notes, "", 0)
-        else:
-            name = file_name(group.name)
-            outputs, result = convert_files({name: text}, self.table)
-            converted, notes = outputs[name], result.notes
+        try:
+            if kind == "fragment":
+                converted, _ = markdown.convert_block(
+                    text, None, self.table, notes, "", 0
+                )
+            else:
+                name = file_name(group.name)
+                outputs, result = convert_files({name: text}, self.table)
+                converted, notes = outputs[name], result.notes
+        except Exception as error:  # one odd string must not stop a batch run
+            self.count("strings the file converter failed on")
+            self.note(
+                group.start,
+                "internal",
+                f"the file converter failed on this string ({type(error).__name__}:"
+                f" {error}); it is left as written",
+            )
+            return
         self.settle(group, kind, text, converted, notes)
 
     def convert_cases(self, documents):
@@ -363,7 +391,10 @@ class Source:
             if len(names) < 2 and not inputs:
                 continue
             texts = {name: self.readable(group) for name, group in names.items()}
-            outputs, result = convert_files(texts, self.table, inputs)
+            try:
+                outputs, result = convert_files(texts, self.table, inputs)
+            except Exception:  # each document converts alone instead
+                continue
             for name, group in names.items():
                 notes = [note for note in result.notes if note.file == name]
                 self.count("documents converted with their case's files")
@@ -462,6 +493,28 @@ class Source:
         self.count("spec paths rewritten")
         self.edits.extend(group.rewrite(new))
         group.converted = new
+
+    def path_inside(self, group):
+        """List a spec path with a changed segment inside a longer string, such as
+        a printed report row or a template that builds the path (P-CLR-2)."""
+        text = group.template if group.interpolated else group.text
+        found = TEMPLATED_INDEX.search(text)
+        found = found.group() if found else None
+        for match in PATH.finditer(text) if found is None else ():
+            path = match.group()
+            if re.split(r"[.\[]", path, maxsplit=1)[0] not in ROOTS:
+                continue
+            if contracts.rewrite_path(path, {}, [], self.table) != path:
+                found = path
+                break
+        if found is not None:
+            self.count("strings holding a spec path listed")
+            self.note(
+                group.start,
+                "path",
+                f"a string holds the spec path {found}, which P-CLR-2 or the rename"
+                " table changes; rewrite it by hand",
+            )
 
     def resolve(self, group):
         """A path rewritten against the specifications nearest to it, or None."""

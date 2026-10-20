@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 from tools.migrate import convert as convert_files
@@ -150,6 +151,29 @@ class RustTests(unittest.TestCase):
         self.assertIn('"columns.ID.derivation"', converted)
         self.assertIn('"rows[0].filter"', converted)
         self.assertEqual([note.line for note in notes(result, "path")], [6])
+
+    def test_a_path_inside_a_longer_string_is_listed(self):
+        source = (
+            "fn t(i: usize) {\n"
+            '    let report = "out.csv,check,columns.X.derivation.compute.expr,,";\n'
+            '    let path = format!("rows[{i}].filter");\n'
+            '    let name = "SRC.literal_count";\n'
+            "}\n"
+        )
+        converted, result = run("t.rs", source)
+        self.assertEqual(converted, source)
+        self.assertEqual([note.line for note in notes(result, "path")], [2, 3])
+
+
+class GuardTests(unittest.TestCase):
+    def test_a_string_the_file_converter_fails_on_is_listed_and_left(self):
+        source = f"fn t() {{\n    let a = {rust_string(SPEC)};\n}}\n"
+        with mock.patch.object(embedded, "convert_files", side_effect=TypeError("odd")):
+            converted, result = run("t.rs", source)
+        self.assertEqual(converted, source)
+        self.assertEqual(
+            [(note.kind, note.line) for note in result.notes], [("internal", 2)]
+        )
 
 
 class PieceTests(unittest.TestCase):
