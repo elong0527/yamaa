@@ -89,6 +89,23 @@ pub struct CapturedDocument {
     normalized: NormalizedDocument,
 }
 impl CapturedDocument {
+    /// A 1.x document admitted at the version it declares, held as the class
+    /// its declared type selects (`crate::document::AdmittedDocument`).
+    pub(crate) fn admitted(
+        schema: Arc<CapturedSchema>,
+        class_name: &str,
+        source: Source,
+        raw: DecodedYaml,
+        normalized: NormalizedDocument,
+    ) -> Self {
+        Self {
+            schema,
+            class_name: class_name.into(),
+            source,
+            raw,
+            normalized,
+        }
+    }
     pub fn class_name(&self) -> &str {
         &self.class_name
     }

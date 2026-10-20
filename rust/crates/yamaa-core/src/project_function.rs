@@ -23,10 +23,16 @@ impl Language {
 }
 
 /// Authored indices survive admission and identify the exact rejected fields.
+/// `InvalidCallable` refuses a 0.5 definition's `function`; a 1.0 function
+/// file is refused when it names no callable at all (`MissingImplementation`,
+/// FUNC-4) or one that is not a callable of its language
+/// (`InvalidImplementation`, FUNC-8).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
     InvalidName,
     InvalidCallable,
+    MissingImplementation,
+    InvalidImplementation(Language),
     EmptyDescription,
     NegativeComparisonDecimals,
     InvalidParameterName { parameter: usize },
@@ -100,10 +106,16 @@ impl Function {
     pub fn name(&self) -> &str {
         &self.definition.name.name
     }
-    /// The callable this host binds. Admission refuses a definition without
-    /// a valid one for its language.
+    /// The callable this host binds. Admission refuses a 0.5 definition
+    /// without a valid one for its language; a 1.0 function file may name
+    /// none for this host, and a call to it then fails before any data is
+    /// read (FUNC-1).
     pub fn call(&self) -> &str {
         callable_of(self.language, &self.definition)
+    }
+    /// Whether the definition names a callable for this host (FUNC-1).
+    pub fn implemented(&self) -> bool {
+        self.definition.implementation(self.language).is_some()
     }
     /// Reuse the shared exact-type/default/missing invocation signature without
     /// inventing versions or a logical-to-host parameter mapping.
@@ -397,16 +409,50 @@ fn evidence(
     })
 }
 
+/// Whether a definition is a 1.0 function file, which declares its own header
+/// and names a callable for each host language it implements (D8).
+fn function_file(def: &ast::Function) -> bool {
+    matches!(
+        def.header,
+        Some(ast::Header {
+            surface: ast::Surface::V1 { .. },
+            ..
+        })
+    )
+}
+
 /// Report all independent static faults, followed by unsatisfied obligations in
 /// lexical tag order. Cases with invalid arguments/results cannot supply coverage.
+///
+/// A 0.5 definition binds one callable, for `language`, the language its
+/// environment file's key states. A 1.0 function file is language-neutral:
+/// every callable it names must be one of its language, and each parameter
+/// name a name in every language it implements, whichever host runs the
+/// build (FUNC-4, FUNC-8).
 pub fn validate(language: Language, def: &ast::Function) -> Vec<Finding> {
     let mut findings = Vec::new();
     if !identifier(&def.name.name) {
         findings.push(Finding::InvalidName);
     }
-    if !callable(language, callable_of(language, def)) {
-        findings.push(Finding::InvalidCallable);
-    }
+    let languages: Vec<Language> = if function_file(def) {
+        if def.implementations.is_empty() {
+            findings.push(Finding::MissingImplementation);
+        }
+        for implementation in &def.implementations {
+            if !callable(implementation.language, &implementation.callable.text) {
+                findings.push(Finding::InvalidImplementation(implementation.language));
+            }
+        }
+        def.implementations
+            .iter()
+            .map(|implementation| implementation.language)
+            .collect()
+    } else {
+        if !callable(language, callable_of(language, def)) {
+            findings.push(Finding::InvalidCallable);
+        }
+        vec![language]
+    };
     if def.description.text.is_empty() {
         findings.push(Finding::EmptyDescription);
     }
@@ -415,7 +461,11 @@ pub fn validate(language: Language, def: &ast::Function) -> Vec<Finding> {
     }
     let mut names = BTreeSet::new();
     for (parameter, p) in def.params.iter().enumerate() {
-        if !identifier(&p.name.name) || !host_name(language, &p.name.name) {
+        if !identifier(&p.name.name)
+            || languages
+                .iter()
+                .any(|&language| !host_name(language, &p.name.name))
+        {
             findings.push(Finding::InvalidParameterName { parameter });
         }
         if !names.insert(p.name.name.as_str()) {

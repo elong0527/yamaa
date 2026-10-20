@@ -1101,6 +1101,7 @@ mod schema {
                 declared.study.as_ref(),
                 Some(section),
                 section.family,
+                yamaa_core::ast::Surface::V0_5,
             )?;
             submission_composition::compose(
                 required,
@@ -1858,7 +1859,9 @@ mod schema {
                 assert_eq!(s.context, ast::DefineContext::Submission);
                 assert_eq!(s.xml_lang.text, "en");
                 // Only Define-XML composition requires the study, guide and target.
-                let Err(findings) = Required::admit(owned.study.as_ref(), Some(s), family) else {
+                let Err(findings) =
+                    Required::admit(owned.study.as_ref(), Some(s), family, ast::Surface::V0_5)
+                else {
                     panic!("composition requires the define declarations")
                 };
                 assert_eq!(
@@ -2404,6 +2407,7 @@ mod schema {
                 declared.study.as_ref(),
                 Some(section),
                 section.family,
+                yamaa_core::ast::Surface::V0_5,
             )?;
             submission_composition::compose(
                 required,

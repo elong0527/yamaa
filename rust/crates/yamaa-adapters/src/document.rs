@@ -173,6 +173,17 @@ impl AdmittedDocument {
     pub fn normalized(&self) -> &NormalizedDocument {
         &self.normalized
     }
+    /// The document held as the class its declared type selects, as a
+    /// structurally prepared 0.5 root is held.
+    pub fn into_captured(self) -> crate::specification_source::CapturedDocument {
+        crate::specification_source::CapturedDocument::admitted(
+            self.schema,
+            self.header.file_type.root_class(),
+            self.source,
+            self.raw,
+            self.normalized,
+        )
+    }
 }
 
 /// A 1.x specification: its layers, each admitted at its own version, the
