@@ -26,6 +26,12 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Hard rules
 
+- **Preserve maintainer automation.** Files under `automation/` are
+  owner-maintained material. Do not modify, delete, rename, move or replace
+  them unless the owner explicitly requests that specific change. General
+  cleanup, consolidation, refactoring or an assessment that content is stale
+  does not authorize changing these files. Report concerns to the owner and
+  leave the files intact.
 - **Breaking a user-facing interface is a decision.** Until 1.0.0, a change
   that breaks the specification language, the Python or R API, saved outputs
   or diagnostic identity follows a decision recorded on #3030 or an owner
