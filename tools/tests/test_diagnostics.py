@@ -618,6 +618,32 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(self.errors(), [])
 
+    def test_inline_path_in_non_mod_file_tracks_its_production_loader(self):
+        self.write(
+            "rust/crates/yamaa-adapters/src/lib.rs",
+            'mod reader;\n#[cfg(test)]\n#[path = "reader/nested/fixtures.rs"]\nmod tests;\n',
+        )
+        reader = self.write(
+            "rust/crates/yamaa-adapters/src/reader.rs",
+            '#[cfg(test)]\n#[path = "fixtures.rs"]\nmod fixtures;\n'
+            'mod nested {\n    #[path = "fixtures.rs"]\n    mod production;\n}\n',
+        )
+        for relative in ("fixtures.rs", "reader/nested/fixtures.rs"):
+            self.write(
+                f"rust/crates/yamaa-adapters/src/{relative}",
+                'fn fixture() { crate::json_wire::decode("{}"); }\n',
+            )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa-adapters/src/reader/nested/fixtures.rs:1: JSON text decoded outside a codec"
+            ],
+        )
+        reader.write_text(
+            reader.read_text().replace("mod nested", "#[cfg(test)]\nmod nested")
+        )
+        self.assertEqual(self.errors(), [])
+
     def test_registered_condition_literal_is_reported_once_as_a_new_site(self):
         self.write(
             "rust/crates/yamaa-adapters/src/rows.rs",

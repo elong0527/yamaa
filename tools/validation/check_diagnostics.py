@@ -624,8 +624,14 @@ def json_test_sources(sources: dict[Path, str]) -> set[Path]:
                 for kind, start, _, _, text in rust_tokens(match[1])
                 if kind == "string" and re.search(r"\bpath\s*=\s*$", match[1][:start])
             ]
+            explicit_base = path.parent
+            # Inside an inline module, Rust includes a non-mod-rs file's
+            # stem in relative paths. A top-level #[path] remains relative
+            # to the file's own directory.
+            if directories and path.stem not in {"lib", "main", "mod"}:
+                explicit_base /= path.stem
             candidates = [
-                path.parent.joinpath(*directories) / name for name in explicit
+                explicit_base.joinpath(*directories) / name for name in explicit
             ]
             # A conditional path can still load the ordinary module on the
             # other configuration. Both loaders must be accounted for.
