@@ -1,7 +1,8 @@
 //! Typed static environment admission without code, lock-version or study ports.
 use crate::{
-    project_function::{self, Definition, Language},
-    project_terminology::{self, Source},
+    ast,
+    project_function::{self, Language},
+    project_terminology,
 };
 use std::collections::BTreeSet;
 
@@ -23,17 +24,17 @@ pub enum Submission {
     Send,
 }
 
-/// Closed classes and required fields have already passed shared schema admission.
-/// Study and section metadata stay with the captured project document; only
-/// submission composition requires them.
+/// The definitions and codelist sources lowered from a project's files, in
+/// declaration order. Study and section metadata stay with the project root;
+/// only submission composition requires them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Draft {
     /// The `environments` key the project links for the host. Absent when the
     /// project names no environment file for the host language.
     pub language: Option<Language>,
     pub lock: Option<LockReference>,
-    pub functions: Option<Vec<Definition>>,
-    pub codelists: Vec<Source>,
+    pub functions: Option<Vec<ast::Function>>,
+    pub codelists: Vec<ast::Codelists>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
@@ -193,7 +194,7 @@ pub fn validate(host: Language, draft: &Draft) -> Vec<Finding> {
     if let Some(functions) = &draft.functions {
         let mut names = BTreeSet::new();
         for (function, definition) in functions.iter().enumerate() {
-            if !names.insert(&definition.name) {
+            if !names.insert(&definition.name.name) {
                 findings.push(Finding::DuplicateFunction { function });
             }
             for finding in project_function::validate(draft.language.unwrap_or(host), definition) {

@@ -106,10 +106,7 @@ impl ProjectCalls {
         let mut index = BTreeMap::new();
         let mut duplicates = Vec::new();
         for (i, function) in functions.iter().enumerate() {
-            if index
-                .insert(function.definition().name.as_str(), i)
-                .is_some()
-            {
+            if index.insert(function.name(), i).is_some() {
                 duplicates.push(i);
             }
         }

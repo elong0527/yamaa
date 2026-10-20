@@ -1,9 +1,10 @@
-//! Decode a structurally normalized definition directly from the shared document.
-//! No host model, JSON plan, code discovery or default synthesis participates.
+//! Read the scalars of a structurally normalized 0.5 document: the reader the
+//! project front end ([`crate::front_end::v0_5::project`]) and project call
+//! decoding share. A value the engine cannot run with, or a node whose shape
+//! the schema should have refused, is a finding at its authored path.
 use crate::{
-    project_function::{Case, Definition, Parameter},
     schema::{Document, DocumentNode as N},
-    value::{ColumnType, Value, ValueType},
+    value::Value,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,6 +19,9 @@ pub struct Finding {
     pub path: String,
     pub node: usize,
     pub kind: Kind,
+    /// The text an out-of-range integer, an invalid date or an invalid
+    /// datetime is written as; a diagnostic reports it.
+    pub value: Option<String>,
 }
 pub(crate) struct Reader<'a> {
     document: &'a Document,
@@ -61,7 +65,31 @@ impl Reader<'_> {
             path: path.into(),
             node,
             kind,
+            value: None,
         });
+    }
+    /// A scalar the engine cannot run with, written as `value`.
+    fn refuse(&mut self, path: &str, node: usize, kind: Kind, value: &str) {
+        self.invalid(path, node, kind, Some(value.into()));
+    }
+    fn invalid(&mut self, path: &str, node: usize, kind: Kind, value: Option<String>) {
+        self.findings.push(Finding {
+            path: path.into(),
+            node,
+            kind,
+            value,
+        });
+    }
+    /// The text of a node that is text.
+    fn written_text(&self, node: usize) -> Option<String> {
+        match self.document.nodes().get(node) {
+            Some(N::Text(text)) => Some(text.clone()),
+            _ => None,
+        }
+    }
+    /// Whether a finding already names `path`.
+    pub(crate) fn has_finding_at(&self, path: &str) -> bool {
+        self.findings.iter().any(|finding| finding.path == path)
     }
     pub(crate) fn field(&mut self, parent: usize, name: &str, path: &str) -> Option<usize> {
         let field = self.document.field(parent, name);
@@ -116,27 +144,29 @@ impl Reader<'_> {
             Some(N::Integer(value)) => match value.parse::<i64>() {
                 Ok(value) => Value::Int(value),
                 Err(_) => {
-                    self.fault(path, node, Kind::IntegerRange);
+                    self.refuse(path, node, Kind::IntegerRange, value);
                     Value::Missing
                 }
             },
             Some(N::Float(value)) => Value::float(*value),
             Some(N::Mapping(_)) => {
                 if let Some(value) = self.document.field(node, "date") {
+                    let written = self.written_text(value);
                     let text = self.text(value, path);
                     match text.parse() {
                         Ok(value) => Value::Date(value),
                         Err(_) => {
-                            self.fault(path, node, Kind::InvalidDate);
+                            self.invalid(path, node, Kind::InvalidDate, written);
                             Value::Missing
                         }
                     }
                 } else if let Some(value) = self.document.field(node, "datetime") {
+                    let written = self.written_text(value);
                     let text = self.text(value, path);
                     match text.parse() {
                         Ok(value) => Value::DateTime(value),
                         Err(_) => {
-                            self.fault(path, node, Kind::InvalidDateTime);
+                            self.invalid(path, node, Kind::InvalidDateTime, written);
                             Value::Missing
                         }
                     }
@@ -150,143 +180,5 @@ impl Reader<'_> {
                 Value::Missing
             }
         }
-    }
-    fn parameter_kind(&mut self, parent: usize, path: &str) -> ValueType {
-        let text = self.text_field(parent, "type", path);
-        match text.as_str() {
-            "str" => ValueType::Str,
-            "int" => ValueType::Int,
-            "float" => ValueType::Float,
-            "bool" => ValueType::Bool,
-            "date" => ValueType::Date,
-            "datetime" => ValueType::DateTime,
-            _ => {
-                self.fault(path, parent, Kind::NormalizedShape);
-                ValueType::Str
-            }
-        }
-    }
-    fn column_kind(&mut self, parent: usize, path: &str) -> ColumnType {
-        let text = self.text_field(parent, "returns", path);
-        match text.as_str() {
-            "str" => ColumnType::Str,
-            "int" => ColumnType::Int,
-            "float" => ColumnType::Float,
-            "date" => ColumnType::Date,
-            "datetime" => ColumnType::DateTime,
-            _ => {
-                self.fault(path, parent, Kind::NormalizedShape);
-                ColumnType::Str
-            }
-        }
-    }
-    fn parameters(&mut self, root: usize) -> Vec<Parameter> {
-        self.sequence(root, "params", "params")
-            .iter()
-            .enumerate()
-            .map(|(i, &node)| {
-                let path = format!("params[{i}]");
-                let name = self.text_field(node, "name", &format!("{path}.name"));
-                let kind = self.parameter_kind(node, &format!("{path}.type"));
-                let required = self.boolean(node, "required", &format!("{path}.required"));
-                let default = self
-                    .document
-                    .field(node, "default")
-                    .map(|value| self.scalar(value, &format!("{path}.default")));
-                let accepts_missing =
-                    self.boolean(node, "accepts_missing", &format!("{path}.accepts_missing"));
-                Parameter {
-                    name,
-                    kind,
-                    required,
-                    default,
-                    accepts_missing,
-                }
-            })
-            .collect()
-    }
-    fn cases(&mut self, root: usize) -> Vec<Case> {
-        self.sequence(root, "tests", "tests")
-            .iter()
-            .enumerate()
-            .map(|(i, &node)| {
-                let path = format!("tests[{i}]");
-                let id = self.text_field(node, "id", &format!("{path}.id"));
-                let covers = self
-                    .sequence(node, "covers", &format!("{path}.covers"))
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &node)| self.text(node, &format!("{path}.covers[{i}]")))
-                    .collect();
-                let mut args = Vec::new();
-                if let Some(args_node) = self.field(node, "args", &format!("{path}.args")) {
-                    if let Some(N::Mapping(items)) = self.document.nodes().get(args_node) {
-                        let items = items.clone();
-                        for (key, value) in items {
-                            let name = self.text(key, &format!("{path}.args"));
-                            let value = self.scalar(value, &format!("{path}.args.{name}"));
-                            args.push((name, value));
-                        }
-                    } else {
-                        self.fault(&format!("{path}.args"), args_node, Kind::NormalizedShape);
-                    }
-                }
-                let result = self
-                    .field(node, "result", &format!("{path}.result"))
-                    .map(|node| self.scalar(node, &format!("{path}.result")))
-                    .unwrap_or(Value::Missing);
-                Case {
-                    id,
-                    covers,
-                    args,
-                    result,
-                }
-            })
-            .collect()
-    }
-}
-
-/// Decode all scalar leaves before returning any definition. Failed values retain
-/// exact node references; placeholder fields are never exposed as an accepted model.
-pub fn decode(document: &Document, root: usize, name: &str) -> Result<Definition, Vec<Finding>> {
-    let mut reader = Reader {
-        document,
-        findings: Vec::new(),
-    };
-    let function = reader.text_field(root, "function", "function");
-    let description = reader.text_field(root, "description", "description");
-    let params = reader.parameters(root);
-    let returns = reader.column_kind(root, "returns");
-    let may_return_missing = reader.boolean(root, "may_return_missing", "may_return_missing");
-    let comparison_decimals = reader
-        .field(root, "comparison_decimals", "comparison_decimals")
-        .map(|node| match reader.scalar(node, "comparison_decimals") {
-            Value::Int(value) => value,
-            _ => {
-                if !reader
-                    .findings
-                    .iter()
-                    .any(|f| f.path == "comparison_decimals")
-                {
-                    reader.fault("comparison_decimals", node, Kind::NormalizedShape);
-                }
-                0
-            }
-        })
-        .unwrap_or_default();
-    let tests = reader.cases(root);
-    if reader.findings.is_empty() {
-        Ok(Definition {
-            name: name.into(),
-            function,
-            description,
-            params,
-            returns,
-            may_return_missing,
-            comparison_decimals,
-            tests,
-        })
-    } else {
-        Err(reader.findings)
     }
 }

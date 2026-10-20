@@ -114,8 +114,9 @@ mod schema {
         use std::collections::BTreeSet;
         use yamaa_core::{
             diagnostic::{ScalarSubmissionRule as Rule, SCALAR_SUBMISSION_RULES},
+            front_end::v0_5::sections as environment,
             schema::{Document, DocumentNode as N},
-            specification_submission_document as spec, submission_document as environment,
+            specification_submission_document as spec,
         };
 
         // Authored invalid scalar occurrences, independent of the decoder and schema.
@@ -179,7 +180,7 @@ mod schema {
             ]);
             let root = a.map(&[("study", study), ("sdtm", section)]);
             let input = a.finish(root);
-            let error = environment::decode(&input, root).unwrap_err();
+            let error = environment::sections(&input).unwrap_err();
             assert!(std::ptr::eq(error.input, &input));
             let environment::Cause::Findings(findings) = error.cause else {
                 panic!("raw findings")

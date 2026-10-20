@@ -3,6 +3,7 @@
 mod support;
 mod project {
     mod project_activation {
+        use crate::support::roots::{Case, Definition, Parameter};
         use yamaa_core::{
             function_invocation::{Argument, HostError},
             project_activation::{
@@ -12,7 +13,7 @@ mod project {
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
             project_environment::{LockKind, LockReference},
-            project_function::{Case, Definition, Function, Language, Parameter},
+            project_function::{Function, Language},
             table::ValueRef,
             value::{ColumnType, Value, ValueType},
         };
@@ -143,7 +144,8 @@ mod project {
                             result: Value::Missing,
                         },
                     ],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap()
         }
@@ -452,7 +454,10 @@ mod project {
                 })
             ));
             let mut definition = function("ridentity").definition().clone();
-            definition.function = "program::ridentity".into();
+            definition.implementations = vec![yamaa_core::ast::Implementation {
+                language: Language::R,
+                callable: crate::support::roots::text("program::ridentity"),
+            }];
             let rfunction = Function::admit(Language::R, definition).unwrap();
             assert_eq!(rfunction.language(), Language::R);
             assert!(matches!(
@@ -876,13 +881,14 @@ mod project {
         }
     }
     mod project_call_binding {
+        use crate::support::roots::{Case, Definition, Parameter};
         use yamaa_core::{
             bound_expression::Read,
             dataset::FunctionInput,
             project_call_binding::{bind, Context, Error, Kind, SourceMode},
             project_call_document::{Argument, Call, Input},
             project_calls::{LocatedCall, ProjectCalls},
-            project_function::{Case, Definition, Function, Language, Parameter},
+            project_function::{Function, Language},
             reference_binding::{Catalog, Dataset, Diagnostic, Field},
             reference_scope::{Finding as ScopeFinding, Phase, Reach, Scope},
             value::{ColumnType, Value, ValueType},
@@ -924,7 +930,8 @@ mod project {
                             result: Value::Missing,
                         },
                     ],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap();
             ProjectCalls::admit(
@@ -1116,10 +1123,11 @@ mod project {
         }
     }
     mod project_call_document {
+        use crate::support::roots::{Case, Definition, Parameter};
         use std::collections::BTreeMap;
         use yamaa_core::{
             project_call_document::{decode, BindingFinding, Input},
-            project_function::{CallFinding, Case, Definition, Function, Language, Parameter},
+            project_function::{CallFinding, Function, Language},
             project_function_document::{Finding, Kind},
             schema::{Document, DocumentNode as N},
             value::{ColumnType, Value, ValueType},
@@ -1170,7 +1178,8 @@ mod project {
                             result: Value::Missing,
                         },
                     ],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap()
         }
@@ -1281,6 +1290,7 @@ mod project {
                             } else {
                                 Kind::InvalidDateTime
                             },
+                            value: Some(text.into()),
                         }]),
                         "{tag}: {text}"
                     );
@@ -1314,22 +1324,27 @@ mod project {
                     Finding {
                         path: "call.args.wide".into(),
                         node: wide,
-                        kind: Kind::IntegerRange
+                        kind: Kind::IntegerRange,
+                        value: Some("9223372036854775808".into()),
                     },
                     Finding {
                         path: "call.args.date".into(),
                         node: date,
-                        kind: Kind::InvalidDate
+                        kind: Kind::InvalidDate,
+                        value: Some("2023-02-29".into()),
                     },
                     Finding {
                         path: "call.args.datetime".into(),
                         node: d.field(datetime, "datetime").unwrap(),
-                        kind: Kind::NormalizedShape
+                        kind: Kind::NormalizedShape,
+                        value: None,
                     },
+                    // A datetime written as no text keeps no written value.
                     Finding {
                         path: "call.args.datetime".into(),
                         node: datetime,
-                        kind: Kind::InvalidDateTime
+                        kind: Kind::InvalidDateTime,
+                        value: None,
                     },
                 ])
             );
@@ -1395,12 +1410,14 @@ mod project {
                     Finding {
                         path: "call".into(),
                         node: d.root(),
-                        kind: Kind::NormalizedShape
+                        kind: Kind::NormalizedShape,
+                        value: None,
                     },
                     Finding {
                         path: "call.args.x".into(),
                         node: d.field(x, "literal").unwrap(),
-                        kind: Kind::NormalizedShape
+                        kind: Kind::NormalizedShape,
+                        value: None,
                     },
                 ])
             );
@@ -1420,16 +1437,18 @@ mod project {
                 Err(vec![Finding {
                     path: "call.args.x".into(),
                     node: x,
-                    kind: Kind::NormalizedShape
+                    kind: Kind::NormalizedShape,
+                    value: None,
                 },])
             );
         }
     }
     mod project_calls {
+        use crate::support::roots::{Case, Definition, Parameter};
         use yamaa_core::{
             project_call_document::{Argument, Call, Input},
             project_calls::{Error, Finding, Kind, LocatedCall, ProjectCalls},
-            project_function::{CallFinding, Case, Definition, Function, Language, Parameter},
+            project_function::{CallFinding, Function, Language},
             value::{ColumnType, Value, ValueType},
         };
         fn function(name: &str) -> Function {
@@ -1469,7 +1488,8 @@ mod project {
                             result: Value::Missing,
                         },
                     ],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap()
         }
@@ -1682,15 +1702,16 @@ mod project {
         }
     }
     mod project_codelist_binding {
+        use crate::support::roots::{Codelist, CodelistType, External, Item, Source};
         use yamaa_core::json::Value as JsonValue;
         use yamaa_core::{
             dataset::Check,
             project_codelist_binding::{bind, Binding, Cause},
-            project_terminology::{Catalogue, Codelist, DataType, External, Item, Source},
+            project_terminology::Catalogue,
             value::{ColumnType, Value},
         };
         fn catalogue(
-            kind: DataType,
+            kind: CodelistType,
             values: Vec<Value>,
             extensible: bool,
             external: bool,
@@ -1722,7 +1743,8 @@ mod project {
                         href: Some("relative/path".into()),
                     }),
                 }],
-            }])
+            }
+            .root()])
             .unwrap()
         }
         fn binding<'a>(
@@ -1744,7 +1766,7 @@ mod project {
         #[test]
         fn complete_static_findings_preserve_all_bindings_and_name_the_redundant_verification() {
             let cat = catalogue(
-                DataType::Text,
+                CodelistType::Text,
                 vec![Value::Str("F".into()), Value::Str("M\0🙂".into())],
                 false,
                 false,
@@ -1794,7 +1816,7 @@ mod project {
         #[test]
         fn fixed_binding_keeps_numeric_authorship_and_rejects_every_restating_verification() {
             let cat = catalogue(
-                DataType::Float,
+                CodelistType::Float,
                 vec![Value::Int(9_007_199_254_740_993), Value::float(-0.0)],
                 false,
                 false,
@@ -1827,7 +1849,12 @@ mod project {
         #[test]
         fn extensible_lists_are_enforced_and_external_dictionaries_leave_verifications_independent()
         {
-            let extensible = catalogue(DataType::Text, vec![Value::Str("F".into())], true, false);
+            let extensible = catalogue(
+                CodelistType::Text,
+                vec![Value::Str("F".into())],
+                true,
+                false,
+            );
             let checks = bind(&extensible, &[binding("CODE", ColumnType::Str, &[])]).unwrap();
             assert!(matches!(
                 &checks[0].verification.check,
@@ -1836,7 +1863,7 @@ mod project {
             assert!(
                 matches!(bind(&extensible, &[binding("CODE", ColumnType::Str, &["allowed"])]), Err(f) if f.len() == 1)
             );
-            let external = catalogue(DataType::Text, vec![], false, true);
+            let external = catalogue(CodelistType::Text, vec![], false, true);
             assert!(
                 bind(&external, &[binding("CODE", ColumnType::Str, &["allowed"])])
                     .unwrap()
@@ -2052,10 +2079,12 @@ mod project {
         }
     }
     mod project_collections {
+        use crate::support::roots::{Case, Definition};
+        use crate::support::roots::{Codelist, CodelistType, Item, Source};
         use yamaa_core::{
             project_environment::{Draft, Environment},
-            project_function::{Case, Definition, Function, Language},
-            project_terminology::{Catalogue, Codelist, DataType, Item, Source},
+            project_function::{Function, Language},
+            project_terminology::Catalogue,
             value::{ColumnType, Value},
         };
         fn definition() -> Definition {
@@ -2077,9 +2106,10 @@ mod project {
         }
         #[test]
         fn function_metadata_keeps_exact_utf8_and_nul_bytes() {
-            let function = Function::admit(Language::Python, definition()).unwrap();
+            let function =
+                Function::admit(Language::Python, definition().root(Language::Python)).unwrap();
             assert_eq!(
-                function.definition().description.as_bytes(),
+                function.definition().description.text.as_bytes(),
                 "μ\0".as_bytes()
             );
         }
@@ -2091,7 +2121,7 @@ mod project {
                 codelists: vec![Codelist {
                     id: "LARGE".into(),
                     name: "Large".into(),
-                    data_type: DataType::Integer,
+                    data_type: CodelistType::Integer,
                     extensible: false,
                     alias: None,
                     format_name: None,
@@ -2108,7 +2138,8 @@ mod project {
                             .collect(),
                     ),
                 }],
-            };
+            }
+            .root();
             let catalogue = Catalogue::admit(vec![source.clone()]).unwrap();
             assert!(catalogue.bind("LARGE", ColumnType::Int, false).is_empty());
             let values: Vec<_> = (0..10_000).map(Value::Int).collect();
@@ -2127,7 +2158,7 @@ mod project {
                 .map(|i| {
                     let mut def = definition();
                     def.name = format!("function_{i}");
-                    def
+                    def.root(Language::Python)
                 })
                 .collect();
             for function in &functions {

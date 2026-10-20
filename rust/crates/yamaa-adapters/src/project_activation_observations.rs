@@ -66,8 +66,15 @@ fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &st
         .functions()
         .get(index)
         .ok_or(Error::InvalidObservation)?;
-    let name = &function.definition().name;
-    if run.captured_environment().origins().functions.get(index) != Some(name) {
+    let name = function.name();
+    if run
+        .captured_environment()
+        .origins()
+        .functions
+        .get(index)
+        .map(String::as_str)
+        != Some(name)
+    {
         return Err(Error::InvalidObservation);
     }
     let source = run
@@ -154,7 +161,7 @@ pub fn activation(run: &dyn ActivationView, observed: &Observations) -> Result<J
     }
     let bindings = observed.bindings.iter().map(|binding| {
         let (function, source) = function(run, binding.function)?;
-        Ok(json!({"function":function.definition().name, "call":function.definition().function, "source":source, "outcome":match binding.outcome {
+        Ok(json!({"function":function.name(), "call":function.call(), "source":source, "outcome":match binding.outcome {
             BindingOutcome::Attempted => "attempted", BindingOutcome::Bound => "bound", BindingOutcome::Rejected => "rejected", BindingOutcome::Interrupted => "interrupted",
         }}))
     }).collect::<Result<Vec<_>, Error>>()?;
@@ -162,8 +169,8 @@ pub fn activation(run: &dyn ActivationView, observed: &Observations) -> Result<J
         let (function, source) = function(run, observed.function)?;
         let definition = function.definition();
         let case = &definition.tests[observed.case];
-        let args = case.args.iter().map(|(name, value)| Ok((name.clone(), scalar(value)?))).collect::<Result<yamaa_core::json::Map<_, _>, Error>>()?;
-        Ok(json!({"function":definition.name, "call":definition.function, "source":source, "case":case.id, "args":args,
+        let args = case.args.iter().map(|(name, value)| Ok((name.name.clone(), scalar(value)?))).collect::<Result<yamaa_core::json::Map<_, _>, Error>>()?;
+        Ok(json!({"function":function.name(), "call":function.call(), "source":source, "case":case.id.text, "args":args,
             "expected":scalar(&case.result)?, "comparison_decimals":definition.comparison_decimals,
             "outcome":match observed.outcome { TestOutcome::Attempted => "attempted", TestOutcome::Passed => "passed", TestOutcome::ResultMismatch => "result_mismatch", TestOutcome::InvocationFailed => "invocation_failed", TestOutcome::Interrupted => "interrupted" },
             "invoked":observed.invoked, "actual_retained":observed.actual.is_some(), "actual":observed.actual.as_ref().map(scalar).transpose()?}))

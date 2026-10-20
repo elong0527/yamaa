@@ -4,12 +4,12 @@
 use crate::json::Value as JsonValue;
 use crate::{
     application_issue::{Fault, Stage},
+    ast::{DefineContext, Transport},
     diagnostic::ConditionCode,
     limits::Limits,
     project_environment::Submission,
     specification_submission_document as spec,
     submission_composition::{printable_ascii, Dataset, Finding, Study},
-    submission_document::{Context, Transport},
     table::{TableAccess, ValueRef},
     value::Value,
 };
@@ -213,7 +213,7 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
         }
         return Err(finding);
     }
-    let text_limits = xpt || study.section.context.value == Context::Submission;
+    let text_limits = xpt || study.section.context == DefineContext::Submission;
     let adam = study.section.family == Submission::Adam;
     for (index, column) in dataset.columns.iter().enumerate() {
         let column_type = column.declaration.column_type.value;
@@ -384,7 +384,7 @@ fn validate_artifact<T: TableAccess>(
     let lists: BTreeMap<_, _> = study
         .codelists
         .iter()
-        .map(|list| (list.declaration.id.as_str(), &list.declaration))
+        .map(|list| (list.declaration.id.name.as_str(), &list.declaration))
         .collect();
     for (index, base) in dataset.columns.iter().enumerate() {
         for row in 0..table.row_count() {
@@ -470,7 +470,7 @@ fn validate_artifact<T: TableAccess>(
                 if let Some(list) = list {
                     finding
                         .context
-                        .insert("codelist".into(), JsonValue::String(list.id.clone()));
+                        .insert("codelist".into(), JsonValue::String(list.id.name.clone()));
                 }
                 keys(dataset, table, row, &mut finding)?;
                 return Err(finding);

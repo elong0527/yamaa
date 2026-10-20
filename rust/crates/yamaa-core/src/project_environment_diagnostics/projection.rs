@@ -1,20 +1,21 @@
 //! Borrowed environment reports admitted before the first owned diagnostic fact.
 //!
-//! The caller supplies the exact retained failed draft, normalized project root,
-//! linked environment file and captures from one attempt. Matching identity
-//! strings or equal arena contents cannot establish that ownership. Origin checks
-//! validate the supplied retained relationships; they do not manufacture
-//! provenance or authorize source reads. The project root declares codelists
-//! and environment links; the linked environment file declares the lock and
-//! functions, so each finding names the file that declares its subject.
+//! The caller supplies the exact retained failed draft, lowered project root
+//! and captured identities from one attempt. Matching identity strings or
+//! equal contents cannot establish that ownership. Origin checks validate the
+//! supplied retained relationships against the project root's declarations;
+//! they do not manufacture provenance or authorize source reads. The project
+//! file declares codelists and environment links; the linked environment file
+//! declares the lock and functions, so each finding names the file that
+//! declares its subject.
 use super::{finding_diagnostic, scalar_diagnostic, Error as CoreError, Project};
 use crate::json::Value as JsonValue;
 use crate::{
+    ast::{self, CodelistSource, FunctionSource},
     diagnostic::{ConditionCode, Diagnostic},
     project_environment::{Draft, Finding},
     project_function::Finding as FunctionFinding,
     project_function_document::Finding as ScalarFinding,
-    schema::{Document, DocumentNode as N},
     value::Value,
 };
 use std::fmt::Write;
@@ -32,11 +33,6 @@ impl From<CoreError> for Error {
         Self::Core(error)
     }
 }
-#[derive(Clone, Copy)]
-pub struct Root<'a> {
-    pub document: &'a Document,
-    pub identity: &'a str,
-}
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Origin<'a> {
     /// The environment file named by the project `environments` key.
@@ -44,19 +40,24 @@ pub enum Origin<'a> {
     Function(&'a str),
     Codelist(usize),
 }
+/// One captured file and the declaration that names it.
 #[derive(Clone, Copy)]
 pub struct Capture<'a> {
     pub origin: Origin<'a>,
-    pub document: &'a Document,
     pub identity: &'a str,
 }
 /// Origin slices and captures are borrowed from the same retained attempt as
-/// `draft`, `root` and `environment`. Admission retains borrowed descriptors in
-/// a collection, so an arbitrary input iterator is never replayed.
+/// `draft` and `project`. Admission retains borrowed descriptors in a
+/// collection, so an arbitrary input iterator is never replayed.
 pub struct Admission<'a, I> {
-    pub root: Root<'a>,
-    /// The environment file the project links for the host, when captured.
-    pub environment: Option<Root<'a>>,
+    /// The project root, lowered with the environment file it links for the
+    /// host when that file lowered.
+    pub project: &'a ast::Project,
+    /// The project file's identity.
+    pub root: &'a str,
+    /// The identity of the environment file the project links for the host,
+    /// when captured.
+    pub environment: Option<&'a str>,
     pub draft: &'a Draft,
     pub function_origins: &'a [String],
     pub codelist_origins: &'a [usize],
@@ -69,8 +70,9 @@ pub struct ScalarSource<'a> {
 }
 /// An immutable authority-bearing report. No owned fact exists before admission.
 pub struct AdmissionReport<'a> {
-    root: Root<'a>,
-    environment: Option<Root<'a>>,
+    project: &'a ast::Project,
+    root: &'a str,
+    environment: Option<&'a str>,
     draft: &'a Draft,
     function_origins: &'a [String],
     codelist_origins: &'a [usize],
@@ -78,11 +80,11 @@ pub struct AdmissionReport<'a> {
     findings: &'a [Finding],
 }
 pub struct RootScalarReport<'a> {
-    root: Root<'a>,
+    root: &'a str,
     findings: &'a [ScalarFinding],
 }
 pub struct ScalarSourcesReport<'a> {
-    root: Root<'a>,
+    root: &'a str,
     sources: Vec<ScalarSource<'a>>,
 }
 
@@ -280,56 +282,40 @@ impl<'a> Project<'a> for Borrowed {
         d.field(key, FieldValue::Integer(text))
     }
 }
-fn root_mapping(root: Root<'_>) -> Result<(), Error> {
-    if !matches!(
-        root.document.nodes().get(root.document.root()),
-        Some(N::Mapping(_))
-    ) {
-        return Err(Error::Core(CoreError::UnavailableShape));
-    }
-    Ok(())
-}
-/// Find the value node of one named entry in a root-level mapping field.
-fn entry_node(root: Root<'_>, field: &str, name: &str) -> Result<usize, Error> {
-    let node = root
-        .document
-        .field(root.document.root(), field)
-        .ok_or(Error::InvalidOrigin)?;
-    let Some(N::Mapping(entries)) = root.document.nodes().get(node) else {
-        return Err(Error::InvalidOrigin);
-    };
-    entries
+/// The function declaration `name` keys, among those the environment file
+/// declares.
+fn function_declaration<'a>(
+    project: &'a ast::Project,
+    name: &str,
+) -> Result<&'a ast::FunctionDeclaration, Error> {
+    project
+        .functions
+        .as_deref()
+        .ok_or(Error::InvalidOrigin)?
         .iter()
-        .find_map(|&(key, value)| match &root.document.nodes()[key] {
-            N::Text(text) if text == name => Some(value),
-            _ => None,
-        })
+        .find(|declaration| declaration.key.as_ref().is_some_and(|key| key.name == name))
         .ok_or(Error::InvalidOrigin)
 }
-fn codelist_node(root: Root<'_>, index: usize) -> Result<usize, Error> {
-    let node = root
-        .document
-        .field(root.document.root(), "codelists")
-        .ok_or(Error::InvalidOrigin)?;
-    let Some(N::Sequence(entries)) = root.document.nodes().get(node) else {
-        return Err(Error::InvalidOrigin);
-    };
-    entries.get(index).copied().ok_or(Error::InvalidOrigin)
-}
-/// Functions are declared by the linked environment file; codelists and the
-/// environment link itself are declared by the project root.
-fn authored_node<'a>(
-    root: Root<'a>,
-    environment: Option<Root<'a>>,
-    origin: Origin<'_>,
-) -> Result<(Root<'a>, usize), Error> {
+/// Whether the declaration `origin` names is written as a path, so names a
+/// file of its own. Functions are declared by the linked environment file;
+/// codelists and the environment link itself by the project file.
+fn declares_file(project: &ast::Project, origin: Origin<'_>) -> Result<bool, Error> {
     match origin {
-        Origin::Environment(key) => Ok((root, entry_node(root, "environments", key)?)),
-        Origin::Function(name) => {
-            let environment = environment.ok_or(Error::InvalidOrigin)?;
-            Ok((environment, entry_node(environment, "functions", name)?))
-        }
-        Origin::Codelist(index) => Ok((root, codelist_node(root, index)?)),
+        Origin::Environment(key) => project
+            .environments
+            .iter()
+            .find(|environment| environment.language.key() == key)
+            .map(|environment| environment.file.is_some())
+            .ok_or(Error::InvalidOrigin),
+        Origin::Function(name) => Ok(matches!(
+            function_declaration(project, name)?.source,
+            FunctionSource::File(_)
+        )),
+        Origin::Codelist(index) => project
+            .codelists
+            .get(index)
+            .map(|declaration| matches!(declaration.source, CodelistSource::File(_)))
+            .ok_or(Error::InvalidOrigin),
     }
 }
 fn declaration(origin: Origin<'_>) -> Result<Path<'_>, CoreError> {
@@ -359,10 +345,6 @@ fn capture_for<'a, I: Iterator<Item = Capture<'a>> + Clone>(
 fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
     input: &Admission<'a, I>,
 ) -> Result<(), Error> {
-    root_mapping(input.root)?;
-    if let Some(environment) = input.environment {
-        root_mapping(environment)?;
-    }
     let functions = input.draft.functions.as_deref().unwrap_or(&[]);
     if input.function_origins.len() != functions.len()
         || input.codelist_origins.len() != input.draft.codelists.len()
@@ -370,7 +352,7 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             .function_origins
             .iter()
             .zip(functions)
-            .any(|(name, function)| name != &function.name)
+            .any(|(name, function)| *name != function.name.name)
     {
         return Err(Error::InvalidOrigin);
     }
@@ -383,13 +365,7 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
         {
             return Err(Error::InvalidOrigin);
         }
-        let (declaring, node) = authored_node(input.root, input.environment, capture.origin)?;
-        if !matches!(declaring.document.nodes().get(node), Some(N::Text(_)))
-            || !matches!(
-                capture.document.nodes().get(capture.document.root()),
-                Some(N::Mapping(_))
-            )
-        {
+        if !declares_file(input.project, capture.origin)? {
             return Err(Error::InvalidOrigin);
         }
         let included = match capture.origin {
@@ -402,33 +378,25 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             return Err(Error::InvalidOrigin);
         }
     }
-    let entries = input.environment.and_then(|environment| {
-        environment
-            .document
-            .field(environment.document.root(), "functions")
-            .and_then(|node| environment.document.nodes().get(node))
-            .map(|node| (environment, node))
-    });
-    let (environment, mut authored) = match entries {
-        Some((environment, N::Mapping(entries))) => (Some(environment), entries.iter()),
-        None if input.function_origins.is_empty() => (None, [].iter()),
-        _ => return Err(Error::InvalidOrigin),
+    let mut authored = match &input.project.functions {
+        Some(declarations) => declarations.iter(),
+        None if input.function_origins.is_empty() => [].iter(),
+        None => return Err(Error::InvalidOrigin),
     };
     for name in input.function_origins {
-        let environment = environment.ok_or(Error::InvalidOrigin)?;
         // Successful typed declarations are an ordered subsequence of authored
         // declarations. Failed captures leave holes, never reordered identities.
-        let (_, node) = authored
+        let declaration = authored
             .by_ref()
-            .find(|&&(key, _)| {
-                matches!(&environment.document.nodes()[key], N::Text(text) if text == name)
+            .find(|declaration| {
+                declaration
+                    .key
+                    .as_ref()
+                    .is_some_and(|key| key.name == *name)
             })
             .ok_or(Error::InvalidOrigin)?;
         let external = capture_for(&input.captures, Origin::Function(name)).is_some();
-        if !matches!(
-            (environment.document.nodes().get(*node), external),
-            (Some(N::Text(_)), true) | (Some(N::Mapping(_)), false)
-        ) {
+        if external != matches!(declaration.source, FunctionSource::File(_)) {
             return Err(Error::InvalidOrigin);
         }
     }
@@ -437,17 +405,7 @@ fn validate_admission<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             return Err(Error::InvalidOrigin);
         }
         let external = capture_for(&input.captures, Origin::Codelist(index)).is_some();
-        if !matches!(
-            (
-                input
-                    .root
-                    .document
-                    .nodes()
-                    .get(codelist_node(input.root, index)?),
-                external
-            ),
-            (Some(N::Text(_)), true) | (Some(N::Mapping(_)), false)
-        ) {
+        if external != declares_file(input.project, Origin::Codelist(index))? {
             return Err(Error::InvalidOrigin);
         }
     }
@@ -459,12 +417,7 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
 ) -> Result<Record<'a>, Error> {
     let mut record = finding_diagnostic(input.draft, finding, &mut Borrowed)?;
     let raw_path = record.path;
-    let environment = || {
-        input
-            .environment
-            .map(|environment| environment.identity)
-            .ok_or(Error::InvalidOrigin)
-    };
+    let environment = || input.environment.ok_or(Error::InvalidOrigin);
     let (source, declaration) = match finding {
         Finding::Function { function, finding } => {
             let name = input
@@ -525,7 +478,7 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
                 return Err(Error::Core(CoreError::UnavailableShape));
             }
             (
-                external.map_or(input.root.identity, |capture| capture.identity),
+                external.map_or(input.root, |capture| capture.identity),
                 declaration(origin)?,
             )
         }
@@ -535,7 +488,7 @@ fn admission_record<'a, I: Iterator<Item = Capture<'a>> + Clone>(
             (environment()?, raw_path)
         }
     };
-    record.provenance(source, input.root.identity, declaration)?;
+    record.provenance(source, input.root, declaration)?;
     Ok(record)
 }
 /// Consume the supplied capture iterator once, then admit the complete ordered
@@ -546,6 +499,7 @@ pub fn admit_admission<'a, I: Iterator<Item = Capture<'a>>>(
 ) -> Result<AdmissionReport<'a>, Error> {
     let captures: Vec<_> = input.captures.collect();
     let input = Admission {
+        project: input.project,
         root: input.root,
         environment: input.environment,
         draft: input.draft,
@@ -558,6 +512,7 @@ pub fn admit_admission<'a, I: Iterator<Item = Capture<'a>>>(
         admission_record(&input, finding)?;
     }
     Ok(AdmissionReport {
+        project: input.project,
         root: input.root,
         environment: input.environment,
         draft: input.draft,
@@ -570,6 +525,7 @@ pub fn admit_admission<'a, I: Iterator<Item = Capture<'a>>>(
 impl AdmissionReport<'_> {
     pub fn diagnostics(&self) -> Result<Vec<Diagnostic>, Error> {
         let input = Admission {
+            project: self.project,
             root: self.root,
             environment: self.environment,
             draft: self.draft,
@@ -584,33 +540,18 @@ impl AdmissionReport<'_> {
     }
 }
 
-fn root_record<'a>(root: Root<'a>, finding: &'a ScalarFinding) -> Result<Record<'a>, Error> {
-    scalar_diagnostic(root.document, finding, &mut Borrowed).map_err(Error::Core)
-}
-fn validate_scalar<'a>(
-    mut record: Record<'a>,
-    source: &'a str,
-    root: Root<'a>,
-    declaration: Path<'a>,
-) -> Result<(), Error> {
-    record.provenance(source, root.identity, declaration)?;
-    Ok(())
+fn root_record(finding: &ScalarFinding) -> Result<Record<'_>, Error> {
+    scalar_diagnostic(finding, &mut Borrowed).map_err(Error::Core)
 }
 /// Failed inline project scalars report against the project root itself.
 pub fn admit_root_scalars<'a>(
-    root: Root<'a>,
+    root: &'a str,
     findings: &'a [ScalarFinding],
 ) -> Result<RootScalarReport<'a>, Error> {
-    root_mapping(root)?;
     let mut declaration = Path::new();
     declaration.text("$")?;
     for finding in findings {
-        validate_scalar(
-            root_record(root, finding)?,
-            root.identity,
-            root,
-            declaration,
-        )?;
+        root_record(finding)?.provenance(root, root, declaration)?;
     }
     Ok(RootScalarReport { root, findings })
 }
@@ -620,8 +561,8 @@ impl RootScalarReport<'_> {
         declaration.text("$")?;
         let mut diagnostics = Vec::new();
         for finding in self.findings {
-            let mut record = root_record(self.root, finding)?;
-            record.provenance(self.root.identity, self.root.identity, declaration)?;
+            let mut record = root_record(finding)?;
+            record.provenance(self.root, self.root, declaration)?;
             diagnostics.push(record.materialize());
         }
         Ok(diagnostics)
@@ -631,27 +572,24 @@ impl RootScalarReport<'_> {
 /// unchanged: this report includes scalar failures only, never replacing other
 /// original failed captures or deciding their later boundary projection. A
 /// failed function file is declared by the captured environment file; a failed
-/// environment file or codelist file is declared by the project root.
+/// environment file or codelist file is declared by the project file.
 pub fn admit_scalar_sources<'a, I: Iterator<Item = ScalarSource<'a>>>(
-    root: Root<'a>,
-    environment: Option<Root<'a>>,
+    project: &ast::Project,
+    root: &'a str,
     sources: I,
 ) -> Result<ScalarSourcesReport<'a>, Error> {
-    root_mapping(root)?;
     let sources: Vec<_> = sources.collect();
     for (index, source) in sources.iter().enumerate() {
-        let (declaring, node) = authored_node(root, environment, source.capture.origin)?;
         if sources[..index]
             .iter()
             .any(|earlier| earlier.capture.origin == source.capture.origin)
-            || !matches!(declaring.document.nodes().get(node), Some(N::Text(_)))
+            || !declares_file(project, source.capture.origin)?
         {
             return Err(Error::InvalidOrigin);
         }
         let declaration = declaration(source.capture.origin)?;
         for finding in source.findings {
-            validate_scalar(
-                scalar_diagnostic(source.capture.document, finding, &mut Borrowed)?,
+            scalar_diagnostic(finding, &mut Borrowed)?.provenance(
                 source.capture.identity,
                 root,
                 declaration,
@@ -666,9 +604,8 @@ impl ScalarSourcesReport<'_> {
         for source in self.sources.iter() {
             let declaration = declaration(source.capture.origin)?;
             for finding in source.findings {
-                let mut record =
-                    scalar_diagnostic(source.capture.document, finding, &mut Borrowed)?;
-                record.provenance(source.capture.identity, self.root.identity, declaration)?;
+                let mut record = scalar_diagnostic(finding, &mut Borrowed)?;
+                record.provenance(source.capture.identity, self.root, declaration)?;
                 diagnostics.push(record.materialize());
             }
         }

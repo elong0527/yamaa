@@ -154,38 +154,26 @@ impl Project {
             schema,
         } = crate::file_workflow::capture_project(project, host, resolver)
             .map_err(|error| crate::project_application::workflow_rejection(&error))?;
-        let root = environment.root();
-        let identity = root.source().identity.clone();
-        let document = &root.normalized().document;
-        let located =
-            yamaa_core::submission_document::locate(document, document.root()).map_err(|_| {
+        let identity = environment.root().source().identity.clone();
+        let declarations = environment
+            .project()
+            .and_then(|project| project.submission.as_ref().ok())
+            .ok_or_else(|| {
                 crate::file_application::rejected(Stage::Project, Fault::ProjectSections)
             })?;
         let mut sections = Vec::new();
         let mut written = Vec::new();
         for section in scope::SECTIONS {
-            let Some(&(_, node)) = located
-                .sections()
+            let Some(declared) = declarations
+                .sections
                 .iter()
-                .find(|(declared, _)| *declared == section)
+                .find(|declared| declared.family == section)
             else {
                 continue;
             };
-            let define = document
-                .field(node, "define")
-                .is_some_and(|define| !matches!(document.nodes()[define], N::Null));
-            sections.push((section, define));
-            let specs = document
-                .field(node, "specs")
-                .map(|specs| &document.nodes()[specs]);
-            let Some(N::Sequence(specs)) = specs else {
-                continue;
-            };
-            for (index, &spec) in specs.iter().enumerate() {
-                let path = text(document, spec).ok_or_else(|| {
-                    crate::file_application::rejected(Stage::Project, Fault::ProjectSections)
-                })?;
-                written.push((section, index, path.to_owned()));
+            sections.push((section, declared.define.is_some()));
+            for (index, spec) in declared.specs.iter().enumerate() {
+                written.push((section, index, spec.text.clone()));
             }
         }
         let listed = written

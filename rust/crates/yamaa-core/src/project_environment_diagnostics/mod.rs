@@ -2,9 +2,10 @@
 //! Resource exhaustion and host failures remain outside semantic vocabulary.
 use crate::json::Value as JsonValue;
 use crate::{
+    ast,
     diagnostic::{ConditionCode as C, Diagnostic},
     project_environment::{Draft, Finding, LockKind},
-    project_function::{Definition, Finding as F},
+    project_function::Finding as F,
     project_terminology::{Fault, Finding as T},
     value::Value,
 };
@@ -53,17 +54,16 @@ impl ReadFailure {
     }
 }
 
-/// Project scalar failures against their retained normalized arena. Integer
+/// Project scalar failures with the written text each finding keeps. Integer
 /// values outside runtime i64 keep their exact mathematical decimal text.
 /// A normalized-shape contradiction has no fabricated language condition.
 pub fn scalar_diagnostics(
-    document: &crate::schema::Document,
     findings: &[crate::project_function_document::Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
     let mut project = Owned;
     findings
         .iter()
-        .map(|finding| scalar_diagnostic(document, finding, &mut project))
+        .map(|finding| scalar_diagnostic(finding, &mut project))
         .collect()
 }
 
@@ -93,40 +93,22 @@ trait Project<'a> {
     ) -> Result<(), Error>;
 }
 fn scalar_diagnostic<'a, B: Project<'a>>(
-    document: &'a crate::schema::Document,
     finding: &'a crate::project_function_document::Finding,
     project: &mut B,
 ) -> Result<B::Output, Error> {
-    use crate::{project_function_document::Kind, schema::DocumentNode as N};
-    let node = document
-        .nodes()
-        .get(finding.node)
-        .ok_or(Error::InvalidIndex)?;
+    use crate::project_function_document::Kind;
     let reason = match finding.kind {
         Kind::IntegerRange => "integer_out_of_range",
         Kind::InvalidDate => "invalid_date",
         Kind::InvalidDateTime => "invalid_datetime",
         Kind::NormalizedShape => return Err(Error::UnavailableShape),
     };
+    let value = finding.value.as_deref().ok_or(Error::UnavailableShape)?;
     let mut d = project.start(C::ProjectEnvironmentInvalid, &finding.path)?;
     project.context(&mut d, "reason", reason)?;
-    match (finding.kind, node) {
-        (Kind::IntegerRange, N::Integer(text)) => project.integer(&mut d, "value", text)?,
-        (Kind::InvalidDate | Kind::InvalidDateTime, N::Mapping(_)) => {
-            let field = if finding.kind == Kind::InvalidDate {
-                "date"
-            } else {
-                "datetime"
-            };
-            let text = document
-                .field(finding.node, field)
-                .and_then(|node| document.nodes().get(node));
-            let Some(N::Text(text)) = text else {
-                return Err(Error::UnavailableShape);
-            };
-            project.context(&mut d, "value", text)?;
-        }
-        _ => return Err(Error::UnavailableShape),
+    match finding.kind {
+        Kind::IntegerRange => project.integer(&mut d, "value", value)?,
+        _ => project.context(&mut d, "value", value)?,
     }
     Ok(d)
 }
@@ -188,7 +170,7 @@ fn lock(value: LockKind) -> &'static str {
         LockKind::Renv => "renv",
     }
 }
-fn function(draft: &Draft, index: usize) -> Result<&Definition, Error> {
+fn function(draft: &Draft, index: usize) -> Result<&ast::Function, Error> {
     draft
         .functions
         .as_deref()
@@ -196,13 +178,13 @@ fn function(draft: &Draft, index: usize) -> Result<&Definition, Error> {
         .ok_or(Error::InvalidIndex)
 }
 fn function_diagnostic<'a, B: Project<'a>>(
-    definition: &'a Definition,
+    definition: &'a ast::Function,
     finding: &'a F,
     project: &mut B,
 ) -> Result<B::Output, Error> {
     let mut d = project.start(C::ProjectEnvironmentInvalid, "functions.")?;
-    project.append(&mut d, &definition.name)?;
-    project.context(&mut d, "function", &definition.name)?;
+    project.append(&mut d, &definition.name.name)?;
+    project.context(&mut d, "function", &definition.name.name)?;
     let (reason, field) = match finding {
         F::InvalidName => ("invalid_function_name", ""),
         F::InvalidCallable => ("invalid_callable", ".function"),
@@ -223,7 +205,7 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 .ok_or(Error::InvalidIndex)?;
             project.append(&mut d, ".params")?;
             project.index(&mut d, *parameter)?;
-            project.context(&mut d, "parameter", &p.name)?;
+            project.context(&mut d, "parameter", &p.name.name)?;
             match finding {
                 F::InvalidParameterName { .. } => ("invalid_parameter_name", ".name"),
                 F::DuplicateParameter { .. } => ("duplicate_parameter", ".name"),
@@ -251,7 +233,7 @@ fn function_diagnostic<'a, B: Project<'a>>(
             let c = definition.tests.get(case).ok_or(Error::InvalidIndex)?;
             project.append(&mut d, ".tests")?;
             project.index(&mut d, case)?;
-            project.context(&mut d, "case", &c.id)?;
+            project.context(&mut d, "case", &c.id.text)?;
             match case_finding {
                 F::InvalidCaseId { .. } => ("invalid_case_id", ".id"),
                 F::DuplicateCaseId { .. } => ("duplicate_case_id", ".id"),
@@ -259,7 +241,7 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 F::DuplicateCoverage { tag, .. }
                 | F::InvalidCoverage { tag, .. }
                 | F::UnsupportedEvidence { tag, .. } => {
-                    let text = c.covers.get(*tag).ok_or(Error::InvalidIndex)?;
+                    let text = &c.covers.get(*tag).ok_or(Error::InvalidIndex)?.text;
                     project.append(&mut d, ".covers")?;
                     project.index(&mut d, *tag)?;
                     project.context(&mut d, "tag", text)?;
@@ -275,8 +257,8 @@ fn function_diagnostic<'a, B: Project<'a>>(
                 | F::ArgumentType { argument, .. } => {
                     let (name, value) = c.args.get(*argument).ok_or(Error::InvalidIndex)?;
                     project.append(&mut d, ".args.")?;
-                    project.append(&mut d, name)?;
-                    project.context(&mut d, "argument", name)?;
+                    project.append(&mut d, &name.name)?;
+                    project.context(&mut d, "argument", &name.name)?;
                     project.scalar(&mut d, "value", value)?;
                     let reason = match case_finding {
                         F::DuplicateArgument { .. } => "duplicate_case_argument",
@@ -291,8 +273,8 @@ fn function_diagnostic<'a, B: Project<'a>>(
                         .get(*parameter)
                         .ok_or(Error::InvalidIndex)?;
                     project.append(&mut d, ".args.")?;
-                    project.append(&mut d, &p.name)?;
-                    project.context(&mut d, "argument", &p.name)?;
+                    project.append(&mut d, &p.name.name)?;
+                    project.context(&mut d, "argument", &p.name.name)?;
                     ("missing_required_case_argument", "")
                 }
                 F::InvalidResult { .. } => {
@@ -331,7 +313,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
     project.index(&mut d, finding.source)?;
     project.append(&mut d, ".codelists")?;
     project.index(&mut d, finding.codelist)?;
-    project.context(&mut d, "codelist", &list.id)?;
+    project.context(&mut d, "codelist", &list.id.name)?;
     match finding.fault {
         Fault::DuplicateId => {
             project.append(&mut d, ".id")?;
@@ -340,12 +322,12 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
         Fault::DuplicateName => {
             project.append(&mut d, ".name")?;
             project.context(&mut d, "field", "name")?;
-            project.context(&mut d, "name", &list.name)?;
+            project.context(&mut d, "name", &list.name.text)?;
         }
         // Only a text codelist's format name is checked for its prefix.
         Fault::FormatNamePrefix => {
             project.append(&mut d, ".format_name")?;
-            let format = list.format_name.as_deref().ok_or(Error::InvalidIndex)?;
+            let format = &list.format_name.as_ref().ok_or(Error::InvalidIndex)?.text;
             project.context(&mut d, "value", format)?;
             project.context(&mut d, "data_type", "text")?;
         }
@@ -369,7 +351,7 @@ fn terminology_diagnostic<'a, B: Project<'a>>(
                 Fault::ExtendedAlias { .. } => {
                     project.append(&mut d, ".alias")?;
                     project.scalar(&mut d, "value", value)?;
-                    let alias = entry.alias.as_deref().ok_or(Error::InvalidIndex)?;
+                    let alias = &entry.alias.as_ref().ok_or(Error::InvalidIndex)?.text;
                     project.context(&mut d, "alias", alias)?;
                 }
                 _ => {
@@ -409,8 +391,8 @@ fn finding_diagnostic<'a, B: Project<'a>>(
         Finding::DuplicateFunction { function: index } => {
             let definition = function(draft, *index)?;
             let mut d = project.start(C::ProjectEnvironmentInvalid, "functions.")?;
-            project.append(&mut d, &definition.name)?;
-            project.context(&mut d, "function", &definition.name)?;
+            project.append(&mut d, &definition.name.name)?;
+            project.context(&mut d, "function", &definition.name.name)?;
             project.context(&mut d, "reason", "duplicate_function")?;
             Ok(d)
         }

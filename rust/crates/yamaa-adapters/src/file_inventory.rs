@@ -33,9 +33,10 @@ fn capture(
     resources: &mut Resources,
     schema: &Arc<CapturedSchema>,
     root: &crate::specification_source::CapturedDocument,
+    project: &yamaa_core::ast::Project,
 ) -> Result<service::Captured<PreparedDocument>, file_preparation::Error> {
     service::capture(
-        &root.normalized().document,
+        project,
         &root.source().identity,
         &mut Native {
             resources,
@@ -57,10 +58,10 @@ pub(crate) fn prepare(
     if !requested || environment.inventory_captured() {
         return Ok(());
     }
-    let Some(root) = environment.root_optional() else {
+    let (Some(root), Some(project)) = (environment.root_optional(), environment.project()) else {
         return Ok(());
     };
-    let captured = capture(resources, schema, root)?;
+    let captured = capture(resources, schema, root, project)?;
     // Metadata inheritance selects its own codec entry. Restore the admitted
     // domain owner before ordinary source paths acquire data-read authority.
     resources

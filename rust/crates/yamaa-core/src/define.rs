@@ -4,20 +4,21 @@
 use crate::json::Value as JsonValue;
 use crate::{
     application_issue::{Fault, Stage},
+    ast::{self, Transport},
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
     project_terminology::Catalogue,
     resource::WrittenPath,
     schema::{Document, DocumentNode},
     submission_composition::{self as composition, Finding},
-    submission_document::{self, Transport},
     submission_transport,
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
 use std::vec;
 
 pub struct EnvironmentView<'a> {
-    pub document: &'a Document,
+    /// The project file, lowered.
+    pub project: &'a ast::Project,
     pub catalogue: &'a Catalogue,
     pub source: &'a str,
 }
@@ -317,8 +318,7 @@ impl<P: Ports> Application<P> {
                 .map_err(Failure::Port)?,
         );
         let environment = P::environment(self.environment.as_ref().expect("captured environment"));
-        let root = environment.document;
-        let declarations = submission_document::decode(root, root.root()).map_err(|_| {
+        let declarations = environment.project.submission.as_ref().map_err(|_| {
             Failure::Metadata(vec![Finding::cause(
                 ConditionCode::SubmissionMetadataMissing,
                 standard,
@@ -329,9 +329,9 @@ impl<P: Ports> Application<P> {
         // additionally requires the study, the selected section and its guide
         // and target, and reports every one that is missing together.
         let required = composition::Required::admit(
-            declarations.study(),
+            declarations.study.as_ref(),
             declarations
-                .sections()
+                .sections
                 .iter()
                 .find(|section| section.family == family),
             family,
@@ -341,9 +341,9 @@ impl<P: Ports> Application<P> {
         let define = required.define;
         let identity = environment.source;
         let define_location = ports
-            .location(&format!("{standard}.define"), identity, &define.value)
+            .location(&format!("{standard}.define"), identity, &define.text)
             .map_err(Failure::Port)?;
-        let transport = section.datasets.as_ref().map(|field| field.value);
+        let transport = section.transport;
         let mut locations = Vec::new();
         let mut hrefs = Vec::new();
         let mut outputs = Vec::new();
@@ -351,10 +351,10 @@ impl<P: Ports> Application<P> {
         // Every file this generation writes, the document first (JSON-2).
         let mut written = vec![define_location.clone()];
         let mut inputs = Vec::new();
-        for (index, spec) in section.specs.value.iter().enumerate() {
+        for (index, spec) in section.specs.iter().enumerate() {
             let path = format!("{standard}.specs[{index}]");
             let document = ports
-                .capture_specification(&path, identity, &spec.value)
+                .capture_specification(&path, identity, &spec.text)
                 .map_err(Failure::Port)?;
             let view = P::specification(&document);
             let origin = view.output.ok_or_else(|| {
@@ -394,7 +394,7 @@ impl<P: Ports> Application<P> {
             let (href, target) = match transport {
                 Some(transport) if !declares_no_data(view.document) => {
                     let file = format!("{}.{}", id.to_ascii_lowercase(), transport.extension());
-                    let target_written = ports.transport_written(&define.value, &file);
+                    let target_written = ports.transport_written(&define.text, &file);
                     let target = ports
                         .location(&format!("{path}.transport"), identity, &target_written)
                         .map_err(Failure::Port)?;
@@ -474,18 +474,18 @@ impl<P: Ports> Application<P> {
                 || crate::submission_origin::names_predecessor(document)
         }) {
             for other in declarations
-                .sections()
+                .sections
                 .iter()
                 .filter(|other| other.family != family)
             {
                 let key = composition::family_name(other.family);
-                for (index, spec) in other.specs.value.iter().enumerate() {
+                for (index, spec) in other.specs.iter().enumerate() {
                     others.push(
                         ports
                             .capture_specification(
                                 &format!("{key}.specs[{index}]"),
                                 identity,
-                                &spec.value,
+                                &spec.text,
                             )
                             .map_err(Failure::Port)?,
                     );
@@ -583,10 +583,10 @@ impl<P: Ports> Application<P> {
             }
         }
         let target = ports
-            .target(&format!("{standard}.define"), identity, &define.value)
+            .target(&format!("{standard}.define"), identity, &define.text)
             .map_err(Failure::Port)?;
         self.artifacts.push(Artifact {
-            written: define.value.clone(),
+            written: define.text.clone(),
             target,
             bytes: xml,
             state: PublicationState::Ready,

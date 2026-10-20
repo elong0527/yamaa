@@ -204,12 +204,14 @@ impl FileProject {
                 .or_else(|| changed::links(document, &self.links, identity, failure))
                 .or_else(|| {
                     let root = captured.root_optional()?;
-                    changed::inventory(root, captured.inventory_documents(), identity, failure)
+                    let project = captured.project()?;
+                    changed::inventory(project, captured.inventory_documents(), identity, failure)
                         .or_else(|| {
                             let environment = changed::Environment {
                                 written: captured.written()?,
                                 host: self.run.environment().host(),
                                 root,
+                                project,
                                 environment_file: captured.environment_file(),
                                 lock: captured.lock(),
                                 captures: captured.captures(),

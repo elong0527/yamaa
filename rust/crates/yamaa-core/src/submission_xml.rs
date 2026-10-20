@@ -1,11 +1,11 @@
 //! Deterministic UTF-8 Define-XML for the shared admitted column metadata profile.
 use crate::{
     application_issue::{Fault, Stage},
+    ast,
     diagnostic::ConditionCode,
     limits::Limits,
-    project_terminology as ct, specification_submission_document as s,
+    specification_submission_document as s,
     submission_composition::{self as model, Finding, Study},
-    submission_document as e,
     value::Value,
 };
 use std::collections::BTreeSet;
@@ -389,15 +389,15 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
 fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
     for list in &study.codelists {
         let c = &list.declaration;
-        let mut code = Element::new("CodeList", &format!("codelists.{}", c.id))
-            .attr("OID", format!("CL.{}", c.id))
-            .attr("Name", &c.name)
+        let mut code = Element::new("CodeList", &format!("codelists.{}", c.id.name))
+            .attr("OID", format!("CL.{}", c.id.name))
+            .attr("Name", &c.name.text)
             .attr(
                 "DataType",
                 match c.data_type {
-                    ct::DataType::Text => "text",
-                    ct::DataType::Integer => "integer",
-                    ct::DataType::Float => "float",
+                    ast::CodelistType::Text => "text",
+                    ast::CodelistType::Integer => "integer",
+                    ast::CodelistType::Float => "float",
                 },
             )
             .optional(
@@ -408,7 +408,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
                 "def:IsNonStandard",
                 (list.standard.is_none() && c.items.is_some()).then_some("Yes"),
             )
-            .optional("SASFormatName", c.format_name.as_ref());
+            .optional("SASFormatName", c.format_name.as_ref().map(|t| &t.text));
         for item in c.items.as_deref().unwrap_or(&[]) {
             let mut node = Element::new(
                 if item.decode.is_some() {
@@ -422,13 +422,13 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
             .optional("Rank", item.rank)
             .optional("def:ExtendedValue", item.extended.then_some("Yes"));
             if let Some(decode) = &item.decode {
-                node.translated("Decode", decode, language);
+                node.translated("Decode", &decode.text, language);
             }
             if let Some(alias) = &item.alias {
                 node.push(
                     Element::new("Alias", &code.path)
                         .attr("Context", "nci:ExtCodeID")
-                        .attr("Name", alias),
+                        .attr("Name", &alias.text),
                 );
             }
             code.push(node);
@@ -436,16 +436,16 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
         if let Some(external) = &c.external {
             code.push(
                 Element::new("ExternalCodeList", &code.path)
-                    .attr("Dictionary", &external.dictionary)
-                    .attr("Version", &external.version)
-                    .optional("href", external.href.as_ref()),
+                    .attr("Dictionary", &external.dictionary.text)
+                    .attr("Version", &external.version.text)
+                    .optional("href", external.href.as_ref().map(|t| &t.text)),
             );
         }
         if let Some(alias) = &c.alias {
             code.push(
                 Element::new("Alias", &code.path)
                     .attr("Context", "nci:ExtCodeID")
-                    .attr("Name", alias),
+                    .attr("Name", &alias.text),
             );
         }
         metadata.push(code);
@@ -458,7 +458,7 @@ fn push_codelists(metadata: &mut Element, study: &Study, language: &str) {
 pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     validate_profile(study)?;
     let section = &study.section;
-    let language = &section.xml_lang.value;
+    let language = &section.xml_lang.text;
     let mut odm = Element::new("ODM", "study")
         .attr("xmlns", "http://www.cdisc.org/ns/odm/v1.3")
         .attr("xmlns:def", "http://www.cdisc.org/ns/def/v2.1")
@@ -467,23 +467,23 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
         .attr("FileType", "Snapshot")
         .attr("FileOID", &study.file_oid)
         .attr("CreationDateTime", &study.created)
-        .optional("Originator", section.originator.as_ref().map(|v| &v.value))
+        .optional("Originator", section.originator.as_ref().map(|v| &v.text))
         .attr("SourceSystem", "yamaa")
         .attr("SourceSystemVersion", &study.source_version)
         .attr(
             "def:Context",
-            match section.context.value {
-                e::Context::Submission => "Submission",
-                e::Context::Other => "Other",
+            match section.context {
+                ast::DefineContext::Submission => "Submission",
+                ast::DefineContext::Other => "Other",
             },
         );
     let mut root =
-        Element::new("Study", "study").attr("OID", format!("STDY.{}", study.study.id.value));
+        Element::new("Study", "study").attr("OID", format!("STDY.{}", study.study.id.name));
     let mut globals = Element::new("GlobalVariables", "study");
     for (name, value) in [
-        ("StudyName", &study.study.name.value),
-        ("StudyDescription", &study.study.description.value),
-        ("ProtocolName", &study.study.protocol_name.value),
+        ("StudyName", &study.study.name.text),
+        ("StudyDescription", &study.study.description.text),
+        ("ProtocolName", &study.study.protocol_name.text),
     ] {
         let mut node = Element::new(name, "study");
         node.text = Some(value.clone());
@@ -509,15 +509,15 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     }
     metadata.push(standards);
     for (kind, name) in [
-        (e::DocumentKind::AnnotatedCrf, "def:AnnotatedCRF"),
-        (e::DocumentKind::Supplemental, "def:SupplementalDoc"),
+        (ast::DocumentKind::AnnotatedCrf, "def:AnnotatedCRF"),
+        (ast::DocumentKind::Supplemental, "def:SupplementalDoc"),
     ] {
         let mut parent = Element::new(name, "documents");
-        for document in &section.documents.value {
-            if document.kind.value == kind {
+        for document in &section.documents {
+            if document.kind == kind {
                 parent.push(
                     Element::new("def:DocumentRef", "documents")
-                        .attr("leafID", format!("LF.{}", document.id.value)),
+                        .attr("leafID", format!("LF.{}", document.id.name)),
                 );
             }
         }
@@ -665,11 +665,11 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
             metadata.push(node);
         }
     }
-    for (index, document) in section.documents.value.iter().enumerate() {
+    for (index, document) in section.documents.iter().enumerate() {
         metadata.leaf(
-            &document.id.value,
-            &document.link.value,
-            &document.title.value,
+            &document.id.name,
+            &document.link.text,
+            &document.title.text,
             Some(&format!(
                 "{}.documents[{index}].title",
                 model::family_name(section.family)
@@ -712,7 +712,7 @@ pub fn render(study: &Study) -> Result<Vec<u8>, Finding> {
     if let Some(stylesheet) = &section.stylesheet {
         out.push_str(&format!(
             "<?xml-stylesheet type=\"text/xsl\" href=\"{}\"?>\n",
-            escape(&stylesheet.value, "stylesheet", true)?
+            escape(&stylesheet.text, "stylesheet", true)?
         ));
     }
     odm.write(0, &mut out)?;
@@ -762,11 +762,11 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
         let declaration = &list.declaration;
         if declaration.items.as_ref().is_some_and(Vec::is_empty) {
             return Err(invalid(
-                &format!("codelists.{}", declaration.id),
+                &format!("codelists.{}", declaration.id.name),
                 "CodeList requires an item or dictionary",
             ));
         }
-        if let Some(format) = &declaration.format_name {
+        if let Some(format) = declaration.format_name.as_ref().map(|t| &t.text) {
             let mut bytes = format.bytes();
             if format.len() > 8
                 || !bytes
@@ -775,7 +775,7 @@ fn validate_profile(study: &Study) -> Result<(), Finding> {
                 || !bytes.all(|c| c.is_ascii_alphanumeric() || b"_.".contains(&c))
             {
                 return Err(invalid(
-                    &format!("codelists.{}.format_name", declaration.id),
+                    &format!("codelists.{}.format_name", declaration.id.name),
                     "SASFormatName facet",
                 ));
             }
