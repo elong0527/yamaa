@@ -60,6 +60,16 @@ KEEPS_SYMBOLS = "the R package keeps its symbols, as CRAN's Repository Policy as
 LINKER_STRIP = {"s", "S", "x", "discard-all"}
 # make's $(strip ...) function trims whitespace and strips nothing.
 MAKE_STRIP = re.compile(r"\$[({]strip\s")
+# make's conditional directives, and the line that opens a define body.
+CONDITIONAL = re.compile(r"(?:ifeq|ifneq|ifdef|ifndef|else|endif)\b")
+DEFINE = re.compile(r"(?:(?:override|export|private)\s+)*define\b")
+# A variable assignment, with its modifiers, or another directive: a make line
+# that opens no rule.
+ASSIGNMENT = re.compile(
+    r"(?:(?:override|export|unexport|private)\s+)*"
+    r"(?:[^\s:#=]+\s*(?::{1,3}=|[+?!]?=)"
+    r"|(?:undefine|vpath|-?include|sinclude|-?load)\b)"
+)
 
 
 def makevars_profile(label, makevars):
@@ -70,7 +80,7 @@ def makevars_profile(label, makevars):
     """
     commands = [
         line
-        for line in makevars.replace("\\\n", " ").splitlines()
+        for line in makevars.replace("\r\n", "\n").replace("\\\n", " ").splitlines()
         if '"$(CARGO)" build ' in line
     ]
     if len(commands) != 1:
@@ -91,49 +101,113 @@ def makevars_profile(label, makevars):
     return profiles[0] if profiles else "dev"
 
 
-def strips_at_link(previous, word):
-    """Whether a word outside the recipes, after `previous`, strips at the link."""
-    if word.startswith("-Wl,"):
-        options = word.split(",")[1:]
-    elif previous == "-Xlinker":
-        options = [word]
-    else:
-        return word == "-s"
-    return any(
-        option.startswith("-") and option.lstrip("-") in LINKER_STRIP
-        for option in options
-    )
+def logical_lines(makevars):
+    """make's logical lines, each as its physical lines: a line that ends in a
+    backslash continues on the next, and make reads CRLF as LF."""
+    lines = [[]]
+    for line in makevars.replace("\r\n", "\n").split("\n"):
+        lines[-1].append(line)
+        if not line.endswith("\\"):
+            lines.append([])
+    return [physical for physical in lines if physical]
+
+
+def opens_rule(text):
+    """Whether a make line, neither a recipe nor a conditional, opens a rule:
+    a target line, as opposed to an assignment, a directive or a
+    target-specific variable."""
+    if ASSIGNMENT.match(text):
+        return False
+    depth = 0
+    for index, char in enumerate(text):
+        depth += (char in "({") - (char in ")}")
+        if char == ":" and depth <= 0:
+            rest = text[index:].lstrip(":")
+            if not rest.startswith("="):
+                return not ASSIGNMENT.match(rest.lstrip())
+    return False
+
+
+def strips_at_link(previous, word, recipe):
+    """Whether a word, after `previous`, passes a strip option to a link.
+
+    The word's comma-separated pieces count as words, as in make's
+    $(if $(DEBUG),,-s), and make's parentheses and braces around them hide
+    nothing. The pieces after -Wl, and a word after -Xlinker, are linker
+    options. The compiler driver's -s counts outside recipes only: a recipe's
+    -s belongs to its own command, as in ln -s.
+    """
+    linker = previous.split(",")[-1].strip("(){}") == "-Xlinker"
+    for part in word.split(","):
+        piece = part.strip("(){}")
+        if piece == "-Wl":
+            linker = True
+        elif piece == "-s" and not recipe:
+            return True
+        elif linker and piece.startswith("-") and piece.lstrip("-") in LINKER_STRIP:
+            return True
+    return False
+
+
+def refuse_strip(label, line, recipe):
+    """Refuse a make line that mentions strip or passes a strip option."""
+    words = MAKE_STRIP.sub(" ", line.replace('"', "").replace("'", "")).split()
+    for previous, word in zip(["", *words], words):
+        if "strip" in word.lower():
+            shown = word
+        elif strips_at_link(previous, word, recipe):
+            shown = word.strip("(){}")
+        else:
+            continue
+        problem = (
+            f"a recipe runs {shown}"
+            if recipe
+            else f"{shown} strips the shared object at R's link step"
+        )
+        raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
 
 
 def check_r_link(label, makevars):
     """Refuse a Makevars template that would strip the shared object at R's
     link step.
 
-    Outside comment lines, nothing may mention strip: a command such as strip
-    or $(STRIP_SHARED_LIB) in a recipe, or an option such as -Wl,--strip-all.
-    Nor may a line outside the recipes, such as PKG_LIBS or a variable that it
-    reads, pass the compiler driver's -s or a linker option in LINKER_STRIP.
-    make's $(strip ...) function is admitted, but not an option inside it.
+    Outside comments, nothing may mention strip: a command such as strip or
+    $(STRIP_SHARED_LIB) in a recipe, or an option such as -Wl,--strip-all. No
+    line may pass a linker option in LINKER_STRIP after -Wl, or -Xlinker.
+    Outside the recipes, in PKG_LIBS or a variable that it reads, no line may
+    pass the compiler driver's -s either. make's $(strip ...) function is
+    admitted, but not an option inside it.
+
+    The lines are read as make reads them. A tab-led line is a recipe only
+    while a rule is open: from a target line, through blank and comment
+    lines, to the next other line. A define body is a variable's value,
+    whatever its lines look like. make keeps a rule open through a
+    conditional, but this check, which evaluates none, closes it there, since
+    a rule that one branch opens is not open in the other.
     """
-    for line in makevars.replace("\\\n", " ").splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        recipe = line.startswith("\t")
-        words = [word.strip("\"'") for word in MAKE_STRIP.sub(" ", line).split()]
-        # make's delimiters, such as the ) that $(strip -s) leaves, hide no option.
-        bare = [word.strip("(){}") for word in words]
-        for previous, word, option in zip(["", *bare], words, bare):
-            if "strip" in word.lower():
-                problem = (
-                    f"a recipe runs {word}"
-                    if recipe
-                    else f"{word} strips the shared object at R's link step"
-                )
-            elif not recipe and strips_at_link(previous, option):
-                problem = f"{option} strips the shared object at R's link step"
+    rule, depth = False, 0
+    for physical in logical_lines(makevars):
+        line = " ".join(part.removesuffix("\\") for part in physical)
+        text = line.strip()
+        if depth:
+            # make counts define and endef on lines that do not start with a tab.
+            if not line.startswith("\t"):
+                depth += bool(re.match(r"define\b", text))
+                depth -= bool(re.match(r"endef\b", text))
+            if depth:
+                refuse_strip(label, line, recipe=False)
+        elif rule and line.startswith("\t"):
+            # The shell reads a recipe line by line, so a comment that ends in
+            # a backslash does not hide the line after it.
+            for part in physical:
+                if not part.lstrip().startswith("#"):
+                    refuse_strip(label, part.removesuffix("\\"), recipe=True)
+        elif text and not text.startswith("#"):
+            refuse_strip(label, line, recipe=False)
+            if DEFINE.match(text):
+                rule, depth = False, 1
             else:
-                continue
-            raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
+                rule = not CONDITIONAL.match(text) and opens_rule(text)
 
 
 def check_r_symbols(label, manifest, config, makevars):
