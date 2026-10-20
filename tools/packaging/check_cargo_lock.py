@@ -13,6 +13,7 @@ import argparse
 import dataclasses
 import io
 import json
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -49,6 +50,16 @@ LAYOUTS = {
 # theirs with the dist profile (rust/Cargo.toml).
 R_PACKAGE = ROOT / "R/yamaa"
 R_MAKEVARS = ("src/Makevars.in", "src/Makevars.win.in")
+KEEPS_SYMBOLS = "the R package keeps its symbols, as CRAN's Repository Policy asks"
+# R's linker, not rustc, links the engine's static library into the shared
+# object, so Cargo's strip never reaches it: R's link step is the one that
+# could strip it. These linker options remove symbols or debug information,
+# as the compiler driver passes them on after -Wl, or -Xlinker: -s
+# (--strip-all), -S (--strip-debug) and -x (--discard-all) for GNU ld and lld,
+# and -S and -x for macOS's ld64.
+LINKER_STRIP = {"s", "S", "x", "discard-all"}
+# make's $(strip ...) function trims whitespace and strips nothing.
+MAKE_STRIP = re.compile(r"\$[({]strip\s")
 
 
 def makevars_profile(label, makevars):
@@ -80,6 +91,47 @@ def makevars_profile(label, makevars):
     return profiles[0] if profiles else "dev"
 
 
+def strips_at_link(previous, word):
+    """Whether a word outside the recipes, after `previous`, strips at the link."""
+    if word.startswith("-Wl,"):
+        options = word.split(",")[1:]
+    elif previous == "-Xlinker":
+        options = [word]
+    else:
+        return word == "-s"
+    return any(
+        option.startswith("-") and option.lstrip("-") in LINKER_STRIP
+        for option in options
+    )
+
+
+def check_r_link(label, makevars):
+    """Refuse a Makevars template that would strip the shared object at R's
+    link step.
+
+    Outside comment lines, nothing may mention strip: a command such as strip
+    or $(STRIP_SHARED_LIB) in a recipe, or an option such as -Wl,--strip-all.
+    Nor may a line outside the recipes, such as PKG_LIBS or a variable that it
+    reads, pass the compiler driver's -s or a linker option in LINKER_STRIP.
+    make's $(strip ...) function is admitted.
+    """
+    for line in makevars.replace("\\\n", " ").splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        recipe = line.startswith("\t")
+        words = [word.strip("\"'") for word in MAKE_STRIP.sub(" ", line).split()]
+        for previous, word in zip(["", *words], words):
+            if "strip" in word.lower() or (
+                not recipe and strips_at_link(previous, word)
+            ):
+                problem = (
+                    f"a recipe runs {word}"
+                    if recipe
+                    else f"{word} strips the shared object at R's link step"
+                )
+                raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
+
+
 def check_r_symbols(label, manifest, config, makevars):
     """Refuse an R build that would strip its shared object.
 
@@ -87,7 +139,8 @@ def check_r_symbols(label, manifest, config, makevars):
     and Cargo configuration, and `makevars` maps each Makevars template's name
     to its text. Neither the profile that a template's cargo build selects nor
     a profile that it inherits from may set strip, other than to false or
-    "none", in the manifest or in the configuration.
+    "none", in the manifest or in the configuration, and no template may
+    strip at R's link step (check_r_link).
     """
     sources = [
         ("the Cargo configuration", tomllib.loads(config).get("profile", {})),
@@ -95,6 +148,7 @@ def check_r_symbols(label, manifest, config, makevars):
     ]
     for name, text in makevars.items():
         selected = makevars_profile(f"{label}: {name}", text)
+        check_r_link(f"{label}: {name}", text)
         profile, seen = selected, set()
         while profile is not None and profile not in seen:
             seen.add(profile)
@@ -107,8 +161,7 @@ def check_r_symbols(label, manifest, config, makevars):
                     )
                     raise ValueError(
                         f"{label}: {where} sets strip in the {profile} profile, "
-                        f"{use}; the R package keeps its symbols, as CRAN's "
-                        "Repository Policy asks"
+                        f"{use}; {KEEPS_SYMBOLS}"
                     )
             profile = next(
                 (
@@ -229,8 +282,8 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
     each crates.io crate of that lock, with every file that its
     `.cargo-checksum.json` lists and no other: in vendor/ in a Python source
     archive, and in src/rust/vendor.tar.xz in an R source package. An R source
-    package's Makevars must build with a profile that strips nothing
-    (check_r_symbols). Returns the host and the lock's packages.
+    package's Makevars must strip nothing, through the Cargo profile or at R's
+    link step (check_r_symbols). Returns the host and the lock's packages.
     """
     canonical = (workspace / "Cargo.lock").read_bytes().decode()
     with tarfile.open(path, "r:gz") as archive:
@@ -333,7 +386,10 @@ def main():
                 for name in R_MAKEVARS
             },
         )
-        print("R package: the profile that its Makevars build with strips nothing")
+        print(
+            "R package: its Makevars strip nothing, through the Cargo profile "
+            "or at R's link step"
+        )
     if args.output_dir:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         (args.output_dir / "cargo-metadata.json").write_text(metadata)

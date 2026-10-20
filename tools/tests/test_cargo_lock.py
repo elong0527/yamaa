@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -366,6 +367,11 @@ class BundleArchiveTests(unittest.TestCase):
                     ValueError, f"in the dist profile, which {name} builds with"
                 ):
                     self.check(dict(entries, **{name: dist}))
+                linked = entries[name] + b"PKG_LIBS += -Wl,-s\n"
+                with self.assertRaisesRegex(
+                    ValueError, f"{name}: -Wl,-s strips the shared object at R's"
+                ):
+                    self.check(dict(entries, **{name: linked}))
                 with self.assertRaisesRegex(
                     ValueError, f"the R package is missing {name}"
                 ):
@@ -460,6 +466,61 @@ class RBuildSymbolsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selects more than one profile"):
             self.check(selection="--release --profile dist")
         self.assertEqual(guard.makevars_profile("x", self.makevars("")), "dev")
+
+
+class RLinkStepTests(unittest.TestCase):
+    """R's linker links the engine's static library into the shared object, so
+    its link step, not Cargo, is where the Makevars could strip it."""
+
+    def test_the_checkout_templates_strip_nothing_at_the_link_step(self):
+        for name in guard.R_MAKEVARS:
+            with self.subTest(name=name):
+                guard.check_r_link(
+                    name, (guard.R_PACKAGE / name).read_text(encoding="utf-8")
+                )
+
+    def test_comment_lines_other_commands_and_make_strip_are_admitted(self):
+        guard.check_r_link(
+            "src/Makevars.in",
+            # make continues a comment line that ends in a backslash.
+            "# Nothing strips the shared object: no strip, -s or -Wl,-S, \\\n"
+            "  nor PKG_LIBS += -s\n"
+            "PKG_LIBS = $(strip $(RUST_LIB)) -Wl,-soname,yamaa.so -Wl,-rpath,x\n"
+            "rust_clean: $(SHLIB)\n"
+            "\t# strip $(SHLIB)\n"
+            "\tln -s target link\n",
+        )
+
+    def test_each_way_to_strip_at_the_link_step_refuses(self):
+        recipe = "rust_clean: $(SHLIB)\n\t"
+        for text, problem in (
+            # A command in a recipe: strip, or R's own $(STRIP_SHARED_LIB).
+            (recipe + "strip --strip-debug $(SHLIB)\n", "a recipe runs strip;"),
+            (recipe + "$(STRIP_SHARED_LIB) $(SHLIB)\n", "a recipe runs $(STRIP_"),
+            # An option in PKG_LIBS or PKG_LDFLAGS, or in a variable they read.
+            ("PKG_LIBS = $(RUST_LIB) -s\n", "-s strips"),
+            ('PKG_LIBS = "$(RUST_LIB)" "-s"\n', "-s strips"),
+            ("PKG_LIBS = $(RUST_LIB) -Wl,-s\n", "-Wl,-s strips"),
+            ("PKG_LIBS = $(RUST_LIB) -Wl,--strip-all\n", "-Wl,--strip-all strips"),
+            ("PKG_LDFLAGS = --strip-debug\n", "--strip-debug strips"),
+            ("PKG_LDFLAGS = -Wl,-O1,-S\n", "-Wl,-O1,-S strips"),
+            ("PKG_LIBS = $(RUST_LIB) -Xlinker -x\n", "-x strips"),
+            ("LINK = -Wl,--discard-all\nPKG_LIBS = $(LINK)\n", "-Wl,--discard-all"),
+            ("PKG_LIBS = $(RUST_LIB) \\\n\t-s\n", "-s strips"),
+            ("override LDFLAGS += -Wl,-s\n", "-Wl,-s strips"),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+        with self.assertRaises(ValueError) as caught:
+            guard.check_r_link("src/Makevars.in", "PKG_LIBS = $(RUST_LIB) -Wl,-s\n")
+        self.assertEqual(
+            str(caught.exception),
+            "src/Makevars.in: -Wl,-s strips the shared object at R's link step; "
+            "the R package keeps its symbols, as CRAN's Repository Policy asks",
+        )
 
 
 if __name__ == "__main__":

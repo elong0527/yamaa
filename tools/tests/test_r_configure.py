@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 
 from tools.ci import toolchain
+from tools.packaging.check_cargo_lock import check_r_link
 from tools.paths import ROOT
 
 PACKAGE = ROOT / "R/yamaa"
@@ -228,6 +229,28 @@ class ConfigureTests(unittest.TestCase):
         self.assertIn(f"\nCARGO = {cargo}\n", makevars)
         self.assertNotIn("@", makevars)
         self.assertFalse((self.package / "src/Makevars").exists())
+
+    def test_what_configure_writes_strips_nothing_at_the_link_step(self):
+        # R's linker links the engine into the shared object with the Makevars
+        # that configure writes, and CRAN's Repository Policy asks a package
+        # not to strip it.
+        sysroot = self.root / "sysroot"
+        library = sysroot / "lib/rustlib/x86_64-pc-windows-gnu/lib"
+        library.mkdir(parents=True)
+        (library / "libstd-0123456789abcdef.rlib").write_bytes(b"")
+        line = "1.99.1 (58cf8f9c3 2026-10-13)"
+        for suffix in ("", ".exe"):
+            tool(self.bin, "rustc" + suffix, f"rustc {line}", sysroot=sysroot)
+            tool(self.bin, "cargo" + suffix, f"cargo {line}")
+        for platform, name in (
+            ("windows = FALSE, darwin = FALSE", "Makevars"),
+            ("windows = FALSE, darwin = TRUE", "Makevars"),
+            ("windows = TRUE, darwin = FALSE", "Makevars.win"),
+        ):
+            with self.subTest(platform=platform):
+                result = self.configure(f"main({platform})")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                check_r_link(f"src/{name}", self.makevars(name))
 
     def test_macos_builds_for_the_deployment_target(self):
         tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
