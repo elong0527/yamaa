@@ -13,7 +13,7 @@
 
 use crate::ast::{
     DatasetCheckKind, Derivation, ExprId, ExprKind, Intermediate, JoinKey, Literal, Named, Role,
-    Scope, Segment, Spec, Step,
+    Scope, Segment, Spec, Step, Template,
 };
 use crate::dependency_analysis;
 use crate::expression::{CompileError, Context};
@@ -115,9 +115,23 @@ impl Reading {
     }
 }
 
+/// The dataset whose records build `template`'s rows: its driver, or `base`
+/// when it names none. What the template derives, groups and filters on
+/// reads that dataset's record as the row's own, as binding reads it.
+fn template_driver<'a>(template: &'a Template, base: Option<&'a str>) -> Option<&'a str> {
+    template
+        .driver
+        .as_ref()
+        .map(|driver| driver.name.as_str())
+        .or(base)
+}
+
 /// The live declarations, by name, as reads find them.
 struct Live<'a> {
     spec: &'a Spec,
+    /// `base`, or the only input: the records a row template that names no
+    /// driver builds its rows from.
+    base: Option<&'a str>,
     /// The one dataset whose records build every row, if every row template
     /// shares it: a qualified read of it reads the row's own record, never a
     /// join.
@@ -135,19 +149,18 @@ impl<'a> Live<'a> {
                 _ => None,
             },
         );
-        let mut drivers = spec.rows.templates.iter().map(|template| {
-            template
-                .driver
-                .as_ref()
-                .map(|driver| driver.name.as_str())
-                .or(base)
-        });
+        let mut drivers = spec
+            .rows
+            .templates
+            .iter()
+            .map(|template| template_driver(template, base));
         let driver = match drivers.next() {
             None => base,
             Some(first) => first.filter(|&first| drivers.all(|other| other == Some(first))),
         };
         Self {
             spec,
+            base,
             driver,
             columns: BTreeSet::new(),
             inputs: BTreeSet::new(),
@@ -173,12 +186,26 @@ impl<'a> Live<'a> {
         );
     }
 
-    /// The names `root` reads in `scope` ([`Spec::reads`]), except an
-    /// aggregate's own bindings and a range bound, which names a donor field;
-    /// the key columns of an aggregate, each paired with the current row's
-    /// same-named value; and the declared key of each input an implicit join
-    /// or a keyless qualified aggregate reads ([`Live::key_reads`]).
+    /// The names `root` reads in `scope` ([`Spec::reads`]) on any row, whose
+    /// own record is the shared driver's, if every row template shares one
+    /// ([`Live::read_driven`]).
     fn read(&self, root: ExprId, scope: Scope, out: &mut Vec<Reading>) -> Result<(), Error> {
+        self.read_driven(root, scope, self.driver, out)
+    }
+
+    /// The names `root` reads in `scope` ([`Spec::reads`]) on a row whose
+    /// own record is `driver`'s, except an aggregate's own bindings and a
+    /// range bound, which names a donor field; the key columns of an
+    /// aggregate, each paired with the current row's same-named value; and
+    /// the declared key of each input an implicit join or a keyless qualified
+    /// aggregate reads ([`Live::key_reads`]).
+    fn read_driven(
+        &self,
+        root: ExprId,
+        scope: Scope,
+        driver: Option<&str>,
+        out: &mut Vec<Reading>,
+    ) -> Result<(), Error> {
         let spec = self.spec;
         let mut bounds = BTreeSet::new();
         let mut predicates = BTreeSet::new();
@@ -240,7 +267,7 @@ impl<'a> Live<'a> {
             // aggregate matches its relation's records on the relation's key,
             // even when that relation drives the rows (LOOKUP-18).
             let joins = |owner: &str| match read.scope {
-                Scope::Row => kind != Kind::Item && Some(owner) != self.driver,
+                Scope::Row => kind != Kind::Item && Some(owner) != driver,
                 Scope::Relation(aggregate) => keyless.contains(&aggregate),
                 Scope::Donor(_) | Scope::Local(_) => false,
             };
@@ -329,8 +356,17 @@ impl<'a> Live<'a> {
     }
 
     fn follow(&mut self, root: ExprId, scope: Scope) -> Result<bool, Error> {
+        self.follow_driven(root, scope, self.driver)
+    }
+
+    fn follow_driven(
+        &mut self,
+        root: ExprId,
+        scope: Scope,
+        driver: Option<&str>,
+    ) -> Result<bool, Error> {
         let mut readings = Vec::new();
-        self.read(root, scope, &mut readings)?;
+        self.read_driven(root, scope, driver, &mut readings)?;
         Ok(self.mark_all(&readings))
     }
 
@@ -398,11 +434,12 @@ impl<'a> Live<'a> {
                     self.inputs.insert(driver.name.clone());
                 }
             }
+            let driver = template_driver(template, self.base);
             for &group in template.group_by.iter().flatten() {
-                self.follow(group, Scope::Row)?;
+                self.follow_driven(group, Scope::Row, driver)?;
             }
             if let Some(filter) = template.filter {
-                self.follow(filter, Scope::Row)?;
+                self.follow_driven(filter, Scope::Row, driver)?;
             }
         }
         Ok(())
@@ -431,12 +468,13 @@ impl<'a> Live<'a> {
                 }
             }
             for (template, row) in spec.rows.templates.iter().enumerate() {
+                let driver = template_driver(row, self.base);
                 for (entry, (name, derivation)) in row.overrides.iter().enumerate() {
                     if overrides[template][entry] || !self.columns.contains(&name.name) {
                         continue;
                     }
                     overrides[template][entry] = true;
-                    changed |= self.follow(derivation.expr, Scope::Row)?;
+                    changed |= self.follow_driven(derivation.expr, Scope::Row, driver)?;
                 }
             }
             for (index, item) in spec.intermediates.iter().enumerate() {
@@ -470,18 +508,25 @@ impl<'a> Live<'a> {
             .collect()
     }
 
-    /// A column's default and each row template's own derivation of it.
-    fn derivations(&self, column: usize) -> impl Iterator<Item = &'a Derivation> + 'a {
+    /// A column's default and each row template's own derivation of it, each
+    /// with the dataset whose record it reads as the row's own: the shared
+    /// driver for the default, and the template's driver for its own.
+    fn derivations(
+        &self,
+        column: usize,
+    ) -> impl Iterator<Item = (&'a Derivation, Option<&'a str>)> + 'a {
         let declared = &self.spec.columns[column];
+        let (driver, base) = (self.driver, self.base);
         declared
             .derivation
             .iter()
+            .map(move |derivation| (derivation, driver))
             .chain(self.spec.rows.templates.iter().filter_map(move |template| {
                 template
                     .overrides
                     .iter()
                     .find(|(name, _)| name.name == declared.name.name)
-                    .map(|(_, derivation)| derivation)
+                    .map(|(_, derivation)| (derivation, template_driver(template, base)))
             }))
     }
 
@@ -490,8 +535,8 @@ impl<'a> Live<'a> {
     /// outside a predicate, which an unknown column fails (LAYER-5).
     fn dependencies(&self, column: usize) -> Result<(BTreeSet<String>, BTreeSet<String>), Error> {
         let mut readings = Vec::new();
-        for derivation in self.derivations(column) {
-            self.read(derivation.expr, Scope::Row, &mut readings)?;
+        for (derivation, driver) in self.derivations(column) {
+            self.read_driven(derivation.expr, Scope::Row, driver, &mut readings)?;
         }
         let mut names = BTreeSet::new();
         let mut diagnosable = BTreeSet::new();
@@ -572,7 +617,7 @@ impl<'a> Live<'a> {
     /// compiler cites it, even when only a row template derives it.
     fn derivation_path(&self, column: usize) -> String {
         let name = &self.spec.columns[column].name.name;
-        let operation = self.derivations(column).next().and_then(|derivation| {
+        let operation = self.derivations(column).next().and_then(|(derivation, _)| {
             match self
                 .spec
                 .paths

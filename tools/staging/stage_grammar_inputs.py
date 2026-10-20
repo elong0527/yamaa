@@ -21,10 +21,10 @@ CONTRACTS = {
     "string-template": "text",
 }
 CONTEXTS = ("predicate", "compute", "aggregate", "derivation")
-# The contexts a public specification field reads. The derivation context is
-# text in an expression field of a 1.0 file, and the engine reads no 1.0 file
-# until #3030's P1-9 (D76): until then only the typed core replays its cases.
-PUBLIC_CONTEXTS = ("predicate", "compute", "aggregate")
+# The contexts a public specification field reads: every one, since the
+# engine reads 1.0 files (#3030 D76), whose expression fields hold the
+# derivation context's text (FORMULA-27).
+PUBLIC_CONTEXTS = CONTEXTS
 
 
 def documents(root=REPOSITORY):
@@ -156,6 +156,21 @@ def specification(contract, case):
         "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
     }
     field = contract if contract == "string-template" else case["context"]
+    if field == "derivation":
+        # Derivation text is a 1.0 expression field (FORMULA-27, D18).
+        return {
+            "yamaa": "1.0",
+            "type": "spec",
+            "domain": "GRAMMAR",
+            "keys": ["ID"],
+            "input": {"SRC": "input.csv"},
+            "base": "SRC",
+            "columns": [
+                {"name": "ID", "type": "str", "derivation": "'one'"},
+                {"name": "RESULT", "type": "float", "derivation": case["text"]},
+            ],
+            "output": {"path": "unwritten.csv", "columns": ["ID", "RESULT"]},
+        }
     column = {
         "name": "RESULT",
         "type": "str" if field in {"predicate", "string-template"} else "float",
@@ -204,10 +219,13 @@ def stage(destination, root=REPOSITORY):
                 encoding="utf-8",
             )
             condition = case.get("condition", "")
-            # Empty expression fields fail the public schema's SCHEMA-12 before parsing.
+            # A 0.5 expression field's schema refuses empty text (SCHEMA-12)
+            # before parsing; a 1.0 expression field's text reaches the grammar.
             public_condition = (
                 "minimum_length"
-                if not case["text"] and case["parse"] == "reject"
+                if not case["text"]
+                and case["parse"] == "reject"
+                and case.get("context") != "derivation"
                 else condition
             )
             writer.writerow(

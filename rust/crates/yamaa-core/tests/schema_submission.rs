@@ -1086,11 +1086,16 @@ mod schema {
             let artifacts: Vec<_> = (0..documents.len())
                 .map(|index| format!("d{index}.csv"))
                 .collect();
+            let trees: Vec<_> = documents
+                .iter()
+                .map(crate::support::submission_tree)
+                .collect();
             let inputs: Vec<_> = documents
                 .iter()
                 .enumerate()
                 .map(|(index, document)| Input {
                     document,
+                    tree: &trees[index],
                     source: &sources[index],
                     artifact: &artifacts[index],
                     href: Some(&artifacts[index]),
@@ -2441,11 +2446,13 @@ mod schema {
                 section.family,
                 yamaa_core::ast::Surface::V0_5,
             )?;
+            let tree = crate::support::submission_tree(document);
             submission_composition::compose(
                 required,
                 catalogue,
                 &[Input {
                     document,
+                    tree: &tree,
                     source: "spec.yaml",
                     artifact: "lb.csv",
                     href: Some("lb.csv"),

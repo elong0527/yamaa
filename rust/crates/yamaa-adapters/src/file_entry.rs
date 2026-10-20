@@ -135,7 +135,7 @@ pub(crate) fn capture(
             &mut resources,
             &schema,
             &mut environment,
-            yamaa_core::submission_inventory::requested(root.model().document()),
+            yamaa_core::submission_inventory::requested(root.document()),
             &root.source().identity,
         )
         .map_err(Error::Document)?;

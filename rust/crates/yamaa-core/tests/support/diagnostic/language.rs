@@ -6,8 +6,7 @@ use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic, InheritanceFinding as F};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::language::{
-    read_header, refusal, FileType, LanguageVersion, PathBase, Reference, ReferenceFault,
-    LANGUAGE_VERSION,
+    read_header, FileType, LanguageVersion, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
 };
 use yamaa_core::schema::{
     DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaStructure,
@@ -76,9 +75,12 @@ fn header(version: &str, file_type: &str) -> T {
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
 
-    // The file a call reads: at its own `yamaa` and `type` (SCHEMA-2).
-    let refused = header("1.0", "spec").document();
-    let finding = refusal(&refused).unwrap().finding();
+    // The file a call reads: at its own `yamaa` and `type` (SCHEMA-2). The
+    // engine reads 1.0 (#3030 D76), so a newer version is refused.
+    let refused = header("1.1", "spec").document();
+    let finding = read_header(&refused, Some(LANGUAGE_VERSION), FileType::Spec)
+        .unwrap_err()
+        .finding();
     schema_finding(
         &mut reached,
         &finding,
@@ -91,7 +93,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         finding.context,
         [
             ("version", C::InputValue(version)),
-            ("language_versions", C::TextList(Vec::new())),
+            ("language_versions", C::TextList(vec!["1.0".into()])),
         ]
     );
     let project = header("1.0", "project").document();

@@ -106,7 +106,7 @@ pub fn link(document: &SpecificationDocument) -> Link<'_> {
     Link {
         dataset: "SRC",
         identity: "/producer.yaml",
-        document,
+        document: document.document(),
     }
 }
 /// Links of the consuming specification held at [`CONSUMER`].

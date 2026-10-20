@@ -166,15 +166,27 @@ impl PreparedRun {
     ) -> Result<Self, Box<RejectedRun>> {
         let (environment, captured) = environment.into_parts();
         let checked = {
+            use crate::specification_source::Compilation;
             let metadata = crate::specification_source::link_metadata(&document, links);
-            project_domain::check_owned_linked(
-                document.compilation_model(),
-                environment,
-                yamaa_core::producer_contract::Links {
-                    consumer: &document.source().identity,
-                    links: &metadata,
-                },
-            )
+            let links = yamaa_core::producer_contract::Links {
+                consumer: &document.source().identity,
+                links: &metadata,
+            };
+            // A 1.x specification binds through the same preparation as a
+            // 0.5 one, from the tree its front end lowered (#3030 D76).
+            match document.compilation() {
+                Compilation::Legacy(model) => {
+                    project_domain::check_owned_linked(model, environment, links)
+                }
+                Compilation::Versioned { tree, document } => {
+                    project_domain::check_owned_tree_linked(
+                        tree.clone(),
+                        document,
+                        environment,
+                        links,
+                    )
+                }
+            }
         };
         match checked {
             Ok(checked) => Ok(Self {

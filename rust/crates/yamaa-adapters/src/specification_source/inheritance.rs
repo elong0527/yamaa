@@ -17,6 +17,14 @@ pub enum InheritanceError<E> {
         error: Box<lifecycle::Error<SourceFailure<E>>>,
         captured_parents: Vec<CapturedParent>,
     },
+    /// A specification that declares the 1.x header did not prepare (#3030
+    /// D76). `schema` is the 1.0 specification closure, and `entry` the
+    /// identity of the entry file.
+    Versioned {
+        schema: Arc<CapturedSchema>,
+        entry: String,
+        error: Box<crate::document::SpecificationError<E>>,
+    },
 }
 pub(super) struct Decoder;
 impl application::InheritanceDecodePort for Decoder {
@@ -69,6 +77,7 @@ impl CapturedSchema {
                 parents: prepared.parents,
                 dictionaries: None,
                 resource_aliases: Default::default(),
+                legacy_tree: Default::default(),
             }
             .prepare_dictionaries(port)?),
             Err(application::Error::Preparation {

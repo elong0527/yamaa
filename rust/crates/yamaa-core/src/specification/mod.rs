@@ -138,7 +138,8 @@ pub enum PreflightFinding {
         row: String,
     },
     UndeclaredRowColumn {
-        index: usize,
+        /// The row template's path, as its specification's surface writes it.
+        row_path: String,
         column: String,
     },
     DuplicateRowDefault {
@@ -155,18 +156,18 @@ pub enum PreflightFinding {
     },
     ConflictingRowConstruction,
     InvalidGroup {
-        index: usize,
+        row_path: String,
         row: String,
         groups: Vec<String>,
     },
     GroupReference {
-        index: usize,
+        row_path: String,
         row: String,
         name: String,
         dataset: String,
     },
     RowDriverUnavailable {
-        index: usize,
+        row_path: String,
         row: String,
         dataset: Option<String>,
     },
@@ -682,6 +683,36 @@ impl PreparedSpecification {
             environment.and_then(|e| e.undeclared_language()),
         )
     }
+    /// Prepare a 1.x specification its front end lowered into `tree`, whose
+    /// resolved document `document` declares its linked inputs, against the
+    /// admitted environment and the producing specifications its `schema`
+    /// links name, as [`PreparedSpecification::prepare_linked`] prepares a
+    /// 0.5 model: preparation and binding read only the tree (#3030 D76).
+    pub fn prepare_tree_linked(
+        tree: ast::Spec,
+        document: &crate::schema::Document,
+        environment: Option<&crate::project_environment::ExecutionEnvironment>,
+        links: crate::producer_contract::Links<'_>,
+    ) -> Result<Self, PrepareError> {
+        // A 1.0 specification compiled without its project fails validation
+        // when it binds a codelist or calls a project function (D32); until
+        // P1-11 builds that, each such binding is refused (D76).
+        if environment.is_none() {
+            let bindings = crate::front_end::v1::spec::checks::project_bindings(&tree);
+            if !bindings.is_empty() {
+                return Err(PrepareError::Unsupported(bindings));
+            }
+        }
+        Self::prepare_lowered(
+            tree,
+            document,
+            environment.map(|e| e.functions()),
+            environment.map(|e| e.catalogue()),
+            links,
+            environment.map(|e| e.inventory()),
+            environment.and_then(|e| e.undeclared_language()),
+        )
+    }
     fn prepare_implementation(
         spec: &SpecificationDocument,
         functions: Option<&[crate::project_function::Function]>,
@@ -693,10 +724,31 @@ impl PreparedSpecification {
         // The one typed tree of the admitted document, which preparation and
         // binding read.
         let tree = crate::front_end::v0_5::lower(spec, None).into_spec();
+        Self::prepare_lowered(
+            tree,
+            spec.document(),
+            functions,
+            catalogue,
+            links,
+            inventory,
+            undeclared,
+        )
+    }
+    /// Admit the links `document` declares, then prepare `tree`, the
+    /// lowering of either language.
+    fn prepare_lowered(
+        tree: ast::Spec,
+        document: &crate::schema::Document,
+        functions: Option<&[crate::project_function::Function]>,
+        catalogue: Option<&crate::project_terminology::Catalogue>,
+        links: crate::producer_contract::Links<'_>,
+        inventory: Option<&crate::submission_inventory::Inventory>,
+        undeclared: Option<crate::project_function::Language>,
+    ) -> Result<Self, PrepareError> {
         checks::root::limits(&tree)?;
         // Link admission precedes every other declaration finding: a refused
         // type authority or contract leaves nothing to compile against.
-        let contracts = crate::producer_contract::admit(spec, links).map_err(|error| {
+        let contracts = crate::producer_contract::admit(document, links).map_err(|error| {
             use crate::producer_contract::AdmissionError;
             match error {
                 AdmissionError::Limit(limit) => {

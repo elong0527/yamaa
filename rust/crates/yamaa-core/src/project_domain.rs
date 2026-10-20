@@ -98,6 +98,23 @@ pub fn check_owned_linked(
         Err(error) => Err(Box::new(RejectedOwnedProject { environment, error })),
     }
 }
+/// [`check_owned_linked`] for a 1.x specification its front end lowered into
+/// `tree`, beside its resolved `document`, which declares its linked inputs.
+pub fn check_owned_tree_linked(
+    tree: crate::ast::Spec,
+    document: &crate::schema::Document,
+    environment: ExecutionEnvironment,
+    links: crate::producer_contract::Links<'_>,
+) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
+    let admitted = environment.is_project().then_some(&environment);
+    match domain::check_tree_linked(tree, document, admitted, links) {
+        Ok(checked) => Ok(CheckedOwnedProject {
+            checked,
+            environment,
+        }),
+        Err(error) => Err(Box::new(RejectedOwnedProject { environment, error })),
+    }
+}
 impl CheckedOwnedProject {
     /// Static native-location admission can reject a checked document while
     /// retaining its original environment; no runtime port has been entered.

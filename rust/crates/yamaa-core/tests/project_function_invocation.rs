@@ -561,7 +561,7 @@ mod project {
             let own = Link {
                 dataset: "SRC",
                 identity: CONSUMER,
-                document: &consumer,
+                document: consumer.document(),
             };
             let findings = invalid(PreparedSpecification::prepare_linked(
                 &consumer,

@@ -3,14 +3,16 @@ name: CI
 # Pull requests are the gate. Main is checked on a schedule rather than after
 # every merge; the scheduled runs also save the Rust caches that pull requests
 # restore. Release branches are checked on each push. This workflow owns the
-# development checks and equivalence gate; release-compatibility.yml owns
-# compatibility builds.
+# development checks and the equivalence and conversion gates;
+# release-compatibility.yml owns compatibility builds.
 on:
   pull_request:
   push:
     branches: ['release/**']
   schedule:
     - cron: '37 1-23/2 * * *'
+    # Weekly: the conversion gate on both hosts.
+    - cron: '23 4 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -113,6 +115,64 @@ jobs:
           sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
       - if: steps.paths.outputs.run == 'true'
         run: make check-equivalence
+  conversion:
+    # The 1.0 conversion gate (#3030 P1-9, D76): every benchmark, converted to
+    # 1.0 by tools/migrate, must give its expected result on a fresh install.
+    # A pull request runs it on Python when its diff reaches the 1.0 front end,
+    # the converter, the 1.0 schemas or the gate, and otherwise passes with a
+    # notice; the weekly schedule and a dispatch run it on both hosts.
+    if: >-
+      github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '23 4 * * 1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Decide whether the diff reaches the gate's paths
+        id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != pull_request ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "hosts=python,r" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::The conversion gate must run on the pull-request head."
+            exit 1
+          fi
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          changed=$(git diff --no-renames --name-only "$base" "$HEAD_SHA" -- \
+            rust/crates/yamaa-core/src/front_end \
+            tools/migrate \
+            yaml/v1 \
+            tools/commands/conversion.py \
+            python/tests/installed/conversion_define.py)
+          echo "hosts=python" >> "$GITHUB_OUTPUT"
+          if [ -n "$changed" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The diff reaches neither the 1.0 front end, the converter, the 1.0 schemas nor the gate, so the conversion gate did not run."
+          fi
+      # The gate builds each host from the checkout; R conformance reads the
+      # package's test dependencies.
+      - uses: ./.github/actions/setup
+        if: steps.paths.outputs.run == 'true'
+        with:
+          r: ${{ steps.paths.outputs.hosts == 'python' && 'none' || 'check' }}
+          package: tools
+      - if: steps.paths.outputs.run == 'true'
+        env:
+          HOSTS: ${{ steps.paths.outputs.hosts }}
+        run: make check-conversion HOSTS="$HOSTS"
   r:
     runs-on: ubuntu-24.04
     timeout-minutes: 40

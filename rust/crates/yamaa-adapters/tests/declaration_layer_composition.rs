@@ -1,7 +1,6 @@
 #![cfg(feature = "yaml")]
 //! Composition of 1.0 specification layers (LAYER-1 to LAYER-10, P-CLR-1,
-//! P-CLR-2, P-NULL-1), which only tests reach until the engine reads 1.0
-//! files (#3030 D76).
+//! P-CLR-2, P-NULL-1).
 //!
 //! A layer's `clear` removes values it inherits before its own fields
 //! compose, YAML null is the missing value and never removes anything, a
