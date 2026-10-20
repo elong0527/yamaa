@@ -68,7 +68,7 @@ class BindingsTests(unittest.TestCase):
     def test_every_export_is_paired_with_the_other_host_or_host_only(self):
         definition = generator._load_definition()
         candidate = copy.deepcopy(definition)
-        candidate["host_only"]["python"].remove("_style_same_value")
+        candidate["host_only"]["python"].remove("_ArrowTable.__arrow_c_stream__")
         with self.assertRaisesRegex(ValueError, "without an R counterpart"):
             generator._validate_operations(candidate)
         candidate = copy.deepcopy(definition)
@@ -265,8 +265,11 @@ class BindingsTests(unittest.TestCase):
                 lambda d: d["host_only"]["r"].remove("run_interrupt"),
             ),
             (
-                "Python exports without an R counterpart: _style_same_value",
-                lambda d: d["host_only"]["python"].remove("_style_same_value"),
+                "Python exports without an R counterpart: "
+                "_ArrowTable.__arrow_c_stream__",
+                lambda d: d["host_only"]["python"].remove(
+                    "_ArrowTable.__arrow_c_stream__"
+                ),
             ),
             (
                 "references absent R export absent_export",

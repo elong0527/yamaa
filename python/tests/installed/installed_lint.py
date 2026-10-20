@@ -1,0 +1,87 @@
+"""Installed yamaa.lint: the P-LINT-2 table, fixes and refusals.
+
+The lint's complete suite is native (the adapters' lint tests); this checks
+what the installed host returns for the shared truth, which R reads too.
+"""
+
+import os
+import tempfile
+import unittest
+from pathlib import Path
+
+import polars as pl
+from host_fixtures import load as load_truth
+
+import yamaa
+
+TRUTH = load_truth(__file__, "lint")
+
+
+def expected(rows):
+    """Integer columns are decimal text in the truth."""
+    return [
+        {
+            name: int(value) if name in TRUTH["integer_columns"] else value
+            for name, value in row.items()
+        }
+        for row in rows
+    ]
+
+
+class Lint(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="yamaa-lint-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.path = self.root / TRUTH["file_name"]
+        self.path.write_bytes(TRUTH["specification_yaml"].encode("utf-8"))
+
+    def check_table(self, table, rows):
+        self.assertIsInstance(table, pl.DataFrame)
+        self.assertEqual(table.columns, TRUTH["columns"])
+        self.assertEqual(
+            table.dtypes,
+            [pl.String, pl.Int64, pl.Int64, pl.String, pl.String, pl.String],
+        )
+        absolute = os.path.abspath(self.path).replace(os.sep, "/")
+        self.assertEqual(table["file"].to_list(), [absolute] * len(rows))
+        self.assertEqual(table.drop("file").to_dicts(), expected(rows))
+
+    def test_findings_come_as_the_six_column_table(self):
+        self.check_table(yamaa.lint(self.path), TRUTH["rows"])
+        self.check_table(yamaa.lint([str(self.path)], fix=False), TRUTH["rows"])
+        self.assertEqual(
+            self.path.read_bytes().decode("utf-8"), TRUTH["specification_yaml"]
+        )
+
+    def test_fix_rewrites_the_file_and_lists_what_remains(self):
+        self.check_table(yamaa.lint([self.path], fix=True), TRUTH["fixed_rows"])
+        self.assertEqual(self.path.read_bytes().decode("utf-8"), TRUTH["fixed_yaml"])
+        self.check_table(yamaa.lint(self.path), TRUTH["fixed_rows"])
+
+    def test_a_clean_table_keeps_its_columns(self):
+        self.path.write_bytes(b"")
+        table = yamaa.lint(self.path)
+        self.assertEqual(table.columns, TRUTH["columns"])
+        self.assertTrue(table.is_empty())
+
+    def test_refusals_raise_yamaa_error_naming_the_condition(self):
+        for refusal in TRUTH["refusals"]:
+            with self.subTest(condition=refusal["condition"]):
+                path = self.root / "refused.yaml"
+                if refusal["yaml"] is not None:
+                    path.write_bytes(refusal["yaml"].encode("utf-8"))
+                with self.assertRaises(yamaa.Error) as raised:
+                    yamaa.lint([self.path, path], fix=True)
+                issues = raised.exception.issues
+                self.assertEqual(issues["condition"].to_list(), [refusal["condition"]])
+                # A refused call writes nothing.
+                self.assertEqual(
+                    self.path.read_bytes().decode("utf-8"),
+                    TRUTH["specification_yaml"],
+                )
+                path.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

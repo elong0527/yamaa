@@ -58,8 +58,8 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   spellings, and the three authoring lints (uniform derivations, redundant
   intermediates, missing output-column labels) are fixed by the
   [style guide](style.md).
-  Run `python -m yamaa.style --fix <spec>.yaml` with the pinned yamaa, then
-  correct what it reports; it exits nonzero while a finding remains.
+  Run `yamaa.lint("<spec>.yaml", fix=True)` (`yamaa_lint("<spec>.yaml", fix = TRUE)`
+  in R) with the pinned yamaa, then correct the findings it still returns.
 - **Output naming.** Every spec's `output.path` is `adam/<ds>-yamaa.parquet`
   (e.g. `adam/adsl-yamaa.parquet`).
 

@@ -119,7 +119,7 @@ def main():
         run(
             sys.executable,
             "-m",
-            "yamaa.style",
+            "tools.commands.lint",
             *sorted(map(str, ROOT.glob("benchmarks/*/spec*.yaml"))),
         )
         run(sys.executable, "-m", "tools.commands.docs", "dashboards")

@@ -5,7 +5,8 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-# Retired evaluator import roots; the retained helpers are _odm and style.
+# Retired evaluator import roots, and the Python style tool that the Rust lint
+# (yamaa.lint) replaced.
 RETIRED_IMPORTS = {
     "_reference_domain",
     "application",
@@ -19,6 +20,7 @@ RETIRED_IMPORTS = {
     "runtime",
     "schema",
     "specification",
+    "style",
     "submission",
     "verification",
 }
