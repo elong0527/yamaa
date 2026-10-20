@@ -1,11 +1,10 @@
-"""Pin how the 1.0 conversion gate converts the corpus and composes the owners."""
+"""Pin how the 1.0 conversion gate converts the corpus and runs the conversion."""
 
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-import yaml
 from tools.benchmark import load_metadata
 from tools.commands import conversion
 from tools.migrate.excepted import EXCEPTED
@@ -44,7 +43,9 @@ class CorpusTests(unittest.TestCase):
                 if link.is_symlink():
                     converted = fixtures / link.relative_to(ROOT / "benchmarks")
                     self.assertTrue(converted.is_symlink(), converted)
-            spec = (fixtures / "adam-adsl-xpt" / "spec.yaml").read_text(encoding="utf-8")
+            spec = (fixtures / "adam-adsl-xpt" / "spec.yaml").read_text(
+                encoding="utf-8"
+            )
             self.assertTrue(spec.startswith('yamaa: "1.0"\ntype: spec\n'))
 
     def test_every_excepted_benchmark_exists_and_states_its_decision(self):
@@ -111,7 +112,9 @@ class HelperTests(unittest.TestCase):
                 for file in expected:
                     write(
                         fixtures / name / "expected" / file,
-                        ERROR.format(path="sdtm.specs[0]") if file == "error.yaml" else "x",
+                        ERROR.format(path="sdtm.specs[0]")
+                        if file == "error.yaml"
+                        else "x",
                     )
             write(
                 fixtures / "plain" / "benchmark.yaml",
@@ -188,11 +191,15 @@ class ConversionGateTests(unittest.TestCase):
     def test_pull_requests_run_python_on_the_converted_corpus(self):
         gate = GateRun()
         fixtures = gate.run()
-        self.assertEqual(gate.plans, [["plan", "--fixtures", str(fixtures), "--output", mock.ANY]])
+        self.assertEqual(
+            gate.plans, [["plan", "--fixtures", str(fixtures), "--output", mock.ANY]]
+        )
         gate.excepted.assert_called_once_with(fixtures)
         self.assertEqual(gate.python_conformance.call_args.args[3], "abc123")
         self.assertEqual(gate.python_conformance.call_args.args[4], fixtures)
-        self.assertEqual(gate.python_define.call_args.args[1:], (Path("venv/bin/python"), fixtures))
+        self.assertEqual(
+            gate.python_define.call_args.args[1:], (Path("venv/bin/python"), fixtures)
+        )
         gate.install_r.assert_not_called()
 
     def test_both_hosts_add_r(self):

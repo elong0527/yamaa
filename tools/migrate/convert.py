@@ -90,6 +90,7 @@ def _requires_match(node):
         return any(_requires_match(item) for item in node.value)
     return False
 
+
 # Keyed members are addressed by identity in a clear path (P-CLR-1).
 IDENTITY = {"columns": "name", "intermediates": "id", "rows": "id"}
 

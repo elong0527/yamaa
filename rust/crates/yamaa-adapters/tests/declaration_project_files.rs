@@ -761,6 +761,7 @@ mod declaration {
         use std::fs;
         use std::path::PathBuf;
         use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
         use yamaa_adapters::{
             document::Closures,
             file_preparation::FileSpecification,
@@ -779,7 +780,6 @@ mod declaration {
         use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::function_invocation::{Argument, HostError};
         use yamaa_core::function_signature::{LogicalSignature, ProjectFunctionIdentity};
-        use std::sync::Arc;
         use yamaa_core::json::Value;
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::project_activation::{ActivationPort, Failure};

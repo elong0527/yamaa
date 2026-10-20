@@ -111,7 +111,10 @@ fn every_specification_call_reads_a_1_0_specification() {
     let spec = study.path("spec.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    assert_eq!(rows(&engine.spec_check(&spec, None, &token).unwrap().issues()), []);
+    assert_eq!(
+        rows(&engine.spec_check(&spec, None, &token).unwrap().issues()),
+        []
+    );
     let mut run = engine.spec_run(&spec, None, &token).unwrap();
     assert_eq!(rows(&run.issues()), []);
     assert_eq!(run.output().unwrap().rows(), 2);
@@ -125,7 +128,10 @@ fn every_specification_call_reads_a_1_0_specification() {
         panic!("entries")
     };
     let entry = &entries[0];
-    assert_eq!(field(entry, "language_version"), &ContextValue::Text("1.0".into()));
+    assert_eq!(
+        field(entry, "language_version"),
+        &ContextValue::Text("1.0".into())
+    );
     let ContextValue::Map(entry_fields) = entry else {
         panic!("an entry")
     };
@@ -154,13 +160,25 @@ fn every_project_call_reads_a_1_0_project() {
     let project = study.path("project.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    assert_eq!(rows(&engine.project_check(&project, &token).unwrap().issues()), []);
+    assert_eq!(
+        rows(&engine.project_check(&project, &token).unwrap().issues()),
+        []
+    );
     let run = engine.project_run(&project, None, &token).unwrap();
     assert_eq!(rows(&run.issues()), []);
-    assert_eq!(engine.project_spec(&project, "DM").unwrap(), study.path("dm.yaml"));
+    assert_eq!(
+        engine.project_spec(&project, "DM").unwrap(),
+        study.path("dm.yaml")
+    );
     // A 0.5 project lists a 1.0 specification, which is read by its own header.
-    study.write("project.yaml", "schema_version: '1.0'\nsdtm: {specs: [dm.yaml]}\n");
-    assert_eq!(rows(&engine.project_check(&project, &token).unwrap().issues()), []);
+    study.write(
+        "project.yaml",
+        "schema_version: '1.0'\nsdtm: {specs: [dm.yaml]}\n",
+    );
+    assert_eq!(
+        rows(&engine.project_check(&project, &token).unwrap().issues()),
+        []
+    );
 }
 
 #[test]
@@ -209,7 +227,10 @@ fn refusals(study: &Study, spec: &str, project: Option<&str>) -> Vec<(String, Ve
     )
     .into_iter()
     .map(|(condition, rule, paths, context)| {
-        assert_eq!(condition, "unsupported_operation", "{spec}: {paths:?} {context:?}");
+        assert_eq!(
+            condition, "unsupported_operation",
+            "{spec}: {paths:?} {context:?}"
+        );
         assert_eq!(rule, None);
         let Value::String(operation) = &context["operation"] else {
             panic!("an operation: {context:?}")
@@ -235,15 +256,23 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
         "spec.yaml",
         &format!("{}\n  - copy: {{dataset: RAW, columns: [AGE]}}\n", spec("")),
     );
-    assert_eq!(refusals(&study, "spec.yaml", None), [refusal("copy", "columns[1]")]);
+    assert_eq!(
+        refusals(&study, "spec.yaml", None),
+        [refusal("copy", "columns[1]")]
+    );
     // Several origins (P1-13).
     study.write(
         "spec.yaml",
-        &spec(&format!("{submission}        - {{type: Predecessor, description: RAW.USUBJID}}\n")),
+        &spec(&format!(
+            "{submission}        - {{type: Predecessor, description: RAW.USUBJID}}\n"
+        )),
     );
     assert_eq!(
         refusals(&study, "spec.yaml", None),
-        [refusal("multiple_origins", "columns.USUBJID.submission.origins")]
+        [refusal(
+            "multiple_origins",
+            "columns.USUBJID.submission.origins"
+        )]
     );
     // A dataset's standard (P1-13).
     study.write(
@@ -306,7 +335,10 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
     );
     assert_eq!(
         refusals(&study, "spec.yaml", None),
-        [refusal("project_binding", "columns.BMI.derivation.function")]
+        [refusal(
+            "project_binding",
+            "columns.BMI.derivation.function"
+        )]
     );
 }
 
@@ -335,7 +367,13 @@ fn a_1_0_project_composes_its_submission() {
     let token = CancellationToken::new();
     let submit = || {
         engine
-            .project_submission(&project, Some("sdtm"), Some("2026-09-11T00:00:00"), "0.4.0", &token)
+            .project_submission(
+                &project,
+                Some("sdtm"),
+                Some("2026-09-11T00:00:00"),
+                "0.4.0",
+                &token,
+            )
             .unwrap()
     };
     let mut submission = submit();

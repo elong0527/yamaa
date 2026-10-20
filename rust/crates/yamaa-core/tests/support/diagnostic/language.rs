@@ -6,8 +6,7 @@ use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic, InheritanceFinding as F};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::language::{
-    read_header, FileType, LanguageVersion, PathBase, Reference, ReferenceFault,
-    LANGUAGE_VERSION,
+    read_header, FileType, LanguageVersion, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
 };
 use yamaa_core::schema::{
     DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaStructure,

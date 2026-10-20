@@ -69,7 +69,10 @@ pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     let mut found = Vec::new();
     for input in &spec.inputs {
         if input.source.profile == Some(Profile::OdmXml) {
-            found.push(unsupported(ODM_XML_INPUT, spec.cite(input.source.path.meta)));
+            found.push(unsupported(
+                ODM_XML_INPUT,
+                spec.cite(input.source.path.meta),
+            ));
         }
     }
     let origins = |metadata: &SubmissionMetadata, at: String, found: &mut Vec<_>| {

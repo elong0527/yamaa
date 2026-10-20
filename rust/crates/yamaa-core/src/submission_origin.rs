@@ -345,12 +345,14 @@ pub(crate) fn copies_expr(
 pub(crate) fn names_predecessor(document: &Document) -> bool {
     let root = document.root();
     let predecessor = |submission: usize| {
-        declared_origins(document, submission).iter().any(|&origin| {
-            document
-                .field(origin, "type")
-                .and_then(|kind| text(document, kind))
-                == Some(OriginType::Predecessor.name())
-        })
+        declared_origins(document, submission)
+            .iter()
+            .any(|&origin| {
+                document
+                    .field(origin, "type")
+                    .and_then(|kind| text(document, kind))
+                    == Some(OriginType::Predecessor.name())
+            })
     };
     let columns = items(document, document.field(root, "columns"));
     columns.iter().any(|&column| {

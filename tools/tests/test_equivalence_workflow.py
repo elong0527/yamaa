@@ -27,9 +27,7 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             Loader=UniqueKeyLoader,
         )
         [step] = [
-            step
-            for step in workflow["jobs"][job]["steps"]
-            if step.get("id") == "paths"
+            step for step in workflow["jobs"][job]["steps"] if step.get("id") == "paths"
         ]
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
@@ -184,7 +182,6 @@ class EquivalenceWorkflowTests(unittest.TestCase):
         self.assertIn("pull-request head", stopped.exception.stdout)
 
 
-
 class ConversionWorkflowTests(unittest.TestCase):
     """The conversion job runs on Python for a pull request whose diff reaches
     the 1.0 front end, the converter, the 1.0 schemas or the gate, and on both
@@ -237,7 +234,10 @@ class ConversionWorkflowTests(unittest.TestCase):
         triggers = workflow.get("on", workflow.get(True))
         schedules = [entry["cron"] for entry in triggers["schedule"]]
         self.assertIn("23 4 * * 1", schedules)
-        self.assertIn("github.event.schedule == '23 4 * * 1'", workflow["jobs"]["conversion"]["if"])
+        self.assertIn(
+            "github.event.schedule == '23 4 * * 1'",
+            workflow["jobs"]["conversion"]["if"],
+        )
         self.assertNotIn("schedule", workflow["jobs"]["equivalence"]["if"])
 
 

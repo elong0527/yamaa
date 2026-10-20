@@ -147,10 +147,7 @@ pub(crate) fn compose_study(
     let project = project.document();
     let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
-    let trees: Vec<_> = docs
-        .iter()
-        .map(crate::support::submission_tree)
-        .collect();
+    let trees: Vec<_> = docs.iter().map(crate::support::submission_tree).collect();
     let others: Vec<_> = others.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.iter().collect();
     let inputs: Vec<_> = docs

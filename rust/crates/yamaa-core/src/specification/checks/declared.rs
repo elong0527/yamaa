@@ -1509,8 +1509,10 @@ impl Checks<'_> {
                         crate::dataset::RelationRangeTypes::incomparable(value, lower, upper)
                     {
                         findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
-                            types
-                                .diagnostic(&format!("{}.between", spec.cite(item.meta)), identifier),
+                            types.diagnostic(
+                                &format!("{}.between", spec.cite(item.meta)),
+                                identifier,
+                            ),
                         )));
                     }
                 }

@@ -83,7 +83,9 @@ def main(argv=None):
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     fixtures, output = args.fixtures.resolve(), args.output.resolve()
     if Path(yamaa.__file__).resolve().is_relative_to(fixtures.parent):
-        raise SystemExit("the Define runner needs a package installed outside the fixtures")
+        raise SystemExit(
+            "the Define runner needs a package installed outside the fixtures"
+        )
     failures = {}
     for case in manifest["cases"]:
         try:

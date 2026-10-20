@@ -173,7 +173,10 @@ mod declaration {
             assert_eq!(
                 found,
                 [
-                    ("schema_version_mismatch", vec!["schema_version".to_string()]),
+                    (
+                        "schema_version_mismatch",
+                        vec!["schema_version".to_string()]
+                    ),
                     ("unknown_field", vec!["yamaa".to_string()]),
                     ("unknown_field", vec!["type".to_string()]),
                 ]
@@ -192,7 +195,10 @@ mod declaration {
             let producer = SPEC.replace("path: output.csv", "path: produced.csv");
             study.write(
                 "producer.yaml",
-                &producer.replace("type: int, derivation", "type: int, label: Identifier, derivation"),
+                &producer.replace(
+                    "type: int, derivation",
+                    "type: int, label: Identifier, derivation",
+                ),
             );
             study.write(
                 "spec.yaml",
@@ -228,7 +234,10 @@ mod declaration {
             let issue = only(&study.check("spec.yaml", Some("project.yaml"))).clone();
             assert_eq!(issue.condition(), "schema_version_mismatch");
             assert_eq!(issue.spec_paths, ["schema_version"]);
-            assert_eq!(issue.context["source"], study.path("python/environment.yaml"));
+            assert_eq!(
+                issue.context["source"],
+                study.path("python/environment.yaml")
+            );
             assert_eq!(issue.context["environment_path"], "environments.python");
             study.write(
                 "project.yaml",

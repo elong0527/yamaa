@@ -191,7 +191,11 @@ def key_order_texts(document):
 def empty_child(document, parent):
     """An empty child layer of `parent`, written in its parent's language: a
     1.x parent declares `yamaa`, which its child declares too (LAYER-4)."""
-    if isinstance(document, dict) and "yamaa" in document and "schema_version" not in document:
+    if (
+        isinstance(document, dict)
+        and "yamaa" in document
+        and "schema_version" not in document
+    ):
         return f'yamaa: "1.0"\ntype: spec\nparent: {parent}\n'
     return f'schema_version: "1.0"\nparent: {parent}\n'
 

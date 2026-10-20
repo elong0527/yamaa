@@ -1630,8 +1630,9 @@ fn compose_datasets(
             predecessor_labels(study, column, &origins, &path, findings);
             // The column's origin answers for every construction whose rows an
             // entry declaring its own origin does not all select (SUB-19).
-            let derivations = tree_column(input.tree, name)
-                .map_or_else(Vec::new, |column| values::column_expressions(input.tree, column));
+            let derivations = tree_column(input.tree, name).map_or_else(Vec::new, |column| {
+                values::column_expressions(input.tree, column)
+            });
             if let Some(column) = admission.admit(
                 column,
                 &column_path,

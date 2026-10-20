@@ -18,8 +18,7 @@
 //! this decoder and retires the decode ports each read site has today.
 use crate::shipped_schema;
 use crate::specification_source::{
-    CapturedFindings, CapturedParent, CapturedSchema, Error, InheritancePort, Source,
-    SourceFailure,
+    CapturedFindings, CapturedParent, CapturedSchema, Error, InheritancePort, Source, SourceFailure,
 };
 use crate::yaml_decode::{decode_yaml, DecodedYaml, SourcePosition};
 use std::sync::Arc;

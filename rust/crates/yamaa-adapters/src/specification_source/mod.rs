@@ -596,13 +596,15 @@ pub(crate) fn prepare_versioned<P: InheritancePort>(
     use yamaa_core::language::{FileType, LANGUAGE_VERSION};
     let closures = Closures::shipped().map_err(InheritanceError::Entry)?;
     let entry = source.identity.clone();
-    let versioned = match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures)
-    {
-        Ok(Decoded::Versioned(versioned)) => versioned,
-        // The caller routes only a root that declares the header here.
-        Ok(Decoded::Legacy { .. }) => return Err(InheritanceError::Entry(Error::VersionedRootRequired)),
-        Err(error) => return Err(InheritanceError::Entry(error)),
-    };
+    let versioned =
+        match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures) {
+            Ok(Decoded::Versioned(versioned)) => versioned,
+            // The caller routes only a root that declares the header here.
+            Ok(Decoded::Legacy { .. }) => {
+                return Err(InheritanceError::Entry(Error::VersionedRootRequired))
+            }
+            Err(error) => return Err(InheritanceError::Entry(error)),
+        };
     let schema = Arc::clone(versioned.schema());
     let refuse = |error| InheritanceError::Versioned {
         schema: Arc::clone(&schema),
@@ -614,9 +616,8 @@ pub(crate) fn prepare_versioned<P: InheritancePort>(
         .map_err(refuse)?;
     // A 1.0 feature the engine does not build yet is refused before binding
     // or rendering reads the specification (D76).
-    let unbuilt = yamaa_core::front_end::v1::spec::checks::unbuilt(
-        prepared.specification.lowered().spec(),
-    );
+    let unbuilt =
+        yamaa_core::front_end::v1::spec::checks::unbuilt(prepared.specification.lowered().spec());
     if !unbuilt.is_empty() {
         return Err(refuse(crate::document::SpecificationError::Unsupported(
             unbuilt,
@@ -775,9 +776,12 @@ impl PreparedDocument {
         }
     }
     pub fn dictionary_sources(&self) -> impl Iterator<Item = &Source> {
-        self.dictionaries
-            .iter()
-            .flat_map(|dictionaries| dictionaries.captures().iter().map(|capture| capture.source()))
+        self.dictionaries.iter().flat_map(|dictionaries| {
+            dictionaries
+                .captures()
+                .iter()
+                .map(|capture| capture.source())
+        })
     }
     pub(crate) fn dictionary_input<'a, E>(
         &'a self,

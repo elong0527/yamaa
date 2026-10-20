@@ -315,7 +315,8 @@ impl SchemaStructure {
         input: &SpecificationDocument,
         dictionaries: &[AdmittedMappingDictionary],
     ) -> Result<SpecificationDocument, NormalizationError> {
-        let (document, _) = self.materialize_mapping_dictionary_document(input.document(), dictionaries)?;
+        let (document, _) =
+            self.materialize_mapping_dictionary_document(input.document(), dictionaries)?;
         SpecificationDocument::admit(document)?.map_err(NormalizationError::Invalid)
     }
 

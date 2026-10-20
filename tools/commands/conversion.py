@@ -79,9 +79,7 @@ def negative_paths(fixtures):
         if rest[0] != rest[1] or len(paths[0]) != len(paths[1]):
             changed.append(name)
             continue
-        rewritten.extend(
-            (name, old, new) for old, new in zip(*paths) if old != new
-        )
+        rewritten.extend((name, old, new) for old, new in zip(*paths) if old != new)
     return changed, rewritten
 
 
@@ -160,7 +158,9 @@ def report(converted, changed, rewritten):
     print(f"excepted {len(EXCEPTED)} benchmarks:")
     for name, reason in sorted(EXCEPTED.items()):
         print(f"  {name}: {reason}")
-    print(f"negative spec paths the rename table's paths block rewrote: {len(rewritten)}")
+    print(
+        f"negative spec paths the rename table's paths block rewrote: {len(rewritten)}"
+    )
     for name, old, new in rewritten:
         print(f"  {name}: {old} -> {new}")
     for name in changed:

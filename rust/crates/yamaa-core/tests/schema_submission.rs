@@ -1088,7 +1088,7 @@ mod schema {
                 .collect();
             let trees: Vec<_> = documents
                 .iter()
-                .map(|document| crate::support::submission_tree(document))
+                .map(crate::support::submission_tree)
                 .collect();
             let inputs: Vec<_> = documents
                 .iter()
