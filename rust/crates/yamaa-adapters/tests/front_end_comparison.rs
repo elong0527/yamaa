@@ -22,9 +22,7 @@
 //! - join keys, which P1-6 declares: an input's `key`, and the key a 0.5
 //!   lookup infers against the one its conversion declares (D23, D63);
 //! - a written `minimum_source_precision` that the month and day rules
-//!   already imply (D61);
-//! - `closed` and `origins`, which the second part of P1-5 lowers, as it
-//!   prunes and orders the 1.0 tree (LAYER-11, LAYER-13).
+//!   already imply (D61).
 //!
 //! Every specification whose trees still differ is listed in [`EXPECTED`]
 //! with the reason, and the test fails when the list is wrong in either
@@ -41,8 +39,8 @@ use yamaa_adapters::shipped_schema;
 use yamaa_adapters::specification_source::{InheritancePort, Source};
 use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::ast::{
-    Closed, Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec,
-    Step, SubmissionMetadata, Written,
+    Comparator, Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec,
+    Step, Written,
 };
 use yamaa_core::expression::Context;
 use yamaa_core::front_end::v0_5::lower;
@@ -71,19 +69,11 @@ const EXPECTED: &[(&str, &str)] = &[
          this negative retire",
     ),
     (
-        "negative-review-unknown-date/spec.yaml",
-        "LAYER-11: the 0.5 tree prunes the unread column ASTDT, and part 2 prunes \
-         the 1.0 tree",
-    ),
-    (
-        "negative-subject-reference/spec.yaml",
-        "LAYER-11: the 0.5 tree prunes the unread column SITEID, and part 2 prunes \
-         the 1.0 tree",
-    ),
-    (
-        "schema-inheritance/spec_study.yaml",
-        "LAYER-11: the 0.5 tree prunes the unread input UNUSED, intermediate \
-         unused_reference and column TEMP, and part 2 prunes the 1.0 tree",
+        "negative-lookup-rename-intermediate/spec.yaml",
+        "P1-6: the converter declares the key of the intermediate CODED but not the \
+         key of its input CODING, so the 1.0 tree cannot tell that CODED only renames \
+         CODING (LOOKUP-4, D23) and prunes it unread, where 0.5 keeps it to refuse it; \
+         P1-6 writes the input's key",
     ),
     (
         "sdtm-tr-tumor-measurements/spec.yaml",
@@ -119,19 +109,12 @@ impl Drop for Scratch {
     }
 }
 
-/// Convert every benchmark into `output/benchmarks` as
-/// `python -m tools.migrate` does.
-fn convert(output: &Path) {
+/// Convert `benchmarks`, the directory of every benchmark or of one, into
+/// `output/benchmarks` as `python -m tools.migrate` does.
+fn convert(benchmarks: &str, output: &Path) {
     let result = Command::new("uv")
         .args(["run", "--project", "python", "--no-sync", "python"])
-        .args([
-            "-m",
-            "tools.migrate",
-            "benchmarks",
-            "--base",
-            ".",
-            "--output",
-        ])
+        .args(["-m", "tools.migrate", benchmarks, "--base", ".", "--output"])
         .arg(output)
         .current_dir(repository())
         .output()
@@ -287,8 +270,6 @@ enum Normalized {
     InputKey,
     LookupKey,
     MinimumPrecision,
-    Closed,
-    Origins,
 }
 
 impl Normalized {
@@ -298,8 +279,6 @@ impl Normalized {
             Self::InputKey => "an input's declared key (P1-6)",
             Self::LookupKey => "a lookup key 0.5 infers and 1.0 declares (P1-6)",
             Self::MinimumPrecision => "minimum_source_precision the rules imply (D61)",
-            Self::Closed => "endpoint inclusion, which part 2 lowers (P-ORD-2)",
-            Self::Origins => "origins, which part 2 lowers (P-ORIGIN-1)",
         }
     }
 }
@@ -340,21 +319,6 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
             left_out.insert(Normalized::InputKey);
         }
         input.key = KeyDecl::Inferred;
-    }
-    // Part 2 lowers `origins` (P-ORIGIN-1); until then 1.0 trees hold none.
-    let mut origins = |metadata: &mut SubmissionMetadata| {
-        if !metadata.origins.is_empty() {
-            metadata.origins.clear();
-            left_out.insert(Normalized::Origins);
-        }
-    };
-    for column in &mut spec.columns {
-        if let Some(submission) = &mut column.submission {
-            origins(&mut submission.metadata);
-            for level in &mut submission.value_level {
-                origins(&mut level.metadata);
-            }
-        }
     }
     for item in &mut spec.intermediates {
         if inferred.contains(&item.id.name) {
@@ -424,17 +388,6 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
                 false
             }
             ExprKind::Scalar { op, handlers, .. } => {
-                // Part 2 lowers `closed` (P-ORD-2); until then 1.0 trees hold
-                // each verb's default.
-                let (closed, default) = match op {
-                    ScalarOp::Diff { closed, .. } => (Some(closed), Closed::Right),
-                    ScalarOp::Cut { closed, .. } => (Some(closed), Closed::Left),
-                    _ => (None, Closed::Left),
-                };
-                if let Some(closed) = closed.filter(|closed| **closed != default) {
-                    *closed = default;
-                    left_out.insert(Normalized::Closed);
-                }
                 matches!(
                     op,
                     ScalarOp::Mapping { .. }
@@ -723,7 +676,7 @@ fn first_difference(left: &[String], right: &[String]) -> String {
 #[test]
 fn every_converted_benchmark_lowers_to_its_original_tree() {
     let scratch = Scratch::new();
-    convert(&scratch.0);
+    convert("benchmarks", &scratch.0);
     let benchmarks = repository().join("benchmarks");
     let mut cases = fs::read_dir(&benchmarks)
         .unwrap()
@@ -811,4 +764,80 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         settled.join("\n")
     );
     assert!(compared > 400, "only {compared} specifications compared");
+}
+
+/// A value-level comparator has no 0.5 form, so no benchmark converts to one.
+/// A converted case that writes one keeps it on the tree: `NE` as `NotIn`
+/// with its one value, as `EQ` is `In` with one, and `NOTIN` as `NotIn`,
+/// never read as a list it selects and never dropped (P-VLM-1). The switch
+/// refuses either until P1-14 builds them (P1-9, D66).
+#[test]
+fn a_converted_value_level_comparator_stays_on_the_tree() {
+    let scratch = Scratch::new();
+    convert("benchmarks/adam-adlb-metadata", &scratch.0);
+    let path = scratch.0.join("benchmarks/adam-adlb-metadata/spec.yaml");
+    let mut text = fs::read_to_string(&path).unwrap();
+    for (from, to) in [
+        (
+            "where: {PARAMCD: [GLUC]}",
+            "where: {PARAMCD: {comparator: NE, values: [GLUC]}}",
+        ),
+        (
+            "where: {PARAMCD: [CREAT]}",
+            "where: {PARAMCD: {comparator: NOTIN, values: [GLUC, HCG]}}",
+        ),
+    ] {
+        assert_eq!(text.matches(from).count(), 1, "{from}");
+        text = text.replace(from, to);
+    }
+    fs::write(&path, text).unwrap();
+    let spec = versioned(&path).unwrap_or_else(|error| panic!("lowered: {error}"));
+    let clauses = spec
+        .columns
+        .iter()
+        .filter_map(|column| column.submission.as_ref())
+        .flat_map(|submission| &submission.value_level)
+        .map(|entry| {
+            let clause = &entry.conditions[0];
+            (
+                entry.id.name.as_str(),
+                clause.comparator,
+                clause
+                    .values
+                    .iter()
+                    .map(|value| value.text.as_str())
+                    .collect::<Vec<_>>(),
+                spec.cite(clause.values[0].meta),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        clauses,
+        [
+            (
+                "GLUC",
+                Comparator::NotIn,
+                vec!["GLUC"],
+                "columns.AVAL.submission.value_level.GLUC.where.PARAMCD.values[0]".to_string()
+            ),
+            (
+                "CREAT",
+                Comparator::NotIn,
+                vec!["GLUC", "HCG"],
+                "columns.AVAL.submission.value_level.CREAT.where.PARAMCD.values[0]".to_string()
+            ),
+            (
+                "HCG",
+                Comparator::In,
+                vec!["HCG"],
+                "columns.AVALC.submission.value_level.HCG.where.PARAMCD[0]".to_string()
+            ),
+            (
+                "NUMERIC",
+                Comparator::In,
+                vec!["GLUC", "CREAT"],
+                "columns.AVALU.submission.value_level.NUMERIC.where.PARAMCD[0]".to_string()
+            ),
+        ]
+    );
 }

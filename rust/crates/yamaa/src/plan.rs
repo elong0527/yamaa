@@ -13,11 +13,13 @@
 
 use std::sync::Arc;
 
+use yamaa_adapters::application_measurements::Measurements;
+
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::Build;
 use crate::error::Error;
-use crate::internal::{outcome_accepted, Built, Compiled, EngineShared, ObserverBridge};
+use crate::internal::{Compiled, EngineShared, ObserverBridge};
 use crate::observe::Progress;
 use crate::resolver::ResourceResolver;
 
@@ -154,7 +156,7 @@ impl Plan {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
+        let measurements = Arc::new(Measurements::new());
         let progress = request
             .observer
             .as_deref()
@@ -165,10 +167,10 @@ impl Plan {
         } else {
             "refused"
         });
-        let outcome = self.run_observed(resolver, true, &measurements, progress);
-        measurements.complete(outcome_accepted(&outcome));
+        let build = self.run_observed(resolver, true, &measurements, progress);
+        measurements.complete(build.accepted());
         let subject = self.name().unwrap_or(&self.compiled.specification);
-        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
+        Ok(build.with_subject(subject))
     }
 
     /// Borrow the compilation report: a refused compilation's diagnostics,
@@ -177,20 +179,19 @@ impl Plan {
         &self.compiled.report
     }
 
-    /// One run; with `verify` it first verifies the compiled metadata.
     /// The specification's dataset name, once compilation read its document.
     pub(crate) fn name(&self) -> Option<&str> {
         self.compiled.state.name()
     }
 
+    /// One run; with `verify` it first verifies the compiled metadata.
     pub(crate) fn run_observed(
         &self,
         resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,
         verify: bool,
-        measurements: &yamaa_adapters::application_measurements::Measurements,
+        measurements: &Arc<Measurements>,
         progress: Option<&dyn Progress>,
-    ) -> Built {
-        let bridge = ObserverBridge::new(measurements, progress);
+    ) -> Build {
         crate::internal::run(
             &self.shared,
             &self.compiled.specification,
@@ -198,7 +199,7 @@ impl Plan {
             resolver,
             None,
             verify,
-            yamaa_core::application_observer::Scope::new(&bridge),
+            &ObserverBridge::new(measurements, progress),
         )
     }
 
@@ -236,10 +237,9 @@ impl Plan {
         &self,
         shared: &EngineShared,
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
-        measurements: &yamaa_adapters::application_measurements::Measurements,
+        measurements: &Arc<Measurements>,
         progress: Option<&dyn Progress>,
-    ) -> Built {
-        let bridge = ObserverBridge::new(measurements, progress);
+    ) -> Build {
         crate::internal::run(
             shared,
             &self.compiled.specification,
@@ -247,7 +247,7 @@ impl Plan {
             None,
             held,
             false,
-            yamaa_core::application_observer::Scope::new(&bridge),
+            &ObserverBridge::new(measurements, progress),
         )
     }
 }
