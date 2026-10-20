@@ -167,7 +167,8 @@ impl Plan {
         });
         let outcome = self.run_observed(resolver, true, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+        let subject = self.name().unwrap_or(&self.compiled.specification);
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
     }
 
     /// Borrow the compilation report: a refused compilation's diagnostics,
@@ -177,6 +178,11 @@ impl Plan {
     }
 
     /// One run; with `verify` it first verifies the compiled metadata.
+    /// The specification's dataset name, once compilation read its document.
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.compiled.state.name()
+    }
+
     pub(crate) fn run_observed(
         &self,
         resolver: Option<Arc<dyn yamaa_adapters::host_resources::Resolver>>,

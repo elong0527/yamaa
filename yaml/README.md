@@ -42,7 +42,7 @@ replay the same parser vectors.
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
-| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: dataset classes and subclasses, standard names, origin types and sources, column roles |
+| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: models, dataset classes and subclasses, standard names and statuses, publishing sets, origin types and sources, column roles, core designations, submission data types, where comparators |
 
 ## The 1.0 schema
 
@@ -175,12 +175,14 @@ rule, grammar, or fixture:
   decides, in each context that decides it.
 - Change a closed CDISC vocabulary in `vocabulary/cdisc.yaml` first, giving
   each added value the language version that admits it, then the schema
-  type the vocabulary names in `yaml/` and `v1/` and the engine's list.
+  type or class field the vocabulary names, in `yaml/` and `v1/` or only in
+  the schema sets its `schemas` lists, and the engine's list.
   `python -m tools.validation.check_cdisc_vocabulary` keeps each list that
   names a Define-XML enumeration equal to that enumeration in the Define-XML
-  schema bundled with the engine, and each schema type equal to its list; a
-  Rust test compares the engine's lists with the file. A vocabulary only
-  grows: no value is removed in 1.x.
+  schema bundled with the engine, and each schema type or field equal to its
+  list; a Rust test compares the engine's lists of dataset classes and
+  subclasses, standard names, origin types and sources, and roles with the
+  file. A vocabulary only grows: no value is removed in 1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

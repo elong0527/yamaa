@@ -28,30 +28,18 @@ pub(super) struct Declaration {
 pub(super) type Bounds = (Option<RelationRangeBound>, Option<RelationRangeBound>);
 
 impl Declaration {
-    /// Read the `between` field of a lookup declaration, written at `path`.
-    pub(super) fn prepare(
-        d: &Document,
-        node: usize,
-        path: &str,
-    ) -> Result<Option<Self>, PrepareError> {
-        let Some(node) = d
-            .field(node, "between")
-            .filter(|&node| !matches!(d.nodes()[node], N::Null))
-        else {
-            return Ok(None);
-        };
-        let bound = |name| {
-            d.field(node, name)
-                .filter(|&node| !matches!(d.nodes()[node], N::Null))
-                .map(|node| text(d, node).map(String::from))
-                .transpose()
-        };
-        Ok(Some(Self {
-            value: text(d, field(d, node, "value")?)?.into(),
-            lower: bound("lower")?,
-            upper: bound("upper")?,
-            path: format!("{path}.between"),
-        }))
+    /// A lookup's range from the tree.
+    pub(super) fn from_tree(
+        spec: &ast::Spec,
+        between: &ast::Between,
+    ) -> Result<Self, PrepareError> {
+        let name = |e| checks::name(spec, e).map(String::from);
+        Ok(Self {
+            value: name(between.value).ok_or(PrepareError::Internal)?,
+            lower: between.lower.and_then(name),
+            upper: between.upper.and_then(name),
+            path: checks::render(spec, between.meta),
+        })
     }
     pub(super) fn path(&self) -> &str {
         &self.path

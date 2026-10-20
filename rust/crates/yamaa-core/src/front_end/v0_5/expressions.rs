@@ -56,41 +56,41 @@ impl Lower<'_> {
                 N::Text(_) => return self.text_expression(value, at, placement),
                 N::Null | N::Boolean(_) | N::Integer(_) | N::Float(_) => {
                     let here = self.written_at(at, value);
-                    return self.push(ExprKind::Literal(self.literal(value)), here, value);
+                    return self.push(ExprKind::Literal(self.literal(value)), here);
                 }
                 _ => {}
             }
         }
         match self.node(value) {
-            N::Text(name) => self.push(ExprKind::Ref(Name(name.clone())), at, value),
+            N::Text(name) => self.push(ExprKind::Ref(Name(name.clone())), at),
             N::Mapping(entries) if entries.len() == 1 => {
                 let (key, payload) = entries[0];
                 let Some(operation) = self.text(key) else {
-                    return self.push(ExprKind::Unsupported(String::new()), at, value);
+                    return self.push(ExprKind::Unsupported(String::new()), at);
                 };
                 let site = self.meta(at, keyword(operation), Some(value));
-                match self.operation(operation, payload, site, value) {
+                match self.operation(operation, payload, site) {
                     Some(id) => id,
-                    None => self.push(ExprKind::Unsupported(operation.into()), site, value),
+                    None => self.push(ExprKind::Unsupported(operation.into()), site),
                 }
             }
-            _ => self.push(ExprKind::Unsupported(String::new()), at, value),
+            _ => self.push(ExprKind::Unsupported(String::new()), at),
         }
     }
 
-    fn operation(&mut self, op: &str, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn operation(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
         Some(match op {
-            "literal" => self.push(ExprKind::Literal(self.literal(p)), site, origin),
-            "source" => self.source(p, site, origin)?,
+            "literal" => self.push(ExprKind::Literal(self.literal(p)), site),
+            "source" => self.source(p, site)?,
             "first_available" => {
                 let sources = self.field(p, "sources")?;
-                let id = self.reserve(site, origin);
+                let id = self.reserve(site);
                 let list = self.meta(site, Segment::Field("sources"), Some(sources));
                 let mut lowered = Vec::new();
                 for (index, &source) in self.items(sources).iter().enumerate() {
                     let meta = self.meta(list, Segment::Index(index as u32), Some(source));
-                    lowered.push(self.source(source, meta, source).unwrap_or_else(|| {
-                        self.push(ExprKind::Unsupported("source".into()), meta, source)
+                    lowered.push(self.source(source, meta).unwrap_or_else(|| {
+                        self.push(ExprKind::Unsupported("source".into()), meta)
                     }));
                 }
                 let missing = self.constant(site, p, "missing");
@@ -102,29 +102,29 @@ impl Lower<'_> {
                     },
                 )
             }
-            "case" => self.case(p, site, origin)?,
-            "flag" => self.flag(p, site, origin)?,
+            "case" => self.case(p, site)?,
+            "flag" => self.flag(p, site)?,
             "compute" => {
                 let text = self.field(p, "expr").filter(|&n| self.text(n).is_some())?;
                 let text_meta = self.meta(site, Segment::Field("expr"), Some(text));
                 let path = self.render(site);
-                self.formula(Context::Compute, text, (site, text_meta), &path, origin)
+                self.formula(Context::Compute, text, (site, text_meta), &path)
             }
-            "aggregate" => self.aggregate(p, site, origin)?,
-            "odm" => self.odm(p, site, origin)?,
-            "function" => self.call(p, site, origin)?,
+            "aggregate" => self.aggregate(p, site)?,
+            "odm" => self.odm(p, site)?,
+            "function" => self.call(p, site)?,
             "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
-                self.window(op, p, site, origin)?
+                self.window(op, p, site)?
             }
-            _ => self.scalar(op, p, site, origin)?,
+            _ => self.scalar(op, p, site)?,
         })
     }
 
     /// A name read at `meta`.
     fn reference(&mut self, node: usize, meta: Meta) -> ExprId {
         match self.text(node) {
-            Some(name) => self.push(ExprKind::Ref(Name(name.into())), meta, node),
-            None => self.push(ExprKind::Unsupported(String::new()), meta, node),
+            Some(name) => self.push(ExprKind::Ref(Name(name.into())), meta),
+            None => self.push(ExprKind::Unsupported(String::new()), meta),
         }
     }
 
@@ -141,10 +141,10 @@ impl Lower<'_> {
     /// A predicate field: grammar text whose site is its own field.
     pub(super) fn predicate(&mut self, node: usize, meta: Meta) -> ExprId {
         if self.text(node).is_none() {
-            return self.push(ExprKind::Unsupported(String::new()), meta, node);
+            return self.push(ExprKind::Unsupported(String::new()), meta);
         }
         let path = self.render(meta);
-        self.formula(Context::Predicate, node, (meta, meta), &path, node)
+        self.formula(Context::Predicate, node, (meta, meta), &path)
     }
 
     /// Text in a 1.0 expression field (D18). Text holding only a name is a
@@ -184,13 +184,13 @@ impl Lower<'_> {
             match leaf {
                 Some(kind @ ExprKind::Ref(_)) if placement == Placement::Derivation => {
                     let meta = self.meta(at, keyword("source"), Some(node));
-                    return self.push(kind, meta, node);
+                    return self.push(kind, meta);
                 }
-                Some(kind) => return self.push(kind, here, node),
+                Some(kind) => return self.push(kind, here),
                 None => {}
             }
         }
-        self.compiled_formula(Context::Derivation, node, (here, here), compiled, node)
+        self.compiled_formula(Context::Derivation, node, (here, here), compiled)
     }
 
     /// Grammar text compiled once, with each name it reads as a child.
@@ -200,11 +200,10 @@ impl Lower<'_> {
         node: usize,
         metas: (Meta, Meta),
         spec_path: &str,
-        origin: usize,
     ) -> ExprId {
         let text = self.text(node).unwrap_or_default();
         let compiled = compile(text, context, spec_path);
-        self.compiled_formula(context, node, metas, compiled, origin)
+        self.compiled_formula(context, node, metas, compiled)
     }
 
     /// The formula node of text `node` compiled as `compiled`.
@@ -214,14 +213,13 @@ impl Lower<'_> {
         node: usize,
         (site, text_meta): (Meta, Meta),
         compiled: Result<CompiledExpression, crate::expression::CompileError>,
-        origin: usize,
     ) -> ExprId {
         let text = self.text(node).unwrap_or_default();
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let mut names = Vec::new();
         if let Ok(compiled) = &compiled {
             for (role, name) in formula_names(compiled) {
-                names.push((role, self.push(ExprKind::Ref(Name(name)), text_meta, node)));
+                names.push((role, self.push(ExprKind::Ref(Name(name)), text_meta)));
             }
         }
         self.fill(
@@ -241,18 +239,18 @@ impl Lower<'_> {
     /// A source binding: a bare name, or a variable with its record
     /// selection. A lone variable is the canonical `source` binding of a
     /// bare name and lowers to a reference.
-    fn source(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn source(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         if let Some(name) = self.text(p) {
-            return Some(self.push(ExprKind::Ref(Name(name.into())), site, origin));
+            return Some(self.push(ExprKind::Ref(Name(name.into())), site));
         }
         let variable = self
             .field(p, "variable")
             .filter(|&n| self.text(n).is_some())?;
         if self.entries(p).len() == 1 {
             let name = self.text(variable).unwrap_or_default();
-            return Some(self.push(ExprKind::Ref(Name(name.into())), site, origin));
+            return Some(self.push(ExprKind::Ref(Name(name.into())), site));
         }
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let variable_meta = self.meta(site, Segment::Field("variable"), Some(variable));
         let variable = self.reference(variable, variable_meta);
         let between = self.field(p, "between").map(|node| {
@@ -277,6 +275,17 @@ impl Lower<'_> {
                 keep,
                 absent,
                 require_match,
+                written: self.written(
+                    p,
+                    &[
+                        "between",
+                        "filter",
+                        "order_by",
+                        "keep",
+                        "absent",
+                        "require_match",
+                    ],
+                ),
             }),
         ))
     }
@@ -290,7 +299,7 @@ impl Lower<'_> {
             })
         };
         let value = part(self, "value")
-            .unwrap_or_else(|| self.push(ExprKind::Unsupported("between".into()), meta, node));
+            .unwrap_or_else(|| self.push(ExprKind::Unsupported("between".into()), meta));
         let lower = part(self, "lower");
         let upper = part(self, "upper");
         Between {
@@ -376,11 +385,11 @@ impl Lower<'_> {
         JoinKey::Columns { columns, meta }
     }
 
-    fn case(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn case(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         if !matches!(self.node(p), N::Sequence(_)) {
             return None;
         }
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let mut arms = Vec::new();
         for (index, &item) in self.items(p).iter().enumerate() {
             let meta = self.meta(site, Segment::Index(index as u32), Some(item));
@@ -399,7 +408,7 @@ impl Lower<'_> {
                             let at = self.meta(meta, Segment::Field("then"), Some(then));
                             self.expression(then, at)
                         }
-                        None => self.push(ExprKind::Unsupported("case".into()), meta, item),
+                        None => self.push(ExprKind::Unsupported("case".into()), meta),
                     };
                     (condition, result)
                 }
@@ -414,14 +423,14 @@ impl Lower<'_> {
     }
 
     /// `flag`: a bare predicate, or `{condition, true_value, false_value, missing}`.
-    fn flag(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn flag(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         let condition = if self.text(p).is_some() {
             p
         } else {
             self.field(p, "condition")
                 .filter(|&n| self.text(n).is_some())?
         };
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let at = self.meta(site, Segment::Field("condition"), Some(condition));
         let condition = self.predicate(condition, at);
         let true_value = self.constant(site, p, "true_value").unwrap_or_else(|| {
@@ -444,7 +453,7 @@ impl Lower<'_> {
         ))
     }
 
-    fn scalar(&mut self, op: &str, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn scalar(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
         let text = |name| self.text_of(p, name);
         let integer = |name| match self.field(p, name).map(|n| self.node(n)) {
             Some(N::Integer(text)) => Some(text.clone()),
@@ -623,10 +632,10 @@ impl Lower<'_> {
                 },
                 SOURCE,
             ),
-            "str_template" => return self.string_template(p, site, origin),
+            "str_template" => return self.string_template(p, site),
             "greatest" | "least" => {
                 let sources = self.field(p, "sources")?;
-                let id = self.reserve(site, origin);
+                let id = self.reserve(site);
                 let list = self.meta(site, Segment::Field("sources"), Some(sources));
                 let operands = self
                     .references(sources, list)
@@ -650,7 +659,7 @@ impl Lower<'_> {
                     },
                 ));
             }
-            "mapping" | "cut" => return self.mapping_cut(op, p, site, origin),
+            "mapping" | "cut" => return self.mapping_cut(op, p, site),
             _ => return None,
         };
         if fields
@@ -659,7 +668,7 @@ impl Lower<'_> {
         {
             return None;
         }
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let mut operands = Vec::new();
         for &(name, slot, _) in fields {
             if let Some(node) = self.field(p, name) {
@@ -682,9 +691,7 @@ impl Lower<'_> {
     /// An operand: a name, or a written number (`shift.days`, `shift.amount`).
     fn operand(&mut self, node: usize, meta: Meta) -> ExprId {
         match self.node(node) {
-            N::Integer(_) | N::Float(_) => {
-                self.push(ExprKind::Literal(self.literal(node)), meta, node)
-            }
+            N::Integer(_) | N::Float(_) => self.push(ExprKind::Literal(self.literal(node)), meta),
             _ => self.reference(node, meta),
         }
     }
@@ -700,7 +707,7 @@ impl Lower<'_> {
 
     /// `str_template`: the template text, written alone or with `missing`;
     /// its placeholders are the operands.
-    fn string_template(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn string_template(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         let (node, shorthand) = match self.node(p) {
             N::Text(_) => (p, true),
             _ => (
@@ -710,7 +717,7 @@ impl Lower<'_> {
             ),
         };
         let template = self.text(node)?;
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let meta = if shorthand {
             site
         } else {
@@ -720,7 +727,7 @@ impl Lower<'_> {
             crate::text_template::StringTemplate::new(template.into(), self.render(site), None);
         let mut operands = Vec::new();
         for name in parsed.iter().flat_map(|parsed| parsed.identifiers()) {
-            let expr = self.push(ExprKind::Ref(Name(name.clone())), meta, node);
+            let expr = self.push(ExprKind::Ref(Name(name.clone())), meta);
             operands.push(Operand {
                 slot: Slot::Source,
                 expr,
@@ -739,7 +746,7 @@ impl Lower<'_> {
         ))
     }
 
-    fn mapping_cut(&mut self, op: &str, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn mapping_cut(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
         let source = self.field(p, "source")?;
         let cut = if op == "cut" {
             let mut breaks = Vec::new();
@@ -762,11 +769,11 @@ impl Lower<'_> {
             }
             None
         };
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let source_meta = self.meta(site, Segment::Field("source"), Some(source));
-        let expr = match self.source(source, source_meta, source) {
+        let expr = match self.source(source, source_meta) {
             Some(expr) => expr,
-            None => self.push(ExprKind::Unsupported("source".into()), source_meta, source),
+            None => self.push(ExprKind::Unsupported("source".into()), source_meta),
         };
         let op = match cut {
             Some((breaks, labels)) => ScalarOp::Cut {
@@ -831,7 +838,7 @@ impl Lower<'_> {
         Dictionary::Inline(entries)
     }
 
-    fn window(&mut self, op: &str, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn window(&mut self, op: &str, p: usize, site: Meta) -> Option<ExprId> {
         let text = |name| self.text_of(p, name);
         let required = |name| self.field(p, name).filter(|&n| self.text(n).is_some());
         let (mut function, fields): (WindowFunction, Vec<(&'static str, Slot, usize)>) = match op {
@@ -893,7 +900,7 @@ impl Lower<'_> {
             ),
             _ => return None,
         };
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let mut operands = Vec::new();
         let mut date = None;
         for (name, slot, node) in fields {
@@ -993,7 +1000,7 @@ impl Lower<'_> {
         ))
     }
 
-    fn aggregate(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn aggregate(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         let (text, shorthand) = match self.node(p) {
             N::Text(_) => (p, true),
             _ => (
@@ -1001,7 +1008,7 @@ impl Lower<'_> {
                 self.entries(p).len() == 1,
             ),
         };
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let key = self.field(p, "key").map(|node| {
             let meta = self.meta(site, Segment::Field("key"), Some(node));
             self.join_key(node, meta)
@@ -1048,13 +1055,7 @@ impl Lower<'_> {
             self.meta(site, Segment::Field("expr"), Some(text))
         };
         let path = self.render(text_meta);
-        let expr = self.formula(
-            Context::Aggregate,
-            text,
-            (text_meta, text_meta),
-            &path,
-            text,
-        );
+        let expr = self.formula(Context::Aggregate, text, (text_meta, text_meta), &path);
         // An aggregate reads a relation when a binding or a name of its
         // expression does; only such a qualified aggregate has a key.
         let qualified = derive.is_some()
@@ -1085,6 +1086,7 @@ impl Lower<'_> {
                 group_by,
                 bindings,
                 expr,
+                written: self.written(p, &[if self.v1() { "derivations" } else { "derive" }]),
             }),
         ))
     }
@@ -1112,7 +1114,7 @@ impl Lower<'_> {
                 }
             }
             None => Derivation {
-                expr: self.push(ExprKind::Unsupported("derive".into()), meta, item),
+                expr: self.push(ExprKind::Unsupported("derive".into()), meta),
                 unconvertible: None,
                 meta,
             },
@@ -1135,7 +1137,7 @@ impl Lower<'_> {
                 self.derivation(node, derivation_meta)
             }
             None => Derivation {
-                expr: self.push(ExprKind::Unsupported("derivations".into()), meta, entry),
+                expr: self.push(ExprKind::Unsupported("derivations".into()), meta),
                 unconvertible: None,
                 meta,
             },
@@ -1149,7 +1151,7 @@ impl Lower<'_> {
     }
 
     /// `odm`: an item, written alone or with its selectors and filter.
-    fn odm(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn odm(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         let (item, shorthand) = match self.node(p) {
             N::Text(_) => (p, true),
             _ => (
@@ -1157,16 +1159,17 @@ impl Lower<'_> {
                 self.entries(p).len() == 1,
             ),
         };
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let item_meta = if shorthand {
             site
         } else {
             self.meta(site, Segment::Field("item"), Some(item))
         };
         let item = self.reference(item, item_meta);
-        let event = self.texts(site, p, "event");
-        let form = self.texts(site, p, "form");
-        let item_group = self.texts(site, p, "item_group");
+        let mut selector = |name| self.field(p, name).map(|_| self.texts(site, p, name));
+        let event = selector("event");
+        let form = selector("form");
+        let item_group = selector("item_group");
         let filter = self.field(p, "filter").map(|node| {
             let meta = self.meta(site, Segment::Field("filter"), Some(node));
             self.predicate(node, meta)
@@ -1184,9 +1187,9 @@ impl Lower<'_> {
     }
 
     /// `function`: a project call with named argument leaves.
-    fn call(&mut self, p: usize, site: Meta, origin: usize) -> Option<ExprId> {
+    fn call(&mut self, p: usize, site: Meta) -> Option<ExprId> {
         let name = self.field(p, "name").filter(|&n| self.text(n).is_some())?;
-        let id = self.reserve(site, origin);
+        let id = self.reserve(site);
         let name_meta = self.meta(site, Segment::Field("name"), Some(name));
         let function = self.named_at(self.text(name).unwrap_or_default(), name_meta);
         let mut args = Vec::new();
@@ -1205,14 +1208,32 @@ impl Lower<'_> {
                     N::Text(_) => self.reference(value, meta),
                     N::Mapping(_) => {
                         let literal = self.argument_literal(value);
-                        self.push(ExprKind::Literal(literal), meta, value)
+                        self.push(ExprKind::Literal(literal), meta)
                     }
-                    _ => self.push(ExprKind::Literal(self.literal(value)), meta, value),
+                    _ => self.push(ExprKind::Literal(self.literal(value)), meta),
                 };
                 args.push((self.named_at(argument, meta), expr));
             }
         }
-        Some(self.fill(id, ExprKind::Call { function, args }))
+        let shape = crate::ast::CallShape {
+            closed: matches!(self.node(p), N::Mapping(entries)
+                if entries.len() == 2
+                    && entries
+                        .iter()
+                        .all(|&(key, _)| matches!(self.text(key), Some("name" | "args")))),
+            args: matches!(
+                self.field(p, "args").map(|node| self.node(node)),
+                Some(N::Mapping(_))
+            ),
+        };
+        Some(self.fill(
+            id,
+            ExprKind::Call {
+                function,
+                args,
+                shape,
+            },
+        ))
     }
 
     /// A tagged argument: `{literal: TEXT | null}`, `{date: TEXT}` or `{datetime: TEXT}`.

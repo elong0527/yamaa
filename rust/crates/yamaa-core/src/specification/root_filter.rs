@@ -6,43 +6,45 @@ use crate::{
     diagnostic::{ConditionCode, Diagnostic},
 };
 
-#[derive(Debug)]
-pub(super) struct RootFilter {
-    expression: String,
-    compiled: Result<CompiledExpression, CompileError>,
-}
-impl RootFilter {
-    pub(super) fn prepare(d: &Document) -> Result<Option<Self>, PrepareError> {
-        let Some(id) = d
-            .field(d.root(), "filter")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        else {
-            return Ok(None);
-        };
-        let expression = text(d, id)?;
-        let compiled = compile(expression, ExpressionContext::Predicate, "filter");
-        if let Err(error @ CompileError::Limit { .. }) = &compiled {
-            return Err(PrepareError::expression(error.clone(), Some("filter")));
-        }
-        Ok(Some(Self {
-            expression: expression.into(),
-            compiled,
-        }))
+/// The root filter at `filter`, a formula beyond the expression compiler's
+/// limits refused before any source is read.
+pub(super) fn admit(spec: &ast::Spec, filter: Option<ExprId>) -> Result<(), PrepareError> {
+    let Some(filter) = filter else {
+        return Ok(());
+    };
+    let ExprKind::Formula(formula) = &spec.expr(filter).kind else {
+        return Err(PrepareError::Internal);
+    };
+    if let Err(error @ CompileError::Limit { .. }) = &formula.compiled {
+        return Err(PrepareError::expression(
+            error.clone(),
+            Some(&checks::render(spec, formula.text.meta)),
+        ));
     }
-    pub(super) fn bind(
-        &self,
-        driver: &str,
-        source: &TableSchema,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<BoundPredicate>, BindError> {
-        let plan = match &self.compiled {
+    Ok(())
+}
+
+/// Bind the root filter at `filter` over the base driver's records.
+pub(super) fn bind(
+    spec: &ast::Spec,
+    filter: ExprId,
+    driver: &str,
+    source: &TableSchema,
+    findings: &mut Vec<BindFinding>,
+) -> Result<Option<BoundPredicate>, BindError> {
+    {
+        let ExprKind::Formula(formula) = &spec.expr(filter).kind else {
+            return Err(BindError::Internal);
+        };
+        let path = checks::render(spec, formula.text.meta);
+        let plan = match &formula.compiled {
             Ok(plan) => plan,
             Err(CompileError::Invalid {
                 position, failure, ..
             }) => {
                 findings.push(BindFinding::Lookup(LookupFinding::grammar(
-                    "filter",
-                    &self.expression,
+                    &path,
+                    &formula.text.text,
                     position.character,
                     failure,
                 )));
@@ -60,7 +62,7 @@ impl RootFilter {
             let Some((dataset, field)) = identifier.split_once('.') else {
                 findings.push(BindFinding::Predicate(Diagnostic {
                     code: ConditionCode::RootFilterPhaseBoundary,
-                    spec_paths: vec!["filter".into()],
+                    spec_paths: vec![path.clone()],
                     context: [
                         ("identifier", identifier),
                         ("available_phase", "column_derivation"),
@@ -89,7 +91,7 @@ impl RootFilter {
                 });
             } else {
                 findings.push(BindFinding::UnknownReference {
-                    path: "filter".into(),
+                    path: path.clone(),
                     name: identifier.into(),
                 });
             }

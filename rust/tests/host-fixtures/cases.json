@@ -4249,10 +4249,15 @@
     },
     "file-resources": {
       "issue_columns": [
+        "severity",
         "phase",
         "condition",
         "rule",
         "spec_paths",
+        "file",
+        "line",
+        "column",
+        "message",
         "context",
         "source_span",
         "operand_route"
@@ -4380,10 +4385,15 @@
         "project.yaml"
       ],
       "issue_columns": [
+        "severity",
         "phase",
         "condition",
         "rule",
         "spec_paths",
+        "file",
+        "line",
+        "column",
+        "message",
         "context",
         "source_span",
         "operand_route"
@@ -4603,10 +4613,15 @@
     "public-contract": {
       "specification_yaml": "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: input.csv}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: SRC.VALUE}\noutput: {path: output.csv, columns: [ID, VALUE]}\n",
       "issue_columns": [
+        "severity",
         "phase",
         "condition",
         "rule",
         "spec_paths",
+        "file",
+        "line",
+        "column",
+        "message",
         "context",
         "source_span",
         "operand_route"
@@ -4726,17 +4741,18 @@
         ]
       },
       "messages": {
-        "failed_run_save": "cannot save a failed run; see issues",
-        "resolve": "cannot resolve the specification; see issues",
-        "unread_project": "cannot read the project; see issues",
-        "unknown_section_run": "cannot run the project; see issues",
-        "unknown_section_submission": "cannot compose the submission; see issues",
-        "refused_project_run_save": "the project run was refused; see issues",
-        "refused_submission_save": "the submission was refused; see issues",
-        "no_member_built": "the project run has no specification named \"ADSL\"; it built none",
-        "unknown_member": "the project run has no specification named \"ADSL\"; it has TEST",
-        "empty_project_run_save": "the project run built no specification, so nothing was saved",
-        "empty_submission_save": "the submission composed no section, so nothing was saved"
+        "failed_run_save": "cannot save TEST: column VALUE holds a value outside its range in 1 of the rows [range_failed, CHECK-7]",
+        "missing_run_save": "cannot save {path}: the engine refused the operation in its prepare stage: resource_missing [engine_rejected]",
+        "resolve": "cannot resolve {path}: the engine refused the operation in its prepare stage: resource_missing [engine_rejected]",
+        "unread_project": "cannot select TEST: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
+        "unknown_section_run": "cannot select bogus: the engine refused the operation in its project stage: unknown_section [engine_rejected]",
+        "unknown_section_submission": "cannot select bogus: the engine refused the operation in its project stage: unknown_section [engine_rejected]",
+        "refused_project_run_save": "cannot save {path}: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
+        "refused_submission_save": "cannot save {path}, section sdtm: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
+        "no_member_built": "cannot select ADSL: the project has no specification named ADSL [unknown_specification_name, PROJECT-6]",
+        "unknown_member": "cannot select ADSL: the project has no specification named ADSL [unknown_specification_name, PROJECT-6]",
+        "empty_project_run_save": "cannot save {path}, section sdtm: there is nothing to save [nothing_to_save, PROJECT-12]",
+        "empty_submission_save": "cannot save {path}: there is nothing to save [nothing_to_save, PROJECT-13]"
       },
       "interrupt_message": "public contract activation interrupt",
       "report_output_yaml": "columns: [ID, VALUE], report: checks.csv}",
@@ -4818,12 +4834,17 @@
           "input_csv": "ID\na\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "validation",
               "condition": "integer_overflow",
               "rule": "VALUE-5",
               "spec_paths": [
                 "columns.N.derivation.literal"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "an int value is outside the range -9223372036854775808 to 9223372036854775807",
               "context": "{\"actual\":18446744073709551616,\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808}",
               "source_span": null,
               "operand_route": null
@@ -4839,12 +4860,17 @@
           },
           "issues": [
             {
+              "severity": "error",
               "phase": "derivation",
               "condition": "division_by_zero",
               "rule": "FORMULA-15",
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "VALUE / ZERO divides by zero",
               "context": "{\"expr\":\"VALUE / ZERO\",\"keys\":[{\"EXACT\":9007199254740992,\"GAP\":null,\"ID\":\"Zo\u00eb\",\"LOW\":-9223372036854775808,\"RATE\":2.5,\"TAG\":\"a\\u0000b\",\"WHOLE\":3.0,\"WIDE\":9007199254740993}]}",
               "source_span": [
                 0,
@@ -4861,12 +4887,17 @@
           "input_csv": "ID,VALUE,ZERO\na,2.5,0\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "derivation",
               "condition": "division_by_zero",
               "rule": "FORMULA-15",
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "1 + VALUE / ZERO divides by zero",
               "context": "{\"expr\":\"1 + VALUE / ZERO\",\"keys\":[{\"ID\":\"a\"}]}",
               "source_span": [
                 4,
@@ -4885,12 +4916,17 @@
           "input_csv": "ID,G,V\na,g,2\na,g,3\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "validation",
               "condition": "invalid_field_type",
               "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
               "operand_route": null
@@ -4904,12 +4940,17 @@
           "input_csv": "ID,G,V\na,g,2\na,g,3\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "validation",
               "condition": "invalid_field_type",
               "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "columns.V.derivation.aggregate has a value of the wrong type or form",
               "context": "{\"dataset\":\"SRC\",\"expected\":\"at least one match pair\"}",
               "source_span": null,
               "operand_route": null
@@ -4923,12 +4964,17 @@
           "input_csv": "ID,G,V\na,g,2\na,g,3\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "validation",
               "condition": "invalid_field_type",
               "rule": "LOOKUP-9",
               "spec_paths": [
                 "columns.V.derivation.aggregate.between"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "columns.V.derivation.aggregate.between has a value of the wrong type or form",
               "context": "{\"expected\":\"at least one of lower, upper\"}",
               "source_span": null,
               "operand_route": null
@@ -4942,23 +4988,33 @@
           "input_csv": "ID\na\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "validation",
               "condition": "undeclared_column",
               "rule": "OUTPUT-1",
               "spec_paths": [
                 "output.columns[1]"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "X is not a declared column",
               "context": "{\"column\":\"X\"}",
               "source_span": null,
               "operand_route": null
             },
             {
+              "severity": "error",
               "phase": "validation",
               "condition": "undeclared_column",
               "rule": "OUTPUT-1",
               "spec_paths": [
                 "output.columns[2]"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "Y is not a declared column",
               "context": "{\"column\":\"Y\"}",
               "source_span": null,
               "operand_route": null
@@ -4972,10 +5028,15 @@
           "input_csv": null,
           "issues": [
             {
+              "severity": "error",
               "phase": "engine",
               "condition": "engine_rejected",
               "rule": null,
               "spec_paths": [],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "the engine refused the operation in its prepare stage: resource_missing",
               "context": "{\"code\":\"resource_missing\",\"stage\":\"prepare\"}",
               "source_span": null,
               "operand_route": null
@@ -4989,12 +5050,17 @@
           "input_csv": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "planning",
               "condition": "unsupported_operation",
               "rule": null,
               "spec_paths": [
                 "columns.WT.derivation.aggregate.between.value"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "aggregate_range_window_read is not supported by this engine",
               "context": "{\"operation\":\"aggregate_range_window_read\"}",
               "source_span": null,
               "operand_route": null
@@ -5008,12 +5074,17 @@
           "input_csv": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "planning",
               "condition": "unsupported_operation",
               "rule": null,
               "spec_paths": [
                 "columns.WT.derivation.aggregate.derive[1].derivation.source"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "aggregate_derive_window_read is not supported by this engine",
               "context": "{\"operation\":\"aggregate_derive_window_read\"}",
               "source_span": null,
               "operand_route": null
@@ -5027,12 +5098,17 @@
           "input_csv": "ID,VAL,LO,HI,W\n1,3,1,1,10\n1,5,2,9,20\n2,4,1,9,30\n",
           "issues": [
             {
+              "severity": "error",
               "phase": "planning",
               "condition": "unsupported_operation",
               "rule": null,
               "spec_paths": [
                 "columns.N.derivation.aggregate"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "output_aggregate_key is not supported by this engine",
               "context": "{\"operation\":\"output_aggregate_key\"}",
               "source_span": null,
               "operand_route": null
@@ -5304,12 +5380,17 @@
       },
       "issues": [
         {
+          "severity": "error",
           "phase": "ingest",
           "condition": "source_parquet_invalid",
           "rule": "PARQUET-5",
           "spec_paths": [
             "input.SRC.path"
           ],
+          "file": null,
+          "line": null,
+          "column": null,
+          "message": "input.parquet is not a valid Parquet file",
           "context": "{\"dataset\":\"SRC\",\"path\":\"input.parquet\"}",
           "source_span": null,
           "operand_route": null
@@ -5333,12 +5414,17 @@
           "output_csv": null,
           "issues": [
             {
+              "severity": "error",
               "phase": "derivation",
               "condition": "division_by_zero",
               "rule": "FORMULA-15",
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
+              "file": null,
+              "line": null,
+              "column": null,
+              "message": "1 + VALUE / ZERO divides by zero",
               "context": "{\"expr\":\"1 + VALUE / ZERO\",\"keys\":[{\"ID\":\"a\"}]}",
               "source_span": [
                 4,

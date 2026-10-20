@@ -191,15 +191,22 @@ impl Temporal {
             operand_route: None,
         }
     }
-    pub(crate) fn bounds_diagnostic(path: &str, value: &str) -> Diagnostic {
+    /// TIME-5's refusal of the endpoints a `diff` counts, at the field that
+    /// writes them, naming the written value and the one value permitted.
+    pub(crate) fn bounds_diagnostic(
+        path: &str,
+        field: &str,
+        value: &str,
+        permitted: &str,
+    ) -> Diagnostic {
         Diagnostic {
             code: ConditionCode::TemporalBounds,
-            spec_paths: vec![format!("{path}.bounds")],
+            spec_paths: vec![format!("{path}.{field}")],
             context: vec![
                 ("value".into(), JsonValue::String(value.into())),
                 (
                     "permitted".into(),
-                    JsonValue::Array(vec![JsonValue::String("exclusive".into())]),
+                    JsonValue::Array(vec![JsonValue::String(permitted.into())]),
                 ),
             ]
             .into_iter()

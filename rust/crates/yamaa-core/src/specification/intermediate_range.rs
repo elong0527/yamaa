@@ -7,14 +7,14 @@ use crate::{
 /// A named intermediate's range (LOOKUP-9), refused at preparation when it
 /// states neither bound.
 pub(super) fn prepare(
-    d: &Document,
-    node: usize,
-    path: &str,
-    intermediate: &str,
+    spec: &ast::Spec,
+    item: &ast::Intermediate,
 ) -> Result<Option<lookup_range::Declaration>, PrepareError> {
-    let Some(declaration) = lookup_range::Declaration::prepare(d, node, path)? else {
+    let Some(between) = &item.between else {
         return Ok(None);
     };
+    let declaration = lookup_range::Declaration::from_tree(spec, between)?;
+    let intermediate = item.id.name.as_str();
     if let Some(finding) = declaration.bounds_finding(Owner::Intermediate(intermediate)) {
         return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
             finding,
@@ -89,25 +89,20 @@ pub(super) fn bind(
     )
 }
 pub(super) fn prepare_columns(
-    d: &Document,
-    item: usize,
+    item: &ast::Intermediate,
 ) -> Result<Option<Vec<String>>, PrepareError> {
-    d.field(item, "columns")
-        .filter(|&node| !matches!(d.nodes()[node], N::Null))
-        .map(|node| {
-            let fields = sequence(d, node)?;
-            if fields.len() > crate::limits::Limits::COLUMNS {
+    item.columns
+        .as_ref()
+        .map(|columns| {
+            if columns.len() > crate::limits::Limits::COLUMNS {
                 return Err(PrepareError::limit(
                     "intermediate_columns",
                     crate::limits::Limits::COLUMNS,
-                    Some(fields.len()),
+                    Some(columns.len()),
                     None,
                 ));
             }
-            fields
-                .iter()
-                .map(|&node| text(d, node).map(String::from))
-                .collect()
+            Ok(columns.iter().map(|column| column.name.clone()).collect())
         })
         .transpose()
 }

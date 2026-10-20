@@ -94,6 +94,17 @@ unheld_integer <- function(case) {
   }
   NULL
 }
+# D39's error text: `cannot save <subject>`, then the first issue's line,
+# `<message> [<condition>, <rule>]`, and the count of the other issues.
+save_refusal_text <- function(failure, issues) {
+  rule <- issues$rule[[1L]]
+  line <- sprintf("%s [%s]", issues$message[[1L]],
+    if (is.na(rule)) issues$condition[[1L]] else paste(issues$condition[[1L]], rule, sep = ", "))
+  others <- nrow(issues) - 1L
+  if (others > 0L) line <- sprintf("%s (and %d more %s)", line, others, if (others == 1L) "issue" else "issues")
+  text <- conditionMessage(failure)
+  startsWith(text, "cannot save ") && endsWith(text, paste0(": ", line))
+}
 assert_output <- function(result, case) {
   stopifnot(nrow(result$issues) == 0L)
   unheld <- unheld_integer(case)
@@ -137,8 +148,7 @@ assert_failed <- function(result, case, root) {
     # A failed run saves nothing and signals the run's unchanged issues.
     failure <- tryCatch(result$save(), error = identity)
     stopifnot(inherits(failure, "yamaa_error"),
-      identical(conditionMessage(failure), "cannot save a failed run; see issues"),
-      identical(failure$issues, before),
+      save_refusal_text(failure, before), identical(failure$issues, before),
       identical(result$issues, before), !file.exists(file.path(root, "result.csv")))
   }
 }

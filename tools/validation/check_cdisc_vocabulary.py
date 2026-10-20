@@ -1,9 +1,10 @@
 """Keep the closed CDISC vocabularies in one data file.
 
-``yaml/vocabulary/cdisc.yaml`` holds the dataset classes and subclasses,
-standard names, origin types and sources, and column roles that a
-specification and a project file are read against (#3030 P-VOC-1). This check
-keeps the file the one source of those lists:
+``yaml/vocabulary/cdisc.yaml`` holds the models, dataset classes and
+subclasses, standard names and statuses, publishing sets, origin types and
+sources, column roles, core designations, submission data types and where
+comparators that a specification and a project file are read against (#3030
+P-VOC-1). This check keeps the file the one source of those lists:
 
 - each vocabulary lists unique values, each with the language version that
   admitted it, none newer than the file's ``version``;
@@ -11,8 +12,10 @@ keeps the file the one source of those lists:
   of the Define-XML schema bundled with the engine, whose release and
   terminology package the file's ``source`` names;
 - each schema set, the 0.5 bundles in ``yaml/`` and the 1.0 bundles in
-  ``yaml/v1/``, spells a vocabulary as the named type it names, with exactly its
-  values in its order, and the 1.0 bundles declare the file's ``version``.
+  ``yaml/v1/``, or only those a vocabulary's ``schemas`` names, spells a
+  vocabulary as the named ``type`` or the class ``field`` it names, with
+  exactly its values in its order, and the 1.0 bundles declare the file's
+  ``version``.
 """
 
 import argparse
@@ -30,13 +33,16 @@ from tools.validation.schema_bundle import Bundle
 VOCABULARY = Path("yaml/vocabulary/cdisc.yaml")
 ENUMERATIONS = Path("rust/tests/schemas/define/2.1/define-enumerations.xsd")
 SCHEMA_SETS = (Path("yaml"), Path("yaml/v1"))
+SET_NAMES = [directory.as_posix() for directory in SCHEMA_SETS]
 VERSIONED_SET = Path("yaml/v1")
 XSD = "{http://www.w3.org/2001/XMLSchema}"
 VERSION = re.compile(r"1\.(?:0|[1-9][0-9]*)")
 PACKAGE_DATE = re.compile(r"\(version (\d{4}-\d{2}-\d{2})\)")
+# A class field, written ``class.field``.
+FIELD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*")
 DOCUMENT_KEYS = {"version", "source", "vocabularies"}
 SOURCE_KEYS = {"define_xml", "terminology"}
-VOCABULARY_KEYS = {"type", "enumeration", "values"}
+VOCABULARY_KEYS = {"type", "field", "enumeration", "schemas", "values"}
 
 
 def minor(version):
@@ -81,8 +87,28 @@ def document_errors(document):
             continue
         for key in sorted(set(vocabulary) - VOCABULARY_KEYS):
             errors.append(f"ERROR: {label}.{key}: unknown field")
-        if not isinstance(vocabulary.get("type"), str):
+        if ("type" in vocabulary) == ("field" in vocabulary):
+            errors.append(f"ERROR: {label}: expected exactly one of type and field")
+        elif "type" in vocabulary and not isinstance(vocabulary["type"], str):
             errors.append(f"ERROR: {label}.type: expected the schema type name")
+        elif "field" in vocabulary and not (
+            isinstance(vocabulary["field"], str)
+            and FIELD.fullmatch(vocabulary["field"])
+        ):
+            errors.append(
+                f"ERROR: {label}.field: expected a class field as class.field"
+            )
+        sets = vocabulary.get("schemas", SET_NAMES)
+        if not (
+            isinstance(sets, list)
+            and sets
+            and all(item in SET_NAMES for item in sets)
+            and len(set(sets)) == len(sets)
+        ):
+            errors.append(
+                f"ERROR: {label}.schemas: expected distinct schema sets among "
+                f"{SET_NAMES}"
+            )
         if "enumeration" in vocabulary and not isinstance(
             vocabulary["enumeration"], str
         ):
@@ -169,8 +195,34 @@ def enumeration_errors(document, enumerations, release):
     return errors
 
 
+def compared_sets(vocabulary):
+    """The schema sets a well-formed vocabulary is compared with."""
+    names = vocabulary.get("schemas", SET_NAMES)
+    return [directory for directory in SCHEMA_SETS if directory.as_posix() in names]
+
+
+def spelling(bundle, vocabulary):
+    """The module declaring the type or class field that spells a vocabulary
+    in one schema set, and the values it lists; None when the set has neither."""
+    if "type" in vocabulary:
+        alias = bundle.aliases.get(vocabulary["type"])
+        if alias is None:
+            return None
+        # A registry type admits registered entries, never a list of values.
+        listed = [] if "registry" in alias else list(bundle.values(alias) or ())
+        return bundle.module_of[vocabulary["type"]], listed
+    owner, name = vocabulary["field"].split(".")
+    if owner not in bundle.classes:
+        return None
+    for item in bundle.fields(owner):
+        if item.name == name:
+            listed = list(bundle.values(item.descriptor) or ())
+            return bundle.module_of[item.origin], listed
+    return None
+
+
 def schema_errors(root, document):
-    """Each schema set spells each vocabulary with exactly its values."""
+    """Each schema set spells each vocabulary it holds with exactly its values."""
     errors = []
     for directory in SCHEMA_SETS:
         try:
@@ -187,17 +239,25 @@ def schema_errors(root, document):
                         f"{document['version']!r}"
                     )
         for name, vocabulary in document["vocabularies"].items():
-            spelled = vocabulary["type"]
-            label = f"{VOCABULARY}.vocabularies.{name}"
-            alias = bundle.aliases.get(spelled)
-            if alias is None:
-                errors.append(f"ERROR: {label}.type: {directory} has no type {spelled}")
+            if directory not in compared_sets(vocabulary):
                 continue
-            listed = list(bundle.values(alias) or ())
+            label = f"{VOCABULARY}.vocabularies.{name}"
+            key = "type" if "type" in vocabulary else "field"
+            try:
+                spelled = spelling(bundle, vocabulary)
+            except SchemaSourceError as exc:
+                errors.append(f"ERROR: {directory}: {exc}")
+                continue
+            if spelled is None:
+                errors.append(
+                    f"ERROR: {label}.{key}: {directory} has no {key} {vocabulary[key]}"
+                )
+                continue
+            module, listed = spelled
             if listed != values(vocabulary):
                 errors.append(
-                    f"ERROR: {directory / bundle.module_of[spelled]}: {spelled} "
-                    f"lists {listed}, but {label} lists {values(vocabulary)}"
+                    f"ERROR: {directory / module}: {vocabulary[key]} lists {listed}, "
+                    f"but {label} lists {values(vocabulary)}"
                 )
     return errors
 
@@ -230,8 +290,8 @@ def main():
     if errors:
         return 1
     print(
-        f"PASS: {VOCABULARY} matches {ENUMERATIONS} and the schema types that "
-        "spell its vocabularies."
+        f"PASS: {VOCABULARY} matches {ENUMERATIONS} and the schema types and "
+        "fields that spell its vocabularies."
     )
     return 0
 
