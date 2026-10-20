@@ -1119,6 +1119,12 @@ mod diagnostics {
                     [
                         ("stage".into(), JsonValue::String("define".into())),
                         ("code".into(), JsonValue::String("resource_limit".into())),
+                        (
+                            "detail".into(),
+                            JsonValue::String(
+                                "table_rows: required Some(10000001), limit 10000000".into(),
+                            ),
+                        ),
                         ("resource".into(), JsonValue::String("table_rows".into())),
                         ("limit".into(), JsonValue::from(10_000_000)),
                         ("actual".into(), JsonValue::from(10_000_001)),

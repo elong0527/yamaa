@@ -166,6 +166,7 @@ mod diagnostics {
                     "opaque_host",
                     "output_limit",
                     "output_projection",
+                    "output_publication_failed",
                     "output_schema",
                     "parent_required",
                     "parquet_boundary",
@@ -214,6 +215,7 @@ mod diagnostics {
                     "unknown_section",
                     "validation_policy",
                     "versioned_root_required",
+                    "yaml_admission",
                     "yaml_decode",
                     "yaml_reader_unavailable",
                 ]

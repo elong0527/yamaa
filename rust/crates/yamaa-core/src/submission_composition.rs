@@ -52,6 +52,12 @@ impl Finding {
             ),
         )
     }
+    /// Retain display detail without using it to classify the failure.
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.context
+            .insert("detail".into(), crate::json::Value::String(detail.into()));
+        self
+    }
     fn refused(path: &str, refusal: crate::diagnostic::Diagnostic) -> Self {
         Self {
             code: refusal.code,
