@@ -1,7 +1,7 @@
 #![cfg(feature = "yaml")]
 //! `check` reports a row template's phase boundaries as `domain` does
 //! (#2754): a row derivation that reads a column its template leaves to the
-//! column phase (REQ-0069), directly or through a lookup that matches on it
+//! column phase (COLUMN-4), directly or through a lookup that matches on it
 //! (LOOKUP-2). Every case lists the same issues in both routes and hosts.
 use std::{
     fs,

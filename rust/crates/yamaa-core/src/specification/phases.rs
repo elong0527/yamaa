@@ -17,7 +17,7 @@
 //!
 //! and is closed over what its row-local defaults read. A default is row
 //! local unless it is an aggregate, a window, reads a SELF lookup or reads
-//! a column that is not row local (REQ-1260); a template cannot replace a
+//! a column that is not row local (SPEC-6); a template cannot replace a
 //! default that is not row local.
 //!
 //! What a derivation reads comes from [`Spec::reads`]: the columns it reads
@@ -28,7 +28,7 @@ use super::{PreflightFinding, PrepareError};
 use crate::ast::{ExprId, ExprKind, JoinKey, Read, ScalarOp, Scope, Spec, Step, Template};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Why a default cannot complete in the row phase (REQ-1260).
+/// Why a default cannot complete in the row phase (SPEC-6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NotRowLocal {
     Aggregate,
@@ -203,7 +203,7 @@ impl<'a> Phases<'a> {
 
     /// The names `root` reads for the current row: each name read in the
     /// row's scope, except an ODM item, which names its dataset
-    /// (REQ-1265), and each key column an aggregate pairs with the row's
+    /// (NAME-7), and each key column an aggregate pairs with the row's
     /// same-named value.
     fn row_reads(&self, root: ExprId) -> Vec<&'a str> {
         self.row_reads_except(root, None)
@@ -427,7 +427,7 @@ impl<'a> Phases<'a> {
     /// lookup, which every template completes in the row phase: their source
     /// reads cannot complete in the column phase under a grouped context they
     /// cannot admit. A default that reads a lookup stays with the templates
-    /// that need it (REQ-1264), and one that reads only other inputs stays in
+    /// that need it (LOOKUP-12), and one that reads only other inputs stays in
     /// the column phase, where it binds against each row's own driver.
     /// Windows, aggregates and mappings stay in the column phase.
     fn grouped_driver_reads(&self) -> Vec<usize> {
@@ -501,7 +501,7 @@ impl<'a> Phases<'a> {
     /// qualified by its own driver is a read of its record. A key whose
     /// default reads a lookup joins only those templates, so that a
     /// candidate another template's filter suppresses never reads that lookup
-    /// (REQ-1264); any other key joins every template once one needs keys,
+    /// (LOOKUP-12); any other key joins every template once one needs keys,
     /// so that no column-phase source read runs under a grouped context it
     /// cannot admit. A window key spans the constructed dataset.
     fn key_needs(&self) -> Vec<Vec<usize>> {

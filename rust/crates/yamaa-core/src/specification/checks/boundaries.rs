@@ -1,6 +1,6 @@
 //! Phase boundaries inside row templates, from each template's phase set
 //! (#2754): a row-phase derivation reads a column its template leaves to
-//! the column phase (REQ-0069), or reads a lookup that matches on one
+//! the column phase (COLUMN-4), or reads a lookup that matches on one
 //! through its key or its range value (LOOKUP-2). Binding reports the same
 //! findings at the same sites, so `check()` and `run()` agree on them.
 //!
