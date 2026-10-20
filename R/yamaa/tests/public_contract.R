@@ -17,6 +17,11 @@ define_fixtures <- normalizePath("define-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
+# D39's error text the fixture authors under `key`, naming the path given.
+error_text <- function(key, path = NULL) {
+  text <- messages[[key]]
+  if (is.null(path)) text else sub("{path}", path, text, fixed = TRUE)
+}
 namespace <- asNamespace("yamaa")
 
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
@@ -31,12 +36,17 @@ for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_spe
   stopifnot(!exists(name, envir = namespace, inherits = FALSE))
 }
 
-# The one findings view: seven columns, context as canonical JSON text, the
-# geometry columns lists holding NULL where nothing was recorded.
+# The one findings view: the twelve columns of D28, context as canonical JSON
+# text, the geometry columns lists holding NULL where nothing was recorded,
+# and no location recorded yet (#3262).
 check_issues <- function(frame) {
   stopifnot(is.data.frame(frame),
     identical(names(frame), fixture_strings(host_truth[["issue_columns"]])),
-    all(vapply(frame[c("phase", "condition", "rule", "context")], is.character, logical(1))),
+    all(vapply(frame[c("severity", "phase", "condition", "rule", "file", "message", "context")],
+      is.character, logical(1))),
+    all(vapply(frame[c("line", "column")], is.double, logical(1))),
+    all(frame$severity == "error"), all(nzchar(frame$message)),
+    all(is.na(frame$file)), all(is.na(frame$line)), all(is.na(frame$column)),
     all(vapply(frame[c("spec_paths", "source_span", "operand_route")], is.list, logical(1))),
     all(vapply(frame$spec_paths, is.character, logical(1))),
     all(startsWith(frame$context, "{")),
@@ -59,6 +69,7 @@ unknown_member <- function(error, available) {
   nrow(issue) == 1L && identical(issue$phase, "validation") &&
     identical(issue$condition, "unknown_specification_name") &&
     identical(issue$rule, "PROJECT-6") && identical(issue$spec_paths, list(character())) &&
+    identical(issue$message, "the project has no specification named ADSL") &&
     identical(issue$context, paste0('{"available":', available, ',"name":"ADSL"}'))
 }
 # The one issue of a save with nothing to write, under `rule`.
@@ -66,7 +77,8 @@ nothing_to_save <- function(error, rule) {
   issue <- error$issues
   nrow(issue) == 1L && identical(issue$phase, "output") &&
     identical(issue$condition, "nothing_to_save") && identical(issue$rule, rule) &&
-    identical(issue$spec_paths, list(character())) && identical(issue$context, "{}")
+    identical(issue$spec_paths, list(character())) &&
+    identical(issue$message, "there is nothing to save") && identical(issue$context, "{}")
 }
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument_failure <- function(code) {
@@ -183,12 +195,14 @@ run_contract <- function() {
     is.null(run$output), is.null(run$report), identical(run$issues, checked))
   for (attempt in 1:2) {
     error <- refusal(run$save())
-    stopifnot(identical(conditionMessage(error), messages[["failed_run_save"]]),
+    # A run whose file was not read names the path as given.
+    stopifnot(identical(conditionMessage(error), error_text("missing_run_save", path("absent.yaml"))),
       identical(error$issues, checked), identical(run$issues, checked),
       identical(error$paths, character()))
   }
   error <- refusal(absent$resolve())
-  stopifnot(identical(conditionMessage(error), messages[["resolve"]]), identical(error$issues, checked))
+  stopifnot(identical(conditionMessage(error), error_text("resolve", path("absent.yaml"))),
+    identical(error$issues, checked))
 
   text_spec <- sub("VALUE, type: int", "VALUE, type: str", spec, fixed = TRUE)
   text_spec <- sub("output: {", host_truth[["empty_text_column"]], text_spec, fixed = TRUE)
@@ -246,7 +260,7 @@ run_contract <- function() {
   # unchanged and the stale output is never touched.
   for (attempt in 1:2) {
     error <- refusal(failed$save())
-    stopifnot(identical(conditionMessage(error), messages[["failed_run_save"]]),
+    stopifnot(identical(conditionMessage(error), error_text("failed_run_save")),
       identical(error$issues, issues), identical(failed$issues, issues), identical(failed$report, report),
       identical(rawfile("output.csv"), charToRaw("sentinel")),
       identical(rawfile("checks.csv"), charToRaw(host_truth[["failed_report_csv"]])))
@@ -399,14 +413,15 @@ qualify_project_run_members <- function() {
     identical(runs$report, member$report))
   locked(member, c(fixture_strings(host_truth[["read_only_views"]][["member_run"]]), "save"))
   error <- refusal(runs[["ADSL"]])
-  stopifnot(identical(conditionMessage(error), messages[["unknown_member"]]),
+  stopifnot(identical(conditionMessage(error), error_text("unknown_member")),
     unknown_member(error, '["TEST"]'))
   # A run or a submission that built nothing has nothing to save.
   error <- refusal(project$run("sdtm")$save())
-  stopifnot(identical(conditionMessage(error), messages[["empty_project_run_save"]]),
+  listing <- file.path(case, "project.yaml")
+  stopifnot(identical(conditionMessage(error), error_text("empty_project_run_save", listing)),
     nothing_to_save(error, "PROJECT-12"))
   error <- refusal(project$submission()$save())
-  stopifnot(identical(conditionMessage(error), messages[["empty_submission_save"]]),
+  stopifnot(identical(conditionMessage(error), error_text("empty_submission_save", listing)),
     nothing_to_save(error, "PROJECT-13"))
   stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
     !file.exists(file.path(case, "test.csv")), returns_paths(runs$save()),
@@ -493,10 +508,11 @@ qualify_public_large_text_callback()
 qualify_project_refusals <- function() {
   root <- tempfile("yamaa-project-refusals-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
-  project <- yamaa_project(file.path(root, "absent-project.yaml"))
+  absent <- file.path(root, "absent-project.yaml")
+  project <- yamaa_project(absent)
   error <- refusal(project$spec("TEST"))
   unread <- error$issues
-  stopifnot(identical(conditionMessage(error), messages[["unread_project"]]),
+  stopifnot(identical(conditionMessage(error), error_text("unread_project")),
     identical(unread$condition, "project_environment_missing"),
     identical(unread$spec_paths, list("environment")),
     identical(check_issues(project$check()$issues), unread))
@@ -506,23 +522,23 @@ qualify_project_refusals <- function() {
     nrow(runs$report) == 0L, identical(members(runs), expected_members("project_run")))
   locked(runs, c(fixture_strings(host_truth[["read_only_views"]][["project_run"]]), "save"))
   error <- refusal(runs$save())
-  stopifnot(identical(conditionMessage(error), messages[["refused_project_run_save"]]),
+  stopifnot(identical(conditionMessage(error), error_text("refused_project_run_save", absent)),
     identical(error$issues, unread))
   error <- refusal(runs[["ADSL"]])
-  stopifnot(identical(conditionMessage(error), messages[["no_member_built"]]), unknown_member(error, "[]"))
+  stopifnot(identical(conditionMessage(error), error_text("no_member_built")), unknown_member(error, "[]"))
   submission <- project$submission("sdtm", created = "2026-09-11T00:00:00")
   stopifnot(identical(members(submission), expected_members("submission")),
     identical(check_issues(submission$issues), unread))
   locked(submission, c(fixture_strings(host_truth[["read_only_views"]][["submission"]]), "save"))
   for (attempt in 1:2) {
     error <- refusal(submission$save())
-    stopifnot(identical(conditionMessage(error), messages[["refused_submission_save"]]),
+    stopifnot(identical(conditionMessage(error), error_text("refused_submission_save", absent)),
       identical(error$issues, submission$issues))
   }
   for (case in list(list(call = function() project$run("bogus"), message = "unknown_section_run"),
                     list(call = function() project$submission("bogus"), message = "unknown_section_submission"))) {
     error <- refusal(case$call())
-    stopifnot(identical(conditionMessage(error), messages[[case$message]]),
+    stopifnot(identical(conditionMessage(error), error_text(case$message)),
       identical(error$issues$phase, "engine"), identical(error$issues$condition, "engine_rejected"),
       identical(error$issues$context,
         '{"code":"unknown_section","section":"bogus","sections":["sdtm","adam","send"],"stage":"project"}'))
@@ -589,12 +605,17 @@ qualify_issue_parity <- function() {
     expected <- case$issues
     text <- function(field) vapply(expected, function(issue)
       if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-    actual <- list(phase = frame$phase, condition = frame$condition, rule = frame$rule,
-      spec_paths = frame$spec_paths, context = frame$context, source_span = frame$source_span,
-      operand_route = frame$operand_route)
-    truth <- list(phase = text("phase"), condition = text("condition"), rule = text("rule"),
+    number <- function(field) vapply(expected, function(issue)
+      if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
+    actual <- list(severity = frame$severity, phase = frame$phase, condition = frame$condition,
+      rule = frame$rule, spec_paths = frame$spec_paths, file = frame$file, line = frame$line,
+      column = frame$column, message = frame$message, context = frame$context,
+      source_span = frame$source_span, operand_route = frame$operand_route)
+    truth <- list(severity = text("severity"), phase = text("phase"),
+      condition = text("condition"), rule = text("rule"),
       spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
-      context = enc2utf8(text("context")),
+      file = text("file"), line = number("line"), column = number("column"),
+      message = enc2utf8(text("message")), context = enc2utf8(text("context")),
       source_span = lapply(expected, function(issue)
         if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),
       operand_route = lapply(expected, function(issue)
@@ -627,7 +648,7 @@ qualify_resolve <- function() {
     !dir.exists(file.path(root, "absent")))
   unlink(entry)
   error <- refusal(spec$resolve())
-  stopifnot(identical(conditionMessage(error), messages[["resolve"]]),
+  stopifnot(identical(conditionMessage(error), error_text("resolve", entry)),
     identical(error$issues$condition, "engine_rejected"))
 
   # The project supplies the function and names itself; the same file alone

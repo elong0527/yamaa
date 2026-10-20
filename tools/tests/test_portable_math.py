@@ -177,10 +177,15 @@ class PublicPortableMath(unittest.TestCase):
             verified.issues.to_dicts(),
             [
                 {
+                    "severity": "error",
                     "phase": "verification",
                     "condition": "assert_failed",
                     "rule": "CHECK-12",
                     "spec_paths": ["verifications[0].assert"],
+                    "file": None,
+                    "line": None,
+                    "column": None,
+                    "message": "the assert predicate is not TRUE in 1 of the rows",
                     "context": '{"failure_count":1,"keys":[{"ID":1}],'
                     '"verification_id":"historical-exp-one-limit"}',
                     "source_span": None,

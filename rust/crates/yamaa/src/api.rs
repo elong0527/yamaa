@@ -705,9 +705,7 @@ impl Submission {
             .members
             .iter()
             .filter_map(|member| match &member.work {
-                Work::Composed(define) if define.composed().is_empty() => {
-                    Some(define.transports())
-                }
+                Work::Composed(define) if define.composed().is_empty() => Some(define.transports()),
                 _ => None,
             })
             .fold((0, 0), |(defines, transports), files| {

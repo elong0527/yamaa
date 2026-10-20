@@ -1075,7 +1075,15 @@ mod tests {
             .spec_run(missing.to_str().unwrap(), None, &token)
             .unwrap();
         let failure = run.save().unwrap_err();
-        assert_eq!(failure.message, "cannot save a failed run; see issues");
+        // D39: a run whose file was not read names the path as given.
+        assert_eq!(
+            failure.message,
+            format!(
+                "cannot save {}: {}",
+                missing.to_str().unwrap(),
+                failure.diagnostics[0].text()
+            )
+        );
         assert!(failure.issues.rows() > 0);
         assert!(failure.paths.is_empty());
     }

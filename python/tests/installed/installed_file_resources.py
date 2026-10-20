@@ -24,6 +24,18 @@ from yamaa import _native
 
 TRUTH = load_truth(__file__, "file-resources")
 
+
+
+class AnyMessage:
+    """Equal to any rendered message: these cases pin what an issue is, and
+    the registry's message tests pin its words."""
+
+    def __eq__(self, other):
+        return isinstance(other, str) and bool(other)
+
+    def __repr__(self):
+        return "<a message>"
+
 ROOT = Path(__file__).with_name("specification-original")
 PATHS = TRUTH["lookup_paths"]
 
@@ -176,7 +188,12 @@ class FileResources(unittest.TestCase):
             result.issues.to_dicts(),
             [
                 {
+                    "severity": "error",
                     **finding,
+                    "file": None,
+                    "line": None,
+                    "column": None,
+                    "message": AnyMessage(),
                     "context": json.dumps(
                         finding["context"],
                         ensure_ascii=False,
@@ -354,10 +371,15 @@ class FileResources(unittest.TestCase):
                 result.issues.to_dicts(),
                 [
                     {
+                        "severity": "error",
                         "phase": "validation",
                         "condition": "resource_path_symlink",
                         "rule": "FILE-8",
                         "spec_paths": ["input.SRC.path"],
+                        "file": None,
+                        "line": None,
+                        "column": None,
+                        "message": AnyMessage(),
                         "context": TRUTH["alias_context_json"],
                         "source_span": None,
                         "operand_route": None,

@@ -864,13 +864,22 @@ class PublicDefine(unittest.TestCase):
                         "schema_version: '1.0'\nparent: base.yaml\n"
                     )
                 result = self.call(directory)
+                rows = result.issues.to_dicts()
+                # Each finding is an error with a message and, until issue
+                # locations land (#3262), no location; the case authors the
+                # rest.
+                for row in rows:
+                    self.assertEqual(row["severity"], "error")
+                    self.assertEqual((row["file"], row["line"], row["column"]), (None,) * 3)
+                    self.assertTrue(row["message"])
+                unauthored = ("severity", "file", "line", "column", "message")
                 actual = [
                     {
                         key: json.loads(value) if key == "context" else value
                         for key, value in row.items()
-                        if key not in ("source_span", "operand_route")
+                        if key not in ("source_span", "operand_route", *unauthored)
                     }
-                    for row in result.issues.to_dicts()
+                    for row in rows
                 ]
                 self.assertEqual(actual, case["issues"])
                 self.assertFalse((directory / "define.xml").exists())
