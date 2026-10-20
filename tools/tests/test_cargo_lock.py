@@ -641,6 +641,103 @@ class RLinkStepTests(unittest.TestCase):
             "link\\#1: $(SHLIB) # note: y\n\tln -s a b\n# end \\\\\\\nPKG_LIBS += -s\n",
         )
 
+    def test_a_tool_behind_a_launcher_an_assignment_or_a_keyword_refuses(self):
+        recipe = "rust_clean: $(SHLIB)\n\t"
+        for text, problem in (
+            # Each launcher, also after make's recipe prefix.
+            (recipe + "env objcopy -g $(SHLIB)\n", "a recipe runs objcopy -g;"),
+            (recipe + "@exec $(OBJCOPY) -S $(SHLIB)\n", "a recipe runs $(OBJCOPY) -S;"),
+            (
+                recipe + "time nohup nice command install -s $(SHLIB) yamaa.so\n",
+                "a recipe runs install -s;",
+            ),
+            # One or more assignments, also after a launcher.
+            (
+                recipe + "FOO=1 BAR= install -s $(SHLIB) yamaa.so\n",
+                "a recipe runs install -s;",
+            ),
+            (
+                recipe + "env LC_ALL=C objcopy -x $(SHLIB)\n",
+                "a recipe runs objcopy -x;",
+            ),
+            # Each shell keyword that a command follows.
+            (
+                recipe + "if objcopy -g $(SHLIB); then :; fi\n",
+                "a recipe runs objcopy -g;",
+            ),
+            (
+                recipe + "if true; then install -s $(SHLIB) yamaa.so; fi\n",
+                "a recipe runs install -s;",
+            ),
+            (
+                recipe + "if false; then :; elif objcopy -S $(SHLIB); then :; fi\n",
+                "a recipe runs objcopy -S;",
+            ),
+            (
+                recipe + "if false; then :; else objcopy -x $(SHLIB); fi\n",
+                "a recipe runs objcopy -x;",
+            ),
+            (
+                recipe + "while objcopy --discard-all $(SHLIB); do :; done\n",
+                "a recipe runs objcopy --discard-all;",
+            ),
+            (
+                recipe + "until install -s $(SHLIB) yamaa.so; do :; done\n",
+                "a recipe runs install -s;",
+            ),
+            (
+                recipe + "for f in $(SHLIB); do objcopy -g $$f; done\n",
+                "a recipe runs objcopy -g;",
+            ),
+            (recipe + "! objcopy -g $(SHLIB)\n", "a recipe runs objcopy -g;"),
+            (recipe + "{ objcopy -S $(SHLIB); }\n", "a recipe runs objcopy -S;"),
+            (
+                recipe + "( install -s $(SHLIB) yamaa.so )\n",
+                "a recipe runs install -s;",
+            ),
+            # A subshell's ( joined to the tool still names it.
+            (recipe + "(objcopy -x $(SHLIB))\n", "a recipe runs (objcopy -x;"),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+        # The same words before another command, or before these tools without
+        # their strip options, are admitted.
+        guard.check_r_link(
+            "src/Makevars.in",
+            recipe + "env FOO=1 ln -s target link\n"
+            "\tif test -d dir; then install -d dir; fi\n"
+            "\t{ objcopy -O binary $(SHLIB) yamaa.bin; }\n",
+        )
+
+    def test_a_single_ampersand_ends_a_shell_command(self):
+        recipe = "rust_clean: $(SHLIB)\n\t"
+        for text, problem in (
+            (recipe + "true & objcopy -g $(SHLIB)\n", "a recipe runs objcopy -g;"),
+            (
+                recipe + "objcopy -O binary $(SHLIB) x&install -s $(SHLIB) yamaa.so\n",
+                "a recipe runs install -s;",
+            ),
+            # The & of a redirection ends no command, so an option after it
+            # still counts.
+            (recipe + "objcopy 2>&1 -g $(SHLIB)\n", "a recipe runs objcopy -g;"),
+            (
+                recipe + "install &>install.log -s $(SHLIB) yamaa.so\n",
+                "a recipe runs install -s;",
+            ),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+        # The -s after a single & belongs to the next command, as after &&.
+        guard.check_r_link(
+            "src/Makevars.in", recipe + "install -d dir & ln -s target dir/link\n"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
