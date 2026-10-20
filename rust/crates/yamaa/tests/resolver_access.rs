@@ -210,12 +210,20 @@ fn a_check_reads_only_metadata_through_the_resolver() {
     let engine = case.engine();
     let token = CancellationToken::new();
     assert_eq!(
-        engine.spec_check("spec.yaml", None, &token).unwrap().rows(),
+        engine
+            .spec_check("spec.yaml", None, &token)
+            .unwrap()
+            .issues()
+            .rows(),
         0
     );
     assert_eq!(case.accesses(), set(&SPEC));
     assert_eq!(
-        engine.project_check("project.yaml", &token).unwrap().rows(),
+        engine
+            .project_check("project.yaml", &token)
+            .unwrap()
+            .issues()
+            .rows(),
         0
     );
     assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));

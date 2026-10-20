@@ -74,7 +74,7 @@ mod execution {
                     bytes: Arc::from(content.into_bytes()),
                     requests: vec![],
                 };
-                let attempt = run.execute_with_port(&mut host, Scope::default());
+                let attempt = run.execute(&mut host, Scope::default());
                 let actual = specification_report::complete(
                     &run,
                     &attempt,
@@ -402,7 +402,7 @@ mod execution {
                 published: vec![],
             };
             for created in [1, 0] {
-                let attempt = run.execute_with_port(&mut data, Scope::default());
+                let attempt = run.execute(&mut data, Scope::default());
                 let report = yamaa_adapters::specification_report::complete(
                     &run,
                     &attempt,
@@ -540,7 +540,7 @@ mod execution {
                             cause: Some(cause),
                             identity: Arc::clone(&identity),
                         };
-                        let mut attempt = run.execute_with_port(&mut port, Scope::default());
+                        let mut attempt = run.execute(&mut port, Scope::default());
                         assert_eq!(
                             port.calls,
                             if fail_at == 0 {
@@ -549,12 +549,12 @@ mod execution {
                                 vec!["DM", "AE"]
                             }
                         );
-                        let Err(PortError::Capture(error)) = &attempt.result else {
+                        let Err(PortError::Capture(error)) = &attempt.dataset.result else {
                             panic!("capture failure missing")
                         };
                         assert!(Arc::ptr_eq(&identity, &error.identity));
                         if fail_at == 1 {
-                            assert!(attempt.sources[0].table.is_some());
+                            assert!(attempt.dataset.sources[0].table.is_some());
                         }
                         let (dataset, path) = if fail_at == 0 {
                             ("DM", "input/dm.csv")
@@ -594,7 +594,8 @@ mod execution {
                             .expect("independent capture truth missing");
                         assert_eq!(expected, yamaa_adapters::json_wire::decode(row[3]).unwrap());
                         let result =
-                            specification_report::build_result(&run, &attempt, metadata()).unwrap();
+                            specification_report::build_result(&run, &attempt, metadata(), &[])
+                                .unwrap();
                         assert_eq!(result.observations(), expected);
                         assert!(result.output().is_none());
                         assert!(matches!(
@@ -603,10 +604,22 @@ mod execution {
                         ));
                         // Failed accounting and opaque host errors cannot borrow a known
                         // finding left in the source ledger to become semantic failures.
-                        attempt.sources.last_mut().unwrap().read.snapshots_created = None;
+                        attempt
+                            .dataset
+                            .sources
+                            .last_mut()
+                            .unwrap()
+                            .read
+                            .snapshots_created = None;
                         assert!(specification_report::failure(&run, &attempt, metadata()).is_err());
-                        attempt.sources.last_mut().unwrap().read.snapshots_created = Some(0);
-                        attempt.sources.last_mut().unwrap().read.failure = None;
+                        attempt
+                            .dataset
+                            .sources
+                            .last_mut()
+                            .unwrap()
+                            .read
+                            .snapshots_created = Some(0);
+                        attempt.dataset.sources.last_mut().unwrap().read.failure = None;
                         assert!(specification_report::failure(&run, &attempt, metadata()).is_err());
                     }
                 }
@@ -621,13 +634,13 @@ mod execution {
                 cause: None,
                 identity: Arc::clone(&identity),
             };
-            let attempt = run.execute_with_port(&mut port, Scope::default());
-            let Err(PortError::Capture(error)) = &attempt.result else {
+            let attempt = run.execute(&mut port, Scope::default());
+            let Err(PortError::Capture(error)) = &attempt.dataset.result else {
                 panic!("opaque failure missing")
             };
             assert!(Arc::ptr_eq(&identity, &error.identity));
-            assert_eq!(attempt.sources[0].read.failure, None);
-            assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+            assert_eq!(attempt.dataset.sources[0].read.failure, None);
+            assert!(specification_report::build_result(&run, &attempt, metadata(), &[]).is_err());
         }
 
         #[test]
@@ -723,7 +736,7 @@ mod execution {
                     if child_path.is_none() {
                         assert_eq!(run.source().path, "internal-location/nested/data.csv");
                     }
-                    let attempt = run.execute_with_port(&mut Missing, Scope::default());
+                    let attempt = run.execute(&mut Missing, Scope::default());
                     let report = specification_report::failure(
                         &run,
                         &attempt,
@@ -837,49 +850,55 @@ mod execution {
                     failures: yamaa_adapters::json_wire::decode(fields[1]).unwrap(),
                     inspected: vec![],
                 };
-                let mut attempt = run.execute_with_port(&mut port, Scope::default());
+                let mut attempt = run.execute(&mut port, Scope::default());
                 assert_eq!(port.inspected, ["DM", "AE", "MEDDRA"]);
-                assert!(attempt.sources.is_empty());
+                assert!(attempt.dataset.sources.is_empty());
                 let expected = yamaa_adapters::json_wire::decode(fields[2]).unwrap();
                 let result =
-                    specification_report::build_result(&run, &attempt, metadata()).unwrap();
+                    specification_report::build_result(&run, &attempt, metadata(), &[]).unwrap();
                 assert_eq!(result.observations(), expected, "{}", fields[0]);
                 assert!(result.output().is_none());
                 assert!(matches!(
                     result.save(&mut Publisher),
                     Err(yamaa_core::specification_output::SaveError::FailedBuild)
                 ));
-                let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+                let Err(PortError::Inspect(ref mut failures)) = attempt.dataset.result else {
                     panic!("inspection findings");
                 };
                 // A cause cannot be attached to a forged declaration, repeated source or
                 // opaque host failure merely because the rest of the ledger is valid.
                 let original = failures[0].source.clone();
                 failures[0].source.path = "forged.csv".into();
-                assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
-                let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+                assert!(
+                    specification_report::build_result(&run, &attempt, metadata(), &[]).is_err()
+                );
+                let Err(PortError::Inspect(ref mut failures)) = attempt.dataset.result else {
                     unreachable!();
                 };
                 failures[0].source = original;
                 if failures.len() > 1 {
                     failures.swap(0, 1);
                     assert!(
-                        specification_report::build_result(&run, &attempt, metadata()).is_err()
+                        specification_report::build_result(&run, &attempt, metadata(), &[])
+                            .is_err()
                     );
-                    let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+                    let Err(PortError::Inspect(ref mut failures)) = attempt.dataset.result else {
                         unreachable!();
                     };
                     failures.swap(0, 1);
                     failures[1].source = failures[0].source.clone();
                     assert!(
-                        specification_report::build_result(&run, &attempt, metadata()).is_err()
+                        specification_report::build_result(&run, &attempt, metadata(), &[])
+                            .is_err()
                     );
                 }
-                let Err(PortError::Inspect(ref mut failures)) = attempt.result else {
+                let Err(PortError::Inspect(ref mut failures)) = attempt.dataset.result else {
                     unreachable!();
                 };
                 failures[0].failure = None;
-                assert!(specification_report::build_result(&run, &attempt, metadata()).is_err());
+                assert!(
+                    specification_report::build_result(&run, &attempt, metadata(), &[]).is_err()
+                );
             }
         }
 
@@ -992,7 +1011,7 @@ mod execution {
                         bytes: input.into(),
                         reads: 0,
                     };
-                    let attempt = run.execute_with_port(&mut host, Scope::default());
+                    let attempt = run.execute(&mut host, Scope::default());
                     let result = specification_report::build_result(
                         &run,
                         &attempt,
@@ -1004,6 +1023,7 @@ mod execution {
                             specification: "spec.yaml",
                             base_directory: ".",
                         },
+                        &[],
                     )
                     .unwrap();
                     let report = result.observations();
@@ -1244,7 +1264,7 @@ mod execution {
                         expected: fixture_bytes(&row["artifact"]),
                         saves: 0,
                     };
-                    let attempt = run.execute_with_port(&mut port, Scope::default());
+                    let attempt = run.execute(&mut port, Scope::default());
                     let example = format!("source-binding-{}", case);
                     let result = specification_report::build_result(
                         &run,
@@ -1257,6 +1277,7 @@ mod execution {
                             specification: "spec.yaml",
                             base_directory: ".",
                         },
+                        &[],
                     )
                     .unwrap();
                     let mut unsaved = expected.clone();
@@ -1373,7 +1394,7 @@ mod execution {
                         expected: fixture_bytes(&row["artifact"]),
                         saves: 0,
                     };
-                    let attempt = run.execute_with_port(&mut port, Scope::default());
+                    let attempt = run.execute(&mut port, Scope::default());
                     let example = format!("mapping-cut-{}", case);
                     let result = specification_report::build_result(
                         &run,
@@ -1386,6 +1407,7 @@ mod execution {
                             specification: "spec.yaml",
                             base_directory: ".",
                         },
+                        &[],
                     )
                     .unwrap();
                     let mut unsaved = expected.clone();

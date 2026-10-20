@@ -15,6 +15,7 @@ use yamaa_adapters::{
     file_workflow,
     project_scope::{Preflight, Project},
     specification_report::Identity,
+    specification_run::NoActivation,
 };
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
@@ -302,7 +303,7 @@ fn saved_build(
     study: &Study,
     held: Option<HeldArtifacts>,
 ) -> (bool, Option<SourceOrigin>, Vec<Diagnostic>) {
-    let yamaa_core::build::Prepared::Plain(prepared) = file_workflow::select_request(
+    let prepared = file_workflow::select_request(
         yamaa_core::build::Request {
             specification: &study.path("adam/adsl.yaml"),
             environment: None,
@@ -314,9 +315,7 @@ fn saved_build(
             "{:?}",
             yamaa_adapters::project_application::selection_failure(&error)
         )
-    }) else {
-        panic!("a plain entry")
-    };
+    });
     let held = held.map(Arc::new);
     let run = || {
         let mut run = prepared.run_scope(None);
@@ -326,11 +325,20 @@ fn saved_build(
         run
     };
     let origin = prepared
-        .build(&mut run(), scope())
+        .build(&mut run(), &mut NoActivation, scope())
+        .dataset
         .sources
         .first()
         .and_then(|source| source.read.origin);
-    let issues = match file_application::plain(&prepared, &mut run(), id(), scope()) {
+    let (_, result) = file_application::run(
+        &prepared,
+        &mut run(),
+        &mut NoActivation,
+        |_| file_application::Classification::Opaque,
+        id(),
+        scope(),
+    );
+    let issues = match result {
         Ok(domain) => domain.issues(),
         Err(issues) => issues,
     };

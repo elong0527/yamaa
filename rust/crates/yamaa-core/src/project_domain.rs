@@ -81,13 +81,16 @@ pub fn check_owned(
     check_owned_linked(document, environment, Default::default())
 }
 /// Own the admitted environment beside a compilation that also admits the
-/// output contracts of linked producing specifications.
+/// output contracts of linked producing specifications. A build without a
+/// project compiles against no environment, as a specification checked alone
+/// does; its empty environment only carries the host to the build.
 pub fn check_owned_linked(
     document: &SpecificationDocument,
     environment: ExecutionEnvironment,
     links: crate::producer_contract::Links<'_>,
 ) -> Result<CheckedOwnedProject, Box<RejectedOwnedProject>> {
-    match domain::check_linked(document, Some(&environment), links) {
+    let admitted = environment.is_project().then_some(&environment);
+    match domain::check_linked(document, admitted, links) {
         Ok(checked) => Ok(CheckedOwnedProject {
             checked,
             environment,

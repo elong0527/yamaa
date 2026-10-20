@@ -1,9 +1,10 @@
 #![cfg(feature = "yaml")]
 //! One prepared value runs many times, each run in its own scope (#2821 step 1).
 //!
-//! Every route's prepared value -- plain, project, and plain with an input
-//! typed through a `schema` link -- runs twice on different studies, fails and
-//! then succeeds, and never sees a snapshot an earlier run captured. Expected artifacts are written here from the authored
+//! Every kind of prepared value -- a specification alone, with a project, and
+//! alone with an input typed through a `schema` link -- runs twice on
+//! different studies, fails and then succeeds, and never sees a snapshot an
+//! earlier run captured. Expected artifacts are written here from the authored
 //! inputs: the output declares exactly the input's columns, so each study's
 //! saved CSV is its input text.
 use std::sync::Arc;
@@ -11,17 +12,15 @@ use std::sync::Arc;
 use yamaa_adapters::{
     file_application::{self, Domain},
     file_preparation::FileSpecification,
-    file_project::FileProject,
     file_resources::RunScope,
     file_workflow,
     host_resources::{MemoryResolver, Resolver},
-    project_report,
     specification_report::Identity,
 };
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
     application_observer::Scope,
-    build::{Prepared, Request},
+    build::Request,
     function_invocation::{Argument, HostError},
     function_signature::{LogicalSignature, ProjectFunctionIdentity},
     project_activation::ActivationPort,
@@ -108,21 +107,13 @@ impl Route {
             resolver,
         )
         .unwrap_or_else(|error| panic!("compile refused: {error:?}"));
-        match (self, selected) {
-            (Route::Plain | Route::Linked, Prepared::Plain(prepared)) => {
-                Compiled::Plain(Box::new(prepared))
-            }
-            (Route::Project, Prepared::Ordinary(prepared)) => Compiled::Project(prepared),
-            _ => panic!("unexpected route"),
-        }
+        assert_eq!(selected.run().has_project(), self == Route::Project);
+        Compiled(Box::new(selected))
     }
 }
 
-/// A prepared value of one route. It is only ever borrowed by its runs.
-enum Compiled {
-    Plain(Box<FileSpecification>),
-    Project(Box<FileProject>),
-}
+/// One prepared value. It is only ever borrowed by its runs.
+struct Compiled(Box<FileSpecification>);
 
 /// One run's public result, whichever route produced it.
 enum Outcome {
@@ -174,28 +165,21 @@ impl ActivationPort for NoActivation {
 
 impl Compiled {
     fn run_scope(&self, resolver: Option<Arc<dyn Resolver>>) -> RunScope {
-        match self {
-            Compiled::Plain(prepared) => prepared.run_scope(resolver),
-            Compiled::Project(project) => project.run_scope(resolver),
-        }
+        self.0.run_scope(resolver)
     }
     /// Run once in `run`, borrowing this prepared value.
     fn run(&self, run: &mut RunScope) -> Outcome {
-        match self {
-            Compiled::Plain(prepared) => {
-                match file_application::plain(prepared, run, identity(), Scope::default()) {
-                    Ok(domain) => Outcome::Domain(Box::new(domain)),
-                    Err(issues) => Outcome::Refused(issues),
-                }
-            }
-            Compiled::Project(project) => {
-                let attempt = project.build(run, &mut NoActivation, Scope::default());
-                let result = project_report::build_result(project.run(), &attempt, identity(), &[])
-                    .unwrap_or_else(|_| panic!("project projection refused"));
-                Outcome::Domain(Box::new(
-                    Domain::from_project(result, project, run).unwrap(),
-                ))
-            }
+        let (_, result) = file_application::run(
+            &self.0,
+            run,
+            &mut NoActivation,
+            |_| file_application::Classification::Opaque,
+            identity(),
+            Scope::default(),
+        );
+        match result {
+            Ok(domain) => Outcome::Domain(Box::new(domain)),
+            Err(issues) => Outcome::Refused(issues),
         }
     }
 }
