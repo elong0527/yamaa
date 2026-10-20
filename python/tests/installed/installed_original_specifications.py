@@ -2040,7 +2040,9 @@ columns:
                 # recorded yet (#3262).
                 for row in result.issues.to_dicts():
                     self.assertEqual(row["severity"], "error")
-                    self.assertEqual((row["file"], row["line"], row["column"]), (None,) * 3)
+                    self.assertEqual(
+                        (row["file"], row["line"], row["column"]), (None,) * 3
+                    )
                     self.assertTrue(row["message"])
                 # The run report records the same outcome as the complete truth.
                 self.assertEqual(

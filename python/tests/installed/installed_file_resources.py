@@ -25,7 +25,6 @@ from yamaa import _native
 TRUTH = load_truth(__file__, "file-resources")
 
 
-
 class AnyMessage:
     """Equal to any rendered message: these cases pin what an issue is, and
     the registry's message tests pin its words."""
@@ -35,6 +34,7 @@ class AnyMessage:
 
     def __repr__(self):
         return "<a message>"
+
 
 ROOT = Path(__file__).with_name("specification-original")
 PATHS = TRUTH["lookup_paths"]

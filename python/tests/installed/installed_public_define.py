@@ -870,7 +870,9 @@ class PublicDefine(unittest.TestCase):
                 # rest.
                 for row in rows:
                     self.assertEqual(row["severity"], "error")
-                    self.assertEqual((row["file"], row["line"], row["column"]), (None,) * 3)
+                    self.assertEqual(
+                        (row["file"], row["line"], row["column"]), (None,) * 3
+                    )
                     self.assertTrue(row["message"])
                 unauthored = ("severity", "file", "line", "column", "message")
                 actual = [
