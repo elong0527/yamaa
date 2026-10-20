@@ -23,7 +23,7 @@ class RenderingTests(unittest.TestCase):
         self.public = public.Public(self.definition)
 
     def test_python_exports_the_declared_names(self):
-        names = ["Error", "__version__", "project", "read_odm", "spec"]
+        names = ["Error", "__version__", "lint", "project", "read_odm", "spec"]
         self.assertEqual(self.public.python_names(), names)
         module = ast.parse(self.public.render_python([]))
         exported = next(
@@ -67,6 +67,7 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_spec)",
                 "export(yamaa_project)",
                 "export(yamaa_read_odm)",
+                "export(yamaa_lint)",
                 'S3method("[[", yamaa_project_run)',
             ],
         )
@@ -83,6 +84,29 @@ class RenderingTests(unittest.TestCase):
                 self.assertIn(expected, text)
         # Only objects an S3 method or a private accessor reaches keep a handle.
         self.assertEqual(text.count("object$.handle <- native"), 2)
+
+    def test_a_path_list_converts_each_path_in_both_hosts(self):
+        python = self.public.render_python([])
+        self.assertIn("def lint(paths, fix: bool = False) -> _pl.DataFrame:", python)
+        self.assertIn(
+            "return _table(_call(_native._lint, _fspaths(paths), fix))", python
+        )
+        self.assertIn(
+            'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))',
+            self.public.render_r([]),
+        )
+
+    def test_a_long_helper_import_is_split_one_name_per_line(self):
+        text = self.public.render_python([])
+        self.assertIn("from yamaa._support import (\n    __version__,\n", text)
+        candidate = copy.deepcopy(self.definition)
+        candidate["public"]["functions"].remove(function(candidate, "lint"))
+        short = public.Public(candidate).render_python([])
+        self.assertIn(
+            "from yamaa._support import __version__, _fspath, _Lazy, _optional_table, "
+            "_pl, _table\n",
+            short,
+        )
 
     def test_a_removed_function_leaves_both_hosts_and_the_namespace(self):
         candidate = copy.deepcopy(self.definition)
@@ -126,7 +150,7 @@ class ValidationTests(unittest.TestCase):
             (
                 "unknown token",
                 lambda d: d["public"]["types"].update(
-                    path_list={"python": "x", "r": "y"}
+                    paths_written={"python": "x", "r": "y"}
                 ),
             ),
             ("undeclared type token", lambda d: d["public"]["types"].pop("count")),

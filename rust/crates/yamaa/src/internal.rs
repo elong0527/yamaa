@@ -171,7 +171,7 @@ pub(crate) fn resolver_bridge(
 pub(crate) fn read_project(
     shared: &EngineShared,
     project: &str,
-) -> Result<yamaa_adapters::project_scope::Project, Vec<yamaa_adapters::issue_rows::Issue>> {
+) -> Result<yamaa_adapters::project_scope::Project, Vec<yamaa_core::diagnostic::Diagnostic>> {
     yamaa_adapters::project_scope::Project::read(project, shared.language, resolver_bridge(shared))
 }
 
@@ -318,7 +318,7 @@ pub(crate) fn format_project_attempt(
     identity: yamaa_adapters::specification_report::Identity<'_>,
     project: &yamaa_adapters::file_project::FileProject,
     run_scope: &yamaa_adapters::file_resources::RunScope,
-) -> Result<yamaa_adapters::file_application::Domain, Vec<yamaa_adapters::issue_rows::Issue>> {
+) -> Result<yamaa_adapters::file_application::Domain, Vec<yamaa_core::diagnostic::Diagnostic>> {
     use yamaa_adapters::project_report::Classified;
     let mut borrowed = Vec::new();
     yamaa_adapters::project_attempt::visit_host_failures(attempt, |stage, error| {
@@ -359,27 +359,27 @@ pub(crate) enum BuildOutcome {
     Plain {
         result: Result<
             yamaa_adapters::file_application::Domain,
-            Vec<yamaa_adapters::issue_rows::Issue>,
+            Vec<yamaa_core::diagnostic::Diagnostic>,
         >,
     },
     Project {
         attempt: Box<ProjectAttempt>,
         result: Result<
             yamaa_adapters::file_application::Domain,
-            Vec<yamaa_adapters::issue_rows::Issue>,
+            Vec<yamaa_core::diagnostic::Diagnostic>,
         >,
     },
     SelectionFailed {
-        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
         sources: RetainedSources,
     },
     Unsupported {
-        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
     },
     /// A project-run specification that did not build: a project finding
     /// failed it, or a producer it reads failed or did not run.
     Refused {
-        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
     },
 }
 
@@ -402,7 +402,7 @@ impl EngineRuntime<'_> {
     /// activation or any study read. The refusal keeps the compiled sources.
     fn refusal(
         &self,
-        verify: impl FnOnce() -> Result<(), Vec<yamaa_adapters::issue_rows::Issue>>,
+        verify: impl FnOnce() -> Result<(), Vec<yamaa_core::diagnostic::Diagnostic>>,
         sources: impl FnOnce() -> RetainedSources,
     ) -> Option<BuildOutcome> {
         if !self.verify {
@@ -506,7 +506,7 @@ pub(crate) fn run_check(
     specification: &str,
     environment: Option<&str>,
     token: &CancellationToken,
-) -> Result<Vec<yamaa_adapters::issue_rows::Issue>, Error> {
+) -> Result<Vec<yamaa_core::diagnostic::Diagnostic>, Error> {
     if token.is_cancelled() {
         return Err(Error::Cancelled);
     }
@@ -527,14 +527,14 @@ pub(crate) fn run_check(
 pub(crate) enum Compiled {
     Ready(Box<yamaa_adapters::file_workflow::Selected>),
     Refused {
-        issues: Vec<yamaa_adapters::issue_rows::Issue>,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
         sources: RetainedSources,
     },
 }
 
 fn selection_failed(
     error: &yamaa_adapters::file_workflow::SelectionError,
-) -> (Vec<yamaa_adapters::issue_rows::Issue>, RetainedSources) {
+) -> (Vec<yamaa_core::diagnostic::Diagnostic>, RetainedSources) {
     (
         yamaa_adapters::project_application::selection_failure(error),
         error.retained_sources(),
@@ -687,8 +687,8 @@ pub(crate) fn outcome_accepted(outcome: &BuildOutcome) -> bool {
     }
 }
 
-/// The issue rows of one outcome, live from its current state.
-pub(crate) fn outcome_issues(outcome: &BuildOutcome) -> Vec<yamaa_adapters::issue_rows::Issue> {
+/// The issues of one outcome, live from its current state.
+pub(crate) fn outcome_issues(outcome: &BuildOutcome) -> Vec<yamaa_core::diagnostic::Diagnostic> {
     match outcome {
         BuildOutcome::Plain { result } | BuildOutcome::Project { result, .. } => match result {
             Ok(domain) => domain.issues(),

@@ -3,6 +3,7 @@
 //! observe file geometry and codecs without interpreting submission declarations.
 use crate::json::Value as JsonValue;
 use crate::{
+    application_issue::{Fault, Stage},
     diagnostic::{ConditionCode, Diagnostic},
     limits::Limits,
     project_terminology::Catalogue,
@@ -140,13 +141,12 @@ fn published_csv_failure<E, PE>(
     dataset: &str,
     written: &str,
 ) -> Failure<E, PE> {
-    if let crate::csv_source::Error::Limit {
-        resource,
-        limit,
-        actual,
-    } = *error
-    {
-        return published_boundary_failure(
+    match *error {
+        crate::csv_source::Error::Limit {
+            resource,
+            limit,
+            actual,
+        } => published_boundary_failure(
             crate::limits::LimitExceeded {
                 resource,
                 limit,
@@ -154,16 +154,20 @@ fn published_csv_failure<E, PE>(
             },
             dataset,
             written,
-        );
-    }
-    published_source_failure(
-        error.finding(dataset, written),
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            written,
-            "published CSV admission",
         ),
-    )
+        crate::csv_source::Error::Profile {
+            cause,
+            record,
+            ref field,
+        } => Failure::Diagnostic(vec![crate::diagnostic::SourceFinding::Csv {
+            cause,
+            record,
+            field,
+            dataset,
+            path: written,
+        }
+        .diagnostic()]),
+    }
 }
 fn published_typed_csv_failure<E, PE>(
     error: &crate::typed_csv::Error,
@@ -796,8 +800,8 @@ pub fn resource_diagnostic(
     use ResourceObservation as R;
     if let R::Limit(error) = observation {
         let mut diagnostic = crate::application_issue::resource_rejected(
-            "define",
-            "resource_limit",
+            Stage::Define,
+            Fault::ResourceLimit,
             error.resource,
             error.limit,
             error.actual,
@@ -813,39 +817,42 @@ pub fn resource_diagnostic(
         R::Missing => ConditionCode::ResourceMissing,
         R::NotRegularFile => ConditionCode::ResourceNotRegularFile,
         R::Changed => ConditionCode::ResourceContentChanged,
-        _ => ConditionCode::ApplicationRejected,
+        _ => {
+            let fault = match observation {
+                R::Unreadable => Fault::ResourceUnreadable,
+                R::InvalidRoot => Fault::ResourceRoot,
+                R::InvalidBase => Fault::ResourceBase,
+                R::InvalidPath => Fault::ResourcePath,
+                R::InvalidLock => Fault::InvalidPackagingLock,
+                R::OutsideRoots => Fault::ResourceOutsideRoots,
+                R::Symlink => Fault::ResourceLink,
+                R::Limit(_) => unreachable!("fixed boundary projected above"),
+                R::Missing | R::NotRegularFile | R::Changed => {
+                    unreachable!("normative resource cause selected")
+                }
+            };
+            let mut diagnostic = crate::application_issue::rejected(Stage::Define, fault);
+            diagnostic.spec_paths = vec![path.into()];
+            diagnostic
+                .context
+                .insert("path".into(), JsonValue::String(written.into()));
+            return diagnostic;
+        }
     };
-    let mut context: crate::diagnostic::Context =
-        [(String::from("path"), JsonValue::String(written.into()))].into();
-    if code == ConditionCode::ApplicationRejected {
-        let classification = match observation {
-            R::Unreadable => "resource_unreadable",
-            R::InvalidRoot => "resource_root",
-            R::InvalidBase => "resource_base",
-            R::InvalidPath => "resource_path",
-            R::InvalidLock => "invalid_packaging_lock",
-            R::OutsideRoots => "resource_outside_roots",
-            R::Symlink => "resource_link",
-            R::Limit(_) => unreachable!("fixed boundary projected above"),
-            R::Missing | R::NotRegularFile | R::Changed => {
-                unreachable!("normative resource cause selected")
-            }
-        };
-        context.insert("stage".into(), JsonValue::String("define".into()));
-        context.insert("code".into(), JsonValue::String(classification.into()));
-    }
     Diagnostic {
         code,
         spec_paths: vec![path.into()],
-        context,
+        context: [(String::from("path"), JsonValue::String(written.into()))].into(),
         source_span: None,
         operand_route: None,
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PublicationFailure {
+    /// The target was refused before any byte was written, for the reason
+    /// the adapter classified from its typed cause.
     #[error("define target admission")]
-    TargetAdmission,
+    TargetAdmission(Fault),
     #[error("define publication")]
     Publication,
 }
@@ -856,28 +863,26 @@ pub fn publication_diagnostic(
     stage: PublicationFailure,
     cause: String,
 ) -> Diagnostic {
-    let code = match stage {
-        PublicationFailure::TargetAdmission => ConditionCode::ApplicationRejected,
-        PublicationFailure::Publication => ConditionCode::OutputPublicationFailed,
+    let mut diagnostic = match stage {
+        PublicationFailure::TargetAdmission(fault) => {
+            crate::application_issue::rejected(Stage::PublicationTargetAdmission, fault)
+        }
+        PublicationFailure::Publication => Diagnostic {
+            code: ConditionCode::OutputPublicationFailed,
+            spec_paths: Vec::new(),
+            context: Default::default(),
+            source_span: None,
+            operand_route: None,
+        },
     };
-    let mut context: crate::diagnostic::Context = [
-        (String::from("artifact"), JsonValue::from(index)),
-        (String::from("cause"), JsonValue::String(cause)),
-    ]
-    .into();
-    if stage == PublicationFailure::TargetAdmission {
-        context.insert(
-            "stage".into(),
-            JsonValue::String("publication_target_admission".into()),
-        );
+    diagnostic.spec_paths = vec!["define".into()];
+    for (key, value) in [
+        ("artifact", JsonValue::from(index)),
+        ("cause", JsonValue::String(cause)),
+    ] {
+        diagnostic.context.insert(key.into(), value);
     }
-    Diagnostic {
-        code,
-        spec_paths: vec!["define".into()],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    diagnostic
 }
 
 impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::fmt::Display for SaveFailure<E, PE> {

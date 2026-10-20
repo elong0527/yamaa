@@ -49,7 +49,7 @@
         "format_name": {
           "type": "string",
           "minLength": 1,
-          "description": "Transport format name carried for a reader.",
+          "description": "Transport format name carried for a reader (CT-12).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },

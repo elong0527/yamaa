@@ -10,9 +10,17 @@ from and every one is unchanged, and compiles again otherwise.
 """
 
 from yamaa import _native
-from yamaa._support import __version__, _fspath, _Lazy, _optional_table, _pl, _table
+from yamaa._support import (
+    __version__,
+    _fspath,
+    _fspaths,
+    _Lazy,
+    _optional_table,
+    _pl,
+    _table,
+)
 
-__all__ = ["Error", "__version__", "project", "read_odm", "spec"]
+__all__ = ["Error", "__version__", "lint", "project", "read_odm", "spec"]
 
 
 class Error(Exception):
@@ -210,3 +218,8 @@ def read_odm(
             max_xml_depth,
         )
     )
+
+
+def lint(paths, fix: bool = False) -> _pl.DataFrame:
+    """Lint specification files, first applying the proved layout fixes when fix is true."""
+    return _table(_call(_native._lint, _fspaths(paths), fix))

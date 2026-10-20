@@ -1,5 +1,6 @@
 //! Shared submission composition over admitted metadata. No study or host ports.
 use crate::{
+    application_issue as issue,
     diagnostic::{ConditionCode, Definition},
     project_environment::Submission,
     project_terminology as ct,
@@ -26,6 +27,36 @@ impl Finding {
             code,
             path: path.into(),
             context: [("detail".into(), crate::json::Value::String(detail.into()))].into(),
+        }
+    }
+    /// An engine fault at `path`, naming its stage and closed code (D73).
+    pub fn fault(path: &str, stage: issue::Stage, fault: issue::Fault) -> Self {
+        Self::refused(path, issue::rejected(stage, fault))
+    }
+    /// The bound an engine pass hit at `path`, with its resource facts.
+    pub fn limit(
+        path: &str,
+        stage: issue::Stage,
+        fault: issue::Fault,
+        bound: crate::limits::LimitExceeded,
+    ) -> Self {
+        Self::refused(
+            path,
+            issue::resource_rejected(
+                stage,
+                fault,
+                bound.resource,
+                bound.limit,
+                bound.actual,
+                Vec::new(),
+            ),
+        )
+    }
+    fn refused(path: &str, refusal: crate::diagnostic::Diagnostic) -> Self {
+        Self {
+            code: refusal.code,
+            path: path.into(),
+            context: refusal.context,
         }
     }
 }
@@ -1875,6 +1906,60 @@ pub fn compose(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An engine refusal at a submission path names its stage and closed
+    /// code; a bound adds its resource facts, without an unknown size.
+    #[test]
+    fn engine_refusals_name_their_stage_code_and_bound() {
+        use crate::json::Value as V;
+        use crate::limits::{LimitExceeded, Limits};
+        let text = |value: &str| V::String(value.into());
+        let fault = Finding::fault(
+            "define",
+            issue::Stage::Define,
+            issue::Fault::OutputProjection,
+        );
+        assert_eq!(fault.code, ConditionCode::ApplicationRejected);
+        assert_eq!(fault.path, "define");
+        assert_eq!(
+            fault.context,
+            [
+                ("code".into(), text("output_projection")),
+                ("stage".into(), text("define")),
+            ]
+            .into()
+        );
+        let rows = Limits::table(Limits::TABLE_ROWS + 1, 1).unwrap_err();
+        let unsized_output = LimitExceeded {
+            resource: "output_bytes",
+            limit: Limits::OUTPUT_BYTES,
+            actual: None,
+        };
+        for (bound, fault, actual) in [
+            (
+                rows,
+                issue::Fault::ResourceLimit,
+                Some(Limits::TABLE_ROWS + 1),
+            ),
+            (unsized_output, issue::Fault::OutputLimit, None),
+        ] {
+            let finding =
+                Finding::limit("datasets.DM.transport", issue::Stage::Define, fault, bound);
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.path, "datasets.DM.transport");
+            let mut expected: crate::diagnostic::Context = [
+                ("code".into(), text(fault.as_str())),
+                ("limit".into(), V::from(bound.limit)),
+                ("resource".into(), text(bound.resource)),
+                ("stage".into(), text("define")),
+            ]
+            .into();
+            if let Some(actual) = actual {
+                expected.insert("actual".into(), V::from(actual));
+            }
+            assert_eq!(finding.context, expected);
+        }
+    }
 
     #[test]
     fn transport_names_are_upper_case_and_at_most_eight_characters() {

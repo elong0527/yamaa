@@ -439,8 +439,8 @@ record was serialized with `model_dump(mode="json")`. Only the existing
 nor candidate diagnostics were used to obtain expectations. No study file was
 opened. Existing benchmark expectations remain unchanged.
 
-Both installed hosts and the original-document adapter compare each complete
-envelope. The core registry test also reaches all twelve preflight causes through
+Both installed hosts and the original-document adapter compare each envelope's
+status and complete findings. The core registry test also reaches all twelve preflight causes through
 actual compilation, including the existing Parquet redundant-type requirement.
 Null requirements and unavailable dataset values are intentional reference truth;
 empty lists and ordered repeated/listed row names must remain intact. This is

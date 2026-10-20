@@ -27,6 +27,15 @@ values.report_outcome.succeeded
 values.report_outcome.failed
 values.report_outcome.held
 values.report_outcome.violated
+values.lint_finding.field_order
+values.lint_finding.root_spacing
+values.lint_finding.entry_spacing
+values.lint_finding.blank_lines
+values.lint_finding.line_width
+values.lint_finding.invalid_suppression
+values.lint_finding.repeated_row_derivation
+values.lint_finding.redundant_intermediate
+values.lint_finding.missing_label
 tables.issues.columns[0]: phase: str, values phase
 tables.issues.columns[1]: condition: str, values yaml/conditions.yaml
 tables.issues.columns[2]: requirement: optional<str>
@@ -48,6 +57,12 @@ tables.report.columns[10]: COUNT: optional<int>
 tables.report.columns[11]: TOTAL: optional<int>
 tables.report.columns[12]: KEYS: optional<str>
 tables.report.columns[13]: DETAILS: str
+tables.lint.columns[0]: file: str
+tables.lint.columns[1]: line: int
+tables.lint.columns[2]: column: int
+tables.lint.columns[3]: finding: str, values lint_finding
+tables.lint.columns[4]: spec_path: str
+tables.lint.columns[5]: message: str
 tables.odm_items.columns[0]: ODMVersion: optional<str>
 tables.odm_items.columns[1]: FileOID: optional<str>
 tables.odm_items.columns[2]: StudyOID: optional<str>
@@ -79,6 +94,7 @@ tables.odm_items.columns[27]: ValuePresent: str
 tables.odm_items.columns[28]: IsNull: str
 tables.odm_items.columns[29]: SourceOrdinal: int
 public.types.path: python str or os.PathLike, unannotated; r character(1)
+public.types.path_list: python a path or a list of paths, unannotated; r character()
 public.types.text: python str; r character(1)
 public.types.optional_text: python str | None; r character(1) or NULL
 public.types.count: python int; r numeric(1), a whole number
@@ -98,6 +114,9 @@ public.functions.read_odm.args[1]: archive_member: optional_text = None; keyword
 public.functions.read_odm.args[2]: max_archive_members: count = 10000; keyword-only
 public.functions.read_odm.args[3]: max_expanded_bytes: count = 268435456; keyword-only
 public.functions.read_odm.args[4]: max_xml_depth: count = 64; keyword-only
+public.functions.lint: python yamaa.lint; r yamaa_lint; returns table; table lint; raises refusal
+public.functions.lint.args[0]: paths: path_list
+public.functions.lint.args[1]: fix: flag = false
 public.classes.Check: python yamaa.Check; r yamaa_check
 public.classes.Check.issues: field; returns table; table issues
 public.classes.Run: python yamaa.Run; r yamaa_run
@@ -137,10 +156,12 @@ public.classes.Project.submission.args[1]: created: optional_text = None; keywor
 public.errors.refusal: python yamaa.Error(Exception) with issues: table; r yamaa_error, error, condition with message: text, call: NULL, issues: table
 public.python.exports.Error
 public.python.exports.__version__
+public.python.exports.lint
 public.python.exports.project
 public.python.exports.read_odm
 public.python.exports.spec
 public.r.exports.yamaa_spec
 public.r.exports.yamaa_project
 public.r.exports.yamaa_read_odm
+public.r.exports.yamaa_lint
 public.r.s3methods.yamaa_project_run.[[
