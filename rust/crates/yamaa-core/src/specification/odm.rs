@@ -72,8 +72,9 @@ pub(super) fn prepare(
     })
 }
 
-/// `record_rows` makes each no-rows output row one base record, whose item
-/// group the read takes its scope from, as an ungrouped row template does.
+/// `record_rows` makes each row of the implicit template one base record,
+/// whose item group the read takes its scope from, as an ungrouped row
+/// template does.
 pub(super) fn bind(
     declaration: &Declaration,
     catalog: &Catalog,

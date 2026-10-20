@@ -1,5 +1,6 @@
 //! Independent vocabulary/context truth from actual shared expression failures.
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -28,7 +29,7 @@ pub(crate) fn check(
     assert_eq!(finding.context, expected);
     assert_eq!(finding.source_span, None);
     assert_eq!(finding.operand_route, None);
-    finding.code
+    rendered(&finding)
 }
 /// One syntax condition, one refused-construct cause and one refused-function
 /// cause serve compute and aggregate alike.
@@ -150,7 +151,7 @@ pub(crate) fn predicate_reached(
         assert_eq!(d.context["position"], V::from(position.character));
         assert_eq!(d.source_span, None);
         assert_eq!(d.operand_route, None);
-        reached.insert(d.code);
+        reached.insert(rendered(&d));
     }
     let expression = "A = 9223372036854775808";
     let Err(CompileError::Invalid {
@@ -178,6 +179,6 @@ pub(crate) fn predicate_reached(
     );
     assert_eq!(d.source_span, None);
     assert_eq!(d.operand_route, None);
-    reached.insert(d.code);
+    reached.insert(rendered(&d));
     reached
 }

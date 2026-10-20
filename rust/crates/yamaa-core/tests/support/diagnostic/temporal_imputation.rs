@@ -1,3 +1,4 @@
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
@@ -47,7 +48,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     };
     for (month, day, minimum, condition, rule, path, fields) in [
         (

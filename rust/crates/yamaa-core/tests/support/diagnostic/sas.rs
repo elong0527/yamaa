@@ -1,5 +1,6 @@
 //! Native codecs supply classified SAS facts at this core-owned projection boundary.
 //! Core diagnostics remain independent of the adapter's C parser and filesystem.
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, SourceFinding};
 use yamaa_core::json::Value as V;
@@ -47,7 +48,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(diagnostic.context, context);
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached
 }

@@ -1,9 +1,6 @@
 //! Bind ordered case predicates to the same scalar grain as their derivation.
 use super::*;
-use crate::{
-    bound_expression::BoundPredicate,
-    dataset::{Intermediate, SecondarySource},
-};
+use crate::bound_expression::BoundPredicate;
 
 fn unknown(path: &str, name: &str) -> BindFinding {
     let mut finding = LookupFinding::new(
@@ -59,18 +56,86 @@ pub(super) fn retain_reference_owner(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+/// A case branch's predicate, each name bound once in this scope. `case`
+/// is where the enclosing `case` started recording findings: a row
+/// template's predicate is built only while the whole `case` has none.
 pub(super) fn bind(
-    spec: &PreparedSpecification,
+    cx: &mut BindContext<'_, '_>,
     plan: &CompiledExpression,
-    column: usize,
-    catalog: &Catalog,
-    secondary: &[SecondarySource],
-    intermediates: &[Option<Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    case: usize,
 ) -> Result<Option<BoundPredicate>, BindError> {
-    let start = findings.len();
+    if let Some(implicit) = cx.implicit() {
+        return implicit_predicate(cx, implicit, plan);
+    }
+    let mut bindings = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for identifier in plan.identifiers() {
+        if !seen.insert(identifier) {
+            continue;
+        }
+        if let crate::reference_scope::Phase::Row { group_by } = cx.scope.phase {
+            if identifier
+                .split_once('.')
+                .is_some_and(|(dataset, _)| cx.catalog.joined(dataset).is_some())
+            {
+                let mut finding = LookupFinding::new(
+                    plan.spec_path(),
+                    if group_by.is_some() {
+                        crate::diagnostic::ConditionCode::GroupedRowNumericSourceScope
+                    } else {
+                        crate::diagnostic::ConditionCode::RowNumericSourceScope
+                    },
+                );
+                finding.text("identifier", identifier);
+                finding.texts("drivers", &[cx.scope.driver]);
+                cx.findings.push(BindFinding::Lookup(finding));
+                continue;
+            }
+        }
+        let reference_start = cx.findings.len();
+        let expression = cx.operand(identifier, plan.spec_path())?;
+        retain_reference_owner(&mut cx.findings[reference_start..], cx.catalog)?;
+        if let Some(expression) = expression {
+            let read = match expression {
+                Expression::Source(column) => Read::Source(column),
+                Expression::Column(column) => Read::Column(column),
+                Expression::Intermediate { index, column } => Read::Intermediate { index, column },
+                Expression::Joined(read) => Read::Joined(read),
+                _ => return Err(BindError::Internal),
+            };
+            bindings.push(Binding {
+                name: identifier.into(),
+                read,
+            });
+        }
+    }
+    if cx.findings.len() == case {
+        Ok(Some(
+            BoundPredicate::new_contextual(cx.captured().typed(plan), bindings, Vec::new())
+                .map_err(BindError::InvalidPredicateBinding)?,
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
+/// The implicit template's predicate: a lookup read takes its selector's
+/// record; a driver field of a non-key column is collected over the row's
+/// records; an unknown bare name a single input stores suggests that
+/// input's field; and every static type fault is reported (FORMULA-5,
+/// FORMULA-12).
+fn implicit_predicate(
+    cx: &mut BindContext<'_, '_>,
+    implicit: binder::Implicit<'_>,
+    plan: &CompiledExpression,
+) -> Result<Option<BoundPredicate>, BindError> {
+    let catalog = cx.catalog;
+    let binder::Donors {
+        named,
+        secondary,
+        items,
+    } = cx.donors;
+    let start = cx.findings.len();
     let mut bindings = Vec::new();
     let mut collected = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -78,20 +143,21 @@ pub(super) fn bind(
         if !seen.insert(name) {
             continue;
         }
-        let reference_start = findings.len();
-        let read = if let Some((index, field)) = spec.intermediates.reference(name) {
-            if let Some(item) = &intermediates[index] {
-                edges.extend(item.output_dependencies());
+        let reference_start = cx.findings.len();
+        let read = if let Some((index, field)) = named.reference(name) {
+            if let Some(item) = &items[index] {
+                cx.edges.extend(item.output_dependencies());
                 if let Some(column) = item.source_column(secondary, field) {
                     Some(Read::Intermediate { index, column })
                 } else {
-                    findings.push(BindFinding::Lookup(LookupFinding::reference(
-                        plan.spec_path(),
-                        name,
-                        None,
-                        ReferenceCause::Value,
-                        None,
-                    )));
+                    cx.findings
+                        .push(BindFinding::Lookup(LookupFinding::reference(
+                            plan.spec_path(),
+                            name,
+                            None,
+                            ReferenceCause::Value,
+                            None,
+                        )));
                     continue;
                 }
             } else {
@@ -107,8 +173,8 @@ pub(super) fn bind(
                 catalog,
                 None,
                 None,
-                edges,
-                findings,
+                cx.edges,
+                cx.findings,
             )?
             .and_then(|expression| match expression {
                 Expression::Joined(read) => Some(Read::Joined(read)),
@@ -117,11 +183,11 @@ pub(super) fn bind(
         } else {
             match catalog.bind(name) {
                 Some(reference_binding::Binding::Output { column, .. }) => {
-                    edges.push(column);
+                    cx.edges.push(column);
                     Some(Read::Column(column))
                 }
                 Some(reference_binding::Binding::Dataset { field, .. }) => {
-                    if !spec.keys.contains(&column) {
+                    if !implicit.key {
                         collected.push(name.into());
                     }
                     Some(Read::Source(field))
@@ -129,7 +195,7 @@ pub(super) fn bind(
                 None => None,
             }
         };
-        retain_reference_owner(&mut findings[reference_start..], catalog)?;
+        retain_reference_owner(&mut cx.findings[reference_start..], catalog)?;
         if let Some(read) = read {
             bindings.push(Binding {
                 name: name.into(),
@@ -144,17 +210,17 @@ pub(super) fn bind(
                     );
                     finding.text("identifier", name);
                     finding.text("suggestion", &format!("{owner}.{name}"));
-                    findings.push(BindFinding::Predicate(finding.diagnostic()));
+                    cx.findings
+                        .push(BindFinding::Predicate(finding.diagnostic()));
                     continue;
                 }
             }
-            findings.push(unknown(plan.spec_path(), name));
+            cx.findings.push(unknown(plan.spec_path(), name));
         }
     }
-    let captured =
-        types::CapturedTypes::new(&spec.intermediates, catalog, secondary, intermediates);
-    captured.predicate(plan, findings);
-    if findings.len() != start {
+    let captured = cx.captured();
+    captured.predicate(plan, cx.findings);
+    if cx.findings.len() != start {
         return Ok(None);
     }
     BoundPredicate::new_contextual(captured.typed(plan), bindings, collected)

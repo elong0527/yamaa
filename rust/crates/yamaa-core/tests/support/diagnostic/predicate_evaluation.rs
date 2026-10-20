@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
 pub(crate) use yamaa_core::json::Value as V;
 pub(crate) use yamaa_core::{
@@ -110,7 +111,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         );
         assert_eq!(d.source_span, None);
         assert_eq!(error.expression, expression);
-        assert!(reached.insert(d.code));
+        assert!(reached.insert(rendered(&d)));
     }
     reached
 }

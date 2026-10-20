@@ -101,6 +101,48 @@ def load_condition_registry(root: Path):
     return registry, []
 
 
+# A `{key}` placeholder, a doubled literal brace, or a stray brace.
+MESSAGE_TOKEN = re.compile(r"\{\{|\}\}|\{([a-z][a-z0-9_]*)\}|[{}]")
+
+
+def message_placeholders(template: str) -> list[str] | None:
+    """The keys a message template names, or None when a brace is stray."""
+    keys = []
+    for token in MESSAGE_TOKEN.finditer(template):
+        if token[0] in ("{{", "}}"):
+            continue
+        if token[1] is None:
+            return None
+        keys.append(token[1])
+    return keys
+
+
+def message_errors(template) -> list[str]:
+    """Why a condition's message template breaks the message form (P-MSG-1).
+
+    A message is one plain clause: printable ASCII on one line, starting in
+    lower case or with a placeholder, with no final period. Braces are
+    `{key}` placeholders or doubled literal braces.
+    """
+    if not isinstance(template, str) or not template:
+        return ["expected non-empty text"]
+    errors = []
+    if not all(" " <= character <= "~" for character in template):
+        errors.append("expected printable ASCII on one line")
+    if template != template.strip() or "  " in template:
+        errors.append("expected single spaces and no surrounding space")
+    if not (
+        "a" <= template[0] <= "z"
+        or (template[0] == "{" and not template.startswith("{{"))
+    ):
+        errors.append("expected a lower-case start or a placeholder")
+    if template.endswith("."):
+        errors.append("expected no final period")
+    if message_placeholders(template) is None:
+        errors.append("expected `{key}` placeholders and doubled literal braces")
+    return errors
+
+
 def validate_condition_registry(root: Path, registry):
     errors = []
     label = "yaml/conditions.yaml"
@@ -130,8 +172,10 @@ def validate_condition_registry(root: Path, registry):
         if not isinstance(registration, dict):
             errors.append(f"ERROR: {path}: expected a mapping")
             continue
-        for field in sorted(set(registration) - {"phases"}):
+        for field in sorted(set(registration) - {"phases", "message"}):
             errors.append(f"ERROR: {path}.{field}: unknown field")
+        for problem in message_errors(registration.get("message")):
+            errors.append(f"ERROR: {path}.message: {problem}")
         phases = registration.get("phases")
         if not (
             isinstance(phases, list)

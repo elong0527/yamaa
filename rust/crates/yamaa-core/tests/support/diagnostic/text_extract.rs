@@ -1,3 +1,4 @@
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
@@ -98,7 +99,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         );
         assert!(finding.source_span.is_none());
         assert!(finding.operand_route.is_none());
-        reached.insert(finding.code);
+        reached.insert(rendered(&finding));
     }
     let wide = "100000000000000000000000000000000000000000000000000000000000000000000000000000000";
     let invalid = make("(a)", wide);

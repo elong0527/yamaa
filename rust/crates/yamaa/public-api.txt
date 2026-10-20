@@ -7,6 +7,7 @@ yamaa: pub mod diagnostic
 yamaa: pub mod engine
 yamaa: pub mod error
 yamaa: pub mod functions
+yamaa: pub mod info
 yamaa: pub mod lint
 yamaa: pub mod observe
 yamaa: pub mod odm
@@ -48,9 +49,11 @@ yamaa::Float64Array: pub use yamaa::table::Float64Array
 yamaa::FunctionError: pub use yamaa::error::FunctionError
 yamaa::FunctionHandle: pub use yamaa::functions::FunctionHandle
 yamaa::FunctionIdentity: pub use yamaa::functions::FunctionIdentity
+yamaa::Host: pub use yamaa::info::Host
 yamaa::HostLanguage: pub use yamaa::functions::HostLanguage
 yamaa::HostPayload: pub use yamaa::error::HostPayload
 yamaa::ISSUE_COLUMNS: pub use yamaa::diagnostic::ISSUE_COLUMNS
+yamaa::Info: pub use yamaa::info::Info
 yamaa::InputFrame: pub use yamaa::table::InputFrame
 yamaa::Int64Array: pub use yamaa::table::Int64Array
 yamaa::LINT_COLUMNS: pub use yamaa::lint::LINT_COLUMNS
@@ -186,6 +189,7 @@ yamaa::diagnostic::Diagnostic: impl Diagnostic
 yamaa::diagnostic::Diagnostic: pub struct Diagnostic [derive(Clone, Debug, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::Diagnostic::code: pub code: String
 yamaa::diagnostic::Diagnostic::context: pub context: DiagnosticContext
+yamaa::diagnostic::Diagnostic::message: pub message: String
 yamaa::diagnostic::Diagnostic::operand_route: pub operand_route: Option<Vec<String>>
 yamaa::diagnostic::Diagnostic::phase: pub phase: String
 yamaa::diagnostic::Diagnostic::rule: pub rule: Option<String>
@@ -411,6 +415,21 @@ yamaa::functions::Signature::may_return_missing: pub may_return_missing: bool
 yamaa::functions::Signature::parameters: pub parameters: Vec<Parameter>
 yamaa::functions::Signature::returns: pub returns: ColumnType
 yamaa::functions::decode_renv_lock: pub fn decode_renv_lock(bytes: &[u8]) -> Result<RenvLock, LockSyntaxError>
+yamaa::info: pub use yamaa::info::info
+yamaa::info::Host: impl Host
+yamaa::info::Host: pub enum Host [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::info::Host::Cli: Cli
+yamaa::info::Host::Python: Python
+yamaa::info::Host::R: R
+yamaa::info::Host::as_str: pub fn as_str(self) -> &'static str
+yamaa::info::Info: pub struct Info [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::info::Info::features: pub features: Vec<&'static str>
+yamaa::info::Info::host: pub host: Host
+yamaa::info::Info::host_version: pub host_version: Option<String>
+yamaa::info::Info::language_versions: pub language_versions: Vec<String>
+yamaa::info::Info::platform: pub platform: String
+yamaa::info::Info::version: pub version: &'static str
+yamaa::info::info: pub fn info(host: Host, host_version: Option<&str>) -> Info
 yamaa::lint: pub use yamaa::lint::lint
 yamaa::lint::LINT_COLUMNS: pub const LINT_COLUMNS: [&str; 6]
 yamaa::lint::LINT_FINDINGS: pub const LINT_FINDINGS: [&str; 9]

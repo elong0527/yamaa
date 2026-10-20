@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use crate::support::project_call_compiler as support;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use support::Tree as T;
@@ -13,6 +14,10 @@ pub(crate) use yamaa_core::{
 };
 pub(crate) struct Row(pub(crate) Vec<Value>);
 pub(crate) fn compiled() -> PreparedSpecification {
+    compiled_with("warning")
+}
+/// The declarations of `compiled`, with the `unique` check at `severity`.
+pub(crate) fn compiled_with(severity: &str) -> PreparedSpecification {
     let list = || T::List(vec![T::text("VAL"), T::text("ID")]);
     let spec = support::specification_with_verifications(
         vec![(
@@ -30,7 +35,7 @@ pub(crate) fn compiled() -> PreparedSpecification {
                 T::map(vec![
                     ("columns", list()),
                     ("id", T::text("u")),
-                    ("severity", T::text("warning")),
+                    ("severity", T::text(severity)),
                 ]),
             )]),
             T::map(vec![(
@@ -133,7 +138,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let projected = project(&compiled, &records, phase, "test.yaml").unwrap();
         if code == VerificationUniqueFailed {
             assert!(projected.diagnostics.is_empty());
+            // At error severity the same failure is an issue.
+            let strict = compiled_with("error");
+            let issues = project(&strict, &records, phase, "test.yaml").unwrap();
+            assert_eq!(issues.diagnostics.len(), 1);
+            reached.insert(rendered(&issues.diagnostics[0]));
         } else {
+            reached.insert(rendered(&projected.diagnostics[0]));
             assert_eq!(projected.diagnostics.len(), 1);
             assert_eq!(projected.diagnostics[0].code, code);
             assert_eq!(
@@ -152,7 +163,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         } else {
             assert!(projected.observations.is_empty());
         }
-        reached.insert(code);
     }
     reached
 }

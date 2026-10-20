@@ -802,6 +802,64 @@ class PublicConformance(unittest.TestCase):
         self.assertEqual(entries["python"][0]["environment"], "project.yaml")
         self.assertEqual(entries["r"][0]["environment"], "project.yaml")
 
+    def command_line(self):
+        return judge.plan(self.fixtures)["examples"][0]["cli"]
+
+    def test_command_line_runs_each_call_and_names_a_project_spec(self):
+        self.assertEqual(
+            self.example["cli"],
+            {
+                "excluded": None,
+                "calls": [
+                    {
+                        "specification": "spec.yaml",
+                        "environment": None,
+                        "arguments": ["run", "spec.yaml"],
+                    }
+                ],
+            },
+        )
+        # With a project, the call names its specification by `domain` (D68).
+        (self.case / "project.yaml").write_text(
+            'schema_version: "1.0"\nsdtm:\n  specs: [spec.yaml]\n'
+        )
+        self.assertEqual(
+            self.command_line()["calls"][0]["arguments"],
+            ["run", "project.yaml", "--spec", "TEST"],
+        )
+        # A specification that names no domain gives its call no command line.
+        (self.case / "spec.yaml").write_text(SPEC.replace("domain: TEST\n", ""))
+        self.assertIsNone(self.command_line()["calls"][0]["arguments"])
+
+    def test_command_line_excludes_benchmarks_whose_project_supplies_functions(self):
+        project = self.case / "project.yaml"
+        # A 0.5 project links the environment files that declare the
+        # functions; a 1.0 project lists function files (D8).
+        for text in (
+            'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n',
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/bmi.yaml]\n',
+        ):
+            project.write_text(text)
+            self.assertEqual(
+                self.command_line(),
+                {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+            )
+        # A 1.0 project's environments hold only locks, and an unreadable
+        # project supplies nothing; the hosts report why it cannot be read.
+        for text in (
+            'yamaa: "1.0"\ntype: project\nenvironments:\n  python: {lock: uv.lock}\n',
+            "sdtm: [unclosed\n",
+        ):
+            project.write_text(text)
+            self.assertIsNone(self.command_line()["excluded"])
+        # A benchmark's own exclusion holds for the command line too.
+        (self.case / "benchmark.yaml").write_text(
+            METADATA + "conformance:\n  excluded: a reviewed reason\n"
+        )
+        self.assertEqual(
+            self.command_line(), {"excluded": "a reviewed reason", "calls": []}
+        )
+
     def child_variant(self, **overrides):
         variant = copy.deepcopy(self.build)
         variant.update(
@@ -1072,6 +1130,41 @@ class PublicConformance(unittest.TestCase):
             self.assertIn(benchmark, names)
             self.assertIn(check, {"empty_child", "key_order"})
             self.assertTrue(item.get("issue") or item.get("permanent"))
+
+    def test_corpus_command_line_plan_excludes_only_project_function_benchmarks(self):
+        corpus = judge.plan(ROOT / "benchmarks")
+        names = {example["name"]: example for example in corpus["examples"]}
+        for name in ("adam-adsl-bmi", "schema-functions"):
+            self.assertEqual(
+                names[name]["cli"],
+                {"excluded": judge.CLI_FUNCTION_EXCLUSION, "calls": []},
+            )
+        for name, example in names.items():
+            entries = example["entries"]
+            if example["cli"]["excluded"]:
+                # Only a project supplies project functions.
+                self.assertTrue(
+                    any(call["environment"] for call in entries["python"]), name
+                )
+                continue
+            # The command line makes the hosts' calls, so they must agree.
+            self.assertEqual(entries["python"], entries["r"], name)
+            calls = example["cli"]["calls"]
+            self.assertEqual(
+                [
+                    {key: call[key] for key in ("specification", "environment")}
+                    for call in calls
+                ],
+                entries["python"],
+                name,
+            )
+            for call in calls:
+                self.assertIsNotNone(call["arguments"], name)
+                self.assertEqual(
+                    call["arguments"][:2],
+                    ["run", call["environment"] or call["specification"]],
+                    name,
+                )
 
 
 if __name__ == "__main__":

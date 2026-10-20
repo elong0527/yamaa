@@ -586,24 +586,30 @@ pub(super) fn bind(
         let column = stored.columns().len() + index;
         let mut edges = Vec::new();
         let start = findings.len();
-        let expression = derivations::bind_row(
+        let expression = BindContext {
+            scope: binder::Scope {
+                template: binder::Template::Any,
+                phase: crate::reference_scope::Phase::Row { group_by: None },
+                driver: dataset,
+                available: Some(&available),
+            },
+            donors: binder::Donors {
+                named: &contextual_names,
+                secondary: &secondary,
+                items: &earlier,
+            },
+            catalog: &catalog,
+            output: &output,
+            project,
+            tree,
+            edges: &mut edges,
+            findings: &mut *findings,
+            reported: false,
+        }
+        .bind(
             &declaration.branch.operation,
             &declaration.branch.path,
             column,
-            &catalog,
-            dataset,
-            None,
-            crate::reference_scope::Phase::Row { group_by: None },
-            Some(&available),
-            &mut edges,
-            findings,
-            false,
-            &output,
-            project,
-            tree,
-            &contextual_names,
-            &secondary,
-            &earlier,
         )?;
         donor_scope_findings(&mut findings[start..], reader, named, &unavailable);
         if let Some(finding) = declaration

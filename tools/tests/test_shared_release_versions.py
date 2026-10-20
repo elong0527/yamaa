@@ -371,6 +371,7 @@ class CandidateRelease(ReleaseTree):
         for name in (
             "yamaa",
             "yamaa-adapters",
+            "yamaa-cli",
             "yamaa-core",
             "yamaa-python",
             "yamaa-r",

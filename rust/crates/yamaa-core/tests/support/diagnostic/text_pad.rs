@@ -1,3 +1,4 @@
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
@@ -28,5 +29,5 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     );
     assert_eq!(d.source_span, None);
     assert_eq!(d.operand_route, None);
-    BTreeSet::from([d.code])
+    BTreeSet::from([rendered(&d)])
 }

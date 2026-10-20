@@ -1848,8 +1848,8 @@ fn template_driver(cx: &Cx<'_>, mode: &RowMode) -> Result<DriverContext, Resolut
 }
 
 /// Deferred column-phase ODM reads carry one scope per template; every read
-/// of one declaration shares the scopes `Rows::bind` derived once. The walk
-/// follows the ODM visitor of the bound plan.
+/// of one declaration shares the scopes binding derived once for its row
+/// templates. The walk follows the ODM visitor of the bound plan.
 fn deferred_odm(expression: &Expression) -> Option<&[OdmTemplateScope]> {
     use Expression as E;
     match expression {

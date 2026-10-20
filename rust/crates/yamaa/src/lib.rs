@@ -48,6 +48,7 @@ pub mod diagnostic;
 pub mod engine;
 pub mod error;
 pub mod functions;
+pub mod info;
 pub mod lint;
 pub mod observe;
 pub mod odm;
@@ -78,6 +79,7 @@ pub use functions::{
     FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
     Signature,
 };
+pub use info::{info, Host, Info};
 pub use lint::{lint, LINT_COLUMNS, LINT_FINDINGS};
 pub use observe::{CallStage, DatasetPhase, Event, Outcome, Phase, Progress, Refusal};
 pub use odm::{read_odm, OdmOptions, ODM_COLUMNS};

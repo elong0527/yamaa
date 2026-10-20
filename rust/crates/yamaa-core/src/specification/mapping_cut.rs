@@ -127,35 +127,6 @@ fn kind_name(kind: ColumnType) -> &'static str {
         ColumnType::DateTime => "datetime",
     }
 }
-fn bound_kind(
-    expression: &Expression,
-    driver: &TableSchema,
-    output: &TableSchema,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Option<ColumnType> {
-    match expression {
-        Expression::Source(column) | Expression::Collect { column, .. } => {
-            driver.columns().get(*column).map(|c| c.kind)
-        }
-        Expression::Column(column) => output.columns().get(*column).map(|c| c.kind),
-        Expression::Intermediate { index, column } => intermediates
-            .get(*index)
-            .and_then(Option::as_ref)
-            .and_then(|item| item.source_kind(secondary, *column)),
-        Expression::SourceLookup { lookup, .. } => secondary
-            .get(lookup.source)
-            .and_then(|item| item.schema.columns().get(lookup.column))
-            .map(|c| c.kind),
-        Expression::Joined(read) | Expression::JoinedSource { read, .. } => {
-            read.schema.columns().get(read.column).map(|c| c.kind)
-        }
-        Expression::SourceBinding { source, .. } => {
-            bound_kind(&source.expression, driver, output, secondary, intermediates)
-        }
-        _ => None,
-    }
-}
 fn checked_wrap(
     declaration: &Declaration,
     column: usize,
@@ -180,86 +151,28 @@ fn checked_wrap(
         operation: declaration.operation.clone(),
     })
 }
-#[allow(clippy::too_many_arguments)]
+/// The structured source binds as the scope decides; its input type is a
+/// lookup read's donor type or the catalog's type of the name.
 pub(super) fn bind(
-    prepared: &PreparedSpecification,
     declaration: &Declaration,
     column: usize,
-    catalog: &Catalog,
-    driver: &TableSchema,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-) -> Result<Option<Expression>, BindError> {
-    let expression = source_expressions::bind(
-        prepared,
-        &declaration.source,
-        column,
-        &format!("{}.source", declaration.operation.path()),
-        catalog,
-        driver,
-        secondary,
-        intermediates,
-        edges,
-        findings,
-    )?;
-    Ok(expression.and_then(|expression| {
-        let kind = bound_kind(
-            &expression,
-            driver,
-            &prepared.output,
-            secondary,
-            intermediates,
-        );
-        checked_wrap(declaration, column, expression, kind, findings)
-    }))
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    declaration: &Declaration,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
     let path = format!("{}.source", declaration.operation.path());
     let name = &declaration.source.variable;
-    let expression = source_expressions::bind_row(
-        &declaration.source,
-        column,
-        &path,
-        catalog,
-        driver,
-        row,
-        phase,
-        available,
-        edges,
-        findings,
-        output,
-        named,
-        secondary,
-        intermediates,
-    )?;
-    let kind = if let Some((index, field)) = named.reference(name) {
-        intermediates
+    let expression = source_expressions::bind(cx, &declaration.source, column, &path)?;
+    let kind = if let Some((index, field)) = cx.donors.named.reference(name) {
+        cx.donors
+            .items
             .get(index)
             .and_then(Option::as_ref)
             .and_then(|item| {
-                let column = item.source_column(secondary, field)?;
-                item.source_kind(secondary, column)
+                let column = item.source_column(cx.donors.secondary, field)?;
+                item.source_kind(cx.donors.secondary, column)
             })
     } else {
-        catalog.type_of(name)
+        cx.catalog.type_of(name)
     };
     Ok(expression
-        .and_then(|expression| checked_wrap(declaration, column, expression, kind, findings)))
+        .and_then(|expression| checked_wrap(declaration, column, expression, kind, cx.findings)))
 }

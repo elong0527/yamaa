@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::diagnostic::{ConditionCode, InheritanceFinding as F};
 pub(crate) use yamaa_core::json::Value as JsonValue;
@@ -119,7 +120,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 JsonValue::Array(cycle.iter().map(|s| JsonValue::String(s.clone())).collect())
             );
         }
-        reached.insert(finding.code);
+        reached.insert(rendered(&finding));
     }
     let dependencies = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&[
         yamaa_core::resolution::Issue::Unknown {
@@ -147,6 +148,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .into_iter()
         .collect()
     );
-    reached.insert(dependency.code);
+    reached.insert(rendered(&dependency));
     reached
 }

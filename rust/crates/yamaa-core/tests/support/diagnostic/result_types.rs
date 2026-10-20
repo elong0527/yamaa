@@ -1,5 +1,6 @@
 //! EXPR-14 result types read by column conversion: VALUE-24 refuses, before
 //! any record is read, a declared type no result of the expression can take.
+use super::rendered;
 use crate::support::document::Tree;
 use std::collections::BTreeSet;
 use yamaa_core::{
@@ -143,7 +144,7 @@ pub fn reached() -> BTreeSet<C> {
             ]
             .into()
         );
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     // A declared `unconvertible` answers each value, so the derivation stands;
     // a text result may parse; and an always-missing result converts.

@@ -1,3 +1,4 @@
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{diagnostic::ConditionCode, text_template::StringTemplate};
@@ -33,7 +34,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(diagnostic.context, context);
         assert!(diagnostic.source_span.is_none());
         assert!(diagnostic.operand_route.is_none());
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     // A template, unlike a single-input verb, still fails on a missing part.
     let op = StringTemplate::new(
@@ -58,6 +59,6 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     );
     assert!(diagnostic.source_span.is_none());
     assert!(diagnostic.operand_route.is_none());
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     reached
 }

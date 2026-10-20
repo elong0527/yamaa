@@ -1,4 +1,5 @@
 //! Original declarations reach range and projection causes with complete context.
+use super::rendered;
 use crate::support::document::Tree;
 use crate::support::table_schema as schema;
 use std::collections::BTreeSet;
@@ -94,7 +95,7 @@ fn check(
     );
     assert_eq!(d.source_span, None);
     assert_eq!(d.operand_route, None);
-    d.code
+    rendered(&d)
 }
 fn bind(between: Option<Tree>, columns: Option<Tree>, lower: T) -> Vec<Diagnostic> {
     let prepared = PreparedSpecification::prepare(&model(between, columns)).unwrap();

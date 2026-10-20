@@ -19,6 +19,8 @@ use std::{collections::BTreeMap, vec};
 
 mod compiler_limits;
 pub use compiler_limits::CompilerLimit;
+mod binder;
+use binder::BindContext;
 mod binding_diagnostics;
 mod checks;
 mod intermediate_admission;
@@ -395,10 +397,10 @@ pub struct PreparedSpecification {
     output_report: Option<String>,
     output_decimals: Option<String>,
     output_order: Vec<(String, bool, bool)>,
-    root_filter: Option<root_filter::RootFilter>,
     keys: Vec<usize>,
-    declarations: Vec<Declaration>,
-    rows: Option<rows::Rows>,
+    /// How the rows are built: the implicit template of a spec without
+    /// `rows`, or its row templates.
+    rows: rows::Rows,
     verifications: verifications::Verifications,
     column_verifications: Vec<verifications::Verifications>,
     /// The typed tree of the same admitted document, which result typing reads.
@@ -853,15 +855,6 @@ fn prepare_column_declarations(
     Ok(declarations)
 }
 
-type ColumnCatalog = (
-    Catalog,
-    Vec<crate::dataset::SecondarySource>,
-    Vec<Option<crate::dataset::Intermediate>>,
-    Vec<BindFinding>,
-);
-
-type BoundColumnDeclarations = (BTreeMap<usize, Assignment>, Vec<Option<Vec<usize>>>);
-
 impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
@@ -1061,7 +1054,7 @@ impl PreparedSpecification {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
             }
-            let rows = rows::Rows::prepare(
+            let rows = rows::Templates::prepare(
                 d,
                 &lowered,
                 &output,
@@ -1096,10 +1089,8 @@ impl PreparedSpecification {
                 output_report,
                 output_decimals,
                 output_order,
-                root_filter,
                 keys,
-                declarations: Vec::new(),
-                rows: Some(rows),
+                rows: rows::Rows::Templates(rows),
                 verifications,
                 column_verifications,
                 tree,
@@ -1138,10 +1129,8 @@ impl PreparedSpecification {
             output_report,
             output_decimals,
             output_order,
-            root_filter,
             keys,
-            declarations,
-            rows: None,
+            rows: rows::Rows::Implicit(rows::Implicit::new(declarations, root_filter)),
             verifications,
             column_verifications,
             tree,
@@ -1336,12 +1325,12 @@ impl PreparedSpecification {
     /// or root `base` and the driver when no row templates are declared.
     pub fn row_constructions(&self) -> Vec<(String, &str)> {
         match &self.rows {
-            Some(rows) => rows
+            rows::Rows::Templates(rows) => rows
                 .drivers()
                 .enumerate()
                 .map(|(index, driver)| (std::format!("rows[{index}]"), driver))
                 .collect(),
-            None => vec![("base".into(), self.source().name.as_str())],
+            rows::Rows::Implicit(_) => vec![("base".into(), self.source().name.as_str())],
         }
     }
     pub fn output_profile(&self) -> Option<&'static str> {
@@ -1462,35 +1451,14 @@ impl PreparedSpecification {
         self.bind_sources(&[source])
     }
     /// Schemas follow authored input order, independently of the selected driver.
-    /// Every bound plan, on the rows and the no-rows route alike, resolves once
-    /// into its slot graph and passes the resolution check. Binding returns that
+    /// Every bound plan, of the implicit template or of row templates, resolves
+    /// once into its slot graph and passes the resolution check. Binding returns that
     /// resolved plan for runs to execute and drops the bound plan it lowered.
     pub fn bind_sources(&self, schemas: &[&TableSchema]) -> Result<ResolvedPlan, BindError> {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
         }
-        let source = schemas[self.driver];
-        let plan = if self.rows.is_some() {
-            self.bind_rows_plan(schemas, source)?
-        } else {
-            let (catalog, secondary, intermediates, mut findings) =
-                self.bind_column_catalog(source, schemas)?;
-            let (assignments, dependencies) = self.bind_column_declarations(
-                &catalog,
-                source,
-                &secondary,
-                &intermediates,
-                &mut findings,
-            )?;
-            self.finish_column_plan(
-                assignments,
-                dependencies,
-                findings,
-                secondary,
-                intermediates,
-                source,
-            )?
-        };
+        let plan = self.rows.bind(self, schemas)?;
         // A plan the stage split cannot schedule is refused before resolution
         // with the operation it does not support.
         let unsupported = aggregates::late_reads(&plan);
@@ -1499,736 +1467,14 @@ impl PreparedSpecification {
         }
         plan.resolve().map_err(BindError::Resolution)
     }
-
-    fn bind_rows_plan(
-        &self,
-        schemas: &[&TableSchema],
-        source: &TableSchema,
-    ) -> Result<DatasetPlan, BindError> {
-        let rows = self.rows.as_ref().ok_or(BindError::Internal)?;
-        let mut findings = Vec::new();
-        let (secondary, intermediates) = self.intermediates.bind(
-            &self.sources,
-            self.driver,
-            schemas,
-            &self.output,
-            &self.keys,
-            Some(&rows.self_columns()),
-            self.project_calls.as_ref(),
-            &self.tree,
-            &mut findings,
-        )?;
-        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
-        rows.bind(
-            self,
-            source,
-            &self.source().name,
-            &self.output,
-            &self.keys,
-            &verifications,
-            self.project_calls.as_ref(),
-            &self.intermediates,
-            secondary,
-            intermediates,
-            findings,
-        )
-        .map(|plan| {
-            plan.with_column_verifications(self.column_verification_groups())
-                .with_warning_verifications(self.warning_verification_paths())
-                .with_output_order(self.bound_output_order())
-                .with_required_matches(self.required_matches.iter().cloned())
-        })
-    }
-
-    fn bind_column_catalog(
-        &self,
-        source: &TableSchema,
-        schemas: &[&TableSchema],
-    ) -> Result<ColumnCatalog, BindError> {
-        let output_fields = self
-            .output
-            .columns()
-            .iter()
-            .map(|c| reference_binding::Field {
-                name: &c.name,
-                column_type: c.kind,
-            })
-            .collect::<Vec<_>>();
-        let source_fields = source
-            .columns()
-            .iter()
-            .map(|c| reference_binding::Field {
-                name: &c.name,
-                column_type: c.kind,
-            })
-            .collect::<Vec<_>>();
-        let catalog = Catalog::compile(
-            &output_fields,
-            &[reference_binding::Dataset {
-                name: &self.source().name,
-                fields: &source_fields,
-            }],
-        )
-        .map_err(BindError::Catalog)?;
-        let mut findings = Vec::new();
-        let (secondary, intermediates) = self.intermediates.bind(
-            &self.sources,
-            self.driver,
-            schemas,
-            &self.output,
-            &self.keys,
-            None,
-            self.project_calls.as_ref(),
-            &self.tree,
-            &mut findings,
-        )?;
-        let catalog = row_drivers::extend_catalog(
-            catalog,
-            source,
-            &self.source().name,
-            &self.keys,
-            &secondary,
-            &self.source().name,
-        )?;
-        Ok((catalog, secondary, intermediates, findings))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_column_declarations(
-        &self,
-        catalog: &Catalog,
-        source: &TableSchema,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<BoundColumnDeclarations, BindError> {
-        let mut assignments = BTreeMap::new();
-        let mut dependencies = Vec::new();
-        for (column, declaration) in self.declarations.iter().enumerate() {
-            // A key that reads other records than its one base record has no
-            // key-phase value to bind (COLUMN-7).
-            let refused = checks::declared::key_record(self, column);
-            if !refused.is_empty() {
-                findings.extend(refused);
-                dependencies.push(Some(Vec::new()));
-                continue;
-            }
-            let declarations_reported = cases::padding_findings(&declaration.operation, findings)?;
-            let mut edges = Vec::new();
-            let path = &declaration.path;
-            let reference_path = if matches!(
-                declaration.operation,
-                Operation::Compute(_) | Operation::InvalidNumeric { .. }
-            ) {
-                format!("{path}.expr")
-            } else {
-                path.clone()
-            };
-            let start = findings.len();
-            let expression = match &declaration.operation {
-                Operation::Odm(operation) => odm::bind(
-                    operation,
-                    catalog,
-                    &self.source().name,
-                    None,
-                    self.odm_phase(column),
-                    self.record_rows(),
-                    findings,
-                )?,
-                Operation::Aggregate(operation) => aggregates::bind(
-                    operation,
-                    catalog,
-                    &self.source().name,
-                    None,
-                    crate::reference_scope::Phase::Column { groups: &[] },
-                    &self.output,
-                    &self.tree,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    self.project_calls.as_ref(),
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Flag(operation) => flags::bind(
-                    operation,
-                    self.reads_one_record(column),
-                    &self.source().name,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    declarations_reported,
-                )?,
-                Operation::Case(branches) => cases::bind(
-                    self,
-                    branches,
-                    column,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    declarations_reported,
-                )?,
-                Operation::ProjectFunction { call, .. } => {
-                    self.bind_project_function(*call, column, catalog, &mut edges, findings)?
-                }
-                Operation::Literal(value) => Some(Expression::Literal(value.clone())),
-                Operation::MappingCut(operation) => mapping_cut::bind(
-                    self,
-                    operation,
-                    column,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Round(rounding) => rounding::bind(
-                    rounding,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrTemplate(operation) => str_template::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Scalar(operation) => scalar::bind(
-                    self,
-                    operation,
-                    column,
-                    catalog,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrExtract(operation) => str_extract::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrReplace(operation) => str_extract::bind_replace(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrCase(operation) => str_case::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrPad(operation) => str_pad::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Imputation(operation) => imputation::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Temporal(operation) => temporal::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Window(window) => window.bind(catalog, &mut edges, findings)?,
-                Operation::InvalidNumeric { expression, error } => {
-                    findings.push(BindFinding::Numeric {
-                        path: reference_path.clone(),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                    None
-                }
-                Operation::Source(declaration) => source_expressions::bind(
-                    self,
-                    declaration,
-                    column,
-                    path,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::FirstAvailable(selection) => self.bind_first_available(
-                    selection,
-                    column,
-                    path,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Compute(compiled) => self.bind_compute(
-                    compiled,
-                    reference_path.clone(),
-                    catalog,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    start,
-                )?,
-            };
-            if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-                let captured = types::CapturedTypes::new(
-                    &self.intermediates,
-                    catalog,
-                    secondary,
-                    intermediates,
-                );
-                let result =
-                    self.tree
-                        .result_type(declaration.value, ast::Scope::Row, &captured)?;
-                findings.extend(
-                    self.conversion_finding(column, result)
-                        .map(BindFinding::Scalar),
-                );
-            }
-            // Invalid declarations remain in the graph so independent cycles and
-            // key dependencies are still reported after the reference findings.
-            dependencies.push(Some(edges));
-            if let Some(expression) = expression {
-                assignments.insert(
-                    column,
-                    Assignment {
-                        column,
-                        expression,
-                        path: path.clone(),
-                    },
-                );
-            }
-        }
-        Ok((assignments, dependencies))
-    }
-
     /// Without row templates, a key derived by a window gives each retained
     /// base record its own output row: the key table is the records
     /// themselves, not their distinct key combinations.
     pub(super) fn record_rows(&self) -> bool {
-        self.rows.is_none()
-            && self.keys.iter().any(|&key| {
-                self.declarations.get(key).is_some_and(|declaration| {
-                    matches!(declaration.operation, Operation::Window(_))
-                })
-            })
-    }
-    /// Whether a no-rows derivation of `column` reads one base record: a key
-    /// is computed per record, and with record rows every column reads its
-    /// row's one record. Otherwise a base read collects the distinct readings
-    /// of the records that feed the key combination.
-    pub(super) fn reads_one_record(&self, column: usize) -> bool {
-        self.keys.contains(&column) || self.record_rows()
-    }
-    /// The phase an `odm` read of `column` binds in without row templates.
-    /// With record rows a key is a derivation of its row's one record, as an
-    /// ungrouped row template's is; every other column is column-phase.
-    pub(super) fn odm_phase(&self, column: usize) -> crate::reference_scope::Phase<'static> {
-        if self.record_rows() && self.keys.contains(&column) {
-            crate::reference_scope::Phase::Row { group_by: None }
-        } else {
-            crate::reference_scope::Phase::Column { groups: &[] }
+        match &self.rows {
+            rows::Rows::Implicit(implicit) => implicit.record_rows(&self.keys),
+            rows::Rows::Templates(_) => false,
         }
-    }
-    fn bind_project_function(
-        &self,
-        call: usize,
-        column: usize,
-        catalog: &Catalog,
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<Expression>, BindError> {
-        let expression = {
-            let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
-            let record = self.reads_one_record(column);
-            let context = crate::project_call_binding::Context {
-                source_dataset: 0,
-                source_mode: if record {
-                    crate::project_call_binding::SourceMode::Record
-                } else {
-                    crate::project_call_binding::SourceMode::Collect
-                },
-                available_outputs: None,
-                scope: crate::reference_scope::Scope {
-                    drivers: &[self.source().name.as_str()],
-                    current_driver: true,
-                    reach: if record {
-                        crate::reference_scope::Reach::Record
-                    } else {
-                        crate::reference_scope::Reach::Relation
-                    },
-                    joined: false,
-                    phase: crate::reference_scope::Phase::Column { groups: &[] },
-                },
-            };
-            match crate::project_call_binding::bind(calls, call, catalog, context) {
-                Ok(bound) => {
-                    edges.extend(bound.dependencies);
-                    Some(Expression::ProjectFunction(bound.function))
-                }
-                Err(crate::project_call_binding::Error::Findings(errors)) => {
-                    findings.extend(functions::bind_findings(calls, call, errors, None)?);
-                    None
-                }
-                Err(crate::project_call_binding::Error::Reference(error)) => {
-                    return Err(BindError::Catalog(error))
-                }
-                Err(_) => return Err(BindError::Internal),
-            }
-        };
-        Ok(expression)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_first_available(
-        &self,
-        selection: &source_expressions::FirstAvailable,
-        column: usize,
-        path: &str,
-        catalog: &Catalog,
-        source: &TableSchema,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<Expression>, BindError> {
-        let expression = {
-            let mut operands = Vec::new();
-            for (index, operand) in selection.sources.iter().enumerate() {
-                let operand_path = format!("{path}.sources[{index}]");
-                if let Some(expression) = source_expressions::bind(
-                    self,
-                    operand,
-                    column,
-                    &operand_path,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    edges,
-                    findings,
-                )? {
-                    // Distinct-value collection failures belong to first_available.
-                    // Recursive operands retain their own expression and handler paths.
-                    let read = match expression {
-                        // A row that is one base record reads that record's
-                        // value: the operand keeps its own collected read.
-                        Expression::Collect {
-                            column,
-                            identifier,
-                            filter,
-                            selection: None,
-                        } if !self.record_rows() => crate::dataset::SelectionRead::Collect {
-                            column,
-                            identifier,
-                            filter: filter.map(std::boxed::Box::new),
-                        },
-                        expression => crate::dataset::SelectionRead::Expression(
-                            std::boxed::Box::new(crate::dataset::Assignment {
-                                column,
-                                expression,
-                                path: operand_path.clone(),
-                            }),
-                        ),
-                    };
-                    operands.push(crate::dataset::SelectionSource {
-                        path: operand_path.clone(),
-                        read,
-                    });
-                }
-            }
-            Some(Expression::FirstAvailable(std::boxed::Box::new(
-                crate::dataset::FirstAvailable::new(
-                    path.into(),
-                    operands,
-                    selection.missing.clone(),
-                ),
-            )))
-        };
-        Ok(expression)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_compute(
-        &self,
-        compiled: &CompiledExpression,
-        reference_path: String,
-        catalog: &Catalog,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-        start: usize,
-    ) -> Result<Option<Expression>, BindError> {
-        let expression = {
-            let bind = |name: &str,
-                        findings: &mut Vec<BindFinding>|
-             -> Result<Option<reference_binding::Binding>, BindError> {
-                if !name.contains('.') {
-                    if let Some(finding) = catalog
-                        .validate_output(name, None, None, &[0])
-                        .map_err(BindError::Catalog)?
-                    {
-                        findings.push(BindFinding::OutputReference {
-                            path: reference_path.clone(),
-                            name: name.into(),
-                            row: None,
-                            finding,
-                        });
-                        return Ok(None);
-                    }
-                }
-                let binding = catalog.bind(name);
-                if binding.is_none() {
-                    findings.push(BindFinding::UnknownReference {
-                        path: reference_path.clone(),
-                        name: name.into(),
-                    });
-                }
-                Ok(binding)
-            };
-            // The reference emits expression-local qualification findings first,
-            // then validates bare references, preserving written occurrence order.
-            checks::declared::qualified_numeric_findings(
-                compiled,
-                &reference_path,
-                &self.intermediates,
-                findings,
-            );
-            let mut bindings = Vec::new();
-            for name in compiled
-                .identifiers()
-                .filter(|name| self.intermediates.reference(name).is_some())
-            {
-                let (index, field) = self
-                    .intermediates
-                    .reference(name)
-                    .ok_or(BindError::Internal)?;
-                if let Some(item) = &intermediates[index] {
-                    edges.extend(row_intermediates::dependencies(index, intermediates)?);
-                    if let Some(column) = item.source_column(secondary, field) {
-                        bindings.push(Binding {
-                            name: name.into(),
-                            read: Read::Intermediate { index, column },
-                        });
-                    } else {
-                        findings.push(BindFinding::UnknownReference {
-                            path: reference_path.clone(),
-                            name: name.into(),
-                        });
-                    }
-                } else {
-                    findings.push(BindFinding::UnknownReference {
-                        path: reference_path.clone(),
-                        name: name.into(),
-                    });
-                }
-            }
-            for name in compiled.identifiers().filter(|name| !name.contains('.')) {
-                if let Some(binding) = bind(name, findings)? {
-                    let read = match binding {
-                        reference_binding::Binding::Output { column, .. } => {
-                            edges.push(column);
-                            Read::Column(column)
-                        }
-                        reference_binding::Binding::Dataset { field, .. } => Read::Source(field),
-                    };
-                    bindings.push(Binding {
-                        name: name.into(),
-                        read,
-                    });
-                }
-            }
-            let captured =
-                types::CapturedTypes::new(&self.intermediates, catalog, secondary, intermediates);
-            captured.numeric(compiled, &bindings, findings);
-            if findings.len() == start {
-                Some(Expression::Compute(
-                    BoundNumeric::new(captured.typed(compiled), bindings)
-                        .map_err(BindError::InvalidNumericBinding)?,
-                ))
-            } else {
-                None
-            }
-        };
-        Ok(expression)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn finish_column_plan(
-        &self,
-        mut assignments: BTreeMap<usize, Assignment>,
-        dependencies: Vec<Option<Vec<usize>>>,
-        mut findings: Vec<BindFinding>,
-        secondary: Vec<crate::dataset::SecondarySource>,
-        intermediates: Vec<Option<crate::dataset::Intermediate>>,
-        source: &TableSchema,
-    ) -> Result<DatasetPlan, BindError> {
-        let analysis = column_dependencies::analyze(&dependencies, &self.keys, false)
-            .map_err(BindError::DependencyPolicy)?;
-        if !analysis.diagnostics.is_empty() {
-            findings.push(BindFinding::Dependencies {
-                columns: self
-                    .output
-                    .columns()
-                    .iter()
-                    .map(|c| c.name.clone())
-                    .collect(),
-                paths: self.declarations.iter().map(|d| d.path.clone()).collect(),
-                diagnostics: analysis.diagnostics,
-            });
-        }
-        let root_filter = self
-            .root_filter
-            .as_ref()
-            .map(|filter| filter.bind(&self.source().name, source, &mut findings))
-            .transpose()?
-            .flatten();
-        // Every row is built from the base driver, the primary port. A dataset
-        // verification reads its intermediates for every row, as a column does.
-        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
-        let verification_reads = relation_predicates::predicate_reads(
-            relation_predicates::verification_predicates(&verifications),
-        );
-        let contexts = [(
-            assignments
-                .values()
-                .map(|assignment| &assignment.expression)
-                .chain(&verification_reads)
-                .collect::<Vec<_>>(),
-            vec![0],
-        )];
-        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
-        aggregates::admit_record_keys(&contexts, &mut findings);
-        relation_predicates::admit_reads(
-            assignments
-                .values()
-                .map(|assignment| &assignment.expression)
-                .chain(&verification_reads),
-            &intermediates,
-            &self.intermediates,
-            0,
-            &RowMode::Keys,
-            None,
-            &mut findings,
-        );
-        if !findings.is_empty() {
-            return Err(BindError::Invalid(findings));
-        }
-        let mut key_assignments = Vec::new();
-        let mut columns = Vec::new();
-        for column in analysis.order {
-            let assignment = assignments.remove(&column).expect("analyzed declaration");
-            if self.keys.contains(&column) {
-                key_assignments.push(assignment)
-            } else {
-                columns.push(assignment)
-            }
-        }
-        let record_windows = key_assignments
-            .iter()
-            .any(|a| a.expression.window().is_some());
-        Ok(DatasetPlan::new_with_intermediates(
-            crate::dataset::SourceSchemas {
-                primary: source.clone(),
-                secondary,
-            },
-            intermediates
-                .into_iter()
-                .map(|item| item.expect("validated intermediate"))
-                .collect(),
-            self.output.clone(),
-            vec![RowTemplate {
-                mode: if record_windows {
-                    RowMode::Records
-                } else {
-                    RowMode::Keys
-                },
-                assignments: key_assignments,
-                filter: root_filter,
-            }],
-            columns,
-            self.keys.clone(),
-            verifications,
-        )
-        .with_column_verifications(self.column_verification_groups())
-        .with_warning_verifications(self.warning_verification_paths())
-        .with_output_order(self.bound_output_order())
-        .with_required_matches(self.required_matches.iter().cloned())
-        .with_conversion_handlers(
-            self.declarations
-                .iter()
-                .filter_map(|declaration| {
-                    declaration
-                        .handler
-                        .as_ref()
-                        .map(|handler| crate::dataset::ConversionHandler {
-                            assignment_path: declaration.path.clone(),
-                            handler: handler.clone(),
-                        })
-                })
-                .collect(),
-        ))
     }
 }
 
