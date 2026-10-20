@@ -483,7 +483,9 @@ build backend. The archive keeps the vendored crates in `vendor/` and, at its
 root, where pip runs the build, a `.cargo/config.toml` that replaces crates.io
 with them and sets Cargo's `net.offline`. maturin runs Cargo with `--locked`,
 so the build uses the trimmed lock unchanged and reads nothing from the
-network.
+network. It builds the `dist` profile that `python/pyproject.toml` selects,
+as the native workflow does for every wheel: release, without the symbol
+table.
 
 The R source package builds offline from the R bundle, as CRAN's Repository
 Policy and its guidance for packages that use Rust ask.
@@ -509,7 +511,10 @@ unpacked crates, and run `cargo build --locked --offline -j 2` with
 (GNU make 4.4 passes it to every command) and runs as many jobs as make
 allows. The installation therefore reads nothing from the network, runs at
 most two jobs and writes nothing outside the build tree and the temporary
-directory.
+directory. The Makevars build the release profile, which strips nothing, so
+the shared object keeps its symbols: CRAN's Repository Policy asks a package
+not to remove diagnostic information such as symbols in shared objects.
+`check_cargo_lock` refuses an R source package whose build would strip.
 
 CRAN's policy admits no binary executable code in a source package, and
 neither package carries any: the vendoring script leaves out the prebuilt

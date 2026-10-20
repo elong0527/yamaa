@@ -59,11 +59,19 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
         }?;
         Ok(bytes.to_vec())
     }
+    /// A `parent` path. Its written form is judged before any resolver is
+    /// asked for it (FILE-4, FILE-5, LAYER-2), as schema admission judges
+    /// every other declared path: a backslash, an empty segment or a trailing
+    /// separator, which a network share's `//server/share` root also writes,
+    /// is refused as written whichever resolver serves the layers.
     fn canonicalize(
         &mut self,
         declaring: &str,
         written: &str,
     ) -> Result<Identity, SourceError<ResourceError>> {
+        if let Some(failure) = yamaa_core::resource::written_path_failure(written) {
+            return Err(SourceError::Raised(ResourceError::WrittenForm(failure)));
+        }
         self.resource_identity(declaring, written)
             .map_err(available)
     }

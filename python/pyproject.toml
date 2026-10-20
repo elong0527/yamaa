@@ -72,6 +72,10 @@ tooling = [
 
 [tool.maturin]
 locked = true
+# Wheels build with the Rust workspace's dist profile, without the symbol
+# table, also when pip builds one from the source archive. `make setup`
+# selects the dev profile instead.
+profile = "dist"
 # The source archive builds offline: tools/staging/engine_bundle.py stages
 # the crates.io crates that its trimmed lock selects beside this file, with
 # the Cargo configuration that reads them (#3030 D55).

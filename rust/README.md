@@ -336,6 +336,13 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   (FILE-8), a directory or other entry as `resource_path_not_regular_file`
   and a missing name as `resource_path_missing`. `MemoryResolver::insert_kind`
   models these.
+- `read_odm` through a resolver captures the source once and holds it whole,
+  under the 10 GiB per-file source bound (code `limit`, `ODM source exceeds
+  10737418240 bytes`), before `max_expanded_bytes` applies: the resolver
+  protocol has no streaming read. Without a resolver, a local archive is
+  streamed and never held whole, and a local plain XML file over
+  `max_expanded_bytes` is refused before it is read; one within that bound
+  is held whole.
 - `resolve_specification` stays public, as decided for 0.4.0 in #2725. The
   facade type is `ResolvedSpecification`; the internal `ResolvedArtifact`
   (above) is its implementation and wire format, not a public type.
