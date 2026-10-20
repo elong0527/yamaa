@@ -59,6 +59,9 @@ def qualify(selection, enabled):
     if ("cc" in tree) != bool({"parquet", "readstat"}.intersection(enabled)):
         raise RuntimeError(f"unexpected native C build dependency for {selection}")
     cargo("check", "--locked", "-p", "yamaa", *features)
+    # The adapters' unit tests behind a disabled reader, such as the
+    # sas_source refusal without readstat, compile in no other build.
+    cargo("test", "--locked", "-p", "yamaa-adapters", *features, "--lib", "--no-run")
     messages = cargo(
         "test",
         "--locked",
