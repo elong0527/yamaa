@@ -88,7 +88,7 @@ impl<'a> Metas<'a> {
 }
 
 /// Prefix each finding of a nested source with the path that declares it.
-pub(crate) fn prefix(findings: Vec<Finding>, path: &str) -> Vec<Finding> {
+fn prefix(findings: Vec<Finding>, path: &str) -> Vec<Finding> {
     findings
         .into_iter()
         .map(|mut finding| {
@@ -130,8 +130,9 @@ fn header(document: &Document, metas: &mut Metas<'_>, root: usize, meta: Meta) -
 }
 
 /// Lower a project file. Its study and sections lower beside it: a project
-/// whose declarations Define-XML composition could not read still prepares
-/// and runs, so their refusal is kept in [`Project::submission`].
+/// whose declarations Define-XML composition could not read still prepares,
+/// and a specification still builds with it, so their refusal is kept in
+/// [`Project::submission`].
 pub fn project(
     document: &Document,
     positions: Option<&Positions>,
