@@ -725,6 +725,43 @@ mod declaration {
             assert!(missing.contains(&(ConditionCode::SchemaMissingRequiredField, "domain".into())));
         }
 
+        /// LAYER-2 and SCHEMA-12: an empty `parent` fails schema admission in
+        /// its layer, being shorter than a `path`'s minimum length of one,
+        /// before any parent is resolved.
+        #[test]
+        fn an_empty_parent_fails_schema_admission_in_its_layer() {
+            let study = Study::new();
+            let closures = closures();
+            study.write(
+                "spec.yaml",
+                &CHILD.replace("parent: base.yaml", "parent: ''"),
+            );
+            let (layer, found) = layer_findings(
+                prepare(&study, "spec.yaml", LANGUAGE_VERSION, &closures).unwrap_err(),
+            );
+            assert_eq!(layer, study.path("spec.yaml"));
+            assert_eq!(
+                found,
+                [(
+                    ConditionCode::SchemaDescriptorMinimumLength,
+                    "parent".to_string()
+                )]
+            );
+            // A public check reports it at `parent`, in the entry, as a 0.5
+            // entry's check does.
+            let issue = only(&study.check("spec.yaml", None)).clone();
+            assert_eq!(
+                (issue.phase(), issue.condition(), issue.rule()),
+                ("validation", "minimum_length", Some("SCHEMA-12"))
+            );
+            assert_eq!(issue.spec_paths, ["parent"]);
+            let entry = study.path("spec.yaml");
+            assert_eq!(
+                Value::Object(issue.context.clone()),
+                json!({"minimum": 1, "source": entry, "entry": entry})
+            );
+        }
+
         /// The diagnostic at a referencing field whose file is refused.
         fn reference_refusal(
             error: ReferenceError<std::io::Error>,

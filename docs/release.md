@@ -26,8 +26,9 @@ open gates live in GitHub issues and pull requests, not here.
   and no lane there uses R 4.4 or the minimum Rust.
 - R binary packages for R-release and R-oldrel, today R 4.6 and R 4.5, on
   Windows x64 and macOS arm64, as CRAN builds them (#3030 D48). Each is built
-  for one R series and works only with R of that series;
-  `install.packages()` installs it with no Rust, Rtools or network. With any
+  for one R series and works only with R of that series, and the macOS
+  binaries need macOS 11 or later, the first macOS for Apple silicon;
+  `install.packages()` installs each with no Rust, Rtools or network. With any
   other R series, R 4.4 among them, and on Linux, which gets no binary
   packages (D54), users install from source: the R source package of the
   GitHub release, which builds with its vendored crates and a Rust
@@ -68,7 +69,9 @@ runs the conformance corpus without a network.
 The native run builds the R binary packages that a release publishes from
 the R source package that it publishes, with `R CMD INSTALL --build` and
 each covered R series: its `native-r-binary` jobs, behind the same refusing
-proxy, on Windows with Rtools45 and the GNU Rust target. Its
+proxy, on Windows with Rtools45 and the GNU Rust target, and on macOS with
+`MACOSX_DEPLOYMENT_TARGET` set to 11.0, which each job compares with the
+minimum macOS that the binary's `yamaa.so` declares. Its
 `native-r-binary-install` jobs then install each binary as a user does, with
 `install.packages(path, repos = NULL)`, on a runner of its platform from
 which the image's Rust has been uninstalled and that has no Rtools; the log

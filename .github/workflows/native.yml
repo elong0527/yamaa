@@ -1292,6 +1292,13 @@ jobs:
       matrix:
         os: [macos-15, windows-2025]
         r: ['4.6.1', '4.5.3']
+    env:
+      # The oldest macOS that the macOS binaries run on, the arm64 floor that
+      # R/yamaa/tools/configure.R gives Cargo when the caller sets none. R
+      # compiles and links yamaa.so with clang, which takes its target from
+      # this variable and otherwise targets the runner's own macOS. Windows
+      # ignores it.
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       # The notice check compares the package's notices with the checkout's
       # byte for byte.
@@ -1353,6 +1360,10 @@ jobs:
           R CMD INSTALL --build --library="${RUNNER_TEMP}/r-binary-library" "${archives[0]}"
           mv "yamaa_${version}.${extension}" "r-binary/yamaa_${version}-${R_VERSION%.*}.${extension}"
           ls -l r-binary
+      # macOS refuses to load a library whose minimum macOS is newer than the
+      # running system, and no lane runs an older macOS, so on macOS the check
+      # reads the minimum that the binary's yamaa.so declares, the minos of its
+      # LC_BUILD_VERSION, which may not exceed the deployment target.
       - name: Check the R binary package
         working-directory: ${{ runner.temp }}
         env:
@@ -1364,6 +1375,17 @@ jobs:
           Rscript --vanilla -e 'built <- packageDescription("yamaa", lib.loc = Sys.getenv("R_LIBS"))$Built' \
             -e 'writeLines(built)' \
             -e 'stopifnot(startsWith(built, paste0("R ", getRversion(), "; ", R.version$platform, ";")))'
+          if [ "${RUNNER_OS}" = macOS ]; then
+            mkdir r-binary-check
+            tar -xzf "${binaries[0]}" -C r-binary-check yamaa/libs/yamaa.so
+            otool -l r-binary-check/yamaa/libs/yamaa.so | grep -A 4 LC_BUILD_VERSION
+            minos=$(otool -l r-binary-check/yamaa/libs/yamaa.so | awk '$1 == "minos" { print $2 }')
+            Rscript --vanilla -e 'minos <- commandArgs(TRUE)' \
+              -e 'target <- Sys.getenv("MACOSX_DEPLOYMENT_TARGET")' \
+              -e 'writeLines(paste0("yamaa.so needs macOS ", minos, " or later; the deployment target is ", target))' \
+              -e 'stopifnot(package_version(minos) <= package_version(target))' \
+              "${minos}"
+          fi
       - name: Preserve the R binary package
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -1436,16 +1458,19 @@ jobs:
       # GitHub's images ship Rust through rustup, which uninstalls itself on
       # Windows; the macOS image installs it with Homebrew, whose build of
       # rustup cannot, so there the step deletes rustup's toolchains and
-      # Cargo's home and Homebrew removes rustup. setup-r says that its
-      # Windows runners may carry an Rtools. R for Windows looks for Rtools in
-      # the directories that its PATH names, C:/rtools45 unless RTOOLS45_HOME
-      # says otherwise. On Windows the image's own MinGW and Git's also carry
-      # a compiler or the GNU runtime libraries that a DLL built with Rtools
-      # could load from the PATH, so R runs the later steps with a PATH that
-      # leaves out every directory holding one of them, which this step
-      # writes and lists. The log shows that neither the shell nor R finds a
-      # Rust tool, that no Rtools directory on R's PATH exists, and on Windows
-      # that R finds no make or gcc either.
+      # Cargo's home and Homebrew removes rustup. Then the shell must find no
+      # Rust tool on the runner's own PATH, which the steps that do not
+      # replace it inherit. On Windows a helper process deletes rustup's
+      # binaries after rustup exits, so the check allows it a minute. setup-r
+      # says that its Windows runners may carry an Rtools. R for Windows looks
+      # for Rtools in the directories that its PATH names, C:/rtools45 unless
+      # RTOOLS45_HOME says otherwise. On Windows the image's own MinGW and
+      # Git's also carry a compiler or the GNU runtime libraries that a DLL
+      # built with Rtools could load from the PATH, so R runs the later steps
+      # with a PATH that leaves out every directory holding one of them, which
+      # this step writes and lists. The log shows that R finds no Rust tool
+      # either, that no Rtools directory on R's PATH exists, and on Windows
+      # that R finds no make or gcc.
       - name: Remove Rust and Rtools from the runner
         working-directory: ${{ runner.temp }}
         run: |
@@ -1458,6 +1483,15 @@ jobs:
           elif command -v rustup; then
             rustup self uninstall -y
           fi
+          # hash -r forgets where the shell last ran rustup.
+          hash -r
+          for attempt in {1..60}; do
+            left=$(for tool in cargo rustc rustup; do command -v "${tool}" || true; done)
+            if [ -z "${left}" ]; then break; fi
+            sleep 1
+          done
+          if [ -n "${left}" ]; then printf 'Still on the PATH:\n%s\n' "${left}"; exit 1; fi
+          echo "No cargo, rustc or rustup is left on the runner's PATH (check ${attempt} of 60)"
           tools=(cargo rustc rustup cargo.exe rustc.exe rustup.exe)
           if [ "${RUNNER_OS}" = Windows ]; then
             shopt -s nocaseglob nullglob
@@ -1482,9 +1516,6 @@ jobs:
           done
           (IFS=:; printf '%s\n' "${kept[*]}") > toolchain-free-path
           export PATH="$(cat toolchain-free-path)"
-          for tool in cargo rustc rustup; do
-            if command -v "${tool}"; then echo "${tool} is still on the PATH"; exit 1; fi
-          done
           Rscript -e 'tools <- c("cargo", "rustc", "rustup", "make", "gcc")' \
             -e 'print(Sys.which(tools))' \
             -e 'absent <- if (.Platform$OS.type == "windows") tools else tools[1:3]' \
