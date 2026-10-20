@@ -79,7 +79,8 @@ A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
 package format spells it in its own syntax, and
 `tools.packaging.check_shared_release_versions` requires every package
-manifest, lock and benchmark R environment to carry its spelling:
+manifest, lock and benchmark R environment to carry its spelling, and every
+link of `python/README.md` that names a release tag to name its tag:
 
 | Release | Python | Cargo | R | Tag |
 | --- | --- | --- | --- | --- |
@@ -90,6 +91,10 @@ An R version cannot mark a candidate, so the R package keeps the final version
 through the candidates (#3030 D53), and R does not offer the final release as
 an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
 tag.
+
+The commit that changes the identity also re-pins the tag links of
+`python/README.md`, the wheels' PyPI description: the check fails until they
+name the new tag, and they return 404 on GitHub until that tag is pushed.
 
 ## Saved artifact readers
 
@@ -393,8 +398,12 @@ Upload those files unchanged with twine, which asks for the owner's PyPI API
 token or reads it from `TWINE_PASSWORD`:
 
 ```sh
-uvx twine upload <new directory>/*
+uvx twine@latest upload <new directory>/*
 ```
+
+Without `@latest`, uvx reuses a twine cached by an earlier run or installed
+with `uv tool install`, and an older twine can refuse the wheels' metadata
+version, 2.4.
 
 A candidate needs no option: its version, X.Y.ZrcN, makes it a pre-release on
 PyPI. PyPI refuses a file name that it already holds, so if an upload stops
