@@ -17,6 +17,13 @@ every rule, including branches the study data do not exercise. Report partial
 results and blockers honestly; never claim 100% equivalence by dropping a
 dataset, variable, record, or unresolved rule.
 
+Organize every generated study deliverable using the
+[Pilot 7 study folder structure](https://github.com/RConsortium/submissions-pilot7-synthetic-data#folder-structure)
+and its [folder manifest](https://github.com/RConsortium/submissions-pilot7-synthetic-data/blob/main/.github/repo-structure.json).
+Use the selected `<study>/` as the workspace root throughout this recipe.
+The directory tree and path rules in section 4 apply to all steps, including
+installation evidence and reports.
+
 ## 1. Install and verify the yamaa R package 0.5.0
 
 Start the job clock and effort/usage ledger before installation. Work in an
@@ -37,16 +44,18 @@ compiler detection, compilation time, permissions, and any installation
 failure as part of the R package assessment.
 
 ```r
+dir.create("log", showWarnings = FALSE)
 install.packages("yamaa_0.5.0.tar.gz", repos = NULL, type = "source")
 library(yamaa)
 stopifnot(as.character(packageVersion("yamaa")) == "0.5.0")
 writeLines(c(capture.output(sessionInfo()), find.package("yamaa")),
-           "environment-r.txt")
+           "log/yamaa-environment-r.txt")
 write.csv(installed.packages()[, c("Package", "Version", "LibPath")],
-          "environment-r-packages.csv", row.names = FALSE)
+          "log/yamaa-environment-r-packages.csv", row.names = FALSE)
 ```
 
-Ensure subsequent `Rscript --vanilla` sessions use that same library, setting
+Run this installation example from the selected study root. Ensure subsequent
+`Rscript --vanilla` sessions use that same library, setting
 `R_LIBS_USER` through the approved environment configuration when needed.
 Record the release asset/reference, installed package location, OS/architecture,
 R and compiler versions, dependency versions, and manual steps. Retain the
@@ -65,7 +74,7 @@ it must not replace the 0.5.0 result.
 
 ## 2. Confirm resources and freeze the test scope
 
-Complete `reports/resource-inventory.csv` before authoring. For every item,
+Complete `log/yamaa-resource-inventory.csv` before authoring. For every item,
 record its controlled location, version or snapshot reference, owner,
 readability, relevance to each ADaM dataset, and status: `available`, `missing`,
 `unreadable`, `version-conflict`, or `not-applicable` with a reason. Confirm
@@ -80,7 +89,7 @@ availability by opening/inspecting the resource, not by assuming a path exists.
 | Other derivation inputs | Randomization, adjudication, coding dictionaries, external data, analysis cutoffs, and other non-SDTM sources actually used by the reference process. |
 | Execution and measurement | Writable output space, approved readers/converters, reference runtime/license if needed, reviewer, and access to AI token/billing records and compute charges. |
 
-Create `reports/scope.csv` with one row for every target ADaM dataset, its
+Create `log/yamaa-scope.csv` with one row for every target ADaM dataset, its
 reference location, expected variables/record count, comparison key and order,
 dependencies, and readiness/blockers. Include ADSL and each downstream dataset;
 do not assume subject identifiers alone identify BDS or occurrence records.
@@ -105,7 +114,7 @@ to reproduce its frozen outputs is itself a source finding.
 
 ## 3. Reconcile source evidence and map every derivation
 
-Before translating, create `reports/derivation-traceability.csv`. Give each
+Before translating, create `log/yamaa-derivation-traceability.csv`. Give each
 rule a stable ID and record the target dataset/variable or record-selection
 rule, source SDTM fields, specification section/version, code location/version,
 reference evidence, proposed yamaa location, expected behavior, review status,
@@ -120,7 +129,7 @@ Use synthetic cases with independently authored expectations for unobserved
 branches and boundaries. Mark untested branches explicitly; do not infer that
 their logic is verified from a complete match on the study's observed records.
 
-Maintain `reports/source-discrepancies.csv` throughout the job:
+Maintain `log/yamaa-source-discrepancies.csv` throughout the job:
 
 | Field | Required content |
 | --- | --- |
@@ -140,29 +149,75 @@ approved snapshot and a separately reported comparison.
 
 ## 4. Author idiomatic specifications
 
-Keep all study work beside the study, for example:
+Use the Pilot 7 stage folders in the selected study. Preserve its existing
+files and create missing stage folders; retain an empty `.gitkeep` in any
+required folder that would otherwise be empty in Git. ODM, SDTM-generation,
+and TLF folders remain part of the layout even when this assessment only
+derives ADaM.
 
 ```text
-study-test/
-  project.yaml
-  adsl.yaml, adae.yaml, ...
-  data/sdtm/                 # frozen inputs or validated staged copies
-  reference/adam/            # read-only reference outputs
-  reference/specs/           # existing specifications and metadata
-  reference/code/            # original programs and dependencies
-  adam/                     # generated <dataset>-yamaa.parquet
-  run.R
-  compare.R
-  reports/                  # confidential evidence, metrics, and logs
-  public-feedback/          # reviewed, synthetic GitHub-ready drafts
+<study>/
+  data/
+    odm/                    # existing source ODM or .gitkeep
+    sdtm/                   # frozen SDTM inputs / validated staged copies
+    adam/
+      adsl.parquet          # existing reference ADaM, read-only
+      adsl-yamaa.parquet    # generated candidate; one per target dataset
+  program/
+    odm/                    # existing ODM programs or .gitkeep
+    sdtm/                   # existing SDTM programs or .gitkeep
+    adam/
+      r/
+        run.R
+        compare.R
+  spec/                     # retain existing specifications and metadata
+    define/                 # existing Define-XML, when available
+    yamaa/
+      project.yaml
+      adsl.yaml
+      adae.yaml
+      r/                    # optional R environment/function definitions
+  tlf/                      # clinical tables, listings, figures or .gitkeep
+  log/
+    yamaa-run.log
+    yamaa-compare.log
+    yamaa-adsl-report.csv    # one engine report per generated dataset
+    yamaa-engine-report.rds
+    yamaa-resource-inventory.csv
+    yamaa-study-report.md
+    yamaa-dataset-metrics.csv
+    yamaa-job-metrics.json
+    yamaa-public-summary.md  # reviewed synthetic feedback drafts
 ```
+
+Reference ADaM may instead be XPT, RDS, or another inventoried format; preserve
+its original filename and bytes under `data/adam/`. Preserve original SAS/R
+programs under `program/adam/` and original specifications under `spec/`.
+Generated candidates use the `-yamaa` suffix so they cannot overwrite the
+reference datasets. Scope and comparison map each reference filename to its
+specific generated candidate; do not infer targets from every file in a
+directory or mistake reference files for unexpected candidate outputs.
+Compare the inventory of generated `*-yamaa.parquet` files with the frozen
+scope and flag missing or unexpected candidates separately from references.
+
+The manifest keeps `.parquet` and `.xpt` files directly in `data/sdtm/` or
+`data/adam/`. Use CSV for per-dataset engine report files in `log/`, and RDS
+for saved R issue tables and the combined engine report. Keep assessment
+reports, metrics, inventories, discrepancies, logs, and public-feedback drafts
+as `log/yamaa-*` files. Clinical TLF outputs belong in `tlf/`. All these
+assessment files remain confidential until the public drafts are cleared.
+Do not introduce top-level `adam/`, `reference/`, `reports/`, or
+`public-feedback/` folders. Check the generated tree against the referenced
+manifest, and use the study repository's Structure Check workflow when
+available. Record the layout reference revision in the inventory.
 
 The programmer creates the study-specific files in this recipe; the report
 and ledger filenames below describe required deliverables, not built-in
 yamaa features. Do not add study orchestration, converters, or reporting
 utilities to the yamaa repository's `.github/scripts`.
 
-- Create exactly one specification per output dataset, such as `adsl.yaml`.
+- Create exactly one specification per output dataset under `spec/yamaa/`,
+  such as `spec/yamaa/adsl.yaml`.
   Keep temporary values and ordered calculations inside it as internal
   columns, intermediates, or ordered derivations. Do not split one dataset
   into `adsl-s1.yaml`, `adsl-final.yaml`, or staged workaround datasets.
@@ -171,7 +226,7 @@ utilities to the yamaa repository's `.github/scripts`.
   project function must be declared, versioned, reviewed, and independently
   tested through the R implementation environment; do not hide the study
   pipeline in a function or preprocessing step. Link the R implementation
-  environment from `project.yaml` with
+  environment from `spec/yamaa/project.yaml` with
   `environments: {r: r/environment.yaml}`; declare its lock and function-file
   references in that environment file, following the 0.5.0 API.
 - Put uniform derivations at column level: key echoes, literals, and common
@@ -188,14 +243,19 @@ utilities to the yamaa repository's `.github/scripts`.
   paths so project execution orders dependencies and reads current results.
   Include every required producer in the selected project run scope.
 - Declare every output column, its type and `label`, and the required
-  `output.columns` order. With specifications at the workspace root, use
-  `output.path: adam/<dataset>-yamaa.parquet`, plus a distinct `output.report`.
+  `output.columns` order. From a specification in `spec/yamaa/`, use
+  `output.path: ../../data/adam/<dataset>-yamaa.parquet` and
+  `output.report: ../../log/yamaa-<dataset>-report.csv`. An SDTM input at
+  `data/sdtm/dm.parquet` is read as `../../data/sdtm/dm.parquet`.
+  Resolve each relative path from its declaring YAML file; project spec
+  listings and sibling producer `schema` links remain `adsl.yaml`, etc.
 - Declare meaningful verifications for keys, populations, ranges, expected
   counts, and other study invariants. Best-practice authoring must preserve
   approved study logic; propose methodological changes as separate findings.
 
 After creating the project file described below, initialize
-`project <- yamaa_project("project.yaml")` in R. Check every specification with
+`project <- yamaa_project("spec/yamaa/project.yaml")` from the study root in R.
+Check every specification with
 `project$spec("ADSL")$check()` and inspect `project$spec("ADSL")$resolve()`;
 repeat for every target. Review the 0.5.0 field order, spacing, line width,
 uniform derivations, redundant intermediates, and output-column labels.
@@ -207,8 +267,9 @@ programmer.
 
 ## 5. Run the study and handle blockers
 
-List all target specifications in `project.yaml` under `adam.specs`. A minimal
-0.5.0 project, before adding study terminology or project functions, is:
+List all target specifications in `spec/yamaa/project.yaml` under `adam.specs`.
+A minimal 0.5.0 project, before adding study terminology or project functions,
+is:
 
 ```yaml
 schema_version: "1.0"
@@ -217,14 +278,18 @@ adam:
 ```
 
 `schema_version: "1.0"` selects the schema bundle used by package 0.5.0; it
-is not the package version. In a downstream specification beside `adsl.yaml`,
-declare the producer link explicitly:
+is not the package version. In a downstream specification such as
+`spec/yamaa/adae.yaml`, declare its input and output paths explicitly:
 
 ```yaml
 input:
   ADSL:
-    path: adam/adsl-yamaa.parquet
+    path: ../../data/adam/adsl-yamaa.parquet
     schema: adsl.yaml
+
+output:
+  path: ../../data/adam/adae-yamaa.parquet
+  report: ../../log/yamaa-adae-report.csv
 ```
 
 Project execution builds linked producers before consumers: typically ADSL,
@@ -234,8 +299,10 @@ artifact. Never feed reference ADaM outputs into the candidate derivation to
 bypass a missing dependency; account for approved external inputs in the
 inventory.
 
-Keep `run.R` within 30 lines using the installed R package. Pass the study
-workspace explicitly: `Rscript --vanilla run.R /path/to/study-test`.
+Keep `program/adam/r/run.R` within 30 lines using the installed R package.
+From the study root, pass that root explicitly:
+`Rscript --vanilla program/adam/r/run.R .`. Capture its stdout and stderr in
+`log/yamaa-run.log`; capture comparison output in `log/yamaa-compare.log`.
 
 ```r
 library(yamaa)
@@ -243,23 +310,23 @@ stopifnot(as.character(packageVersion("yamaa")) == "0.5.0")
 args <- commandArgs(trailingOnly = TRUE)
 stopifnot(length(args) == 1L)
 root <- normalizePath(args[[1]], mustWork = TRUE)
-reports <- file.path(root, "reports")
+reports <- file.path(root, "log")
 dir.create(reports, showWarnings = FALSE)
 tryCatch({
-  project <- yamaa_project(file.path(root, "project.yaml"))
+  project <- yamaa_project(file.path(root, "spec", "yamaa", "project.yaml"))
   checked <- project$check()
-  saveRDS(checked$issues, file.path(reports, "preflight-issues.rds"))
+  saveRDS(checked$issues, file.path(reports, "yamaa-preflight-issues.rds"))
   if (nrow(checked$issues)) stop("Resolve preflight issues before running")
   runs <- project$run("adam")
-  saveRDS(runs$issues, file.path(reports, "run-issues.rds"))
-  saveRDS(runs$report, file.path(reports, "engine-report.rds"))
+  saveRDS(runs$issues, file.path(reports, "yamaa-run-issues.rds"))
+  saveRDS(runs$report, file.path(reports, "yamaa-engine-report.rds"))
   missing_output <- vapply(runs$names, function(name) is.null(runs[[name]]$output),
                            logical(1))
   if (nrow(runs$issues) || any(missing_output)) stop("Study run incomplete")
   runs$save()
 }, yamaa_error = function(error) {
   saveRDS(list(message = conditionMessage(error), issues = error$issues),
-          file.path(reports, "failure.rds"))
+          file.path(reports, "yamaa-failure.rds"))
   stop(error)
 })
 ```
@@ -267,9 +334,12 @@ tryCatch({
 Use `readRDS()` to inspect the saved R issue tables, engine report, and failure
 details; RDS preserves list columns and diagnostic locations without another
 package. Retain the condition message even when an R error has no issue rows.
-Retain each attempt's logs, issue tables, and reports before
-retrying; isolate output directories or archive previous attempts so stale
-outputs cannot pass comparison after a failed run. Time generation and
+Retain each attempt's logs, issue tables, and reports before retrying, using
+attempt identifiers in the log filenames. Archive previous candidates in a
+controlled snapshot that retains the same study layout; clear only the
+previous generated `data/adam/<dataset>-yamaa.parquet` targets before the next
+attempt so stale outputs cannot pass comparison after a failed run. Keep
+current Parquet outputs directly in `data/adam/`. Time generation and
 comparison separately with an external job wrapper/ledger; also record
 installation, investigation, authoring, review, and rework. A successful
 `runs$save()` alone is not equivalence. Assess R data-frame types, missing
@@ -286,8 +356,10 @@ intended derivation. Prepare a GitHub-ready finding as described below.
 
 ## 6. Independently compare every output and rule
 
-Implement comparison in a separate `compare.R`, using an independent R reader
-and a documented comparison contract. Stage approved comparison dependencies,
+Implement comparison in `program/adam/r/compare.R`, using an independent R
+reader and a documented comparison contract. Resolve paths from the explicit
+study root, read only the reference/candidate pairs frozen in scope, and
+write comparison evidence to `log/yamaa-*`. Stage approved dependencies,
 for example `arrow` for Parquet, `haven` for SAS datasets/transport files and
 tagged missing values, and `jsonlite` for JSON metrics, when those formats
 require them. Record their versions separately from yamaa's runtime needs.
@@ -321,20 +393,20 @@ reference; never generate expected results from the candidate specifications.
    every rule/branch, including those unobserved in the study. Record rule
    coverage, missing evidence, and reviewer sign-off alongside data matching.
 
-`compare.R` must report matched/total columns and cells for each dataset,
-structural/metadata differences, and scope coverage. It exits nonzero on any
-mismatch, missing or unassessable target, or validation issue. If the study
-lead accepts numeric tolerance differences for a separate practical
+`program/adam/r/compare.R` must report matched/total columns and cells for each
+dataset, structural/metadata differences, and scope coverage. It exits nonzero
+on any mismatch, missing or unassessable target, or validation issue. If the
+study lead accepts numeric tolerance differences for a separate practical
 assessment, retain the strict result and label the acceptance explicitly;
 do not relabel it as 100% exact matching.
 
 ## 7. Produce the confidential study report
 
-Deliver `reports/study-report.md` plus machine-readable
-`dataset-metrics.csv`, `job-metrics.json`, and the ledgers below. Populate
-actual values with units and evidence; use `not-measured` or `unavailable`
-with a reason when instrumentation or billing access is absent. Never invent
-measurements or substitute zero for unknown usage.
+Deliver `log/yamaa-study-report.md` plus machine-readable
+`log/yamaa-dataset-metrics.csv`, `log/yamaa-job-metrics.json`, and the ledgers
+below. Populate actual values with units and evidence; use `not-measured` or
+`unavailable` with a reason when instrumentation or billing access is absent.
+Never invent measurements or substitute zero for unknown usage.
 
 | Overall metric | Definition |
 | --- | --- |
@@ -353,7 +425,7 @@ differences, tolerance-only matches, validation issues, and elapsed time.
 State whether column matches refer to structure or complete column contents.
 Keep logical derivation coverage separate from the dataset reproduction count.
 
-Maintain `reports/usage-ledger.csv` with attempt/phase, provider/model, usage
+Maintain `log/yamaa-usage-ledger.csv` with attempt/phase, provider/model, usage
 categories, units, rate, amount, and billing evidence reference. Compute an
 estimated charge as the sum of each disjoint billed quantity times its
 applicable unit price; label estimates and reconcile them with invoices when
@@ -373,8 +445,9 @@ and tests, and no unresolved source conflict affecting the conclusion.
 
 ## 8. Prepare GitHub-ready yamaa improvement feedback
 
-Create a separate `public-feedback/summary.md` and one draft per actionable
-finding. Cover user interface (installation, authoring, diagnostics, review,
+Create a separate `log/yamaa-public-summary.md` and
+`log/yamaa-public-<finding-id>.md` for each actionable finding. Cover user
+interface (installation, authoring, diagnostics, review,
 comparison), specification schema (clarity, expressiveness, repetition,
 traceability), engine (correctness, supported operations, determinism,
 performance), and documentation/tooling as supported by observed evidence.
