@@ -222,11 +222,15 @@ jobs:
           python -m pip wheel --no-deps --no-build-isolation rust/tests/project-programs/python --wheel-dir "${RUNNER_TEMP}/project-dist"
           mkdir -p "${RUNNER_TEMP}/reference-dist"
           cp "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}/reference-dist/"
+      # The package notice checks compare each archive with the committed
+      # notices and component inventories, so the generators first prove those
+      # copies current.
       - name: Check Python distribution contents
         run: |
           python -m tools.packaging.check_python_package_hygiene "${RUNNER_TEMP}/native-dist"
           python -m tools.packaging.check_cargo_lock --output-dir "${RUNNER_TEMP}/rust-dependencies" "${RUNNER_TEMP}"/native-dist/*.tar.gz
           python -m tools.packaging.generate_third_party_notices
+          python -m tools.packaging.generate_component_inventory
           python -m tools.packaging.check_package_notices "${RUNNER_TEMP}"/native-dist/*.whl "${RUNNER_TEMP}"/native-dist/*.tar.gz
       - name: Preserve the reference host wheel
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
