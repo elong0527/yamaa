@@ -32,8 +32,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          r: runtime
       - id: lint
         run: make check-lint
       # Report repository findings even when lint fails.
@@ -47,8 +45,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-        with:
-          r: runtime
       - run: make test-rust
   python:
     runs-on: ubuntu-24.04
