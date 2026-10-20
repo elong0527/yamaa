@@ -1271,9 +1271,296 @@ jobs:
           path: ${{ runner.temp }}/offline/public-conformance
           if-no-files-found: error
 
+  r-binary:
+    name: native-r-binary (${{ matrix.os }}, R ${{ matrix.r }})
+    needs: r-dist
+    runs-on: ${{ matrix.os }}
+    # The R binary packages that a release publishes, for R-release and
+    # R-oldrel on Windows x64 and macOS arm64 (#3030 D48): R CMD INSTALL
+    # --build of the published R source package with that R, and on Windows
+    # with Rtools45 and the GNU Rust target. The build reads the vendored
+    # crates behind a proxy that refuses every connection.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 45 || 30 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+        r: ['4.6.1', '4.5.3']
+    steps:
+      # The notice check compares the package's notices with the checkout's
+      # byte for byte.
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+      - name: Install Rust
+        run: |
+          python -m tools.ci.toolchain --install
+          if [ "${RUNNER_OS}" = Windows ]; then
+            rustup target add x86_64-pc-windows-gnu
+          fi
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: ${{ matrix.r }}
+          rtools-version: ${{ runner.os == 'Windows' && '45' || '' }}
+          use-public-rspm: true
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/published
+      # R CMD INSTALL --build writes yamaa_<version>.zip on Windows and
+      # yamaa_<version>.tgz on macOS. Both R series' binaries go in one
+      # release, so the asset name adds the series after a hyphen, which
+      # install.packages() reads as part of the version: it takes the
+      # package name from what comes before the underscore. Environment names
+      # are case-insensitive on Windows; libcurl reads only the lowercase
+      # http_proxy.
+      - name: Build the R binary package
+        working-directory: ${{ runner.temp }}
+        env:
+          R_VERSION: ${{ matrix.r }}
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          Rscript --vanilla -e 'stopifnot(identical(as.character(getRversion()), Sys.getenv("R_VERSION")))'
+          archives=(published/yamaa_*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          version=$(basename "${archives[0]}" .tar.gz)
+          version=${version#yamaa_}
+          extension=tgz
+          if [ "${RUNNER_OS}" = Windows ]; then extension=zip; fi
+          mkdir r-binary-library r-binary
+          R CMD INSTALL --build --library="${RUNNER_TEMP}/r-binary-library" "${archives[0]}"
+          mv "yamaa_${version}.${extension}" "r-binary/yamaa_${version}-${R_VERSION%.*}.${extension}"
+          ls -l r-binary
+      - name: Check the R binary package
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/r-binary-library
+        run: |
+          binaries=(r-binary/*)
+          test "${#binaries[@]}" -eq 1
+          python -m tools.packaging.check_package_notices "${binaries[0]}"
+          Rscript --vanilla -e 'built <- packageDescription("yamaa", lib.loc = Sys.getenv("R_LIBS"))$Built' \
+            -e 'writeLines(built)' \
+            -e 'stopifnot(startsWith(built, paste0("R ", getRversion(), "; ", R.version$platform, ";")))'
+      - name: Preserve the R binary package
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-binary-${{ matrix.os }}-${{ matrix.r }}
+          path: ${{ runner.temp }}/r-binary
+          if-no-files-found: error
+
+  r-binary-install:
+    name: native-r-binary-install (${{ matrix.os }}, R ${{ matrix.r }})
+    needs: r-binary
+    runs-on: ${{ matrix.os }}
+    # Each R binary package, installed as a user installs it, with
+    # install.packages(path, repos = NULL) and R of its series, on a runner
+    # that has no Rust, no Rtools and no network: the image's Rust is
+    # uninstalled, setup-r installs no Rtools, any Rtools that the image
+    # carries is deleted, and the installation, the conformance corpus and
+    # the installed R suites run behind a proxy that refuses every
+    # connection. Before that, while the network is up, the suites' suggested
+    # packages are installed as CRAN binaries. The cohort comparison reads the
+    # reports.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+        r: ['4.6.1', '4.5.3']
+    steps:
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3 pyarrow==25.0.1
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: ${{ matrix.r }}
+          rtools-version: none
+          windows-path-include-rtools: false
+          use-public-rspm: true
+      - name: Download the R binary package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-binary-${{ matrix.os }}-${{ matrix.r }}
+          path: ${{ runner.temp }}/r-binary
+      - name: Install the R suites' suggested packages
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/r-binary-library
+        run: |
+          mkdir r-binary-library
+          Rscript --vanilla - <<'RS'
+          repository <- Sys.getenv("RSPM")
+          if (!nzchar(repository)) repository <- "https://cloud.r-project.org"
+          options(repos = c(CRAN = repository))
+          description <- read.dcf(file.path(Sys.getenv("GITHUB_WORKSPACE"), "R/yamaa/DESCRIPTION"))
+          suggests <- strsplit(description[1, "Suggests"], ",", fixed = TRUE)[[1]]
+          packages <- trimws(sub("[[:space:]]*[(][^)]*[)]", "", suggests))
+          install.packages(packages, lib = Sys.getenv("R_LIBS"), type = "binary")
+          stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
+          RS
+      # GitHub's images ship Rust through rustup, and setup-r says that its
+      # Windows runners may carry an Rtools. R for Windows looks for Rtools in
+      # the directories that its PATH names, C:/rtools45 unless RTOOLS45_HOME
+      # says otherwise. On Windows the image's own MinGW and Git's also carry
+      # a compiler or the GNU runtime libraries that a DLL built with Rtools
+      # could load from the PATH, so R runs the later steps with a PATH that
+      # leaves out every directory holding one of them, which this step
+      # writes and lists. The log shows that neither the shell nor R finds a
+      # Rust tool, that no Rtools directory on R's PATH exists, and on Windows
+      # that R finds no make or gcc either.
+      - name: Remove Rust and Rtools from the runner
+        working-directory: ${{ runner.temp }}
+        run: |
+          if command -v rustup; then rustup self uninstall -y; fi
+          tools=(cargo rustc rustup cargo.exe rustc.exe rustup.exe)
+          if [ "${RUNNER_OS}" = Windows ]; then
+            shopt -s nocaseglob nullglob
+            for directory in /c/rtools*; do
+              echo "Deleting ${directory}"
+              rm -rf "${directory}"
+            done
+            remaining=(/c/rtools*)
+            echo "Rtools directories left in C:/: ${#remaining[@]}"
+            test "${#remaining[@]}" -eq 0
+            env | grep -i '^rtools' || true
+            tools+=(gcc.exe cc.exe make.exe libgcc_s_seh-1.dll libwinpthread-1.dll libstdc++-6.dll)
+          fi
+          kept=()
+          IFS=: read -r -a entries <<< "${PATH}"
+          for entry in "${entries[@]}"; do
+            keep=yes
+            for tool in "${tools[@]}"; do
+              if [ -e "${entry}/${tool}" ]; then keep=no; fi
+            done
+            if [ "${keep}" = yes ]; then kept+=("${entry}"); else echo "Left off R's PATH: ${entry}"; fi
+          done
+          (IFS=:; printf '%s\n' "${kept[*]}") > toolchain-free-path
+          export PATH="$(cat toolchain-free-path)"
+          for tool in cargo rustc rustup; do
+            if command -v "${tool}"; then echo "${tool} is still on the PATH"; exit 1; fi
+          done
+          Rscript -e 'tools <- c("cargo", "rustc", "rustup", "make", "gcc")' \
+            -e 'print(Sys.which(tools))' \
+            -e 'absent <- if (.Platform$OS.type == "windows") tools else tools[1:3]' \
+            -e 'stopifnot(!nzchar(Sys.which(absent)))' \
+            -e 'path <- strsplit(Sys.getenv("PATH"), .Platform$path.sep, fixed = TRUE)[[1]]' \
+            -e 'rtools <- path[grepl("rtools", path, ignore.case = TRUE)]' \
+            -e 'print(data.frame(rtools = rtools, exists = dir.exists(rtools)))' \
+            -e 'stopifnot(!any(dir.exists(rtools)))'
+      # Loading the package proves that its shared object needs nothing that
+      # the toolchain-free PATH leaves out. On macOS the dynamic loader reads
+      # no PATH, so the log lists the libraries that it links, none of them
+      # from Homebrew.
+      - name: Install the R binary package without a network
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/r-binary-library
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          binaries=(r-binary/yamaa_*)
+          test "${#binaries[@]}" -eq 1
+          if [ "${RUNNER_OS}" = macOS ]; then linked=$(command -v otool); fi
+          export PATH="$(cat toolchain-free-path)"
+          Rscript -e 'install.packages(commandArgs(TRUE), repos = NULL, lib = Sys.getenv("R_LIBS"))' "${binaries[0]}"
+          Rscript -e 'built <- packageDescription("yamaa", lib.loc = Sys.getenv("R_LIBS"))$Built' \
+            -e 'writeLines(built)' \
+            -e 'stopifnot(startsWith(built, paste0("R ", getRversion(), "; ", R.version$platform, ";")))' \
+            -e 'library(yamaa)' \
+            -e 'writeLines(paste("yamaa", packageVersion("yamaa"), "loaded from", find.package("yamaa")))'
+          if [ "${RUNNER_OS}" = macOS ]; then
+            "${linked}" -L "${R_LIBS}/yamaa/libs/yamaa.so"
+            if "${linked}" -L "${R_LIBS}/yamaa/libs/yamaa.so" | grep -E '/opt/homebrew/|/usr/local/'; then exit 1; fi
+          fi
+      # The original benchmarks call the project programs package, plain R
+      # that installs without a compiler. R runs with the toolchain-free PATH.
+      - name: Report installed R public benchmark conformance
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/r-binary-library
+          PUBLIC_CONFORMANCE_PACKAGE_FORM: binary
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          revision=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)
+          python -I -m tools.conformance.public_conformance plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          (
+            export PATH="$(cat toolchain-free-path)"
+            R CMD INSTALL --library="${R_LIBS}" "${GITHUB_WORKSPACE}/rust/tests/project-programs/r"
+            Rscript --vanilla "${GITHUB_WORKSPACE}/rust/tests/public_conformance.R" \
+              public-conformance-plan "${GITHUB_WORKSPACE}/benchmarks" public-conformance/observed "${revision}"
+          )
+          python -I -m tools.conformance.public_conformance compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve R public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-r-binary-${{ matrix.os }}-${{ matrix.r }}
+          path: ${{ runner.temp }}/public-conformance
+          if-no-files-found: error
+      - name: Run installed R supplemental suites outside checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          binaries=(r-binary/yamaa_*)
+          python -m tools.commands.installed stage \
+            --runtime r --staged-root "${RUNNER_TEMP}"
+          YAMAA_PUBLIC_REPORT_DIR="${RUNNER_TEMP}/qualification/r-binary/public-reports" R_LIBS="${RUNNER_TEMP}/r-binary-library" python -I -m tools.commands.installed run \
+            --output qualification/r-binary --runtime r --staged-root "${RUNNER_TEMP}" \
+            --source-revision "$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)" --package-form binary \
+            --artifact-reference "github-actions:${GITHUB_RUN_ID}/attempt-${GITHUB_RUN_ATTEMPT}/native-r-binary-${{ matrix.os }}-${{ matrix.r }}/$(basename "${binaries[0]}")" \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Preserve R binary qualification
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-r-binary-qualification-${{ matrix.os }}-${{ matrix.r }}
+          path: ${{ runner.temp }}/qualification
+          if-no-files-found: error
+
   public-cohort:
     name: public-cohort-complete-runs
-    needs: [qualify, r]
+    needs: [qualify, r, r-binary-install]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1304,6 +1591,10 @@ jobs:
 
         with:
           pattern: native-r-qualification-*
+          path: ${{ runner.temp }}/cohort-input
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: native-r-binary-qualification-*
           path: ${{ runner.temp }}/cohort-input
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
