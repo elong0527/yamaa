@@ -2,6 +2,7 @@
 
     python -m tools.migrate benchmarks/adam-adsl-bmi --output /tmp/converted
     python -m tools.migrate benchmarks --output /tmp/converted --counts
+    python -m tools.migrate --embedded rust/crates --output /tmp/converted
 
 Each SOURCE is a benchmark or project directory, a directory searched for
 them, a project file, or a YAML or Markdown file. The converted files are
@@ -9,6 +10,10 @@ written under the target at their path relative to `--base` (by default
 the common parent of the sources); files that need no change are copied
 unchanged from a unit directory. The manual follow-up list goes to standard
 output. The target must not overlap a source: nothing is converted in place.
+
+With `--embedded`, each SOURCE is a Rust, Python, R, JSON or TSV file or a
+directory searched for them, and the YAML embedded in them is converted
+instead (`tools.migrate.embedded`); only the files that change are written.
 """
 
 import argparse
@@ -16,21 +21,25 @@ import sys
 from collections import Counter
 
 from tools.migrate import SourceError, convert, write
+from tools.migrate.embedded import convert_embedded
 from tools.migrate.table import TableError
 
 
 def render_counts(result):
-    lines = ["Converter footprint (occurrences / documents):"]
+    lines = []
     rows = sorted(
         {row for _, row in result.counts} | {row for _, row in result.documents}
     )
-    for area in ("files", "markdown"):
-        lines.append(f"  {area}:")
-        for row in rows:
-            occurrences = result.counts.get((area, row), 0)
-            documents = len(result.documents.get((area, row), ()))
-            if occurrences or documents:
-                lines.append(f"    {row}: {occurrences} / {documents}")
+    if rows:
+        # The embedded converter counts statistics only.
+        lines.append("Converter footprint (occurrences / documents):")
+        for area in ("files", "markdown"):
+            lines.append(f"  {area}:")
+            for row in rows:
+                occurrences = result.counts.get((area, row), 0)
+                documents = len(result.documents.get((area, row), ()))
+                if occurrences or documents:
+                    lines.append(f"    {row}: {occurrences} / {documents}")
     lines.append("Statistics:")
     for name, value in sorted(result.stats.items()):
         lines.append(f"  {name}: {value}")
@@ -47,6 +56,11 @@ def main(argv=None):
         "sources", nargs="+", help="directories, project files, YAML or Markdown files"
     )
     parser.add_argument(
+        "--embedded",
+        action="store_true",
+        help="convert the YAML embedded in Rust, Python, R, JSON and TSV files",
+    )
+    parser.add_argument(
         "--output", required=True, help="target directory, outside every source"
     )
     parser.add_argument("--base", help="directory the written paths are relative to")
@@ -55,9 +69,12 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        result = convert(args.sources, base=args.base)
+        if args.embedded:
+            result = convert_embedded(args.sources, base=args.base)
+        else:
+            result = convert(args.sources, base=args.base)
         target = write(result, args.output, args.sources)
-    except (SourceError, TableError) as error:
+    except (SourceError, TableError, FileNotFoundError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
     kinds = Counter(note.kind for note in result.notes)
