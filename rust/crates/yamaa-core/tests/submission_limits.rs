@@ -19,7 +19,8 @@ fn oversized_published_table_refuses_before_schema_or_cell_access() {
             panic!("geometry admission precedes cell access")
         }
     }
-    let study = one(project(), specification(), &ct::Catalogue::default()).unwrap();
+    let catalogue = ct::Catalogue::admit(Vec::new()).unwrap();
+    let study = one(project(), specification(), &catalogue).unwrap();
     let finding =
         submission_transport::admit(&study, &study.datasets()[0], &Oversized).unwrap_err();
     assert_eq!(finding.code, ConditionCode::ApplicationRejected);
