@@ -174,9 +174,14 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     # key-order variant compares them without their order.
     tables <- list(output=public_table(output, types),
       report=public_table(built$report, report_types))
-    # A refused save signals yamaa_error; the record keeps the run's issues.
-    saved <- if(length(issues)) FALSE else tryCatch({built$save(); TRUE}, yamaa_error=function(error) FALSE)
-    list(issues=issue_rows(built$issues), tables=tables, saved=saved)
+    # A save returns the paths it wrote, in publication order; a refused save
+    # signals yamaa_error with the paths it wrote first. The record keeps the
+    # run's issues.
+    paths <- NULL
+    saved <- if (length(issues)) FALSE else tryCatch({paths <- built$save(); TRUE},
+      yamaa_error=function(error) { paths <<- error$paths; FALSE })
+    list(issues=issue_rows(built$issues), tables=tables, saved=saved,
+      paths=if (is.null(paths)) NULL else as.list(paths))
   }
   # The bytes of every regular file in a case; staged links are skipped.
   case_files <- function(case) {

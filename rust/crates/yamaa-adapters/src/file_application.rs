@@ -6,10 +6,7 @@ use crate::{
     specification_report::{self, BuildResult, Identity},
     specification_run::Attempt,
 };
-use std::{
-    any::Any,
-    panic::{catch_unwind, AssertUnwindSafe},
-};
+use std::any::Any;
 use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::application_observer::Scope;
 use yamaa_core::diagnostic::Diagnostic;
@@ -165,7 +162,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
 
 pub struct Domain {
     result: BuildResult,
-    targets: Option<Vec<crate::resource_publication::AnchoredTarget>>,
+    targets: Option<Vec<crate::publication::AnchoredTarget>>,
     publication_issues: Failure,
     published: Option<StoredReport>,
     publication_attempt: PublicationAttempt,
@@ -176,6 +173,15 @@ struct PublicationAttempt {
     completed: usize,
     failure: Option<crate::file_publication::Error>,
     unwind: Option<Box<dyn Any + Send>>,
+}
+/// What a save admitted for one result before it staged anything: the
+/// complete publication observations, with an empty slot for each file it
+/// writes, and each file's output field.
+pub struct Admitted {
+    report: StoredReport,
+    artifacts: std::vec::IntoIter<Value>,
+    fields: Vec<&'static str>,
+    written: Vec<String>,
 }
 fn publication_at(
     mut issues: Failure,
@@ -212,7 +218,7 @@ impl Domain {
         mut target: impl FnMut(
             &str,
         ) -> Result<
-            crate::resource_publication::AnchoredTarget,
+            crate::publication::AnchoredTarget,
             crate::file_resources::Error,
         >,
     ) -> Self {
@@ -278,92 +284,30 @@ impl Domain {
     pub fn artifact(&self) -> Option<std::sync::Arc<[u8]>> {
         self.result.artifact()
     }
-    /// Open the publisher of every file a save would write, the report file
-    /// alone with `report_only`, without writing any of them.
-    pub(crate) fn publishers(
+    /// The files a save of this result writes, in publication order: its
+    /// declared report file, then its primary artifact unless `report_only`
+    /// or the build failed (OUTPUT-10). A failed build that declares no report
+    /// file writes nothing. The complete publication observations are
+    /// admitted first, so a report too large to record refuses the save before
+    /// any file is staged; every prefix of them then fits.
+    pub fn plan(
         &self,
         report_only: bool,
-    ) -> Result<Vec<crate::resource_publication::Publisher>, Failure> {
+    ) -> Result<Option<(Vec<crate::publication::File<'_>>, Admitted)>, Failure> {
         let diagnostic = report_only || self.result.output().is_none();
-        let mut items = self.result.publication_items();
-        if diagnostic {
-            items.truncate(usize::from(self.result.report_file()));
+        if diagnostic && !self.result.report_file() {
+            return Ok(None);
         }
         let Some(targets) = self.targets.as_ref() else {
             return Err(self.publication_issues.clone());
-        };
-        targets
-            .iter()
-            .zip(&items)
-            .map(|(target, (path, _, _))| {
-                target
-                    .publisher(path)
-                    .map_err(|error| publication_failure(&error))
-            })
-            .collect()
-    }
-    /// Preflight the complete target set before writing held report/primary
-    /// bytes. Failed builds may publish their declared report file on explicit
-    /// Save and still raise the original failed-build result. Build itself
-    /// never writes.
-    pub fn save(&mut self) -> Result<bool, FailedBuild> {
-        self.save_with(|publisher, path, bytes| publisher.publish(path, bytes))
-    }
-    /// Publish the declared report file alone, as a failed build saves, even
-    /// when the build succeeded. `Err` means there is no report file to write.
-    pub fn save_report(&mut self) -> Result<bool, FailedBuild> {
-        if !self.result.report_file() {
-            return Err(FailedBuild);
-        }
-        let failed = self.result.output().is_none();
-        match self.save_mode(true, |publisher, path, bytes| {
-            publisher.publish(path, bytes)
-        }) {
-            // A failed build reports its failure after the report was written.
-            Err(FailedBuild) if failed => Ok(self.publication_attempt.failure.is_none()
-                && self.publication_attempt.unwind.is_none()
-                && self.publication_issues.is_empty()),
-            outcome => outcome,
-        }
-    }
-    fn save_with(
-        &mut self,
-        publish: impl FnMut(
-            &mut crate::resource_publication::Publisher,
-            &str,
-            &[u8],
-        ) -> Result<(), crate::file_publication::Error>,
-    ) -> Result<bool, FailedBuild> {
-        self.save_mode(false, publish)
-    }
-    fn save_mode(
-        &mut self,
-        report_only: bool,
-        mut publish: impl FnMut(
-            &mut crate::resource_publication::Publisher,
-            &str,
-            &[u8],
-        ) -> Result<(), crate::file_publication::Error>,
-    ) -> Result<bool, FailedBuild> {
-        let failed = self.result.output().is_none();
-        let diagnostic = failed || report_only;
-        if diagnostic && !self.result.report_file() {
-            return if failed { Err(FailedBuild) } else { Ok(false) };
-        }
-        self.published = None;
-        self.publication_attempt = Default::default();
-        let Some(targets) = self.targets.as_ref() else {
-            return if failed { Err(FailedBuild) } else { Ok(false) };
         };
         let mut items = self.result.publication_items();
         if diagnostic {
             // The report file comes first; a diagnostic save writes it alone.
             items.truncate(1);
         }
-        // Own one complete report and both at-most-two artifact entries before
-        // publication. Every prefix fits the admitted complete encoded report;
-        // its artifact slots are reserved before the first publisher. Later
-        // success only moves an already-owned entry into an admitted slot.
+        // Own one complete report and every artifact entry before staging.
+        // Later success only moves an already-owned entry into its slot.
         let report = (|| {
             let mut report = self.result.publication_observations(items.len())?;
             let Value::Array(artifacts) = report["artifacts"].take() else {
@@ -375,93 +319,157 @@ impl Domain {
             report["artifacts"] = Value::Array(Vec::with_capacity(artifacts.len()));
             Ok((report, artifacts.into_iter()))
         })();
-        let (report, mut artifacts) = match report {
-            Ok(report) => report,
-            Err(error) => {
-                self.publication_issues = match &error {
-                    specification_report::Error::ResourceLimit(refusal) => {
-                        refusal.issues(Stage::Output, Fault::PublicationReportLimit)
-                    }
-                    _ => rejected(Stage::Output, Fault::PublicationReportLimit),
-                };
-                return if failed { Err(FailedBuild) } else { Ok(false) };
+        let (report, artifacts) = report.map_err(|error| match &error {
+            specification_report::Error::ResourceLimit(refusal) => {
+                refusal.issues(Stage::Output, Fault::PublicationReportLimit)
             }
-        };
+            _ => rejected(Stage::Output, Fault::PublicationReportLimit),
+        })?;
         let fields = [("report", self.result.report_file()), ("path", !diagnostic)]
             .into_iter()
             .filter_map(|(field, present)| present.then_some(field))
-            .collect::<Vec<_>>();
-        let publishers = targets
+            .collect();
+        let files = targets
             .iter()
             .zip(&items)
-            .map(|(target, (path, _, _))| target.publisher(path))
-            .collect::<Result<Vec<_>, _>>();
-        self.publication_issues.clear();
-        let mut publishers = match publishers {
-            Ok(publishers) => publishers,
-            Err(error) => {
-                self.publication_issues = publication_failure(&error);
-                self.publication_attempt.failure = Some(error);
-                return if failed { Err(FailedBuild) } else { Ok(false) };
+            .map(|(target, (written, bytes, _))| crate::publication::File {
+                target,
+                written,
+                bytes,
+            })
+            .collect();
+        let written = items
+            .iter()
+            .map(|(written, _, _)| (*written).to_owned())
+            .collect();
+        Ok(Some((
+            files,
+            Admitted {
+                report,
+                artifacts,
+                fields,
+                written,
+            },
+        )))
+    }
+    /// A save of this result refused before it staged anything, for `issues`.
+    pub fn refuse(&mut self, issues: Failure) {
+        self.published = None;
+        self.publication_attempt = Default::default();
+        self.publication_issues = issues;
+    }
+    /// What the latest save did with this result's files: `committed` of
+    /// them replaced their targets, and, when the save stopped at one of
+    /// them, which one and why. The observations then list the replaced
+    /// files, and a stop joins the issues as the save's own finding.
+    pub fn record(
+        &mut self,
+        admitted: Admitted,
+        committed: usize,
+        stopped: Option<(usize, crate::publication::Cause)>,
+    ) {
+        use crate::publication::Cause;
+        let Admitted {
+            mut report,
+            mut artifacts,
+            fields,
+            written,
+        } = admitted;
+        let slots = report
+            .get_mut("artifacts")
+            .and_then(Value::as_array_mut)
+            .expect("admitted artifact slots");
+        slots.extend(artifacts.by_ref().take(committed));
+        self.published = Some(report);
+        self.publication_attempt = PublicationAttempt {
+            entered: committed,
+            completed: committed,
+            ..Default::default()
+        };
+        self.publication_issues = Vec::new();
+        let Some((file, cause)) = stopped else {
+            return;
+        };
+        let attempt = &mut self.publication_attempt;
+        let at = |issues, attempt: &PublicationAttempt| {
+            publication_at(issues, fields[file], &written[file], attempt)
+        };
+        self.publication_issues = match cause {
+            // The save never entered this file: its target is refused.
+            Cause::Target(error) => {
+                attempt.entered = 0;
+                let issues = publication_failure(&error);
+                attempt.failure = Some(error);
+                issues
+            }
+            Cause::Collision { .. } => {
+                attempt.entered = 0;
+                let error = crate::file_publication::Error::InvalidTarget;
+                let issues = publication_failure(&error);
+                attempt.failure = Some(error);
+                issues
+            }
+            Cause::Stage(error) | Cause::Commit(error) => {
+                attempt.entered = file + 1;
+                let issues = at(publication_failure(&error), attempt);
+                attempt.failure = Some(error);
+                issues
+            }
+            Cause::Unwind(payload) => {
+                attempt.entered = file + 1;
+                let issues = at(rejected(Stage::Output, Fault::PublicationUnwind), attempt);
+                attempt.unwind = Some(payload);
+                issues
             }
         };
-        // Physical alias checks are performed on these retained parent handles
-        // before the first publication call (see Publisher::same_target).
-        for index in 0..publishers.len() {
-            for prior in &publishers[..index] {
-                match publishers[index].same_target(prior) {
-                    Ok(false) => (),
-                    result => {
-                        let error = result
-                            .err()
-                            .unwrap_or(crate::file_publication::Error::InvalidTarget);
-                        self.publication_issues = publication_failure(&error);
-                        self.publication_attempt.failure = Some(error);
-                        return if failed { Err(FailedBuild) } else { Ok(false) };
-                    }
-                }
-            }
+    }
+    /// Save this result alone, as an outcome of one member saves it: the
+    /// declared report file, then the primary artifact. A failed build writes
+    /// only its report file and still reports a failed save. Build itself
+    /// never writes.
+    pub fn save(&mut self) -> Result<bool, FailedBuild> {
+        self.save_with(false, |_| Ok(()))
+    }
+    /// Publish the declared report file alone, as a failed build saves, even
+    /// when the build succeeded. `Err` means there is no report file to write.
+    pub fn save_report(&mut self) -> Result<bool, FailedBuild> {
+        if !self.result.report_file() {
+            return Err(FailedBuild);
         }
-        self.published = Some(report);
-        for (index, (publisher, (path, bytes, _))) in publishers.iter_mut().zip(items).enumerate() {
-            self.publication_attempt.entered = index + 1;
-            match catch_unwind(AssertUnwindSafe(|| publish(publisher, path, bytes))) {
-                Ok(Ok(())) => {
-                    self.publication_attempt.completed = index + 1;
-                    self.published
-                        .as_mut()
-                        .expect("admitted report")
-                        .get_mut("artifacts")
-                        .and_then(Value::as_array_mut)
-                        .expect("admitted artifact slots")
-                        .push(artifacts.next().expect("admitted artifact entry"));
-                }
-                Ok(Err(error)) => {
-                    self.publication_issues = publication_at(
-                        publication_failure(&error),
-                        fields[index],
-                        path,
-                        &self.publication_attempt,
-                    );
-                    self.publication_attempt.failure = Some(error);
-                    return if failed { Err(FailedBuild) } else { Ok(false) };
-                }
-                Err(payload) => {
-                    self.publication_attempt.unwind = Some(payload);
-                    self.publication_issues = publication_at(
-                        rejected(Stage::Output, Fault::PublicationUnwind),
-                        fields[index],
-                        path,
-                        &self.publication_attempt,
-                    );
-                    return if failed { Err(FailedBuild) } else { Ok(false) };
-                }
-            }
+        let failed = self.result.output().is_none();
+        match self.save_with(true, |_| Ok(())) {
+            // A failed build reports its failure after the report was written.
+            Err(FailedBuild) if failed => Ok(self.publication_issues.is_empty()),
+            outcome => outcome,
         }
+    }
+    /// [`Self::save`], or [`Self::save_report`] with `report_only`, calling
+    /// `before` with each file's position before it is committed.
+    pub(crate) fn save_with(
+        &mut self,
+        report_only: bool,
+        before: impl FnMut(usize) -> Result<(), crate::file_publication::Error>,
+    ) -> Result<bool, FailedBuild> {
+        let failed = self.result.output().is_none();
+        let fail = || if failed { Err(FailedBuild) } else { Ok(false) };
+        let (staged, admitted) = match self.plan(report_only) {
+            Ok(None) => return fail(),
+            Ok(Some((files, admitted))) => (crate::publication::stage(&files), admitted),
+            Err(issues) => {
+                self.refuse(issues);
+                return fail();
+            }
+        };
+        let (committed, stopped) = match staged.and_then(|staged| staged.commit_with(before)) {
+            Ok(paths) => (paths.len(), None),
+            Err(stop) => (stop.committed, Some((stop.file, stop.cause))),
+        };
+        let saved = stopped.is_none();
+        self.record(admitted, committed, stopped);
         if failed {
             Err(FailedBuild)
         } else {
-            Ok(true)
+            Ok(saved)
         }
     }
 }
@@ -864,11 +872,9 @@ mod tests {
         let marker = Arc::new(());
         measurements.save_entered();
         assert!(!result
-            .save_with(
-                |_, _, _| Err(crate::file_publication::Error::Io(std::io::Error::other(
-                    Marker(Arc::clone(&marker))
-                )))
-            )
+            .save_with(false, |_| Err(crate::file_publication::Error::Io(
+                std::io::Error::other(Marker(Arc::clone(&marker)))
+            )))
             .unwrap());
         measurements.save_completed("refused");
         let Some(crate::file_publication::Error::Io(error)) = &result.publication_attempt.failure
@@ -927,15 +933,14 @@ mod tests {
             let marker = Arc::new(());
             let mut entered = 0;
             assert!(!result
-                .save_with(|publisher, path, bytes| {
-                    let index = entered;
+                .save_with(false, |index| {
                     entered += 1;
                     if index == fail_at {
                         return Err(crate::file_publication::Error::Io(std::io::Error::other(
                             Marker(Arc::clone(&marker)),
                         )));
                     }
-                    publisher.publish(path, bytes)
+                    Ok(())
                 })
                 .unwrap());
             assert_eq!(entered, fail_at + 1);
@@ -992,7 +997,7 @@ mod tests {
         let original = result.observations();
         let marker = Arc::new(());
         assert!(result
-            .save_with(|_, _, _| {
+            .save_with(false, |_| {
                 Err(crate::file_publication::Error::Io(std::io::Error::other(
                     Marker(Arc::clone(&marker)),
                 )))
@@ -1039,7 +1044,7 @@ mod tests {
         fs::create_dir(study.0.join("foreign")).unwrap();
         std::os::unix::fs::symlink("foreign", study.0.join("nested")).unwrap();
         assert!(!result
-            .save_with(|_, _, _| panic!("linked parent entered publisher"))
+            .save_with(false, |_| panic!("linked parent entered publisher"))
             .unwrap());
         assert_eq!(result.publication_attempt.entered, 0);
         assert_eq!(result.publication_attempt.completed, 0);
@@ -1064,12 +1069,12 @@ mod tests {
         let marker = Arc::new(());
         let mut entered = 0;
         assert!(!result
-            .save_with(|publisher, path, bytes| {
+            .save_with(false, |_| {
                 entered += 1;
                 if entered == 2 {
                     std::panic::panic_any(Arc::clone(&marker));
                 }
-                publisher.publish(path, bytes)
+                Ok(())
             })
             .unwrap());
         assert!(Arc::ptr_eq(

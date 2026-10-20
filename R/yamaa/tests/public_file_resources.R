@@ -1,5 +1,10 @@
 # Real public filesystem controls; private cache/limits/Changed stay in typed Rust.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -35,7 +40,7 @@ qualify_entry_relative_programs <- function(producer) {
       # A link only types the stored artifact: callers build and save each
       # study's producer before its consumer reads it.
       produced <- yamaa_spec(file.path(study,"producer.yaml"))$run()
-      stopifnot(nrow(produced$issues)==0L,is.null(produced$save()),
+      stopifnot(nrow(produced$issues)==0L,returns_paths(produced$save()),
         identical(rawfile(file.path(study,"output/produced.csv")),charToRaw(truth$studies[[name]])))
     }
     stopifnot(nrow(yamaa_spec(entry)$check()$issues)==0L)
@@ -47,7 +52,7 @@ qualify_entry_relative_programs <- function(producer) {
   for(name in names(results)) {
     study <- file.path(work,name); unlink(file.path(study,"input"),recursive=TRUE)
     expected <- charToRaw(truth$studies[[name]])
-    stopifnot(is.null(results[[name]]$save()),
+    stopifnot(returns_paths(results[[name]]$save()),
       identical(rawfile(file.path(study,"output/result.csv")),expected),
       file.exists(file.path(study,"output/report.csv")))
     if(producer) stopifnot(identical(rawfile(file.path(study,"output/produced.csv")),expected))
@@ -182,7 +187,7 @@ second <- spec$run()
 stopifnot(nrow(second$issues)==0L,
   identical(first$output$DTHDY,c(150,80,NA_real_,NA_real_)),
   identical(second$output$DTHDY,c(151,80,NA_real_,NA_real_)),
-  identical(observations(first),expected),is.null(first$save()),
+  identical(observations(first),expected),returns_paths(first$save()),
   identical(rawfile(file.path(owner$case,"adsl.csv")),rawfile(file.path(owner$case,"expected/adsl.csv"))))
 unlink(owner$directory,recursive=TRUE)
 cat("changed physical bytes affect fresh runs while prior output remains owned passed\n")
@@ -196,7 +201,7 @@ held <- actual$output
 golden <- rawfile(file.path(owner$case,"expected/adsl.csv"))
 expected <- lookup_report(owner$entry,TRUE)
 unlink(owner$entry);unlink(file.path(owner$case,"input"),recursive=TRUE);invisible(gc())
-stopifnot(is.null(actual$save()),identical(rawfile(file.path(owner$case,"adsl.csv")),golden),
+stopifnot(returns_paths(actual$save()),identical(rawfile(file.path(owner$case,"adsl.csv")),golden),
   identical(observations(actual),expected),identical(actual$output,held))
 rm(actual);invisible(gc())
 stopifnot(identical(held$DTHDY,c(150,80,NA_real_,NA_real_)))
@@ -216,7 +221,7 @@ for(written in c("../outside.csv",normalizePath(source,winslash="/"))) {
   writeBin(charToRaw(simple(written)),entry)
   actual <- yamaa_spec(entry)$run()
   stopifnot(nrow(actual$issues)==0L,identical(actual$output$ID,7),
-    is.null(actual$save()),identical(rawfile(file.path(case,"result.csv")),charToRaw("ID\n7\n")))
+    returns_paths(actual$save()),identical(rawfile(file.path(case,"result.csv")),charToRaw("ID\n7\n")))
 }
 unlink(directory,recursive=TRUE)
 cat("approved parent-relative and absolute public source paths passed\n")

@@ -15,7 +15,7 @@ use arrow_array::RecordBatchIterator;
 use arrow_schema::Schema;
 use yamaa::{
     CancellationToken, DataType, Engine, EngineOptions, FFI_ArrowArrayStream, Field, Float64Array,
-    HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Request, SaveOutcome,
+    HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch, Request,
 };
 
 /// Specification bytes served from memory. The input table arrives as an
@@ -55,14 +55,13 @@ pub fn main() {
             .with_resolver(resolver.clone()),
     );
     let token = CancellationToken::new();
-    let request = Request::new("spec.yaml");
 
-    let report = engine.check(&request, &token).unwrap();
-    let mut build = engine.build(&request, &token).unwrap();
+    let check = engine.spec_check("spec.yaml", None, &token).unwrap();
+    let mut run = engine.spec_run("spec.yaml", None, &token).unwrap();
     if cfg!(feature = "yaml") {
-        assert!(report.is_empty());
-        assert!(build.report().is_empty());
-        let output = build.output().unwrap();
+        assert_eq!(check.issues().rows(), 0);
+        assert_eq!(run.issues().rows(), 0);
+        let output = run.output().unwrap();
         assert_eq!(output.rows(), 2);
         assert_eq!(output.columns()[0].name(), "ID");
         assert_eq!(output.columns()[1].name(), "VALUE");
@@ -73,15 +72,17 @@ pub fn main() {
             .unwrap();
         assert_eq!((ids.value(0), ids.value(1)), (1, 2));
         assert!(!output.ipc().unwrap().is_empty());
-        assert_eq!(build.save().unwrap(), SaveOutcome::Saved);
+        // A save returns what it wrote; a caller's resolver names each file
+        // by the reference its target reply gave.
+        assert_eq!(run.save().unwrap(), ["memory:/out.csv"]);
         assert!(resolver.published("memory:/out.csv").is_some());
         assert_eq!(resolver.staged_count(), 0);
         println!("memory example: 2 output rows, save published memory:/out.csv");
     } else {
         // Without document admission the same calls report typed diagnostics.
-        assert!(!report.is_empty());
-        assert!(build.output().is_none());
-        assert!(build.save().is_err());
+        assert!(check.issues().rows() > 0);
+        assert!(run.output().is_none());
+        assert!(run.save().unwrap_err().paths.is_empty());
         println!("memory example: unavailable without the yaml feature, as reported");
     }
 

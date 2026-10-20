@@ -1,5 +1,10 @@
 # Installed 1,024/1,025 controls for every width route (#2299).
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # arrow and jsonlite are suggested packages, each used only where it is
 # installed. Without jsonlite, which decodes the project route's issues,
 # the capacity refusals are compared on the specification route alone;
@@ -150,7 +155,7 @@ assert_layered_cases <- function(root, width) {
     for (row in seq_along(rows)) {
       stopifnot(identical(unlist(built$output[row, ], use.names = FALSE), rows[[row]]))
     }
-    stopifnot(is.null(built$save()))
+    stopifnot(returns_paths(built$save()))
     output <- file.path(root, "out.csv")
     stopifnot(identical(readBin(output, "raw", n = file.info(output)$size), expected))
   }
@@ -324,7 +329,7 @@ run_column_ceilings <- function() {
     consumer <- linked_consumer(producer)
     if (width == 1024L) {
       # Callers build and save the producer before its consumer reads it.
-      stopifnot(is.null(yamaa_spec(producer)$run()$save()))
+      stopifnot(returns_paths(yamaa_spec(producer)$run()$save()))
       assert_build(consumer)
     } else {
       for (operation in operations(FALSE)) assert_refusal(operation(consumer))

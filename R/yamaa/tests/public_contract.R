@@ -1,5 +1,10 @@
 # Installed public API contracts; inputs and exact truth are independently authored.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -163,9 +168,12 @@ run_contract <- function() {
   }
   stopifnot(!file.exists(path("output.csv")))
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
-  stopifnot(is.null(first$save()), identical(rawfile("output.csv"), charToRaw(input)))
+  # save() returns the one path it wrote, invisibly (D38).
+  saved <- withVisible(first$save())
+  stopifnot(!saved$visible, identical(saved$value, normalizePath(path("output.csv"), winslash = "/")),
+    identical(rawfile("output.csv"), charToRaw(input)))
   rm(first); invisible(gc())
-  stopifnot(refuses_output(second, beyond), is.null(second$save()))
+  stopifnot(refuses_output(second, beyond), returns_paths(second$save()))
 
   absent <- yamaa_spec(path("absent.yaml"))
   checked <- check_issues(absent$check()$issues)
@@ -176,7 +184,8 @@ run_contract <- function() {
   for (attempt in 1:2) {
     error <- refusal(run$save())
     stopifnot(identical(conditionMessage(error), messages[["failed_run_save"]]),
-      identical(error$issues, checked), identical(run$issues, checked))
+      identical(error$issues, checked), identical(run$issues, checked),
+      identical(error$paths, character()))
   }
   error <- refusal(absent$resolve())
   stopifnot(identical(conditionMessage(error), messages[["resolve"]]), identical(error$issues, checked))
@@ -191,7 +200,7 @@ run_contract <- function() {
   # Text holding NUL has no R character value either: the frame refuses it and
   # save still publishes the held bytes.
   stopifnot(refuses_output(text, "text containing NUL cannot be held by an R character vector"),
-    is.null(text$save()))
+    returns_paths(text$save()))
   expected <- c(charToRaw('ID,VALUE,EMPTY\na,a'), as.raw(0L), charToRaw('b,""\nb,'),
     as.raw(c(0xc3, 0xa9)), charToRaw(',""\nc,,""\n'))
   stopifnot(identical(rawfile("output.csv"), expected))
@@ -400,7 +409,7 @@ qualify_project_run_members <- function() {
   stopifnot(identical(conditionMessage(error), messages[["empty_submission_save"]]),
     nothing_to_save(error, "PROJECT-13"))
   stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
-    !file.exists(file.path(case, "test.csv")), is.null(runs$save()),
+    !file.exists(file.path(case, "test.csv")), returns_paths(runs$save()),
     identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
   cat("project run members hold each run and only the project run saves\n")
 }
@@ -409,10 +418,10 @@ qualify_project_run_members()
 # Save, delete what was written, save again: the same held bytes return,
 # with every source already gone.
 restored <- function(directory, names, save) {
-  stopifnot(is.null(save()))
+  stopifnot(returns_paths(save()))
   held <- lapply(file.path(directory, names), function(path) readBin(path, "raw", file.info(path)$size))
   unlink(file.path(directory, names))
-  stopifnot(is.null(save()))
+  stopifnot(returns_paths(save()))
   for (index in seq_along(names)) {
     path <- file.path(directory, names[[index]])
     stopifnot(identical(readBin(path, "raw", file.info(path)$size), held[[index]]))
@@ -475,7 +484,7 @@ qualify_public_large_text_callback <- function() {
   built <- yamaa_project(file.path(directory, "project.yaml"))$spec("TEXT")$run()
   stopifnot(nrow(check_issues(built$issues)) == 0L, identical(built$output$V, value))
   unlink(file.path(directory, c("domain.yaml", "project.yaml", "environment.yaml", "renv.lock", "input.csv")))
-  stopifnot(is.null(built$save()),
+  stopifnot(returns_paths(built$save()),
     identical(readBin(file.path(directory, "held.csv"), "raw", n = length(expected) + 1L), expected))
   cat("public callback text beyond one MiB remains owned and saves exact bytes\n")
 }
@@ -690,7 +699,7 @@ qualify_resolved_schema_links <- function() {
     stopifnot(identical(source$location$path, file.path(study, "output/produced.csv")))
     # Callers build and save each study's producer first.
     dir.create(file.path(study, "output"))
-    stopifnot(is.null(yamaa_spec(file.path(study, "producer.yaml"))$run()$save()))
+    stopifnot(returns_paths(yamaa_spec(file.path(study, "producer.yaml"))$run()$save()))
     result <- spec$run()
     stopifnot(nrow(result$issues) == 0L, identical(result$output$ID, identifier),
       !file.exists(file.path(study, "output/final.csv")))

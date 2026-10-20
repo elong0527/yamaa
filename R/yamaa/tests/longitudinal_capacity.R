@@ -1,4 +1,9 @@
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 check <- function(path) yamaa_spec(path)$check()
 run <- function(path) yamaa_spec(path)$run()
 
@@ -41,7 +46,7 @@ run_longitudinal_capacity <- function() {
     if (profile == "parquet") {
       # A link only types the stored artifact: save the producer before its
       # consumer reads it.
-      stopifnot(is.null(built$save()))
+      stopifnot(returns_paths(built$save()))
       consumer <- file.path(root, "consumer.yaml")
       writeLines(c(
         "schema_version: '1.0'", "domain: WIDE", "keys: [ID]", "input:",
@@ -52,13 +57,13 @@ run_longitudinal_capacity <- function() {
       consumed <- run(consumer)
       stopifnot(nrow(consumed$issues) == 0L,
                 identical(dim(consumed$output), c(rows, 100L)),
-                is.null(consumed$save()))
+                returns_paths(consumed$save()))
       output <- file.path(root, "consumer.csv")
       stopifnot(identical(readBin(output, "raw", n = file.info(output)$size), expected))
     }
     writeBin(charToRaw("changed\n"), file.path(root, "input.csv"))
     for (attempt in 1:2) {
-      stopifnot(is.null(built$save()))
+      stopifnot(returns_paths(built$save()))
       output <- file.path(root, paste0("output.", profile))
       if (profile == "csv") {
         actual <- readBin(output, "raw", n = file.info(output)$size)

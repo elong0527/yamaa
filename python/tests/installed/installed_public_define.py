@@ -88,9 +88,18 @@ class PublicDefine(unittest.TestCase):
         return result
 
     def save(self, result, directory, names):
-        """Save, require exactly `names` to appear, and return their bytes."""
+        """Save, require exactly `names` to appear, and return their bytes.
+
+        save() returns their absolute paths, the transport files first and
+        the document last (JSON-14).
+        """
         before = {path.name for path in directory.iterdir()}
-        self.assertIsNone(result.save())
+        paths = result.save()
+        self.assertEqual(
+            sorted(paths),
+            sorted((directory / name).resolve().as_posix() for name in names),
+        )
+        self.assertTrue(paths[-1].endswith(".xml"), paths)
         self.assertEqual(
             {path.name for path in directory.iterdir()} - before, set(names)
         )
@@ -100,6 +109,7 @@ class PublicDefine(unittest.TestCase):
         with self.assertRaises(yamaa.Error) as caught:
             result.save()
         self.assertTrue(caught.exception.issues.equals(result.issues))
+        self.assertEqual(caught.exception.paths, [])
 
     def validate_xml(self, content):
         parser = etree.XMLParser(no_network=True, resolve_entities=False)
@@ -569,6 +579,7 @@ class PublicDefine(unittest.TestCase):
         (directory / "define.xml").mkdir()
         with self.assertRaises(yamaa.Error) as caught:
             result.save()
+        self.assertEqual(caught.exception.paths, [])
         self.assertFalse((directory / "dm.json").exists())
         self.assertTrue((directory / "define.xml").is_dir())
         # The refused save explains itself, and the submission keeps that cause.

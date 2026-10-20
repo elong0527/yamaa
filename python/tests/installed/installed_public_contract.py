@@ -55,6 +55,11 @@ REMOVED = (
 )
 
 
+def paths_of(*paths):
+    """The paths save() returns: absolute, with forward slashes, in order."""
+    return [Path(path).resolve().as_posix() for path in paths]
+
+
 def public_names(value):
     return sorted(name for name in dir(value) if not name.startswith("_"))
 
@@ -124,6 +129,8 @@ class PublicContract(unittest.TestCase):
         self.assertIsNone(error.__cause__)
         self.assertTrue(error.__suppress_context__)
         self.issues(error)
+        # Only a save writes before it refuses (P-API-1).
+        self.assertIsInstance(error.paths, list)
         return error
 
     def test_exports_native_surface_and_version(self):
@@ -250,6 +257,7 @@ class PublicContract(unittest.TestCase):
         for _ in range(2):
             error = self.refusal(run.save)
             self.assertEqual(str(error), MESSAGES["failed_run_save"])
+            self.assertEqual(error.paths, [])
             self.assertTrue(error.issues.equals(checked))
             self.assertTrue(run.issues.equals(checked))
         error = self.refusal(spec.resolve)
@@ -279,12 +287,12 @@ class PublicContract(unittest.TestCase):
         self.spec.unlink()
         (self.root / "input.csv").unlink()
         gc.collect()
-        self.assertIsNone(first.save())
+        self.assertEqual(first.save(), paths_of(self.root / "output.csv"))
         self.assertEqual((self.root / "output.csv").read_bytes(), INPUT)
         del first
         gc.collect()
         self.assertEqual(second.output["VALUE"].to_list(), VALUES)
-        self.assertIsNone(second.save())
+        self.assertEqual(second.save(), paths_of(self.root / "output.csv"))
 
     def test_typed_columns_keep_their_exact_values(self):
         self.spec.write_text(TRUTH["typed_specification_yaml"], encoding="utf-8")
@@ -329,7 +337,7 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(self.issues(result).is_empty())
         self.assertEqual(result.output["VALUE"].to_list(), ["a\x00b", "\u00e9", None])
         self.assertEqual(result.output["EMPTY"].to_list(), ["", "", ""])
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save(), paths_of(self.root / "output.csv"))
         self.assertEqual(
             (self.root / "output.csv").read_bytes(),
             b'ID,VALUE,EMPTY\na,a\x00b,""\nb,\xc3\xa9,""\nc,,""\n',
@@ -384,6 +392,7 @@ class PublicContract(unittest.TestCase):
         for _ in range(2):
             error = self.refusal(result.save)
             self.assertEqual(str(error), MESSAGES["failed_run_save"])
+            self.assertEqual(error.paths, paths_of(self.root / "checks.csv"))
             self.assertEqual(error.issues.to_dicts(), issues)
             self.assertEqual(result.issues.to_dicts(), issues)
             self.assertEqual(result.report.to_dicts(), truth)
@@ -603,19 +612,24 @@ class PublicContract(unittest.TestCase):
         ):
             error = self.refusal(result.save)
             self.assertEqual(str(error), MESSAGES[message])
+            self.assertEqual(error.paths, [])
             self.assertEqual(error.issues.to_dicts(), [nothing_to_save(rule)])
         self.assertFalse((case / "test.csv").exists())
-        self.assertIsNone(runs.save())
+        self.assertEqual(runs.save(), paths_of(case / "test.csv"))
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,1.5\n")
 
     def test_every_save_rewrites_what_the_result_holds_without_rereading(self):
         def restored(directory, names, save):
-            """Save, delete what was written, save again: the same bytes return."""
-            self.assertIsNone(save())
+            """Save, delete what was written, save again: the same bytes return.
+
+            `names` are in publication order, which each save returns.
+            """
+            paths = paths_of(*(directory / name for name in names))
+            self.assertEqual(save(), paths)
             held = {name: (directory / name).read_bytes() for name in names}
             for name in names:
                 (directory / name).unlink()
-            self.assertIsNone(save())
+            self.assertEqual(save(), paths)
             for name in names:
                 self.assertEqual((directory / name).read_bytes(), held[name])
             return held
@@ -631,7 +645,7 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(self.issues(run).is_empty())
         self.spec.unlink()
         (self.root / "input.csv").unlink()
-        held = restored(self.root, ["output.csv", "report.csv"], run.save)
+        held = restored(self.root, ["report.csv", "output.csv"], run.save)
         self.assertEqual(held["output.csv"], INPUT)
         # A project run: each member's output.
         project, case = self.function_study()
@@ -652,7 +666,7 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(self.issues(submission).is_empty())
         for name in ("project.yaml", "spec.yaml", "dm.csv"):
             (directory / name).unlink()
-        held = restored(directory, ["define.xml", "dm.json"], submission.save)
+        held = restored(directory, ["dm.json", "define.xml"], submission.save)
         for name, content in held.items():
             self.assertEqual(content, (fixture / "expected" / name).read_bytes())
 
@@ -691,7 +705,7 @@ class PublicContract(unittest.TestCase):
             "large.csv",
         ):
             (case / name).unlink()
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save(), paths_of(case / "held.csv"))
         self.assertEqual((case / "held.csv").read_bytes(), expected)
 
     def test_project_refusals_are_issues_and_unknown_sections_raise(self):
