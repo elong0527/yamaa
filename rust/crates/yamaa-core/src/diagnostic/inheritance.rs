@@ -1,9 +1,11 @@
-//! Pure inheritance traversal causes with original declaring-file provenance.
+//! Pure inheritance traversal and composition causes with original
+//! declaring-file provenance.
 use super::{ConditionCode as C, Diagnostic, ProjectionError};
 use crate::json::Value as JsonValue;
 
-/// Borrow facts retained by the traversal. This grants no source authority and
-/// leaves opaque host errors, schema-arena findings and policy failures separate.
+/// Borrow facts retained by the traversal or the composition. This grants no
+/// source authority and leaves opaque host errors, schema-arena findings and
+/// policy failures separate.
 pub enum InheritanceFinding<'a> {
     InvalidParent {
         declaring: &'a str,
@@ -12,6 +14,17 @@ pub enum InheritanceFinding<'a> {
     ParentUnavailable {
         declaring: &'a str,
         path: &'a str,
+    },
+    /// The layer `source` lies on the network share `parent_root` and writes
+    /// `path` relative to itself, while the entry lies below `entry_root`: no
+    /// written path names that location from the entry (LAYER-10, FILE-4).
+    /// The resource port names both roots; only it knows how an identity is
+    /// rooted.
+    ParentOnAnotherShare {
+        source: &'a str,
+        path: &'a str,
+        parent_root: &'a str,
+        entry_root: &'a str,
     },
     Cycle {
         path: &'a [String],
@@ -46,6 +59,18 @@ impl InheritanceFinding<'_> {
                 context.insert("path".into(), text(path));
                 context.insert("source".into(), text(declaring));
                 (C::InheritanceParentUnavailable, "parent")
+            }
+            Self::ParentOnAnotherShare {
+                source,
+                path,
+                parent_root,
+                entry_root,
+            } => {
+                context.insert("source".into(), text(source));
+                context.insert("path".into(), text(path));
+                context.insert("parent_root".into(), text(parent_root));
+                context.insert("entry_root".into(), text(entry_root));
+                (C::InheritanceParentOnAnotherShare, "parent")
             }
             Self::Cycle {
                 path,
