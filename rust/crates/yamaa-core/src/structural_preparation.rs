@@ -100,7 +100,8 @@ impl<L> Prepared<L> {
 
 /// Named text, closed-class lookup and any declared schema_version guard precede
 /// physical decoding. Structural root has no separate named-selection guard.
-/// One successful decode precedes the existing default/type/value checkpoints.
+/// One successful decode precedes the existing default/type/value checkpoints;
+/// a root that declares the 1.x header is refused first (SCHEMA-2).
 /// No source is captured, replayed, queried as a model or granted host authority.
 pub fn prepare<P: StructuralDecodePort>(
     schema: &SchemaStructure,
@@ -128,6 +129,15 @@ pub fn prepare<P: StructuralDecodePort>(
         document,
         locations,
     } = decoder.decode(&source).map_err(Error::Decode)?;
+    // A root that declares the 1.x header is refused before the 0.5 closure
+    // reads it (SCHEMA-2, #3030 D76).
+    if let Some(fault) = crate::language::refusal(&document) {
+        return Err(Error::Findings(Box::new(Findings {
+            source,
+            document,
+            findings: vec![fault.finding()],
+        })));
+    }
     let normalized = match selection {
         Selection::StructuralRoot => schema.normalize_document(&document),
         Selection::NamedClass(_) => {

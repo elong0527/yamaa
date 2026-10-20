@@ -5,31 +5,42 @@
 use super::*;
 use crate::json::Value as V;
 use crate::{
+    ast::{self, Comparator},
     dataset::{Check, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
-    submission_values::{self as values, Declared, Entry, Finding},
+    submission_values::{self as values, Declared, Finding},
 };
 use std::collections::BTreeSet;
 
 /// An entry's where clause over the declared columns, when every where column
 /// is a declared `str` column other than `own` listing a value; static
-/// admission reports every other clause.
-pub(super) fn clause(entry: &Entry<'_>, output: &TableSchema, own: usize) -> Option<WhereClause> {
+/// admission reports every other clause. A clause that excludes values
+/// (NE/NOTIN, 1.0 only) has no executable scope yet and compiles to none.
+pub(super) fn clause(
+    entry: &ast::ValueLevel,
+    output: &TableSchema,
+    own: usize,
+) -> Option<WhereClause> {
     let terms = entry
-        .clause
+        .conditions
         .iter()
-        .map(|(name, listed)| {
+        .map(|condition| {
             let column = output
                 .columns()
                 .iter()
-                .position(|column| column.name == *name)?;
-            (column != own
+                .position(|column| column.name == condition.column.name)?;
+            (condition.comparator == Comparator::In
+                && column != own
                 && output.columns()[column].kind == ColumnType::Str
-                && !listed.is_empty())
+                && !condition.values.is_empty())
             .then(|| {
                 (
                     column,
-                    listed.iter().map(|value| (*value).to_owned()).collect(),
+                    condition
+                        .values
+                        .iter()
+                        .map(|value| value.text.clone())
+                        .collect(),
                 )
             })
         })
@@ -94,23 +105,33 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
 /// `warning` per entry that matches no row. The checks follow the column's
 /// declared verifications and precede its other metadata checks.
 pub(super) fn admit(
-    d: &Document,
-    columns: &[usize],
+    spec: &ast::Spec,
     output: &TableSchema,
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    let carried = sequence(d, field(d, field(d, d.root(), "output")?, "columns")?)?
+    let carried = spec
+        .output
+        .columns
         .iter()
-        .map(|&id| text(d, id))
-        .collect::<Result<BTreeSet<_>, _>>()?;
-    for (index, &node) in columns.iter().enumerate() {
+        .map(|column| column.name.as_str())
+        .collect::<BTreeSet<_>>();
+    for (index, column) in spec.columns.iter().enumerate() {
         let name = output.columns()[index].name.as_str();
-        let entries = values::entries(d, node);
-        if entries.is_empty() {
+        let Some(submission) = column
+            .submission
+            .as_ref()
+            .filter(|submission| !submission.value_level.is_empty())
+        else {
             continue;
-        }
-        let findings = values::admit(&entries, name, |where_column| {
+        };
+        let entries = &submission.value_level;
+        let clauses = entries.iter().map(values::clause).collect::<Vec<_>>();
+        let written = entries
+            .iter()
+            .zip(&clauses)
+            .map(|(entry, clause)| (entry.id.name.as_str(), clause));
+        let findings = values::admit(written, name, |where_column| {
             let declared = output
                 .columns()
                 .iter()
@@ -126,15 +147,15 @@ pub(super) fn admit(
         }
         let compiled = entries
             .iter()
-            .map(|entry| clause(entry, output, index).map(|clause| (entry.id.to_owned(), clause)))
+            .map(|entry| clause(entry, output, index).map(|clause| (entry.id.name.clone(), clause)))
             .collect::<Option<Vec<_>>>()
             .ok_or(PrepareError::Internal)?;
         groups[index].append_metadata(Verification {
-            path: format!("columns.{name}.submission.value_level"),
+            path: format!("{}.value_level", spec.cite(submission.meta)),
             check: Check::ValueEntries(compiled.clone()),
         });
-        for (id, clause) in compiled {
-            let path = values::path(name, &id);
+        for (entry, (id, clause)) in entries.iter().zip(compiled) {
+            let path = spec.cite(entry.meta);
             groups[index].warning_paths.push(path.clone());
             groups[index].append_metadata(Verification {
                 path,

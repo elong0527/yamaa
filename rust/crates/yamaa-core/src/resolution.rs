@@ -304,7 +304,7 @@ impl<'a> Live<'a> {
                     }
                 }
                 DatasetCheckKind::RowCount(count) => {
-                    readings.extend(count.group_by.iter().map(Reading::variable));
+                    readings.extend(count.group_by.iter().flatten().map(Reading::variable));
                     for root in [count.filter, count.when].into_iter().flatten() {
                         self.read(root, Scope::Row, &mut readings)?;
                     }

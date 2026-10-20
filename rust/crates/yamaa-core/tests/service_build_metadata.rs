@@ -1123,11 +1123,24 @@ mod service {
         #[test]
         fn publication_stage_projection_preserves_full_width_artifact_index_and_cause_text() {
             use define::PublicationFailure as P;
+            use yamaa_core::application_issue::Fault;
             use yamaa_core::json::Value as C;
 
             for (stage, code, phase, requirement) in [
                 (
-                    P::TargetAdmission(yamaa_core::application_issue::Fault::InvalidTarget),
+                    P::TargetAdmission(Fault::InvalidTarget),
+                    ConditionCode::ApplicationRejected,
+                    "engine",
+                    None,
+                ),
+                (
+                    P::TargetAdmission(Fault::TargetChanged),
+                    ConditionCode::ApplicationRejected,
+                    "engine",
+                    None,
+                ),
+                (
+                    P::TargetAdmission(Fault::PublicationFailed),
                     ConditionCode::ApplicationRejected,
                     "engine",
                     None,
@@ -1153,14 +1166,12 @@ mod service {
                     ("cause".into(), C::String("opaque original cause".into())),
                 ]
                 .into();
-                if let P::TargetAdmission(_) = stage {
-                    // A refused target is an engine fault: its stage and closed code.
-                    for (key, value) in [
-                        ("stage", "publication_target_admission"),
-                        ("code", "invalid_target"),
-                    ] {
-                        expected.insert(key.into(), C::String(value.into()));
-                    }
+                if let P::TargetAdmission(fault) = stage {
+                    expected.insert("code".into(), C::String(fault.as_str().into()));
+                    expected.insert(
+                        "stage".into(),
+                        C::String("publication_target_admission".into()),
+                    );
                 }
                 assert_eq!(finding.context, expected);
                 assert_eq!(finding.source_span, None);

@@ -66,9 +66,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The R package builds its own engine and no step imports the Python
+      # package, so the development package would go unused.
       - uses: ./.github/actions/setup
         with:
           r: check
+          package: tools
       # `make test-r` runs R CMD check --as-cran; with checkbashisms and aspell
       # it also checks the configure scripts and DESCRIPTION's spelling, as
       # CRAN's checks do.

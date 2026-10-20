@@ -1686,7 +1686,8 @@ mod schema {
         use yamaa_core::portable_regex::{CompileError, Resource};
         use yamaa_core::schema::ConstraintViolation as C;
         use yamaa_core::schema::{
-            Descriptor, DescriptorError, DescriptorIssue as I, Document, DocumentNode as N,
+            Descriptor, DescriptorError, DescriptorIssue as I, DescriptorSite, Document,
+            DocumentNode as N,
         };
 
         use crate::support::document::Tree as V;
@@ -1696,9 +1697,81 @@ mod schema {
             value.document()
         }
 
+        /// A class field descriptor, or else a named value type's.
         fn admit(value: V, class_field: bool) -> yamaa_core::schema::DescriptorReport {
+            let site = if class_field {
+                DescriptorSite::ClassField
+            } else {
+                DescriptorSite::NamedType
+            };
+            admit_at(value, site)
+        }
+
+        fn admit_at(value: V, site: DescriptorSite) -> yamaa_core::schema::DescriptorReport {
             let d = document(value);
-            Descriptor::admit(&d, d.root(), class_field).unwrap()
+            Descriptor::admit(&d, d.root(), site).unwrap()
+        }
+
+        #[test]
+        fn a_named_type_declares_a_kind_and_a_class_field_the_version_that_introduced_it() {
+            let report = admit_at(
+                V::map(vec![
+                    ("type", V::text("str")),
+                    ("kind", V::text("identifier")),
+                ]),
+                DescriptorSite::NamedType,
+            );
+            assert!(report.issues().is_empty());
+            assert_eq!(report.into_descriptor().unwrap().kind(), Some("identifier"));
+            for kind in yamaa_core::schema::FIELD_KINDS {
+                let report = admit_at(
+                    V::map(vec![("type", V::text("str")), ("kind", V::text(kind))]),
+                    DescriptorSite::NamedType,
+                );
+                assert_eq!(report.into_descriptor().unwrap().kind(), Some(kind));
+            }
+            for kind in [V::text("label"), V::text("Identifier"), V::boolean(true)] {
+                let report = admit_at(
+                    V::map(vec![("type", V::text("str")), ("kind", kind)]),
+                    DescriptorSite::NamedType,
+                );
+                assert_eq!(report.issues(), [I::InvalidKind]);
+            }
+            let report = admit_at(
+                V::map(vec![("type", V::text("str")), ("since", V::text("1.1"))]),
+                DescriptorSite::ClassField,
+            );
+            assert!(report.issues().is_empty());
+            assert_eq!(
+                report.into_descriptor().unwrap().since(),
+                Some(yamaa_core::language::LanguageVersion::new(1))
+            );
+            for since in [
+                V::text("1.01"),
+                V::text("2"),
+                V::float(1.1),
+                V::integer("1"),
+            ] {
+                let report = admit_at(
+                    V::map(vec![("type", V::text("str")), ("since", since)]),
+                    DescriptorSite::ClassField,
+                );
+                assert_eq!(report.issues(), [I::InvalidSince]);
+            }
+            // `kind` belongs to a named value type and `since` to a class field
+            // alone; a registry entry's payload declares neither.
+            for (keyword, value, site) in [
+                ("kind", "name", DescriptorSite::ClassField),
+                ("kind", "name", DescriptorSite::RegistryEntry),
+                ("since", "1.0", DescriptorSite::NamedType),
+                ("since", "1.0", DescriptorSite::RegistryEntry),
+            ] {
+                let report = admit_at(
+                    V::map(vec![(keyword, V::text(value)), ("type", V::text("str"))]),
+                    site,
+                );
+                assert_eq!(report.issues(), [I::UnknownKeyword { key: 0 }], "{keyword}");
+            }
         }
 
         #[test]
@@ -1716,7 +1789,7 @@ mod schema {
                 ("description", V::text("A field")),
                 ("default", V::Scalar(N::Null)),
             ]));
-            let report = Descriptor::admit(&d, d.root(), true).unwrap();
+            let report = Descriptor::admit(&d, d.root(), DescriptorSite::ClassField).unwrap();
             assert!(report.issues().is_empty());
             assert_eq!(
                 report.references(),
@@ -1885,7 +1958,7 @@ mod schema {
                 ("pattern", V::text(pattern)),
             ]));
             assert!(matches!(
-                Descriptor::admit(&d, d.root(), false),
+                Descriptor::admit(&d, d.root(), DescriptorSite::NamedType),
                 Err(DescriptorError::Regex(CompileError::Limit {
                     resource: Resource::Depth,
                     limit: 128
@@ -1901,7 +1974,7 @@ mod schema {
             ]));
             for _ in 0..3 {
                 assert!(
-                    matches!(Descriptor::admit(&d,d.root(),false).unwrap().issues(),[I::InvalidPattern{pattern,..}] if pattern=="[")
+                    matches!(Descriptor::admit(&d,d.root(),DescriptorSite::NamedType).unwrap().issues(),[I::InvalidPattern{pattern,..}] if pattern=="[")
                 );
             }
         }
@@ -1914,7 +1987,7 @@ mod schema {
                 ("pattern", V::text(pattern.clone())),
             ]));
             for _ in 0..3 {
-                let descriptor = Descriptor::admit(&d, d.root(), false)
+                let descriptor = Descriptor::admit(&d, d.root(), DescriptorSite::NamedType)
                     .unwrap()
                     .into_descriptor()
                     .unwrap();
@@ -1932,7 +2005,7 @@ mod schema {
                 ),
             ]));
             for _ in 0..2 {
-                let descriptor = Descriptor::admit(&d, d.root(), false)
+                let descriptor = Descriptor::admit(&d, d.root(), DescriptorSite::NamedType)
                     .unwrap()
                     .into_descriptor()
                     .unwrap();
@@ -1944,7 +2017,9 @@ mod schema {
             ]));
             for _ in 0..2 {
                 assert_eq!(
-                    Descriptor::admit(&d, d.root(), false).unwrap().issues(),
+                    Descriptor::admit(&d, d.root(), DescriptorSite::NamedType)
+                        .unwrap()
+                        .issues(),
                     [I::Description]
                 );
             }

@@ -856,7 +856,8 @@ pub enum PublicationFailure {
     #[error("define publication")]
     Publication,
 }
-/// Project the entered publication stage, not an inferred exception message.
+/// Project the entered publication stage and the adapter's typed admission fault,
+/// never a classification inferred from an exception message.
 /// The native original error remains held separately from its display text.
 pub fn publication_diagnostic(
     index: usize,

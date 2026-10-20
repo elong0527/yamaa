@@ -80,8 +80,16 @@ impl Writer<'_> {
     /// A held cell the writer cannot read or the record layout cannot carry.
     /// Admission already refused every authored one, so this is a byte
     /// projection the writer could not complete.
-    fn failure(&self) -> Finding {
-        Finding::fault(self.path, Stage::Define, Fault::OutputProjection)
+    fn failure(&self, detail: &str) -> Finding {
+        Finding::fault(self.path, Stage::Define, Fault::OutputProjection).with_detail(detail)
+    }
+    fn limit(&self, bound: LimitExceeded) -> Finding {
+        let detail = if bound.actual.is_none() {
+            "output byte limit".into()
+        } else {
+            bound.to_string()
+        };
+        Finding::limit(self.path, Stage::Define, Fault::OutputLimit, bound).with_detail(detail)
     }
     /// Admit `required` output bytes against the shared output bound; a size
     /// with no representation exceeds it.
@@ -93,10 +101,11 @@ impl Writer<'_> {
                 actual: None,
             })
             .and_then(|required| Limits::output_bytes(required).map(|()| required))
-            .map_err(|bound| Finding::limit(self.path, Stage::Define, Fault::OutputLimit, bound))
+            .map_err(|bound| self.limit(bound))
     }
     fn bytes(&mut self, bytes: &[u8]) -> Result<(), Finding> {
-        self.admit(self.output.len().checked_add(bytes.len()))?;
+        Limits::output_extension(self.output.len(), bytes.len())
+            .map_err(|bound| self.limit(bound))?;
         self.output.extend_from_slice(bytes);
         Ok(())
     }
@@ -109,7 +118,7 @@ impl Writer<'_> {
         Ok(())
     }
     fn number(&mut self, value: f64) -> Result<(), Finding> {
-        let bytes = ibm(value).ok_or_else(|| self.failure())?;
+        let bytes = ibm(value).ok_or_else(|| self.failure("number outside IBM double range"))?;
         self.bytes(&bytes)
     }
 }
@@ -157,7 +166,7 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
                 .ok()
                 .filter(|value| *value <= 0x7fff)
                 .map(u16::to_be_bytes)
-                .ok_or_else(|| writer.failure())
+                .ok_or_else(|| writer.failure("NAMESTR field out of range"))
         };
         let mut namestr = Vec::with_capacity(140);
         namestr.extend(short(if variable.kind == XptKind::Character {
@@ -188,14 +197,17 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
         namestr.extend(position.to_be_bytes());
         namestr.resize(140, 0);
         writer.bytes(&namestr)?;
-        position += u32::try_from(variable.width).map_err(|_| writer.failure())?;
+        position +=
+            u32::try_from(variable.width).map_err(|_| writer.failure("observation width"))?;
     }
     writer.pad()?;
     // XPT-2: the observation header, then each row's cells in column order.
     writer.bytes(&header("OBS", &"0".repeat(30)))?;
     for row in 0..table.row_count() {
         for (column, variable) in document.variables.iter().enumerate() {
-            let value = table.cell(row, column).map_err(|_| writer.failure())?;
+            let value = table
+                .cell(row, column)
+                .map_err(|_| writer.failure("held table access"))?;
             match (variable.kind, value) {
                 (XptKind::Character, ValueRef::Missing) => {
                     writer.bytes(&padded("", variable.width))?
@@ -219,7 +231,7 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
                     (crate::arrow_temporal::datetime_seconds(moment) + SAS_EPOCH_DAYS * 86_400)
                         as f64,
                 )?,
-                _ => return Err(writer.failure()),
+                _ => return Err(writer.failure("held cell does not match its variable")),
             }
         }
     }
@@ -230,6 +242,73 @@ pub fn render<T: TableAccess>(document: &XptDocument, table: &T) -> Result<Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oversized_transport_refuses_before_reserving_or_reading_cells() {
+        use yamaa_core::{
+            diagnostic::ConditionCode,
+            submission_xpt::XptVariable,
+            table::{CellError, TableSchema},
+        };
+        struct Oversized;
+        impl TableAccess for Oversized {
+            type Error = ();
+            fn schema(&self) -> &TableSchema {
+                panic!("size admission precedes schema access")
+            }
+            fn row_count(&self) -> usize {
+                Limits::OUTPUT_BYTES / 8
+            }
+            fn cell(&self, _: usize, _: usize) -> Result<ValueRef<'_>, CellError<()>> {
+                panic!("size admission precedes cell access")
+            }
+        }
+        let document = XptDocument {
+            path: "datasets.DM.transport".into(),
+            name: "DM".into(),
+            label: "Demographics".into(),
+            created: "01JAN26:00:00:00".into(),
+            variables: vec![XptVariable {
+                name: "AGE".into(),
+                label: "Age".into(),
+                kind: XptKind::Number,
+                width: 8,
+                format: None,
+            }],
+        };
+        let finding = render(&document, &Oversized).unwrap_err();
+        assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+        assert_eq!(finding.path, "datasets.DM.transport");
+        assert_eq!(finding.context["stage"], "define");
+        assert_eq!(finding.context["code"], "output_limit");
+        assert_eq!(finding.context["resource"], "output_bytes");
+        assert_eq!(finding.context["limit"], Limits::OUTPUT_BYTES);
+        // 640 header bytes + 160 padded NAMESTR bytes + 80 observation-header
+        // bytes + the 10 GiB observations (already a multiple of 80).
+        assert_eq!(finding.context["actual"], Limits::OUTPUT_BYTES + 880);
+
+        let mut writer = Writer {
+            output: Vec::new(),
+            path: "datasets.DM.transport",
+        };
+        let projection = writer.number(f64::INFINITY).unwrap_err();
+        assert_eq!(projection.context["stage"], "define");
+        assert_eq!(projection.context["code"], "output_projection");
+        assert_eq!(
+            projection.context["detail"],
+            "number outside IBM double range"
+        );
+        assert!(writer.output.is_empty());
+        let overflow = writer.limit(LimitExceeded {
+            resource: "output_bytes",
+            limit: Limits::OUTPUT_BYTES,
+            actual: None,
+        });
+        assert_eq!(overflow.context["detail"], "output byte limit");
+        assert_eq!(overflow.context["code"], "output_limit");
+        assert_eq!(overflow.context["limit"], Limits::OUTPUT_BYTES);
+        assert!(!overflow.context.contains_key("actual"));
+    }
 
     fn hex(bytes: [u8; 8]) -> String {
         bytes.iter().map(|byte| format!("{byte:02X}")).collect()
@@ -295,6 +374,12 @@ mod tests {
             .into();
             if let Some(actual) = actual {
                 expected.insert("actual".into(), V::from(actual));
+                expected.insert(
+                    "detail".into(),
+                    text("output_bytes: required Some(10737418241), limit 10737418240"),
+                );
+            } else {
+                expected.insert("detail".into(), text("output byte limit"));
             }
             assert_eq!(finding.context, expected);
         }
@@ -303,6 +388,7 @@ mod tests {
             finding.context,
             [
                 ("code".into(), text("output_projection")),
+                ("detail".into(), text("number outside IBM double range")),
                 ("stage".into(), text("define")),
             ]
             .into()

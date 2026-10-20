@@ -1,49 +1,26 @@
 #![cfg(feature = "yaml")]
 //! The 1.0 schema files in `yaml/v1/`, read with the engine's schema model.
 //!
-//! Nothing in the engine reads the 1.0 files yet. Its bundle rules accept the
-//! notation the 1.0 files are written in except one keyword, the `kind` a
-//! named type declares (`yaml/README.md`), so each named type's `kind` is
-//! removed before admission and nothing else changes. Each file type's bundle
-//! is then admitted with valid defaults, and every converted example of the
-//! 1.0 interface RFC validates against its file type's root class.
+//! The package embeds the closure of each 1.0 file type beside the 0.5 ones,
+//! and the engine's bundle rules accept the notation the 1.0 files are written
+//! in, `kind` included (`yaml/README.md`). Each file type's closure is admitted
+//! with valid defaults, and every converted example of the 1.0 interface RFC
+//! passes the document decoder: its header selects its closure, and it is
+//! admitted at the version it declares, a specification layer by layer.
 mod declaration {
     mod v1_schema {
         use std::collections::BTreeSet;
         use std::path::{Path, PathBuf};
+        use yamaa_adapters::document::{self, check_references, Closures, Decoded};
+        use yamaa_adapters::shipped_schema;
+        use yamaa_adapters::specification_source::{InheritancePort, Source};
         use yamaa_adapters::yaml_decode::decode_yaml;
-        use yamaa_core::schema::{
-            Document, DocumentNode as N, SchemaDiagnostic, SchemaModule, SchemaStructure,
-        };
-
-        /// Each 1.0 file type, its entry module and its root class.
-        const FILE_TYPES: [(&str, &str, &str); 4] = [
-            ("spec", "schema_spec.yaml", "root_class"),
-            ("project", "schema_project.yaml", "project_class"),
-            ("codelists", "schema_codelists.yaml", "codelist_file_class"),
-            (
-                "function",
-                "schema_function.yaml",
-                "function_definition_class",
-            ),
-        ];
-        /// Root collections whose members defer requiredness in a layer (LAYER-4).
-        const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", "columns", "rows"];
+        use yamaa_core::inheritance::{Source as GraphSource, SourceError};
+        use yamaa_core::language::{FileType, LANGUAGE_VERSION};
+        use yamaa_core::schema::{Document, DocumentNode as N, SchemaAliasKind};
 
         fn repository() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
-        }
-
-        fn decode_text(label: &str, bytes: &[u8]) -> Document {
-            decode_yaml(bytes)
-                .unwrap_or_else(|error| panic!("{label}: {error:?}"))
-                .document
-        }
-
-        fn decode(path: &Path) -> Document {
-            let bytes =
-                std::fs::read(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-            decode_text(&path.display().to_string(), &bytes)
         }
 
         fn text<'a>(document: &'a Document, name: &str) -> Option<&'a str> {
@@ -53,154 +30,41 @@ mod declaration {
             }
         }
 
-        /// Copy the tree under `id`, children first, leaving out dropped entries.
-        fn copy(
-            document: &Document,
-            id: usize,
-            dropped: &BTreeSet<(usize, usize)>,
-            nodes: &mut Vec<N>,
-        ) -> usize {
-            let node = match &document.nodes()[id] {
-                N::Sequence(items) => N::Sequence(
-                    items
-                        .iter()
-                        .map(|&item| copy(document, item, dropped, nodes))
-                        .collect(),
-                ),
-                N::Mapping(entries) => N::Mapping(
-                    entries
-                        .iter()
-                        .enumerate()
-                        .filter(|(index, _)| !dropped.contains(&(id, *index)))
-                        .map(|(_, &(key, value))| {
-                            (
-                                copy(document, key, dropped, nodes),
-                                copy(document, value, dropped, nodes),
-                            )
-                        })
-                        .collect(),
-                ),
-                scalar => scalar.clone(),
-            };
-            nodes.push(node);
-            nodes.len() - 1
-        }
-
-        /// A schema module without the `kind` of its named value types.
-        fn without_kind(document: &Document) -> Document {
-            let nodes = document.nodes();
-            let N::Mapping(declarations) = &nodes[document.root()] else {
-                panic!("a schema module is a mapping");
-            };
-            let mut dropped = BTreeSet::new();
-            for &(_, value) in declarations {
-                let N::Mapping(entries) = &nodes[value] else {
-                    continue;
-                };
-                let named_type = ["type", "registry"]
-                    .iter()
-                    .any(|keyword| document.field(value, keyword).is_some());
-                for (index, &(key, _)) in entries.iter().enumerate() {
-                    if named_type && matches!(&nodes[key], N::Text(name) if name == "kind") {
-                        dropped.insert((value, index));
-                    }
-                }
+        /// Files resolved beside their declaring file.
+        struct Files;
+        impl InheritancePort for Files {
+            type Error = std::io::Error;
+            fn canonicalize(
+                &mut self,
+                declaring: &str,
+                written: &str,
+            ) -> Result<GraphSource, SourceError<Self::Error>> {
+                let candidate = Path::new(declaring).parent().unwrap().join(written);
+                let identity = candidate
+                    .canonicalize()
+                    .map_err(|_| SourceError::Unavailable)?;
+                Ok(GraphSource {
+                    identity: identity.to_str().unwrap().into(),
+                    display_path: candidate.to_str().unwrap().into(),
+                })
             }
-            let mut copied = Vec::with_capacity(nodes.len());
-            let root = copy(document, document.root(), &dropped, &mut copied);
-            Document::new(copied, root).expect("a copied module stays a valid document")
-        }
-
-        /// One file type's bundle: its entry module first, then what it includes.
-        fn closure(entry: &str) -> Vec<SchemaModule> {
-            let directory = repository().join("yaml/v1");
-            let mut modules: Vec<SchemaModule> = Vec::new();
-            let mut pending = vec![entry.to_string()];
-            while let Some(name) = pending.pop() {
-                if modules.iter().any(|module| module.name == name) {
-                    continue;
-                }
-                let document = without_kind(&decode(&directory.join(&name)));
-                if let Some(includes) = document.field(document.root(), "includes") {
-                    let N::Sequence(items) = &document.nodes()[includes] else {
-                        panic!("{name}: includes is a list");
-                    };
-                    for &item in items.iter().rev() {
-                        let N::Text(included) = &document.nodes()[item] else {
-                            panic!("{name}: an include is a file name");
-                        };
-                        pending.push(included.clone());
-                    }
-                }
-                modules.push(SchemaModule { name, document });
+            fn capture(
+                &mut self,
+                source: &GraphSource,
+            ) -> Result<Vec<u8>, SourceError<Self::Error>> {
+                std::fs::read(&source.identity).map_err(SourceError::Raised)
             }
-            modules
-        }
-
-        fn structure(entry: &str, root: &str) -> SchemaStructure {
-            SchemaStructure::admit(closure(entry), 0, root)
-                .unwrap_or_else(|error| panic!("{entry}: {error:?}"))
-        }
-
-        fn root_class(file_type: &str) -> (SchemaStructure, &'static str) {
-            let (_, entry, root) = FILE_TYPES
-                .into_iter()
-                .find(|(name, _, _)| *name == file_type)
-                .unwrap_or_else(|| panic!("no file type {file_type}"));
-            (structure(entry, root), root)
-        }
-
-        /// A complete document of the root class, requiredness included.
-        fn complete(
-            structure: &SchemaStructure,
-            root: &str,
-            document: &Document,
-        ) -> Vec<SchemaDiagnostic> {
-            let types = structure.parse_query_types(&[root.to_string()]).unwrap();
-            structure
-                .validate_types(&types, document, document.root(), "$", false)
-                .unwrap()
-        }
-
-        /// One specification layer: the header is written, an unknown root
-        /// field fails, a keyed collection defers requiredness at every depth,
-        /// and every other root field is complete (LAYER-4, LAYER-7).
-        fn layer(
-            structure: &SchemaStructure,
-            root: &str,
-            document: &Document,
-        ) -> Vec<SchemaDiagnostic> {
-            let class = structure.class_named(root).unwrap();
-            let N::Mapping(entries) = &document.nodes()[document.root()] else {
-                panic!("a layer is a mapping");
-            };
-            for header in ["yamaa", "type"] {
-                assert!(
-                    text(document, header).is_some(),
-                    "a layer declares {header}"
-                );
+            fn rebase(
+                &mut self,
+                _: &GraphSource,
+                _: &GraphSource,
+                written: &str,
+            ) -> Result<String, Self::Error> {
+                Ok(written.into())
             }
-            let mut findings = Vec::new();
-            for &(key, value) in entries {
-                let N::Text(name) = &document.nodes()[key] else {
-                    panic!("a root field name is text");
-                };
-                let field = class
-                    .fields
-                    .iter()
-                    .find(|field| &field.name == name)
-                    .unwrap_or_else(|| panic!("unknown root field {name}"));
-                let fragment = COLLECTIONS.contains(&name.as_str());
-                findings.extend(
-                    structure
-                        .validate_descriptor(field.descriptor, document, value, name, fragment)
-                        .unwrap(),
-                );
-            }
-            findings
         }
 
-        fn examples() -> Vec<(PathBuf, Document)> {
+        fn examples() -> Vec<PathBuf> {
             let mut paths = Vec::new();
             let mut pending = vec![repository().join("docs/design/interface-1.0/examples")];
             while let Some(directory) = pending.pop() {
@@ -212,93 +76,130 @@ mod declaration {
                         .extension()
                         .is_some_and(|extension| extension == "yaml")
                     {
-                        paths.push(path);
+                        paths.push(path.canonicalize().unwrap());
                     }
                 }
             }
             paths.sort();
             paths
-                .into_iter()
-                .map(|path| {
-                    let document = decode(&path);
-                    (path, document)
-                })
-                .collect()
+        }
+
+        fn decode(path: &Path) -> Document {
+            decode_yaml(&std::fs::read(path).unwrap()).unwrap().document
         }
 
         #[test]
-        fn every_file_type_bundle_is_admitted_with_valid_defaults() {
-            for (file_type, entry, root) in FILE_TYPES {
-                let structure = structure(entry, root);
-                assert_eq!(structure.version(), "1.0", "{file_type}");
+        fn every_file_type_closure_is_admitted_with_valid_defaults_and_kinds() {
+            for file_type in FileType::ALL {
+                let schema = shipped_schema::capture_versioned(file_type).unwrap();
+                let structure = schema.structure();
+                assert_eq!(structure.version(), "1.0", "{file_type:?}");
+                assert_eq!(structure.root_class().name, file_type.root_class());
                 let defaults = structure.validate_defaults().unwrap();
                 assert!(
                     defaults
                         .iter()
                         .all(|default| default.diagnostics.is_empty()),
-                    "{file_type}: {defaults:?}"
+                    "{file_type:?}: {defaults:?}"
+                );
+                // A named value type keeps the kind it declares (#3030 D31).
+                let (_, identifier) = structure.alias_named("identifier").unwrap();
+                let SchemaAliasKind::Descriptor(descriptor) = identifier.kind else {
+                    panic!("identifier is a value type");
+                };
+                assert_eq!(
+                    structure.descriptors()[descriptor].descriptor.kind(),
+                    Some("identifier")
                 );
             }
         }
 
         #[test]
-        fn the_six_converted_examples_validate() {
+        fn the_six_converted_examples_pass_the_document_decoder() {
+            let closures = Closures::shipped().unwrap();
             let examples = examples();
             let parents: BTreeSet<PathBuf> = examples
                 .iter()
-                .filter_map(|(path, document)| {
-                    let parent = text(document, "parent")?;
+                .filter_map(|path| {
+                    let parent = text(&decode(path), "parent")?.to_string();
                     Some(path.parent()?.join(parent).canonicalize().unwrap())
                 })
                 .collect();
+            let mut chains = Vec::new();
             let mut directories = BTreeSet::new();
-            let mut layers = 0;
-            for (path, document) in &examples {
+            for path in &examples {
                 let directory = path
-                    .parent()
+                    .strip_prefix(
+                        repository()
+                            .join("docs/design/interface-1.0/examples")
+                            .canonicalize()
+                            .unwrap(),
+                    )
                     .unwrap()
-                    .strip_prefix(repository().join("docs/design/interface-1.0/examples"))
-                    .unwrap();
-                directories.insert(
-                    directory
-                        .components()
-                        .next()
-                        .unwrap()
-                        .as_os_str()
-                        .to_string_lossy()
-                        .into_owned(),
-                );
-                let file_type = text(document, "type").expect("every example declares type");
-                let (structure, root) = root_class(file_type);
-                let is_layer = text(document, "parent").is_some()
-                    || parents.contains(&path.canonicalize().unwrap());
-                let findings = if is_layer {
-                    layers += 1;
-                    // A layer is no complete specification on its own.
-                    assert!(!complete(&structure, root, document).is_empty());
-                    layer(&structure, root, document)
-                } else {
-                    complete(&structure, root, document)
+                    .components()
+                    .next()
+                    .unwrap()
+                    .as_os_str()
+                    .to_string_lossy()
+                    .into_owned();
+                directories.insert(directory.clone());
+                let identity = path.to_str().unwrap().to_string();
+                let declared = decode(path);
+                let file_type = FileType::parse(text(&declared, "type").unwrap()).unwrap();
+                let source = Source {
+                    identity: identity.clone(),
+                    bytes: std::fs::read(path).unwrap(),
                 };
-                assert!(findings.is_empty(), "{}: {findings:?}", path.display());
+                let Decoded::Versioned(document) =
+                    document::decode(source, file_type, Some(LANGUAGE_VERSION), &closures).unwrap()
+                else {
+                    panic!("{identity}: every example declares the 1.x header");
+                };
+                assert_eq!(document.header().version, LANGUAGE_VERSION);
+                // Every file an example's referencing fields name declares the
+                // type its field reads.
+                check_references(
+                    &document.raw().document,
+                    file_type,
+                    &identity,
+                    LANGUAGE_VERSION,
+                    &mut Files,
+                )
+                .unwrap_or_else(|error| panic!("{identity}: {error:?}"));
+                match file_type {
+                    // A parent is a layer, prepared with the entry naming it.
+                    FileType::Spec if parents.contains(path) => {}
+                    FileType::Spec => {
+                        let prepared = document
+                            .prepare_specification(identity.clone(), &mut Files)
+                            .unwrap_or_else(|error| panic!("{identity}: {error:?}"));
+                        assert_eq!(prepared.version(), LANGUAGE_VERSION);
+                        chains.push((directory, prepared.layers().len()));
+                    }
+                    _ => {
+                        document
+                            .admit()
+                            .unwrap_or_else(|error| panic!("{identity}: {error:?}"));
+                    }
+                }
             }
-            assert_eq!(layers, 5);
             assert_eq!(
-                directories.into_iter().collect::<Vec<_>>(),
+                chains,
                 [
-                    "adam-adsl-bmi",
-                    "adam-adtte-pfs",
-                    "schema-inheritance",
-                    "schema-inheritance-clear",
-                    "sdtm-dm-metadata",
-                    "sdtm-lb-multiform",
+                    ("adam-adsl-bmi".to_string(), 1),
+                    ("adam-adtte-pfs".to_string(), 1),
+                    ("schema-inheritance".to_string(), 3),
+                    ("schema-inheritance-clear".to_string(), 2),
+                    ("sdtm-dm-metadata".to_string(), 1),
+                    ("sdtm-lb-multiform".to_string(), 1),
                 ]
             );
+            assert_eq!(directories.len(), 6);
         }
 
         #[test]
         fn a_0_5_spelling_in_a_1_0_file_fails() {
-            let (structure, root) = root_class("spec");
+            let closures = Closures::shipped().unwrap();
             let path =
                 repository().join("docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml");
             let original = std::fs::read_to_string(&path).unwrap();
@@ -313,11 +214,23 @@ mod declaration {
             ] {
                 assert!(original.contains(old), "{old}");
                 let edited = original.replacen(old, new, 1);
-                let document = decode_text("edited example", edited.as_bytes());
-                assert!(
-                    !complete(&structure, root, &document).is_empty(),
-                    "{new} should fail"
-                );
+                let source = Source {
+                    identity: "spec.yaml".into(),
+                    bytes: edited.into_bytes(),
+                };
+                // `schema_version` beside `yamaa` keeps the 0.5 path, where the
+                // 1.0 fields are unknown; the others fail 1.0 admission.
+                match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures)
+                    .unwrap()
+                {
+                    Decoded::Legacy { .. } => assert!(new.contains("schema_version")),
+                    Decoded::Versioned(document) => assert!(
+                        document
+                            .prepare_specification("spec.yaml".into(), &mut Files)
+                            .is_err(),
+                        "{new} should fail"
+                    ),
+                }
             }
         }
     }

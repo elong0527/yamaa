@@ -3,7 +3,8 @@
 Each JSON Schema is a view of one file type's schema bundle: a class becomes a
 closed object, a union ``anyOf``, a registry a one-entry object, and every
 field carries its kind and its schema-notation type as ``x-yamaa-kind`` and
-``x-yamaa-type``. A specification file may be one layer of an inheritance
+``x-yamaa-type``, and a field a later language version introduced its
+``since`` as ``x-yamaa-since``. A specification file may be one layer of an inheritance
 chain, so the spec schema checks what one layer may write (LAYER-4), and its
 ``$defs/root_class`` checks a complete specification. The schemas are
 committed beside their sources; without ``--write`` this check refuses a
@@ -132,6 +133,8 @@ class Renderer:
                 item.descriptor, f"{owner}.{item.name}"
             )
             schema["x-yamaa-type"] = item.descriptor["type"]
+            if "since" in item.descriptor:
+                schema["x-yamaa-since"] = item.descriptor["since"]
             properties[item.name] = schema
         return properties
 

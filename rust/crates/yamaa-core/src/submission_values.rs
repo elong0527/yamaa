@@ -1,7 +1,9 @@
 //! Value-level entries keyed by a declared where clause (SUB-12, SUB-13): the
 //! entries a column declares, the static checks that need no data, and what
 //! each row construction proves about the rows an entry selects. Shared by the
-//! domain build and by composition; no study, host or data access.
+//! domain build, which reads the typed tree, and by composition, which still
+//! reads each specification's document; no study, host or data access.
+use crate::ast::{self, ExprId, ExprKind, Literal};
 use crate::schema::{Document, DocumentNode as N};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -135,27 +137,30 @@ pub(crate) struct Declared {
 /// within the column, where clauses over declared `str` output columns other
 /// than the column itself with nonempty distinct values, and no two entries
 /// whose where clauses can select one row.
-pub(crate) fn admit<'a>(
-    entries: &[Entry<'a>],
+pub(crate) fn admit<'a, 'b>(
+    entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
     column: &str,
     declared: impl Fn(&str) -> Option<Declared>,
-) -> Vec<Finding<'a>> {
+) -> Vec<Finding<'a>>
+where
+    'a: 'b,
+{
     let mut findings = Vec::new();
     let mut ids = BTreeSet::new();
-    let mut valid = Vec::new();
-    for entry in entries {
-        if !ids.insert(entry.id) {
-            findings.push(Finding::DuplicateId { id: entry.id });
+    let mut valid = Vec::<(&'a str, &'b Clause<'a>)>::new();
+    for (id, clause) in entries {
+        if !ids.insert(id) {
+            findings.push(Finding::DuplicateId { id });
         }
         let before = findings.len();
-        if entry.clause.is_empty() {
+        if clause.is_empty() {
             findings.push(Finding::Where {
-                id: entry.id,
+                id,
                 column: None,
                 fault: WhereFault::NoColumns,
             });
         }
-        for (name, values) in &entry.clause {
+        for (name, values) in clause {
             let fault = if *name == column {
                 Some(WhereFault::Itself)
             } else {
@@ -176,7 +181,7 @@ pub(crate) fn admit<'a>(
             });
             if let Some(fault) = fault {
                 findings.push(Finding::Where {
-                    id: entry.id,
+                    id,
                     column: Some(name),
                     fault,
                 });
@@ -185,16 +190,10 @@ pub(crate) fn admit<'a>(
         if findings.len() != before {
             continue;
         }
-        if let Some(other) = valid
-            .iter()
-            .find(|other: &&&Entry<'a>| overlap(&other.clause, &entry.clause))
-        {
-            findings.push(Finding::Overlap {
-                id: entry.id,
-                other: other.id,
-            });
+        if let Some(&(other, _)) = valid.iter().find(|(_, other)| overlap(other, clause)) {
+            findings.push(Finding::Overlap { id, other });
         }
-        valid.push(entry);
+        valid.push((id, clause));
     }
     findings
 }
@@ -349,6 +348,124 @@ pub(crate) fn declared_columns(d: &Document) -> BTreeMap<&str, usize> {
         .collect()
 }
 
+/// One entry's where clause as written in the typed tree.
+pub(crate) fn clause(entry: &ast::ValueLevel) -> Clause<'_> {
+    entry
+        .conditions
+        .iter()
+        .map(|condition| {
+            (
+                condition.column.name.as_str(),
+                condition
+                    .values
+                    .iter()
+                    .map(|value| value.text.as_str())
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+/// A column's value-level entries in the typed tree, in declaration order.
+pub(crate) fn levels(column: &ast::Column) -> &[ast::ValueLevel] {
+    column
+        .submission
+        .as_ref()
+        .map_or(&[], |submission| submission.value_level.as_slice())
+}
+
+/// The row constructions of a spec: each row template, or the one
+/// construction from column derivations when it declares none.
+fn templates(spec: &ast::Spec) -> Vec<Option<&ast::Template>> {
+    if spec.rows.templates.is_empty() {
+        vec![None]
+    } else {
+        spec.rows.templates.iter().map(Some).collect()
+    }
+}
+
+/// The derivation one construction gives a column: the row template's own,
+/// or the column's when the template inherits it.
+fn derivation_of(construction: Option<&ast::Template>, column: &ast::Column) -> Option<ExprId> {
+    construction
+        .and_then(|template| {
+            template
+                .overrides
+                .iter()
+                .find(|(name, _)| name.name == column.name.name)
+        })
+        .map(|(_, derivation)| derivation.expr)
+        .or_else(|| column.derivation.as_ref().map(|derivation| derivation.expr))
+}
+
+/// What a construction proves about the rows a where clause selects.
+fn reach_of(
+    spec: &ast::Spec,
+    construction: Option<&ast::Template>,
+    clause: &[(&str, Vec<&str>)],
+) -> Reach {
+    let mut every = true;
+    for (name, values) in clause {
+        let Some(column) = spec.columns.iter().find(|column| column.name.name == *name) else {
+            every = false;
+            continue;
+        };
+        // A bare `literal` gives every row the same value.
+        let literal =
+            derivation_of(construction, column).and_then(|expr| match &spec.expr(expr).kind {
+                ExprKind::Literal(Literal::Text(value)) => Some(Some(value.as_str())),
+                ExprKind::Literal(Literal::Missing) => Some(None),
+                _ => None,
+            });
+        match literal {
+            Some(Some(value)) if values.contains(&value) => {}
+            Some(_) => return Reach::Never,
+            None => every = false,
+        }
+    }
+    if every {
+        Reach::Only
+    } else {
+        Reach::Unknown
+    }
+}
+
+/// SUB-13: the derivations of a column that can produce a row the entry
+/// selects. A construction that derives a where column as a literal outside
+/// the entry's values cannot, and every other construction may.
+pub(crate) fn entry_expressions(
+    spec: &ast::Spec,
+    column: &ast::Column,
+    entry: &ast::ValueLevel,
+) -> Vec<ExprId> {
+    let clause = clause(entry);
+    templates(spec)
+        .into_iter()
+        .filter(|&construction| reach_of(spec, construction, &clause) != Reach::Never)
+        .filter_map(|construction| derivation_of(construction, column))
+        .collect()
+}
+
+/// SUB-19: the derivations the column-level origin answers for. A
+/// construction every row of which an entry declaring its own origin selects
+/// is answered for by that entry instead.
+pub(crate) fn column_expressions(spec: &ast::Spec, column: &ast::Column) -> Vec<ExprId> {
+    let owned = levels(column)
+        .iter()
+        .filter(|entry| !entry.metadata.origins.is_empty())
+        .map(clause)
+        .collect::<Vec<_>>();
+    templates(spec)
+        .into_iter()
+        .filter(|&construction| {
+            !owned
+                .iter()
+                .any(|clause| reach_of(spec, construction, clause) == Reach::Only)
+        })
+        .filter_map(|construction| derivation_of(construction, column))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -424,7 +541,11 @@ mod tests {
         ];
         let fault = |id, column, fault| Finding::Where { id, column, fault };
         assert_eq!(
-            admit(&entries, "AVAL", declared),
+            admit(
+                entries.iter().map(|entry| (entry.id, &entry.clause)),
+                "AVAL",
+                declared
+            ),
             [
                 Finding::DuplicateId { id: "A" },
                 fault("B", None, WhereFault::NoColumns),

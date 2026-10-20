@@ -1,8 +1,9 @@
 """Read a schema bundle written in the schema notation: names, types and kinds.
 
 The notation is defined by ``rules/reference/schema-language.md``. The 1.0
-schema files under ``yaml/v1/`` add one keyword, ``kind``, which a named value
-type declares to give the fields it types their kind (``yaml/README.md``).
+schema files under ``yaml/v1/`` add two keywords (``yaml/README.md``):
+``kind``, which a named value type declares to give the fields it types their
+kind, and ``since``, the language version that introduced a class field.
 The Rust engine owns admission; this reader serves the repository generators
 and their tests, and refuses only what they cannot interpret.
 """
@@ -21,6 +22,8 @@ DESCRIPTOR_KEYWORDS = frozenset(
     {"type", "description", "pattern", "min_length", "size", "values", "default"}
 )
 NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# A language version, ``1.N`` with no leading zero (SCHEMA-2).
+LANGUAGE_VERSION = re.compile(r"1\.(?:0|[1-9][0-9]*)")
 TOKEN = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_]*|\[|\]|,)")
 
 
@@ -214,11 +217,18 @@ class Bundle:
     def _check_field(self, owner, name, descriptor):
         if not isinstance(descriptor, dict) or "type" not in descriptor:
             raise SchemaSourceError(f"{owner}.{name}: a field has a typed descriptor")
-        unknown = set(descriptor) - DESCRIPTOR_KEYWORDS - {"required"}
+        unknown = set(descriptor) - DESCRIPTOR_KEYWORDS - {"required", "since"}
         if unknown:
             raise SchemaSourceError(
                 f"{owner}.{name}: unknown keyword {sorted(unknown)[0]}"
                 + (" (a named value type declares kind)" if "kind" in unknown else "")
+            )
+        since = descriptor.get("since")
+        if since is not None and not (
+            isinstance(since, str) and LANGUAGE_VERSION.fullmatch(since)
+        ):
+            raise SchemaSourceError(
+                f"{owner}.{name}: since must be a quoted language version 1.N"
             )
 
     def payload_fields(self, registry, keyword):

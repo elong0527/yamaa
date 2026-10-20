@@ -489,8 +489,27 @@ impl SchemaStructure {
         value: usize,
         fragment: bool,
     ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_types_at(types, input, value, fragment, "<normalization>")
+    }
+    /// Validate and normalize a complete 1.x document against the root class
+    /// of this view of its 1.0 closure; findings name paths from the root.
+    pub fn normalize_root(
+        &self,
+        input: &Document,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        let types = self.parse_query_types(&[self.root_class().name.clone()])?;
+        self.normalize_types_at(&types, input, input.root(), false, "")
+    }
+    fn normalize_types_at(
+        &self,
+        types: &[TypeExpression],
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        path: &str,
+    ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
-        let findings = self.validate_types(types, input, value, "<normalization>", fragment)?;
+        let findings = self.validate_types(types, input, value, path, fragment)?;
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }

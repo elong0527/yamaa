@@ -1,6 +1,7 @@
 //! Structural descriptor admission precedes name resolution and default validation.
 
 use super::{Document, DocumentNode, TypeError, TypeExpression};
+use crate::language::LanguageVersion;
 use crate::portable_regex;
 use std::vec;
 
@@ -38,7 +39,33 @@ pub enum DescriptorIssue {
     SingleOrList {
         member: String,
     },
+    /// `kind` names none of the closed field kinds (#3030 D31).
+    InvalidKind,
+    /// `since` names no language version (P-VER-1).
+    InvalidSince,
 }
+
+/// Where a descriptor is declared, which decides the keywords it may write.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DescriptorSite {
+    /// A class field, or a field of a registry entry's class: it may write
+    /// `required`, and `since`, the language version that introduced it.
+    ClassField,
+    /// A named value type: it may write `kind`, the kind of the fields it types.
+    NamedType,
+    /// A registry entry's payload descriptor.
+    RegistryEntry,
+}
+
+/// The closed field kinds a named value type declares in `kind` (#3030 D31).
+pub const FIELD_KINDS: [&str; 6] = [
+    "expression",
+    "name",
+    "identifier",
+    "value",
+    "path",
+    "structure",
+];
 
 /// Policy and unsupported-language outcomes are never structural schema diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -61,6 +88,8 @@ pub struct Descriptor {
     pattern: Option<(String, portable_regex::Pattern)>,
     minimum: Option<String>,
     size: Option<String>,
+    kind: Option<String>,
+    since: Option<LanguageVersion>,
 }
 
 /// A failed descriptor still contributes valid type references to bundle diagnostics.
@@ -95,8 +124,9 @@ impl Descriptor {
     pub fn admit(
         document: &Document,
         node: usize,
-        class_field: bool,
+        site: DescriptorSite,
     ) -> Result<DescriptorReport, DescriptorError> {
+        let class_field = site == DescriptorSite::ClassField;
         let nodes = document.nodes();
         let value = nodes.get(node).ok_or(DescriptorError::InvalidNode)?;
         let DocumentNode::Mapping(entries) = value else {
@@ -119,7 +149,8 @@ impl Descriptor {
                             | "min_length"
                             | "size"
                             | "default"
-                    ) || (class_field && name == "required")
+                    ) || (class_field && matches!(name.as_str(), "required" | "since"))
+                        || (site == DescriptorSite::NamedType && name == "kind")
                 }
                 _ => false,
             };
@@ -275,6 +306,25 @@ impl Descriptor {
                 _ => issues.push(DescriptorIssue::ValuesTextSequence),
             }
         }
+        let mut kind = None;
+        if let Some(id) = field("kind").filter(|_| site == DescriptorSite::NamedType) {
+            match &nodes[id] {
+                DocumentNode::Text(text) if FIELD_KINDS.contains(&text.as_str()) => {
+                    kind = Some(text.clone())
+                }
+                _ => issues.push(DescriptorIssue::InvalidKind),
+            }
+        }
+        let mut since = None;
+        if let Some(id) = field("since").filter(|_| class_field) {
+            match &nodes[id] {
+                DocumentNode::Text(text) => match LanguageVersion::parse(text) {
+                    Some(version) => since = Some(version),
+                    None => issues.push(DescriptorIssue::InvalidSince),
+                },
+                _ => issues.push(DescriptorIssue::InvalidSince),
+            }
+        }
         let descriptor = issues.is_empty().then_some(Self {
             members,
             required,
@@ -283,6 +333,8 @@ impl Descriptor {
             pattern,
             minimum,
             size,
+            kind,
+            since,
         });
         Ok(DescriptorReport {
             issues,
@@ -320,6 +372,15 @@ impl Descriptor {
     /// Exact sizes are not truncated to the compiling host's pointer width.
     pub fn size(&self) -> Option<&str> {
         self.size.as_deref()
+    }
+    /// The kind a named value type declares for the fields it types (#3030 D31).
+    pub fn kind(&self) -> Option<&str> {
+        self.kind.as_deref()
+    }
+    /// The language version that introduced a class field (P-VER-1). A document
+    /// declaring an older version does not declare the field.
+    pub fn since(&self) -> Option<LanguageVersion> {
+        self.since
     }
     /// Compare finite document lengths with an arbitrary-width admitted minimum.
     pub fn length_meets_minimum(&self, length: usize) -> bool {

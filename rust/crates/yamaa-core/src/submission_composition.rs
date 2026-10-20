@@ -52,6 +52,12 @@ impl Finding {
             ),
         )
     }
+    /// Retain display detail without using it to classify the failure.
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.context
+            .insert("detail".into(), crate::json::Value::String(detail.into()));
+        self
+    }
     fn refused(path: &str, refusal: crate::diagnostic::Diagnostic) -> Self {
         Self {
             code: refusal.code,
@@ -1118,7 +1124,8 @@ fn compose_values(
             continue;
         }
         let entries = values::entries(doc, base.node);
-        let static_findings = values::admit(&entries, name, |where_column| {
+        let written = entries.iter().map(|entry| (entry.id, &entry.clause));
+        let static_findings = values::admit(written, name, |where_column| {
             let declared = columns.iter().find(|c| c.name.value == where_column)?;
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),

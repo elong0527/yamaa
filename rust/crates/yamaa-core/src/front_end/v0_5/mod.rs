@@ -752,7 +752,9 @@ impl<'d> Lower<'d> {
                     None => DatasetCheckKind::Unsupported(operation.into()),
                 },
                 "row_count" => {
-                    let group_by = self.names(meta, payload, "group_by");
+                    let group_by = self
+                        .field(payload, "group_by")
+                        .map(|_| self.names(meta, payload, "group_by"));
                     let filter = self.field(payload, "filter").map(|node| {
                         let meta = self.field_meta(meta, "filter", node);
                         self.predicate(node, meta)
