@@ -59,11 +59,10 @@ jobs:
   equivalence:
     # The engine gate: fresh builds of both hosts must reproduce every
     # benchmark's expected bytes and every negative benchmark's first issue.
-    # It runs when a pull request's diff reaches the engine, the schemas,
-    # the hosts, the repository tools, the benchmarks or this gate's setup;
-    # otherwise the job passes without running, so branch protection can
-    # require it on every pull request. Scheduled runs leave it out: the gate
-    # rebuilds both hosts.
+    # Run by default, including new build/configuration inputs. Only changes
+    # confined to the documentation paths below pass without running, so
+    # branch protection can require this job on every pull request.
+    # Scheduled runs leave it out: the gate rebuilds both hosts.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -89,14 +88,16 @@ jobs:
             exit 1
           fi
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
-          changed=$(git diff --name-only "$base" "$HEAD_SHA" -- \
-            rust yaml benchmarks python R/yamaa tools pyproject.toml \
-            Makefile .gitattributes .github/workflows/ci.yml .github/actions/setup)
+          changed=$(git diff --no-renames --name-only "$base" "$HEAD_SHA" -- . \
+            ':(top,exclude)README.md' \
+            ':(top,exclude)CONTRIBUTING.md' \
+            ':(top,exclude)AGENTS.md' \
+            ':(top,exclude,glob)docs/**/*.md')
           if [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::The diff reaches none of the gate's paths, so the equivalence gate did not run."
+            echo "::notice::The diff changes only documentation, so the equivalence gate did not run."
           fi
       # The gate builds both hosts from the checkout and ends with
       # R CMD check --as-cran, so it needs what the r job needs.

@@ -12,7 +12,15 @@ from tools.validation._repository_yaml import UniqueKeyLoader
 
 
 class EquivalenceWorkflowTests(unittest.TestCase):
-    def decide(self, path, *, event="pull_request", base_path=None, merge=False):
+    def decide(
+        self,
+        path,
+        *,
+        event="pull_request",
+        base_path=None,
+        merge=False,
+        rename_from=None,
+    ):
         workflow = yaml.load(
             (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
             Loader=UniqueKeyLoader,
@@ -45,7 +53,12 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             git("init", "--quiet")
             git("commit", "--quiet", "--allow-empty", "-m", "Base")
             base = git("rev-parse", "HEAD")
-            head = commit(path)
+            if rename_from:
+                base = commit(rename_from)
+                (work / path).parent.mkdir(parents=True, exist_ok=True)
+                git("mv", rename_from, path)
+            for changed in (path,) if isinstance(path, str) else path:
+                head = commit(changed)
             if base_path:
                 git("checkout", "--quiet", "--detach", base)
                 base = commit(base_path)
@@ -97,6 +110,8 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             "python/tests/installed/example.py",
             "python/pyproject.toml",
             "python/uv.lock",
+            "python/README.md",
+            "rust/README.md",
             "R/yamaa/DESCRIPTION",
             "tools/migrate/example.py",
             "tools/conformance/example.py",
@@ -114,6 +129,11 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             "pyproject.toml",
             "Makefile",
             ".gitattributes",
+            ".cargo/config.toml",
+            ".cargo/config",
+            "R/.gitattributes",
+            "new-build-input/settings.toml",
+            "docs/tools/generator.py",
             ".github/workflows/ci.yml",
             ".github/actions/setup/action.yml",
         ):
@@ -121,15 +141,34 @@ class EquivalenceWorkflowTests(unittest.TestCase):
                 self.assertEqual(self.decide(path)[0], "run=true")
 
     def test_docs_only_diff_skips_with_a_notice(self):
-        decision, notice = self.decide("CONTRIBUTING.md")
-        self.assertEqual(decision, "run=false")
-        self.assertIn("::notice::", notice)
-        self.assertIn("equivalence gate did not run", notice)
+        for path in (
+            "README.md",
+            "CONTRIBUTING.md",
+            "AGENTS.md",
+            "docs/release.md",
+            "docs/articles/api.md",
+        ):
+            with self.subTest(path=path):
+                decision, notice = self.decide(path)
+                self.assertEqual(decision, "run=false")
+                self.assertIn("::notice::", notice)
+                self.assertIn("equivalence gate did not run", notice)
 
     def test_changes_only_on_the_base_do_not_trigger_the_gate(self):
         self.assertEqual(
             self.decide("CONTRIBUTING.md", base_path="rust/src/lib.rs")[0],
             "run=false",
+        )
+
+    def test_mixed_documentation_and_build_changes_run_the_gate(self):
+        self.assertEqual(
+            self.decide(("docs/release.md", ".cargo/config.toml"))[0], "run=true"
+        )
+
+    def test_moving_code_into_documentation_still_runs_the_gate(self):
+        self.assertEqual(
+            self.decide("docs/former-code.md", rename_from="tools/gate.py")[0],
+            "run=true",
         )
 
     def test_dispatch_runs_even_without_engine_changes(self):
