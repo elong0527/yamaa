@@ -1,5 +1,5 @@
 //! The specification lint through the public [`yamaa::lint`] facade: the
-//! P-LINT-2 table, file order, fixes and refusals.
+//! P-LINT-2 table, file order, fixes, the printed lines and refusals.
 #![cfg(feature = "yaml")]
 
 use std::path::PathBuf;
@@ -84,7 +84,7 @@ fn findings_come_as_the_six_column_table() {
         "dm.yaml",
         &CANONICAL.replace("input/dm.csv\n\noutput:", "input/dm.csv\noutput:"),
     );
-    let table = lint(&[packed], false).unwrap();
+    let table = lint(&[packed], false).unwrap().table();
     let names = table
         .columns()
         .iter()
@@ -129,9 +129,12 @@ fn findings_come_as_the_six_column_table() {
 fn a_clean_file_gives_an_empty_table() {
     let directory = Directory::new("clean");
     let clean = directory.write("dm.yaml", CANONICAL);
-    let table = lint(&[clean], false).unwrap();
+    let linted = lint(&[clean], false).unwrap();
+    let table = linted.table();
     assert_eq!(table.rows(), 0);
     assert_eq!(table.columns().len(), LINT_COLUMNS.len());
+    assert!(linted.findings().is_empty());
+    assert_eq!(linted.summary(), "0 lint findings in 0 of 1 file");
 }
 
 #[test]
@@ -143,7 +146,7 @@ fn rows_follow_the_files_then_line_column_and_finding() {
     );
     let second = directory.write("b.yaml", &broken);
     let first = directory.write("a.yaml", &broken);
-    let table = lint(&[second, first], false).unwrap();
+    let table = lint(&[second, first], false).unwrap().table();
     let found = rows(&table)
         .into_iter()
         .map(|(file, line, column, finding, ..)| (file, line, column, finding))
@@ -156,7 +159,9 @@ fn rows_follow_the_files_then_line_column_and_finding() {
     };
     assert_eq!(found, [expected("b.yaml"), expected("a.yaml")].concat());
     // A directory names its specifications in sorted path order.
-    let table = lint(&[directory.0.to_string_lossy().into_owned()], false).unwrap();
+    let table = lint(&[directory.0.to_string_lossy().into_owned()], false)
+        .unwrap()
+        .table();
     let files = rows(&table)
         .into_iter()
         .map(|(file, ..)| file)
@@ -182,7 +187,9 @@ fn fix_rewrites_the_file_and_lists_what_remains() {
             &format!("    label: {}\n", "x".repeat(80)),
         );
     let path = directory.write("dm.yaml", &written);
-    let table = lint(std::slice::from_ref(&path), true).unwrap();
+    let clean = directory.write("clean.yaml", CANONICAL);
+    let linted = lint(&[path.clone(), clean], true).unwrap();
+    let table = linted.table();
     let fixed = std::fs::read_to_string(&path).unwrap();
     assert_eq!(
         fixed,
@@ -205,6 +212,58 @@ fn fix_rewrites_the_file_and_lists_what_remains() {
             "columns[0].label".to_owned()
         )]
     );
+    // Two files linted, one holds the finding that remains, and the fix
+    // rewrote the first, whose path the result names.
+    assert_eq!(linted.files(), 2);
+    assert_eq!(linted.rewritten(), [directory.absolute("dm.yaml")]);
+    assert_eq!(
+        linted.summary(),
+        "1 lint finding in 1 of 2 files; fixed 1 file"
+    );
+}
+
+/// The command line's text, authored from `api.md` ("lint()") and the
+/// draft's `cli.commands`: one `file:line:column: finding message` line per
+/// finding, then `N lint findings in M of K files`.
+#[test]
+fn findings_print_as_the_style_line_and_the_summary_line() {
+    let directory = Directory::new("print");
+    let broken = format!(
+        "\n{}",
+        CANONICAL.replace("input/dm.csv\n\noutput:", "input/dm.csv\noutput:")
+    );
+    let first = directory.write("a.yaml", &broken);
+    let clean = directory.write("clean.yaml", CANONICAL);
+    let linted = lint(&[first, clean], false).unwrap();
+    let file = directory.absolute("a.yaml");
+    let lines = linted
+        .findings()
+        .iter()
+        .map(yamaa::LintFinding::text)
+        .collect::<Vec<_>>();
+    // The temporary directory is not beneath the current directory, so each
+    // file prints absolute.
+    assert_eq!(
+        lines,
+        [
+            format!("{file}:1:1: blank_lines remove the leading blank line"),
+            format!("{file}:7:1: root_spacing leave one blank line before `output`"),
+        ]
+    );
+    assert_eq!(linted.summary(), "2 lint findings in 1 of 2 files");
+    let yamaa::ContextValue::Map(value) = linted.findings()[1].to_value() else {
+        panic!("a finding is an object");
+    };
+    assert_eq!(
+        value.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["column", "file", "finding", "line", "message", "spec_path"]
+    );
+    assert_eq!(
+        linted.findings()[1].to_value().to_json(),
+        format!(
+            r#"{{"column":1,"file":"{file}","finding":"root_spacing","line":7,"message":"leave one blank line before `output`","spec_path":"output"}}"#
+        )
+    );
 }
 
 #[test]
@@ -212,11 +271,25 @@ fn a_file_that_cannot_be_read_or_parsed_refuses_with_its_issue() {
     let directory = Directory::new("refuse");
     let broken = directory.write("broken.yaml", "a: [\n");
     let failure = lint(&[broken], false).unwrap_err();
+    // D39: the call, the first issue's line, and no count when it is the only
+    // issue.
+    let prefix = format!(
+        "cannot lint {}: the file is not valid YAML: ",
+        directory.absolute("broken.yaml")
+    );
+    assert!(
+        failure.message.starts_with(&prefix)
+            && failure.message.ends_with(" [invalid_yaml, SCHEMA-3]"),
+        "{}",
+        failure.message
+    );
+    assert_eq!(failure.diagnostics.len(), 1);
     assert_eq!(
         failure.message,
         format!(
-            "cannot lint {}; see issues",
-            directory.absolute("broken.yaml")
+            "cannot lint {}: {}",
+            directory.absolute("broken.yaml"),
+            failure.diagnostics[0].text()
         )
     );
     let issues = &failure.issues.batches()[0];
@@ -232,6 +305,13 @@ fn a_file_that_cannot_be_read_or_parsed_refuses_with_its_issue() {
         .to_string_lossy()
         .into_owned();
     let failure = lint(&[missing], false).unwrap_err();
+    let absolute = directory.absolute("missing.yaml");
+    assert_eq!(
+        failure.message,
+        format!(
+            "cannot lint {absolute}: {absolute} does not exist [resource_path_missing, FILE-7]"
+        )
+    );
     let issues = &failure.issues.batches()[0];
     let conditions = issues
         .column(failure.issues.schema().index_of("condition").unwrap())

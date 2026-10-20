@@ -568,6 +568,15 @@ impl PreparedDocument {
             PreparedContent::Inherited(prepared) => prepared.model(),
         }
     }
+    /// The specification's `domain`, when it is written as text: the dataset
+    /// name a run's printed summary names.
+    pub fn domain(&self) -> Option<&str> {
+        let model = self.model().document();
+        match &model.nodes()[model.field(model.root(), "domain")?] {
+            yamaa_core::schema::DocumentNode::Text(text) => Some(text),
+            _ => None,
+        }
+    }
     pub fn dictionary_sources(&self) -> impl Iterator<Item = &Source> {
         self.dictionaries
             .iter()

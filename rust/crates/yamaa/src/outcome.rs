@@ -7,7 +7,6 @@
 
 use yamaa_adapters::project_scope::identify;
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::project_environment::Submission as Section;
 
 use crate::api::{Run, Status};
 use crate::diagnostic::Severity;
@@ -41,7 +40,7 @@ pub(crate) struct Member {
 pub(crate) enum Work {
     Checked(Vec<Diagnostic>),
     Built(Box<Run>),
-    Composed(Section, Box<DefineBuild>),
+    Composed(Box<DefineBuild>),
 }
 
 impl Member {
@@ -51,7 +50,7 @@ impl Member {
         let mut issues = match &self.work {
             Work::Checked(issues) => issues.clone(),
             Work::Built(run) => run.build().issues(),
-            Work::Composed(_, define) => define.issues(),
+            Work::Composed(define) => define.issues(),
         };
         if let Some(identity) = &self.identity {
             identify(&mut issues, identity);
@@ -63,7 +62,7 @@ impl Member {
         match &self.work {
             Work::Checked(issues) => Status::of_all(issues, []),
             Work::Built(run) => run.status(),
-            Work::Composed(_, define) => Status::of_all(define.composed(), []),
+            Work::Composed(define) => Status::of_all(define.composed(), []),
         }
     }
 
@@ -72,14 +71,6 @@ impl Member {
             Work::Built(run) => Some(run),
             _ => None,
         }
-    }
-
-    /// The name a message uses for the member: its name, else its identity.
-    pub(crate) fn label(&self) -> &str {
-        self.name
-            .as_deref()
-            .or(self.identity.as_deref())
-            .unwrap_or_default()
     }
 }
 

@@ -439,6 +439,8 @@ pub struct Diagnostic {           // #[non_exhaustive]
     pub code: String,             // stable condition code, e.g. `unknown_field`
     pub rule: Option<String>,     // the rule card the condition cites
     pub spec_path: Vec<String>,   // ordered path segments
+    pub location: Option<Location>,  // where the first spec path is written
+    pub message: String,          // rendered from the condition's template
     pub context: DiagnosticContext,
     pub source_span: Option<SourceSpan>,     // byte span in the expression
     pub operand_route: Option<Vec<String>>,  // root-to-node operand steps
@@ -456,9 +458,16 @@ tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token
 outside both 64-bit ranges), fraction/exponent tokens as `Float`, and nested
 lists and maps; `to_json()` returns the canonical text the host frames show.
 Geometry is optional and absent means unrecorded: a present zero-width span or
-empty route is a fact, never a default. The boundary version and record
-definition in #2674 conform to this struct; the cross-host parity tests are
-#2677.
+empty route is a fact, never a default. `location` stays `None` until issue
+locations land (#3262). The one record feeds every form of an issue:
+`Report::table()` builds the twelve-column issues table both hosts return
+(D28), `text()` its printed line and `to_value()` its JSON object, whose
+`context` is an object. The boundary version and record definition in #2674
+conform to this struct; the cross-host parity tests are #2677.
+
+Every result prints a `Summary` rendered here (`yamaa::text`, D37), and a
+refusal's `Failure::message` is D39's error text: the `Action` that refused,
+the first issue's line and the count of the others.
 
 ### Errors
 

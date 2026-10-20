@@ -3,7 +3,7 @@
 //! these functions; behavior, validation and messages stay in Rust.
 use pyo3::{exceptions::PyException, prelude::*};
 use std::sync::{Arc, Mutex};
-use yamaa::{CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage};
+use yamaa::{Action, CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage};
 
 use crate::arrow_bridge::ArrowTable;
 
@@ -21,10 +21,11 @@ fn raise(py: Python<'_>, failure: Failure) -> PyErr {
     }
 }
 
-fn raise_error(py: Python<'_>, context: &str, error: Error) -> PyErr {
+/// Raise the refusal of `action` for `error` (D39), or the cancellation.
+fn raise_error(py: Python<'_>, action: Action<'_>, error: Error) -> PyErr {
     match error {
         Error::Cancelled => pyo3::exceptions::PyRuntimeError::new_err("operation cancelled"),
-        error => raise(py, Failure::from_error(context, &error)),
+        error => raise(py, Failure::from_error(action, &error)),
     }
 }
 
@@ -104,7 +105,7 @@ pub fn _spec_check(
     engine(py)
         .spec_check(specification, project, &token)
         .map(|check| ArrowTable::from(&check.issues()))
-        .map_err(|error| raise_error(py, "cannot check the specification", error))
+        .map_err(|error| raise_error(py, Action::Read(specification), error))
 }
 
 /// The compiled plans one lazy specification or project object keeps between
@@ -136,7 +137,7 @@ pub fn _spec_run(
         Some(plans) => engine.spec_run_reusing(specification, project, &plans.inner, &token),
         None => engine.spec_run(specification, project, &token),
     }
-    .map_err(|error| raise_error(py, "cannot run the specification", error))?;
+    .map_err(|error| raise_error(py, Action::Read(specification), error))?;
     let run = Run::new(run);
     run.propagate_interrupt(py)?;
     Ok(run)
@@ -176,7 +177,7 @@ pub fn _read_odm(
     }
     yamaa::read_odm(std::path::Path::new(source), &options)
         .map(|table| ArrowTable::from(&table))
-        .map_err(|error| raise_error(py, "cannot read ODM", error))
+        .map_err(|error| raise_error(py, Action::Read(source), error))
 }
 
 /// The lint table of every file `paths` names, fixing them first when `fix`
@@ -185,7 +186,7 @@ pub fn _read_odm(
 #[pyo3(signature=(paths, fix=false))]
 pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<ArrowTable> {
     yamaa::lint(&paths, fix)
-        .map(|table| ArrowTable::from(&table))
+        .map(|lint| ArrowTable::from(&lint.table()))
         .map_err(|failure| raise(py, failure))
 }
 
@@ -273,7 +274,7 @@ pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<ArrowTable> {
     engine(py)
         .project_check(project, &CancellationToken::new())
         .map(|check| ArrowTable::from(&check.issues()))
-        .map_err(|error| raise_error(py, "cannot check the project", error))
+        .map_err(|error| raise_error(py, Action::Read(project), error))
 }
 
 #[pyfunction]
@@ -290,7 +291,8 @@ pub fn _project_run(
         Some(plans) => engine.project_run_reusing(project, section, &plans.inner, &token),
         None => engine.project_run(project, section, &token),
     }
-    .map_err(|error| raise_error(py, "cannot run the project", error))?;
+    // Only an unknown section refuses the call with issues.
+    .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
     // A project interrupt in any specification fails the call with its own
     // object, as a single run does.
     for name in runs.names() {
@@ -325,7 +327,8 @@ pub fn _project_submission(
             yamaa::VERSION,
             &CancellationToken::new(),
         )
-        .map_err(|error| raise_error(py, "cannot compose the submission", error))?;
+        // Only an unknown section refuses the call with issues.
+        .map_err(|error| raise_error(py, Action::Select(section.unwrap_or_default()), error))?;
     Ok(Submission {
         inner: Arc::new(Mutex::new(submission)),
     })

@@ -2,12 +2,14 @@
 //! the written form the style guide fixes, as one table.
 //!
 //! [`lint`] reads each file it names once, through the local file resolver,
-//! and returns the findings that remain as a [`Table`] with the
+//! and returns the findings that remain as a [`Lint`], whose table has the
 //! [`LINT_COLUMNS`]: the file's absolute path with forward slashes, the
 //! one-based line and column where the departure starts, the finding (one of
 //! [`LINT_FINDINGS`]), its spec path (`$` for the root) and a message. Rows
 //! come in argument order of the files, a directory's specification files in
-//! sorted path order, then by line, column and finding.
+//! sorted path order, then by line, column and finding. The result also
+//! counts the files linted and names the files a fix rewrote, for the command
+//! line's summary line, `N lint findings in M of K files`.
 //!
 //! A comment `# yamaa-lint: allow <finding>, ... -- <reason>` directly above a
 //! field or an entry suppresses the named findings within it (P-LINT-1); a
@@ -23,14 +25,210 @@
 //! the issue that says why, before any file is written.
 
 use crate::api::Failure;
-use crate::diagnostic::Report;
+use crate::diagnostic::{ContextValue, Report};
 use crate::table::Table;
+use crate::text::{self, Action};
 
 /// The lint table's columns, in order (P-LINT-2).
 pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_path", "message"];
 
 /// Every value of the lint table's `finding` column.
 pub const LINT_FINDINGS: [&str; 9] = yamaa_adapters::lint::FINDINGS;
+
+/// What [`lint`] found: the findings that remain, in table order, with the
+/// number of files it read and the files a fix rewrote. The hosts return its
+/// [`table`](Lint::table) (D40); the command line prints each finding's
+/// [`text`](LintFinding::text), then the [`summary`](Lint::summary).
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Lint {
+    findings: Vec<LintFinding>,
+    files: usize,
+    flagged: usize,
+    rewritten: Vec<String>,
+    fix: bool,
+}
+
+/// One departure from the written form: one row of the lint table.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LintFinding {
+    /// The file's absolute path, with forward slashes.
+    pub file: String,
+    /// The one-based line where the departure starts.
+    pub line: usize,
+    /// The one-based column where the departure starts, in Unicode scalar
+    /// values.
+    pub column: usize,
+    /// One of [`LINT_FINDINGS`].
+    pub finding: &'static str,
+    /// The spec path of the departure, `$` for the root.
+    pub spec_path: String,
+    /// The finding's message; not frozen.
+    pub message: String,
+}
+
+impl LintFinding {
+    /// The finding as the command line prints it: `<file>:<line>:<column>:
+    /// <finding> <message>`, the file relative to the current directory when
+    /// beneath it, and only ASCII.
+    pub fn text(&self) -> String {
+        let directory = text::current_directory();
+        text::ascii(&format!(
+            "{}:{}:{}: {} {}",
+            text::relative(&self.file, directory.as_deref()),
+            self.line,
+            self.column,
+            self.finding,
+            self.message
+        ))
+    }
+
+    /// The finding as one JSON object with the lint table's six keys, as the
+    /// command line's `--format json` writes it.
+    pub fn to_value(&self) -> ContextValue {
+        let text = |value: &str| ContextValue::Text(value.to_owned());
+        let int = |value: usize| ContextValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
+        ContextValue::Map(
+            [
+                ("file", text(&self.file)),
+                ("line", int(self.line)),
+                ("column", int(self.column)),
+                ("finding", text(self.finding)),
+                ("spec_path", text(&self.spec_path)),
+                ("message", text(&self.message)),
+            ]
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+        )
+    }
+}
+
+impl Lint {
+    /// The findings that remain, in table order.
+    pub fn findings(&self) -> &[LintFinding] {
+        &self.findings
+    }
+
+    /// The number of files the call linted.
+    pub fn files(&self) -> usize {
+        self.files
+    }
+
+    /// The files a fix rewrote, absolute with forward slashes, in lint order;
+    /// empty without `fix`.
+    pub fn rewritten(&self) -> &[String] {
+        &self.rewritten
+    }
+
+    /// The summary line: `<n> lint findings in <m> of <k> files`, counting
+    /// the findings that remain, the files that hold them and the files
+    /// linted, then `; fixed <f> files` when the call fixed. Counts take the
+    /// singular noun for 1.
+    pub fn summary(&self) -> String {
+        let mut line = format!(
+            "{} in {} of {}",
+            text::count(self.findings.len(), "lint finding", "lint findings"),
+            self.flagged,
+            text::count(self.files, "file", "files")
+        );
+        if self.fix {
+            line.push_str("; fixed ");
+            line.push_str(&text::count(self.rewritten.len(), "file", "files"));
+        }
+        line
+    }
+
+    /// The lint table (P-LINT-2) with the [`LINT_COLUMNS`], one row per
+    /// finding that remains.
+    pub fn table(&self) -> Table {
+        use arrow_array::builder::{Int64Builder, StringBuilder};
+        use arrow_schema::{DataType, Field, Schema};
+        use std::sync::Arc;
+
+        let int = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
+        let mut file = StringBuilder::new();
+        let mut line = Int64Builder::new();
+        let mut column = Int64Builder::new();
+        let mut finding = StringBuilder::new();
+        let mut spec_path = StringBuilder::new();
+        let mut message = StringBuilder::new();
+        for item in &self.findings {
+            file.append_value(&item.file);
+            line.append_value(int(item.line));
+            column.append_value(int(item.column));
+            finding.append_value(item.finding);
+            spec_path.append_value(&item.spec_path);
+            message.append_value(&item.message);
+        }
+        let types = [
+            DataType::Utf8,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Utf8,
+            DataType::Utf8,
+            DataType::Utf8,
+        ];
+        let schema = Arc::new(Schema::new(
+            LINT_COLUMNS
+                .into_iter()
+                .zip(types)
+                .map(|(name, kind)| Field::new(name, kind, true))
+                .collect::<Vec<_>>(),
+        ));
+        let batch = arrow_array::RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(file.finish()),
+                Arc::new(line.finish()),
+                Arc::new(column.finish()),
+                Arc::new(finding.finish()),
+                Arc::new(spec_path.finish()),
+                Arc::new(message.finish()),
+            ],
+        )
+        .expect("the builders produce exactly the declared lint columns");
+        Table::from_public(
+            yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
+                .expect("the batch was built against this schema"),
+        )
+    }
+
+    fn from_adapter(files: Vec<yamaa_adapters::lint::Linted>, fix: bool) -> Self {
+        let flagged = files
+            .iter()
+            .filter(|file| !file.findings.is_empty())
+            .count();
+        let rewritten = files
+            .iter()
+            .filter(|file| file.fixed)
+            .map(|file| file.file.clone())
+            .collect();
+        let count = files.len();
+        let findings = files
+            .into_iter()
+            .flat_map(|linted| {
+                let file = linted.file;
+                linted.findings.into_iter().map(move |item| LintFinding {
+                    file: file.clone(),
+                    line: item.line,
+                    column: item.column,
+                    finding: item.finding,
+                    spec_path: item.spec_path,
+                    message: item.message,
+                })
+            })
+            .collect();
+        Self {
+            findings,
+            files: count,
+            flagged,
+            rewritten,
+            fix,
+        }
+    }
+}
 
 /// Lint the specification files `paths` names, fixing them first when `fix`
 /// is true.
@@ -43,80 +241,33 @@ pub const LINT_FINDINGS: [&str; 9] = yamaa_adapters::lint::FINDINGS;
 /// let paths = [path.to_string_lossy().into_owned()];
 /// let result = yamaa::lint(&paths, false);
 /// if cfg!(feature = "yaml") {
-///     let table = result.unwrap();
-///     assert_eq!(table.rows(), 1); // root_spacing: leave one blank line before `output`
-///     assert_eq!(table.columns().len(), yamaa::LINT_COLUMNS.len());
+///     let lint = result.unwrap();
+///     assert_eq!(lint.findings().len(), 1); // root_spacing: leave one blank line before `output`
+///     assert_eq!(lint.summary(), "1 lint finding in 1 of 1 file");
+///     assert_eq!(lint.table().columns().len(), yamaa::LINT_COLUMNS.len());
 /// } else {
 ///     assert!(result.is_err());
 /// }
 /// std::fs::remove_file(&path).unwrap();
 /// ```
-pub fn lint(paths: &[String], fix: bool) -> Result<Table, Failure> {
+pub fn lint(paths: &[String], fix: bool) -> Result<Lint, Failure> {
     match yamaa_adapters::lint::lint(paths, fix) {
-        Ok(files) => Ok(table(&files)),
-        Err(error) => Err(refusal(&error)),
+        Ok(files) => Ok(Lint::from_adapter(files, fix)),
+        Err(error) => Err(refusal(&error, paths)),
     }
 }
 
-fn refusal(error: &yamaa_adapters::lint::Error) -> Failure {
-    let issues = error.diagnostics();
-    let message = match error.file() {
-        Some(file) => format!("cannot lint {file}; see issues"),
-        None => "cannot lint: this build has no YAML reader; see issues".to_owned(),
+/// D39's refusal, naming the file concerned (relative to the current
+/// directory when beneath it), or the first path given when the refusal
+/// concerns no file.
+fn refusal(error: &yamaa_adapters::lint::Error, paths: &[String]) -> Failure {
+    let directory = text::current_directory();
+    let path = match error.file() {
+        Some(file) => text::relative(file, directory.as_deref()),
+        None => paths.first().map_or("", String::as_str),
     };
-    Failure::new(message, &Report::from_issues(&issues))
-}
-
-fn table(files: &[yamaa_adapters::lint::Linted]) -> Table {
-    use arrow_array::builder::{Int64Builder, StringBuilder};
-    use arrow_schema::{DataType, Field, Schema};
-    use std::sync::Arc;
-
-    let mut file = StringBuilder::new();
-    let mut line = Int64Builder::new();
-    let mut column = Int64Builder::new();
-    let mut finding = StringBuilder::new();
-    let mut spec_path = StringBuilder::new();
-    let mut message = StringBuilder::new();
-    for linted in files {
-        for item in &linted.findings {
-            file.append_value(&linted.file);
-            line.append_value(i64::try_from(item.line).unwrap_or(i64::MAX));
-            column.append_value(i64::try_from(item.column).unwrap_or(i64::MAX));
-            finding.append_value(item.finding);
-            spec_path.append_value(&item.spec_path);
-            message.append_value(&item.message);
-        }
-    }
-    let types = [
-        DataType::Utf8,
-        DataType::Int64,
-        DataType::Int64,
-        DataType::Utf8,
-        DataType::Utf8,
-        DataType::Utf8,
-    ];
-    let schema = Arc::new(Schema::new(
-        LINT_COLUMNS
-            .into_iter()
-            .zip(types)
-            .map(|(name, kind)| Field::new(name, kind, true))
-            .collect::<Vec<_>>(),
-    ));
-    let batch = arrow_array::RecordBatch::try_new(
-        schema.clone(),
-        vec![
-            Arc::new(file.finish()),
-            Arc::new(line.finish()),
-            Arc::new(column.finish()),
-            Arc::new(finding.finish()),
-            Arc::new(spec_path.finish()),
-            Arc::new(message.finish()),
-        ],
-    )
-    .expect("the builders produce exactly the declared lint columns");
-    Table::from_public(
-        yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
-            .expect("the batch was built against this schema"),
+    Failure::new(
+        Action::Lint(path),
+        &Report::from_issues(&error.diagnostics()),
     )
 }

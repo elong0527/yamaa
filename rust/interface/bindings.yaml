@@ -98,14 +98,29 @@ values:
 # optional<T>; a column's `values` names a vocabulary above, or the condition
 # registry.
 tables:
+  # Section 2.7 (D28): the frozen twelve columns. Issue locations (#3262)
+  # fill file, line and column; until then they are missing.
   issues:
     rust: yamaa::ISSUE_COLUMNS
     order: report order, the first issue first
     columns:
+      - {name: severity, type: str, values: severity}
       - {name: phase, type: str, values: phase}
       - {name: condition, type: str, values: yaml/conditions.yaml}
-      - {name: rule, type: optional<str>, meaning: the rule card the condition cites}
+      - name: rule
+        type: optional<str>
+        meaning: card ID the condition cites; missing for engine_rejected and unsupported_operation
       - {name: spec_paths, type: list<str>, meaning: "every spec path the issue concerns, possibly none"}
+      - name: file
+        type: optional<str>
+        meaning: absolute path, forward slashes, of the YAML file that wrote the first spec path
+      - {name: line, type: optional<int>, meaning: one-based line of that node}
+      - name: column
+        type: optional<int>
+        meaning: one-based column of that node, in Unicode scalar values
+      - name: message
+        type: str
+        meaning: rendered in Rust from the condition's template in yaml/conditions.yaml; not frozen
       - {name: context, type: str, meaning: "canonical JSON text (RFC 8785) of the condition's facts"}
       - name: source_span
         type: optional<list<int>>

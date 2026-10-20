@@ -361,7 +361,7 @@ impl Engine {
         // The compilation above has just verified the metadata it captured.
         let outcome = plan.run_observed(None, false, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).named(plan.name()))
     }
 
     /// Build `request` through `plans`, as a host's lazy object runs (#2821).
@@ -391,10 +391,11 @@ impl Engine {
             .as_ref()
             .and_then(|identity| plans.get(identity))
             .filter(|plan| plan.reusable_by(&self.shared));
-        let outcome = match kept {
+        let (outcome, name) = match kept {
             Some(plan) => {
                 measurements.plan("reused");
-                plan.run_through(&self.shared, held, &measurements, progress)
+                let outcome = plan.run_through(&self.shared, held, &measurements, progress);
+                (outcome, plan.name().map(str::to_owned))
             }
             None => {
                 let plan = self.compile_observed(request, &measurements, progress);
@@ -413,11 +414,11 @@ impl Engine {
                         == Some(&identity);
                     plans.replace(identity, stable.then_some(&plan));
                 }
-                outcome
+                (outcome, plan.name().map(str::to_owned))
             }
         };
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).named(name.as_deref()))
     }
 
     /// A project-run specification that did not build, with the findings
@@ -560,6 +561,8 @@ pub struct Build {
     run_report: Option<Table>,
     project_failures: Option<Vec<AttemptFailure>>,
     interrupt: Option<FunctionError>,
+    /// The specification's dataset name, once its document was read.
+    name: Option<String>,
 }
 
 impl Build {
@@ -580,10 +583,23 @@ impl Build {
             run_report: None,
             project_failures: None,
             interrupt: None,
+            name: None,
         };
         build.refresh();
         build.capture_evidence(shared);
         build
+    }
+
+    /// The same build, naming the dataset its specification declares.
+    pub(crate) fn named(mut self, name: Option<&str>) -> Self {
+        self.name = name.map(str::to_owned);
+        self
+    }
+
+    /// The specification's dataset name, its `domain`, once its document was
+    /// read.
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     fn refresh(&mut self) {
@@ -902,6 +918,12 @@ impl DefineBuild {
     /// Count resource reads captured while composing.
     pub fn capture_reads(&self) -> usize {
         self.inner.capture_reads()
+    }
+
+    /// The transport files of a section that composed: every artifact but
+    /// its define.xml, which comes last (JSON-14).
+    pub(crate) fn transports(&self) -> usize {
+        self.inner.artifacts().len().saturating_sub(1)
     }
 
     /// Open, without writing, every file `save` would write, against the
