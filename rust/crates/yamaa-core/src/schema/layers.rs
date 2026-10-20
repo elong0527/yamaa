@@ -1,9 +1,9 @@
 //! Ordered layer composition; filesystem graph traversal stays outside the schema core.
 
 use super::{
-    scalar_diagnostic_label, ComposedValue, CompositionOrigin, Document, DocumentNode as N,
-    NormalizationError, NormalizationResource, SchemaContext, SchemaDiagnostic, SchemaOrigin,
-    SchemaSource, SchemaStructure, ValidationError,
+    scalar_diagnostic_label, validation::NullPolicy, ComposedValue, CompositionOrigin, Document,
+    DocumentNode as N, NormalizationError, NormalizationResource, SchemaContext, SchemaDiagnostic,
+    SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 use std::vec;
@@ -114,6 +114,10 @@ struct Run<'a, 'c> {
     diagnostics: &'c mut Vec<SchemaDiagnostic>,
     nodes: Vec<N>,
     origins: Vec<Option<CompositionOrigin>>,
+    /// `Clear` composes 0.5 layers, whose YAML null clears what a layer
+    /// inherits; `Value` composes 1.x layers, which clear only through
+    /// `clear` and in which null is the missing value (LAYER-9).
+    nulls: NullPolicy,
 }
 impl Run<'_, '_> {
     fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
@@ -206,7 +210,8 @@ impl Run<'_, '_> {
         Ok(())
     }
     /// Root fields: keyed collections compose member by member; every other
-    /// field replaces whole, and a null clears it. `parent` is never contributed.
+    /// field replaces whole, and in a 0.5 layer a null clears it. `parent` and
+    /// a 1.x layer's `clear` are never contributed.
     fn root(
         &mut self,
         old: Site<'_>,
@@ -223,7 +228,7 @@ impl Run<'_, '_> {
         for &(key, value) in after {
             let name = new.child(key).text()?;
             let value = new.child(value);
-            if name == "parent" {
+            if name == "parent" || (name == "clear" && !self.nulls.clears()) {
                 changes.push(Change::Remove);
                 continue;
             }
@@ -232,7 +237,7 @@ impl Run<'_, '_> {
                 .find(|field| field.name == name)
                 .ok_or(ValidationError::InvalidDescriptor)?;
             let previous = self.find(old, name)?;
-            if matches!(value.value(), N::Null) {
+            if self.nulls.clears() && matches!(value.value(), N::Null) {
                 if name == "schema_version"
                     || self.schema.descriptors()[field.descriptor]
                         .descriptor
@@ -245,7 +250,8 @@ impl Run<'_, '_> {
                 }
                 continue;
             }
-            let previous = previous.filter(|site| !matches!(site.value(), N::Null));
+            let previous =
+                previous.filter(|site| !self.nulls.clears() || !matches!(site.value(), N::Null));
             let value = match COLLECTIONS
                 .iter()
                 .find(|(collection, _)| *collection == name)
@@ -346,6 +352,7 @@ impl Run<'_, '_> {
                 descriptor,
                 previous.map(|site| (site.document, site.node)),
                 (incoming.document, incoming.node),
+                self.nulls,
             )?;
             changed.push(self.import(composed, previous, incoming)?);
         }
@@ -385,10 +392,33 @@ impl Run<'_, '_> {
     }
 }
 
+/// The path of a member `label` names below `path`: joined with `.` in 0.5
+/// diagnostics, and in the spec path notation of a 1.x specification, which
+/// quotes a key that is not a bare segment (P-CLR-1).
+fn member_path(path: &str, label: &str, nulls: NullPolicy) -> String {
+    if nulls.clears() {
+        format!("{path}.{label}")
+    } else {
+        super::spec_path::join(path, label)
+    }
+}
+
+/// How provenance spells a path: the notation, and the keys it leaves out.
+#[derive(Clone, Copy)]
+struct Notation<'a> {
+    nulls: NullPolicy,
+    /// Keys that shorthand expansion wrote, which a 1.x path names a value
+    /// through without spelling (P-CLR-1): the value is recorded at the path
+    /// of the mapping holding it.
+    transparent: &'a dyn Fn(usize) -> bool,
+}
+
 fn provenance(
     document: &Document,
     origins: &[Option<CompositionOrigin>],
+    notation: Notation<'_>,
 ) -> Result<Vec<LayerProvenance>, NormalizationError> {
+    let nulls = notation.nulls;
     fn record(
         document: &Document,
         node: usize,
@@ -396,6 +426,7 @@ fn provenance(
         origins: &[Option<CompositionOrigin>],
         output: &mut Vec<LayerProvenance>,
         depth: usize,
+        notation: Notation<'_>,
     ) -> Result<(), NormalizationError> {
         let limit = crate::limits::Limits::SEMANTIC_DEPTH;
         if depth > limit {
@@ -413,14 +444,12 @@ fn provenance(
             for &(key, value) in items {
                 let label = scalar_diagnostic_label(&document.nodes()[key])
                     .ok_or(ValidationError::InvalidDescriptor)?;
-                record(
-                    document,
-                    value,
-                    format!("{path}.{label}"),
-                    origins,
-                    output,
-                    depth + 1,
-                )?;
+                let path = if (notation.transparent)(key) {
+                    path.clone()
+                } else {
+                    member_path(&path, &label, notation.nulls)
+                };
+                record(document, value, path, origins, output, depth + 1, notation)?;
             }
         }
         Ok(())
@@ -445,10 +474,11 @@ fn provenance(
                     record(
                         document,
                         node,
-                        format!("{name}.{id}"),
+                        member_path(name, id, nulls),
                         origins,
                         &mut output,
                         0,
+                        notation,
                     )?;
                 }
             }
@@ -469,10 +499,11 @@ fn provenance(
                     record(
                         document,
                         node,
-                        format!("{name}.{id}"),
+                        member_path(name, id, nulls),
                         origins,
                         &mut output,
                         0,
+                        notation,
                     )?;
                 }
             }
@@ -498,51 +529,95 @@ impl SchemaStructure {
         &self,
         layers: &[Document],
     ) -> Result<ComposedLayers, NormalizationError> {
-        let mut document =
-            Document::new(vec![N::Mapping(vec![])], 0).map_err(NormalizationError::Document)?;
-        let mut origins = vec![None];
+        let (mut document, mut origins) = empty()?;
         let mut diagnostics = Vec::new();
         for (layer, input) in layers.iter().enumerate() {
-            let mut run = Run {
-                schema: self,
-                diagnostics: &mut diagnostics,
-                nodes: Vec::new(),
-                origins: Vec::new(),
-            };
-            let root = run.root(
-                Site {
-                    document: &document,
-                    node: document.root(),
-                    origins: Some(&origins),
-                    layer: 0,
-                },
-                Site {
-                    document: input,
-                    node: input.root(),
-                    origins: None,
-                    layer,
-                },
-                0,
+            (document, origins) = compose_step(
+                self,
+                NullPolicy::Clear,
+                &mut diagnostics,
+                (&document, &origins),
+                (layer, input),
             )?;
-            document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
-            origins = run.origins;
         }
-        let provenance = provenance(&document, &origins)?;
-        Ok(ComposedLayers {
-            document,
-            node_origins: origins
-                .into_iter()
-                .map(|origin| LayerNodeOrigin {
-                    layer: origin.map(|origin| origin.input),
-                    origin: SchemaOrigin {
-                        source: SchemaSource::Input,
-                        node: origin.map_or(0, |origin| origin.node),
-                        generated: origin.is_none(),
-                    },
-                })
-                .collect(),
-            provenance,
-            diagnostics,
+        finish(document, origins, diagnostics, NullPolicy::Clear, &|_| {
+            false
         })
     }
+}
+
+/// The accumulated value before the first layer: an empty root, with no
+/// written origin.
+pub(super) fn empty() -> Result<(Document, Vec<Option<CompositionOrigin>>), NormalizationError> {
+    let document =
+        Document::new(vec![N::Mapping(vec![])], 0).map_err(NormalizationError::Document)?;
+    Ok((document, vec![None]))
+}
+
+/// Compose one normalized layer, numbered `layer.0` in contribution order, onto
+/// the accumulated value: keyed collections member by member and every other
+/// root field whole (LAYER-5, LAYER-6). `nulls` says how YAML null composes.
+pub(super) fn compose_step(
+    schema: &SchemaStructure,
+    nulls: NullPolicy,
+    diagnostics: &mut Vec<SchemaDiagnostic>,
+    accumulated: (&Document, &[Option<CompositionOrigin>]),
+    layer: (usize, &Document),
+) -> Result<(Document, Vec<Option<CompositionOrigin>>), NormalizationError> {
+    let (document, origins) = accumulated;
+    let (layer, input) = layer;
+    let mut run = Run {
+        schema,
+        diagnostics,
+        nodes: Vec::new(),
+        origins: Vec::new(),
+        nulls,
+    };
+    let root = run.root(
+        Site {
+            document,
+            node: document.root(),
+            origins: Some(origins),
+            layer: 0,
+        },
+        Site {
+            document: input,
+            node: input.root(),
+            origins: None,
+            layer,
+        },
+        0,
+    )?;
+    let document = Document::new(run.nodes, root).map_err(NormalizationError::Document)?;
+    Ok((document, run.origins))
+}
+
+/// The composed value with the provenance of every contributed path. In 1.x
+/// notation a key for which `transparent` holds is not spelled.
+pub(super) fn finish(
+    document: Document,
+    origins: Vec<Option<CompositionOrigin>>,
+    diagnostics: Vec<SchemaDiagnostic>,
+    nulls: NullPolicy,
+    transparent: &dyn Fn(usize) -> bool,
+) -> Result<ComposedLayers, NormalizationError> {
+    let mut provenance = provenance(&document, &origins, Notation { nulls, transparent })?;
+    // A value named through a shorthand key shares its holder's path.
+    provenance.dedup();
+    Ok(ComposedLayers {
+        document,
+        node_origins: origins
+            .into_iter()
+            .map(|origin| LayerNodeOrigin {
+                layer: origin.map(|origin| origin.input),
+                origin: SchemaOrigin {
+                    source: SchemaSource::Input,
+                    node: origin.map_or(0, |origin| origin.node),
+                    generated: origin.is_none(),
+                },
+            })
+            .collect(),
+        provenance,
+        diagnostics,
+    })
 }

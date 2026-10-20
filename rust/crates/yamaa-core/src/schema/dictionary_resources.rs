@@ -159,7 +159,7 @@ impl Run<'_> {
                 if let N::Sequence(items) = &self.input.nodes()[value] {
                     let child = member.child(*inner);
                     let identity = match child.text() {
-                        "column_class" => Some("name"),
+                        "column_class" | "column_entry" => Some("name"),
                         "row_class" | "intermediate_class" => Some("id"),
                         _ => None,
                     };

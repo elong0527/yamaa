@@ -310,6 +310,14 @@ mod declaration {
             }
         }
 
+        /// The text a resolved specification's root field holds.
+        fn text<'a>(document: &'a yamaa_core::schema::Document, field: &str) -> Option<&'a str> {
+            match &document.nodes()[document.field(document.root(), field)?] {
+                yamaa_core::schema::DocumentNode::Text(value) => Some(value),
+                _ => None,
+            }
+        }
+
         fn source(identity: &str, text: &str) -> Source {
             Source {
                 identity: identity.into(),
@@ -585,7 +593,12 @@ mod declaration {
             let prepared = prepare(&study, "spec.yaml", reads, &closures).unwrap();
             assert_eq!(prepared.layers().len(), 2);
             assert_eq!(prepared.version(), LanguageVersion::new(0));
-            assert!(prepared.normalized().is_none());
+            // The layers compose into one specification without `parent`.
+            assert_eq!(text(prepared.resolved(), "domain"), Some("TEST"));
+            assert_eq!(text(prepared.resolved(), "yamaa"), Some("1.0"));
+            let resolved = prepared.resolved();
+            assert!(resolved.field(resolved.root(), "columns").is_some());
+            assert!(resolved.field(resolved.root(), "parent").is_none());
             // A parent written for 1.1 that uses the 1.1 field, under a 1.0
             // child: each layer at its own version, the chain at the newest.
             study.write(
@@ -608,6 +621,8 @@ mod declaration {
                 ]
             );
             assert_eq!(prepared.version(), LanguageVersion::new(1));
+            // The resolved specification records the newest version.
+            assert_eq!(text(prepared.resolved(), "yamaa"), Some("1.1"));
             // The same field written in the 1.0 child fails in that layer.
             study.write(
                 "spec.yaml",
@@ -707,7 +722,7 @@ mod declaration {
             study.write("alone.yaml", SPEC);
             let prepared = prepare(&study, "alone.yaml", LANGUAGE_VERSION, &closures).unwrap();
             assert_eq!(prepared.layers().len(), 1);
-            assert!(prepared.normalized().is_some());
+            assert_eq!(text(prepared.resolved(), "domain"), Some("TEST"));
             study.write("alone.yaml", BASE);
             let SpecificationError::Entry(error) =
                 prepare(&study, "alone.yaml", LANGUAGE_VERSION, &closures).unwrap_err()

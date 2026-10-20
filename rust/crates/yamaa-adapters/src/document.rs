@@ -6,8 +6,9 @@
 //! the rules at the `yamaa-v0.5.0` tag (#3030 D75). A root that declares
 //! `yamaa` and `type` is a 1.x document: the declared type selects its 1.0
 //! closure, and the document is admitted at the version it declares; a
-//! specification's layers are each admitted at their own version, and the
-//! chain needs the newest (P-VER-1).
+//! specification's layers are each admitted at their own version, the chain
+//! needs the newest (P-VER-1), and the layers compose into one resolved
+//! specification, each layer's `clear` applied before it (LAYER-9).
 //!
 //! Until the engine reads 1.0 files (#3030 D76, P1-9) public calls read no 1.x
 //! version: every 0.5 read refuses a 1.x header through the same header reader
@@ -21,10 +22,14 @@ use crate::specification_source::{
 use crate::yaml_decode::{decode_yaml, DecodedYaml};
 use std::sync::Arc;
 use yamaa_core::inheritance::{self as graph, VersionedChain};
+use yamaa_core::inheritance_preparation::{self as lifecycle, ResolvedVersioned, VersionedError};
 use yamaa_core::language::{
     self, FileType, Header, LanguageVersion, PathBase, Reference, ReferenceFault,
 };
-use yamaa_core::schema::{Document, NormalizationError, NormalizedDocument, SchemaDiagnostic};
+use yamaa_core::schema::{
+    Document, LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument,
+    SchemaDiagnostic,
+};
 
 /// The 1.0 closure of each file type.
 #[derive(Clone, Debug)]
@@ -168,14 +173,15 @@ impl AdmittedDocument {
 }
 
 /// A 1.x specification: its layers, each admitted at its own version, the
-/// version the chain needs, and, for a specification of one layer, its
-/// normalized document. Composing several layers is not part of this
+/// version the chain needs, and the resolved specification they compose into
+/// (LAYER-1), with the provenance of every value. Pruning and dependency
+/// order read the lowered specification and are not part of this
 /// preparation.
 #[derive(Debug)]
 pub struct PreparedSpecification {
     schema: Arc<CapturedSchema>,
     chain: VersionedChain,
-    normalized: Option<NormalizedDocument>,
+    resolved: ResolvedVersioned,
 }
 
 impl PreparedSpecification {
@@ -190,19 +196,69 @@ impl PreparedSpecification {
     pub fn version(&self) -> LanguageVersion {
         self.chain.version
     }
-    pub fn normalized(&self) -> Option<&NormalizedDocument> {
-        self.normalized.as_ref()
+    /// The resolved specification: the layers composed, each layer's `clear`
+    /// applied before it, and normalized at the chain's version, which `yamaa`
+    /// records (LAYER-9, LAYER-14).
+    pub fn resolved(&self) -> &Document {
+        &self.resolved.document
     }
+    /// Parallel to [`PreparedSpecification::resolved`]'s nodes: the layer and
+    /// occurrence each node was written at, or the schema default it came
+    /// from.
+    pub fn origins(&self) -> &[LayerNodeOrigin] {
+        &self.resolved.origins
+    }
+    /// The layer, numbered in contribution order, that contributed each
+    /// written path, keyed members named by identity.
+    pub fn provenance(&self) -> &[LayerProvenance] {
+        &self.resolved.provenance
+    }
+    /// The identity of the layer that wrote the value at `path`, a finding's
+    /// spec path, or the nearest value holding it.
+    pub fn declaring_source(&self, path: &str) -> Option<&str> {
+        Some(&self.declaring_layer(path)?.source.identity)
+    }
+    /// The layer that wrote the value at `path`, or the nearest value
+    /// holding it, as that layer was written.
+    pub fn declaring_layer(&self, path: &str) -> Option<&graph::VersionedLayer> {
+        self.chain
+            .layers
+            .get(declaring_layer(&self.resolved.provenance, path)?)
+    }
+}
+
+/// The layer that contributed `path` or the nearest written path holding it.
+fn declaring_layer(provenance: &[LayerProvenance], path: &str) -> Option<usize> {
+    provenance
+        .iter()
+        .filter(|origin| {
+            path == origin.path
+                || path
+                    .strip_prefix(&origin.path)
+                    .is_some_and(|suffix| suffix.starts_with(['.', '[']))
+        })
+        .max_by_key(|origin| origin.path.len())
+        .map(|origin| origin.layer)
 }
 
 /// Why a 1.x specification is refused.
 #[derive(Debug)]
 pub enum SpecificationError<E> {
-    /// The file is not a specification, or as the one layer of a
-    /// specification it is incomplete.
+    /// The file is not a specification, or the specification its layers
+    /// compose into is not valid at the chain's version: findings in the
+    /// resolved specification, whose provenance names each layer.
     Entry(Error),
     /// A layer fails admission, or its parent cannot be read (LAYER-2, LAYER-4).
     Traversal(graph::Error<SourceFailure<E>>),
+    /// A layer lists in `clear` a value it cannot clear: findings in that
+    /// layer, each `invalid_clear` at its `clear[i]` (LAYER-9).
+    Clear {
+        source: graph::Source,
+        document: Document,
+        findings: Vec<SchemaDiagnostic>,
+    },
+    /// The host could not respell a layer's path from the entry (LAYER-10).
+    Path(SourceFailure<E>),
 }
 
 impl VersionedDocument {
@@ -271,36 +327,50 @@ impl VersionedDocument {
             identity: self.source.identity.clone(),
             display_path,
         };
+        let schema = self.schema.structure();
+        let mut parents = Parents { port };
         let chain = graph::traverse_versioned(
-            self.schema.structure(),
+            schema,
             self.reads,
             entry,
             self.raw.document.clone(),
-            &mut Parents { port },
+            &mut parents,
         )
         .map_err(SpecificationError::Traversal)?;
-        let normalized = match chain.layers.as_slice() {
-            [layer] => {
-                let view = self.schema.structure().at_version(layer.version);
-                match view.normalize_root(&layer.document) {
-                    Ok(normalized) => Some(normalized),
-                    Err(NormalizationError::Invalid(found)) => {
-                        return Err(SpecificationError::Entry(findings(
-                            &self.schema,
-                            self.source,
-                            self.raw.document,
-                            found,
-                        )));
-                    }
-                    Err(error) => return Err(SpecificationError::Entry(Error::Normalize(error))),
-                }
+        let resolved = match lifecycle::prepare_versioned(schema, &chain, &mut parents) {
+            Ok(resolved) => resolved,
+            Err(VersionedError::Clear { layer, findings }) => {
+                let layer = &chain.layers[layer];
+                return Err(SpecificationError::Clear {
+                    source: layer.source.clone(),
+                    document: layer.document.clone(),
+                    findings,
+                });
             }
-            _ => None,
+            Err(VersionedError::Path(error)) => return Err(SpecificationError::Path(error)),
+            Err(VersionedError::Normalize(context)) => {
+                let lifecycle::FailureContext { error, input, .. } = *context;
+                let error = match (error, input) {
+                    (NormalizationError::Invalid(found), Some(input)) => {
+                        findings(&self.schema, self.source, input, found)
+                    }
+                    (error, _) => Error::Normalize(error),
+                };
+                return Err(SpecificationError::Entry(error));
+            }
+            Err(VersionedError::Layer { error, .. }) => {
+                return Err(SpecificationError::Entry(Error::Normalize(error)))
+            }
+            Err(VersionedError::Document(error)) => {
+                return Err(SpecificationError::Entry(Error::Normalize(
+                    NormalizationError::Document(error),
+                )))
+            }
         };
         Ok(PreparedSpecification {
             schema: self.schema,
             chain,
-            normalized,
+            resolved,
         })
     }
 }
@@ -315,6 +385,19 @@ fn host<E>(error: graph::SourceError<E>) -> graph::SourceError<SourceFailure<E>>
     match error {
         graph::SourceError::Unavailable => graph::SourceError::Unavailable,
         graph::SourceError::Raised(error) => graph::SourceError::Raised(SourceFailure::Host(error)),
+    }
+}
+
+impl<P: InheritancePort> lifecycle::PathPort for Parents<'_, P> {
+    fn rebase(
+        &mut self,
+        layer: &graph::Source,
+        entry: &graph::Source,
+        written: &str,
+    ) -> Result<String, Self::Error> {
+        self.port
+            .rebase(layer, entry, written)
+            .map_err(SourceFailure::Host)
     }
 }
 
