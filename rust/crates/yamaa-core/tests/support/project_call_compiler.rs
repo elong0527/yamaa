@@ -7,46 +7,45 @@ use yamaa_core::{
 };
 
 pub fn function(name: &str) -> Function {
-    Function::admit(
-        Language::Python,
-        Definition {
-            name: name.into(),
-            function: format!("project.{name}"),
-            description: "Integer identity.".into(),
-            params: vec![Parameter {
-                name: "x".into(),
-                kind: ValueType::Int,
-                required: true,
-                default: None,
-                accepts_missing: false,
-            }],
-            returns: ColumnType::Int,
-            may_return_missing: false,
-            comparison_decimals: 4,
-            tests: vec![
-                Case {
-                    id: "normal".into(),
-                    covers: vec!["normal".into()],
-                    args: vec![("x".into(), Value::Int(7))],
-                    result: Value::Int(7),
-                },
-                Case {
-                    id: "boundary".into(),
-                    covers: vec!["boundary".into()],
-                    args: vec![("x".into(), Value::Int(i64::MIN))],
-                    result: Value::Int(i64::MIN),
-                },
-                Case {
-                    id: "missing".into(),
-                    covers: vec!["short-circuit-missing:x".into()],
-                    args: vec![("x".into(), Value::Missing)],
-                    result: Value::Missing,
-                },
-            ],
-        }
-        .root(Language::Python),
-    )
-    .unwrap()
+    Function::admit(Language::Python, definition(name).root(Language::Python)).unwrap()
+}
+/// An integer identity named `name`, with the tests its contract needs.
+pub fn definition(name: &str) -> Definition {
+    Definition {
+        name: name.into(),
+        function: format!("project.{name}"),
+        description: "Integer identity.".into(),
+        params: vec![Parameter {
+            name: "x".into(),
+            kind: ValueType::Int,
+            required: true,
+            default: None,
+            accepts_missing: false,
+        }],
+        returns: ColumnType::Int,
+        may_return_missing: false,
+        comparison_decimals: 4,
+        tests: vec![
+            Case {
+                id: "normal".into(),
+                covers: vec!["normal".into()],
+                args: vec![("x".into(), Value::Int(7))],
+                result: Value::Int(7),
+            },
+            Case {
+                id: "boundary".into(),
+                covers: vec!["boundary".into()],
+                args: vec![("x".into(), Value::Int(i64::MIN))],
+                result: Value::Int(i64::MIN),
+            },
+            Case {
+                id: "missing".into(),
+                covers: vec!["short-circuit-missing:x".into()],
+                args: vec![("x".into(), Value::Missing)],
+                result: Value::Missing,
+            },
+        ],
+    }
 }
 pub fn call(name: &str, args: Vec<(&str, Tree)>) -> Tree {
     Tree::map(vec![(

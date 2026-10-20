@@ -13,6 +13,11 @@
 //! into that language's environment and its definitions into
 //! [`Project::functions`]. Each of its paths keeps the environment file's
 //! own spelling, `lock` and `functions.<name>`.
+//!
+//! The 1.0 front end ([`crate::front_end::v1::project`]) shares the lowering
+//! of what both surfaces write alike: codelist sources, the study and
+//! sections, and a definition's parameters and tests. It stays here until
+//! the 0.5 front end goes (P2-13).
 
 use super::sections;
 use super::Positions;
@@ -27,15 +32,28 @@ use crate::project_function_document::{Finding, Kind, Reader};
 use crate::schema::{Document, DocumentNode as N};
 use crate::value::{ColumnType, Value, ValueType};
 
+/// How a definition's written test arguments, results and defaults become
+/// values: a 0.5 definition tags a date or datetime (`{date: ...}`), and a
+/// 1.0 function file writes it as text that the declared parameter or
+/// return type types (P-FN-1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::front_end) enum Values {
+    Tagged,
+    Declared,
+}
+
 /// The metas of one document's nodes, in the arena of the root they lower
 /// into.
-pub(super) struct Metas<'a> {
+pub(in crate::front_end) struct Metas<'a> {
     positions: Option<&'a Positions>,
     paths: &'a mut Paths,
 }
 
 impl<'a> Metas<'a> {
-    pub(super) fn new(positions: Option<&'a Positions>, paths: &'a mut Paths) -> Self {
+    pub(in crate::front_end) fn new(
+        positions: Option<&'a Positions>,
+        paths: &'a mut Paths,
+    ) -> Self {
         Self { positions, paths }
     }
     fn span(&self, node: Option<usize>, inherited: Span) -> Span {
@@ -43,7 +61,7 @@ impl<'a> Metas<'a> {
             .unwrap_or(inherited)
     }
     /// The arena's root, the document's root node.
-    pub(super) fn root(&self, node: usize) -> Meta {
+    pub(in crate::front_end) fn root(&self, node: usize) -> Meta {
         Meta {
             path: self.paths.root(),
             span: self.span(Some(node), Span::UNKNOWN),
@@ -57,10 +75,15 @@ impl<'a> Metas<'a> {
             span: self.span(node, parent.span),
         }
     }
-    pub(super) fn field(&mut self, parent: Meta, name: &'static str, node: Option<usize>) -> Meta {
+    pub(in crate::front_end) fn field(
+        &mut self,
+        parent: Meta,
+        name: &'static str,
+        node: Option<usize>,
+    ) -> Meta {
         self.child(parent, Segment::Field(name), node)
     }
-    pub(super) fn index(&mut self, parent: Meta, index: usize, node: usize) -> Meta {
+    pub(in crate::front_end) fn index(&mut self, parent: Meta, index: usize, node: usize) -> Meta {
         self.child(parent, Segment::Index(index as u32), Some(node))
     }
     /// A list entry with an identity, such as a parameter by its name.
@@ -102,7 +125,7 @@ fn prefix(findings: Vec<Finding>, path: &str) -> Vec<Finding> {
         .collect()
 }
 
-fn text_of(document: &Document, node: usize) -> Option<&str> {
+pub(in crate::front_end) fn text_of(document: &Document, node: usize) -> Option<&str> {
     match document.nodes().get(node) {
         Some(N::Text(text)) => Some(text),
         _ => None,
@@ -167,39 +190,14 @@ pub fn project(
         }
     }
     let mut leaves = Vec::new();
-    let mut codelists = Vec::new();
-    if let Some(list) = document.field(root, "codelists") {
-        let declared = metas.field(meta, "codelists", Some(list));
-        for (index, node) in reader
-            .sequence(root, "codelists", "codelists")
-            .into_iter()
-            .enumerate()
-        {
-            let path = format!("codelists[{index}]");
-            let meta = metas.index(declared, index, node);
-            let source = match document.nodes().get(node) {
-                Some(N::Text(written)) => Some(CodelistSource::File(Text {
-                    text: written.clone(),
-                    meta,
-                })),
-                Some(N::Mapping(_)) => match codelists_at(document, positions, node) {
-                    Ok(source) => Some(CodelistSource::Inline(Box::new(source))),
-                    Err(findings) => {
-                        leaves.extend(prefix(findings, &path));
-                        None
-                    }
-                },
-                _ => {
-                    reader.fault(&path, node, Kind::NormalizedShape);
-                    None
-                }
-            };
-            if let Some(source) = source {
-                codelists.push(CodelistDeclaration { source, meta });
-            }
-        }
-    }
-    let submission = sections::lower(document, root, &mut metas, meta)
+    let codelists = codelist_declarations(
+        document,
+        positions,
+        (&mut reader, &mut metas),
+        (root, meta),
+        &mut leaves,
+    );
+    let submission = sections::lower(document, root, &mut metas, meta, Surface::V0_5)
         .map_err(|_| crate::ast::SubmissionRefused);
     let mut findings = reader.finish();
     findings.extend(leaves);
@@ -216,6 +214,53 @@ pub fn project(
     } else {
         Err(findings)
     }
+}
+
+/// The codelist sources a project file declares in `codelists`, each written
+/// inline or as the path of a codelist file (CT-1, P-TYPE-1). An inline
+/// source is a root of its own; each of its findings, prefixed with its
+/// declaration, goes to `leaves`.
+pub(in crate::front_end) fn codelist_declarations(
+    document: &Document,
+    positions: Option<&Positions>,
+    (reader, metas): (&mut Reader<'_>, &mut Metas<'_>),
+    (root, meta): (usize, Meta),
+    leaves: &mut Vec<Finding>,
+) -> Vec<CodelistDeclaration> {
+    let mut codelists = Vec::new();
+    let Some(list) = document.field(root, "codelists") else {
+        return codelists;
+    };
+    let declared = metas.field(meta, "codelists", Some(list));
+    for (index, node) in reader
+        .sequence(root, "codelists", "codelists")
+        .into_iter()
+        .enumerate()
+    {
+        let path = format!("codelists[{index}]");
+        let meta = metas.index(declared, index, node);
+        let source = match document.nodes().get(node) {
+            Some(N::Text(written)) => Some(CodelistSource::File(Text {
+                text: written.clone(),
+                meta,
+            })),
+            Some(N::Mapping(_)) => match codelists_at(document, positions, node) {
+                Ok(source) => Some(CodelistSource::Inline(Box::new(source))),
+                Err(findings) => {
+                    leaves.extend(prefix(findings, &path));
+                    None
+                }
+            },
+            _ => {
+                reader.fault(&path, node, Kind::NormalizedShape);
+                None
+            }
+        };
+        if let Some(source) = source {
+            codelists.push(CodelistDeclaration { source, meta });
+        }
+    }
+    codelists
 }
 
 /// Lower the environment file a 0.5 project links for `language` into the
@@ -348,7 +393,11 @@ fn parameter_kind(reader: &mut Reader<'_>, parent: usize, path: &str) -> ValueTy
     }
 }
 
-fn column_kind(reader: &mut Reader<'_>, parent: usize, path: &str) -> ColumnType {
+pub(in crate::front_end) fn column_kind(
+    reader: &mut Reader<'_>,
+    parent: usize,
+    path: &str,
+) -> ColumnType {
     let text = reader.text_field(parent, "returns", path);
     match text.as_str() {
         "str" => ColumnType::Str,
@@ -364,7 +413,7 @@ fn column_kind(reader: &mut Reader<'_>, parent: usize, path: &str) -> ColumnType
 }
 
 /// A text field's value and meta, read through `reader` as the field `name`.
-fn text_field(
+pub(in crate::front_end) fn text_field(
     reader: &mut Reader<'_>,
     metas: &mut Metas<'_>,
     document: &Document,
@@ -425,22 +474,17 @@ fn function_at(
         "description",
         "description",
     );
-    let params = parameters(&mut reader, &mut metas, document, at);
+    let params = parameters(&mut reader, &mut metas, document, at, Values::Tagged);
     let returns = column_kind(&mut reader, root, "returns");
     let may_return_missing = reader.boolean(root, "may_return_missing", "may_return_missing");
-    let comparison_decimals = reader
-        .field(root, "comparison_decimals", "comparison_decimals")
-        .map(|node| match reader.scalar(node, "comparison_decimals") {
-            Value::Int(value) => value,
-            _ => {
-                if !reader.has_finding_at("comparison_decimals") {
-                    reader.fault("comparison_decimals", node, Kind::NormalizedShape);
-                }
-                0
-            }
-        })
-        .unwrap_or_default();
-    let tests = cases(&mut reader, &mut metas, document, at);
+    let comparison_decimals = comparison_decimals(&mut reader, root);
+    let tests = cases(
+        &mut reader,
+        &mut metas,
+        document,
+        at,
+        (&params, returns, Values::Tagged),
+    );
     let findings = reader.finish();
     if !findings.is_empty() {
         return Err(findings);
@@ -463,11 +507,53 @@ fn function_at(
     })
 }
 
-fn parameters(
+/// `comparison_decimals`, which the schema defaults.
+pub(in crate::front_end) fn comparison_decimals(reader: &mut Reader<'_>, root: usize) -> i64 {
+    reader
+        .field(root, "comparison_decimals", "comparison_decimals")
+        .map(|node| match reader.scalar(node, "comparison_decimals") {
+            Value::Int(value) => value,
+            _ => {
+                if !reader.has_finding_at("comparison_decimals") {
+                    reader.fault("comparison_decimals", node, Kind::NormalizedShape);
+                }
+                0
+            }
+        })
+        .unwrap_or_default()
+}
+
+/// The value written at `node`, as `values` reads a definition's values;
+/// `kind` is the type the definition declares for it, if any.
+fn value(
+    reader: &mut Reader<'_>,
+    node: usize,
+    path: &str,
+    (values, kind): (Values, Option<ValueType>),
+) -> Value {
+    match values {
+        Values::Tagged => reader.scalar(node, path),
+        Values::Declared => reader.declared(node, path, kind),
+    }
+}
+
+/// The value type a column type's values have.
+fn value_type(kind: ColumnType) -> ValueType {
+    match kind {
+        ColumnType::Str => ValueType::Str,
+        ColumnType::Int => ValueType::Int,
+        ColumnType::Float => ValueType::Float,
+        ColumnType::Date => ValueType::Date,
+        ColumnType::DateTime => ValueType::DateTime,
+    }
+}
+
+pub(in crate::front_end) fn parameters(
     reader: &mut Reader<'_>,
     metas: &mut Metas<'_>,
     document: &Document,
     (root, meta): (usize, Meta),
+    values: Values,
 ) -> Vec<Parameter> {
     let list = metas.field(meta, "params", document.field(root, "params"));
     reader
@@ -485,9 +571,14 @@ fn parameters(
             let name = text_field(reader, metas, document, at, "name", &format!("{path}.name"));
             let kind = parameter_kind(reader, node, &format!("{path}.type"));
             let required = reader.boolean(node, "required", &format!("{path}.required"));
-            let default = document
-                .field(node, "default")
-                .map(|value| reader.scalar(value, &format!("{path}.default")));
+            let default = document.field(node, "default").map(|written| {
+                value(
+                    reader,
+                    written,
+                    &format!("{path}.default"),
+                    (values, Some(kind)),
+                )
+            });
             let accepts_missing =
                 reader.boolean(node, "accepts_missing", &format!("{path}.accepts_missing"));
             Parameter {
@@ -505,11 +596,14 @@ fn parameters(
         .collect()
 }
 
-fn cases(
+/// The definition's `tests`. A case's arguments are typed by the parameters
+/// they name and its result by `returns`, as `values` reads them.
+pub(in crate::front_end) fn cases(
     reader: &mut Reader<'_>,
     metas: &mut Metas<'_>,
     document: &Document,
     (root, meta): (usize, Meta),
+    (params, returns, values): (&[Parameter], ColumnType, Values),
 ) -> Vec<FunctionTest> {
     let list = metas.field(meta, "tests", document.field(root, "tests"));
     reader
@@ -539,10 +633,19 @@ fn cases(
             if let Some(args_node) = reader.field(node, "args", &format!("{path}.args")) {
                 let declared = metas.field(meta, "args", Some(args_node));
                 if let Some(N::Mapping(items)) = document.nodes().get(args_node) {
-                    for &(key, value) in items {
+                    for &(key, written) in items {
                         let name = reader.text(key, &format!("{path}.args"));
-                        let argument = reader.scalar(value, &format!("{path}.args.{name}"));
-                        let meta = metas.key(declared, &name, Some(value));
+                        let kind = params
+                            .iter()
+                            .find(|parameter| parameter.name.name == name)
+                            .map(|parameter| parameter.kind);
+                        let argument = value(
+                            reader,
+                            written,
+                            &format!("{path}.args.{name}"),
+                            (values, kind),
+                        );
+                        let meta = metas.key(declared, &name, Some(written));
                         args.push((Named { name, meta }, argument));
                     }
                 } else {
@@ -551,7 +654,14 @@ fn cases(
             }
             let result = reader
                 .field(node, "result", &format!("{path}.result"))
-                .map(|node| reader.scalar(node, &format!("{path}.result")))
+                .map(|node| {
+                    value(
+                        reader,
+                        node,
+                        &format!("{path}.result"),
+                        (values, Some(value_type(returns))),
+                    )
+                })
                 .unwrap_or(Value::Missing);
             FunctionTest {
                 id,
@@ -575,34 +685,42 @@ fn codelists_at(
     let mut metas = Metas::new(positions, &mut paths);
     let meta = metas.root(root);
     let mut reader = Reader::new(document);
+    let (standard, codelists) = codelist_source(&mut reader, &mut metas, document, (root, meta));
+    let findings = reader.finish();
+    if !findings.is_empty() {
+        return Err(findings);
+    }
+    Ok(Codelists {
+        header: None,
+        standard,
+        codelists,
+        paths,
+        meta,
+    })
+}
+
+/// The `standard` and `codelists` of the codelist source whose root is
+/// `root`, read through `reader` into `metas`' arena.
+pub(in crate::front_end) fn codelist_source(
+    reader: &mut Reader<'_>,
+    metas: &mut Metas<'_>,
+    document: &Document,
+    (root, meta): (usize, Meta),
+) -> (Option<TerminologyStandard>, Vec<Codelist>) {
     let standard = document.field(root, "standard").map(|node| {
         let meta = metas.field(meta, "standard", Some(node));
         let at = (node, meta);
         TerminologyStandard {
-            name: text_field(
-                &mut reader,
-                &mut metas,
-                document,
-                at,
-                "name",
-                "standard.name",
-            ),
+            name: text_field(reader, metas, document, at, "name", "standard.name"),
             publishing_set: text_field(
-                &mut reader,
-                &mut metas,
+                reader,
+                metas,
                 document,
                 at,
                 "publishing_set",
                 "standard.publishing_set",
             ),
-            version: text_field(
-                &mut reader,
-                &mut metas,
-                document,
-                at,
-                "version",
-                "standard.version",
-            ),
+            version: text_field(reader, metas, document, at, "version", "standard.version"),
             meta,
         }
     });
@@ -620,22 +738,8 @@ fn codelists_at(
             .unwrap_or_default();
         let meta = metas.member(list, index, written, node);
         let at = (node, meta);
-        let id = text_field(
-            &mut reader,
-            &mut metas,
-            document,
-            at,
-            "id",
-            &format!("{path}.id"),
-        );
-        let name = text_field(
-            &mut reader,
-            &mut metas,
-            document,
-            at,
-            "name",
-            &format!("{path}.name"),
-        );
+        let id = text_field(reader, metas, document, at, "id", &format!("{path}.id"));
+        let name = text_field(reader, metas, document, at, "name", &format!("{path}.name"));
         let data_type = match reader
             .text_field(node, "data_type", &format!("{path}.data_type"))
             .as_str()
@@ -650,16 +754,16 @@ fn codelists_at(
         };
         let extensible = reader.boolean(node, "extensible", &format!("{path}.extensible"));
         let alias = optional_text(
-            &mut reader,
-            &mut metas,
+            reader,
+            metas,
             document,
             at,
             "alias",
             &format!("{path}.alias"),
         );
         let format_name = optional_text(
-            &mut reader,
-            &mut metas,
+            reader,
+            metas,
             document,
             at,
             "format_name",
@@ -680,8 +784,8 @@ fn codelists_at(
                         .map(|node| reader.scalar(node, &format!("{path}.value")))
                         .unwrap_or(Value::Missing);
                     let decode = optional_text(
-                        &mut reader,
-                        &mut metas,
+                        reader,
+                        metas,
                         document,
                         at,
                         "decode",
@@ -691,8 +795,8 @@ fn codelists_at(
                         .field(node, "rank")
                         .and_then(|node| reader.integer(node, &format!("{path}.rank")));
                     let alias = optional_text(
-                        &mut reader,
-                        &mut metas,
+                        reader,
+                        metas,
                         document,
                         at,
                         "alias",
@@ -715,24 +819,24 @@ fn codelists_at(
             let at = (external, meta);
             ExternalDictionary {
                 dictionary: text_field(
-                    &mut reader,
-                    &mut metas,
+                    reader,
+                    metas,
                     document,
                     at,
                     "dictionary",
                     &format!("{path}.external.dictionary"),
                 ),
                 version: text_field(
-                    &mut reader,
-                    &mut metas,
+                    reader,
+                    metas,
                     document,
                     at,
                     "version",
                     &format!("{path}.external.version"),
                 ),
                 href: optional_text(
-                    &mut reader,
-                    &mut metas,
+                    reader,
+                    metas,
                     document,
                     at,
                     "href",
@@ -756,17 +860,7 @@ fn codelists_at(
             meta,
         });
     }
-    let findings = reader.finish();
-    if !findings.is_empty() {
-        return Err(findings);
-    }
-    Ok(Codelists {
-        header: None,
-        standard,
-        codelists,
-        paths,
-        meta,
-    })
+    (standard, codelists)
 }
 
 #[cfg(test)]

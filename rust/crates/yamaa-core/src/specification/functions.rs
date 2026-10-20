@@ -14,6 +14,9 @@ pub enum Cause {
     UnknownFunction,
     /// The supplied project links no environment file for the host language.
     UndeclaredEnvironment(crate::project_function::Language),
+    /// The called function's file names no callable for the host language
+    /// (FUNC-1).
+    MissingImplementation(crate::project_function::Language),
     UnknownReference(String),
     RowPhase {
         identifier: String,
@@ -73,6 +76,10 @@ impl FunctionFinding {
             Cause::UndeclaredEnvironment(language) => {
                 context.insert("language".into(), text(language.key()));
                 (C::ProjectEnvironmentMissing, Some("undeclared"))
+            }
+            Cause::MissingImplementation(language) => {
+                context.insert("language".into(), text(language.key()));
+                (C::FunctionImplementationMissing, None)
             }
             Cause::UnknownArgument => (C::InvalidFunctionArgument, Some("unknown_argument")),
             Cause::DuplicateArgument => (C::InvalidFunctionArgument, Some("duplicate_argument")),
@@ -225,6 +232,26 @@ pub(super) fn prepare(
     let mut findings = Vec::new();
     for (request, Request { node, path, .. }) in requests.iter().enumerate() {
         match project_call_document::decode(d, *node, path) {
+            // A 1.0 function file may name no callable for the host: the
+            // call fails here, before any data is read, and no other finding
+            // of it is reported (FUNC-1).
+            Ok(call)
+                if function_index
+                    .get(call.name.as_str())
+                    .is_some_and(|function| !function.implemented()) =>
+            {
+                let function = function_index[call.name.as_str()];
+                findings.push((
+                    request,
+                    invalid(FunctionFinding {
+                        path: format!("{path}.name"),
+                        function: call.name,
+                        argument: None,
+                        node: *node,
+                        cause: Cause::MissingImplementation(function.language()),
+                    }),
+                ));
+            }
             Ok(call) => {
                 origins.push((request, *node, path.clone(), call.name.clone()));
                 calls.push(LocatedCall {
