@@ -2898,6 +2898,24 @@ functions:
                 yamaa_core::json::Value::Object(result.issues()[0].context.clone()),
                 yamaa_adapters::json!({"source":"study/environment.yaml","entry":"study/project.yaml","lock_source":"held/uv.lock","lock":"../uv.lock","package":"project","reason":"distribution_not_identified","expected":[],"actual":null})
             );
+            // A host exception while verifying the lock names no lock
+            // finding: the lock failure stays the original opaque payload.
+            let host = yamaa_adapters::specification_report::build_result(
+                &run,
+                &attempt,
+                report_identity(),
+                &[Classified::Host {
+                    failure: original,
+                    details: yamaa_adapters::project_function_diagnostics::HostDetails::Exception {
+                        class: "OSError",
+                        message: "lock unreadable",
+                    },
+                }],
+            );
+            let Err(Error::Opaque(held)) = host else {
+                panic!("a host fact on the lock failure stays opaque")
+            };
+            assert!(std::ptr::eq(held, original));
             assert_eq!(
                 result.observations()["source_reads"],
                 yamaa_adapters::json!([])
