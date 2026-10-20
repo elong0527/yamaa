@@ -38,8 +38,8 @@ class ToolchainTest(unittest.TestCase):
         )
 
     def test_the_declaration_names_only_what_a_source_build_needs(self):
-        # Both source packages carry rust-toolchain.toml unchanged, and rustup
-        # installs every component it lists for a build inside their bundled
+        # The R source package carries rust-toolchain.toml unchanged, and rustup
+        # installs every component it lists for a build inside its bundled
         # workspace.
         self.assertEqual(
             toolchain.declaration(),
