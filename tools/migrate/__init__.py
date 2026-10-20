@@ -29,6 +29,23 @@ import os
 from pathlib import Path
 
 import yaml
+
+# Tools run from the repository root, whose yaml/ directory holds the
+# specification schemas. Without PyYAML installed, `import yaml` finds that
+# directory as an empty namespace package, and the converter would fail later
+# on a missing attribute; refuse whatever stands in for PyYAML by name.
+if not (hasattr(yaml, "__version__") and hasattr(yaml, "BaseLoader")):
+    found = (
+        getattr(yaml, "__file__", None)
+        or ", ".join(getattr(yaml, "__path__", []))
+        or repr(yaml)
+    )
+    raise ImportError(
+        f"tools.migrate needs PyYAML, but `import yaml` found {found}, "
+        "which is not PyYAML: install the locked tooling environment with "
+        "`uv sync --project python --locked --group tooling --no-install-package yamaa`"
+    )
+
 from tools.migrate import table as table_module
 from tools.migrate.text import compose, value_of
 from tools.migrate.unit import (

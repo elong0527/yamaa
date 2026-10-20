@@ -4,8 +4,10 @@ Only the comparator reads independent expected truth. CSV bytes and typed host
 views compare exactly; Parquet compares logical fields, types, nulls and rows.
 A run's output and its declared run report are the compared tables, and a
 successful build's save() returns the absolute paths of those declared files in
-publication order, the report first (D38, OUTPUT-10). R holds a declared
-integer as a plain double, which must equal that integer exactly.
+publication order, the report first (D38, OUTPUT-10). The runners record each
+path relative to the case's root, so every lane's records read the same on
+every machine, container and operating system. R holds a declared integer as a
+plain double, which must equal that integer exactly.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ import csv
 import datetime as dt
 import json
 import math
-import os
+import posixpath
 import re
 import shutil
 import struct
@@ -829,14 +831,15 @@ def judge_repeats(builds):
     return findings
 
 
-def same_path(actual, expected):
-    """Whether save() reported `expected`: one absolute path with forward
-    slashes, spelled as the host's own filesystem compares it."""
-    return (
-        isinstance(actual, str)
-        and "\\" not in actual
-        and os.path.normcase(actual) == os.path.normcase(expected)
-    )
+def declared_paths(specification, output):
+    """The paths a successful save of `specification` returns, as the runners
+    record them: relative to the case's root, with forward slashes, the
+    declared report before the declared output (D38, OUTPUT-10)."""
+    return [
+        posixpath.normpath(posixpath.join(posixpath.dirname(specification), declared))
+        for declared in (output.get("report"), output.get("path"))
+        if declared is not None
+    ]
 
 
 def compare_example(example, runtime, record, fixtures, observed, expectations=None):
@@ -992,19 +995,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     compared = set()
     for entry, build in zip(entries, builds):
         types, output = declarations(case / entry["specification"])
-        written = [
-            (
-                observed
-                / "work"
-                / case.name
-                / Path(entry["specification"]).parent
-                / declared
-            )
-            .resolve()
-            .as_posix()
-            for declared in (output.get("report"), output.get("path"))
-            if declared is not None
-        ]
+        written = declared_paths(entry["specification"], output)
         for slot, key in (("output", "path"), ("report", "report")):
             declared = output.get(key)
             actual = build["tables"].get(slot)
@@ -1069,11 +1060,9 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             )
         else:
             paths = build.get("paths")
-            if not (
-                isinstance(paths, list)
-                and len(paths) == len(written)
-                and all(map(same_path, paths, written))
-            ):
+            # Recorded paths are text relative to the case, so every lane
+            # compares them alike, letter case and separators included.
+            if paths != written:
                 result["findings"].append(
                     {
                         "saved_paths": entry["specification"],

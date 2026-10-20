@@ -108,6 +108,19 @@ declared_types <- function(spec, columns) {
   if (length(missing)) stop("output columns without a declared type: ", paste(missing, collapse=", "))
   types[columns]
 }
+# The paths a save returned, relative to the case's root, so a record reads
+# the same on every machine, container and operating system. save() returns
+# absolute paths with forward slashes. A path that has a backslash, or that
+# is not below the case, stays as returned, for the comparator to refuse.
+# On Windows, whose file names ignore letter case, the root compares without
+# it, as Python's paths do there.
+relative_paths <- function(paths, case) {
+  root <- paste0(case, "/")
+  fold <- if (.Platform$OS.type == "windows") tolower else identity
+  below <- !grepl("\\", paths, fixed=TRUE) & startsWith(fold(paths), fold(root))
+  paths[below] <- substring(paths[below], nchar(root) + 1L)
+  paths
+}
 issue_rows <- function(frame) lapply(seq_len(nrow(frame)), function(index) list(
   phase=frame$phase[[index]], condition=frame$condition[[index]], rule=frame$rule[[index]],
   spec_paths=as.list(frame$spec_paths[[index]]), context=raw_json(frame$context[[index]])))
@@ -165,7 +178,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     platform=R.version$platform, package_form=Sys.getenv("PUBLIC_CONFORMANCE_PACKAGE_FORM", "installed"),
     evidence=paste0(Sys.getenv("GITHUB_SERVER_URL"), "/", Sys.getenv("GITHUB_REPOSITORY"), "/actions/runs/", Sys.getenv("GITHUB_RUN_ID")),
     table_encoding="str:utf8-hex,float:ieee754-be,int:decimal,date:epoch-days,datetime:epoch-seconds"))
-  observe <- function(spec, built) {
+  observe <- function(spec, built, case) {
     issues <- issue_rows(built$issues)
     output <- built$output
     types <- if (is.null(output)) NULL else declared_types(spec, names(output))
@@ -176,12 +189,12 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
       report=public_table(built$report, report_types))
     # A save returns the paths it wrote, in publication order; a refused save
     # signals yamaa_error with the paths it wrote first. The record keeps the
-    # run's issues.
+    # run's issues, and the paths relative to the case's root.
     paths <- NULL
     saved <- if (length(issues)) FALSE else tryCatch({paths <- built$save(); TRUE},
       yamaa_error=function(error) { paths <<- error$paths; FALSE })
     list(issues=issue_rows(built$issues), tables=tables, saved=saved,
-      paths=if (is.null(paths)) NULL else as.list(paths))
+      paths=if (is.null(paths)) NULL else as.list(relative_paths(paths, case)))
   }
   # The bytes of every regular file in a case; staged links are skipped.
   case_files <- function(case) {
@@ -196,14 +209,14 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
   build_one <- function(case, specification, environment, repeat_run=FALSE) {
     spec <- open_spec(case, specification, environment)
     first <- spec$run()
-    record <- c(list(specification=specification, environment=environment), observe(spec, first))
+    record <- c(list(specification=specification, environment=environment), observe(spec, first, case))
     if (repeat_run) {
       # The repeat pass (#2821): a second run of the same object reuses what
       # the first compiled and must equal it, saving the same bytes.
       record$plan <- plan_of(first)
       before <- case_files(case)
       second <- spec$run()
-      again <- observe(spec, second)
+      again <- observe(spec, second, case)
       after <- case_files(case)
       paths <- sort(union(names(before), names(after)))
       again$plan <- plan_of(second)

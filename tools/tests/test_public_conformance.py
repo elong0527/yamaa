@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import importlib.util
 import io
 import os
 import shutil
@@ -24,6 +25,18 @@ columns:
 """
 
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
+
+
+def installed_runner():
+    """The installed Python conformance runner, loaded from its file; it
+    imports the package only when it runs."""
+    spec = importlib.util.spec_from_file_location(
+        "installed_public_conformance",
+        ROOT / "python/tests/installed/public_conformance.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def repeated(build):
@@ -70,8 +83,9 @@ class PublicConformance(unittest.TestCase):
             "environment": None,
             "issues": [],
             "saved": True,
-            # save() returns the declared file's absolute path (D38).
-            "paths": [candidate.resolve().as_posix()],
+            # save() returns the declared file's absolute path (D38), which
+            # the runners record relative to the case's root.
+            "paths": ["result.csv"],
             "tables": {
                 "output": {
                     "columns": [["ID", "int"], ["VALUE", "str"]],
@@ -84,8 +98,7 @@ class PublicConformance(unittest.TestCase):
 
     def saved(self, *names):
         """The build's save wrote `names` in this order beside the candidate."""
-        work = self.observed / "work/simple"
-        self.build["paths"] = [(work / name).resolve().as_posix() for name in names]
+        self.build["paths"] = list(names)
 
     def verdict(self):
         return judge.compare_example(
@@ -192,12 +205,18 @@ class PublicConformance(unittest.TestCase):
 
     def test_a_successful_save_returns_the_authored_paths_in_order(self):
         path = self.build["paths"][0]
+        # A record keeps no machine's root, so the absolute path that save()
+        # returned is refused on every lane, as is any other spelling.
+        absolute = (self.observed / "work/simple/result.csv").resolve().as_posix()
         for paths in (
             None,
             [],
             [path, path],
-            [path.replace("result.csv", "other.csv")],
-            [path.replace("/", "\\")],
+            ["other.csv"],
+            [absolute],
+            [absolute.replace("/", "\\")],
+            ["./result.csv"],
+            ["Result.csv"],
         ):
             with self.subTest(paths=paths):
                 self.build["paths"] = paths
@@ -207,6 +226,37 @@ class PublicConformance(unittest.TestCase):
                     {"saved_paths": "spec.yaml", "expected": [path], "actual": paths},
                     result["findings"],
                 )
+
+    def test_saved_paths_are_declared_beside_the_entry_from_the_case_root(self):
+        # An entry below the case's root declares its files beside itself;
+        # a parent segment resolves as text, as the engine's canonical path
+        # does. The report comes first.
+        self.assertEqual(
+            judge.declared_paths(
+                "specs/spec.yaml",
+                {"report": "checks.csv", "path": "../out/result.csv"},
+            ),
+            ["specs/checks.csv", "out/result.csv"],
+        )
+        self.assertEqual(judge.declared_paths("spec.yaml", {}), [])
+
+    def test_the_python_runner_records_saved_paths_below_the_case_root(self):
+        relative = installed_runner().relative
+        case = (self.observed / "work/simple").resolve()
+        root = case.as_posix()
+        self.assertEqual(
+            relative([f"{root}/checks.csv", f"{root}/out/result.csv"], case),
+            ["checks.csv", "out/result.csv"],
+        )
+        self.assertIsNone(relative(None, case))
+        self.assertEqual(relative([], case), [])
+        # A path outside the case, or with a backslash, stays as returned.
+        outside = [
+            f"{root}2/result.csv",
+            f"{case.parent.as_posix()}/result.csv",
+            f"{root}/out\\result.csv",
+        ]
+        self.assertEqual(relative(outside, case), outside)
 
     def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
         # Preserve the independent corruption controls from the retired
@@ -1019,7 +1069,6 @@ class PublicConformance(unittest.TestCase):
         candidate = observed / "work/ordered/result.csv"
         candidate.parent.mkdir(parents=True)
         shutil.copyfile(case / "expected/result.csv", candidate)
-        self.build["paths"] = [candidate.resolve().as_posix()]
         example = judge.plan(fixtures)["examples"][0]
         kinds = [v["kind"] for v in example["variants"]["python"]]
         self.assertEqual(
