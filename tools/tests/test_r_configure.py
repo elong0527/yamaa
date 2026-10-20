@@ -3,10 +3,14 @@
 These tests run R/yamaa/tools/configure.R, which configure and configure.win
 run, against fake cargo and rustc commands, and run the engine recipe of the
 Makevars that it writes with make. They need R; `make test-r` runs them.
+One test runs the recipes with the real Cargo of the Rust toolchain that the
+workspace selects; set RUSTUP_TOOLCHAIN to run it with another, such as the
+workspace rust-version.
 """
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -17,13 +21,45 @@ from pathlib import Path
 
 from tools.ci import toolchain
 from tools.packaging.check_cargo_lock import check_r_link
-from tools.paths import ROOT
+from tools.paths import ROOT, WORKSPACE
 from tools.staging import vendor_crates
 
 PACKAGE = ROOT / "R/yamaa"
 RSCRIPT = shutil.which("Rscript")
 MAKE = shutil.which("make")
 SYSTEM_PATH = "/usr/bin:/bin"
+
+
+def rust_toolchain():
+    """The cargo and rustc of the Rust toolchain that the workspace selects,
+    rather than rustup's proxies, and its host target; or None without one.
+
+    Under rustup this is the pinned toolchain unless RUSTUP_TOOLCHAIN names
+    another.
+    """
+    proxy = shutil.which("rustc")
+    if proxy is None:
+        return None
+
+    def output(*arguments):
+        return subprocess.run(
+            [proxy, *arguments],
+            cwd=WORKSPACE,
+            env=os.environ | {"RUSTUP_AUTO_INSTALL": "0"},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+
+    try:
+        sysroot = Path(output("--print", "sysroot").strip())
+        host = re.search(r"^host: (\S+)$", output("-vV"), re.MULTILINE)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    cargo, rustc = sysroot / "bin/cargo", sysroot / "bin/rustc"
+    if host is None or not (cargo.is_file() and rustc.is_file()):
+        return None
+    return cargo, rustc, host.group(1)
 
 
 def tool(directory, name, line, status=0, sysroot=None, record=os.devnull):
@@ -73,6 +109,9 @@ class ConfigureTests(unittest.TestCase):
         self.home = self.root / "home"
         self.home.mkdir()
         self.record = self.root / "cargo-build.txt"
+        # A goal that makes only the engine library.
+        self.goal = self.root / "engine.mk"
+        self.goal.write_text("engine: $(RUST_LIB)\n", encoding="utf-8")
 
     def manifest(self, version):
         manifest = self.package / "src/rust/Cargo.toml"
@@ -139,12 +178,10 @@ class ConfigureTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return "Makevars.win" if windows else "Makevars"
 
-    def build(self, makevars, **environment):
-        """Make the engine library with the Makevars that configure wrote.
-
-        Returns the target directory and the Cargo home that cargo was given,
-        resolved against the directory that it ran in.
-        """
+    def make(self, makevars, *arguments, **environment):
+        """Run make for the engine library with the Makevars that configure
+        wrote, in src/ as R CMD INSTALL does, with `arguments` before the
+        goal."""
         if MAKE is None:
             self.skipTest("make is not installed")
         home = subprocess.run(
@@ -153,11 +190,8 @@ class ConfigureTests(unittest.TestCase):
             text=True,
             check=True,
         ).stdout
-        goal = self.root / "engine.mk"
-        goal.write_text("engine: $(RUST_LIB)\n", encoding="utf-8")
-        self.record.unlink(missing_ok=True)
-        result = subprocess.run(
-            [MAKE, "-f", makevars, "-f", str(goal), "engine"],
+        return subprocess.run(
+            [MAKE, "-f", makevars, "-f", str(self.goal), *arguments, "engine"],
             cwd=self.package / "src",
             env={
                 "PATH": f"{self.bin}:{SYSTEM_PATH}",
@@ -169,11 +203,63 @@ class ConfigureTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+
+    def build(self, makevars, **environment):
+        """Make the engine library with the Makevars that configure wrote.
+
+        Returns the target directory and the Cargo home that cargo was given,
+        resolved against the directory that it ran in.
+        """
+        self.record.unlink(missing_ok=True)
+        result = self.make(makevars, **environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         directory, target, cargo_home = self.record.read_text(
             encoding="utf-8"
         ).splitlines()
         return Path(directory, target).resolve(), Path(directory, cargo_home).resolve()
+
+    def cargo_command(self, makevars):
+        """The words of the engine recipe's cargo command, as make prints it
+        without running anything."""
+        result = self.make(makevars, "-n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # The shell joins a line that ends in a backslash to the next.
+        lines = result.stdout.replace("\\\n", "").splitlines()
+        (command,) = [line for line in lines if " build " in line]
+        return shlex.split(command)
+
+    def bundle(self):
+        """Replace the bundle's workspace with one that Cargo can build: a
+        yamaa-r crate with no dependencies whose static library stands for
+        the engine."""
+        rust = self.package / "src/rust"
+        crate = rust / "yamaa-r"
+        (crate / "src").mkdir(parents=True, exist_ok=True)
+        (rust / "Cargo.toml").write_text(
+            '[workspace]\nmembers = ["yamaa-r"]\nresolver = "2"\n\n'
+            f'[workspace.package]\nrust-version = "{toolchain.minimum()}"\n',
+            encoding="utf-8",
+        )
+        (rust / "Cargo.lock").write_text(
+            'version = 3\n\n[[package]]\nname = "yamaa-r"\nversion = "0.1.0"\n',
+            encoding="utf-8",
+        )
+        (crate / "Cargo.toml").write_text(
+            '[package]\nname = "yamaa-r"\nversion = "0.1.0"\nedition = "2021"\n\n'
+            '[lib]\ncrate-type = ["staticlib"]\n',
+            encoding="utf-8",
+        )
+        (crate / "src/lib.rs").write_text(
+            "pub fn answer() -> i32 {\n    42\n}\n", encoding="utf-8"
+        )
+
+    def outside_package(self):
+        """Every path below the temporary root that is not in the package."""
+        return {
+            path
+            for path in self.root.rglob("*")
+            if not path.is_relative_to(self.package)
+        }
 
     def test_tools_on_the_path_are_reported_and_written_into_makevars(self):
         rustc = tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
@@ -388,6 +474,135 @@ class ConfigureTests(unittest.TestCase):
             result.stdout.splitlines()[-1],
             f"Cargo builds in {shared}, which YAMAA_R_CARGO_TARGET_DIR names",
         )
+
+    def test_yamaa_r_cargo_target_dir_leaves_out_only_the_isolation(self):
+        # Unset, the cargo command carries the settings that keep the build in
+        # the package. Set, as in CI, the build leaves the package anyway, and
+        # the command differs only by its directory and by lacking them, so
+        # inherited Cargo settings apply as they do to any Cargo build.
+        shared = self.root / "shared/target"
+        for windows in (False, True):
+            with self.subTest(windows=windows):
+                # make expands CURDIR to the directory where it runs.
+                own = (
+                    f"{(self.package / 'src').resolve()}/rust/target"
+                    if windows
+                    else "rust/target"
+                )
+                settings = [
+                    "RUSTC_WRAPPER=",
+                    "RUSTC_WORKSPACE_WRAPPER=",
+                    f"CARGO_BUILD_BUILD_DIR={own}",
+                ]
+                options = [
+                    "--config",
+                    "build.rustc-wrapper=''",
+                    "--config",
+                    "build.rustc-workspace-wrapper=''",
+                ]
+                isolated = self.cargo_command(self.configured(windows))
+                cargo = next(
+                    index
+                    for index, word in enumerate(isolated)
+                    if word.endswith(("/cargo", "/cargo.exe"))
+                )
+                self.assertLessEqual(set(settings), set(isolated[:cargo]))
+                self.assertEqual(isolated[-len(options) :], options)
+                makevars = self.configured(
+                    windows, YAMAA_R_CARGO_TARGET_DIR=str(shared)
+                )
+                self.assertEqual(
+                    [
+                        word.replace(str(shared), own)
+                        for word in self.cargo_command(makevars)
+                    ],
+                    [word for word in isolated if word not in settings + options],
+                )
+
+    def test_no_inherited_build_directory_or_rustc_wrapper_reaches_cargo(self):
+        # CRAN's policy admits no writing outside the build tree and the
+        # temporary directory. So unless YAMAA_R_CARGO_TARGET_DIR is set, a
+        # build directory or a rustc wrapper that the caller's environment or
+        # a .cargo/config.toml in a parent directory names must neither move
+        # Cargo's output nor run (#3030 D86). Both recipes run here with a
+        # real Cargo on a one-crate bundle.
+        found = rust_toolchain()
+        if found is None:
+            self.skipTest("no Rust toolchain")
+        cargo, rustc, host = found
+        runs = self.root / "wrapper-runs"
+        wrapper = self.root / "wrapper"
+        wrapper.write_text(
+            f'#!/bin/sh\necho "$*" >> "{runs}"\nexec "$@"\n', encoding="utf-8"
+        )
+        wrapper.chmod(0o755)
+        outside = self.root / "build-dir"
+        parent = self.root / ".cargo/config.toml"
+        parent.parent.mkdir()
+        # Each setting in the environment, or in the parent's configuration.
+        settings = [
+            ({"CARGO_BUILD_BUILD_DIR": str(outside)}, ""),
+            *(
+                ({name: str(wrapper)}, "")
+                for name in (
+                    "RUSTC_WRAPPER",
+                    "RUSTC_WORKSPACE_WRAPPER",
+                    "CARGO_BUILD_RUSTC_WRAPPER",
+                    "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
+                )
+            ),
+            ({}, f'build-dir = "{outside}"'),
+            ({}, f'rustc-wrapper = "{wrapper}"'),
+            ({}, f'rustc-workspace-wrapper = "{wrapper}"'),
+        ]
+        own = self.package / "src/rust/target"
+
+        def run_recipe(makevars, environment, configuration, *arguments):
+            shutil.rmtree(own, ignore_errors=True)
+            shutil.rmtree(outside, ignore_errors=True)
+            runs.unlink(missing_ok=True)
+            parent.write_text(f"[build]\n{configuration}\n", encoding="utf-8")
+            before = self.outside_package()
+            result = self.make(makevars, *arguments, **environment)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return self.outside_package() - before
+
+        for windows in (False, True):
+            makevars = self.configured(windows)
+            self.bundle()
+            # The toolchain's own tools stand in for configure's fake ones.
+            # Makevars.win builds for the host, whose standard library the
+            # toolchain has, with GNU make as on Rtools.
+            variables = [f"CARGO={cargo}", f"RUSTC={rustc}"]
+            library = own / "release/libyamaa_r.a"
+            if windows:
+                variables.append(f"RUST_TARGET={host}")
+                library = own / host / "release/libyamaa_r.a"
+            # Without the isolation, as with YAMAA_R_CARGO_TARGET_DIR set, the
+            # caller's wrapper runs, and the check below would see it.
+            for environment, configuration in (
+                ({"RUSTC_WRAPPER": str(wrapper)}, ""),
+                ({}, f'rustc-wrapper = "{wrapper}"'),
+            ):
+                with self.subTest(
+                    windows=windows, isolation=False, configuration=configuration
+                ):
+                    arguments = [*variables, "ISOLATION_ENV=", "ISOLATION_CONFIG="]
+                    written = run_recipe(
+                        makevars, environment, configuration, *arguments
+                    )
+                    self.assertIn(runs, written)
+            for environment, configuration in settings:
+                with self.subTest(
+                    windows=windows,
+                    environment=environment,
+                    configuration=configuration,
+                ):
+                    written = run_recipe(
+                        makevars, environment, configuration, *variables
+                    )
+                    self.assertTrue(library.is_file())
+                    self.assertEqual(written, set())
 
     def test_a_target_directory_that_make_cannot_read_is_refused(self):
         tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
