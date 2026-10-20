@@ -397,10 +397,8 @@ pub struct PreparedSpecification {
     output_report: Option<String>,
     output_decimals: Option<String>,
     output_order: Vec<(String, bool, bool)>,
-    root_filter: Option<root_filter::RootFilter>,
     keys: Vec<usize>,
-    declarations: Vec<Declaration>,
-    rows: Option<rows::Rows>,
+    rows: rows::Rows,
     verifications: verifications::Verifications,
     column_verifications: Vec<verifications::Verifications>,
     /// The typed tree of the same admitted document, which result typing reads.
@@ -855,15 +853,6 @@ fn prepare_column_declarations(
     Ok(declarations)
 }
 
-type ColumnCatalog = (
-    Catalog,
-    Vec<crate::dataset::SecondarySource>,
-    Vec<Option<crate::dataset::Intermediate>>,
-    Vec<BindFinding>,
-);
-
-type BoundColumnDeclarations = (BTreeMap<usize, Assignment>, Vec<Option<Vec<usize>>>);
-
 impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
@@ -1063,7 +1052,7 @@ impl PreparedSpecification {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
             }
-            let rows = rows::Rows::prepare(
+            let rows = rows::Templates::prepare(
                 d,
                 &lowered,
                 &output,
@@ -1098,10 +1087,8 @@ impl PreparedSpecification {
                 output_report,
                 output_decimals,
                 output_order,
-                root_filter,
                 keys,
-                declarations: Vec::new(),
-                rows: Some(rows),
+                rows: rows::Rows::Templates(rows),
                 verifications,
                 column_verifications,
                 tree,
@@ -1140,10 +1127,8 @@ impl PreparedSpecification {
             output_report,
             output_decimals,
             output_order,
-            root_filter,
             keys,
-            declarations,
-            rows: None,
+            rows: rows::Rows::Implicit(rows::Implicit::new(declarations, root_filter)),
             verifications,
             column_verifications,
             tree,
@@ -1338,12 +1323,12 @@ impl PreparedSpecification {
     /// or root `base` and the driver when no row templates are declared.
     pub fn row_constructions(&self) -> Vec<(String, &str)> {
         match &self.rows {
-            Some(rows) => rows
+            rows::Rows::Templates(rows) => rows
                 .drivers()
                 .enumerate()
                 .map(|(index, driver)| (std::format!("rows[{index}]"), driver))
                 .collect(),
-            None => vec![("base".into(), self.source().name.as_str())],
+            rows::Rows::Implicit(_) => vec![("base".into(), self.source().name.as_str())],
         }
     }
     pub fn output_profile(&self) -> Option<&'static str> {
@@ -1471,27 +1456,7 @@ impl PreparedSpecification {
         if schemas.len() != self.sources.len() {
             return Err(BindError::SourceCount);
         }
-        let source = schemas[self.driver];
-        let plan = if self.rows.is_some() {
-            self.bind_rows_plan(schemas, source)?
-        } else {
-            let (catalog, secondary, intermediates, mut findings) =
-                self.bind_column_catalog(source, schemas)?;
-            let (assignments, dependencies) = self.bind_column_declarations(
-                &catalog,
-                &secondary,
-                &intermediates,
-                &mut findings,
-            )?;
-            self.finish_column_plan(
-                assignments,
-                dependencies,
-                findings,
-                secondary,
-                intermediates,
-                source,
-            )?
-        };
+        let plan = self.rows.bind(self, schemas)?;
         // A plan the stage split cannot schedule is refused before resolution
         // with the operation it does not support.
         let unsupported = aggregates::late_reads(&plan);
@@ -1500,306 +1465,14 @@ impl PreparedSpecification {
         }
         plan.resolve().map_err(BindError::Resolution)
     }
-
-    fn bind_rows_plan(
-        &self,
-        schemas: &[&TableSchema],
-        source: &TableSchema,
-    ) -> Result<DatasetPlan, BindError> {
-        let rows = self.rows.as_ref().ok_or(BindError::Internal)?;
-        let mut findings = Vec::new();
-        let (secondary, intermediates) = self.intermediates.bind(
-            &self.sources,
-            self.driver,
-            schemas,
-            &self.output,
-            &self.keys,
-            Some(&rows.self_columns()),
-            self.project_calls.as_ref(),
-            &self.tree,
-            &mut findings,
-        )?;
-        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
-        rows.bind(
-            self,
-            source,
-            &self.source().name,
-            &self.output,
-            &self.keys,
-            &verifications,
-            self.project_calls.as_ref(),
-            &self.intermediates,
-            secondary,
-            intermediates,
-            findings,
-        )
-        .map(|plan| {
-            plan.with_column_verifications(self.column_verification_groups())
-                .with_warning_verifications(self.warning_verification_paths())
-                .with_output_order(self.bound_output_order())
-                .with_required_matches(self.required_matches.iter().cloned())
-        })
-    }
-
-    fn bind_column_catalog(
-        &self,
-        source: &TableSchema,
-        schemas: &[&TableSchema],
-    ) -> Result<ColumnCatalog, BindError> {
-        let output_fields = self
-            .output
-            .columns()
-            .iter()
-            .map(|c| reference_binding::Field {
-                name: &c.name,
-                column_type: c.kind,
-            })
-            .collect::<Vec<_>>();
-        let source_fields = source
-            .columns()
-            .iter()
-            .map(|c| reference_binding::Field {
-                name: &c.name,
-                column_type: c.kind,
-            })
-            .collect::<Vec<_>>();
-        let catalog = Catalog::compile(
-            &output_fields,
-            &[reference_binding::Dataset {
-                name: &self.source().name,
-                fields: &source_fields,
-            }],
-        )
-        .map_err(BindError::Catalog)?;
-        let mut findings = Vec::new();
-        let (secondary, intermediates) = self.intermediates.bind(
-            &self.sources,
-            self.driver,
-            schemas,
-            &self.output,
-            &self.keys,
-            None,
-            self.project_calls.as_ref(),
-            &self.tree,
-            &mut findings,
-        )?;
-        let catalog = row_drivers::extend_catalog(
-            catalog,
-            source,
-            &self.source().name,
-            &self.keys,
-            &secondary,
-            &self.source().name,
-        )?;
-        Ok((catalog, secondary, intermediates, findings))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_column_declarations(
-        &self,
-        catalog: &Catalog,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<BoundColumnDeclarations, BindError> {
-        let mut assignments = BTreeMap::new();
-        let mut dependencies = Vec::new();
-        for (column, declaration) in self.declarations.iter().enumerate() {
-            // A key that reads other records than its one base record has no
-            // key-phase value to bind (COLUMN-7).
-            let refused = checks::declared::key_record(self, column);
-            if !refused.is_empty() {
-                findings.extend(refused);
-                dependencies.push(Some(Vec::new()));
-                continue;
-            }
-            let declarations_reported = cases::padding_findings(&declaration.operation, findings)?;
-            let mut edges = Vec::new();
-            let path = &declaration.path;
-            let start = findings.len();
-            let expression = BindContext {
-                scope: binder::Scope {
-                    template: binder::Template::Implicit(binder::Implicit {
-                        keys: &self.keys,
-                        key: self.keys.contains(&column),
-                        records: self.record_rows(),
-                    }),
-                    phase: crate::reference_scope::Phase::Column { groups: &[] },
-                    driver: &self.source().name,
-                    available: None,
-                },
-                donors: binder::Donors {
-                    named: &self.intermediates,
-                    secondary,
-                    items: intermediates,
-                },
-                catalog,
-                output: &self.output,
-                project: self.project_calls.as_ref(),
-                tree: &self.tree,
-                edges: &mut edges,
-                findings: &mut *findings,
-                reported: declarations_reported,
-            }
-            .bind(&declaration.operation, path, column)?;
-            if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-                let captured = types::CapturedTypes::new(
-                    &self.intermediates,
-                    catalog,
-                    secondary,
-                    intermediates,
-                );
-                let result =
-                    self.tree
-                        .result_type(declaration.value, ast::Scope::Row, &captured)?;
-                findings.extend(
-                    self.conversion_finding(column, result)
-                        .map(BindFinding::Scalar),
-                );
-            }
-            // Invalid declarations remain in the graph so independent cycles and
-            // key dependencies are still reported after the reference findings.
-            dependencies.push(Some(edges));
-            if let Some(expression) = expression {
-                assignments.insert(
-                    column,
-                    Assignment {
-                        column,
-                        expression,
-                        path: path.clone(),
-                    },
-                );
-            }
-        }
-        Ok((assignments, dependencies))
-    }
-
     /// Without row templates, a key derived by a window gives each retained
     /// base record its own output row: the key table is the records
     /// themselves, not their distinct key combinations.
     pub(super) fn record_rows(&self) -> bool {
-        self.rows.is_none()
-            && self.keys.iter().any(|&key| {
-                self.declarations.get(key).is_some_and(|declaration| {
-                    matches!(declaration.operation, Operation::Window(_))
-                })
-            })
-    }
-    #[allow(clippy::too_many_arguments)]
-    fn finish_column_plan(
-        &self,
-        mut assignments: BTreeMap<usize, Assignment>,
-        dependencies: Vec<Option<Vec<usize>>>,
-        mut findings: Vec<BindFinding>,
-        secondary: Vec<crate::dataset::SecondarySource>,
-        intermediates: Vec<Option<crate::dataset::Intermediate>>,
-        source: &TableSchema,
-    ) -> Result<DatasetPlan, BindError> {
-        let analysis = column_dependencies::analyze(&dependencies, &self.keys, false)
-            .map_err(BindError::DependencyPolicy)?;
-        if !analysis.diagnostics.is_empty() {
-            findings.push(BindFinding::Dependencies {
-                columns: self
-                    .output
-                    .columns()
-                    .iter()
-                    .map(|c| c.name.clone())
-                    .collect(),
-                paths: self.declarations.iter().map(|d| d.path.clone()).collect(),
-                diagnostics: analysis.diagnostics,
-            });
+        match &self.rows {
+            rows::Rows::Implicit(implicit) => implicit.record_rows(&self.keys),
+            rows::Rows::Templates(_) => false,
         }
-        let root_filter = self
-            .root_filter
-            .as_ref()
-            .map(|filter| filter.bind(&self.source().name, source, &mut findings))
-            .transpose()?
-            .flatten();
-        // Every row is built from the base driver, the primary port. A dataset
-        // verification reads its intermediates for every row, as a column does.
-        let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
-        let verification_reads = relation_predicates::predicate_reads(
-            relation_predicates::verification_predicates(&verifications),
-        );
-        let contexts = [(
-            assignments
-                .values()
-                .map(|assignment| &assignment.expression)
-                .chain(&verification_reads)
-                .collect::<Vec<_>>(),
-            vec![0],
-        )];
-        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
-        aggregates::admit_record_keys(&contexts, &mut findings);
-        relation_predicates::admit_reads(
-            assignments
-                .values()
-                .map(|assignment| &assignment.expression)
-                .chain(&verification_reads),
-            &intermediates,
-            &self.intermediates,
-            0,
-            &RowMode::Keys,
-            None,
-            &mut findings,
-        );
-        if !findings.is_empty() {
-            return Err(BindError::Invalid(findings));
-        }
-        let mut key_assignments = Vec::new();
-        let mut columns = Vec::new();
-        for column in analysis.order {
-            let assignment = assignments.remove(&column).expect("analyzed declaration");
-            if self.keys.contains(&column) {
-                key_assignments.push(assignment)
-            } else {
-                columns.push(assignment)
-            }
-        }
-        let record_windows = key_assignments
-            .iter()
-            .any(|a| a.expression.window().is_some());
-        Ok(DatasetPlan::new_with_intermediates(
-            crate::dataset::SourceSchemas {
-                primary: source.clone(),
-                secondary,
-            },
-            intermediates
-                .into_iter()
-                .map(|item| item.expect("validated intermediate"))
-                .collect(),
-            self.output.clone(),
-            vec![RowTemplate {
-                mode: if record_windows {
-                    RowMode::Records
-                } else {
-                    RowMode::Keys
-                },
-                assignments: key_assignments,
-                filter: root_filter,
-            }],
-            columns,
-            self.keys.clone(),
-            verifications,
-        )
-        .with_column_verifications(self.column_verification_groups())
-        .with_warning_verifications(self.warning_verification_paths())
-        .with_output_order(self.bound_output_order())
-        .with_required_matches(self.required_matches.iter().cloned())
-        .with_conversion_handlers(
-            self.declarations
-                .iter()
-                .filter_map(|declaration| {
-                    declaration
-                        .handler
-                        .as_ref()
-                        .map(|handler| crate::dataset::ConversionHandler {
-                            assignment_path: declaration.path.clone(),
-                            handler: handler.clone(),
-                        })
-                })
-                .collect(),
-        ))
     }
 }
 

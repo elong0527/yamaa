@@ -85,10 +85,308 @@ fn deferred_odm_contexts(
         .collect::<Vec<_>>()
         .into()
 }
+/// How a spec's rows are built: the one implicit template of a spec without
+/// `rows`, or its row templates. Binding takes one route for both
+/// ([`Rows::bind`]), and every derivation binds through one
+/// [`BindContext`].
 #[derive(Debug)]
-pub(super) struct Rows {
+pub(super) enum Rows {
+    Implicit(Implicit),
+    Templates(Templates),
+}
+/// A spec without `rows` builds one implicit template over its base driver
+/// (`yaml/schema.yaml`'s root `filter` is that template's filter). Its rows
+/// are its keys' distinct combinations of the retained base records, or
+/// the records themselves when a window derives a key. Every column binds
+/// in declaration order; a key is computed from one base record and is the
+/// template's row-phase assignment, and every other column completes the
+/// rows in the column phase.
+#[derive(Debug)]
+pub(super) struct Implicit {
+    /// Each column's derivation, in declaration order.
+    declarations: Vec<Declaration>,
+    /// The root filter, which reads only the base driver (ROW-9).
+    filter: Option<root_filter::RootFilter>,
+}
+/// The row templates, and the derivations the column phase completes.
+#[derive(Debug)]
+pub(super) struct Templates {
     templates: Vec<Template>,
     columns: Vec<SharedDeclaration>,
+}
+
+impl Rows {
+    /// Bind every derivation over the rows, after the intermediates: the
+    /// implicit template's columns in declaration order, or each row
+    /// template's derivations and then the column phase. Schemas follow
+    /// authored input order.
+    pub(super) fn bind(
+        &self,
+        prepared: &PreparedSpecification,
+        schemas: &[&TableSchema],
+    ) -> Result<DatasetPlan, BindError> {
+        let source = schemas[prepared.driver];
+        let mut findings = Vec::new();
+        let self_columns = match self {
+            Rows::Implicit(_) => None,
+            Rows::Templates(templates) => Some(templates.self_columns()),
+        };
+        let (secondary, intermediates) = prepared.intermediates.bind(
+            &prepared.sources,
+            prepared.driver,
+            schemas,
+            &prepared.output,
+            &prepared.keys,
+            self_columns.as_deref(),
+            prepared.project_calls.as_ref(),
+            &prepared.tree,
+            &mut findings,
+        )?;
+        let plan = match self {
+            Rows::Implicit(implicit) => {
+                implicit.bind(prepared, source, secondary, intermediates, findings)?
+            }
+            Rows::Templates(templates) => {
+                let verifications =
+                    prepared
+                        .verifications
+                        .bind(prepared, &secondary, &intermediates)?;
+                templates.bind(
+                    prepared,
+                    source,
+                    &prepared.source().name,
+                    &prepared.output,
+                    &prepared.keys,
+                    &verifications,
+                    prepared.project_calls.as_ref(),
+                    &prepared.intermediates,
+                    secondary,
+                    intermediates,
+                    findings,
+                )?
+            }
+        };
+        Ok(plan
+            .with_column_verifications(prepared.column_verification_groups())
+            .with_warning_verifications(prepared.warning_verification_paths())
+            .with_output_order(prepared.bound_output_order())
+            .with_required_matches(prepared.required_matches.iter().cloned()))
+    }
+}
+
+impl Implicit {
+    pub(super) fn new(
+        declarations: Vec<Declaration>,
+        filter: Option<root_filter::RootFilter>,
+    ) -> Self {
+        Self {
+            declarations,
+            filter,
+        }
+    }
+    /// Each column's derivation, in declaration order.
+    pub(super) fn declarations(&self) -> &[Declaration] {
+        &self.declarations
+    }
+    /// Whether every row is one base record: a window derives a key, so the
+    /// key table is the records themselves, not their distinct key
+    /// combinations.
+    pub(super) fn record_rows(&self, keys: &[usize]) -> bool {
+        keys.iter().any(|&key| {
+            self.declarations
+                .get(key)
+                .is_some_and(|declaration| matches!(declaration.operation, Operation::Window(_)))
+        })
+    }
+    /// Bind each column in declaration order, then order the columns
+    /// (COLUMN-5, COLUMN-6, COLUMN-7), bind the root filter and the dataset
+    /// verifications, and admit what every row reads from its lookups.
+    fn bind(
+        &self,
+        prepared: &PreparedSpecification,
+        source: &TableSchema,
+        secondary: Vec<crate::dataset::SecondarySource>,
+        intermediates: Vec<Option<crate::dataset::Intermediate>>,
+        mut findings: Vec<BindFinding>,
+    ) -> Result<DatasetPlan, BindError> {
+        let base = prepared.source().name.as_str();
+        let keys = &prepared.keys;
+        let catalog = row_drivers::joined_catalog(&prepared.output, source, base, keys, &secondary)?;
+        let records = self.record_rows(keys);
+        let mut assignments = BTreeMap::new();
+        let mut dependencies = Vec::new();
+        for (column, declaration) in self.declarations.iter().enumerate() {
+            // A key that reads other records than its one base record has no
+            // key-phase value to bind (COLUMN-7).
+            let refused = checks::declared::key_record(prepared, column);
+            if !refused.is_empty() {
+                findings.extend(refused);
+                dependencies.push(Some(Vec::new()));
+                continue;
+            }
+            let reported = cases::padding_findings(&declaration.operation, &mut findings)?;
+            let mut edges = Vec::new();
+            let start = findings.len();
+            let expression = BindContext {
+                scope: binder::Scope {
+                    template: binder::Template::Implicit(binder::Implicit {
+                        keys,
+                        key: keys.contains(&column),
+                        records,
+                    }),
+                    phase: Phase::Column { groups: &[] },
+                    driver: base,
+                    available: None,
+                },
+                donors: binder::Donors {
+                    named: &prepared.intermediates,
+                    secondary: &secondary,
+                    items: &intermediates,
+                },
+                catalog: &catalog,
+                output: &prepared.output,
+                project: prepared.project_calls.as_ref(),
+                tree: &prepared.tree,
+                edges: &mut edges,
+                findings: &mut findings,
+                reported,
+            }
+            .bind(&declaration.operation, &declaration.path, column)?;
+            if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
+                let captured = types::CapturedTypes::new(
+                    &prepared.intermediates,
+                    &catalog,
+                    &secondary,
+                    &intermediates,
+                );
+                let result =
+                    prepared
+                        .tree
+                        .result_type(declaration.value, ast::Scope::Row, &captured)?;
+                findings.extend(
+                    prepared
+                        .conversion_finding(column, result)
+                        .map(BindFinding::Scalar),
+                );
+            }
+            // Invalid declarations remain in the graph so independent cycles and
+            // key dependencies are still reported after the reference findings.
+            dependencies.push(Some(edges));
+            if let Some(expression) = expression {
+                assignments.insert(
+                    column,
+                    Assignment {
+                        column,
+                        expression,
+                        path: declaration.path.clone(),
+                    },
+                );
+            }
+        }
+        let analysis = column_dependencies::analyze(&dependencies, keys, false)
+            .map_err(BindError::DependencyPolicy)?;
+        if !analysis.diagnostics.is_empty() {
+            findings.push(BindFinding::Dependencies {
+                columns: prepared
+                    .output
+                    .columns()
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect(),
+                paths: self.declarations.iter().map(|d| d.path.clone()).collect(),
+                diagnostics: analysis.diagnostics,
+            });
+        }
+        let filter = self
+            .filter
+            .as_ref()
+            .map(|filter| filter.bind(base, source, &mut findings))
+            .transpose()?
+            .flatten();
+        // Every row is built from the base driver, the primary port. A dataset
+        // verification reads its intermediates for every row, as a column does.
+        let verifications = prepared
+            .verifications
+            .bind(prepared, &secondary, &intermediates)?;
+        let verification_reads = relation_predicates::predicate_reads(
+            relation_predicates::verification_predicates(&verifications),
+        );
+        let contexts = [(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads)
+                .collect::<Vec<_>>(),
+            vec![0],
+        )];
+        lookup_range::admit(contexts.iter().cloned(), &intermediates, &mut findings);
+        aggregates::admit_record_keys(&contexts, &mut findings);
+        relation_predicates::admit_reads(
+            assignments
+                .values()
+                .map(|assignment| &assignment.expression)
+                .chain(&verification_reads),
+            &intermediates,
+            &prepared.intermediates,
+            0,
+            &RowMode::Keys,
+            None,
+            &mut findings,
+        );
+        if !findings.is_empty() {
+            return Err(BindError::Invalid(findings));
+        }
+        let mut key_assignments = Vec::new();
+        let mut columns = Vec::new();
+        for column in analysis.order {
+            let assignment = assignments.remove(&column).expect("analyzed declaration");
+            if keys.contains(&column) {
+                key_assignments.push(assignment)
+            } else {
+                columns.push(assignment)
+            }
+        }
+        let record_windows = key_assignments
+            .iter()
+            .any(|a| a.expression.window().is_some());
+        Ok(DatasetPlan::new_with_intermediates(
+            crate::dataset::SourceSchemas {
+                primary: source.clone(),
+                secondary,
+            },
+            intermediates
+                .into_iter()
+                .map(|item| item.expect("validated intermediate"))
+                .collect(),
+            prepared.output.clone(),
+            vec![RowTemplate {
+                mode: if record_windows {
+                    RowMode::Records
+                } else {
+                    RowMode::Keys
+                },
+                assignments: key_assignments,
+                filter,
+            }],
+            columns,
+            keys.clone(),
+            verifications,
+        )
+        .with_conversion_handlers(
+            self.declarations
+                .iter()
+                .filter_map(|declaration| {
+                    declaration
+                        .handler
+                        .as_ref()
+                        .map(|handler| crate::dataset::ConversionHandler {
+                            assignment_path: declaration.path.clone(),
+                            handler: handler.clone(),
+                        })
+                })
+                .collect(),
+        ))
+    }
 }
 fn unsupported(operation: &str, path: &str) -> PrepareError {
     PrepareError::Unsupported(vec![UnsupportedFeature {
@@ -877,7 +1175,7 @@ pub(super) struct PhaseDerivation {
     pub handled: bool,
 }
 
-impl Rows {
+impl Templates {
     /// Each row template and its row-phase derivations, in construction order.
     pub(super) fn phases(&self) -> Vec<TemplatePhase<'_>> {
         self.templates
@@ -941,7 +1239,7 @@ impl RowDeclaration {
     }
 }
 
-impl Rows {
+impl Templates {
     /// Each row template's driver name, in construction order.
     pub(super) fn drivers(&self) -> impl Iterator<Item = &str> {
         self.templates
@@ -1710,7 +2008,7 @@ mod tests {
     /// a grouped SRC template overriding neither. Every template filters on
     /// the two bare defaults, so each template needs all three columns
     /// row-phase and the inherited defaults stay shared.
-    fn shared_default_rows() -> Rows {
+    fn shared_default_rows() -> Templates {
         let large = "shared-authored-default ".repeat(256);
         let mut arena = Arena::new();
         let id_default = arena.source_derivation("SRC.ID");
@@ -1802,7 +2100,7 @@ mod tests {
         assert!(findings.is_empty());
         let intermediates = intermediates::Declarations::default();
         let tree = crate::front_end::v0_5::lower_document(&document, None);
-        Rows::prepare(
+        Templates::prepare(
             &document,
             &tree,
             &output,
@@ -1816,7 +2114,7 @@ mod tests {
         .unwrap()
     }
 
-    fn declaration(rows: &Rows, template: usize, column: usize) -> &SharedDeclaration {
+    fn declaration(rows: &Templates, template: usize, column: usize) -> &SharedDeclaration {
         rows.templates[template]
             .declarations
             .iter()
