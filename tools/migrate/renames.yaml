@@ -9,9 +9,10 @@
 # What this file is. It maps every field, registry keyword and enumerated
 # value of today's schemas (yaml/schema*.yaml, 0.5.0) to its 1.0 spelling,
 # or to "removed" with the reason, and lists the fields 1.0 adds. Phase 2's
-# internal converter (tools/migrate/, D35) is driven by it.
-# No tool reads this file yet, and no repository check interprets it beyond
-# the generic YAML, ASCII and rule-citation checks.
+# internal converter (tools/migrate/, D35) is driven by it, and refuses to
+# run unless every transform and `paths` rule named here has one
+# implementation. No repository check interprets it beyond the generic YAML,
+# ASCII and rule-citation checks.
 #
 # Measured at main 1758ad145. Counts are occurrences in parsed documents.
 #
@@ -84,11 +85,11 @@ measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
   entries: 636
-  changes: 64
+  changes: 67
   by_kind_and_decision:
-    keep, decided: 572
+    keep, decided: 569
     new, decided: 21
-    removed, decided: 10
+    removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
     value, decided: 5
@@ -3577,7 +3578,7 @@ entries:
   proposed: '{lock: PATH}'
   decision: decided (D8)
   reason: Path of an environment file becomes the host's lock settings.
-  field_kind: path
+  field_kind: structure
   convert: {action: transform, transform: environment_to_function_files}
   measurement: {bench: 9, rust: 48, hosts: 16, docs: 1, tools: 1, total: 75}
 - id: project.environments_class.r
@@ -3590,7 +3591,7 @@ entries:
   proposed: '{lock: PATH}'
   decision: decided (D8)
   reason: As for python.
-  field_kind: path
+  field_kind: structure
   convert: {action: transform, transform: environment_to_function_files}
   measurement: {bench: 9, rust: 12, hosts: 16, docs: 1, tools: 1, total: 39}
 - id: project.study_class.id
@@ -4188,7 +4189,7 @@ entries:
   decision: decided (D8)
   reason: One language-neutral contract per function (FUNC-4); the Python and R definitions of every benchmark
     pair differ only in `function` (measured).
-  field_kind: structure
+  field_kind: path
   convert: {action: transform, transform: environment_to_function_files}
   measurement: {bench: 16, rust: 35, hosts: 9, docs: 2, tools: 1, total: 63}
 - id: function.function_definition_class.function
@@ -6053,8 +6054,10 @@ entries:
   path: columns[].derivation.impute.minimum_source_precision
   today: year
   type: enumerated value
-  kind: keep
-  decision: decided (D58)
+  kind: removed
+  decision: decided (D61)
+  ref: P-IMP-1
+  reason: 'Removed with the field it belongs to (D61, P-IMP-1).'
   convert: {action: none}
   measurement: {bench: 6, rust: 0, hosts: 0, docs: 0, tools: 0, total: 6}
 - id: spec.impute.minimum_source_precision=month
@@ -6063,8 +6066,10 @@ entries:
   path: columns[].derivation.impute.minimum_source_precision
   today: month
   type: enumerated value
-  kind: keep
-  decision: decided (D58)
+  kind: removed
+  decision: decided (D61)
+  ref: P-IMP-1
+  reason: 'Removed with the field it belongs to (D61, P-IMP-1).'
   convert: {action: none}
   measurement: {bench: 4, rust: 2, hosts: 0, docs: 0, tools: 0, total: 6}
 - id: spec.impute.minimum_source_precision=day
@@ -6073,8 +6078,10 @@ entries:
   path: columns[].derivation.impute.minimum_source_precision
   today: day
   type: enumerated value
-  kind: keep
-  decision: decided (D58)
+  kind: removed
+  decision: decided (D61)
+  ref: P-IMP-1
+  reason: 'Removed with the field it belongs to (D61, P-IMP-1).'
   convert: {action: none}
   measurement: {bench: 10, rust: 4, hosts: 0, docs: 3, tools: 0, total: 17}
 - id: spec.impute.time=first
