@@ -86,8 +86,8 @@ pub(in crate::specification) fn findings(
     }
     checks.intermediates(&mut findings)?;
     match &prepared.rows {
-        None => checks.base(&mut findings)?,
-        Some(rows) => checks.rows(rows, &mut findings)?,
+        rows::Rows::Implicit(_) => checks.base(&mut findings)?,
+        rows::Rows::Templates(rows) => checks.rows(rows, &mut findings)?,
     }
     checks.ranges(&mut findings)?;
     Ok(findings)
@@ -124,7 +124,7 @@ pub(in crate::specification) fn key_record(
     column: usize,
 ) -> Vec<BindFinding> {
     let spec = prepared.tree.spec();
-    if prepared.rows.is_some() || !prepared.keys.contains(&column) {
+    if matches!(prepared.rows, rows::Rows::Templates(_)) || !prepared.keys.contains(&column) {
         return Vec::new();
     }
     let Some(derivation) = spec
@@ -1618,7 +1618,11 @@ impl Checks<'_> {
     /// each scoped to the rows it evaluates on; then the static types and
     /// conversions in binding's order, each template's derivations first;
     /// then each template's cycles and the column phase's order.
-    fn rows(&self, rows: &rows::Rows, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
+    fn rows(
+        &self,
+        rows: &rows::Templates,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
         let spec = self.spec;
         let primary = self.prepared.source().name.as_str();
         let phases = rows.phases();
@@ -1638,8 +1642,11 @@ impl Checks<'_> {
         };
         for derivation in &columns {
             let root = root(derivation)?;
-            let drivers =
-                rows.column_drivers_of(derivation.column, lookups::aggregates(spec, root), primary);
+            let drivers = rows
+                .column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
+                .into_iter()
+                .map(|binding| binding.driver)
+                .collect::<Vec<_>>();
             self.derivation(
                 root,
                 Some(Scope {
@@ -1662,18 +1669,17 @@ impl Checks<'_> {
             {
                 self.grammar(filter, findings)?;
             }
-            let driver = [template.driver];
+            // The scope binding binds the template's derivations in.
+            let bound = template.scope();
             for derivation in &template.derivations {
                 let root = root(derivation)?;
                 // A phase boundary stops binding before the selections.
                 self.defects(root, findings)?;
                 if !super::boundaries::derivation(spec, template, root, findings) {
                     let scope = Scope {
-                        drivers: &driver,
+                        drivers: std::slice::from_ref(&bound.driver),
                         row: Some(template.id),
-                        phase: Some(Phase::Row {
-                            group_by: template.groups.as_deref(),
-                        }),
+                        phase: Some(bound.phase),
                     };
                     self.selections(root, Some(scope), false, findings)?;
                 }
@@ -1748,10 +1754,10 @@ impl Checks<'_> {
         for derivation in &columns {
             let root = root(derivation)?;
             let mut edges = Vec::new();
-            for driver in
-                rows.column_drivers_of(derivation.column, lookups::aggregates(spec, root), primary)
+            for binding in
+                rows.column_bindings(derivation.column, lookups::aggregates(spec, root), primary)
             {
-                for edge in self.edges(root, driver) {
+                for edge in self.edges(root, binding.driver) {
                     if !edges.contains(&edge) {
                         edges.push(edge);
                     }
@@ -1840,7 +1846,7 @@ impl Checks<'_> {
                 )
             })
             .map(|binding| Evaluated::Name(&binding.name));
-        let Some(rows) = &prepared.rows else {
+        let rows::Rows::Templates(rows) = &prepared.rows else {
             let base = prepared.source().name.as_str();
             let evaluated = spec
                 .columns

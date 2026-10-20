@@ -67,78 +67,15 @@ pub(super) fn declaration_findings(operation: &Declaration, findings: &mut Vec<B
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The source binds as the scope decides; a width defect, reported with the
+/// derivation's declaration defects, leaves nothing to wrap.
 pub(super) fn bind(
     operation: &Declaration,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
     let path = format!("{}.source", operation.path());
-    let bound = rounding::bind_operand(
-        operation.source(),
-        &path,
-        column,
-        keys,
-        catalog,
-        declarations,
-        secondary,
-        intermediates,
-        edges,
-        findings,
-    )?;
-    if operation.has_width_error() {
-        return Ok(None);
-    }
-    let Declaration::Valid(operation) = operation else {
-        return Err(BindError::Internal);
-    };
-    Ok(bound.map(|expression| Expression::StrPad {
-        source: std::boxed::Box::new(Assignment {
-            column,
-            path,
-            expression,
-        }),
-        operation: operation.clone(),
-    }))
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &Declaration,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    let path = format!("{}.source", operation.path());
-    let bound = self_relations::bind_operand(
-        operation.source(),
-        &path,
-        catalog,
-        driver,
-        row,
-        phase,
-        available,
-        edges,
-        findings,
-        output,
-        named,
-        secondary,
-        intermediates,
-    )?;
+    let bound = cx.operand(operation.source(), &path)?;
     if operation.has_width_error() {
         return Ok(None);
     }
