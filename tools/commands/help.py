@@ -23,7 +23,7 @@ HELP = """yamaa repository commands (run from the repository root)
                     and spelling.
   check-equivalence Executor equivalence gate: both hosts built from the checkout for
                     public benchmark conformance, installed Python suites, R CMD check.
-                    Needs what test-python and test-r need. Not part of CI.
+                    Needs what test-python and test-r need. CI runs it on qualifying PRs.
   probe-executor    Time the executor probe on a release build. Not part of CI.
   docs-test         Canonical page and benchmark dashboard tests.
   docs-generate     Generate benchmark dashboards from current authored data.

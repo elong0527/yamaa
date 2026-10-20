@@ -3,7 +3,8 @@ name: CI
 # Pull requests are the gate. Main is checked on a schedule rather than after
 # every merge; the scheduled runs also save the Rust caches that pull requests
 # restore. Release branches are checked on each push. This workflow owns the
-# four development checks; release-compatibility.yml owns compatibility builds.
+# development checks and equivalence gate; release-compatibility.yml owns
+# compatibility builds.
 on:
   pull_request:
   push:
@@ -55,6 +56,63 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
+  equivalence:
+    # The engine gate: fresh builds of both hosts must reproduce every
+    # benchmark's expected bytes and every negative benchmark's first issue.
+    # Run by default, including new build/configuration inputs. Only changes
+    # confined to the documentation paths below pass without running, so
+    # branch protection can require this job on every pull request.
+    # Scheduled runs leave it out: the gate rebuilds both hosts.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Decide whether the diff reaches the gate's paths
+        id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != pull_request ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::The equivalence gate must run on the pull-request head."
+            exit 1
+          fi
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          changed=$(git diff --no-renames --name-only "$base" "$HEAD_SHA" -- . \
+            ':(top,exclude)README.md' \
+            ':(top,exclude)CONTRIBUTING.md' \
+            ':(top,exclude)AGENTS.md' \
+            ':(top,exclude,glob)docs/**/*.md')
+          if [ -n "$changed" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The diff changes only documentation, so the equivalence gate did not run."
+          fi
+      # The gate builds both hosts from the checkout and ends with
+      # R CMD check --as-cran, so it needs what the r job needs.
+      - uses: ./.github/actions/setup
+        if: steps.paths.outputs.run == 'true'
+        with:
+          r: check
+          package: tools
+      - name: Install the programs that CRAN's checks use
+        if: steps.paths.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
+      - if: steps.paths.outputs.run == 'true'
+        run: make check-equivalence
   r:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
