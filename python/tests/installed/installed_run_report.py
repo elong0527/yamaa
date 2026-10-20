@@ -24,7 +24,7 @@ TRUTH = load_truth(__file__, "verification-logs")
 ROOT = Path(__file__).with_name("specification-original")
 CASE = TRUTH["case_name"]
 # The case declares `output.report` and `output.path`; the run report is
-# written first, then the primary artifact (REQ-0757).
+# written first, then the primary artifact (OUTPUT-10).
 NAMES = ("adsl-checks.csv", "adsl.csv")
 REPORT, OUTPUT = NAMES
 
@@ -154,7 +154,7 @@ class RunReport(unittest.TestCase):
             # The failed run's report, from the independent golden of the
             # successful run: the run row records the failure and has no
             # output count, a failed run has no column rows, and only the
-            # checks of the failed stage have rows (REQ-0392, REQ-0393).
+            # checks of the failed stage have rows (CHECK-24, CHECK-23).
             golden = (case / "expected" / REPORT).read_text(encoding="utf-8")
             header, _, source, rows, _, _, not_missing, violated, *_ = (
                 golden.splitlines(keepends=True)

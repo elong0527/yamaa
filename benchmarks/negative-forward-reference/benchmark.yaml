@@ -4,6 +4,6 @@ domain: ADLB
 conformance:
   metamorphic:
     empty_child:
-      reason: 'by design: REQ-0643 orders composed columns, so the empty child builds
+      reason: 'by design: LAYER-13 orders composed columns, so the empty child builds
         instead of reporting the parent''s forward reference'
       permanent: true

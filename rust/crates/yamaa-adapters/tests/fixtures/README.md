@@ -107,9 +107,9 @@ The Unix publisher receives an absolute file target explicitly selected by its c
 
 An exclusive nonblocking selected-parent lock coordinates native publishers for the duration of staging, replacement and cleanup. A refusal preserves the prior target and creates no temporary entry. Explicit saves intentionally replace the target currently present; later completed saves win, including when several retained publisher handles select the same target. This is replacement authority rather than a compare-and-swap API. Writers outside the native protocol do not participate in its advisory lock.
 
-The candidate is written into an exclusive private staging directory beneath the selected parent. The adapter verifies its owner, 0700 mode and opened identity, retains its descriptor, creates the candidate exclusively with owner-only mode 0600, writes/flushed/syncs its complete bytes and closes the file. Candidate identity checks and the final rename use that retained private descriptor. Swapping the staging directory entry in the parent therefore cannot substitute the candidate. Failure paths perform explicit fallible cleanup before returning the publication error. Cleanup verifies the held candidate identity and the observed staging-entry identity before removal. An unconfirmed or substituted entry is preserved. A cleanup failure retains the original operation error, its own cause and the staging location in the returned error. The reported location names the captured parent; outside renames can move that directory. Drop supplies only a final best-effort retry for unwinding and after commit. No fallible publication result follows successful replacement. REQ-0752 and REQ-0753 now explicitly permit this protected staging namespace on the target filesystem.
+The candidate is written into an exclusive private staging directory beneath the selected parent. The adapter verifies its owner, 0700 mode and opened identity, retains its descriptor, creates the candidate exclusively with owner-only mode 0600, writes/flushed/syncs its complete bytes and closes the file. Candidate identity checks and the final rename use that retained private descriptor. Swapping the staging directory entry in the parent therefore cannot substitute the candidate. Failure paths perform explicit fallible cleanup before returning the publication error. Cleanup verifies the held candidate identity and the observed staging-entry identity before removal. An unconfirmed or substituted entry is preserved. A cleanup failure retains the original operation error, its own cause and the staging location in the returned error. The reported location names the captured parent; outside renames can move that directory. Drop supplies only a final best-effort retry for unwinding and after commit. No fallible publication result follows successful replacement. OUTPUT-8 now explicitly permits this protected staging namespace on the target filesystem.
 
-Eight native integration tests cover complete/empty/UTF-8 bytes, unchanged old hard-link aliases, path/capacity refusal, directory suffixes, link/directory refusal, retained selected-parent authority after rename, lock refusal with explicit retry, intentional replacement by a later completed save and observed permission failure. DAC tests restore permissions and report privileged bypass. A deterministic adapter unit test swaps the temporary entry immediately before rename; it failed by publishing replacement bytes before correction and now publishes the original checked bytes through the retained descriptor. The lock refusal also failed before correction. Four additional unit cases cover target/staging-name collisions and bounded exhaustion, unconfirmed ownership, a substituted staging entry during failed publication, and an actual cleanup permission failure. The collision failed before correction. Failed cleanup preserves the old target, retains the original error and reports the cleanup cause and canonical staging path; it preserves the substituted directory. Permission tests restore the selected parent and report privileged bypass. REQ-0754 explicitly reports incomplete cleanup caused by external interference or filesystem failure instead of claiming that no residue remains.
+Eight native integration tests cover complete/empty/UTF-8 bytes, unchanged old hard-link aliases, path/capacity refusal, directory suffixes, link/directory refusal, retained selected-parent authority after rename, lock refusal with explicit retry, intentional replacement by a later completed save and observed permission failure. DAC tests restore permissions and report privileged bypass. A deterministic adapter unit test swaps the temporary entry immediately before rename; it failed by publishing replacement bytes before correction and now publishes the original checked bytes through the retained descriptor. The lock refusal also failed before correction. Four additional unit cases cover target/staging-name collisions and bounded exhaustion, unconfirmed ownership, a substituted staging entry during failed publication, and an actual cleanup permission failure. The collision failed before correction. Failed cleanup preserves the old target, retains the original error and reports the cleanup cause and canonical staging path; it preserves the substituted directory. Permission tests restore the selected parent and report privileged bypass. OUTPUT-8 explicitly reports incomplete cleanup caused by external interference or filesystem failure instead of claiming that no residue remains.
 
 The private R bridge registers handles without dereferencing user pointers. Owned build results save through the native engine gate with no source recapture or R publication callback. Installed replay compares complete reports for all seventeen unchanged original results, exact successful CSV bytes, retained Parquet bytes, repeated saves, capture counters and failed-build gates. It also checks bounded raw transport, target spelling and expired handles with Python absent from PATH. The bridge's roxygen comments document these private closures.
 
@@ -138,7 +138,7 @@ services. Key-phase, row-template, secondary and intermediate selection operands
 remain outside this compiler slice. Existing predicate parity gaps remain open.
 
 The unchanged negative-source-trivial-filter benchmark receives a separate full
-report authored from its committed input and REQ-0148 error declaration. Installed
+report authored from its committed input and LOOKUP-8 error declaration. Installed
 hosts compare the complete report with new and cached captures and retained save
 gates. It is private-route evidence; the assisted inventory remains unchanged.
 
@@ -194,8 +194,8 @@ asserted or ones read from the documents by hand; no Rust output generated them.
 ## odm_deferred
 # Deferred ODM defaults
 
-Seven independently authored reports and CSV artifacts retain REQ-1265 through
-REQ-1278 semantics when a column default depends on a completed row-number window.
+Seven independently authored reports and CSV artifacts retain NAME-7 to
+NAME-13 semantics when a column default depends on a completed row-number window.
 They cover record occurrence scope, missing items, group hierarchy scope,
 selectors followed by source-only predicates, an unselected CASE branch, and
 complete ambiguity context with the authored row-template identity. Record
@@ -209,10 +209,10 @@ unchanged. The same fixture is staged for installed Python and standalone R.
 ## odm_reads
 # Independently authored ODM reads
 
-These fourteen literal reports and CSV artifacts follow REQ-1265 through
-REQ-1278.
+These fourteen literal reports and CSV artifacts follow NAME-7 to
+NAME-13.
 Eight separate complete preflight failures in `odm_preflight.json` also cover
-REQ-1295.
+INPUT-4.
 They were authored independently of the new Rust evaluator; no native output
 generated their expectations. Historical benchmark expected files are unchanged.
 
@@ -281,7 +281,7 @@ column verifications remain unsupported.
 
 `original_column_matches.json` holds sixteen independently authored complete reports for raw YAML and captured CSV. Every field and six successful exact CSV artifacts were enumerated and compared with actual reference Python execution before the candidate was exercised. Candidate observations never write expected truth. Only backend and runtime/engine versions are normalized.
 
-Search is unanchored unless the authored pattern supplies anchors. Missing values pass. Unicode scalar matching retains the portable contract; the lookahead and backreference cases fall outside the portable subset and are deferred invalid patterns. Wrong column kinds and invalid syntax are deferred until the owning converted column checkpoint, even for empty input; earlier conversion failures take precedence. A held record survives a later conversion failure. Compound cases pin an earlier invalid pattern and a repeated verification ID before a later pattern that exceeds compilation policy: the earlier REQ-0827/REQ-0398 remains deferred at its owning checkpoint. Later declaration vocabulary is still scanned before study capture, while unreachable payload compilation stops. Invalid pattern findings contain only the original pattern at the pattern path and keep earlier completed records.
+Search is unanchored unless the authored pattern supplies anchors. Missing values pass. Unicode scalar matching retains the portable contract; the lookahead and backreference cases fall outside the portable subset and are deferred invalid patterns. Wrong column kinds and invalid syntax are deferred until the owning converted column checkpoint, even for empty input; earlier conversion failures take precedence. A held record survives a later conversion failure. Compound cases pin an earlier invalid pattern and a repeated verification ID before a later pattern that exceeds compilation policy: the earlier TEXT-6/CHECK-3 remains deferred at its owning checkpoint. Later declaration vocabulary is still scanned before study capture, while unreachable payload compilation stops. Invalid pattern findings contain only the original pattern at the pattern path and keep earlier completed records.
 
 An additional reference assessment found that empty patterns fail schema minimum length before source capture; it is outside this checkpoint fixture. The unchanged negative-sex-code and negative-matches-bad-pattern documents have separately authored full reports. Existing committed expected CSV and error files are unchanged.
 
@@ -307,8 +307,7 @@ Ordinary-column wrappers compile handlers into the existing core `ConversionHand
 # Original mapping and cut truth
 
 These twenty authored specifications and complete reports were written from
-REQ-0304, REQ-0306, REQ-0334, REQ-0343 through REQ-0347, REQ-0360,
-REQ-0361, REQ-0364, REQ-0709, REQ-0710, REQ-0714, REQ-1110 and REQ-1118.
+COLUMN-10, COLUMN-11, COLUMN-14, EXPR-11, EXPR-12 and EXPR-13.
 No candidate or reference evaluator authored an expected value. The truth owns
 source bytes, typed observations, declared zero/reached handler counts, failure
 identity and geometry, and repeated exact CSV publication. It covers roots,
@@ -340,8 +339,8 @@ This extends existing conversion recovery without changing engine evaluation. Ru
 
 Sixteen independently authored original YAML documents, source records, complete
 reports, handler counts and exact CSV bytes cover scalar driver and secondary
-source bindings. The truth was written from REQ-0075, REQ-0127, REQ-0150-0152 and
-REQ-0345/0353-0356. No candidate or reference execution generated the expectations.
+source bindings. The truth was written from COLUMN-2, COLUMN-11, COLUMN-12, COLUMN-14,
+LOOKUP-1 and LOOKUP-10. No candidate or reference execution generated the expectations.
 
 Cases cover eligibility before ordered selection, stable first/last ties, explicit
 null placement with descending order, empty matches with zero handler counts,
@@ -353,7 +352,7 @@ invalid absence replacements with both handler and conversion context. Successfu
 with fresh attempt-local choices and handler counts. Negative results cannot save.
 
 The source.condition wording in issue #1980 has no grammar definition.
-`yaml/schema_expression_core.yaml` source_binding_class and REQ-0093-0095/0351-0355
+`yaml/schema_expression_core.yaml` source_binding_class, NAME-6 and COLUMN-12
 define variable, filter, order_by, keep and absent. Condition belongs to flag_class.
 Existing unknown-field schema diagnostics remain authoritative. Single-value
 ordered sources and key-phase source options remain explicitly unsupported in
@@ -385,7 +384,7 @@ original-document use case; it does not qualify the replacement public API.
 ## predicate_diagnostics
 # Original predicate diagnostic truth
 
-The malformed window filter `ID >` was independently authored and captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Its complete failed report pins REQ-0188, the authored filter path, character position 4 and one captured/ingested `ID,V\n1,2\n` source. Rust and both installed hosts preserve this report after dropping preparation, without recapture or successful save.
+The malformed window filter `ID >` was independently authored and captured from the unchanged Python reference on 2026-10-07, based on merged `c6bbdc1ae315c6b9c86ff8688cc56ed765f4093c`. Its complete failed report pins FORMULA-1, the authored filter path, character position 4 and one captured/ingested `ID,V\n1,2\n` source. Rust and both installed hosts preserve this report after dropping preparation, without recapture or successful save.
 
 The shared core diagnostic also represents the existing named-selection causes and predicate parser causes, with typed context and canonical registry mappings. Existing independent lookup reports and locked predicate syntax fixtures retain their exact observations. No old expectation is regenerated.
 
@@ -409,17 +408,17 @@ The three previously documented forms now have these statuses:
 
 | Filter | Unchanged reference observation | Native status |
 | --- | --- | --- |
-| `ID LIKE '%' ESCAPE 'xx'` | REQ-0188, position 19; predicate/position context | Approved REQ-0191 under #1973 item 6; position 19 and predicate/position context are preserved. The historical reference citation remains recorded. |
-| `STR_CONTAINS(ID, '(')` | REQ-1244, position 17; predicate/position context | Matches the new complete original report; standalone syntax retains regex byte/reason |
-| `ID = DATE '2026-02-30'` | REQ-0188, position 10; predicate/position context | Matches the new complete original report; standalone syntax retains temporal kind/error |
+| `ID LIKE '%' ESCAPE 'xx'` | FORMULA-1, position 19; predicate/position context | Approved FORMULA-7 under #1973 item 6; position 19 and predicate/position context are preserved. The historical reference citation remains recorded. |
+| `STR_CONTAINS(ID, '(')` | FORMULA-8, position 17; predicate/position context | Matches the new complete original report; standalone syntax retains regex byte/reason |
+| `ID = DATE '2026-02-30'` | FORMULA-1, position 10; predicate/position context | Matches the new complete original report; standalone syntax retains temporal kind/error |
 
-REQ-0191 owns invalid ESCAPE literals in `rules/formulas.md`, and the
+FORMULA-7 owns invalid ESCAPE literals in `rules/formulas.md`, and the
 locked predicate syntax fixture already preserves that native mapping. The
-unchanged Python reference was rerun on 2026-10-11 and still reports REQ-0188.
-The delegated decision in #1973 item 6 selects REQ-0191 for new shared execution.
+unchanged Python reference was rerun on 2026-10-11 and still reports FORMULA-1.
+The delegated decision in #1973 item 6 selects FORMULA-7 for new shared execution.
 This disposes of the citation difference without rewriting either locked
-observation. REQ-0192 now explicitly describes parse-time `invalid_expression`
-under REQ-0188 and retained temporal cause/standalone context, preserving the
+observation. FORMULA-3 now explicitly describes parse-time `invalid_expression`
+under FORMULA-1 and retained temporal cause/standalone context, preserving the
 original rejected date's complete report. Installed qualification remains a
 separate gate; this record does not turn a pending tuple into a pass.
 
@@ -442,7 +441,7 @@ opened. Existing benchmark expectations remain unchanged.
 Both installed hosts and the original-document adapter compare each envelope's
 status and complete findings. The core registry test also reaches all twelve preflight causes through
 actual compilation, including the existing Parquet redundant-type requirement.
-Null requirements and unavailable dataset values are intentional reference truth;
+Null rules and unavailable dataset values are intentional reference truth;
 empty lists and ordered repeated/listed row names must remain intact. This is
 preparation evidence, not public API or `shared_run` inventory qualification.
 
@@ -462,19 +461,19 @@ This extends error-severity column checks over the existing bounded row language
 
 The 27 complete reports in `row_filters.json` were enumerated independently and compared with actual Python reference execution while native imports were forbidden, before native replay. Twenty-one successful reports retain exact CSV and six grammar, source-reference or phase failures retain complete source observations and failed-save gates. Candidate observations never write expected truth. Existing goldens and the assisted inventory remain unchanged.
 
-The compiler admits filters on converted row columns and direct driver fields for ungrouped rows. Group-reference findings precede filter and derivation findings, including a combined failure with both invalid group and filter. Grouped filters read completed candidate columns, including admitted row-local defaults, and reject source-record reads. Grouped filter reads promote admitted defaults into each template's row scope (REQ-1260). Typed phase findings preserve authored paths, identifiers, row IDs and available/required phases, including the reference vocabulary's absent requirement identifier. Executable predicates, conversion order, three-valued truth and filtering remain existing engine services. All row-filter text is charged before compiling any expression.
+The compiler admits filters on converted row columns and direct driver fields for ungrouped rows. Group-reference findings precede filter and derivation findings, including a combined failure with both invalid group and filter. Grouped filters read completed candidate columns, including admitted row-local defaults, and reject source-record reads. Grouped filter reads promote admitted defaults into each template's row scope (SPEC-6). Typed phase findings preserve authored paths, identifiers, row IDs and available/required phases, including the reference vocabulary's absent requirement identifier. Executable predicates, conversion order, three-valued truth and filtering remain existing engine services. All row-filter text is charged before compiling any expression.
 
 Truth covers comparisons, boolean composition, missing/unknown values, empty input, Unicode expressed with valid ASCII YAML escapes, post-conversion reads versus original source values, template declaration order, checks after filtering, grouped MEAN/COUNT and inherited defaults. An initial independently authored template-order expectation was corrected to declaration-order construction before native replay. Grammar and unknown driver-field reports retain existing canonical causes.
 
-Qualified lookup state, broader row derivations and default dependencies remain unsupported. Ungrouped filter promotion of a column default not already selected by a template remains explicitly unsupported pending reconciliation: REQ-1260 names grouped filters as the promoting context, while the reference also promotes ungrouped filter reads. This slice retains that gap without fabricating a phase failure for those forms. Public frontend and warning-severity gates remain open.
+Qualified lookup state, broader row derivations and default dependencies remain unsupported. Ungrouped filter promotion of a column default not already selected by a template remains explicitly unsupported pending reconciliation: SPEC-6 names grouped filters as the promoting context, while the reference also promotes ungrouped filter reads. This slice retains that gap without fabricating a phase failure for those forms. Public frontend and warning-severity gates remain open.
 
 `row_filter_admission.json` now retains two independently authored complete
 failure reports for integer literals behind constant boolean branches. The
-approved REQ-0014 predicate carrier rule requires `integer_overflow` during
+approved VALUE-5 predicate carrier rule requires `integer_overflow` during
 parsing, with the complete predicate and character position. The findings remain
 deferred until source ingestion, preserve the source table and failed-save gate,
 and cannot be hidden by boolean short circuiting. The historical reference
-reports derivation overflow with an absent requirement; that reference remains
+reports derivation overflow with an absent rule; that reference remains
 unqualified for this family. Benchmark expected files are unchanged. Parser and
 executable-plan resource refusals remain implementation policies.
 
@@ -524,7 +523,7 @@ wire projection charges the actual rendered text separately.
 Eight independently authored complete reports exercise the source-port contract
 already qualified in #1773: missing and non-regular resources, at the first or
 second lookup source request, with new or cached prior bytes. The reports are
-constructed from that declared contract and REQ-0785 without invoking the
+constructed from that declared contract and FILE-7 without invoking the
 candidate engine. They are source-port truth, not a claim that the production
 filesystem preflight or original-YAML inventory frontend has qualified.
 
@@ -547,20 +546,20 @@ actual reference Python execution. Only backend/runtime identifiers differ.
 No candidate output generated this truth.
 
 Filters bind after complete ingestion, retain authored paths and inspect every
-identifier, including unreachable branches. REQ-0132 keeps eligibility within
-the source dataset. REQ-0148 rejects filters over single output/intermediate
+identifier, including unreachable branches. LOOKUP-8 keeps eligibility within
+the source dataset. LOOKUP-8 rejects filters over single output/intermediate
 values before parsing that inapplicable filter. The existing core predicate and
 collection services evaluate eligibility before reading candidate values.
 Filtered key assignments, secondary source expressions and source ordering
 remain explicitly unsupported before study effects in this bounded slice.
-The existing predicate requirement/context gaps remain separate and unqualified.
+The existing predicate rule/context gaps remain separate and unqualified.
 
 ## source_inspection
 # Declared-source metadata preflight
 
 Seven independently authored complete reports cover missing/nonregular first and
 later resources, two mixed pairs and all three missing lookup sources. Expected
-issues follow REQ-0785 in source declaration order. The reference Python runner
+issues follow FILE-7 in source declaration order. The reference Python runner
 was independently exercised with actual removed files/directories and compared
 against every field, after identifying only the backend and runtime versions.
 The candidate engine did not produce this truth.
@@ -589,11 +588,11 @@ Fifteen independently enumerated issue payloads inspect known verification decla
 
 Unicode is written with the required escape in ASCII YAML source and decoded into UTF-8 issue text; the source policy is unchanged.
 
-The payload contains only phase, condition, requirement, spec_paths and context; context is JSON text encoded once by the shared Rust adapter. Held checks and data-dependent violations have no static issue. Known deferred declarations appear even where a build would first fail conversion or arithmetic. This inspection does not change build checkpoints, promise successful execution, report source-dependent binding findings, or qualify the public filesystem facade.
+The payload contains only phase, condition, rule, spec_paths and context; context is JSON text encoded once by the shared Rust adapter. Held checks and data-dependent violations have no static issue. Known deferred declarations appear even where a build would first fail conversion or arithmetic. This inspection does not change build checkpoints, promise successful execution, report source-dependent binding findings, or qualify the public filesystem facade.
 
 Both installed hosts compare complete UTF-8 payloads twice while study callbacks are forbidden. A fake engine port separately pins zero study effects and unchanged earlier build failure. The encoder checks the exact byte ceiling, refusal one byte below it and reuse after refusal.
 
-The compound invalid-pattern/later-limit source comes from the independently authored complete build report. Its sole static finding keeps the first pattern path and JSON context without entering study authority. Direct compiled-model coverage also pins an empty verification ID under REQ-0374, including repeated queries.
+The compound invalid-pattern/later-limit source comes from the independently authored complete build report. Its sole static finding keeps the first pattern path and JSON context without entering study authority. Direct compiled-model coverage also pins an empty verification ID under CHECK-3, including repeated queries.
 
 ## run_report_reference
 The `specs/schema-verification-log.json` report comes from the installed,

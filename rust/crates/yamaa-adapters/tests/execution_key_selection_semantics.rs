@@ -88,7 +88,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 /// The head of a specification without row templates whose one input SRC
@@ -124,14 +124,14 @@ fn a_require_pattern_read_from_data_fails_although_when_exempts_the_row() {
     assert_eq!(
         fixture.run(),
         Err(vec![json!({
-            "phase": "validation", "condition": "invalid_expression", "requirement": "REQ-0191",
+            "phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7",
             "spec_paths": ["verifications[1].assert.require"],
             "context": {"reason": "LIKE pattern has a dangling escape"}
         })])
     );
     assert_eq!(
         fixture.report_checks(),
-        ["out.csv,check,verifications[0].row_count,row_count,,,REQ-0385,error,held,,0,1,,{}"]
+        ["out.csv,check,verifications[0].row_count,row_count,,,CHECK-13,error,held,,0,1,,{}"]
     );
 }
 
@@ -152,7 +152,7 @@ fn a_source_filter_is_asked_about_every_record_of_the_key() {
     assert_eq!(
         fixture.run(),
         Err(vec![json!({
-            "phase": "validation", "condition": "invalid_expression", "requirement": "REQ-0191",
+            "phase": "validation", "condition": "invalid_expression", "rule": "FORMULA-7",
             "spec_paths": ["columns.V.derivation.source.filter"],
             "context": {"reason": "LIKE pattern has a dangling escape"}
         })])
@@ -174,7 +174,7 @@ fn a_key_counts_every_distinct_raw_reading_before_conversion() {
     assert_eq!(
         fixture.run(),
         Err(vec![json!({
-            "phase": "derivation", "condition": "multiple_values_per_key", "requirement": "REQ-0075",
+            "phase": "derivation", "condition": "multiple_values_per_key", "rule": "COLUMN-2",
             "spec_paths": ["columns.V.derivation.source"],
             "context": {"identifier": "SRC.V", "value_count": 3, "keys": [{"ID": 1}]}
         })])
@@ -204,12 +204,12 @@ fn records_missing_a_key_reach_the_output_gate_without_collapsing() {
         fixture.run(),
         Err(vec![
             json!({
-                "phase": "output", "condition": "missing_key", "requirement": "REQ-0240",
+                "phase": "output", "condition": "missing_key", "rule": "OUTPUT-3",
                 "spec_paths": ["keys[1]"],
                 "context": {"column": "ID", "missing_count": 2, "keys": [missing.clone(), missing.clone()]}
             }),
             json!({
-                "phase": "output", "condition": "duplicate_key", "requirement": "REQ-0240",
+                "phase": "output", "condition": "duplicate_key", "rule": "OUTPUT-3",
                 "spec_paths": ["keys"],
                 "context": {"duplicate_count": 1, "keys": [missing]}
             }),
@@ -350,7 +350,7 @@ fn a_missing_first_match_value_does_not_skip_a_later_one() {
     assert_eq!(
         padded(&"9".repeat(81)).run(),
         Err(vec![json!({
-            "phase": "engine", "condition": "engine_rejected", "requirement": null,
+            "phase": "engine", "condition": "engine_rejected", "rule": null,
             "spec_paths": [], "context": {"code": "result_projection", "stage": "build"}
         })])
     );

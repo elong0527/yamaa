@@ -72,7 +72,7 @@ fn text(value: &str) -> JsonValue {
 fn check(
     d: Diagnostic,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     path: &str,
     context: &[(&str, &str)],
 ) -> ConditionCode {
@@ -80,9 +80,9 @@ fn check(
         (
             d.definition().phase,
             d.definition().condition,
-            d.definition().requirement
+            d.definition().rule
         ),
-        ("validation", condition, Some(requirement))
+        ("validation", condition, Some(rule))
     );
     assert_eq!(d.spec_paths, [path]);
     assert_eq!(
@@ -194,7 +194,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         findings.remove(0),
         "unknown_field",
-        "REQ-0122",
+        "LOOKUP-11",
         "intermediates[0].columns",
         &[("intermediate", "P"), ("identifier", "D.ABSENT")],
     ));

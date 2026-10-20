@@ -29,8 +29,8 @@ observations <- function(run) yamaa:::.run_observations(run)
 here <- function(name) file.path(normalizePath(getwd(), winslash = "/"), name)
 # One issue row as a list of plain R values, for exact comparison.
 row_of <- function(frame, index = 1L) lapply(frame, function(column) column[[index]])
-issue <- function(condition, requirement, spec_paths, context, phase = "validation")
-  list(phase = phase, condition = condition, requirement = requirement, spec_paths = spec_paths,
+issue <- function(condition, rule, spec_paths, context, phase = "validation")
+  list(phase = phase, condition = condition, rule = rule, spec_paths = spec_paths,
     context = context, source_span = NULL, operand_route = NULL)
 same_issues <- function(frame, expected) {
   actual <- lapply(seq_len(nrow(frame)), function(index) row_of(frame, index))
@@ -83,7 +83,7 @@ qualify_metadata_failure_locations <- function() {
   writeLines(c("schema_version: '1.0'", "environments: {python: environment.yaml, r: environment.yaml}",
     "codelists: [missing-codelists.yaml]", "adam: {specs: [absent-spec.yaml]}"), "project.yaml")
   entry <- here("project.yaml")
-  expected <- Map(function(declaration, path) issue("project_environment_invalid", "REQ-0695",
+  expected <- Map(function(declaration, path) issue("project_environment_invalid", "FUNC-2",
     declaration, paste0('{"cause":"missing","entry":"', entry, '","environment_path":"', declaration,
       '","path":"', path, '"}')),
     c("lock", "functions.id", "codelists[0]"),
@@ -102,7 +102,7 @@ qualify_unavailable_environment_file <- function() {
   writeLines(c("schema_version: '1.0'",
     "environments: {python: missing-environment.yaml, r: missing-environment.yaml}",
     "adam: {specs: [spec.yaml]}"), "project.yaml")
-  expected <- list(issue("project_environment_invalid", "REQ-0695", "environments.r",
+  expected <- list(issue("project_environment_invalid", "FUNC-2", "environments.r",
     paste0('{"cause":"missing","entry":"', here("project.yaml"),
       '","environment_path":"environments.r","path":"missing-environment.yaml"}')))
   for (content in list(NULL, "[entry must not be read")) {
@@ -131,17 +131,17 @@ qualify_own_environment_entry <- function() {
   refuse_activation({
     spec <- project$spec("TEST")
     for (result in list(spec$check(), spec$run())) {
-      same_issues(result$issues, list(issue("project_environment_missing", "REQ-0694",
+      same_issues(result$issues, list(issue("project_environment_missing", "FUNC-1",
         "columns.VALUE.derivation.function.name", paste0("{", context, "}"))))
     }
     # A project result names the specification each issue belongs to.
-    same_issues(project$check()$issues, list(issue("project_environment_missing", "REQ-0694",
+    same_issues(project$check()$issues, list(issue("project_environment_missing", "FUNC-1",
       "columns.VALUE.derivation.function.name",
       paste0('{"cause":"undeclared","entry":"', path,
         '","function":"project_value","language":"r","source":"', path, '"}'))))
     # The same file alone has no project, so the function is unknown.
     same_issues(yamaa_spec("spec.yaml")$check()$issues, list(issue("unknown_project_function",
-      "REQ-0698", "columns.VALUE.derivation.function.name", '{"function":"project_value"}')))
+      "FUNC-4", "columns.VALUE.derivation.function.name", '{"function":"project_value"}')))
   })
   stopifnot(identical(sort(list.files()), c("project.yaml", "spec.yaml")))
   cat("public R reads only its own environments entry\n")
@@ -222,13 +222,13 @@ stopifnot(file.copy(file.path(root, name), work, recursive = TRUE))
 case <- file.path(work, name); setwd(case); unlink("input", recursive = TRUE)
 project <- yamaa_project("project.yaml")
 context <- '"argument":"x","cause":"missing_required_argument","function":"project_value"'
-expected <- list(issue("invalid_function_argument", "REQ-0700",
+expected <- list(issue("invalid_function_argument", "FUNC-5",
   "columns.RESULT.derivation.function.args", paste0("{", context, "}")))
 refuse_activation({
   spec <- project$spec("TEST")
   for (result in list(spec$check(), spec$run())) same_issues(result$issues, expected)
   # A project check names the specification each issue belongs to.
-  same_issues(project$check()$issues, list(issue("invalid_function_argument", "REQ-0700",
+  same_issues(project$check()$issues, list(issue("invalid_function_argument", "FUNC-5",
     "columns.RESULT.derivation.function.args",
     paste0('{"argument":"x","cause":"missing_required_argument","entry":"', here("spec.yaml"),
       '","function":"project_value","source":"', here("spec.yaml"), '"}'))))
@@ -265,7 +265,7 @@ for (declared_lock in c(TRUE, FALSE)) {
 invisible(file.copy(file.path(root, name, "r/environment.yaml"), env, overwrite = TRUE))
 # Captured syntax, rather than the selected host or basename, identifies the lock.
 invisible(file.copy(file.path(root, name, "python/uv.lock"), lock, overwrite = TRUE))
-lock_kind <- function(environment) issue("project_environment_invalid", "REQ-0695", "lock",
+lock_kind <- function(environment) issue("project_environment_invalid", "FUNC-2", "lock",
   paste0('{"actual_lock_kind":"uv","entry":"', here("project.yaml"),
     '","environment_path":"lock","language":"r","reason":"lock_kind_mismatch","source":"',
     here(environment), '"}'))
@@ -283,7 +283,7 @@ stopifnot(identical(row_of(checked), lock_kind("python/environment.yaml")),
 invisible(file.copy(file.path(root, name, "project.yaml"), "project.yaml", overwrite = TRUE))
 writeLines(c("schema_version: '1.0'", "language: r", readtext(env)[-1L]), env)
 checked <- refuse_activation(project$check())$issues
-stopifnot(identical(checked$condition, "unknown_field"), identical(checked$requirement, "REQ-0285"),
+stopifnot(identical(checked$condition, "unknown_field"), identical(checked$rule, "SCHEMA-13"),
   identical(checked$spec_paths, list("language")),
   grepl('"environment_path":"environments.r"', checked$context, fixed = TRUE))
 invisible(file.copy(file.path(root, name, "r/environment.yaml"), env, overwrite = TRUE))
@@ -302,7 +302,7 @@ text <- sub("codelist: IDENTIFIERS", "codelist: ABSENT", text, fixed = TRUE)
 text <- sub("args: {x: SOURCE.VALUE}", "args: {}", text, fixed = TRUE)
 writeLines(text, "spec.yaml"); unlink("input", recursive = TRUE)
 checked <- refuse_activation(project$spec("TEST")$check())
-stopifnot(setequal(checked$issues$requirement, c("REQ-0700", "REQ-0953")))
+stopifnot(setequal(checked$issues$rule, c("FUNC-5", "CT-1")))
 # Independently specified math truth is identical in column, row and nested case
 # contexts. These declarations call no project function.
 for (context in fixture_strings(host_truth[["quota_modes"]])) {
@@ -370,17 +370,17 @@ for (precision in fixture_strings(host_truth[["invalid_csv_precision"]])) {
     identical(checked$issues, failed$issues),
     identical(failed$issues$phase, "validation"),
     identical(failed$issues$condition, "invalid_field_type"),
-    identical(failed$issues$requirement, "REQ-0744"),
+    identical(failed$issues$rule, "CSV-6"),
     identical(failed$issues$spec_paths, list("output.decimals")),
     grepl(paste0('"actual":', precision), failed$issues$context, fixed = TRUE),
     grepl(host_truth[["csv_precision_expected"]], failed$issues$context, fixed = TRUE),
     inherits(tryCatch(failed$save(), error = identity), "yamaa_error"), !file.exists("rounded.csv"))
 }
-for (case in list(c("-9223372036854775809", "rounded.csv", "invalid_field_type", "REQ-0744"),
-                  c("2", "rounded.parquet", "decimals_not_applicable", "REQ-0762"))) {
+for (case in list(c("-9223372036854775809", "rounded.csv", "invalid_field_type", "CSV-6"),
+                  c("2", "rounded.parquet", "decimals_not_applicable", "CSV-6"))) {
   failed <- precision_study(case[[1L]], case[[2L]])$run()
   stopifnot(is.null(failed$output), identical(failed$issues$condition, case[[3L]]),
-    identical(failed$issues$requirement, case[[4L]]),
+    identical(failed$issues$rule, case[[4L]]),
     identical(failed$issues$spec_paths, list("output.decimals")),
     inherits(tryCatch(failed$save(), error = identity), "yamaa_error"), !file.exists(case[[2L]]))
   if (case[[1L]] == "-9223372036854775809") stopifnot(grepl(
@@ -438,7 +438,7 @@ for (attempt in 1:2) {
   # Linked producers supply output contracts only: their own findings are
   # never compiled, and only the entry is checked.
   checked <- refuse_activation(spec$check())
-  same_issues(checked$issues, list(issue("invalid_regex", "REQ-0827",
+  same_issues(checked$issues, list(issue("invalid_regex", "TEXT-6",
     host_truth[["verification_pattern_path"]], '{"pattern":"\u00e9("}')))
 }
 # A link types whatever file the consumer names; a path that differs from the
@@ -449,7 +449,7 @@ stopifnot(nrow(checked$issues) == 0L)
 writeLines(graph_document(host_truth[["incompatible_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- refuse_activation(spec$check())
 stopifnot(identical(checked$issues$condition, "redundant_field_type"),
-  identical(checked$issues$requirement, "REQ-0523"),
+  identical(checked$issues$rule, "INPUT-6"),
   identical(checked$issues$spec_paths, list("input.P.types.ID")),
   !any(file.exists(fixture_strings(host_truth[["unread_graph_files"]]))))
 cat("public R linked checks report only the entry with no study/publication effects\n")
@@ -609,7 +609,7 @@ qualify_aggregate_callback <- function() {
   writeLines(sub(", order_by: [SRC.ID], keep: first", "", spec, fixed = TRUE), "spec.yaml")
   unlink("input.csv")
   issues <- refuse_activation(project$spec("TEST")$check())$issues
-  stopifnot(any(issues$condition == "invalid_derive_step" & issues$requirement == "REQ-1242"))
+  stopifnot(any(issues$condition == "invalid_derive_step" & issues$rule == "LOOKUP-22"))
   cat("public R aggregate callbacks preserve current-source types and kept record identity\n")
 }
 qualify_aggregate_callback()

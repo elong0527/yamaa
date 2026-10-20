@@ -155,7 +155,7 @@ fn kind_of(name: &str) -> Option<ColumnType> {
 }
 
 /// SAS-style non-finite spellings the typed-CSV conversion maps to
-/// missing (the engine's `nonfinite_text` rule, REQ-0006 family).
+/// missing (the engine's `nonfinite_text` rule, VALUE-4 family).
 fn nonfinite_text(text: &str) -> bool {
     matches!(text, ".nan" | ".NaN" | ".NAN")
         || matches!(
@@ -1188,7 +1188,7 @@ fn scalar_text(text: &str, kind: &str) -> Result<String, String> {
     })
 }
 
-/// A minimal big unsigned integer for the exact REQ-0747 projection.
+/// A minimal big unsigned integer for the exact CSV-9 projection.
 struct BigUint(Vec<u64>);
 
 impl BigUint {
@@ -1302,9 +1302,9 @@ impl BigUint {
     }
 }
 
-/// REQ-0747 reported-precision projection of one binary64 value,
+/// CSV-9 reported-precision projection of one binary64 value,
 /// mirroring the runner's `reported_table`: the exact integer ratio is
-/// rounded to `decimals` places under REQ-0418's interval (ties, and near
+/// rounded to `decimals` places under FORMULA-16's interval (ties, and near
 /// ties within 2^-26 below a scaled tie, away from zero), then read back
 /// as a float.
 fn project_reported(value: f64, decimals: u32) -> f64 {
@@ -1582,7 +1582,7 @@ fn typed_from_batches(
 }
 
 /// The host table of one slot, from its Arrow IPC bytes; column kinds
-/// come from the table's own schema, floats pass the REQ-0747
+/// come from the table's own schema, floats pass the CSV-9
 /// projection when the specification declares reported precision.
 fn typed_from_ipc(bytes: &[u8], decimals: Option<u32>) -> Result<TypedTable, String> {
     let reader = arrow_ipc::reader::StreamReader::try_new(std::io::Cursor::new(bytes), None)
@@ -1796,26 +1796,26 @@ fn issue_record(issue: &Diagnostic) -> Sj {
 
 fn brief_record(record: &Sj) -> String {
     format!(
-        "phase={} condition={} requirement={} spec_paths={}",
+        "phase={} condition={} rule={} spec_paths={}",
         record.get("phase").cloned().unwrap_or(Sj::Null),
         record.get("condition").cloned().unwrap_or(Sj::Null),
-        record.get("requirement").cloned().unwrap_or(Sj::Null),
+        record.get("rule").cloned().unwrap_or(Sj::Null),
         record.get("spec_paths").cloned().unwrap_or(Sj::Null),
     )
 }
 
 fn brief_issue(issue: &Diagnostic) -> String {
     format!(
-        "phase={} condition={} requirement={:?} spec_paths={:?}",
+        "phase={} condition={} rule={:?} spec_paths={:?}",
         issue.phase(),
         issue.condition(),
-        issue.requirement(),
+        issue.rule(),
         issue.spec_paths
     )
 }
 
 /// The runner's `diagnostic_matches`: phase, condition and spec_paths
-/// exactly; requirement when the expectation declares one; the expected
+/// exactly; rule when the expectation declares one; the expected
 /// context a recursive subset of the reported one.
 fn diagnostic_matches(want: &Sj, got: &Sj) -> bool {
     for field in ["phase", "condition", "spec_paths"] {
@@ -1827,8 +1827,8 @@ fn diagnostic_matches(want: &Sj, got: &Sj) -> bool {
             return false;
         }
     }
-    if let Some(requirement) = want.get("requirement") {
-        if got.get("requirement") != Some(requirement) {
+    if let Some(rule) = want.get("rule") {
+        if got.get("rule") != Some(rule) {
             return false;
         }
     }
@@ -2343,27 +2343,27 @@ const EXEMPTIONS: &[(&str, &str)] = &[
     ),
     (
         "adam-advs-percentiles",
-        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, FUNC-2 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-functions",
-        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, FUNC-2 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-keys-record-reads",
-        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, FUNC-2 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-window-key-records",
-        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, FUNC-2 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "schema-non-finite",
-        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
+        "calls project functions; project preparation fails first (project_environment_invalid, FUNC-2 at lock) because the uv.lock its Python environment file declares is a host-side file absent from the benchmark directory",
     ),
     (
         "negative-function-contract",
-        "calls project functions; project preparation fails first (project_environment_invalid, REQ-0695 at lock: its Python environment file's uv.lock is absent), masking the expected invalid_function_argument finding (REQ-0700)",
+        "calls project functions; project preparation fails first (project_environment_invalid, FUNC-2 at lock: its Python environment file's uv.lock is absent), masking the expected invalid_function_argument finding (FUNC-5)",
     ),
     // File-ingest diagnostics (7): the expected diagnostic has phase
     // `ingest` — it is produced by decoding the input file's text. An

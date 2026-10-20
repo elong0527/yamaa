@@ -31,7 +31,7 @@ pub enum HostError<E> {
 
 /// Stable activated callable slots; no Send/Sync/Clone requirement or retry.
 /// Adapters normalize nonfinite returns, encode temporal arguments at the
-/// REQ-0570 boundary, and contain host exceptions before returning here. The
+/// VALUE-17 boundary, and contain host exceptions before returning here. The
 /// owned result cannot borrow the input or callback's temporary host buffers.
 pub trait FunctionPort {
     type Error;
@@ -125,10 +125,10 @@ impl<E, I> InvocationFailure<E, I> {
         self.code().definition().condition
     }
     /// Name the normative owner of this failure; no handler can repair it.
-    pub fn requirement(&self) -> &'static str {
+    pub fn rule(&self) -> &'static str {
         self.code()
             .definition()
-            .requirement
+            .rule
             .expect("runtime function rule")
     }
 }

@@ -42,7 +42,7 @@ pub fn refusal(error: &CompileError, message: bool) -> Value {
         } => {
             let issue = failure.syntax_diagnostic();
             let context = yamaa_core::json::Value::Object(issue.context.clone());
-            let mut outcome = json!({"status":"invalid","condition":failure.condition(),"requirement":failure.requirement(),"position":{"byte":position.byte,"character":position.character},"context":context});
+            let mut outcome = json!({"status":"invalid","condition":failure.condition(),"rule":failure.rule(),"position":{"byte":position.byte,"character":position.character},"context":context});
             if message {
                 outcome["message"] = json!(explanation);
             }

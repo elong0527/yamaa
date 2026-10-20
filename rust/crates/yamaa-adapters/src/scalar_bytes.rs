@@ -4,7 +4,7 @@ use yamaa_core::{temporal::Precision, value::Value};
 /// A logical scalar, not a vector: tag 0 missing, 1 int, 2 float, 3 str, 4 bool.
 /// Integers use canonical ASCII decimal; float bits use eight little-endian bytes.
 /// Tags 5/6 carry whole epoch days/seconds as exact binary64 little-endian bytes.
-/// Host temporal encoding deliberately drops collected precision (REQ-0570).
+/// Host temporal encoding deliberately drops collected precision (VALUE-17).
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScalarBytes {
     pub tag: i32,

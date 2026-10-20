@@ -90,7 +90,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0188",
+      "rule": "FORMULA-1",
       "position": {
         "byte": 9,
         "character": 6
@@ -104,7 +104,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0188",
+      "rule": "FORMULA-1",
       "position": {
         "byte": 3,
         "character": 1
@@ -118,7 +118,7 @@
     "expected": {
       "status": "invalid",
       "condition": "prohibited_function",
-      "requirement": "REQ-0440",
+      "rule": "FORMULA-13",
       "position": {
         "byte": 0,
         "character": 0
@@ -135,7 +135,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0188",
+      "rule": "FORMULA-1",
       "position": {
         "byte": 5,
         "character": 5
@@ -149,7 +149,7 @@
     "expected": {
       "status": "invalid",
       "condition": "prohibited_function",
-      "requirement": "REQ-0440",
+      "rule": "FORMULA-13",
       "position": {
         "byte": 4,
         "character": 4
@@ -279,7 +279,7 @@
     "expected": {
       "status": "invalid",
       "condition": "nested_reduction",
-      "requirement": "REQ-0502",
+      "rule": "FORMULA-21",
       "position": {
         "byte": 3,
         "character": 1
@@ -296,7 +296,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0188",
+      "rule": "FORMULA-1",
       "position": {
         "byte": 10,
         "character": 10
@@ -310,7 +310,7 @@
     "expected": {
       "status": "invalid",
       "condition": "prohibited_construct",
-      "requirement": "REQ-0441",
+      "rule": "FORMULA-27",
       "position": {
         "byte": 12,
         "character": 12
@@ -326,7 +326,7 @@
     "expected": {
       "status": "invalid",
       "condition": "prohibited_function",
-      "requirement": "REQ-0440",
+      "rule": "FORMULA-13",
       "position": {
         "byte": 0,
         "character": 0
@@ -403,7 +403,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0191",
+      "rule": "FORMULA-7",
       "position": {
         "byte": 24,
         "character": 24
@@ -418,7 +418,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0191",
+      "rule": "FORMULA-7",
       "position": {
         "byte": 24,
         "character": 24
@@ -433,7 +433,7 @@
     "expected": {
       "status": "invalid",
       "condition": "invalid_expression",
-      "requirement": "REQ-0191",
+      "rule": "FORMULA-7",
       "position": {
         "byte": 13,
         "character": 13
@@ -448,7 +448,7 @@
     "expected": {
       "status": "invalid",
       "condition": "integer_overflow",
-      "requirement": "REQ-0014",
+      "rule": "VALUE-5",
       "position": {
         "byte": 4,
         "character": 4
@@ -463,7 +463,7 @@
     "expected": {
       "status": "invalid",
       "condition": "integer_overflow",
-      "requirement": "REQ-0014",
+      "rule": "VALUE-5",
       "position": {
         "byte": 4,
         "character": 4
@@ -478,7 +478,7 @@
     "expected": {
       "status": "invalid",
       "condition": "integer_overflow",
-      "requirement": "REQ-0014",
+      "rule": "VALUE-5",
       "position": {
         "byte": 4,
         "character": 4
@@ -493,7 +493,7 @@
     "expected": {
       "status": "invalid",
       "condition": "integer_overflow",
-      "requirement": "REQ-0014",
+      "rule": "VALUE-5",
       "position": {
         "byte": 19,
         "character": 19
@@ -508,7 +508,7 @@
     "expected": {
       "status": "invalid",
       "condition": "integer_overflow",
-      "requirement": "REQ-0014",
+      "rule": "VALUE-5",
       "position": {
         "byte": 9,
         "character": 6
@@ -523,7 +523,7 @@
     "expected": {
       "status": "invalid",
       "condition": "integer_overflow",
-      "requirement": "REQ-0014",
+      "rule": "VALUE-5",
       "position": {
         "byte": 16,
         "character": 16

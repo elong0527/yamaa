@@ -1285,7 +1285,7 @@ mod project {
                 (-1.23445, -1.2345, 4, true),
                 (1.23444, 1.2345, 4, false),
                 // The exact binary64 2.675 is 1.8e-14 below the scaled tie,
-                // inside REQ-0418's 2^-26 interval, so its copy is 2.68.
+                // inside FORMULA-16's 2^-26 interval, so its copy is 2.68.
                 (2.675, 2.67, 2, false),
                 (2.675, 2.68, 2, true),
                 (-2.675, -2.68, 2, true),
@@ -1504,7 +1504,7 @@ mod project {
             };
             let first = lock_diagnostics(Some(origins), &original.findings).unwrap();
             assert_eq!(first.len(), 2);
-            assert_eq!(first[0].definition().requirement, Some("REQ-0697"));
+            assert_eq!(first[0].definition().rule, Some("FUNC-3"));
             assert_eq!(
                 lock_diagnostics(None, &original.findings),
                 Err(LockDiagnosticError::InvalidContext)
@@ -1860,12 +1860,12 @@ mod project {
                 let record = &records[0];
                 assert_eq!(
                     (
-                        record.definition().requirement.unwrap(),
+                        record.definition().rule.unwrap(),
                         record.path.as_str(),
                         record.evaluated_count,
                         record.failed_count
                     ),
-                    ("REQ-0957", "columns.CODE.submission.codelist", 2, 1)
+                    ("CT-7", "columns.CODE.submission.codelist", 2, 1)
                 );
                 assert_eq!(record.offending_rows[0].values, [Value::Int(i64::MAX - 1)]);
                 assert_eq!(
@@ -1951,23 +1951,23 @@ mod project {
         }
         #[test]
         fn compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes() {
-            for (doc, condition, requirement, path) in [
+            for (doc, condition, rule, path) in [
                 (
                     spec("UNKNOWN", "str", None, false, None),
                     "unknown_codelist",
-                    "REQ-0953",
+                    "CT-1",
                     "columns.CODE.submission.codelist",
                 ),
                 (
                     spec("SEX", "int", None, false, None),
                     "codelist_type_mismatch",
-                    "REQ-0954",
+                    "CT-8",
                     "columns.CODE.submission.codelist",
                 ),
                 (
                     spec("SEX", "str", Some("F"), false, None),
                     "redundant_declaration",
-                    "REQ-0955",
+                    "CT-9",
                     "columns.CODE.verifications[0].allowed_values",
                 ),
             ] {
@@ -1982,9 +1982,9 @@ mod project {
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
                 assert_eq!(d.spec_paths, [path]);
             }
@@ -2190,13 +2190,9 @@ mod project {
                         (
                             diagnostic.definition().phase,
                             diagnostic.definition().condition,
-                            diagnostic.definition().requirement
+                            diagnostic.definition().rule
                         ),
-                        (
-                            "validation",
-                            "project_environment_missing",
-                            Some("REQ-0694")
-                        )
+                        ("validation", "project_environment_missing", Some("FUNC-1"))
                     );
                     assert_eq!(
                         diagnostic.context,
@@ -2295,18 +2291,18 @@ mod project {
                     "columns.C.derivation.function.args.x",
                 ]
             );
-            for (d, condition, requirement) in [
-                (&diagnostics[0], "unknown_project_function", "REQ-0698"),
-                (&diagnostics[1], "invalid_function_argument", "REQ-0700"),
-                (&diagnostics[2], "invalid_function_argument", "REQ-0700"),
+            for (d, condition, rule) in [
+                (&diagnostics[0], "unknown_project_function", "FUNC-4"),
+                (&diagnostics[1], "invalid_function_argument", "FUNC-5"),
+                (&diagnostics[2], "invalid_function_argument", "FUNC-5"),
             ] {
                 assert_eq!(
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
             }
             assert_eq!(
@@ -2399,10 +2395,7 @@ mod project {
                 })
                 .unwrap();
             assert!(matches!(finding.cause, FunctionCause::ArgumentType { .. }));
-            assert_eq!(
-                finding.diagnostic().definition().requirement,
-                Some("REQ-0700")
-            );
+            assert_eq!(finding.diagnostic().definition().rule, Some("FUNC-5"));
             assert_eq!(
                 finding.diagnostic().spec_paths,
                 ["columns.A.derivation.function.args.x"]
@@ -2431,7 +2424,7 @@ mod project {
                 assert_eq!(diagnostics.len(), 1);
                 let diagnostic = &diagnostics[0];
                 assert_eq!(diagnostic.definition().condition, "unknown_field");
-                assert_eq!(diagnostic.definition().requirement, Some("REQ-0103"));
+                assert_eq!(diagnostic.definition().rule, Some("NAME-3"));
                 assert_eq!(
                     diagnostic.spec_paths,
                     [format!("columns.{column}.derivation.function.args.x")]

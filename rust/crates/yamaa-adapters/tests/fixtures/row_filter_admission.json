@@ -15,7 +15,7 @@
             "predicate": "FALSE AND V = 9223372036854775808"
           },
           "phase": "validation",
-          "requirement": "REQ-0014",
+          "rule": "VALUE-5",
           "spec_paths": [
             "rows[0].filter"
           ]
@@ -35,7 +35,7 @@
                 "predicate": "FALSE AND V = 9223372036854775808"
               },
               "phase": "validation",
-              "requirement": "REQ-0014",
+              "rule": "VALUE-5",
               "spec_paths": [
                 "rows[0].filter"
               ]
@@ -108,7 +108,7 @@
             "predicate": "TRUE OR V = -9223372036854775809"
           },
           "phase": "validation",
-          "requirement": "REQ-0014",
+          "rule": "VALUE-5",
           "spec_paths": [
             "rows[0].filter"
           ]
@@ -128,7 +128,7 @@
                 "predicate": "TRUE OR V = -9223372036854775809"
               },
               "phase": "validation",
-              "requirement": "REQ-0014",
+              "rule": "VALUE-5",
               "spec_paths": [
                 "rows[0].filter"
               ]

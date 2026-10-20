@@ -1,8 +1,8 @@
 #![cfg(feature = "yaml")]
 //! A driver field that a window partitions, orders or reads by is a scalar
 //! source of each row. Under grouped construction it must be a group key: a
-//! grouped row template's window fails under REQ-0067, and a column-level
-//! window under REQ-0107, before any data is read. The declarations decide
+//! grouped row template's window fails under ROW-5, and a column-level
+//! window under NAME-4, before any data is read. The declarations decide
 //! it, so `check` reports the same refusal.
 use std::{
     fs,
@@ -75,7 +75,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 const HEAD: &str = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\n\
@@ -100,17 +100,17 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
          rows:\n  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n\
          \x20     LOW: {{aggregate: 'MIN(SRC.VAL)'}}\n"
     );
-    for (specification, path, requirement, row) in [
+    for (specification, path, rule, row) in [
         (
             &row,
             "rows[0].derivations.SEQ.row_number.window.order_by[0]",
-            "REQ-0067",
+            "ROW-5",
             Some("grouped"),
         ),
         (
             &column,
             "columns.SEQ.derivation.row_number.window.order_by[0]",
-            "REQ-0107",
+            "NAME-4",
             None,
         ),
     ] {
@@ -125,7 +125,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "ungrouped_driver_field",
-                "requirement": requirement,
+                "rule": rule,
                 "spec_paths": [path],
                 "context": context
             })
@@ -183,7 +183,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             vec![yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "unknown_field",
-                "requirement": "REQ-0103",
+                "rule": "NAME-3",
                 "spec_paths": [path],
                 "context": {"identifier": "SRC.MISSING"}
             })]

@@ -122,7 +122,7 @@ pub(in crate::specification) fn findings(spec: &Spec) -> Vec<PreflightFinding> {
         for (column, &name) in spec.columns.iter().zip(&names) {
             match &column.derivation {
                 // Aggregate column results belong to the completed dataset and
-                // cannot be promoted into row-local defaults (REQ-1260).
+                // cannot be promoted into row-local defaults (SPEC-6).
                 Some(derivation) if aggregate(spec, derivation.expr) => {
                     let overridden = rows
                         .iter()

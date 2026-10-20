@@ -43,11 +43,11 @@ impl Failure {
         self.diagnostic_code().definition().condition
     }
     /// The rule owning the finding.
-    pub fn requirement(&self) -> &'static str {
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("expression findings have a normative requirement")
+            .rule
+            .expect("expression findings have a normative rule")
     }
     /// The construct, function or reducers a finding names.
     fn facts(&self, context: &mut Context) {
@@ -186,11 +186,11 @@ impl Condition {
     pub fn condition(&self) -> &'static str {
         self.diagnostic_code().definition().condition
     }
-    pub fn requirement(&self) -> &'static str {
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("expression conditions have a normative requirement")
+            .rule
+            .expect("expression conditions have a normative rule")
     }
     /// A comparison's facts name its operands' types; a numeric operand's
     /// facts carry the expression and the failing operation's values.

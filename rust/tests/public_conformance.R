@@ -57,7 +57,7 @@ move_inputs <- function(source, target) {
 }
 # R exchanges int and float as double, so a public table cannot tell them
 # apart by class. Each column's kind is its declared type: the
-# specification's for an output, REQ-0392's for the run report. A column's
+# specification's for an output, CHECK-24's for the run report. A column's
 # R class must agree with its kind, and every cell must convert exactly.
 report_types <- c(ARTIFACT="str", KIND="str", SPEC_PATH="str", NAME="str", ID="str", TARGET="str",
   RULE="str", SEVERITY="str", OUTCOME="str", CONDITION="str", COUNT="int", TOTAL="int", KEYS="str",
@@ -109,7 +109,7 @@ declared_types <- function(spec, columns) {
   types[columns]
 }
 issue_rows <- function(frame) lapply(seq_len(nrow(frame)), function(index) list(
-  phase=frame$phase[[index]], condition=frame$condition[[index]], requirement=frame$requirement[[index]],
+  phase=frame$phase[[index]], condition=frame$condition[[index]], rule=frame$rule[[index]],
   spec_paths=as.list(frame$spec_paths[[index]]), context=raw_json(frame$context[[index]])))
 # How a run got its plan, from its private observations: compiled, refused or
 # reused, or NULL when they name none. The measurements close the
@@ -170,7 +170,7 @@ run_conformance <- function(args = commandArgs(trailingOnly = TRUE)) {
     output <- built$output
     types <- if (is.null(output)) NULL else declared_types(spec, names(output))
     # The run report is a compared table like the output, as in the Python
-    # runner. Its check rows follow column declaration order (REQ-1175), so a
+    # runner. Its check rows follow column declaration order (CHECK-23), so a
     # key-order variant compares them without their order.
     tables <- list(output=public_table(output, types),
       report=public_table(built$report, report_types))

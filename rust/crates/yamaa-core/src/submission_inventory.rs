@@ -56,7 +56,7 @@ pub fn requested(document: &Document) -> bool {
 }
 /// Select only the specifications each section lists, in written order.
 /// Full Define/family admission is deliberately left with its existing
-/// composition use case (REQ-0908).
+/// composition use case (SUB-23).
 pub fn references(project: &ast::Project) -> Result<Vec<&str>, MetadataError> {
     let declarations = project
         .submission

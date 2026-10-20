@@ -146,7 +146,7 @@ class ColumnCeilings(unittest.TestCase):
                 context = json.loads(rows[0]["context"])
                 self.assertNotIn("incomplete_checks_from", context)
                 self.assertEqual((context["limit"], context["actual"]), (1024, 1025))
-                self.assertIsNone(rows[0]["requirement"])
+                self.assertIsNone(rows[0]["rule"])
             repaired = dict(document)
             repaired["columns"] = document["columns"][:-1]
             # Dropping the C1024 declaration must also drop it from the live
@@ -165,7 +165,7 @@ class ColumnCeilings(unittest.TestCase):
                 rows = result.issues.to_dicts()
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(rows[0]["condition"], "incompatible_input_type")
-                self.assertEqual(rows[0]["requirement"], "REQ-0308")
+                self.assertEqual(rows[0]["rule"], "TEXT-1")
                 self.assertNotIn(
                     "incomplete_checks_from", json.loads(rows[0]["context"])
                 )

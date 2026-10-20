@@ -97,7 +97,7 @@ impl WindowFinding {
     }
 }
 impl Declaration {
-    /// A partition names each variable once (REQ-0293); report every repeat.
+    /// A partition names each variable once (WINDOW-3); report every repeat.
     fn repeated_groups(&self, findings: &mut Vec<BindFinding>) {
         for (index, name) in self.groups.iter().enumerate() {
             if self.groups[..index].contains(name) {
@@ -352,7 +352,7 @@ impl Declaration {
     }
     /// A driver field the window reads is a scalar source of each row it
     /// partitions or orders. Under grouped construction it must be a group key
-    /// (REQ-0067 for a row template, REQ-0107 at column level). A column-level
+    /// (ROW-5 for a row template, NAME-4 at column level). A column-level
     /// window spans every constructed row, and preparation has already refused
     /// its read of a driver that some row template does not share
     /// (`column_driver_findings`, WINDOW-11). So every grouped template a

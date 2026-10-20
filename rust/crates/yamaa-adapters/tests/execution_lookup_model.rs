@@ -263,7 +263,7 @@ fn a_required_range_match_fails_the_row_without_a_record() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unmatched_key");
-    assert_eq!(failure["requirement"], "LOOKUP-24");
+    assert_eq!(failure["rule"], "LOOKUP-24");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["columns.APERIOD.derivation.source"])
@@ -273,7 +273,7 @@ fn a_required_range_match_fails_the_row_without_a_record() {
 #[test]
 fn a_range_value_names_a_value_of_the_current_row() {
     let other = "STUDYID,USUBJID,REFDT\nS,S-1,2025-01-05\nS,S-2,2025-03-10\n";
-    for (value, condition, requirement, path) in [
+    for (value, condition, rule, path) in [
         // Another input's record is not a value of an event row (LOOKUP-9).
         (
             "OTHER.REFDT",
@@ -318,9 +318,9 @@ fn a_range_value_names_a_value_of_the_current_row() {
             (
                 failure["phase"].as_str(),
                 failure["condition"].as_str(),
-                failure["requirement"].as_str()
+                failure["rule"].as_str()
             ),
-            (Some("validation"), Some(condition), Some(requirement)),
+            (Some("validation"), Some(condition), Some(rule)),
             "{value}: {failure:?}"
         );
         assert_eq!(failure["spec_paths"], yamaa_adapters::json!([path]));
@@ -347,7 +347,7 @@ fn a_range_on_a_read_without_an_implicit_join_is_refused() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "prohibited_construct");
-    assert_eq!(failure["requirement"], "LOOKUP-9");
+    assert_eq!(failure["rule"], "LOOKUP-9");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["columns.DRIVER.derivation.source.between"])
@@ -466,7 +466,7 @@ fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unknown_field");
-    assert_eq!(failure["requirement"], "LOOKUP-9");
+    assert_eq!(failure["rule"], "LOOKUP-9");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["rows[1].derivations.WINDOW.source.between.value"])
@@ -485,7 +485,7 @@ fn a_range_value_reads_the_record_of_the_driver_of_its_own_row() {
     let fixture = Fixture::new(&measurements("W.NAME", "W.NAME", named), &inputs);
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unknown_field");
-    assert_eq!(failure["requirement"], "LOOKUP-9");
+    assert_eq!(failure["rule"], "LOOKUP-9");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["intermediates[0].between.value"])
@@ -579,7 +579,7 @@ fn a_per_value_key_type_that_cannot_compare_fails_for_every_kind() {
             (
                 failure["phase"].as_str(),
                 failure["condition"].as_str(),
-                failure["requirement"].as_str()
+                failure["rule"].as_str()
             ),
             (
                 Some("validation"),
@@ -640,7 +640,7 @@ fn an_aggregate_range_value_reads_the_driver_of_every_template_row() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unknown_field");
-    assert_eq!(failure["requirement"], "LOOKUP-9");
+    assert_eq!(failure["rule"], "LOOKUP-9");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["columns.HOLDING.derivation.aggregate.between.value"])
@@ -685,9 +685,9 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
         (
             failure["phase"].as_str(),
             failure["condition"].as_str(),
-            failure["requirement"].as_str()
+            failure["rule"].as_str()
         ),
-        (Some("validation"), Some("phase_boundary"), Some("REQ-0069")),
+        (Some("validation"), Some("phase_boundary"), Some("COLUMN-4")),
         "{failure:?}"
     );
     assert_eq!(
@@ -892,7 +892,7 @@ fn a_range_value_naming_a_field_its_driver_intermediate_derives_is_unsupported()
         (
             failure["phase"].as_str(),
             failure["condition"].as_str(),
-            failure["requirement"].is_null()
+            failure["rule"].is_null()
         ),
         (Some("planning"), Some("unsupported_operation"), true),
         "{failure:?}"
@@ -1061,7 +1061,7 @@ fn finding(issue: &Value) -> Value {
 }
 
 /// The findings `check` reports, after asserting that the run reports exactly
-/// the same issues, with the same requirement.
+/// the same issues, with the same rule.
 #[track_caller]
 fn agreeing(fixture: &Fixture) -> Vec<Value> {
     let checked = fixture.checked();

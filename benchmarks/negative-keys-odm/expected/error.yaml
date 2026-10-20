@@ -2,7 +2,7 @@ phase: validation
 condition: key_dependency
 spec_paths:
   - columns.SEX.derivation.odm
-requirement: COLUMN-7
+rule: COLUMN-7
 context:
   column: SEX
   operation: odm

@@ -174,12 +174,11 @@ import repository packages.
 
 For rule or schema changes, follow their area guides; `make quick` runs the
 repository checks. `make check-repository` runs `tools.rules.check`, which reads the
-rules once through `tools/rules/model.py` and checks cards, legacy requirements,
-every rule citation and markdown links. During the 0.5.0 conversion, run
+rules once through `tools/rules/model.py` and checks cards,
+every rule citation and markdown links. Run
 `python -m tools.rules.migrate statements --base origin/main` to list
 the card titles and statements a pull request adds, changes or removes for
-review; `report` accounts for the replaced requirements and `links` moves
-markdown citations to their cards.
+review.
 
 Repository Python checks source syntax, physical schema includes, fixture
 metadata, grammar documents, layout and editorial rules without importing an
@@ -202,7 +201,7 @@ exact head, and says so in the PR. The gate builds the Python and R packages
 from the checkout and installs both outside it. On each host it runs public
 benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
-requirement and specification paths. A repeat pass runs each entry's spec
+rule and specification paths. A repeat pass runs each entry's spec
 object a second time and requires it to reuse what the first run compiled,
 with the same issues, tables and saved bytes. On the same installs it then
 runs the installed Python suites and `R CMD check`, which carry the
@@ -460,7 +459,7 @@ to this contributor guide. A site page links a repository file outside `docs/`
 by relative path, such as `../rules/reference/csv.md`: the site points it at the
 file on main, and a copy read at a release tag names that tag's file.
 
-The requirement index, rules summary and schema-field references are generated
+The rule index, rules summary and schema-field references are generated
 from `rules/` and `yaml/` on every build. Edit the owning rule or schema, not a
 generated page.
 Benchmark dashboards likewise render authored fixtures without executing the

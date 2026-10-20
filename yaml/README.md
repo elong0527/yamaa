@@ -21,7 +21,7 @@ The [contract index](../rules/README.md#rule-files) organizes the language by se
 
 Schemas own structure, defaults, and structural constraints. Indexed contracts
 own shared and operation-local behavior. Schema descriptions link to the owning
-requirement. Examples demonstrate those contracts without redefining them.
+rule. Examples demonstrate those contracts without redefining them.
 
 Closed grammars are defined once in [grammar/](grammar/README.md). Their
 contract blocks are generated views checked against those files; R and Python
@@ -38,7 +38,7 @@ replay the same parser vectors.
 | [rules/](../rules/README.md) | Normative contracts |
 | [Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) | Generated shapes, defaults, and semantic links |
 | [Schema fields (1.0)](https://elong0527.github.io/yamaa/reference/schema-fields-v1/) | The same view of `v1/`, with each field's kind |
-| [Requirement index](https://elong0527.github.io/yamaa/reference/requirements/) | Generated canonical IDs and owners |
+| [Rule index](https://elong0527.github.io/yamaa/reference/rule-index/) | Generated canonical IDs and owners |
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |

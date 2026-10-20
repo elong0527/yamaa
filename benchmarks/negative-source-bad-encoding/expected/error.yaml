@@ -2,7 +2,7 @@ phase: ingest
 condition: invalid_text
 spec_paths:
   - input.DM.path
-requirement: REQ-0853
+rule: CSV-10
 context:
   dataset: DM
   path: input/dm.csv

@@ -81,7 +81,7 @@ class IssueFrameTruth(unittest.TestCase):
             diagnostic = dict(
                 phase="derivation",
                 condition="integer_overflow",
-                requirement=None,
+                rule=None,
                 spec_paths=["columns.\u00e9\U0001f642", 'quote"slash\\'],
                 context={
                     "minimum": -(2**63),
@@ -98,7 +98,7 @@ class IssueFrameTruth(unittest.TestCase):
             with patch.object(stage, "CASES", ("case",)):
                 stage.stage_issue_frame_truth(root)
             actual = (root / "issue-frame-truth.R").read_text()
-            self.assertIn("requirement=c(NA_character_)", actual)
+            self.assertIn("rule=c(NA_character_)", actual)
             self.assertIn(
                 'spec_paths=list(c("columns.\\u00e9\\U0001f642","quote\\"slash\\\\"))',
                 actual,
@@ -106,7 +106,7 @@ class IssueFrameTruth(unittest.TestCase):
             self.assertIn("-9223372036854775808", actual)
             self.assertIn("9223372036854775807", actual)
             self.assertIn(
-                '"static/empty"=list(phase=character(),condition=character(),requirement=character(),spec_paths=list(),context=character())',
+                '"static/empty"=list(phase=character(),condition=character(),rule=character(),spec_paths=list(),context=character())',
                 actual,
             )
             self.assertNotIn("\\ud83d", actual)

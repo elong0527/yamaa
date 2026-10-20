@@ -1,4 +1,4 @@
-"""Generate the schema field, requirement index and rules summary pages.
+"""Generate the schema field, rule index and rules summary pages.
 
 The pages are views of ``rules/`` and ``yaml/`` rendered on every docs build;
 they add no semantics. Their relative links resolve from
@@ -13,7 +13,7 @@ from pathlib import Path
 
 from tools.paths import ROOT
 from tools.rules.model import (
-    REQUIREMENT_INDEX,
+    RULE_INDEX,
     RULES_SUMMARY,
     SCHEMA_FIELDS,
     SCHEMA_FIELDS_V1,
@@ -30,7 +30,7 @@ from tools.validation.repository_schema import (
 )
 from tools.validation.schema_bundle import Bundle
 
-PAGE_DIRECTORY = posixpath.dirname(REQUIREMENT_INDEX)
+PAGE_DIRECTORY = posixpath.dirname(RULE_INDEX)
 GENERATED_MARK = "<!-- generated: generate_rule_reference.py -->"
 # A link between two generated pages names the site page: a relative link on
 # a generated page becomes a repository link, and generated pages are not
@@ -83,7 +83,7 @@ def page_link(path, fragment=""):
 
 
 def rule_link(rules, identifier):
-    """Link to the rule an ID names; a replaced ID links to its card."""
+    """Link to the card an ID names."""
     rule = rules.resolve(identifier)
     return f"[{rule.id}]({page_link(rule.file, rule.id.lower())})"
 
@@ -250,15 +250,14 @@ def schema_fields_v1(root, rules):
     return "\n".join(lines)
 
 
-def requirement_index(rules):
+def rule_index(rules):
     lines = [
-        "# Requirement index",
+        "# Rule index",
         "",
         GENERATED_MARK,
         "",
         "Rule IDs identify rules independently of file paths. A card's ID carries",
-        "its file's prefix; a contract not yet converted to cards keeps its",
-        "`REQ-NNNN` requirements.",
+        "its file's prefix.",
         "",
     ]
     cards = [card for rule_file in rules.ordered_files() for card in rule_file.cards]
@@ -269,30 +268,6 @@ def requirement_index(rules):
                 f"| {rule_link(rules, card.id)} | {table_text(card.title)} "
                 f"| `{card.file}` |"
             )
-        lines.append("")
-    if rules.requirements:
-        lines += [
-            "## Requirements not yet converted",
-            "",
-            "| Requirement | Contract |",
-            "| --- | --- |",
-        ]
-        for identifier, requirement in sorted(rules.requirements.items()):
-            lines.append(f"| {rule_link(rules, identifier)} | `{requirement.file}` |")
-        lines.append("")
-    replaced = sorted(set(rules.replaced) - set(rules.requirements))
-    if replaced:
-        lines += [
-            "## Replaced requirements",
-            "",
-            "Until the conversion completes, each of these IDs resolves to the",
-            "card that replaces it.",
-            "",
-            "| Requirement | Card |",
-            "| --- | --- |",
-        ]
-        for identifier in replaced:
-            lines.append(f"| {identifier} | {rule_link(rules, identifier)} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -315,10 +290,8 @@ def rules_summary(rules):
             text = rebase(principle.text, "README.md")
             lines += [f"**P{principle.number}. {principle.title}** {text}", ""]
     listing = {row.path: row for row in rules.listing or ()}
-    legacy = []
     for rule_file in rules.ordered_files():
         if not rule_file.cards:
-            legacy.append(rule_file)
             continue
         lines += [f"## {rule_file.title or rule_file.path}", ""]
         if rule_file.path in listing:
@@ -333,20 +306,6 @@ def rules_summary(rules):
             target = page_link(card.file, card.id.lower())
             lines.append(f"- [{card.id}]({target}). {card.title}")
         lines.append("")
-    if legacy:
-        lines += [
-            "## Not yet converted",
-            "",
-            "These contracts keep their `REQ-NNNN` requirements until they become",
-            "cards.",
-            "",
-        ]
-        for rule_file in legacy:
-            covers = listing[rule_file.path].covers if rule_file.path in listing else ""
-            title = rule_file.title or rule_file.path
-            entry = f"- [{title}]({page_link(rule_file.path)})"
-            lines.append(f"{entry}: {covers}" if covers else entry)
-        lines.append("")
     return "\n".join(lines)
 
 
@@ -356,7 +315,7 @@ def generated(root):
     pages = {
         SCHEMA_FIELDS: schema_fields(root, rules),
         SCHEMA_FIELDS_V1: schema_fields_v1(root, rules),
-        REQUIREMENT_INDEX: requirement_index(rules),
+        RULE_INDEX: rule_index(rules),
         RULES_SUMMARY: rules_summary(rules),
     }
     return {root / "rules" / page: text for page, text in pages.items()}

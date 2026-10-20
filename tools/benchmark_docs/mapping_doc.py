@@ -203,7 +203,7 @@ def match_clauses(node, ctx=None, depth=0):
         clauses.append("matching on " + join_and([str(k) for k in key]))
     else:
         # An omitted key matches on the output keys the donor dataset also
-        # carries (REQ-0150), so the reviewer is told a join still happens.
+        # carries (LOOKUP-1), so the reviewer is told a join still happens.
         clauses.append("matching on the shared output keys")
     between = node.get("between")
     if isinstance(between, dict):
@@ -510,7 +510,7 @@ def describe_mapping_handler(mapping, handler):
     """What one mapping event yields: a literal, missing, or an error.
 
     Each event has its own handler, and an omitted handler makes the event
-    fatal (REQ-0344).
+    fatal (COLUMN-10).
     """
     if not declared(mapping, handler):
         return "are errors"
@@ -554,7 +554,7 @@ def describe_case_result(result, ctx=None, depth=0):
 
 
 def describe_flag(node, ctx=None, depth=0):
-    """`flag` is the one-branch `case` that yields a flag value (REQ-1256)."""
+    """`flag` is the one-branch `case` that yields a flag value (EXPR-8)."""
     if not isinstance(node, dict):
         return (
             '"Y" when '
@@ -568,7 +568,7 @@ def describe_flag(node, ctx=None, depth=0):
     )
     false_value = literal_text(node.get("false_value"))
     text = true_value + " when " + condition + "; " + false_value + " otherwise"
-    # An unknown condition never falls through to false_value (REQ-1257).
+    # An unknown condition never falls through to false_value (EXPR-8).
     text += "; " + literal_text(node.get("missing")) + " when the condition is unknown"
     return sentence(text)
 
@@ -1144,7 +1144,7 @@ def describe_derivation(derivation, ctx=None, depth=0):
     if not isinstance(derivation, dict):
         return str(derivation)
     # `handled_expression_class`: an inner expression plus the value a failed
-    # conversion yields (REQ-1148).
+    # conversion yields (SUB-1).
     if "value" in derivation:
         text = clause(describe_derivation(derivation["value"], ctx, depth))
         if declared(derivation, "unconvertible"):
@@ -1168,7 +1168,7 @@ def classify_origin(derivation, input_names, ctx=None, adam=False):
     donor column was collected: the value this dataset publishes is the
     product of the join, not a field a site typed into this record.
 
-    REQ-0890 admits only Derived, Assigned, Predecessor and Other for the
+    SUB-15 admits only Derived, Assigned, Predecessor and Other for the
     adam family, so a bare copy from a declared input is Predecessor and a
     recode or any other computation is Derived. For sdtm the same copy is
     Collected; a mapping or source over a locally derived column computes

@@ -86,11 +86,9 @@ Enforced by [CSV-3](reference/csv.md#csv-3),
 
 ## Rule files
 
-Language rules live in `rules/*.md`. Format and file-handling rules move to
+Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
-profiles to `rules/profiles/`. During the 0.5.0 conversion, contracts not yet
-converted keep their `REQ-NNNN` requirements and are listed with the prefix
-`REQ`.
+profiles in `rules/profiles/`.
 
 While the 0.5 and 1.0 surfaces coexist
 ([#3030](https://github.com/elong0527/yamaa/issues/3030)), a file that
@@ -128,7 +126,7 @@ the conditions that path still raises.
 | [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 | [Project file](profiles/project.md) | PROJECT | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
 
-The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
+The [rule index](https://elong0527.github.io/yamaa/reference/rule-index/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)
 and [schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/)
 are generated from these files and `yaml/` on every docs build. The
@@ -168,8 +166,6 @@ For a study entry whose parent is a compound layer whose parent is an ...
   tests and grammar vectors that exercise the rule.
 - **Detail**: everything after those lines. Detail is normative, holds edge
   cases, tables and examples, and must agree with the statement.
-- **Replaces**: during the 0.5.0 conversion only, the `REQ-NNNN` IDs the card
-  absorbs, so existing citations keep resolving. It is removed before release.
 
 Cite a rule by ID, linked to its anchor. Normative `must`, `must not`,
 `should` and `may` have their usual requirement meanings. Rules state behavior,

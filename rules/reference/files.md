@@ -20,7 +20,6 @@ configuration is discovered, and a project file does not select a
 specification's resource locations.
 
 Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`.
-Replaces: REQ-0772, REQ-1246.
 
 A dataset or output declaration may explicitly select its entry file with
 `relative_to: entry` under [FILE-2](#file-2). Composition retains the original
@@ -47,7 +46,6 @@ declaring file. A rooted path names its absolute local location regardless of
 `relative_to`.
 
 Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_shared_program_uses_each_study_input_and_saves_held_artifacts`, `rust/crates/yamaa-adapters/tests/file_resources.rs::composed_relative_input_base_can_change_without_redeclaring_the_inherited_path`, `rust/crates/yamaa-adapters/tests/resolved_artifact.rs::two_studies_and_their_schema_links_match_the_actual_direct_preparation`, `python/tests/installed/installed_file_resources.py::test_entry_relative_schema_links_select_each_study_producer_wrapper`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_entry_relative_schema_resolves_from_the_entry_in_every_layer`.
-Replaces: REQ-0780, REQ-1151.
 
 The schema fixes the closed values and the default. An inherited input uses
 its composed setting, even when another layer supplied the path. An inherited
@@ -76,7 +74,6 @@ is built. The consumer neither runs the producer nor compares the producer's
 `output.path` with its own `path`.
 
 Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`.
-Replaces: REQ-1247.
 
 Checking reads no study data, so a link whose artifact does not exist yet
 passes `check`, and building fails with the ordinary missing-input finding at
@@ -105,7 +102,6 @@ under [Values](../values.md), like every other repository-authored
 value.
 
 Evidence: `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-adapters/src/file_metadata.rs::absolute_spelling_covers_both_root_forms_lexically`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::parent_and_absolute_local_paths_build_and_save_held_bytes`, `rust/crates/yamaa-adapters/src/file_resolver.rs::rooted_spellings_split_into_one_root_and_their_segments_on_every_host`, `rust/crates/yamaa-adapters/tests/network_shares.rs::a_specification_on_a_network_share_builds_and_saves_through_the_share`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`.
-Replaces: REQ-0773, REQ-0774, REQ-0779.
 
 An absolute local path may name any location permitted by the operating system
 and the caller's sandbox. yamaa does not require that location to lie under a
@@ -138,7 +134,6 @@ trailing separator; an empty path has one empty segment and is invalid.
 
 Fails: `resource_path_uri_scheme`, `resource_path_not_normalized`.
 Evidence: `negative-path-url`, `rust/crates/yamaa-adapters/tests/file_resources.rs::public_check_and_build_validate_written_paths_before_source_profiles`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::uri_grammar_preserves_local_absolute_parent_and_windows_drive_paths`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`.
-Replaces: REQ-0775, REQ-0776, REQ-0777.
 
 A URI scheme, including `file:` and `https:`, fails with
 `resource_path_uri_scheme`. A backslash, an empty segment or a trailing
@@ -156,7 +151,6 @@ without a yamaa containment failure. A parent step at a filesystem root stays
 at that root.
 
 Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes`, `rust/crates/yamaa-adapters/tests/resolved_artifact.rs::absolute_and_parent_relative_paths_are_facts_and_never_fallback_searches`.
-Replaces: REQ-0778.
 
 ## Reaching a file
 
@@ -173,7 +167,6 @@ is rejected.
 
 Fails: `resource_path_missing`, `resource_path_not_regular_file`.
 Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_the_kind_of_the_entry_that_stops_them`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`.
-Replaces: REQ-0781, REQ-0782, REQ-0784, REQ-0785.
 
 The caller's entry parent, and the parent of the project file the caller
 passes, are each canonicalized and opened once; aliases the caller used for a
@@ -207,7 +200,6 @@ retains the no-link check on every component below its filesystem root.
 
 Fails: `resource_path_symlink`.
 Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`.
-Replaces: REQ-0783.
 
 Each walk verifies the retained directory and file entries, and a name
 substitution cannot redirect a read or publication silently.
@@ -237,7 +229,6 @@ relative and a rooted spelling of one file therefore produce one key and bind
 one snapshot.
 
 Evidence: `sdtm-fa-odm-multitest`, `rust/crates/yamaa-adapters/tests/file_resources.rs::parent_and_absolute_dot_aliases_share_bytes_and_detect_later_changes`, `rust/crates/yamaa-adapters/src/file_resources.rs::repeated_alias_verification_keeps_original_bytes_and_checks_every_witness`, `rust/crates/yamaa-adapters/src/file_resources.rs::a_hard_link_rewritten_between_captures_is_a_change`, `rust/crates/yamaa-adapters/src/file_resources.rs::a_hard_link_rewritten_after_its_captured_name_is_renamed_is_a_change`.
-Replaces: REQ-0786, REQ-0787.
 
 Several dataset identifiers may resolve to one physical file. The declarations
 remain distinct, each with its own identifier and its own
@@ -257,7 +248,6 @@ modification time, inode number or size is not the identity.
 
 Fails: `resource_path_content_changed`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_source_retains_original_snapshot_and_ingest_issue_and_refuses_both_saves`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::already_captured_changed_metadata_keeps_original_snapshot_and_native_failure`, `rust/crates/yamaa-adapters/src/file_resources.rs::reused_numeric_identity_without_a_current_physical_witness_is_a_fresh_capture`, `rust/crates/yamaa/tests/plan_contracts.rs::a_changed_environment_refuses_runs_until_it_is_restored`, `rust/crates/yamaa/tests/plan_contracts.rs::a_changed_function_contract_refuses_runs_until_it_is_restored`, `rust/crates/yamaa/tests/plan_contracts.rs::every_changed_local_file_refuses_runs_under_its_declaring_field`.
-Replaces: REQ-0788, REQ-0789.
 
 An implementation may validate once and run many times. Each such run, before
 it activates a project function or reads an input record, verifies every file
@@ -284,7 +274,6 @@ any data is read and reports under the `validation` phase, except
 
 Fails: `resource_path_uri_scheme`, `resource_path_not_normalized`, `resource_path_symlink`, `resource_path_missing`, `resource_path_not_regular_file`, `resource_path_content_changed`.
 Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`.
-Replaces: REQ-0790, REQ-0791, REQ-0792.
 
 An absolute written path supplied by the specification may be repeated.
 Resolved paths retained as provenance are not substituted for the authored

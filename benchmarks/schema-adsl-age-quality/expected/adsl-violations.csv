@@ -5,4 +5,4 @@ adsl.csv,rows,base,DM,,,,,,,8,8,,{}
 adsl.csv,column,columns.STUDYID,STUDYID,,,,,,,0,8,,"{""max_length"":8}"
 adsl.csv,column,columns.USUBJID,USUBJID,,,,,,,0,8,,"{""max_length"":12}"
 adsl.csv,column,columns.AGE,AGE,,,,,,,1,8,,{}
-adsl.csv,check,columns.AGE.verifications[0].range,range,,AGE,REQ-0377,warning,violated,range_failed,3,8,"[{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-104""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-105""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-106""}]","{""column"":""AGE""}"
+adsl.csv,check,columns.AGE.verifications[0].range,range,,AGE,CHECK-7,warning,violated,range_failed,3,8,"[{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-104""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-105""},{""STUDYID"":""YAMAA-01"",""USUBJID"":""YAMAA-01-106""}]","{""column"":""AGE""}"

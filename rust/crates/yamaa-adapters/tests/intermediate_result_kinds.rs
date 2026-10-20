@@ -203,7 +203,7 @@ fn known_date_choices_reject_incompatible_filter_types_in_check_and_build() {
         );
         assert_eq!(checked.len(), 1, "{operation}: {checked:?}");
         assert_eq!(checked[0].condition(), "incompatible_input_type");
-        assert_eq!(checked[0].requirement(), Some("REQ-0190"));
+        assert_eq!(checked[0].rule(), Some("FORMULA-5"));
         assert_eq!(checked[0].spec_paths, ["intermediates[0].filter"]);
         assert_eq!(
             yamaa_core::json::Value::Object(checked[0].context.clone()),
@@ -308,7 +308,7 @@ fn unknown_choices_report_the_actual_integer_when_date_sources_are_missing() {
         let issues = result.issues();
         assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
         assert_eq!(issues[0].condition(), "incompatible_input_type");
-        assert_eq!(issues[0].requirement(), Some("REQ-0190"));
+        assert_eq!(issues[0].rule(), Some("FORMULA-5"));
         assert_eq!(issues[0].spec_paths, ["intermediates[0].filter"]);
         assert_eq!(
             yamaa_core::json::Value::Object(issues[0].context.clone()),
@@ -371,7 +371,7 @@ fn assert_integer_day_count(expression: &str, integer_row: &str, float_row: &str
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{expression}: {issues:?}");
     assert_eq!(issues[0].condition(), "incompatible_input_type");
-    assert_eq!(issues[0].requirement(), Some("REQ-1298"));
+    assert_eq!(issues[0].rule(), Some("TIME-14"));
     assert_eq!(
         issues[0].spec_paths,
         ["intermediates[0].derivations.EXENDT.shift.days"]
@@ -415,7 +415,7 @@ fn nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound() {
     let assert_refused = |issues: &[yamaa_core::diagnostic::Diagnostic]| {
         assert_eq!(issues.len(), 1, "{issues:?}");
         assert_eq!(issues[0].condition(), "incompatible_input_type");
-        assert_eq!(issues[0].requirement(), Some("REQ-1298"));
+        assert_eq!(issues[0].rule(), Some("TIME-14"));
         assert_eq!(
             issues[0].spec_paths,
             ["intermediates[0].derivations.EXENDT.shift.days"]
@@ -754,7 +754,7 @@ fn assert_nested_lookup_type_error(
     let issues = result.issues();
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].condition(), "incompatible_input_type");
-    assert_eq!(issues[0].requirement(), Some("LOOKUP-9"));
+    assert_eq!(issues[0].rule(), Some("LOOKUP-9"));
     assert_eq!(issues[0].spec_paths, [expected_path]);
     assert_eq!(
         yamaa_core::json::Value::Object(issues[0].context.clone()),

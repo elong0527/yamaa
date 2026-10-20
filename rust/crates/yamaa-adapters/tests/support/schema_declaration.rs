@@ -74,7 +74,7 @@ pub fn observe_input(input: SchemaInput, document: &str, root: Option<&str>) -> 
                 .map(|(name, field)| (name.into(), value(field)))
                 .collect::<Map<String, _>>();
             json!({"phase": finding.phase, "condition": finding.condition,
-                "requirement": finding.requirement, "spec_paths": [finding.path],
+                "rule": finding.rule, "spec_paths": [finding.path],
                 "context": context})
         })
         .collect::<Vec<_>>();

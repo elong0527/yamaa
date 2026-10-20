@@ -24,7 +24,6 @@ terminology and no dataset inventory.
 
 Fails: `project_environment_missing`, `project_environment_invalid`.
 Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`.
-Replaces: REQ-1331, REQ-1335.
 
 A project file declares `schema_version`, `environments`, `codelists`,
 `study`, and the `sdtm`, `adam` and `send` sections, each optional except
@@ -48,7 +47,6 @@ of its study metadata.
 
 Fails: `project_environment_missing`.
 Evidence: `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_project_without_an_environment_for_the_host_leaves_other_languages_unread`.
-Replaces: REQ-1332, REQ-1336.
 
 An absent entry leaves that host without an implementation environment. A
 specification that calls a project function then cannot execute, and the call
@@ -68,7 +66,6 @@ are required only when Define-XML composes the section
 document links or generate a Define-XML document.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`.
-Replaces: REQ-1333.
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready. A section's `datasets` requests the transport
@@ -89,7 +86,6 @@ environment file. Absolute local paths and parent segments have their
 
 Fails: `resource_path_missing`.
 Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_and_function_paths_resolve_from_the_environment_file_and_codelists_from_the_project`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
-Replaces: REQ-1334.
 
 An absent file fails at its one selected location, without discovery or a
 fallback search. The project file does not change where a specification's own
@@ -110,7 +106,6 @@ the project path of each listing, such as `sdtm.specs[0]`.
 
 Fails: `duplicate_specification_name`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa-adapters/tests/project_scope.rs::listings_follow_section_run_order_and_names_are_their_domains`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
-Replaces: REQ-1338.
 
 Every project operation reports that finding; a project run or submission then
 builds nothing, and selecting a specification by name fails.
@@ -128,7 +123,6 @@ project file.
 
 Fails: `unknown_specification_name`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::names_select_listed_specifications_and_refuse_unknown_or_shared_names`, `rust/crates/yamaa/tests/project_operations.rs::a_project_run_refuses_a_name_it_did_not_build`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
-Replaces: REQ-1339.
 
 Selecting one specification's run from a project run by name accepts only a
 name of that run. Any other name, one that another section lists included,
@@ -150,7 +144,6 @@ check also reports the project findings of [PROJECT-5](#project-5),
 [PROJECT-12](#project-12) among the files of every listed specification.
 
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::project_check_reports_every_specification_and_the_project_findings`, `python/tests/installed/installed_public_environment.py::test_project_check_validates_original_studies_without_study_inputs`.
-Replaces: REQ-1340, REQ-1348.
 
 Each finding names the listed specification it belongs to in its `entry`
 context and the document it comes from in its `source` context.
@@ -177,7 +170,6 @@ instead of that file. Independent specifications keep run-scope order.
 
 Fails: `producer_workflow_cycle`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_memory`, `rust/crates/yamaa-adapters/tests/project_scope.rs::plans_order_their_scope_producer_first`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`.
-Replaces: REQ-1330, REQ-1341, REQ-1342.
 
 The project run is the caller that orders these builds. The link itself only
 types a stored artifact ([INPUT-10](../inputs.md#input-10)): a specification
@@ -205,7 +197,6 @@ missing input at `input.<dataset>.path`.
 
 Fails: `resource_path_missing`, `producer_contract_mismatch`, `artifact_path_collision`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_producer_outside_the_scope_is_read_from_its_saved_artifact_and_checked`, `rust/crates/yamaa/tests/project_operations.rs::a_specification_may_not_write_the_saved_artifact_it_reads`, `rust/crates/yamaa-adapters/tests/project_scope.rs::saved_links_read_held_or_saved_artifacts_under_the_producer_contract`.
-Replaces: REQ-1343.
 
 The consumer may not write the files it reads: its `output.path` and
 `output.report` locations may not name the producer's, as
@@ -223,7 +214,6 @@ run-scope artifact is an ordinary source.
 
 Fails: `unlinked_producer`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::an_input_that_reads_a_run_scope_artifact_without_a_link_fails_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
-Replaces: REQ-1344.
 
 The finding fails only the consumer that declares the input, at its
 `input.<dataset>.path`; the other specifications of the run scope still build.
@@ -240,7 +230,6 @@ output, findings and run report.
 
 Fails: `producer_not_completed`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_failed_specification_stops_only_its_consumers_and_saves_reports_alone`, `rust/crates/yamaa-adapters/tests/project_scope.rs::blocked_consumers_name_each_failed_producer`, `rust/crates/yamaa-core/tests/support/diagnostic/project_scope.rs`.
-Replaces: REQ-1345.
 
 The finding is reported at the consumer's `input.<dataset>.schema` for each
 link to a producer that did not complete.
@@ -262,7 +251,6 @@ that ran and declares one, then fails with every run's findings.
 
 Fails: `artifact_path_collision`, `nothing_to_save`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::every_target_is_validated_before_the_first_file_is_written`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `rust/crates/yamaa-adapters/tests/project_scope.rs::the_preflight_refuses_two_results_that_write_one_file`, `rust/crates/yamaa-adapters/tests/project_scope.rs::report_only_saves_write_the_report_file_and_no_primary_artifact`.
-Replaces: REQ-1346.
 
 Locations compare as [OUTPUT-9](../output.md#output-9) compares the two
 paths of one specification, two spellings of one file included. Each
@@ -287,7 +275,6 @@ order; the first section whose publication fails stops the save.
 
 Fails: `nothing_to_save`.
 Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
-Replaces: REQ-1347.
 
 Saving first compares the targets of every section: two sections that name
 one file fail the save before any file is written. A section whose own target

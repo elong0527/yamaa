@@ -1,5 +1,5 @@
 //! Partition rows by key values, groups in first-occurrence order and
-//! members in row order (REQ-0037/0038/0065). Missing values compare equal;
+//! members in row order (ROW-4). Missing values compare equal;
 //! text is exact; temporal precision and float zero signs do not affect
 //! equality, as `table_grouping::Key` defines it. Each row is hashed once
 //! and compared with its group's first row, so no key is copied.

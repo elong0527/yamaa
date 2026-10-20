@@ -3,6 +3,6 @@ condition: dependency_cycle
 spec_paths:
   - columns.ALTVAL.derivation.aggregate
   - columns.AVAL.derivation.case
-requirement: REQ-0072
+rule: COLUMN-6
 context:
   cycle: [ALTVAL, AVAL, ALTVAL]

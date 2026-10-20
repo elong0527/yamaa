@@ -1058,7 +1058,7 @@ mod tests {
             cells(&failure.issues, "condition"),
             [Some(fault.condition.to_owned())]
         );
-        assert_eq!(cells(&failure.issues, "requirement"), [None]);
+        assert_eq!(cells(&failure.issues, "rule"), [None]);
         assert_eq!(
             cells(&failure.issues, "context"),
             [Some(

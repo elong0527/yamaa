@@ -198,7 +198,7 @@ def test_compiler_refusal_details_on_check_and_run(
     document = yaml.safe_load(spec.read_text())
     if resource == "inputs":
         document["input"] = {f"S{index}": "input.csv" for index in range(actual)}
-        # Every specification is pruned after composition (REQ-0638-REQ-0641):
+        # Every specification is pruned after composition (LAYER-11 and LAYER-12):
         # keep all 17 inputs live through a single row-phase default so the
         # inputs capacity is still exercised instead of being pruned away.
         document["columns"][0]["derivation"] = {
@@ -212,7 +212,7 @@ def test_compiler_refusal_details_on_check_and_run(
         issue = result.issues.row(0, named=True)
         assert issue["phase"] == "engine"
         assert issue["condition"] == "engine_rejected"
-        assert issue["requirement"] is None
+        assert issue["rule"] is None
         assert issue["spec_paths"] == [path]
         assert json.loads(issue["context"]) == {
             "code": "compiler_limit",
@@ -254,7 +254,7 @@ def test_inheritance_depth_admits_original_chain_and_parent_occurrences_keep_fix
     for issue in refusals(spec, project):
         assert issue["phase"] == "engine"
         assert issue["condition"] == "engine_rejected"
-        assert issue["requirement"] is None
+        assert issue["rule"] is None
         assert issue["spec_paths"] == []
         assert issue["context"] == {
             "code": "resource_limit",
@@ -280,7 +280,7 @@ def test_wide_yaml_integer_reaches_its_complete_language_finding(tmp_path, proje
         for issue in refusals(spec, project):
             assert issue["phase"] == "validation"
             assert issue["condition"] == "schema_version_mismatch"
-            assert issue["requirement"] == "REQ-0281"
+            assert issue["rule"] == "SCHEMA-2"
             assert issue["spec_paths"] == ["schema_version"]
             assert issue["context"] == {"expected": "1.0", "actual": actual}
     assert not (tmp_path / "out.csv").exists()

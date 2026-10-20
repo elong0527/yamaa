@@ -943,7 +943,7 @@ pub(super) fn current_references(
 ) -> Result<(), PrepareError> {
     references_mode(d, value, project, names, depth, false, true)
 }
-/// A donor window cannot read a named selector (REQ-1263). Its invalid fields
+/// A donor window cannot read a named selector (LOOKUP-16). Its invalid fields
 /// remain window binding findings, rather than executable dependency edges.
 pub(super) fn donor_references(
     d: &Document,

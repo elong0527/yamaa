@@ -2,7 +2,7 @@ phase: validation
 condition: redundant_declaration
 spec_paths:
   - columns.SEX.verifications[0].allowed_values
-requirement: REQ-0955
+rule: CT-9
 context:
   column: SEX
   codelist: SEX

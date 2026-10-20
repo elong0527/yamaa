@@ -352,7 +352,7 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
             assert_eq!(issues.len(), 1, "{entry} {route}: {issues:?}");
             let issue = &issues[0];
             assert_eq!(
-                (issue.phase(), issue.condition(), issue.requirement()),
+                (issue.phase(), issue.condition(), issue.rule()),
                 ("validation", "parent_on_another_share", Some("LAYER-10")),
                 "{entry} {route}"
             );

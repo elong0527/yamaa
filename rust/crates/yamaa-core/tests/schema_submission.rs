@@ -638,7 +638,7 @@ mod schema {
                     .count(),
                 1
             );
-            assert!(values.iter().all(|v| v.requirement().is_none()));
+            assert!(values.iter().all(|v| v.rule().is_none()));
         }
         #[test]
         fn portable_choice_and_identifier_failures_use_only_applicable_current_causes() {
@@ -661,16 +661,16 @@ mod schema {
             assert_eq!(
                 findings(&input)
                     .iter()
-                    .map(|v| v.requirement())
+                    .map(|v| v.rule())
                     .collect::<Vec<_>>(),
                 [
-                    Some("REQ-1046"),
-                    Some("REQ-1141"),
-                    Some("REQ-1145"),
-                    Some("REQ-1046"),
-                    Some("REQ-1142"),
-                    Some("REQ-1143"),
-                    Some("REQ-1144")
+                    Some("SPEC-2"),
+                    Some("SUB-10"),
+                    Some("SUB-6"),
+                    Some("SPEC-2"),
+                    Some("SUB-14"),
+                    Some("SUB-14"),
+                    Some("SUB-21")
                 ]
             );
             let mut a = Arena::default();
@@ -680,9 +680,9 @@ mod schema {
             assert_eq!(
                 findings(&input)
                     .iter()
-                    .map(|v| v.requirement())
+                    .map(|v| v.rule())
                     .collect::<Vec<_>>(),
-                [Some("REQ-1146"), Some("REQ-1147")]
+                [Some("SUB-4"), Some("SUB-4")]
             );
         }
         #[test]
@@ -707,7 +707,7 @@ mod schema {
             assert_eq!(values[1].key, Some(bool_key));
             assert!(values
                 .iter()
-                .all(|v| v.requirement().is_none() && v.origin.is_none()));
+                .all(|v| v.rule().is_none() && v.origin.is_none()));
         }
         #[test]
         fn malformed_lists_nested_objects_and_integer_kinds_refuse_without_partial_acceptance() {
@@ -742,7 +742,7 @@ mod schema {
                     Kind::ExpectedMapping
                 ]
             );
-            assert!(values.iter().all(|v| v.requirement().is_none()));
+            assert!(values.iter().all(|v| v.rule().is_none()));
         }
         #[test]
         fn valid_metadata_is_owned_and_invalid_metadata_keeps_complete_original_findings() {
@@ -848,9 +848,9 @@ mod schema {
             let input = a.finish(root);
             let values = findings(&input);
             assert_eq!(values.len(), 3);
-            assert_eq!(values[0].requirement(), Some("REQ-1046"));
-            assert_eq!(values[1].requirement(), None);
-            assert_eq!(values[2].requirement(), None);
+            assert_eq!(values[0].rule(), Some("SPEC-2"));
+            assert_eq!(values[1].rule(), None);
+            assert_eq!(values[2].rule(), None);
             assert_eq!(
                 values[2].path.steps().collect::<Vec<_>>(),
                 [
@@ -947,7 +947,7 @@ mod schema {
             assert_eq!(values[0].node, 0);
             assert_eq!(values[0].key, Some(0));
             assert_eq!(values[0].kind, Kind::NonTextKey);
-            assert_eq!(values[0].requirement(), None);
+            assert_eq!(values[0].rule(), None);
             let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
             let owner = decode(&empty);
             assert!(owner.dataset().is_none());
@@ -1601,15 +1601,19 @@ mod schema {
                 findings[12].path.steps().collect::<Vec<_>>(),
                 [Step::Field(F::Adam), Step::Field(F::Datasets)]
             );
-            assert_eq!(findings[12].requirement(), None);
+            assert_eq!(findings[12].rule(), None);
             assert_eq!(
-                findings
-                    .iter()
-                    .filter_map(|f| f.requirement())
-                    .collect::<Vec<_>>(),
-                ["REQ-1068", "REQ-1074", "REQ-1046", "REQ-1070", "REQ-1073", "REQ-1070"]
+                findings.iter().filter_map(|f| f.rule()).collect::<Vec<_>>(),
+                [
+                    "DEFINE-9",
+                    "DEFINE-6",
+                    "SPEC-2",
+                    "DEFINE-13",
+                    "DEFINE-21",
+                    "DEFINE-13"
+                ]
             );
-            assert_eq!(findings[7].requirement(), None); // null is an original shape, not a fabricated normative message.
+            assert_eq!(findings[7].rule(), None); // null is an original shape, not a fabricated normative message.
             assert!(matches!(error.input.nodes()[findings[7].node], N::Null));
         }
         #[test]
@@ -1677,7 +1681,7 @@ mod schema {
             );
             assert!(findings
                 .iter()
-                .all(|f| f.requirement().is_none() && matches!(input.nodes()[f.node], N::Null)));
+                .all(|f| f.rule().is_none() && matches!(input.nodes()[f.node], N::Null)));
         }
         #[test]
         fn scalar_container_and_nontext_key_refusals_preserve_original_shapes() {
@@ -1696,7 +1700,7 @@ mod schema {
                 let error = sections(&input).unwrap_err();
                 assert!(std::ptr::eq(error.input, &input));
                 assert!(
-                    matches!(error.cause, Cause::Findings(v) if v.len() == 1 && v[0].node == node && v[0].kind == Kind::ExpectedMapping && v[0].requirement().is_none())
+                    matches!(error.cause, Cause::Findings(v) if v.len() == 1 && v[0].node == node && v[0].kind == Kind::ExpectedMapping && v[0].rule().is_none())
                 );
             }
             let mut a = Arena::default();
@@ -1765,7 +1769,7 @@ mod schema {
                 unknown.node,
                 input.field(section, "generator_version").unwrap()
             );
-            assert_eq!(unknown.requirement(), None);
+            assert_eq!(unknown.rule(), None);
             let mut a = Arena::default();
             let key = a.node(N::Integer("2".into()));
             let value = a.node(N::Null);
@@ -1962,7 +1966,7 @@ mod schema {
                 assert_eq!(finding.node, fact.node);
                 assert_eq!(finding.container, Some(fact.sequence));
                 assert_eq!(finding.key, None);
-                assert_eq!(finding.requirement(), None);
+                assert_eq!(finding.rule(), None);
                 assert_eq!(
                     finding.origin,
                     Some(sections::Origin {
@@ -2098,7 +2102,7 @@ mod schema {
                     findings[0].path.steps().collect::<Vec<_>>(),
                     [Step::Field(F::Adam), Step::Field(F::SourceSystemVersion)]
                 );
-                assert_eq!(findings[0].requirement(), None);
+                assert_eq!(findings[0].rule(), None);
             }
         }
 
@@ -2512,7 +2516,7 @@ mod schema {
         #[test]
         fn each_independent_value_admission_control_has_the_required_condition_and_entry_path() {
             let entry = "sdtm.specs[0].columns.LBORRESU.submission.value_level";
-            for (case, condition, requirement, suffix, reason) in [
+            for (case, condition, rule, suffix, reason) in [
                 (
                     "duplicate id",
                     "duplicate_identifier",
@@ -2579,7 +2583,7 @@ mod schema {
                 (
                     "invalid source",
                     "origin_source_not_admitted",
-                    "REQ-0919",
+                    "SUB-15",
                     format!("{entry}.CREAT.origin"),
                     None,
                 ),
@@ -2589,7 +2593,7 @@ mod schema {
                     findings
                         .iter()
                         .any(|finding| finding.definition().condition == condition
-                            && finding.definition().requirement == Some(requirement)
+                            && finding.definition().rule == Some(rule)
                             && finding.path == suffix
                             && reason.is_none_or(|reason| finding.context["detail"]
                                 == yamaa_core::json::Value::String(reason.into()))),

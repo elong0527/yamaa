@@ -54,7 +54,7 @@ def check_shared(operation, names):
             or not isinstance(finding, dict)
             or not all(
                 isinstance(finding.get(field), str) and finding[field]
-                for field in ("phase", "condition", "requirement", "spec_path")
+                for field in ("phase", "condition", "rule", "spec_path")
             )
         ):
             errors.append(f"ERROR: {label}: {name} lacks a refusal contract")

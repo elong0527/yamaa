@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.EXSTDY.derivation.to_epoch_day.source
-requirement: REQ-0606
+rule: TIME-1
 context:
   source: EX.EXSTDT
   expected: date

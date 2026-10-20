@@ -143,7 +143,7 @@ fn rebased<P: PathPort>(
         }
     }
     if let Some(output) = document.field(document.root(), "output") {
-        // REQ-0629 replaces output atomically, keeping its paths and selector together.
+        // LAYER-5 replaces output atomically, keeping its paths and selector together.
         let from_entry = document
             .field(output, "relative_to")
             .is_some_and(|id| matches!(&document.nodes()[id], N::Text(base) if base == "entry"));

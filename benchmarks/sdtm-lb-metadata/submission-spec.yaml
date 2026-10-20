@@ -1,6 +1,6 @@
 # Independent submission completion over the unchanged executable LB fixture.
 # The original loader accepts Assigned/Investigator without a study family;
-# SDTM REQ-0889 instead requires Vendor/Sponsor for Assigned. This positive
+# SDTM SUB-15 instead requires Vendor/Sponsor for Assigned. This positive
 # witness explicitly selects Sponsor, while tests retain the original
 # rejection.
 schema_version: '1.0'

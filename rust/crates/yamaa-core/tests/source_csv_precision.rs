@@ -8,7 +8,7 @@ mod source {
         #[test]
         fn ties_and_near_ties_round_away_from_zero_with_independent_text() {
             // Scaled distances below the tie are from the exact binary64 value;
-            // REQ-0418 counts anything within 2^-26 (about 1.49e-8) as a tie.
+            // FORMULA-16 counts anything within 2^-26 (about 1.49e-8) as a tie.
             for (value, digits, expected) in [
                 (0.125, 2, "0.13"),
                 (-0.125, 2, "-0.13"),
@@ -1515,8 +1515,8 @@ mod source {
             for (index, finding) in actual.iter().enumerate() {
                 assert_eq!(finding.definition().phase, "ingest");
                 assert_eq!(
-                    finding.definition().requirement,
-                    Some(if index == 9 { "REQ-0853" } else { "REQ-0851" })
+                    finding.definition().rule,
+                    Some(if index == 9 { "CSV-10" } else { "CSV-16" })
                 );
             }
         }
@@ -1563,18 +1563,12 @@ mod source {
                 ]
             );
             assert_eq!(
-                (
-                    actual[0].definition().phase,
-                    actual[0].definition().requirement
-                ),
-                ("validation", Some("REQ-0532"))
+                (actual[0].definition().phase, actual[0].definition().rule),
+                ("validation", Some("INPUT-6"))
             );
             assert_eq!(
-                (
-                    actual[1].definition().phase,
-                    actual[1].definition().requirement
-                ),
-                ("ingest", Some("REQ-0536"))
+                (actual[1].definition().phase, actual[1].definition().rule),
+                ("ingest", Some("INPUT-7"))
             );
             let long = format!("{}β\0\"\\", "9".repeat(6000));
             let error = yamaa_core::typed_csv::Error::FieldParse {
@@ -1711,10 +1705,10 @@ mod source {
                 .map(|error| error.finding("SRC", "data.parquet"))
                 .collect();
             let wanted = [
-                (C::ParquetInvalid, "REQ-1038", vec![]),
+                (C::ParquetInvalid, "PARQUET-5", vec![]),
                 (
                     C::ParquetFieldNameEmpty,
-                    "REQ-1039",
+                    "PARQUET-6",
                     vec![(
                         "field",
                         V::Number(("1").parse().expect("canonical integer")),
@@ -1722,12 +1716,12 @@ mod source {
                 ),
                 (
                     C::ParquetFieldNameDuplicate,
-                    "REQ-1039",
+                    "PARQUET-6",
                     vec![("field", text("I"))],
                 ),
                 (
                     C::ParquetFieldTypeUnsupported,
-                    "REQ-1040",
+                    "PARQUET-7",
                     vec![
                         ("field", text("S")),
                         ("stored_type", text("struct<left: int64, right: string>")),
@@ -1735,7 +1729,7 @@ mod source {
                 ),
                 (
                     C::ParquetFieldValueInvalid,
-                    "REQ-1041",
+                    "PARQUET-9",
                     vec![
                         ("field", text("DT")),
                         ("row", V::Number(("2").parse().expect("canonical integer"))),
@@ -1743,15 +1737,15 @@ mod source {
                     ],
                 ),
             ];
-            for (actual, (code, requirement, extra)) in source_diagnostics(&borrowed).zip(wanted) {
+            for (actual, (code, rule, extra)) in source_diagnostics(&borrowed).zip(wanted) {
                 let fields = vec![("dataset", text("SRC")), ("path", text("data.parquet"))]
                     .into_iter()
                     .chain(extra)
                     .collect();
                 assert_eq!(actual, expected(code, "input.SRC.path", fields));
                 assert_eq!(
-                    (actual.definition().phase, actual.definition().requirement),
-                    ("ingest", Some(requirement))
+                    (actual.definition().phase, actual.definition().rule),
+                    ("ingest", Some(rule))
                 );
             }
             let mut inspected = 0;

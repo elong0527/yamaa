@@ -1,9 +1,9 @@
 version: "1.0"
 
-# See REQ-1091.
+# See FORMULA-17.
 
 expressions:
-# See REQ-1092.
+# See FORMULA-17.
     aggregate:
         type: [aggregate_expression, aggregate_class]
 

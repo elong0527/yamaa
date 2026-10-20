@@ -85,18 +85,18 @@ output: {{path: output.csv, columns: [I, S]}}
         fn original_yaml_to_checked_numeric_failure_without_python_plan() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            for (name, condition, requirement, path, keys) in [
+            for (name, condition, rule, path, keys) in [
                 (
                     "negative-zero-division",
                     "division_by_zero",
-                    "REQ-0430",
+                    "FORMULA-15",
                     "columns.PCHG.derivation.compute",
                     vec!["PILOT7", "P7-742", "ALT"],
                 ),
                 (
                     "negative-integer-overflow",
                     "integer_overflow",
-                    "REQ-0434",
+                    "VALUE-5",
                     "columns.CELLTOT.derivation.compute",
                     vec!["YAMAA-01", "YAMAA-01-102"],
                 ),
@@ -123,7 +123,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(error.spec_path, path);
                 let EvaluationErrorKind::Condition(actual) = error.kind;
                 assert_eq!(actual.condition(), condition);
-                assert_eq!(actual.requirement(), requirement);
+                assert_eq!(actual.rule(), rule);
                 assert_eq!(
                     identity.unwrap().values,
                     keys.into_iter()
@@ -335,11 +335,11 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            for (name, condition, requirement, column, expr, keys) in [
+            for (name, condition, rule, column, expr, keys) in [
                 (
                     "negative-zero-division",
                     "division_by_zero",
-                    "REQ-0430",
+                    "FORMULA-15",
                     "PCHG",
                     "100 * (AVAL - BASE) / BASE",
                     vec!["PILOT7", "P7-742", "ALT"],
@@ -347,7 +347,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 (
                     "negative-integer-overflow",
                     "integer_overflow",
-                    "REQ-0434",
+                    "VALUE-5",
                     "CELLTOT",
                     "CELLCNT * VOLUML",
                     vec!["YAMAA-01", "YAMAA-01-102"],
@@ -370,7 +370,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     "division_by_zero" => ((0, 26), Vec::new()),
                     _ => ((0, 16), Vec::new()),
                 };
-                let expected = json!({"phase":"derivation","condition":condition,"requirement":requirement,
+                let expected = json!({"phase":"derivation","condition":condition,"rule":rule,
                     "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context,
                     "source_span":{"start":span.0,"end":span.1},"operand_route":route});
                 let row = keys
@@ -452,29 +452,29 @@ output: {{path: output.csv, columns: [I, S]}}
             let case = root.join("benchmarks/negative-zero-division");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
             let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            for (expr, condition, requirement, context) in [
+            for (expr, condition, rule, context) in [
                 (
                     "AVAL +",
                     "invalid_expression",
-                    Some("REQ-0188"),
+                    Some("FORMULA-1"),
                     json!({"expr":"AVAL +"}),
                 ),
                 (
                     "LB.LBSTRESN + 1",
                     "qualified_identifier",
-                    Some("REQ-0442"),
+                    Some("FORMULA-9"),
                     json!({"expr":"LB.LBSTRESN + 1","identifier":"LB.LBSTRESN"}),
                 ),
                 (
                     "BOGUS + 1",
                     "unknown_field",
-                    Some("REQ-0106"),
+                    Some("NAME-3"),
                     json!({"identifier":"BOGUS"}),
                 ),
                 (
                     "LBSTRESN + 1",
                     "unresolvable_name",
-                    Some("REQ-0106"),
+                    Some("NAME-3"),
                     json!({"identifier":"LBSTRESN","suggestion":"LB.LBSTRESN"}),
                 ),
             ] {
@@ -484,7 +484,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(
                     spec_findings(&error, Some(run.source())).unwrap(),
                     vec![
-                        json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["columns.PCHG.derivation.compute.expr"],"context":context})
+                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["columns.PCHG.derivation.compute.expr"],"context":context})
                     ]
                 );
             }
@@ -494,7 +494,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}})
+                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}})
                 ]
             );
             let written = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
@@ -503,11 +503,11 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"ingest","condition":"source_quote_unterminated","requirement":"REQ-0851","spec_paths":["input.LB.path"],"context":{"dataset":"LB","path":"input/lb.csv","record":2,"field":1}})
+                    json!({"phase":"ingest","condition":"source_quote_unterminated","rule":"CSV-16","spec_paths":["input.LB.path"],"context":{"dataset":"LB","path":"input/lb.csv","record":2,"field":1}})
                 ]
             );
             // BOGUS joins the projection as an undeclared column while PCHG
-            // stays in it: pruning (REQ-0638) would otherwise discard PCHG
+            // stays in it: pruning (LAYER-11) would otherwise discard PCHG
             // and its division before execution.
             let written = raw.replace(
                 "columns: [STUDYID, USUBJID, PARAMCD, AVAL, BASE, PCHG]",
@@ -545,10 +545,10 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"requirement":"REQ-0198","context":{"column":"PCHG"}}),
-                    json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"requirement":"REQ-0080","context":{"identifier":"LB"}}),
-                    json!({"phase":"validation","condition":"undeclared_column","spec_paths":["keys[3]"],"requirement":"REQ-0220","context":{"column":"BOGUS"}}),
-                    json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"requirement":"REQ-0064","context":{"dataset":"BAD"}}),
+                    json!({"phase":"validation","condition":"missing_derivation","spec_paths":["columns.PCHG.derivation"],"rule":"SPEC-4","context":{"column":"PCHG"}}),
+                    json!({"phase":"validation","condition":"duplicate_identifier","spec_paths":["input.LB","domain"],"rule":"NAME-2","context":{"identifier":"LB"}}),
+                    json!({"phase":"validation","condition":"undeclared_column","spec_paths":["keys[3]"],"rule":"OUTPUT-2","context":{"column":"BOGUS"}}),
+                    json!({"phase":"validation","condition":"driver_unavailable","spec_paths":["base"],"rule":"ROW-8","context":{"dataset":"BAD"}}),
                 ]
             );
         }
@@ -656,8 +656,8 @@ output: {{path: output.csv, columns: [I, S]}}
             let case = root.join("benchmarks/negative-zero-division");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
             let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            let unknown = json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0106","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
-            let cycle = json!({"phase":"validation","condition":"dependency_cycle","requirement":"REQ-0072","spec_paths":["columns.PCHG.derivation.compute"],"context":{"cycle":["PCHG","PCHG"]}});
+            let unknown = json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
+            let cycle = json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.PCHG.derivation.compute"],"context":{"cycle":["PCHG","PCHG"]}});
             let written = raw
                 .replace("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
                 .replace("100 * (AVAL - BASE) / BASE", "BOGUS + PCHG");
@@ -666,7 +666,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}}),
+                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AVAL.derivation.source"],"context":{"identifier":"LB.BOGUS"}}),
                     unknown.clone(),
                     cycle.clone()
                 ]
@@ -678,8 +678,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"qualified_identifier","requirement":"REQ-0442","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBSTRESN"}}),
-                    json!({"phase":"validation","condition":"qualified_identifier","requirement":"REQ-0442","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBBLRESN"}}),
+                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBSTRESN"}}),
+                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBBLRESN"}}),
                     unknown,
                     cycle
                 ]
@@ -908,7 +908,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"ingest","condition":"field_parse_failed","requirement":"REQ-0536","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
+                    json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"int","value":"42.5"}})
                 ]
             );
             let written = written.replace("{LBSTRESN: int}", "{LBSTRESN: int, ZZ: float, AA: int}");
@@ -920,7 +920,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0532","spec_paths":["input.LB.types.ZZ"],"context":{"dataset":"LB","field":"ZZ"}})
+                    json!({"phase":"validation","condition":"unknown_field","rule":"INPUT-6","spec_paths":["input.LB.types.ZZ"],"context":{"dataset":"LB","field":"ZZ"}})
                 ]
             );
         }
@@ -1025,47 +1025,47 @@ output: {{path: output.csv, columns: [I, S]}}
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
             let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
             let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            for (expr, condition, requirement, context) in [
+            for (expr, condition, rule, context) in [
                 (
                     "SUM(AVAL)",
                     "invalid_aggregate_context",
-                    "REQ-0329",
+                    "LOOKUP-18",
                     json!({"expr":"SUM(AVAL)","reason":"a grouped row aggregate reads its row driver"}),
                 ),
                 (
                     "SUM(ABSENT)",
                     "invalid_aggregate_context",
-                    "REQ-0329",
+                    "LOOKUP-18",
                     json!({"expr":"SUM(ABSENT)","reason":"a grouped row aggregate reads its row driver"}),
                 ),
                 (
                     "SUM(OTHER.X)",
                     "invalid_aggregate_context",
-                    "REQ-0329",
+                    "LOOKUP-18",
                     json!({"expr":"SUM(OTHER.X)","reason":"a grouped row aggregate reads 'LB', not 'OTHER'"}),
                 ),
                 (
                     "SUM(LB.ABSENT)",
                     "unknown_field",
-                    "REQ-0103",
+                    "NAME-3",
                     json!({"identifier":"LB.ABSENT"}),
                 ),
                 (
                     "SUM(",
                     "invalid_expression",
-                    "REQ-0188",
+                    "FORMULA-1",
                     json!({"expr":"SUM("}),
                 ),
                 (
                     "SUM(SUM(LB.LBSTRESN))",
                     "nested_reduction",
-                    "REQ-0502",
+                    "FORMULA-21",
                     json!({"expr":"SUM(SUM(LB.LBSTRESN))","outer":"SUM","inner":"SUM"}),
                 ),
                 (
                     "SUM(LB.LBSTRESN, LB.LBSTRESN)",
                     "invalid_expression",
-                    "REQ-0188",
+                    "FORMULA-1",
                     json!({"expr":"SUM(LB.LBSTRESN, LB.LBSTRESN)"}),
                 ),
             ] {
@@ -1078,7 +1078,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(
                     spec_findings(&error, Some(run.source())).unwrap(),
                     vec![
-                        json!({"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":context})
+                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":context})
                     ]
                 );
                 let invalid_data = String::from_utf8(data.clone())
@@ -1088,7 +1088,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(
                     spec_findings(&error, Some(run.source())).unwrap(),
                     vec![
-                        json!({"phase":"ingest","condition":"field_parse_failed","requirement":"REQ-0536","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"float","value":"invalid"}})
+                        json!({"phase":"ingest","condition":"field_parse_failed","rule":"INPUT-7","spec_paths":["input.LB.types.LBSTRESN"],"context":{"dataset":"LB","field":"LBSTRESN","type":"float","value":"invalid"}})
                     ]
                 );
             }
@@ -1224,7 +1224,7 @@ output: {{path: output.csv, columns: [I, S]}}
             expected["artifacts"] = json!([]);
             expected["tables"].as_array_mut().unwrap().pop();
             expected["nodes"][0]["outcome"] = json!("failure");
-            expected["diagnostics"] = json!([{"phase":"validation","condition":"unknown_artifact_profile","requirement":"REQ-0760","spec_paths":["output.path"],"context":{"path":"adlb.bad","permitted":[".csv",".parquet"]}}]);
+            expected["diagnostics"] = json!([{"phase":"validation","condition":"unknown_artifact_profile","rule":"OUTPUT-5","spec_paths":["output.path"],"context":{"path":"adlb.bad","permitted":[".csv",".parquet"]}}]);
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
             expected["source_reads"][0]["snapshots_created"] = json!(0);
             assert_eq!(report, expected);
@@ -1239,7 +1239,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let attempt = run.execute(&mut port, Scope::default());
             let actual =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
-            let diagnostic = json!({"phase":"verification","condition":"row_count_failed","requirement":"REQ-0385","spec_paths":["verifications[0].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
+            let diagnostic = json!({"phase":"verification","condition":"row_count_failed","rule":"CHECK-13","spec_paths":["verifications[0].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
             expected["diagnostics"] = json!([diagnostic.clone()]);
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
             let mut failure = diagnostic;
@@ -1272,7 +1272,7 @@ output: {{path: output.csv, columns: [I, S]}}
             .unwrap();
             let rows = original["tables"][1]["rows"].as_array().unwrap();
             let keys=[0,1,2,12,3,4,5,13,6,14,7,8,9,15,10,11,16].into_iter().map(|row|json!({"STUDYID":rows[row][0]["value"],"USUBJID":rows[row][1]["value"],"PARAMCD":rows[row][3]["value"],"AVISIT":rows[row][2]["value"]})).collect::<Vec<_>>();
-            let diagnostic = json!({"phase":"verification","condition":"unique_failed","requirement":"REQ-0381","spec_paths":["verifications[0].unique"],"context":{"columns":["USUBJID"],"failure_count":5,"keys":&keys[..5]}});
+            let diagnostic = json!({"phase":"verification","condition":"unique_failed","rule":"CHECK-10","spec_paths":["verifications[0].unique"],"context":{"columns":["USUBJID"],"failure_count":5,"keys":&keys[..5]}});
             expected["diagnostics"] = json!([diagnostic.clone()]);
             expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
             let mut failure = diagnostic;
@@ -1285,7 +1285,7 @@ output: {{path: output.csv, columns: [I, S]}}
             count["failure"] = Json::Null;
             let mut unique = count.clone();
             unique["check"] = json!("unique");
-            unique["requirement"] = json!("REQ-0381");
+            unique["rule"] = json!("CHECK-10");
             unique["spec_path"] = json!("verifications[0].unique");
             unique["evaluated_count"] = json!(5);
             unique["failure"] = failure;
@@ -1354,47 +1354,47 @@ output: {{path: output.csv, columns: [I, S]}}
             };
             // Each valid first check records its identity and failure before the later
             // declaration aborts. Earlier data failures are kept in the ledger, while
-            // the later declaration is the execution diagnostic (REQ-1177).
-            for (declaration, condition, requirement, suffix, reason) in [
+            // the later declaration is the execution diagnostic (CHECK-22).
+            for (declaration, condition, rule, suffix, reason) in [
                 (
                     "unique: []",
                     "invalid_declaration",
-                    "REQ-0397",
+                    "CHECK-4",
                     "unique",
                     "columns names at least one column",
                 ),
                 (
                     "unique: [ABSENT]",
                     "unknown_field",
-                    "REQ-0405",
+                    "CHECK-4",
                     "unique.columns",
                     "unknown column 'ABSENT'",
                 ),
                 (
                     "row_count: {}",
                     "invalid_declaration",
-                    "REQ-0399",
+                    "CHECK-4",
                     "row_count",
                     "row_count requires one bound",
                 ),
                 (
                     "row_count: {min: 19, max: 18}",
                     "invalid_declaration",
-                    "REQ-0399",
+                    "CHECK-4",
                     "row_count",
                     "row_count min exceeds max",
                 ),
                 (
                     "row_count: {min: 999999999999999999999, max: 999999999999999999998}",
                     "invalid_declaration",
-                    "REQ-0399",
+                    "CHECK-4",
                     "row_count",
                     "row_count min exceeds max",
                 ),
                 (
                     "row_count: {id: \"a'b\", min: 0}",
                     "duplicate_identifier",
-                    "REQ-0398",
+                    "CHECK-3",
                     "row_count",
                     "verification id \"a'b\" repeats verifications[0].row_count",
                 ),
@@ -1426,7 +1426,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     }
                     assert_eq!(
                         actual["diagnostics"],
-                        json!([{"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":[format!("verifications[1].{suffix}")],"context":{"reason":reason}}])
+                        json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":[format!("verifications[1].{suffix}")],"context":{"reason":reason}}])
                     );
                 }
             }
@@ -1489,23 +1489,23 @@ output: {{path: output.csv, columns: [I, S]}}
                     .unwrap();
             let bytes =
                 std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/input/lb.csv")).unwrap();
-            for (replacement, condition, requirement, context) in [
+            for (replacement, condition, rule, context) in [
                 (
                     "[]",
                     "invalid_field_type",
-                    "REQ-0065",
+                    "ROW-4",
                     json!({"row":"total","group_by":[]}),
                 ),
                 (
                     "[LB.STUDYID, LB.STUDYID]",
                     "invalid_field_type",
-                    "REQ-0065",
+                    "ROW-4",
                     json!({"row":"total","group_by":["LB.STUDYID","LB.STUDYID"]}),
                 ),
                 (
                     "[STUDYID]",
                     "unknown_field",
-                    "REQ-0066",
+                    "ROW-4",
                     json!({"row":"total","identifier":"STUDYID","dataset":"LB"}),
                 ),
             ] {
@@ -1515,7 +1515,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 );
                 let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
                     .expect_err("preflight without source");
-                assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"requirement":requirement,"spec_paths":["rows[1].group_by"],"context":context}]).as_array().unwrap().clone());
+                assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows[1].group_by"],"context":context}]).as_array().unwrap().clone());
             }
             let written = raw
                 .replace("id: total", "id: total\n    dataset: ABSENT")
@@ -1523,7 +1523,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
                 .err()
                 .unwrap();
-            assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","requirement":"REQ-0034","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
+            assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","rule":"ROW-1","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
             let written = raw.replace(
                 "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
                 "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
@@ -1533,20 +1533,20 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["rows[1].group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
+                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["rows[1].group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
                 ]
             );
-            for (written, path, requirement, context) in [
+            for (written, path, rule, context) in [
                 (
                     raw.replace("PARAM: {literal: Total of Components}", "PARAM: LB.LBTEST"),
                     "rows[1].derivations.PARAM.source",
-                    "REQ-0067",
+                    "ROW-5",
                     json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
                 ),
                 (
                     raw.replace("derivation: LB.VISIT", "derivation: LB.LBTEST"),
                     "columns.AVISIT.derivation.source",
-                    "REQ-0067",
+                    "ROW-5",
                     json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
                 ),
             ] {
@@ -1555,7 +1555,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     .execute_csv(&bytes)
                     .err()
                     .expect("scope finding after ingestion");
-                assert_eq!(spec_findings(&error,Some(run.source())).unwrap(),json!([{"phase":"validation","condition":"ungrouped_driver_field","requirement":requirement,"spec_paths":[path],"context":context}]).as_array().unwrap().clone());
+                assert_eq!(spec_findings(&error,Some(run.source())).unwrap(),json!([{"phase":"validation","condition":"ungrouped_driver_field","rule":rule,"spec_paths":[path],"context":context}]).as_array().unwrap().clone());
             }
         }
 
@@ -1679,7 +1679,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     expected["artifacts"] = json!([]);
                     expected["verifications"] = json!([]);
                     expected["tables"].as_array_mut().unwrap().pop();
-                    expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0510","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
+                    expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-23","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
                     expected["nodes"][0]["outcome"] = json!("failure");
                     expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
                     assert!(host.published.is_empty());
@@ -1789,7 +1789,7 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.PARAM.derivation.source"],"context":{"identifier":"LB.ABSENT"}})
+                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PARAM.derivation.source"],"context":{"identifier":"LB.ABSENT"}})
                 ]
             );
             let bad = raw.replace(
@@ -1801,12 +1801,12 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"duplicate_derivation","requirement":"REQ-1260","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
+                    json!({"phase":"validation","condition":"duplicate_derivation","rule":"SPEC-6","spec_paths":["columns.AVAL.derivation"],"context":{"column":"AVAL","rows":["collected","total"],"not_row_local":"aggregate"}})
                 ]
             );
             // Missing coverage is reported in declared column order, then the
             // independently conflicting root filter. The ABSENT row derivation
-            // names an undeclared column, so pruning (REQ-0638) discards it
+            // names an undeclared column, so pruning (LAYER-11) discards it
             // with the dead declaration instead of reporting it.
             let bad = raw
                 .replace("domain: ADLB", "domain: ADLB\nfilter: 'TRUE'")
@@ -1821,8 +1821,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"missing_derivation","requirement":"REQ-0200","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
-                    json!({"phase":"validation","condition":"conflicting_row_construction","requirement":"REQ-1171","spec_paths":["filter","rows"],"context":{}}),
+                    json!({"phase":"validation","condition":"missing_derivation","rule":"SPEC-5","spec_paths":["columns.PARAM.derivation"],"context":{"column":"PARAM","rows":["collected"]}}),
+                    json!({"phase":"validation","condition":"conflicting_row_construction","rule":"ROW-9","spec_paths":["filter","rows"],"context":{}}),
                 ]
             );
         }

@@ -1,4 +1,4 @@
-//! Canonical scalar text with Unicode-character left padding (REQ-1261).
+//! Canonical scalar text with Unicode-character left padding (TEXT-2).
 use crate::{
     conversion::{convert, ConversionError},
     value::{ColumnType, Value},

@@ -40,10 +40,10 @@ dataset_verifications:
         - when:
             type: predicate
             required: false
-            description: See REQ-0383.
+            description: See CHECK-12.
         - require: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
-    row_count: # See REQ-1152.
+    row_count: # See CHECK-13.
         - id: {type: verification_id, required: false}
         - group_by: {type: "list[variable]", required: false}
         - filter: {type: predicate, required: false}

@@ -3,74 +3,74 @@ use yamaa_core::json::Value as C;
 use yamaa_core::{csv_source::parse, diagnostic::ConditionCode};
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (input, condition, requirement, record, field) in [
+    for (input, condition, rule, record, field) in [
         (
             &b""[..],
             "source_header_absent",
-            "REQ-0851",
+            "CSV-16",
             1,
             C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"\xef\xbb\xbfID\n"[..],
             "source_byte_order_mark",
-            "REQ-0851",
+            "CSV-16",
             1,
             C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\nx\r"[..],
             "source_carriage_return",
-            "REQ-0851",
+            "CSV-16",
             2,
             C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\nx\"y"[..],
             "source_quote_in_bare_field",
-            "REQ-0851",
+            "CSV-16",
             2,
             C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\n\"x\" "[..],
             "source_text_after_quote",
-            "REQ-0851",
+            "CSV-16",
             2,
             C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID\n\"x"[..],
             "source_quote_unterminated",
-            "REQ-0851",
+            "CSV-16",
             2,
             C::Number(("1").parse().expect("canonical integer")),
         ),
         (
             &b"ID,V\nx"[..],
             "source_record_width",
-            "REQ-0851",
+            "CSV-16",
             2,
             C::Number(("2").parse().expect("canonical integer")),
         ),
         (
             &b"ID,\nx,y"[..],
             "source_field_name_empty",
-            "REQ-0851",
+            "CSV-16",
             1,
             C::Number(("2").parse().expect("canonical integer")),
         ),
         (
             &b"ID,ID\nx,y"[..],
             "source_field_name_duplicate",
-            "REQ-0851",
+            "CSV-16",
             1,
             C::String("ID".into()),
         ),
         (
             &b"\xef\xbb\xbfID\n\"x\ny\",\xff"[..],
             "invalid_text",
-            "REQ-0853",
+            "CSV-10",
             2,
             C::Number(("2").parse().expect("canonical integer")),
         ),
@@ -79,14 +79,10 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         let finding = error.finding("SRC", "source.csv").unwrap().diagnostic();
         let definition = finding.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            ("ingest", condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            ("ingest", condition, Some(rule))
         );
-        assert_eq!(error.requirement(), Some(requirement));
+        assert_eq!(error.rule(), Some(rule));
         assert_eq!(finding.spec_paths, ["input.SRC.path"]);
         assert_eq!(finding.context["dataset"], C::String("SRC".into()));
         assert_eq!(finding.context["path"], C::String("source.csv".into()));
@@ -103,7 +99,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         .join(",");
     let error = parse(header.as_bytes()).unwrap_err();
     assert!(error.finding("SRC", "source.csv").is_none());
-    assert!(error.requirement().is_none());
+    assert!(error.rule().is_none());
     reached
 }
 
@@ -114,7 +110,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         csv_source, diagnostic::Context, typed_csv::PreparedTypes, value::ColumnType,
     };
     let mut reached = std::collections::BTreeSet::new();
-    for (declarations, content, phase, condition, requirement, field, extra) in [
+    for (declarations, content, phase, condition, rule, field, extra) in [
         (
             vec![
                 ("X".into(), ColumnType::Int),
@@ -123,7 +119,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
             b"X\ninvalid".as_slice(),
             "validation",
             "unknown_field",
-            "REQ-0532",
+            "INPUT-6",
             "ABSENT",
             vec![],
         ),
@@ -132,7 +128,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
             b"A,B\n1,bad\nworse,2".as_slice(),
             "ingest",
             "field_parse_failed",
-            "REQ-0536",
+            "INPUT-7",
             "B",
             vec![("type", "int"), ("value", "bad")],
         ),
@@ -144,12 +140,8 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         let diagnostic = error.finding("SRC").unwrap().diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            (phase, condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            (phase, condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_paths, [format!("input.SRC.types.{field}")]);
         let expected: Context = [("dataset", "SRC"), ("field", field)]

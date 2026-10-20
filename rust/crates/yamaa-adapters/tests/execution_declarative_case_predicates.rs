@@ -121,7 +121,7 @@ columns:
             assert_eq!(
                 issues,
                 vec![
-                    yamaa_adapters::json!({"phase":"derivation","condition":"multiple_values_per_key","requirement":"REQ-0075","spec_paths":["columns.VALUE.derivation.case[0].when"],"context":{"identifier":"SRC.V","value_count":2,"keys":[{"ID":"a"}]}})
+                    yamaa_adapters::json!({"phase":"derivation","condition":"multiple_values_per_key","rule":"COLUMN-2","spec_paths":["columns.VALUE.derivation.case[0].when"],"context":{"identifier":"SRC.V","value_count":2,"keys":[{"ID":"a"}]}})
                 ]
             );
             assert!(result.save().is_err());
@@ -194,7 +194,7 @@ columns:
             if predicate == "7" {
                 let Err(issues) = built else { panic!("non-text public predicate was admitted") };
                 assert_eq!(issues[0].condition(), "invalid_field_type");
-                assert_eq!(issues[0].requirement(), Some("REQ-0287"));
+                assert_eq!(issues[0].rule(), Some("SCHEMA-12"));
                 assert_eq!(issues[0].spec_paths, ["verifications[0].assert.require"]);
                 assert!(!fixture.0.join("result.csv").exists());
                 continue;
@@ -300,7 +300,7 @@ columns:
                         "historical_private_reference_defect"
                     );
                     assert_eq!(case["csv"], disposition["historical_csv"]);
-                    assert_eq!(disposition["requirement"], "REQ-0148");
+                    assert_eq!(disposition["rule"], "LOOKUP-8");
                     continue;
                 }
                 let fixture = Fixture::new();
@@ -381,7 +381,7 @@ columns:
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].phase(), definition.phase);
             assert_eq!(result.issues()[0].condition(), definition.condition);
-            assert_eq!(result.issues()[0].requirement(), definition.requirement);
+            assert_eq!(result.issues()[0].rule(), definition.rule);
             assert!(result.output().is_none());
             assert!(result.save().is_err());
             assert!(!fixture.0.join("result.csv").exists());
@@ -443,7 +443,7 @@ columns:
                 let issue = &result.issues()[0];
                 assert_eq!(issue.phase(), definition.phase);
                 assert_eq!(issue.condition(), definition.condition);
-                assert_eq!(issue.requirement(), definition.requirement);
+                assert_eq!(issue.rule(), definition.rule);
                 assert_eq!(
                     issue.spec_paths,
                     vec![format!("verifications[0].assert.{field}")]
@@ -546,7 +546,7 @@ columns:
             fs::write(fixture.0.join("alt.csv"), "ID,SEQ,CUT\n1,1,4\n3,1,2\n").unwrap();
         }
         fn finding(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn complete_root_outputs_and_handler_geometry_are_current_row_specific() {
@@ -629,7 +629,7 @@ columns:
             assert_eq!(
                 issues,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0120","spec_paths":["intermediates[0].filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates[0].filter"],"context":{"identifier":"SRC.CUT","intermediate":"P"}})
                 ]
             );
             assert!(!fixture.0.join("result.csv").exists());
@@ -657,7 +657,7 @@ columns:
                 ])
             );
             // Only B is neutralised: A still derives P.A, so pruning
-            // (REQ-0638) keeps P live and its filter is still refused. A
+            // (LAYER-11) keeps P live and its filter is still refused. A
             // refused intermediate's fields no longer bind, so A's read
             // reports unknown_field as well — the same pair a composed
             // specification (one with a parent) reports.
@@ -670,8 +670,8 @@ columns:
             assert_eq!(
                 issues,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0120","spec_paths":["intermediates[0].filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}}),
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates[0].filter"],"context":{"identifier":"TIME","intermediate":"P","suggestion":"D.TIME"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
                 ]
             );
         }
@@ -746,7 +746,7 @@ columns:
             }
         }
         fn issues(issues: &[yamaa_core::diagnostic::Diagnostic]) -> Vec<yamaa_core::json::Value> {
-            issues.iter().map(|i|yamaa_adapters::json!({"phase":i.phase(),"condition":i.condition(),"requirement":i.requirement(),"spec_paths":i.spec_paths,"context":i.context.clone()})).collect()
+            issues.iter().map(|i|yamaa_adapters::json!({"phase":i.phase(),"condition":i.condition(),"rule":i.rule(),"spec_paths":i.spec_paths,"context":i.context.clone()})).collect()
         }
         fn reference() -> yamaa_core::json::Value {
             yamaa_adapters::json_wire::decode(include_str!("fixtures/flag_reference.json")).unwrap()
@@ -955,7 +955,7 @@ columns:
                 Ok(result) => result.issues().to_vec(),
                 Err(records) => records,
             };
-            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
+            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
         }
         const BODY: &str = r#"schema_version: '1.0'
 domain: TEST
@@ -1010,7 +1010,7 @@ columns:
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
+                    yamaa_adapters::json!({"phase":"validation", "condition":"rename_only_intermediate", "rule":"LOOKUP-4", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
                 ]
             );
             assert!(!fixture.0.join("src.csv").exists());
@@ -1035,7 +1035,7 @@ columns:
                 assert_eq!(
                     issues(fixture.run(&authored)),
                     vec![
-                        yamaa_adapters::json!({"phase":"validation", "condition":"rename_only_intermediate", "requirement":"REQ-1248", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
+                        yamaa_adapters::json!({"phase":"validation", "condition":"rename_only_intermediate", "rule":"LOOKUP-4", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P","dataset":"DONOR"}})
                     ]
                 );
                 assert!(!fixture.0.join("src.csv").exists());
@@ -1052,7 +1052,7 @@ columns:
                 assert_eq!(
                     issues(fixture.run(&BODY.replace(line, ""))),
                     vec![
-                        yamaa_adapters::json!({"phase":"validation", "condition":"unpaired_fields", "requirement":"LOOKUP-10", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "declared":[declared], "missing":[missing]}})
+                        yamaa_adapters::json!({"phase":"validation", "condition":"unpaired_fields", "rule":"LOOKUP-10", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "declared":[declared], "missing":[missing]}})
                     ]
                 );
             }
@@ -1063,7 +1063,7 @@ columns:
             fs::write(fixture.0.join("src.csv"), "ID\n1\n").unwrap();
             fs::write(fixture.0.join("donor.csv"), "OTHER,SEQ,A,B\nx,0,a,b\n").unwrap();
             // Only B is neutralised: A still derives P.A, so pruning
-            // (REQ-0638) keeps P live and key admission still runs for it.
+            // (LAYER-11) keeps P live and key admission still runs for it.
             // A refused intermediate's fields no longer bind, so A's read
             // reports unknown_field as well — the same pair a composed
             // specification (one with a parent) reports.
@@ -1073,8 +1073,8 @@ columns:
             assert_eq!(
                 issues(fixture.run(&unused)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"no_applicable_keys", "requirement":"LOOKUP-5", "spec_paths":["intermediates[0]"], "context":{"dataset":"DONOR", "keys":["ID","PARAM"], "hint":"declare the `key` explicitly"}}),
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
+                    yamaa_adapters::json!({"phase":"validation", "condition":"no_applicable_keys", "rule":"LOOKUP-5", "spec_paths":["intermediates[0]"], "context":{"dataset":"DONOR", "keys":["ID","PARAM"], "hint":"declare the `key` explicitly"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
                 ]
             );
             fs::write(fixture.0.join("donor.csv"), "ID,PARAM,SEQ,A,B\nx,0,0,a,b\n").unwrap();
@@ -1082,8 +1082,8 @@ columns:
             assert_eq!(
                 issues(fixture.run(&mismatched)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"incompatible_input_type", "requirement":"LOOKUP-9", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "source":"ID", "expected":"int", "actual":"str"}}),
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0103","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
+                    yamaa_adapters::json!({"phase":"validation", "condition":"incompatible_input_type", "rule":"LOOKUP-9", "spec_paths":["intermediates[0]"], "context":{"intermediate":"P", "source":"ID", "expected":"int", "actual":"str"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.A.derivation.source"],"context":{"identifier":"P.A"}})
                 ]
             );
         }
@@ -1261,7 +1261,7 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn independent_original_language_captures_match_all_output_bytes_and_complete_findings() {
@@ -1314,7 +1314,7 @@ columns:
                 yamaa_adapters::json!([{
                     "phase": "validation",
                     "condition": "incompatible_input_type",
-                    "requirement": "REQ-0190",
+                    "rule": "FORMULA-5",
                     "spec_paths": ["intermediates[0].filter"],
                     "context": {"left_type": "int", "right_type": "str"},
                 }])
@@ -1348,7 +1348,7 @@ columns:
             assert_eq!(
         result.issues().iter().map(issue_json).collect::<Vec<_>>(),
         yamaa_adapters::json!([{
-            "phase": "validation", "condition": "incompatible_input_type", "requirement": "REQ-0190",
+            "phase": "validation", "condition": "incompatible_input_type", "rule": "FORMULA-5",
             "spec_paths": ["intermediates[0].filter"], "context": {"left_type": "int", "right_type": "str"},
         }]).as_array().unwrap().as_slice()
     );
@@ -1401,7 +1401,7 @@ columns:
                 let fixture = Fixture::new();
                 let mut result = fixture.run(variant, &case);
                 if variant == "unused" {
-                    // Option B (REQ-0638, REQ-0641): no column reads LOOK, so
+                    // Option B (LAYER-11, LAYER-12): no column reads LOOK, so
                     // pruning discards the intermediate together with its
                     // ill-typed filter; the specification builds instead of
                     // refusing the dead declaration.
@@ -1415,7 +1415,7 @@ columns:
                     assert!(fixture.check().is_empty(), "check without data: {variant}");
                     continue;
                 }
-                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0190","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
+                let expected = yamaa_adapters::json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-5","spec_paths":["intermediates[0].filter"],"context":{"left_type":"int","right_type":"str"}}]);
                 assert_eq!(
                     result.issues().iter().map(issue_json).collect::<Vec<_>>(),
                     expected.as_array().unwrap().as_slice(),
@@ -1668,7 +1668,7 @@ columns:
                     })
                     .collect::<Vec<_>>(),
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-0125","spec_paths":["columns.B.derivation.source"],"context":{"identifier":"P.LOW"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-11","spec_paths":["columns.B.derivation.source"],"context":{"identifier":"P.LOW"}})
                 ]
             );
             assert_eq!(
@@ -1851,7 +1851,7 @@ columns:
             assert_eq!(
                 findings,
                 [
-                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","requirement":"LOOKUP-9","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
+                    yamaa_adapters::json!({"phase":"validation","condition":"incomparable_range_types","rule":"LOOKUP-9","spec_paths":["intermediates[0].between"],"context":{"intermediate":"EPOCHDEF","value_type":"date","lower_type":"int","upper_type":"int"}})
                 ]
             );
             assert_eq!(
@@ -1970,26 +1970,26 @@ columns:
         }
         #[test]
         fn ordering_and_unknown_profile_negatives_keep_registered_first_findings() {
-            for (name, condition, path, requirement, context) in [
+            for (name, condition, path, rule, context) in [
                 (
                     "negative-order-repeated",
                     "duplicate_order_term",
                     "output.order_by[2]",
-                    "REQ-0224",
+                    "OUTPUT-12",
                     yamaa_adapters::json!({"column":"USUBJID"}),
                 ),
                 (
                     "negative-order-unknown-column",
                     "undeclared_column",
                     "output.order_by[1]",
-                    "REQ-0224",
+                    "OUTPUT-12",
                     yamaa_adapters::json!({"column":"VISITNUM"}),
                 ),
                 (
                     "negative-source-unknown-format",
                     "source_profile_unknown",
                     "input.DM.path",
-                    "REQ-0852",
+                    "INPUT-1",
                     yamaa_adapters::json!({"dataset":"DM", "path":"input/dm.txt"}),
                 ),
             ] {
@@ -2004,8 +2004,8 @@ columns:
                 assert_eq!(issues.len(), 1, "{name}: {issues:?}");
                 let issue = &issues[0];
                 assert_eq!(
-                    (issue.phase(), issue.condition(), issue.requirement()),
-                    ("validation", condition, Some(requirement)),
+                    (issue.phase(), issue.condition(), issue.rule()),
+                    ("validation", condition, Some(rule)),
                     "{name}"
                 );
                 assert_eq!(issue.spec_paths, [path], "{name}");
@@ -2031,15 +2031,11 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             let issues = fixture.run().err().expect("static declaration");
             assert_eq!(issues.len(), 1);
             assert_eq!(
-                (
-                    issues[0].phase(),
-                    issues[0].condition(),
-                    issues[0].requirement()
-                ),
+                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
                 (
                     "validation",
                     "empty_string_present_unsupported",
-                    Some("REQ-1161")
+                    Some("INPUT-9")
                 )
             );
             assert_eq!(issues[0].spec_paths, ["input.SRC.empty_string"]);
@@ -2128,8 +2124,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
             assert_eq!(result.issues().len(), 1);
             let issue = &result.issues()[0];
             assert_eq!(
-                (issue.phase(), issue.condition(), issue.requirement()),
-                ("validation", "phase_boundary", Some("REQ-1170"))
+                (issue.phase(), issue.condition(), issue.rule()),
+                ("validation", "phase_boundary", Some("ROW-9"))
             );
             assert_eq!(issue.spec_paths, ["filter"]);
             assert_eq!(
@@ -2146,8 +2142,8 @@ columns: [{name: ID, type: str, derivation: SRC.ID}]
                 .expect("static conflicting row construction");
             assert_eq!(issues.len(), 1);
             assert_eq!(
-                (issues[0].condition(), issues[0].requirement()),
-                ("conflicting_row_construction", Some("REQ-1171"))
+                (issues[0].condition(), issues[0].rule()),
+                ("conflicting_row_construction", Some("ROW-9"))
             );
         }
 
@@ -2186,12 +2182,8 @@ columns:
             let issues = result.issues();
             assert_eq!(issues.len(), 1);
             assert_eq!(
-                (
-                    issues[0].phase(),
-                    issues[0].condition(),
-                    issues[0].requirement()
-                ),
-                ("validation", "ordinal_field_collision", Some("REQ-1294"))
+                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
+                ("validation", "ordinal_field_collision", Some("INPUT-4"))
             );
             assert_eq!(issues[0].spec_paths, ["input.SOURCE.ordinal"]);
             assert_eq!(
@@ -2215,12 +2207,8 @@ columns: [{name: ID, type: str, derivation: {odm: SRC.ITEM}}]
                 .expect("fixed schema rejects ordinal before capture");
             assert_eq!(issues.len(), 1);
             assert_eq!(
-                (
-                    issues[0].phase(),
-                    issues[0].condition(),
-                    issues[0].requirement()
-                ),
-                ("validation", "odm_schema_field_type", Some("REQ-1295"))
+                (issues[0].phase(), issues[0].condition(), issues[0].rule()),
+                ("validation", "odm_schema_field_type", Some("INPUT-4"))
             );
             assert_eq!(issues[0].spec_paths, ["input.SRC.ordinal"]);
             assert_eq!(
@@ -2458,7 +2446,7 @@ columns:
             }
         }
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn complete_independent_record_contexts_and_unchanged_original() {

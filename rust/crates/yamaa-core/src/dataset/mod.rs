@@ -412,7 +412,7 @@ pub enum Check {
         code: crate::diagnostic::ConditionCode,
         reason: String,
     },
-    /// `require` must hold on every row that `when`, if present, binds (REQ-0383).
+    /// `require` must hold on every row that `when`, if present, binds (CHECK-12).
     Assert {
         when: Option<BoundPredicate>,
         require: BoundPredicate,

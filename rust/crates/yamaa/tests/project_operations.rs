@@ -104,7 +104,7 @@ fn study() -> Study {
 struct Row {
     phase: String,
     condition: String,
-    requirement: Option<String>,
+    rule: Option<String>,
     spec_paths: Vec<String>,
     context: Value,
 }
@@ -121,10 +121,10 @@ fn rows(table: &Table) -> Vec<Row> {
                 .unwrap()
                 .clone()
         };
-        let (phase, condition, requirement, context) = (
+        let (phase, condition, rule, context) = (
             text("phase"),
             text("condition"),
-            text("requirement"),
+            text("rule"),
             text("context"),
         );
         let paths = batch
@@ -140,7 +140,7 @@ fn rows(table: &Table) -> Vec<Row> {
             rows.push(Row {
                 phase: phase.value(row).to_owned(),
                 condition: condition.value(row).to_owned(),
-                requirement: (!requirement.is_null(row)).then(|| requirement.value(row).to_owned()),
+                rule: (!rule.is_null(row)).then(|| rule.value(row).to_owned()),
                 spec_paths: (0..values.len())
                     .map(|i| values.value(i).to_owned())
                     .collect(),
@@ -189,7 +189,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let issues = rows(&unknown.issues);
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].condition, "unknown_specification_name");
-    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1339"));
+    assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-6"));
     assert_eq!(issues[0].context["name"], text("ADXX"));
     assert_eq!(
         issues[0].context["available"],
@@ -207,7 +207,7 @@ fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let issues = rows(&duplicate.issues);
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].condition, "duplicate_specification_name");
-    assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1338"));
+    assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-5"));
     assert_eq!(issues[0].spec_paths, ["sdtm.specs[0]", "adam.specs[1]"]);
     assert_eq!(issues[0].context["name"], text("DM"));
     let check = conditions(
@@ -358,7 +358,7 @@ fn assert_nothing_to_save(issues: &Table, rule: &str) {
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].phase, "output");
     assert_eq!(issues[0].condition, "nothing_to_save");
-    assert_eq!(issues[0].requirement.as_deref(), Some(rule));
+    assert_eq!(issues[0].rule.as_deref(), Some(rule));
     assert!(issues[0].spec_paths.is_empty());
     assert_eq!(
         issues[0].context.as_object().map(|context| context.len()),
@@ -420,7 +420,7 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
         assert_eq!(issues.len(), 1, "{issues:?}");
         assert_eq!(issues[0].phase, "validation");
         assert_eq!(issues[0].condition, "unknown_specification_name");
-        assert_eq!(issues[0].requirement.as_deref(), Some("REQ-1339"));
+        assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-6"));
         assert!(issues[0].spec_paths.is_empty());
         assert_eq!(issues[0].context["name"], text(name));
         // Every name the run has, sorted.
@@ -508,7 +508,7 @@ fn project_check_reports_every_specification_and_the_project_findings() {
         .iter()
         .find(|row| row.condition == "unlinked_producer")
         .expect("unlinked producer finding");
-    assert_eq!(unlinked.requirement.as_deref(), Some("REQ-1344"));
+    assert_eq!(unlinked.rule.as_deref(), Some("PROJECT-10"));
     assert_eq!(unlinked.spec_paths, ["input.DM.path"]);
     assert_eq!(unlinked.context["path"], text("../out/dm.csv"));
     assert_eq!(
@@ -723,7 +723,7 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
         text(&study.path("sdtm/dm.yaml"))
     );
     assert_eq!(issues[1].condition, "producer_not_completed");
-    assert_eq!(issues[1].requirement.as_deref(), Some("REQ-1345"));
+    assert_eq!(issues[1].rule.as_deref(), Some("PROJECT-11"));
     assert_eq!(issues[1].spec_paths, ["input.DM.schema"]);
     assert_eq!(
         issues[1].context["producer"],

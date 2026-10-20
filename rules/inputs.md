@@ -20,7 +20,6 @@ to a default: it fails during validation, before any byte is read.
 
 Fails: `source_profile_unknown`.
 Evidence: `negative-source-unknown-format`, `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`.
-Replaces: REQ-0751, REQ-0830, REQ-0831, REQ-0832, REQ-0852.
 
 The extension selects the profile under
 [OUTPUT-5](output.md#output-5); a study that stores `DM.CSV`
@@ -63,7 +62,6 @@ base-record and grouped-input order, breaks window ties and orders
 floating-point reduction.
 
 Evidence: `adam-adlb-ordered-sum`, `schema-source-ordinal`.
-Replaces: REQ-0514, REQ-0515, REQ-0538.
 
 The [Column derivation](columns.md) uses the sequence as
 base-record and grouped-input order, [VALUE-23](values.md#value-23) uses it to
@@ -88,7 +86,6 @@ filter, join, grouping or window reads the input dataset; filtering keeps the
 original positions. Without the declaration, ingestion adds no field.
 
 Evidence: `schema-source-ordinal`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::source_ordinals_precede_filtering_and_count_multiline_records_once`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_linked_ordinal_is_local_to_the_consumer_and_never_part_of_the_contract`.
-Replaces: REQ-1291, REQ-1292, REQ-1293.
 
 ```yaml
 input:
@@ -127,7 +124,6 @@ validation with `odm_schema_field_type`.
 
 Fails: `ordinal_field_collision`, `odm_schema_field_type`.
 Evidence: `negative-source-ordinal-collision`, `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::ordinal_collision_and_fixed_odm_schema_have_complete_public_diagnostics`.
-Replaces: REQ-1294, REQ-1295.
 
 `ordinal_field_collision` reports the input dataset, the generated field name
 and the `input.<dataset>.ordinal` specification path. `odm_schema_field_type`
@@ -148,7 +144,6 @@ types, and every field of a typeless container, such as a delimited file, is
 `str` unless `types` declares otherwise. A type is never inferred from values.
 
 Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs`.
-Replaces: REQ-0516, REQ-0517, REQ-0518, REQ-0519, REQ-0525, REQ-0537, REQ-1059, REQ-1060.
 
 Two extracts of the same dataset bind the same field to the same type. Where
 the type comes from depends on the container:
@@ -195,7 +190,6 @@ is present, even when an entry agrees with the producer.
 
 Fails: `unknown_field`, `redundant_field_type`.
 Evidence: `negative-types-unknown-field`, `negative-redefined-date`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
-Replaces: REQ-0523, REQ-0532, REQ-0533.
 
 An unknown field fails with `unknown_field`, and a field whose type the source
 already supplies fails with `redundant_field_type`. The producing
@@ -216,7 +210,6 @@ conversion failure: it occurs before any derivation, and no handler answers it.
 
 Fails: `field_parse_failed`.
 Evidence: `negative-ingest-unit`, `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/fixtures/source_typing.json`.
-Replaces: REQ-0526, REQ-0527, REQ-0536.
 
 The YAML 1.2 non-finite spellings of [VALUE-6](values.md#value-6) remain text
 when the field's type is `str`, and normalize to missing only after parsing as
@@ -242,7 +235,6 @@ an empty string from a delimited source. No text is a missing-value sentinel:
 values.
 
 Evidence: `negative-source-na-age`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
-Replaces: REQ-0528, REQ-0529, REQ-0530, REQ-0531.
 
 An empty field holds no text to parse. In a delimited source, no collected
 empty value is distinct from a missing one.
@@ -261,7 +253,6 @@ fails validation.
 
 Fails: `empty_string_present_unsupported`.
 Evidence: `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::csv_present_empty_is_rejected_before_study_bytes_are_requested`.
-Replaces: REQ-1158, REQ-1159, REQ-1160, REQ-1161.
 
 Handlers answer for a collected empty string like any other string. The
 container profiles keep their own distinction -- a Parquet null and a
@@ -289,7 +280,6 @@ first. A link cannot name the consuming specification.
 
 Fails: `invalid_producer_contract`.
 Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
-Replaces: REQ-0520, REQ-0521, REQ-0534.
 
 ```yaml
 input:
@@ -335,7 +325,6 @@ fields fail.
 
 Fails: `producer_contract_mismatch`.
 Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_header_must_equal_the_producer_output_columns_in_order`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_stored_parquet_schema_must_equal_the_producer_output_types`.
-Replaces: REQ-0522, REQ-0524, REQ-0535.
 
 A stored artifact whose field names, order or self-describing types do not
 exactly match the producer's output contract fails with

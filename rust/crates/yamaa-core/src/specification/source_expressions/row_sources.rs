@@ -100,7 +100,7 @@ pub(in crate::specification) fn bind(
             declaration.bind_row_filter(path, driver, catalog, named, findings)?
         };
         let selection = if declaration.is_group_key(driver, phase) {
-            // REQ-0086: the key is already scalar; keep/order cannot choose a new record.
+            // NAME-4: the key is already scalar; keep/order cannot choose a new record.
             None
         } else if let (Some(dataset), Some(schema)) = (dataset, schema.as_deref()) {
             declaration.bind_selection(path, dataset, schema, findings)

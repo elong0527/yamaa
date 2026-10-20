@@ -69,7 +69,7 @@ pub(super) fn prepare(
 
     let items = sequence(d, node)?;
 
-    // The schema owns REQ-0339 shape failures. These branches defend the
+    // The schema owns EXPR-7 shape failures. These branches defend the
     // normalized-document contract rather than declare a language subset.
     if items.is_empty() {
         return Err(PrepareError::Internal);

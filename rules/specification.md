@@ -20,8 +20,6 @@ dataset `domain` names. Its other root fields declare the row identity
 completed dataset (`verifications`) and the metadata carried with it
 (`submission`, `metadata`).
 
-Replaces: REQ-1042, REQ-1045.
-
 Each root field's schema description states its meaning.
 [SCHEMA-2](reference/schema-language.md#schema-2) governs the header, and
 [Inheritance](inheritance.md) resolves `parent` before validation and
@@ -44,7 +42,6 @@ holds one declaration for each identifier.
 
 Fails: `duplicate_identifier`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
-Replaces: REQ-0227, REQ-0228, REQ-0238, REQ-1044, REQ-1046.
 
 A duplicate within one layer also fails under [LAYER-4](inheritance.md#layer-4).
 [Schema language](reference/schema-language.md) owns the corresponding
@@ -66,7 +63,6 @@ separate declared column. The specification fixes the family's size; a study
 whose reference data exceeds it must revise the specification.
 
 Evidence: `schema-structure`, `adam-adae-query-flags`, `negative-query-overflow`.
-Replaces: REQ-0196, REQ-1043.
 
 Competing values for one family member fail under
 [Lookup and joins](lookup.md). A shared position suffix groups
@@ -87,7 +83,6 @@ than left without a derivation.
 
 Fails: `missing_derivation`.
 Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`.
-Replaces: REQ-0092, REQ-0198, REQ-0204.
 
 <a id="spec-5"></a>
 
@@ -102,7 +97,6 @@ target a declared column.
 
 Fails: `missing_derivation`, `undeclared_column`.
 Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::ordered-missing-rows`.
-Replaces: REQ-0200, REQ-0201, REQ-0202.
 
 Without `rows` entries the every-entry requirement is vacuous, and
 [SPEC-4](#spec-4) requires a column-level derivation. A key in `derivations`
@@ -124,7 +118,6 @@ column fails.
 
 Fails: `duplicate_derivation`.
 Evidence: `schema-rows-override`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
-Replaces: REQ-0199, REQ-1260.
 
 The rule applies to output and internal columns alike. A row-phase context is
 one of these:
@@ -158,7 +151,6 @@ omitted from the artifact. One dependency graph covers every declared column
 regardless of `output`, and an output column may depend on an internal one.
 
 Evidence: `schema-structure`, `sdtm-relrec-links`.
-Replaces: REQ-0205, REQ-0206, REQ-0208, REQ-0209.
 
 Internal columns hold the working values of a multi-step derivation and do
 not change evaluation; [Column derivation](columns.md) builds
@@ -180,7 +172,6 @@ may denote a non-ASCII value; the decoded value is then an ordinary string.
 
 Fails: `non_ascii_source`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::original_decode_diagnostics_remain_bounded_and_owned`, `rust/crates/yamaa-core/tests/support/diagnostic/yaml_source.rs`.
-Replaces: REQ-0705.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
 one-character string U+00E9.

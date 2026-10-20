@@ -85,48 +85,48 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let compiled = compiled();
     let rows = [Row(vec![Value::Int(i64::MAX)])];
     let mut reached = BTreeSet::new();
-    for (code, path, phase, condition, requirement) in [
+    for (code, path, phase, condition, rule) in [
         (
             OutputMissingKeyFailed,
             "keys[0]",
             Phase::Output,
             "missing_key",
-            "REQ-0240",
+            "OUTPUT-3",
         ),
         (
             OutputDuplicateKeyFailed,
             "keys",
             Phase::Output,
             "duplicate_key",
-            "REQ-0240",
+            "OUTPUT-3",
         ),
         (
             VerificationUniqueFailed,
             "verifications[0].unique",
             Phase::Verification,
             "unique_failed",
-            "REQ-0381",
+            "CHECK-10",
         ),
         (
             VerificationAllOrNoneFailed,
             "verifications[1].all_or_none",
             Phase::Verification,
             "all_or_none_failed",
-            "REQ-0382",
+            "CHECK-11",
         ),
         (
             VerificationAssertFailed,
             "verifications[2].assert",
             Phase::Verification,
             "assert_failed",
-            "REQ-0384",
+            "CHECK-12",
         ),
         (
             VerificationRowCountFailed,
             "verifications[3].row_count",
             Phase::Verification,
             "row_count_failed",
-            "REQ-0385",
+            "CHECK-13",
         ),
     ] {
         let records = [record(code, path, &rows)];
@@ -140,16 +140,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 projected.diagnostics[0].code.definition().condition,
                 condition
             );
-            assert_eq!(
-                projected.diagnostics[0].code.definition().requirement,
-                Some(requirement)
-            );
+            assert_eq!(projected.diagnostics[0].code.definition().rule, Some(rule));
         }
         if phase == Phase::Verification {
             let observation = object(&projected.observations[0]);
             let failure = object(&observation["failure"]);
             assert_eq!(failure["condition"], Fact::Text(condition));
-            assert_eq!(failure["requirement"], Fact::Text(requirement));
+            assert_eq!(failure["rule"], Fact::Text(rule));
             assert_eq!(observation["evaluated_count"], Fact::Unsigned(9));
             assert_eq!(observation["specification"], Fact::Text("test.yaml"));
         } else {

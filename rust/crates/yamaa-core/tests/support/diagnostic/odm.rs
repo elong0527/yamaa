@@ -13,7 +13,7 @@ pub(crate) fn check(
     finding: F<'_>,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     path: &str,
     context: Vec<(&str, V)>,
     reached: &mut BTreeSet<ConditionCode>,
@@ -23,9 +23,9 @@ pub(crate) fn check(
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
-        (phase, condition, Some(requirement))
+        (phase, condition, Some(rule))
     );
     assert_eq!(diagnostic.spec_paths, [path]);
     assert_eq!(
@@ -39,10 +39,10 @@ pub(crate) fn check(
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (declared, name, requirement) in [
-        (OdmDeclared::Types, "types", "REQ-1275"),
-        (OdmDeclared::Schema, "schema", "REQ-1275"),
-        (OdmDeclared::Ordinal, "ordinal", "REQ-1295"),
+    for (declared, name, rule) in [
+        (OdmDeclared::Types, "types", "NAME-8"),
+        (OdmDeclared::Schema, "schema", "NAME-8"),
+        (OdmDeclared::Ordinal, "ordinal", "INPUT-4"),
     ] {
         check(
             F::Declared {
@@ -51,7 +51,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "validation",
             "odm_schema_field_type",
-            requirement,
+            rule,
             &format!("input.D.{name}"),
             vec![("dataset", text("D")), ("declared", text(name))],
             &mut reached,
@@ -64,7 +64,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         },
         "validation",
         "odm_schema_field_missing",
-        "REQ-1275",
+        "NAME-8",
         "input.D.path",
         vec![
             ("dataset", text("D")),
@@ -81,7 +81,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         },
         "validation",
         "odm_schema_field_ambiguous",
-        "REQ-1275",
+        "NAME-8",
         "input.D.path",
         vec![
             ("dataset", text("D")),
@@ -100,7 +100,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "validation",
             "odm_schema_field_type",
-            "REQ-1275",
+            "NAME-8",
             "input.D.path",
             vec![
                 ("dataset", text("D")),
@@ -120,7 +120,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         },
         "ingest",
         "odm_schema_value_missing",
-        "REQ-1276",
+        "NAME-9",
         "input.D.path",
         vec![
             ("dataset", text("D")),
@@ -150,7 +150,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "validation",
             "invalid_odm_context",
-            "REQ-1277",
+            "NAME-11",
             "columns.V.derivation.odm",
             vec![("dataset", text("D")), ("location", text(location.name()))],
             &mut reached,
@@ -192,7 +192,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 },
                 expected_phase,
                 "odm_not_unique",
-                "REQ-1278",
+                "NAME-13",
                 "rows[0].derivations.V.odm",
                 vec![
                     ("item", text("D.Item.with.periods")),

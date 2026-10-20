@@ -29,12 +29,12 @@ impl Diagnostic {
         self.diagnostic_code().definition().condition
     }
 
-    /// Retain the governing language requirement for each dependency rule.
-    pub fn requirement(&self) -> &'static str {
+    /// Retain the language rule that governs each dependency.
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("dependency cause has a normative requirement")
+            .rule
+            .expect("dependency cause has a normative rule")
     }
 
     /// Select the authored path kind without constructing host-specific path strings.
@@ -73,7 +73,7 @@ pub struct Analysis {
 /// Completed row-phase columns do not block scheduling, but still participate in
 /// the declaration-order and key-dependency rules. A later key is available
 /// before the column phase only when it is derived first: always without rows
-/// (REQ-0074), and with rows only when no row template leaves it to the column
+/// (COLUMN-7), and with rows only when no row template leaves it to the column
 /// phase. This does not waive preflight, type, reference-resolution, or
 /// phase-boundary checks performed by the caller.
 pub fn analyze(
@@ -123,7 +123,7 @@ pub fn analyze(
     }
     // Without rows every key is derived before any other column. With rows, a key
     // that some template completes in the column phase follows declaration order
-    // like any other column-phase column (REQ-0071).
+    // like any other column-phase column (COLUMN-5).
     let derived_first =
         |dependency: usize| is_key[dependency] && (!has_rows || dependencies[dependency].is_none());
     for (column, edges) in dependencies.iter().enumerate() {

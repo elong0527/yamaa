@@ -5,7 +5,7 @@
 //! origins, roots and resource identities render with forward slashes, where
 //! that prefix becomes `//?/`: a spelling no other host produces and one the
 //! resource grammar refuses, because `//` reads as an empty segment
-//! (REQ-0777). Every adapter canonicalization goes through [`canonicalize`],
+//! (FILE-5). Every adapter canonicalization goes through [`canonicalize`],
 //! which drops the prefix when Windows can address the path without it and
 //! keeps it for the paths that need it: those whose plain spelling reaches
 //! the legacy `MAX_PATH` limit, and the device and volume namespaces, which

@@ -268,7 +268,7 @@ fn named_dictionaries_and_mapping_order_are_retained_without_changing_the_compil
     study.write("spec.yaml", "schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\nbase: Z\ninput: {Z: z.csv, A: a.csv}\ncolumns: [{name: ID, type: str, derivation: Z.ID}, {name: X, type: str, derivation: {mapping: {source: Z.CODE, dict: dict.yaml}}}]\noutput: {path: result.csv, columns: [ID, X]}\n");
     let artifact = study.resolve("spec.yaml");
     let entry = &artifact.entries()[0];
-    // Input A is read by nothing, so pruning (REQ-0638) discards it from
+    // Input A is read by nothing, so pruning (LAYER-11) discards it from
     // the resolved model exactly as composition would; Z's order is kept.
     assert_eq!(entry.mapping_order["/input"], ["Z"]);
     let dictionary = entry

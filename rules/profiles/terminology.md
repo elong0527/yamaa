@@ -22,7 +22,6 @@ binding naming no declared codelist, fails validation.
 
 Fails: `duplicate_define_identifier`, `unknown_codelist`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`.
-Replaces: REQ-0926, REQ-0927, REQ-0948, REQ-0953, REQ-1077.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
 is what a reader sees. [Submission metadata](submission.md)'s `codelist` names
@@ -45,7 +44,6 @@ published concept identifier of the codelist itself, and an item's `alias` the
 published identifier of that value.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-vs-epoch-from-subject-elements`.
-Replaces: REQ-0928, REQ-0930, REQ-0958.
 
 Both aliases are optional here; [DEFINE-4](define-xml.md#define-4) states when a
 document requires an alias, and [CT-6](#ct-6) refuses one on a sponsor-extended
@@ -86,7 +84,6 @@ neither, fails validation.
 
 Fails: `codelist_shape_invalid`.
 Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `rust/crates/yamaa-core/tests/project_execution.rs::invalid_shapes_and_missing_boolean_fractional_item_types_are_rejected`.
-Replaces: REQ-0931, REQ-0936, REQ-0947, REQ-1079.
 
 A reference without a version identifies nothing to check. The failure reports
 the codelist.
@@ -105,7 +102,6 @@ fails validation.
 
 Fails: `codelist_duplicate_value`, `codelist_shape_invalid`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::numeric_equality_is_exact_at_i64_and_binary64_boundaries`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
-Replaces: REQ-0929, REQ-0935, REQ-0949, REQ-0950.
 
 A duplicate coded value within one codelist fails with
 `codelist_duplicate_value`. A coded value that is not of the codelist's
@@ -123,7 +119,6 @@ some items and not others.
 
 Fails: `codelist_partial_item_field`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/support/project_environment.rs`.
-Replaces: REQ-0932, REQ-0933, REQ-0951, REQ-1078.
 
 A list whose values are already the words a reader needs has no decode to add.
 Lists with and without `decode` are different kinds of list rather than a list
@@ -141,7 +136,6 @@ codelist, or one that declares `alias`, fails validation.
 
 Fails: `codelist_extension_not_admitted`, `codelist_extended_alias`.
 Evidence: `sdtm-ta-sponsor-epoch`, `rust/crates/yamaa-core/tests/project_execution.rs::extensions_require_both_a_published_source_and_an_extensible_list`, `rust/crates/yamaa-core/tests/project_execution.rs::extended_items_carry_no_published_alias`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_independent_item_findings_survive_invalid_shape`, `rust/crates/yamaa-core/tests/support/project_environment.rs`.
-Replaces: REQ-0934, REQ-0952.
 
 Adding a value to a list that admits no additions is a contradiction rather
 than an extension. A sponsor addition is an item like any other, so
@@ -175,7 +169,6 @@ codelist enforces nothing.
 
 Fails: `allowed_values_failed`.
 Evidence: `negative-epoch-outside-extensible-list`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelists_inherit_origins_and_check_completed_where_columns`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_extensible_lists_are_enforced_on_their_rows_and_dictionaries_replace_the_default`, `rust/crates/yamaa-core/tests/project_execution.rs::owned_checked_environment_executes_fixed_codelists_before_later_cells_in_both_plan_forms`.
-Replaces: REQ-0937, REQ-0938, REQ-0939, REQ-0940, REQ-0957.
 
 Missing values pass exactly as [Verification](../verification.md)'s
 `allowed_values` treats them; a column that also prohibits absence resolves
@@ -210,7 +203,6 @@ column's declared type does not admit fails validation.
 
 Fails: `codelist_type_mismatch`.
 Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`, `rust/crates/yamaa-core/tests/project_execution.rs::binding_checks_exact_column_type_and_rejects_restated_item_sets`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`.
-Replaces: REQ-0941, REQ-0954.
 
 A coded value a column could never hold is a defect in the specification rather
 than a constraint that never fires.
@@ -229,7 +221,6 @@ verification standing.
 
 Fails: `redundant_declaration`.
 Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-core/tests/project_execution.rs::extensible_catalogue_is_enforced_and_states_the_value_set_once`.
-Replaces: REQ-0942, REQ-0944, REQ-0945, REQ-0955.
 
 The failure reports the verification's path and, in `stated_by`, the binding's
 path, with the column and the codelist. A binding's items are known where a
@@ -250,7 +241,6 @@ serve another submission section and are omitted without an
 unreferenced-codelist failure.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
-Replaces: REQ-0946.
 
 <a id="ct-11"></a>
 
@@ -266,7 +256,6 @@ completed column, and fails the same way.
 
 Fails: `allowed_values_failed`.
 Evidence: `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inventory_uses_inherited_declared_dataset_names_and_retained_original_metadata_in_both_hosts`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::absent_study_inventory_checks_nonmissing_values_and_keeps_missing_values_admitted`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inventory_names_the_datasets_of_every_submission_section`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionInventoryFailed`.
-Replaces: REQ-1156.
 
 The admitted values are the study's dataset inventory, which no static list can
 enumerate; that distinguishes this vocabulary from a codelist, whose values

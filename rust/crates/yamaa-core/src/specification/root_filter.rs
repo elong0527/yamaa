@@ -1,4 +1,4 @@
-//! A root predicate reads only the base driver, before key construction (REQ-1170).
+//! A root predicate reads only the base driver, before key construction (ROW-9).
 use super::*;
 use crate::json::Value as JsonValue;
 use crate::{

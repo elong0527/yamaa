@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.ASTDTF.derivation.imputation_flag.source
-requirement: TIME-18
+rule: TIME-18
 context:
   source: AE.AESTDTC
   expected: date or datetime

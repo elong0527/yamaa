@@ -19,7 +19,7 @@ pub fn observe(text: &str) -> Value {
                     }
                 }
                 json!({"status":"invalid", "condition":definition.condition,
-                    "requirement":definition.requirement, "context":context,
+                    "rule":definition.rule, "context":context,
                     "position":{"byte":span.start,"character":text[..span.start].chars().count()},
                     "span":{"byte_start":span.start,"byte_end":span.end,
                         "character_start":text[..span.start].chars().count(),

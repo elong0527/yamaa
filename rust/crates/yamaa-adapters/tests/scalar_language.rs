@@ -95,7 +95,7 @@ mod scalar {
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -210,7 +210,7 @@ mod scalar {
                 let issue = issue_json(&issues[0]);
                 assert_eq!(issue["phase"], "validation");
                 assert_eq!(issue["condition"], "conversion_failed");
-                assert_eq!(issue["requirement"], "VALUE-24");
+                assert_eq!(issue["rule"], "VALUE-24");
                 assert_eq!(
                     issue["spec_paths"],
                     yamaa_adapters::json!(["columns.RESULT"])
@@ -233,36 +233,36 @@ mod scalar {
 
         #[test]
         fn csv_text_regex_declarations_are_reported_without_source_capture() {
-            for (expression, suffix, condition, requirement) in [
+            for (expression, suffix, condition, rule) in [
         (
             "{str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}",
             "str_extract.pattern",
             "invalid_regex",
-            "REQ-0827",
+            "TEXT-6",
         ),
         (
             "{str_extract: {source: SRC.TEXT, pattern: '[z-a]'}}",
             "str_extract.pattern",
             "invalid_regex",
-            "REQ-0827",
+            "TEXT-6",
         ),
         (
             "{str_extract: {source: SRC.TEXT, pattern: '[]a(]'}}",
             "str_extract.pattern",
             "invalid_regex",
-            "REQ-0827",
+            "TEXT-6",
         ),
         (
             "{str_extract: {source: SRC.TEXT, pattern: '(a)', group: 2}}",
             "str_extract.group",
             "regex_group_out_of_range",
-            "REQ-0816",
+            "TEXT-10",
         ),
         (
             "{case: [{when: 'SRC.I > 0', then: {str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}}, {otherwise: {literal: x}}]}",
             "case[0].then.str_extract.pattern",
             "invalid_regex",
-            "REQ-0827",
+            "TEXT-6",
         ),
     ] {
         for typed in [false, true] {
@@ -289,7 +289,7 @@ mod scalar {
             );
             assert_eq!(checked.len(), 1, "{expression}: {checked:?}");
             assert_eq!(checked[0].condition(), condition);
-            assert_eq!(checked[0].requirement(), Some(requirement));
+            assert_eq!(checked[0].rule(), Some(rule));
             assert_eq!(checked[0].spec_paths, [format!("columns.RESULT.derivation.{suffix}")]);
             assert_eq!(attempt(&fixture).err().unwrap(), checked);
             assert!(!fixture.0.join("output.csv").exists());
@@ -307,7 +307,7 @@ mod scalar {
             let issues = attempt(&fixture).err().unwrap();
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition(), "incompatible_input_type");
-            assert_eq!(issues[0].requirement(), Some("REQ-0308"));
+            assert_eq!(issues[0].rule(), Some("TEXT-1"));
             assert_eq!(
                 issues[0].spec_paths,
                 ["columns.RESULT.derivation.str_extract.source"]
@@ -388,7 +388,7 @@ mod scalar {
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "multiple_matches");
-            assert_eq!(result.issues()[0].requirement(), Some("REQ-0127"));
+            assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
             assert_eq!(result.issues()[0].spec_paths, ["rows[0].filter"]);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(context["match_count"], 2);
@@ -500,7 +500,7 @@ mod scalar {
                 issues
                     .iter()
                     .any(|issue| issue.condition() == "unknown_field"
-                        && issue.requirement() == Some("REQ-0410")
+                        && issue.rule() == Some("FORMULA-9")
                         && issue.spec_paths == ["rows[0].derivations.VALUE.compute.expr"]),
                 "{issues:?}"
             );
@@ -529,7 +529,7 @@ mod scalar {
                     issues
                         .iter()
                         .any(|issue| issue.condition() == "unknown_field"
-                            && issue.requirement() == Some("REQ-0410")
+                            && issue.rule() == Some("FORMULA-9")
                             && issue.spec_paths == [path]),
                     "{issues:?}"
                 );
@@ -834,8 +834,8 @@ rows:
                     "{HEADER}adsl.csv,run,output,,,,,,failed,range_failed,,,,{{}}\n\
                      adsl.csv,input,input.DM,DM,,,,,,,3,,,\"{{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
                      adsl.csv,rows,base,DM,,,,,,,3,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,error,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
+                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{{}}\n\
+                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,error,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
                 );
                 assert_eq!(saved_report(&study, "adsl-checks.csv"), expected);
                 assert_eq!(
@@ -907,7 +907,7 @@ rows:
         #[test]
         fn failed_runs_report_the_prefix_they_reached_and_no_columns() {
             let (study, raw) = Study::benchmark();
-            // FAIL must be projected to stay live under pruning (REQ-0638);
+            // FAIL must be projected to stay live under pruning (LAYER-11);
             // a dead column's division failure would be discarded with it.
             let raw = raw
                 .replace("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: {compute: {expr: '1 / 0'}}\n\nverifications:\n")
@@ -924,8 +924,8 @@ rows:
                     "{HEADER}adsl.csv,run,output,,,,,,failed,division_by_zero,,,,{{}}\n\
                      adsl.csv,input,input.DM,DM,,,,,,,3,,,\"{{\"\"bytes\"\":66,\"\"path\"\":\"\"input/dm.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
                      adsl.csv,rows,base,DM,,,,,,,3,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{{}}\n\
-                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,warning,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
+                     adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{{}}\n\
+                     adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,warning,violated,range_failed,1,3,\"[{{\"\"USUBJID\"\":\"\"S-2\"\"}}]\",\"{{\"\"column\"\":\"\"AGE\"\"}}\"\n"
                 )
             );
             assert_eq!(
@@ -1000,9 +1000,9 @@ rows:
                      out.csv,input,input.SRC,SRC,,,,,,,4,,,\"{{\"\"bytes\"\":65,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
                      out.csv,rows,rows[0],SRC,,,,,,,3,4,,{{}}\n\
                      out.csv,rows,rows[1],SRC,,,,,,,2,4,,{{}}\n\
-                     out.csv,handler,rows[0].derivations.N.unconvertible,unconvertible,,N,REQ-0013,,,,1,,,{{}}\n\
+                     out.csv,handler,rows[0].derivations.N.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{{}}\n\
                      out.csv,handler,rows[0].derivations.LABEL.mapping.missing,missing,,LABEL,,,,,1,,,{{}}\n\
-                     out.csv,handler,rows[0].derivations.LABEL.mapping.unmapped,unmapped,,LABEL,REQ-0334,,,,1,,,{{}}\n\
+                     out.csv,handler,rows[0].derivations.LABEL.mapping.unmapped,unmapped,,LABEL,COLUMN-10,,,,1,,,{{}}\n\
                      out.csv,column,columns.ID,ID,,,,,,,0,5,,\"{{\"\"max_length\"\":2}}\"\n\
                      out.csv,column,columns.KIND,KIND,,,,,,,0,5,,\"{{\"\"max_length\"\":5}}\"\n\
                      out.csv,column,columns.LABEL,LABEL,,,,,,,1,5,,\"{{\"\"max_length\"\":5}}\"\n\
@@ -1115,14 +1115,14 @@ columns:
             assert_eq!(
                 handler_rows(&study, &result),
                 [
-                    "out.csv,handler,columns.N.derivation.unconvertible,unconvertible,,N,REQ-0013,,,,1,,,{}",
-                    "out.csv,handler,columns.LAST.derivation.source.multiple_matches,multiple_matches,,LAST,REQ-0127,,,,0,,,{}",
+                    "out.csv,handler,columns.N.derivation.unconvertible,unconvertible,,N,VALUE-3,,,,1,,,{}",
+                    "out.csv,handler,columns.LAST.derivation.source.multiple_matches,multiple_matches,,LAST,LOOKUP-10,,,,0,,,{}",
                     "out.csv,handler,columns.LAST.derivation.source.no_match,no_match,,LAST,LOOKUP-24,,,,2,,,{}",
                     "out.csv,handler,columns.UP.derivation.str_case.missing,missing,,UP,,,,,2,,,{}",
-                    "out.csv,handler,columns.UP.derivation.str_case.source.multiple_matches,multiple_matches,,UP,REQ-0127,,,,0,,,{}",
+                    "out.csv,handler,columns.UP.derivation.str_case.source.multiple_matches,multiple_matches,,UP,LOOKUP-10,,,,0,,,{}",
                     "out.csv,handler,columns.UP.derivation.str_case.source.no_match,no_match,,UP,LOOKUP-24,,,,2,,,{}",
                     "out.csv,handler,columns.ANY.derivation.first_available.missing,missing,,ANY,,,,,1,,,{}",
-                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].multiple_matches,multiple_matches,,ANY,REQ-0127,,,,0,,,{}",
+                    "out.csv,handler,columns.ANY.derivation.first_available.sources[0].multiple_matches,multiple_matches,,ANY,LOOKUP-10,,,,0,,,{}",
                     "out.csv,handler,columns.ANY.derivation.first_available.sources[0].no_match,no_match,,ANY,LOOKUP-24,,,,2,,,{}",
                     "out.csv,handler,columns.SELFV.derivation.source.no_match,no_match,,SELFV,LOOKUP-24,,,,0,,,{}",
                     "out.csv,handler,columns.BYC.derivation.source.no_match,no_match,,BYC,LOOKUP-24,,,,2,,,{}",
@@ -1201,14 +1201,14 @@ columns:
             assert_eq!(
                 handler_rows(&study, &result),
                 [
-                    "out.csv,handler,columns.TAGN.derivation.unconvertible,unconvertible,,TAGN,REQ-0013,,,,1,,,{}",
-                    "out.csv,handler,columns.CAT.derivation.source.multiple_matches,multiple_matches,,CAT,REQ-0127,,,,1,,,{}",
+                    "out.csv,handler,columns.TAGN.derivation.unconvertible,unconvertible,,TAGN,VALUE-3,,,,1,,,{}",
+                    "out.csv,handler,columns.CAT.derivation.source.multiple_matches,multiple_matches,,CAT,LOOKUP-10,,,,1,,,{}",
                     "out.csv,handler,columns.CAT.derivation.source.no_match,no_match,,CAT,LOOKUP-24,,,,1,,,{}",
-                    "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,REQ-0127,,,,1,,,{}",
+                    "out.csv,handler,columns.NEAR.derivation.source.multiple_matches,multiple_matches,,NEAR,LOOKUP-10,,,,1,,,{}",
                     "out.csv,handler,columns.NEAR.derivation.source.no_match,no_match,,NEAR,LOOKUP-24,,,,2,,,{}",
-                    "out.csv,handler,intermediates[0].derivations.FLAGN.unconvertible,unconvertible,,,REQ-0013,,,,6,,,{}",
+                    "out.csv,handler,intermediates[0].derivations.FLAGN.unconvertible,unconvertible,,,VALUE-3,,,,6,,,{}",
                     "out.csv,handler,intermediates[0].derivations.GRADE.mapping.missing,missing,,,,,,,3,,,{}",
-                    "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,REQ-0127,,,,2,,,{}",
+                    "out.csv,handler,intermediates[1].derivations.G2.source.multiple_matches,multiple_matches,,,LOOKUP-10,,,,2,,,{}",
                     "out.csv,handler,intermediates[1].derivations.G2.source.no_match,no_match,,,LOOKUP-24,,,,0,,,{}",
                 ]
             );
@@ -1297,7 +1297,7 @@ verifications:
             // one offending group, still reported as a sequence of counts.
             assert!(
                 report.contains(
-                    "out.csv,check,verifications[0].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,2,\"[{\"\"ARM\"\":\"\"A\"\"}]\",\"{\"\"counts\"\":[2]}\"\n"
+                    "out.csv,check,verifications[0].row_count,row_count,,,CHECK-13,warning,violated,row_count_failed,1,2,\"[{\"\"ARM\"\":\"\"A\"\"}]\",\"{\"\"counts\"\":[2]}\"\n"
                 ),
                 "{report}"
             );
@@ -1305,13 +1305,13 @@ verifications:
             // adds the denominator.
             assert!(
                 report.contains(
-                    "out.csv,check,verifications[1].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":3}\"\n"
+                    "out.csv,check,verifications[1].row_count,row_count,,,CHECK-13,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":3}\"\n"
                 ),
                 "{report}"
             );
             assert!(
                 report.contains(
-                    "out.csv,check,verifications[2].row_count,row_count,,,REQ-0385,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":2,\"\"denominator\"\":3}\"\n"
+                    "out.csv,check,verifications[2].row_count,row_count,,,CHECK-13,warning,violated,row_count_failed,1,1,[{}],\"{\"\"count\"\":2,\"\"denominator\"\":3}\"\n"
                 ),
                 "{report}"
             );
@@ -1360,12 +1360,12 @@ columns:
                      out.csv,input,input.SRC,SRC,,,,,,,3,,,\"{{\"\"bytes\"\":68,\"\"path\"\":\"\"input/input.csv\"\",\"\"profile\"\":\"\"csv\"\"}}\"\n\
                      out.csv,rows,base,SRC,,,,,,,3,3,,{{}}\n\
                      out.csv,handler,columns.START.derivation.impute.missing,missing,,START,,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.START.derivation.impute.invalid,invalid,,START,REQ-0588,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.START.derivation.impute.invalid,invalid,,START,TIME-13,,,,1,,,{{}}\n\
                      out.csv,handler,columns.STAMP.derivation.impute.missing,missing,,STAMP,,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.STAMP.derivation.impute.invalid,invalid,,STAMP,REQ-0588,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.SPAN.derivation.duration_value.invalid,invalid,,SPAN,REQ-1301,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.STAMP.derivation.impute.invalid,invalid,,STAMP,TIME-13,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.SPAN.derivation.duration_value.invalid,invalid,,SPAN,TIME-17,,,,1,,,{{}}\n\
                      out.csv,handler,columns.PR.derivation.precision.missing,missing,,PR,,,,,1,,,{{}}\n\
-                     out.csv,handler,columns.PR.derivation.precision.invalid,invalid,,PR,REQ-0588,,,,1,,,{{}}\n\
+                     out.csv,handler,columns.PR.derivation.precision.invalid,invalid,,PR,TIME-13,,,,1,,,{{}}\n\
                      out.csv,column,columns.ID,ID,,,,,,,0,3,,{{}}\n\
                      out.csv,column,columns.START,START,,,,,,,2,3,,{{}}\n\
                      out.csv,column,columns.STAMP,STAMP,,,,,,,2,3,,{{}}\n\

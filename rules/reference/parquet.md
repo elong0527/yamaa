@@ -16,7 +16,6 @@ logical type, as the table below fixes. Every field is optional, and every
 column type admits a missing value.
 
 Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::ordered_row_groups_and_projection_survive_an_empty_source`.
-Replaces: REQ-0734, REQ-0735.
 
 | Column type | Physical | Logical |
 |---|---|---|
@@ -39,7 +38,6 @@ resolution: it is written with the microsecond unit, and its microsecond part
 is always zero.
 
 Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::artifacts_keep_complete_temporal_fields_and_drop_collected_precision`, `python/tests/installed/installed_original_specifications.py::test_closed_parquet_types_and_exact_values_with_independent_reader`.
-Replaces: REQ-0737, REQ-0738, REQ-0739.
 
 The same wall clock survives a write and a read. Shifting a value into or out
 of a machine timezone changes the value.
@@ -53,7 +51,6 @@ A `float` enters this profile as the binary64 value its derivation produced.
 consumer that reads the artifact receives the value the calculation used.
 
 Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_double_operands_round_trip_without_display_rounding`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::output_reached`, `python/tests/installed/installed_original_specifications.py::test_original_build_saves_parquet_with_independent_logical_readback`.
-Replaces: REQ-0743.
 
 Storing native double values is not display. Display rounding happens once, in
 the `csv` profile under [CSV-8](csv.md#csv-8), and an `output.decimals`
@@ -71,7 +68,6 @@ adds no key-value metadata of its own beyond what the format requires.
 Conforming parquet artifacts are not required to have identical bytes.
 
 Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::closed_schema_and_exact_values_include_full_integers_temporals_nulls_and_zero_sign`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-0740, REQ-0741, REQ-0742.
 
 An artifact that must be byte-identical uses the `csv` profile.
 
@@ -90,7 +86,6 @@ source. Bytes that are not one readable Parquet file fail.
 
 Fails: `source_parquet_invalid`.
 Evidence: `schema-parquet`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::every_record_reads_in_order_past_the_row_groups_one_footer_numbers`.
-Replaces: REQ-1028, REQ-1029, REQ-1030, REQ-1038.
 
 A file with no readable Parquet schema is not a valid empty source. Bytes that
 are not one readable Parquet file fail with `source_parquet_invalid`.
@@ -107,7 +102,6 @@ schema is a layout of its value type, not a type of its own
 
 Fails: `source_field_name_empty`, `source_field_name_duplicate`.
 Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::nested_roots_name_their_own_field_after_flat_columns_and_preserve_name_precedence`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::field_names_and_physical_alignment_have_stable_precedence`.
-Replaces: REQ-1031, REQ-1039.
 
 An empty name fails with `source_field_name_empty` and a duplicate name with
 `source_field_name_duplicate`. A type outside this profile falls outside the
@@ -128,7 +122,6 @@ missing value and does not change the field's column type.
 
 Fails: `source_field_type_unsupported`.
 Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::only_the_closed_pairs_pass_including_legacy_string_date_and_large_offsets`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::view_and_dictionary_layouts_read_as_their_value_type`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::signed_integer_annotations_read_as_int_and_declare_their_width`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::signed_integer_fields_that_fit_their_physical_type_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsupported_stored_types_retain_independent_arrow_type_spelling`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::the_pyarrow_int32_fixture_reads_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::dictionaries_of_the_other_admitted_types_read_as_their_value_type`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::duckdb_signed_integer_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unannotated_int32_fields_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::logical_signed_integer_annotations_read_as_int`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::unsigned_annotations_stay_refused`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::a_stored_value_outside_its_declared_width_is_invalid`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::an_integer_annotation_its_physical_type_cannot_carry_is_invalid`, `python/tests/installed/installed_original_specifications.py::test_parquet_signed_integer_fields_read_as_int`.
-Replaces: REQ-1032, REQ-1033, REQ-1040.
 
 | Parquet type | Column type |
 |---|---|
@@ -176,7 +169,6 @@ delivered bit-identically. A non-finite `DOUBLE` is normalized immediately to
 missing under [Values](../values.md).
 
 Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::parquet_input_policy_and_owned_source_observations_use_the_shared_build_path`.
-Replaces: REQ-1034, REQ-1035.
 
 <a id="parquet-9"></a>
 
@@ -190,7 +182,6 @@ fails.
 
 Fails: `source_field_value_invalid`.
 Evidence: `adam-adsl-randomization`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value`, `rust/crates/yamaa-adapters/src/parquet_source/profile.rs::temporal_edges_are_integral_and_never_rounded_into_range`.
-Replaces: REQ-1036, REQ-1041.
 
 The failure reports the field, the record and the stored integer value.
 
@@ -203,4 +194,3 @@ sizing do not alter delivered fields, records, types or values, and are
 ignored. They cannot supply or override a field type.
 
 Evidence: `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::independent_codecs_page_versions_and_encodings_preserve_exact_values`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::empty_tables_and_nonfinite_inputs_keep_the_closed_schema_and_normalized_nulls`, `python/tests/installed/installed_original_specifications.py::test_original_ordered_sum_reads_parquet_and_preserves_complete_truth`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::every_record_reads_in_order_past_the_row_groups_one_footer_numbers`, `rust/crates/yamaa-adapters/src/parquet_source/row_groups.rs::more_row_groups_than_an_i16_ordinal_numbers_read_whole`.
-Replaces: REQ-1037.

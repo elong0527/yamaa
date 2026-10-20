@@ -26,12 +26,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         message: "unchanged",
     });
     let mut reached = BTreeSet::new();
-    for (kind, details, condition, requirement) in [
+    for (kind, details, condition, rule) in [
         (
             FailureKind::UnknownArguments(names.clone()),
             None,
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
         ),
         (
             FailureKind::MissingRequired {
@@ -39,7 +39,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             None,
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
         ),
         (
             FailureKind::ArgumentType {
@@ -49,31 +49,31 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             None,
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
         ),
         (
             FailureKind::CallFailed(&payload),
             host,
             "function_call_failed",
-            "REQ-0701",
+            "FUNC-8",
         ),
         (
             FailureKind::InvalidHostResult(&payload),
             host,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
         (
             FailureKind::BooleanResult,
             None,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
         (
             FailureKind::UndeclaredMissing,
             None,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
         (
             FailureKind::ResultType {
@@ -82,7 +82,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             None,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
     ] {
         let failure = InvocationFailure {
@@ -93,8 +93,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             projection::invocation("columns.X.derivation", &failure, None, &[], details).unwrap();
         let mapping = diagnostic.code.definition();
         assert_eq!(
-            (mapping.phase, mapping.condition, mapping.requirement),
-            ("derivation", condition, Some(requirement))
+            (mapping.phase, mapping.condition, mapping.rule),
+            ("derivation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_path, "columns.X.derivation");
         let Fact::Text(name) = diagnostic.context["function"] else {

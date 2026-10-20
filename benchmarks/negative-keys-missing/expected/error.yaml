@@ -2,7 +2,7 @@ phase: validation
 condition: key_dependency
 spec_paths:
   - columns.AVISIT.derivation
-requirement: REQ-0074
+rule: COLUMN-7
 context:
   column: AVISIT
   dependency: ADY

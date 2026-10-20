@@ -18,7 +18,6 @@ one, every row template must state `dataset`.
 
 Fails: `driver_unavailable`, `duplicate_identifier`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv`, `schema-rows-override`.
-Replaces: REQ-0034, REQ-1056.
 
 An omitted driver when no single input is implied, or a driver that names
 neither a declared input nor a named intermediate, fails validation with
@@ -40,7 +39,6 @@ have one column type as its result type ([EXPR-14](expressions.md#expr-14)).
 
 Fails: `invalid_intermediate_driver`, `unknown_intermediate_driver_type`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `schema-intermediate-driver-columns`.
-Replaces: REQ-1262.
 
 The intermediate's `columns` list, when present, limits the fields the row
 template may read; otherwise all stored and derived fields are visible. Its
@@ -70,7 +68,6 @@ the candidate's derived columns and lookup state. Every driver record whose
 record before the window pass.
 
 Evidence: `schema-row-templates`, `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`.
-Replaces: REQ-0035, REQ-0036.
 
 A row template with `group_by` is group-driven under [ROW-4](#row-4).
 [ROW-6](#row-6) limits what a filter may name, and
@@ -91,7 +88,6 @@ columns, and the candidate is appended only when the result is `TRUE`.
 
 Fails: `invalid_field_type`, `unknown_field`.
 Evidence: `schema-row-templates`, `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::row_group_declarations_and_shared_scope_keep_authored_diagnostics`.
-Replaces: REQ-0037, REQ-0038, REQ-0065, REQ-0066.
 
 [Values](values.md) defines equality for strings. Groups follow the
 position of their first driver record, and driver order is kept within each
@@ -115,7 +111,6 @@ matching values, in dependency order.
 
 Fails: `ungrouped_driver_field`.
 Evidence: `negative-row-window-ungrouped`, `negative-row-ungrouped-second-template`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
-Replaces: REQ-0047, REQ-0067.
 
 The aggregate reduces the group under
 [Expressions](expressions.md) and
@@ -137,7 +132,6 @@ qualified variable or a column not derived by that row template.
 
 Fails: `phase_boundary`.
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`, `rust/crates/yamaa-core/src/specification/types/tests.rs::a_deferred_lookup_match_has_its_authored_filter_phase_witness`.
-Replaces: REQ-0068.
 
 A qualified grouped-filter reference or an unqualified filter reference outside
 the row template's derivations fails with `phase_boundary`, naming the row,
@@ -157,7 +151,6 @@ keeps first-occurrence group order. Input datasets and row templates fix the
 output rows: no operation repeats a candidate a data-dependent number of times.
 
 Evidence: `schema-row-templates`, `adam-adex-uncollected`.
-Replaces: REQ-0039, REQ-0040, REQ-0041, REQ-0043.
 
 No generated index supports such repetition. A source value may decide whether
 a written row template keeps one candidate; it cannot create more rows. Row
@@ -192,7 +185,6 @@ supplies them.
 
 Fails: `driver_unavailable`.
 Evidence: `sdtm-se-subject-elements`, `schema-window-key-records`, `schema-window-key-odm-records`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
-Replaces: REQ-0042, REQ-0064.
 
 The key table is standalone: it has one row per unique key combination and no
 link back to the input records. The input records a key combination was
@@ -226,7 +218,6 @@ and evaluates before any derivation. A root `filter` declared together with
 
 Fails: `phase_boundary`, `conflicting_row_construction`.
 Evidence: `adam-adtte-dor`, `adam-adrs-response-records`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`.
-Replaces: REQ-1170, REQ-1171.
 
 The base driver is the declared `base`, or the single declared dataset when
 `base` is omitted. Unlike an ungrouped row template's `filter`

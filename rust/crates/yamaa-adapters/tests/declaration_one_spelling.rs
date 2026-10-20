@@ -36,7 +36,7 @@ mod declaration {
         fn restated(path: &str, field: &str, shorthand: Value) -> Value {
             json!({
                 "phase": "validation", "condition": "redundant_long_form",
-                "requirement": "SCHEMA-15", "spec_paths": [path],
+                "rule": "SCHEMA-15", "spec_paths": [path],
                 "context": {"field": field, "shorthand": shorthand},
             })
         }

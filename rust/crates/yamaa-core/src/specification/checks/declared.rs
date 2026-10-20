@@ -178,7 +178,7 @@ pub(in crate::specification) fn key_record(
         .collect()
 }
 
-/// REQ-0442: a qualified formula name must name a declared record lookup.
+/// FORMULA-9: a qualified formula name must name a declared record lookup.
 /// The test reads declarations alone, so binding and check share it.
 pub(in crate::specification) fn qualified_numeric_findings(
     compiled: &CompiledExpression,
@@ -435,8 +435,8 @@ impl Checks<'_> {
         Ok(())
     }
 
-    /// A mapping or cut reads a source of a type it accepts (REQ-0304,
-    /// REQ-0306): a bare output column's or a stored field's declared type.
+    /// A mapping or cut reads a source of a type it accepts (EXPR-11,
+    /// EXPR-13): a bare output column's or a stored field's declared type.
     fn mapping_type(
         &self,
         e: ExprId,
@@ -475,8 +475,8 @@ impl Checks<'_> {
     /// reads a field: a reduction of several relations, a derive binding's
     /// names, groups outside its relation, a context it cannot reduce in
     /// and an undeclared relation; then, at column level, each name outside
-    /// a reduction that is no group key (REQ-0503), a group that is no key
-    /// (REQ-0470) and its operands' types (REQ-0510). A row template's
+    /// a reduction that is no group key (FORMULA-22), a group that is no key
+    /// (LOOKUP-19) and its operands' types (FORMULA-23). A row template's
     /// groups are fields of its driver, which binding reads first. False
     /// when binding binds nothing more of the aggregate.
     fn aggregate(
@@ -705,7 +705,7 @@ impl Checks<'_> {
         // A qualified reduction matches donor records on its keys alone, so
         // each group is a key: a declared key's field, or else an output key,
         // which a group the relation stores is then applicable on
-        // (REQ-0470).
+        // (LOOKUP-19).
         if let Some(relation) = relation {
             let applicable = match &aggregate.key {
                 Some(JoinKey::Columns { columns, .. }) => {
@@ -940,7 +940,7 @@ impl Checks<'_> {
                 .is_some_and(|(qualifier, _)| scope.drivers.contains(&qualifier))
         };
         // Under grouped construction each operand naming a field of the rows'
-        // driver must be a group key (REQ-0067 in a row template, REQ-0107 at
+        // driver must be a group key (ROW-5 in a row template, NAME-4 at
         // column level). Binding decides it only for a field the driver
         // stores, and reports any other as unknown; without source schemas
         // every such field is stored.
@@ -977,7 +977,7 @@ impl Checks<'_> {
                 forbidden: baseline,
             }));
         }
-        // A partition names each variable once (REQ-0293); report every repeat.
+        // A partition names each variable once (WINDOW-3); report every repeat.
         for (index, &group) in window.group_by.iter().enumerate() {
             let named = name(spec, group).unwrap_or_default();
             if window.group_by[..index]
@@ -995,7 +995,7 @@ impl Checks<'_> {
         }
         // Binding's catalog holds one dataset, the rows' driver, so it refuses
         // a field of any other dataset whether or not that dataset stores it
-        // (REQ-0103): the operands, then each filter name once, in sorted order.
+        // (NAME-3): the operands, then each filter name once, in sorted order.
         if let Some(scope) = scope {
             let filtered = window
                 .filter
@@ -1267,8 +1267,8 @@ impl Checks<'_> {
         columns
     }
 
-    /// Column order over each derivation's reads (REQ-0071, REQ-0072,
-    /// REQ-0074), named with binding's columns and paths.
+    /// Column order over each derivation's reads (COLUMN-5, COLUMN-6,
+    /// COLUMN-7), named with binding's columns and paths.
     fn order(
         &self,
         dependencies: &[Option<Vec<usize>>],
@@ -1555,9 +1555,9 @@ impl Checks<'_> {
 
     /// Without row templates, each column in declaration order: a key that
     /// reads other records, the derivation's defects and selections, its
-    /// formula's qualified names (REQ-0442), its static types and its
+    /// formula's qualified names (FORMULA-9), its static types and its
     /// conversion (VALUE-24); then column order over what every derivation
-    /// reads (REQ-0071, REQ-0072, REQ-0074).
+    /// reads (COLUMN-5, COLUMN-6, COLUMN-7).
     fn base(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         let spec = self.spec;
         let prepared = self.prepared;
