@@ -111,6 +111,14 @@ class HostBindings(unittest.TestCase):
             (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
             Loader=UniqueKeyLoader,
         )
+        installs = {
+            "r": "check",
+            "equivalence": "check",
+            # The conversion gate checks R only when it runs both hosts.
+            "conversion": (
+                "${{ steps.paths.outputs.hosts == 'python' && 'none' || 'check' }}"
+            ),
+        }
         for name, job in workflow["jobs"].items():
             [setup] = [
                 step
@@ -120,7 +128,7 @@ class HostBindings(unittest.TestCase):
             with self.subTest(job=name):
                 self.assertEqual(
                     setup.get("with", {}).get("r", "none"),
-                    "check" if name in {"r", "equivalence"} else "none",
+                    installs.get(name, "none"),
                 )
         self.assertIn(
             "make test-r", [step.get("run") for step in workflow["jobs"]["r"]["steps"]]

@@ -79,9 +79,9 @@ impl PreflightFinding {
                     ("required_phase", text("row_construction")),
                 ]),
             ),
-            Self::UndeclaredRowColumn { index, column } => (
+            Self::UndeclaredRowColumn { row_path, column } => (
                 C::PreflightUndeclaredRowColumn,
-                vec![format!("rows[{index}].derivations.{column}")],
+                vec![format!("{row_path}.derivations.{column}")],
                 context([("column", text(column))]),
             ),
             Self::DuplicateRowDefault {
@@ -107,19 +107,23 @@ impl PreflightFinding {
                 vec!["filter".into(), "rows".into()],
                 Context::new(),
             ),
-            Self::InvalidGroup { index, row, groups } => (
+            Self::InvalidGroup {
+                row_path,
+                row,
+                groups,
+            } => (
                 C::PreflightInvalidGroup,
-                vec![format!("rows[{index}].group_by")],
+                vec![format!("{row_path}.group_by")],
                 context([("row", text(row)), ("group_by", texts(groups))]),
             ),
             Self::GroupReference {
-                index,
+                row_path,
                 row,
                 name,
                 dataset,
             } => (
                 C::PreflightGroupReference,
-                vec![format!("rows[{index}].group_by")],
+                vec![format!("{row_path}.group_by")],
                 context([
                     ("row", text(row)),
                     ("identifier", text(name)),
@@ -127,12 +131,12 @@ impl PreflightFinding {
                 ]),
             ),
             Self::RowDriverUnavailable {
-                index,
+                row_path,
                 row,
                 dataset,
             } => (
                 C::PreflightRowDriverUnavailable,
-                vec![format!("rows[{index}].dataset")],
+                vec![format!("{row_path}.dataset")],
                 context([("row", text(row)), ("dataset", optional_text(dataset))]),
             ),
             Self::MissingDerivation { column } => (

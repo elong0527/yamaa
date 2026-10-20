@@ -8,8 +8,8 @@ use crate::{
 use crate::{
     resource::ResourceFailure,
     schema::{
-        AdmittedMappingDictionary, MappingDictionaryReference, NormalizationError, SchemaStructure,
-        SpecificationDocument,
+        AdmittedMappingDictionary, Document, LayerProvenance, MappingDictionaryReference,
+        NormalizationError, SchemaStructure, SpecificationDocument,
     },
 };
 
@@ -17,23 +17,38 @@ use crate::{
 pub enum Origins<'a> {
     Standalone(&'a str),
     Inherited(&'a PreparedInheritance),
+    /// A resolved 1.x specification: the layer that contributed each
+    /// written path, and its layers in contribution order.
+    Versioned {
+        provenance: &'a [LayerProvenance],
+        layers: &'a [crate::inheritance::VersionedLayer],
+    },
+}
+/// The layer, numbered in contribution order, that contributed `path` or
+/// the nearest written path holding it.
+fn contribution(provenance: &[LayerProvenance], path: &str) -> Option<usize> {
+    provenance
+        .iter()
+        .filter(|origin| {
+            path == origin.path
+                || path
+                    .strip_prefix(&origin.path)
+                    .is_some_and(|suffix| suffix.starts_with(['.', '[']))
+        })
+        .max_by_key(|origin| origin.path.len())
+        .map(|origin| origin.layer)
 }
 impl Origins<'_> {
     fn declaring(&self, path: &str) -> Option<&str> {
         match self {
             Self::Standalone(source) => Some(source),
             Self::Inherited(prepared) => {
-                let contribution = prepared
-                    .provenance()
-                    .iter()
-                    .filter(|origin| {
-                        path == origin.path
-                            || path
-                                .strip_prefix(&origin.path)
-                                .is_some_and(|suffix| suffix.starts_with(['.', '[']))
-                    })
-                    .max_by_key(|origin| origin.path.len())?;
-                Some(&prepared.layers().get(contribution.layer)?.source.identity)
+                let layer = contribution(prepared.provenance(), path)?;
+                Some(&prepared.layers().get(layer)?.source.identity)
+            }
+            Self::Versioned { provenance, layers } => {
+                let layer = contribution(provenance, path)?;
+                Some(&layers.get(layer)?.source.identity)
             }
         }
     }
@@ -188,6 +203,74 @@ pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
     port: &mut P,
     decoder: &mut D,
 ) -> PreparationResult<P::Error, D::Error, D::Raw> {
+    materialized(
+        schema,
+        model.document(),
+        origins,
+        seeds,
+        port,
+        decoder,
+        |dictionaries| schema.materialize_mapping_dictionaries(model, dictionaries),
+    )
+    .map(|prepared| prepared.map(|(model, captures)| Prepared { model, captures }))
+}
+
+/// The dictionaries a resolved 1.x specification reads, materialized into a
+/// compiler-only copy of it, as [`prepare`] materializes a 0.5 model's.
+#[derive(Debug)]
+pub struct PreparedDocument<R> {
+    /// The specification with each dictionary file's admitted content in
+    /// place of its path. It grants no source IO and is never shown as the
+    /// resolved specification.
+    pub document: Document,
+    /// Parallel to `document`'s nodes: the node of the resolved
+    /// specification each copies, or the `dict` path whose file holds it.
+    pub sources: Vec<usize>,
+    pub captures: Vec<Captured<R>>,
+}
+pub type DocumentPreparationResult<E, X, R> =
+    Result<Option<PreparedDocument<R>>, Box<Error<E, X, R>>>;
+/// [`prepare`] for a resolved 1.x specification held as `document`: each
+/// dictionary file it names is captured from the layer that wrote its path,
+/// admitted, and materialized; `None` when it names none.
+pub fn prepare_document<P: InheritanceCapturePort, D: InheritanceDecodePort>(
+    schema: &SchemaStructure,
+    document: &Document,
+    origins: Origins<'_>,
+    seeds: &[Seed<'_, D::Raw>],
+    port: &mut P,
+    decoder: &mut D,
+) -> DocumentPreparationResult<P::Error, D::Error, D::Raw> {
+    materialized(
+        schema,
+        document,
+        origins,
+        seeds,
+        port,
+        decoder,
+        |dictionaries| schema.materialize_mapping_dictionary_document(document, dictionaries),
+    )
+    .map(|prepared| {
+        prepared.map(|((document, sources), captures)| PreparedDocument {
+            document,
+            sources,
+            captures,
+        })
+    })
+}
+
+/// Capture and admit every dictionary file `document` names, then
+/// `materialize` them.
+#[allow(clippy::type_complexity)]
+fn materialized<P: InheritanceCapturePort, D: InheritanceDecodePort, T>(
+    schema: &SchemaStructure,
+    document: &Document,
+    origins: Origins<'_>,
+    seeds: &[Seed<'_, D::Raw>],
+    port: &mut P,
+    decoder: &mut D,
+    materialize: impl FnOnce(&[AdmittedMappingDictionary]) -> Result<T, NormalizationError>,
+) -> Result<Option<(T, Vec<Captured<D::Raw>>)>, Box<Error<P::Error, D::Error, D::Raw>>> {
     let mut run = Run {
         port,
         decoder,
@@ -196,7 +279,7 @@ pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
     };
     let attempt = (|| {
         let references = schema
-            .mapping_dictionary_references(model.document())
+            .mapping_dictionary_references(document)
             .map_err(Cause::Materialize)?;
         if references.is_empty() {
             return Ok(None);
@@ -209,17 +292,13 @@ pub fn prepare<P: InheritanceCapturePort, D: InheritanceDecodePort>(
             };
             dictionaries.push(run.dictionary(schema, reference, declaring)?);
         }
-        schema
-            .materialize_mapping_dictionaries(model, &dictionaries)
+        materialize(&dictionaries)
             .map(Some)
             .map_err(Cause::Materialize)
     })();
     match attempt {
         Ok(None) => Ok(None),
-        Ok(Some(model)) => Ok(Some(Prepared {
-            model,
-            captures: run.captures,
-        })),
+        Ok(Some(materialized)) => Ok(Some((materialized, run.captures))),
         Err(cause) => Err(Box::new(Error {
             cause,
             captures: run.captures,

@@ -239,10 +239,10 @@ fn admit<E>(
     source: Source,
     input: Document,
 ) -> Result<(Layer, Option<String>), Error<E>> {
-    // The 0.5 chain reads no 1.x layer (SCHEMA-2, #3030 D76).
-    if let Some(fault) = language::refusal(&input) {
-        return Err(header_error(fault, entry, source, input));
-    }
+    // A 0.5 chain reads each of its layers under the rules at the
+    // `yamaa-v0.5.0` tag (#3030 D75), so a parent that declares the 1.x header
+    // fails its admission in that layer: inheritance never migrates a layer
+    // between the languages (LAYER-4).
     let normalized = match schema.normalize_layer(&input) {
         Ok(value) => value,
         Err(error) => {

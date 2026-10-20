@@ -164,6 +164,11 @@ is. A producing specification linked through `schema` is a resource of its
 consumer, not a separate entry. R returns a named list and Python a dict. It
 reads no study data and runs no project code.
 
+Each entry names the language its specification is written in: a 1.0
+specification's entry records `language_version`, the newest version any of
+its layers declares in `yamaa`, and a 0.5 specification's entry records its
+`schema_version`.
+
 === "R"
 
     ```r

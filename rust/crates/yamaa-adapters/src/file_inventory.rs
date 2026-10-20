@@ -23,7 +23,7 @@ impl service::Ports for Native<'_> {
         )
     }
     fn document(specification: &PreparedDocument) -> &yamaa_core::schema::Document {
-        specification.model().document()
+        specification.document()
     }
     fn identity(specification: &PreparedDocument) -> &str {
         &specification.source().identity

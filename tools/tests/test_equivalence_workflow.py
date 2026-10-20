@@ -20,15 +20,14 @@ class EquivalenceWorkflowTests(unittest.TestCase):
         base_path=None,
         merge=False,
         rename_from=None,
+        job="equivalence",
     ):
         workflow = yaml.load(
             (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
             Loader=UniqueKeyLoader,
         )
         [step] = [
-            step
-            for step in workflow["jobs"]["equivalence"]["steps"]
-            if step.get("id") == "paths"
+            step for step in workflow["jobs"][job]["steps"] if step.get("id") == "paths"
         ]
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
@@ -181,6 +180,65 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             self.decide("python/pyproject.toml", merge=True)
         self.assertIn("::error::", stopped.exception.stdout)
         self.assertIn("pull-request head", stopped.exception.stdout)
+
+
+class ConversionWorkflowTests(unittest.TestCase):
+    """The conversion job runs on Python for a pull request whose diff reaches
+    the 1.0 front end, the converter, the 1.0 schemas or the gate, and on both
+    hosts on dispatch or its weekly schedule."""
+
+    def decide(self, path, **arguments):
+        decision, notice = EquivalenceWorkflowTests.decide(
+            self, path, job="conversion", **arguments
+        )
+        return dict(line.split("=", 1) for line in decision.splitlines()), notice
+
+    def test_the_gate_s_inputs_run_it_on_python(self):
+        for path in (
+            "rust/crates/yamaa-core/src/front_end/v1/spec/checks.rs",
+            "tools/migrate/excepted.py",
+            "yaml/v1/schema_spec.yaml",
+            "tools/commands/conversion.py",
+            "python/tests/installed/conversion_define.py",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    self.decide(path)[0], {"run": "true", "hosts": "python"}
+                )
+
+    def test_other_changes_pass_with_a_notice(self):
+        for path in (
+            "rust/crates/yamaa-core/src/specification/mod.rs",
+            "yaml/schema.yaml",
+            "benchmarks/example/expected/data.csv",
+            "README.md",
+        ):
+            with self.subTest(path=path):
+                decision, notice = self.decide(path)
+                self.assertEqual(decision, {"hosts": "python", "run": "false"})
+                self.assertIn("conversion gate did not run", notice)
+
+    def test_dispatch_and_the_schedule_run_both_hosts(self):
+        for event in ("workflow_dispatch", "schedule"):
+            with self.subTest(event=event):
+                self.assertEqual(
+                    self.decide("README.md", event=event)[0],
+                    {"run": "true", "hosts": "python,r"},
+                )
+
+    def test_the_weekly_schedule_alone_runs_the_job(self):
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
+            Loader=UniqueKeyLoader,
+        )
+        triggers = workflow.get("on", workflow.get(True))
+        schedules = [entry["cron"] for entry in triggers["schedule"]]
+        self.assertIn("23 4 * * 1", schedules)
+        self.assertIn(
+            "github.event.schedule == '23 4 * * 1'",
+            workflow["jobs"]["conversion"]["if"],
+        )
+        self.assertNotIn("schedule", workflow["jobs"]["equivalence"]["if"])
 
 
 if __name__ == "__main__":

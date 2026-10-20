@@ -73,6 +73,9 @@ impl Finding {
 }
 pub struct Input<'a> {
     pub document: &'a Document,
+    /// The specification lowered into the AST, whose derivations SUB-19 and
+    /// SUB-20 read in the language it is written in (#3030 D76).
+    pub tree: &'a ast::Spec,
     pub source: &'a str,
     pub artifact: &'a str,
     /// Relative publication-package reference already admitted by the file
@@ -401,28 +404,32 @@ fn origin_admits(
         }
     }
 }
+/// The column of `tree` that `name` declares.
+fn tree_column<'t>(tree: &'t ast::Spec, name: &str) -> Option<&'t ast::Column> {
+    tree.columns.iter().find(|column| column.name.name == name)
+}
 /// The first derivation that refutes the origin type under SUB-19, if any.
 fn refuting(
-    document: &Document,
-    derivations: &[usize],
+    tree: &ast::Spec,
+    derivations: &[ast::ExprId],
     kind: spec::OriginType,
     reads: &Reads,
 ) -> Option<origin::DerivationKind> {
     derivations
         .iter()
-        .map(|&node| origin::classify(document, node, reads))
+        .map(|&expr| origin::classify_expr(tree, expr, reads))
         .find(|derivation| !derivation.admits(kind))
 }
 /// SUB-20: the first derivation that is not the copy a Predecessor claims.
 fn copy_failure(
-    document: &Document,
-    derivations: &[usize],
+    tree: &ast::Spec,
+    derivations: &[ast::ExprId],
     predecessor: &origin::Predecessor<'_>,
     reads: &Reads,
 ) -> Option<origin::CopyFailure> {
     derivations
         .iter()
-        .find_map(|&node| origin::copies(document, node, predecessor, reads).err())
+        .find_map(|&expr| origin::copies_expr(tree, expr, predecessor, reads).err())
 }
 fn reserved_metadata(
     document: &Document,
@@ -527,6 +534,8 @@ enum Level {
 /// Admit the complete inherited column metadata for a base or per-value item.
 struct ColumnAdmission<'a> {
     doc: &'a Document,
+    /// The specification's tree, whose derivations SUB-19 and SUB-20 read.
+    tree: &'a ast::Spec,
     /// The dataset name, reported with transport findings.
     dataset: &'a str,
     section: &'a ast::Section,
@@ -554,13 +563,13 @@ impl ColumnAdmission<'_> {
         &self,
         column: &spec::Column,
         column_path: &str,
-        derivations: &[usize],
+        derivations: &[ast::ExprId],
         level: Level,
         findings: &mut Vec<Finding>,
         bound: &mut BTreeSet<String>,
     ) -> Option<Column> {
         let Self {
-            doc,
+            tree,
             section,
             known,
             acrfs,
@@ -684,11 +693,11 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        if refuting(doc, derivations, origin.kind.value, reads).is_some() {
+        if refuting(tree, derivations, origin.kind.value, reads).is_some() {
             findings.push(Finding::cause(refutation, column_path, name));
         } else if let Some(failure) = predecessor
             .as_ref()
-            .and_then(|predecessor| copy_failure(doc, derivations, predecessor, reads))
+            .and_then(|predecessor| copy_failure(tree, derivations, predecessor, reads))
         {
             // SUB-20: a Predecessor is a bare `source` of the column it names.
             let mut finding = Finding::cause(refutation, column_path, name);
@@ -1109,7 +1118,6 @@ fn compose_values(
         .columns()
         .expect("admitted dataset columns")
         .value;
-    let declared_columns = values::declared_columns(doc);
     let positions: Vec<String> = selected
         .iter()
         .map(|column| column.declaration.name.value.clone())
@@ -1198,7 +1206,7 @@ fn compose_values(
         let Some(position) = positions.iter().position(|column| column == name) else {
             continue;
         };
-        for (entry, written) in metadata.value_level.iter().zip(&entries) {
+        for entry in &metadata.value_level {
             let id = &entry.id.value;
             let entry_path = format!("{path}.{}", values::path(name, id));
             let clause = entry
@@ -1236,10 +1244,17 @@ fn compose_values(
             }
             // An entry without its own origin answers with the column's,
             // which the column's own refutation already covers (SUB-13).
-            let derivations = if entry.metadata.origin_metadata.is_some() {
-                values::entry_derivations(doc, base.node, name, &declared_columns, written)
-            } else {
-                Vec::new()
+            let derivations = match (
+                &entry.metadata.origin_metadata,
+                tree_column(admission.tree, name),
+            ) {
+                (Some(_), Some(column)) => values::levels(column)
+                    .iter()
+                    .find(|level| level.id.name == *id)
+                    .map_or_else(Vec::new, |level| {
+                        values::entry_expressions(admission.tree, column, level)
+                    }),
+                _ => Vec::new(),
             };
             let value = admission.admit(
                 &effective,
@@ -1263,8 +1278,15 @@ fn compose_values(
                         .expect("refuted admitted origin");
                     // A Predecessor that is not the named copy is refuted by a
                     // bare `source`, which SUB-19 alone admits.
-                    let kind = refuting(doc, &derivations, origin.kind.value, admission.reads)
-                        .unwrap_or_else(|| origin::classify(doc, derivations[0], admission.reads));
+                    let kind = refuting(
+                        admission.tree,
+                        &derivations,
+                        origin.kind.value,
+                        admission.reads,
+                    )
+                    .unwrap_or_else(|| {
+                        origin::classify_expr(admission.tree, derivations[0], admission.reads)
+                    });
                     for (key, value) in [
                         ("derivation_kind", kind.name()),
                         ("origin_type", origin.kind.value.name()),
@@ -1378,6 +1400,23 @@ fn compose_datasets(
     for (index, input) in inputs.iter().enumerate() {
         let doc = input.document;
         let path = format!("{family}.specs[{index}]");
+        // A listed 1.0 specification's `model` names its section's model
+        // (SUB-3), which P1-10 checks; until then one that omits `model` or
+        // names another is refused (#3030 D76).
+        if !matches!(input.tree.header.surface, ast::Surface::V0_5) {
+            let model = match section.family {
+                Submission::Sdtm => ast::ModelKind::Sdtm,
+                Submission::Adam => ast::ModelKind::Adam,
+                Submission::Send => ast::ModelKind::Send,
+            };
+            if input.tree.model.as_ref().map(|declared| declared.kind) != Some(model) {
+                findings.push(Finding::unsupported(
+                    &path,
+                    crate::front_end::v1::spec::checks::MODEL_CHECK,
+                ));
+                continue;
+            }
+        }
         reserved_metadata(
             doc,
             doc.root(),
@@ -1385,7 +1424,7 @@ fn compose_datasets(
             &path,
             findings,
         );
-        let reads = Reads::of(doc);
+        let reads = Reads::of_spec(input.tree);
         let id = text(doc, doc.root(), "domain").unwrap_or_default();
         if !ids.insert(id.clone()) || known.contains(id.as_str()) {
             findings.push(Finding::cause(
@@ -1559,9 +1598,9 @@ fn compose_datasets(
                 ));
             }
         }
-        let declared_columns = values::declared_columns(doc);
         let admission = ColumnAdmission {
             doc,
+            tree: input.tree,
             dataset: &id,
             section,
             catalogue,
@@ -1600,13 +1639,9 @@ fn compose_datasets(
             predecessor_labels(study, column, &origins, &path, findings);
             // The column's origin answers for every construction whose rows an
             // entry declaring its own origin does not all select (SUB-19).
-            let derivations = values::column_derivations(
-                doc,
-                column.node,
-                name,
-                &declared_columns,
-                &values::entries(doc, column.node),
-            );
+            let derivations = tree_column(input.tree, name).map_or_else(Vec::new, |column| {
+                values::column_expressions(input.tree, column)
+            });
             if let Some(column) = admission.admit(
                 column,
                 &column_path,
