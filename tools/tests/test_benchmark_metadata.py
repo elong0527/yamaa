@@ -31,7 +31,10 @@ class BenchmarkMetadata(unittest.TestCase):
         from tools.paths import ROOT
         from tools.staging.stage_project_inputs import stage_case
 
-        source = ROOT / "benchmarks/adam-adsl-bmi"
+        # The project names its Python lock at python/uv.lock in either
+        # language: a 0.5 environment file's `lock: uv.lock` beside it, or a
+        # 1.x project's environments.python.lock.
+        source = ROOT / "benchmarks/schema-functions"
         staged = self.case / "runtime"
         stage_case(
             source,
@@ -46,8 +49,8 @@ class BenchmarkMetadata(unittest.TestCase):
         for name in ("expected", "README.md", "benchmark.yaml"):
             self.assertFalse((staged / name).exists())
         self.assertEqual(
-            (staged / "input/adsl.csv").read_bytes(),
-            (source / "input/adsl.csv").read_bytes(),
+            (staged / "input/source.csv").read_bytes(),
+            (source / "input/source.csv").read_bytes(),
         )
 
     def test_runtime_staging_follows_the_python_environment_the_project_links(self):
@@ -75,6 +78,39 @@ class BenchmarkMetadata(unittest.TestCase):
         shutil.rmtree(staged)
         stage_case(source, staged)
         self.assertFalse((staged / "code/py/uv.lock").exists())
+
+    def test_runtime_staging_supplies_the_lock_a_1_x_project_names(self):
+        from tools.paths import ROOT
+        from tools.staging.stage_project_inputs import python_lock, stage_case
+
+        source = self.case / "study"
+        source.mkdir()
+        (source / "spec.yaml").write_text('yamaa: "1.0"\ntype: spec\ndomain: TEST\n')
+        (source / "benchmark.yaml").write_text(yaml.safe_dump(self.metadata))
+        project = source / "project.yaml"
+        # The lock resolves from the project file, in a directory the study
+        # does not hold yet (#3030 D8, FUNC-3).
+        project.write_text(
+            'yamaa: "1.0"\ntype: project\n'
+            "environments: {python: {lock: code/py/uv.lock}, r: {lock: r/renv.lock}}\n"
+        )
+        self.assertEqual(str(python_lock(source, "project.yaml")), "code/py/uv.lock")
+        staged = self.case / "staged"
+        stage_case(source, staged)
+        self.assertEqual(
+            (staged / "code/py/uv.lock").read_bytes(),
+            (ROOT / "python/uv.lock").read_bytes(),
+        )
+        self.assertFalse((staged / "r").exists())
+        # A host that declares no lock has no entry, and nothing is staged.
+        for environments in ("{r: {lock: r/renv.lock}}", "{}"):
+            project.write_text(
+                f'yamaa: "1.0"\ntype: project\nenvironments: {environments}\n'
+            )
+            self.assertIsNone(python_lock(source, "project.yaml"))
+            shutil.rmtree(staged)
+            stage_case(source, staged)
+            self.assertFalse((staged / "code").exists())
 
     def test_singleton_and_root_project_defaults_are_explicit_in_plan(self):
         (self.case / "environment.yaml").write_text("root is never automatic\n")
