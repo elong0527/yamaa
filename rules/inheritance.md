@@ -40,14 +40,17 @@ parent path. Two spellings that reach the same file, after symbolic links are
 resolved, are one layer.
 
 Fails: `invalid_parent_path`, `parent_not_found`.
-Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`.
+Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::an_empty_parent_fails_schema_admission_before_it_is_resolved`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::an_empty_parent_fails_schema_admission_in_its_layer`.
 
-A URL, URI, empty path or other non-local reference fails with
-`invalid_parent_path`, reporting the declaring file and its `parent`. A
-missing, unreadable or non-regular parent fails with `parent_not_found`,
-reporting the declaring file and path. `parent` is a path, so YAML null is not
-a parent: it fails as `invalid_field_type` ([LAYER-9](#layer-9)), and a layer
-without a parent omits the field.
+A URL, URI or other non-local reference fails with `invalid_parent_path`,
+reporting the declaring file and its `parent`. An empty `parent` fails schema
+admission in its layer first: `parent` is a `path`, whose minimum length is
+one, so it fails with `minimum_length`
+([SCHEMA-12](reference/schema-language.md#schema-12)) before any parent is
+resolved. A missing, unreadable or non-regular parent fails with
+`parent_not_found`, reporting the declaring file and path. `parent` is a path,
+so YAML null is not a parent: it fails as `invalid_field_type`
+([LAYER-9](#layer-9)), and a layer without a parent omits the field.
 
 A non-empty local `parent` keeps the written form of every declared path
 ([FILE-4](reference/files.md#file-4), [FILE-5](reference/files.md#file-5)).
@@ -55,6 +58,13 @@ A `\`, an empty segment or a trailing separator in it, as in
 `std//base.yaml`, `base.yaml/` or a network share's
 `//server/share/base.yaml`, fails with `resource_path_not_normalized` at
 `parent`, naming the path as written, before the parent is resolved.
+
+A `parent` is walked from its anchor as every declared path is
+([FILE-7](reference/files.md#file-7), [FILE-8](reference/files.md#file-8)):
+a symbolic link below the anchor, as the layer's own name or as a directory on
+its way, fails with `resource_path_symlink` at `parent`, naming the path as
+written. The only symbolic links resolved before two spellings are compared
+are those of the caller-selected directories that FILE-8 exempts.
 
 <a id="layer-3"></a>
 

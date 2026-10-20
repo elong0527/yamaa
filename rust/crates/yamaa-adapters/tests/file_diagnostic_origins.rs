@@ -1888,6 +1888,19 @@ mod file {
                 json!([{"phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":"absent.yaml","source":study.resource_key("entry/spec.yaml")}}])
             );
         }
+        /// LAYER-2 and SCHEMA-12: an empty `parent` fails schema admission in
+        /// its layer, as a `path` shorter than one, before any parent is
+        /// resolved.
+        #[test]
+        fn an_empty_parent_fails_schema_admission_before_it_is_resolved() {
+            let study = Study::new();
+            let actual: Value = failure(&study, &format!("{VALID}parent: ''\n"));
+            let entry = study.resource_key("entry/spec.yaml");
+            assert_eq!(
+                actual,
+                json!([{"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["parent"],"context":{"minimum":1,"source":entry,"entry":entry}}])
+            );
+        }
         #[test]
         fn invalid_parent_preserves_complete_layer_context() {
             let study = Study::new();
@@ -1951,12 +1964,12 @@ mod file {
                 study.0.join("entry/link.yaml"),
             )
             .unwrap();
-            let Err(error) = study.prepare(&format!("{VALID}parent: link.yaml\n")) else {
-                panic!("expected preparation failure")
-            };
+            // A linked parent fails at `parent` as any linked file a run reads
+            // (FILE-8, LAYER-2).
+            let actual = failure(&study, &format!("{VALID}parent: link.yaml\n"));
             assert_eq!(
-                crate::support::retained_resource_message(error),
-                "resource path contains a symbolic link"
+                actual,
+                json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["parent"],"context":{"path":"link.yaml"}}])
             );
             let resources =
                 Resources::new(&study.text("entry"), &study.text("entry"), &[]).unwrap();
@@ -2205,9 +2218,11 @@ mod file {
             );
             assert!(!study.0.join("entry/input.csv").exists());
         }
+        /// FILE-8: a linked dictionary fails at its authored field, as a
+        /// missing one or a directory does under FILE-7.
         #[cfg(unix)]
         #[test]
-        fn dictionary_symlink_policy_retains_original_resource_error() {
+        fn dictionary_symlink_failure_names_authored_field_without_host_identity() {
             let study = Study::new();
             fs::write(study.0.join("parent/dict.yaml"), "A: answer\n").unwrap();
             std::os::unix::fs::symlink(
@@ -2215,13 +2230,10 @@ mod file {
                 study.0.join("entry/dict.yaml"),
             )
             .unwrap();
-            let error = match study.prepare(DICTIONARY_SPEC) {
-                Ok(_) => panic!(),
-                Err(error) => error,
-            };
+            let actual = failure(&study, DICTIONARY_SPEC);
             assert_eq!(
-                crate::support::retained_resource_message(error),
-                "resource path contains a symbolic link"
+                actual,
+                json!([{"phase":"validation","condition":"resource_path_symlink","rule":"FILE-8","spec_paths":["columns.X.derivation.mapping.dict"],"context":{"path":"dict.yaml"}}])
             );
         }
     }
