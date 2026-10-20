@@ -779,7 +779,7 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        let findings = checks::lookups::admission_findings(tree);
+        let findings = checks::lookups::admission_findings(tree, d, items)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -949,24 +949,10 @@ impl Declarations {
                 .transpose()?;
             let require_match = requires_match(d, id);
             let unique = Self::prepare_unique_checks(d, id, &path)?;
-            let driver_prohibited = [
-                "key",
-                "between",
-                "order_by",
-                "keep",
-                "no_match",
-                "require_match",
-            ]
-            .into_iter()
-            .filter(|name| {
-                if *name == "no_match" {
-                    d.field(id, name).is_some()
-                } else {
-                    present(d, id, name)
-                }
-            })
-            .map(String::from)
-            .collect();
+            let driver_prohibited = checks::lookups::driver_prohibited(d, id)
+                .into_iter()
+                .map(String::from)
+                .collect();
             let derivations = intermediate_derivations::prepare(
                 d, id, &path, dataset, project, extraction, templates, &result,
             )?;

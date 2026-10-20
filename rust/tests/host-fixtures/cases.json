@@ -1039,6 +1039,52 @@
           "csv": null
         },
         {
+          "name": "original_lookup_wrong_qualifier_without_inputs",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":\"SRC.X\"},{\"name\":\"V\",\"type\":\"float\",\"derivation\":\"LOOK.V\"}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.V > 0\"}]}",
+          "inputs": {},
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "requirement": "REQ-0190",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "requirement": "REQ-0785",
+              "spec_paths": [
+                "input.SRC.path"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "path": "input/source.csv"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "requirement": "REQ-0785",
+              "spec_paths": [
+                "input.RIGHT.path"
+              ],
+              "context": {
+                "dataset": "RIGHT",
+                "path": "input/right.csv"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
           "name": "unknown_bare_case",
           "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\",\"DTHFL2\":\"str\"}}},\"base\":\"SRC\",\"keys\":[\"K\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"K\",\"DTHFL\"]},\"columns\":[{\"name\":\"K\",\"type\":\"str\",\"derivation\":\"SRC.X\"},{\"name\":\"DTHFL\",\"type\":\"str\",\"derivation\":{\"case\":[{\"when\":\"NOSUCH = 'Y'\",\"then\":{\"literal\":\"Y\"}},{\"otherwise\":{\"literal\":\"N\"}}]}}]}",
           "inputs": {

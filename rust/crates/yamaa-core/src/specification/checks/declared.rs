@@ -41,6 +41,33 @@ struct Checks<'a> {
     declared: types::DeclaredTypes<'a>,
 }
 
+/// How a check types a field of a record: by its owner and field name.
+type Typing<'a> = dyn Fn(&str, &str) -> Option<ResultType> + 'a;
+
+/// An intermediate's donor record as a check types it.
+struct Donor<'s> {
+    index: usize,
+    item: &'s ast::Intermediate,
+    /// Whether the record is a completed row of the rows being built.
+    self_rows: bool,
+    /// Each derivation's result type, in written order.
+    results: Vec<ResultType>,
+    /// The derived fields and, for a completed row, every column.
+    fields: BTreeMap<String, ResultType>,
+}
+
+impl Donor<'_> {
+    /// A field of the record: one it derives or completes, or else a field
+    /// of the input it reads, as `stored` types it.
+    fn field(&self, field: &str, stored: &Typing<'_>) -> Option<ResultType> {
+        self.fields.get(field).copied().or_else(|| {
+            (!self.self_rows)
+                .then(|| stored(&self.item.dataset.name, field))
+                .flatten()
+        })
+    }
+}
+
 /// Every declaration finding of `prepared`, in binding's order.
 pub(in crate::specification) fn findings(
     prepared: &PreparedSpecification,
@@ -64,6 +91,23 @@ pub(in crate::specification) fn findings(
     }
     checks.ranges(&mut findings)?;
     Ok(findings)
+}
+
+/// The type faults of each intermediate's filter that written declarations
+/// decide. When every input is missing, binding reads no field, and `run()`
+/// reports these instead of the missing inputs (`specification_run`).
+pub(in crate::specification) fn written_filter_types(
+    prepared: &PreparedSpecification,
+    d: &Document,
+) -> Result<Vec<Diagnostic>, BindError> {
+    Checks {
+        d,
+        lowered: prepared.tree.lowered(),
+        spec: prepared.tree.spec(),
+        prepared,
+        declared: prepared.declared_types(),
+    }
+    .written_filter_types()
 }
 
 /// Without row templates, each key is computed from one base record before
@@ -1258,10 +1302,107 @@ impl Checks<'_> {
         ast::result_type(self.spec, root, scope, &self.prepared.tree.env(names))
     }
 
+    /// Each intermediate's donor record in the order binding derives them,
+    /// with each derivation's result type. `stored` types a field of an
+    /// input's record and `current` a field of the record a lookup reads
+    /// from; an earlier intermediate's fields have the types found for it.
+    fn donors(
+        &self,
+        stored: &Typing<'_>,
+        current: &Typing<'_>,
+    ) -> Result<Vec<Donor<'_>>, BindError> {
+        let spec = self.spec;
+        let mut known = BTreeMap::<String, ResultType>::new();
+        let mut inputs = BTreeMap::<&str, &str>::new();
+        let mut donors = Vec::new();
+        for (identifier, _, _) in self.prepared.intermediates.audit_entries() {
+            let Some((index, item)) = spec
+                .intermediates
+                .iter()
+                .enumerate()
+                .find(|(_, item)| item.id.name == identifier)
+            else {
+                return Err(BindError::Internal);
+            };
+            let dataset = item.dataset.name.as_str();
+            let mut donor = Donor {
+                index,
+                item,
+                self_rows: dataset == "SELF" && has_rows(spec),
+                results: Vec::new(),
+                fields: BTreeMap::new(),
+            };
+            if donor.self_rows {
+                donor.fields.extend(
+                    spec.columns
+                        .iter()
+                        .map(|column| (column.name.name.clone(), ResultType::column(column.kind))),
+                );
+            }
+            for binding in &item.bindings {
+                let input = |name: &str| {
+                    let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
+                    if owner == dataset {
+                        donor.field(field, stored).unwrap_or(ResultType::UNKNOWN)
+                    } else if let Some(kind) = known.get(name) {
+                        *kind
+                    } else {
+                        match inputs.get(owner) {
+                            Some(input) => stored(input, field),
+                            None => current(owner, field),
+                        }
+                        .unwrap_or(ResultType::UNKNOWN)
+                    }
+                };
+                let result =
+                    self.result_type(binding.derivation.expr, ast::Scope::Donor(index), &input);
+                let kind = binding.declared.map_or(result, ResultType::column);
+                donor.results.push(result);
+                donor.fields.insert(binding.name.name.clone(), kind);
+            }
+            for (field, &kind) in &donor.fields {
+                known.insert(format!("{identifier}.{field}"), kind);
+            }
+            if !donor.self_rows {
+                inputs.insert(identifier, dataset);
+            }
+            donors.push(donor);
+        }
+        Ok(donors)
+    }
+
+    /// The static type faults of an intermediate's filter over its donor
+    /// record and the record it is read from (FORMULA-5).
+    fn filter_types(
+        &self,
+        donor: &Donor<'_>,
+        stored: &Typing<'_>,
+        current: &Typing<'_>,
+    ) -> Vec<Diagnostic> {
+        let Some(ExprKind::Formula(ast::Formula {
+            compiled: Ok(filter),
+            ..
+        })) = donor.item.filter.map(|filter| &self.spec.expr(filter).kind)
+        else {
+            return Vec::new();
+        };
+        let dataset = donor.item.dataset.name.as_str();
+        types::predicate_kinds(filter, |name| {
+            let (owner, field) = name
+                .split_once('.')
+                .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
+            if owner == dataset {
+                donor.field(field, stored)?.single()
+            } else {
+                current(owner, field)?.single()
+            }
+        })
+    }
+
     /// Each intermediate in the order it is derived: its filter's grammar,
     /// each derivation's defects, selections and conversion (VALUE-24), its
-    /// filter's operand types and its key types, over the declared types of
-    /// its donor and of earlier intermediates.
+    /// filter's operand types, its key types and its range's types, over the
+    /// declared types of its donor and of earlier intermediates.
     fn intermediates(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
         let spec = self.spec;
         let declared = &self.declared;
@@ -1289,85 +1430,27 @@ impl Checks<'_> {
             Some((owner, field)) => current(owner, field).unwrap_or(ResultType::UNKNOWN),
             None => declared.name(name),
         };
-        // Fields of earlier intermediates: derived names, and the input each
-        // one reads for its stored fields.
-        let mut known = BTreeMap::<String, ResultType>::new();
-        let mut inputs = BTreeMap::<&str, &str>::new();
-        for (identifier, _, _) in self.prepared.intermediates.audit_entries() {
-            let Some((index, item)) = spec
-                .intermediates
-                .iter()
-                .enumerate()
-                .find(|(_, item)| item.id.name == identifier)
-            else {
-                return Err(BindError::Internal);
-            };
-            let dataset = item.dataset.name.as_str();
-            let self_rows = dataset == "SELF" && has_rows(spec);
-            let mut donor = BTreeMap::new();
-            if self_rows {
-                donor.extend(
-                    spec.columns
-                        .iter()
-                        .map(|column| (column.name.name.clone(), ResultType::column(column.kind))),
-                );
-            }
-            let donor_type = |donor: &BTreeMap<String, ResultType>, field: &str| {
-                donor
-                    .get(field)
-                    .copied()
-                    .or_else(|| (!self_rows).then(|| stored(dataset, field)).flatten())
-            };
+        let donors = self.donors(&stored, &current)?;
+        for (position, donor) in donors.iter().enumerate() {
+            let (index, item) = (donor.index, donor.item);
+            let identifier = item.id.name.as_str();
             if let Some(filter) = item.filter {
                 self.grammar(filter, findings)?;
             }
-            for binding in &item.bindings {
+            for (binding, &result) in item.bindings.iter().zip(&donor.results) {
                 self.derivation(binding.derivation.expr, None, false, findings)?;
-                let input = |name: &str| {
-                    let (owner, field) = name.split_once('.').unwrap_or((dataset, name));
-                    if owner == dataset {
-                        donor_type(&donor, field).unwrap_or(ResultType::UNKNOWN)
-                    } else if let Some(kind) = known.get(name) {
-                        *kind
-                    } else {
-                        match inputs.get(owner) {
-                            Some(input) => stored(input, field),
-                            None => current(owner, field),
-                        }
-                        .unwrap_or(ResultType::UNKNOWN)
-                    }
-                };
-                let result =
-                    self.result_type(binding.derivation.expr, ast::Scope::Donor(index), &input);
                 if let (Some(typed), None) = (binding.declared, &binding.derivation.unconvertible) {
                     findings.extend(
                         types::conversion_finding(&render(spec, binding.meta), result, typed)
                             .map(BindFinding::Scalar),
                     );
                 }
-                let kind = binding.declared.map_or(result, ResultType::column);
-                donor.insert(binding.name.name.clone(), kind);
             }
-            if let Some(ExprKind::Formula(ast::Formula {
-                compiled: Ok(filter),
-                ..
-            })) = item.filter.map(|filter| &spec.expr(filter).kind)
-            {
-                findings.extend(
-                    types::predicate_kinds(filter, |name| {
-                        let (owner, field) = name
-                            .split_once('.')
-                            .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
-                        if owner == dataset {
-                            donor_type(&donor, field)?.single()
-                        } else {
-                            current(owner, field)?.single()
-                        }
-                    })
+            findings.extend(
+                self.filter_types(donor, &stored, &current)
                     .into_iter()
                     .map(BindFinding::Predicate),
-                );
-            }
+            );
             // A key compares each donor column with its current-row value: a
             // listed column with the same-named value, a written name with
             // that name, and any other value by its result type (LOOKUP-6).
@@ -1383,7 +1466,9 @@ impl Checks<'_> {
             };
             for (column, value) in keys {
                 let field = column.name.as_str();
-                let Some(actual) = donor_type(&donor, field).and_then(ResultType::column_type)
+                let Some(actual) = donor
+                    .field(field, &stored)
+                    .and_then(ResultType::column_type)
                 else {
                     continue;
                 };
@@ -1416,20 +1501,23 @@ impl Checks<'_> {
             // fields; each stated one must be typed (LOOKUP-9).
             if let Some(between) = &item.between {
                 let primary = self.prepared.source().name.as_str();
+                let earlier = &donors[..position];
                 let value =
                     name(spec, between.value).and_then(|value| match value.split_once('.') {
                         None if spec.columns.iter().any(|column| column.name.name == value) => {
                             Some(declared.name(value))
                         }
                         None => stored(primary, value),
-                        Some((owner, field)) => known
-                            .get(value)
-                            .copied()
-                            .or_else(|| stored(inputs.get(owner).copied().unwrap_or(owner), field)),
+                        Some((owner, field)) => {
+                            match earlier.iter().find(|prior| prior.item.id.name == owner) {
+                                Some(prior) => prior.field(field, &stored),
+                                None => stored(owner, field),
+                            }
+                        }
                     });
                 let bound = |bound: Option<ExprId>| match bound {
                     None => Some(None),
-                    Some(bound) => donor_type(&donor, name(spec, bound)?)?.single().map(Some),
+                    Some(bound) => donor.field(name(spec, bound)?, &stored)?.single().map(Some),
                 };
                 if let (Some(value), Some(lower), Some(upper)) = (
                     value.and_then(ResultType::single),
@@ -1446,14 +1534,23 @@ impl Checks<'_> {
                     }
                 }
             }
-            for (field, kind) in donor {
-                known.insert(format!("{identifier}.{field}"), kind);
-            }
-            if !self_rows {
-                inputs.insert(identifier, dataset);
-            }
         }
         Ok(())
+    }
+
+    /// The type faults of each intermediate's filter that written
+    /// declarations decide: a field no declaration types is not yet known,
+    /// as before its input is read.
+    fn written_filter_types(&self) -> Result<Vec<Diagnostic>, BindError> {
+        let written = |owner: &str, field: &str| {
+            Some(self.declared.written(&format!("{owner}.{field}")))
+                .filter(|&kind| kind != ResultType::UNKNOWN)
+        };
+        let mut findings = Vec::new();
+        for donor in self.donors(&written, &written)? {
+            findings.extend(self.filter_types(&donor, &written, &written));
+        }
+        Ok(findings)
     }
 
     /// Without row templates, each column in declaration order: a key that

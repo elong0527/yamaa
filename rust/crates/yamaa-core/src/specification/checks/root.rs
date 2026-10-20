@@ -280,9 +280,11 @@ fn aggregate(spec: &Spec, e: ExprId) -> bool {
 /// input may not declare and the types a Parquet input restates.
 pub(in crate::specification) fn source_findings(
     spec: &Spec,
+    d: &Document,
     odm_inputs: &BTreeSet<&str>,
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut findings = Vec::new();
+    let declarations = d.field(d.root(), "input");
     for input in &spec.inputs {
         let name = input.name.name.as_str();
         let written = input.source.path.text.as_str();
@@ -318,11 +320,13 @@ pub(in crate::specification) fn source_findings(
             });
         }
         if odm_inputs.contains(name) {
+            // A written `types` declares types even when it is empty, which
+            // the tree does not keep (NAME-8).
+            let types = declarations
+                .and_then(|declarations| d.field(declarations, name))
+                .is_some_and(|node| present(d, node, "types"));
             let declared = [
-                (
-                    !input.source.types.is_empty(),
-                    crate::diagnostic::OdmDeclared::Types,
-                ),
+                (types, crate::diagnostic::OdmDeclared::Types),
                 (
                     input.source.schema.is_some(),
                     crate::diagnostic::OdmDeclared::Schema,
