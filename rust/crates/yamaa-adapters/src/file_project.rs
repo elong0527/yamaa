@@ -40,7 +40,7 @@ pub fn prepare(
         &mut resources,
         &specification_schema,
         &mut environment,
-        yamaa_core::submission_inventory::requested(document.model().document()),
+        yamaa_core::submission_inventory::requested(document.document()),
         &document.source().identity,
     )
     .map_err(Error::Document)?;
@@ -70,8 +70,7 @@ pub fn prepare(
 ///
 /// `schemas` decide whether a 1.0 project is read
 /// ([`project_source::ProjectSchemas::versioned`]): public calls pass the
-/// shipped schemas, which read none until the engine reads 1.0 files (#3030
-/// D76, P1-9).
+/// shipped schemas, which read 1.0 files (#3030 D76).
 pub(crate) fn capture_environment(
     resources: &mut Resources,
     written: &str,

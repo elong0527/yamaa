@@ -93,7 +93,13 @@ fn kind(d: &Document, node: usize) -> Result<ColumnType, Error> {
 /// Read the producing specification's selected output fields with their declared
 /// types and labels. Each output schema has the fixed column boundary.
 pub fn prepare(spec: &SpecificationDocument) -> Result<Contract, Error> {
-    let d = spec.document();
+    prepare_document(spec.document())
+}
+
+/// [`prepare`] for a resolved specification of either language: a 0.5
+/// model's document or a resolved 1.x specification, which write the output
+/// contract's fields under the same names.
+pub fn prepare_document(d: &Document) -> Result<Contract, Error> {
     let declarations = sequence(d, field(d, d.root(), "columns")?)?;
     let output = field(d, d.root(), "output")?;
     let selected = sequence(d, field(d, output, "columns")?)?;
@@ -160,7 +166,9 @@ pub struct Link<'a> {
     pub dataset: &'a str,
     /// Canonical identity of the producing specification.
     pub identity: &'a str,
-    pub document: &'a SpecificationDocument,
+    /// The producing specification, resolved: a 0.5 model's document or a
+    /// resolved 1.x specification ([`prepare_document`]).
+    pub document: &'a Document,
 }
 /// Every resolved link of one consuming specification, beside the consumer's
 /// own canonical identity. The default supplies no link metadata.
@@ -204,16 +212,17 @@ fn invalid(dataset: &str, reason: &str) -> Diagnostic {
     }
 }
 
-/// Admit every linked input of `consumer` before compilation. `types` must be
-/// absent beside `schema`, a link cannot name the consuming specification, and
-/// the producing specification must declare a valid output contract. Returns
-/// each linked dataset's contract in authored input order.
+/// Admit every linked input of `consumer`, its resolved document of either
+/// language, before compilation. `types` must be absent beside `schema`, a
+/// link cannot name the consuming specification, and the producing
+/// specification must declare a valid output contract. Returns each linked
+/// dataset's contract in authored input order.
 pub(crate) fn admit(
-    consumer: &SpecificationDocument,
+    consumer: &Document,
     links: Links<'_>,
 ) -> Result<Vec<(String, Contract)>, AdmissionError> {
     crate::limits::Limits::inputs(links.links.len()).map_err(AdmissionError::Limit)?;
-    let d = consumer.document();
+    let d = consumer;
     let Some(N::Mapping(inputs)) = d.field(d.root(), "input").map(|id| &d.nodes()[id]) else {
         return Err(AdmissionError::Boundary);
     };
@@ -292,7 +301,7 @@ pub(crate) fn admit(
             findings.push(invalid(dataset, "self_reference"));
             continue;
         }
-        let contract = match prepare(link.document) {
+        let contract = match prepare_document(link.document) {
             Ok(contract) => contract,
             Err(Error::Invalid(causes)) => {
                 findings.extend(causes.iter().map(|cause| cause.diagnostic(dataset)));

@@ -6,8 +6,43 @@ use FieldName as F;
 
 const DATASET: &[F] = DATASET_METADATA_FIELDS;
 const COLUMN: &[F] = &[F::Name, F::Type, F::Label, F::Submission];
-const SUBMISSION: &[F] = COLUMN_METADATA_FIELDS;
-const ENTRY: &[F] = VALUE_ENTRY_FIELDS;
+/// A column's governed fields, where a 1.0 specification writes its origin
+/// as `origins` (P-ORIGIN-1).
+const SUBMISSION: &[F] = &[
+    F::Core,
+    F::Mandatory,
+    F::Role,
+    F::DataType,
+    F::Length,
+    F::SignificantDigits,
+    F::DisplayFormat,
+    F::Codelist,
+    F::InventoryVocabulary,
+    F::Origin,
+    F::Origins,
+    F::Method,
+    F::Comment,
+    F::ValueLevel,
+];
+/// An entry's fields, with a 1.0 entry's `origins` (P-ORIGIN-1).
+const ENTRY: &[F] = &[
+    F::Id,
+    F::Where,
+    F::Label,
+    F::Core,
+    F::Mandatory,
+    F::Role,
+    F::DataType,
+    F::Length,
+    F::SignificantDigits,
+    F::DisplayFormat,
+    F::Codelist,
+    F::InventoryVocabulary,
+    F::Origin,
+    F::Origins,
+    F::Method,
+    F::Comment,
+];
 /// The metadata fields an entry shares with its column.
 const ENTRY_METADATA: &[F] = &[
     F::Core,
@@ -38,12 +73,13 @@ const PAGES: &[F] = &[F::Type, F::Refs, F::Title];
 impl Path {
     fn root() -> Self {
         Self {
-            steps: [None; 10],
+            steps: [None; 11],
             len: 0,
         }
     }
     fn child(mut self, step: Step) -> Self {
-        // A value-level entry's deepest pages field reaches ten segments.
+        // A value-level entry's deepest pages field reaches ten segments, and
+        // eleven through a 1.0 entry's `origins[0]` (P-ORIGIN-1).
         self.steps[self.len] = Some(step);
         self.len += 1;
         self
@@ -494,6 +530,20 @@ impl<'a> Parser<'a> {
                 TextRule::Identifier,
                 true,
             )?;
+            // A resolved 1.0 specification holds its where condition in the
+            // long form, `{values: [...]}`; a comparator is refused before
+            // composition reads it (#3030 D76, P1-14).
+            let list = match &self.input.nodes()[value] {
+                N::Mapping(_) if self.input.field(value, "comparator").is_none() => {
+                    self.input.field(value, "values").unwrap_or(value)
+                }
+                _ => value,
+            };
+            let occurrence = Origin {
+                container: if list == value { node } else { value },
+                node: Some(list),
+                ..occurrence
+            };
             let Some(items) = self.sequence(occurrence, term)? else {
                 complete = false;
                 continue;
@@ -501,7 +551,7 @@ impl<'a> Parser<'a> {
             let mut values = Vec::with_capacity(items.len());
             for (position, &item) in items.iter().enumerate() {
                 let item = Origin {
-                    container: value,
+                    container: list,
                     key: None,
                     node: Some(item),
                     field: F::Where,
@@ -566,7 +616,7 @@ impl<'a> Parser<'a> {
             None,
             false,
         )?;
-        let origin_metadata = self.origin(self.get(node, F::Origin), path.field(F::Origin))?;
+        let origin_metadata = self.origin_of(node, path)?;
         let method = self.method(self.get(node, F::Method), path.field(F::Method))?;
         let comment = self.comment(self.get(node, F::Comment), path.field(F::Comment))?;
         Ok(ColumnSubmission {
@@ -586,6 +636,36 @@ impl<'a> Parser<'a> {
             comment,
             value_level: Vec::new(),
         })
+    }
+    /// The origin `node` declares: a 0.5 `origin`, or the one entry of a
+    /// 1.0 `origins` (P-ORIGIN-1). Several origins are refused before any
+    /// composition reads them (#3030 D76, P1-13).
+    fn origin_of(&mut self, node: usize, path: Path) -> Result<Option<OriginMetadata>, Cause> {
+        let origins = self.get(node, F::Origins);
+        let Some(list) = origins.node else {
+            return self.origin(self.get(node, F::Origin), path.field(F::Origin));
+        };
+        let path = path.field(F::Origins);
+        let N::Sequence(items) = &self.input.nodes()[list] else {
+            self.fault(origins, path, Kind::ExpectedSequence, None)?;
+            return Ok(None);
+        };
+        match items.as_slice() {
+            [] => Ok(None),
+            &[item] => self.origin(
+                Origin {
+                    container: list,
+                    key: None,
+                    node: Some(item),
+                    field: F::Origins,
+                },
+                path.child(Step::Index(0)),
+            ),
+            _ => {
+                self.fault(origins, path, Kind::ExpectedMapping, None)?;
+                Ok(None)
+            }
+        }
     }
     fn origin(&mut self, origin: Origin, path: Path) -> Result<Option<OriginMetadata>, Cause> {
         if origin.node.is_none() {

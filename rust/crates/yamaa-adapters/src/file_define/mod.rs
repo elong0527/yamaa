@@ -329,7 +329,7 @@ impl Ports for NativePorts {
     }
     fn specification(document: &Self::Specification) -> service::SpecificationView<'_> {
         use yamaa_core::schema::DocumentNode as N;
-        let model = document.model().document();
+        let model = document.document();
         let inputs = model
             .field(model.root(), "input")
             .and_then(|node| match &model.nodes()[node] {
@@ -350,6 +350,7 @@ impl Ports for NativePorts {
             .collect();
         service::SpecificationView {
             document: model,
+            tree: document.tree(),
             source: &document.source().identity,
             output: document.written_output_origin(),
             inputs,

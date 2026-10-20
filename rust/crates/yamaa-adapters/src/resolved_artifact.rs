@@ -60,7 +60,7 @@ pub fn resolve(
 /// every value, kept through composition; the layers in contribution order;
 /// and every resource the specification names, each written as its layer
 /// wrote it and located by `location` from the base its declaration selects
-/// (FILE-2). Until the engine reads 1.0 files (#3030 D76) only tests reach it.
+/// (FILE-2). `resolve()` returns it for every 1.x specification (#3030 D76).
 pub fn versioned(
     prepared: &PreparedSpecification,
     project: Option<String>,
@@ -280,6 +280,13 @@ pub(crate) fn single(
     resources: &Resources,
     environment: Option<String>,
 ) -> Result<ResolvedArtifact, Error> {
+    // A 1.x specification records its language version, never
+    // `schema_version` (D84).
+    if let Some(prepared) = document.versioned() {
+        return versioned(prepared, environment, |base, written| {
+            resources.location_from(base, written)
+        });
+    }
     Ok(ResolvedArtifact::new(
         document.source().identity.clone(),
         environment,

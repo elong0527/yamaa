@@ -526,3 +526,52 @@ fn a_declared_key_s_columns_order_the_join_s_reader() {
         .collect::<Vec<_>>();
     assert_eq!(bound, [Code::ColumnForwardReference]);
 }
+
+/// A layered specification orders its columns by dependency (LAYER-13), and
+/// reads a row template's qualified read of its own driver as the row's own
+/// record, as binding does, never as an implicit join: a template deriving a
+/// key column from its driver does not read that column through the
+/// driver's key. A column's default reads another template's driver
+/// through its key, so it still orders after the key's columns.
+#[test]
+fn ordering_reads_a_row_template_s_own_driver_without_a_join() {
+    let mut tree = spec(
+        Some(&["USUBJID"]),
+        vec![],
+        vec![(
+            "rows",
+            Tree::list(vec![
+                template("src", "SRC", &[]),
+                template(
+                    "subjects",
+                    "DM",
+                    &[("STUDYID", "DM.STUDYID"), ("USUBJID", "DM.USUBJID")],
+                ),
+            ]),
+        )],
+    );
+    tree.set(
+        &["columns"],
+        Tree::list(vec![
+            column("AGE", "int", "DM.AGE"),
+            column("STUDYID", "str", "SRC.STUDYID"),
+            column("USUBJID", "str", "SRC.USUBJID"),
+        ]),
+    );
+    tree.set(
+        &["output", "columns"],
+        Tree::list(vec![text("STUDYID"), text("USUBJID"), text("AGE")]),
+    );
+    let document = tree.document();
+    let spec = crate::front_end::v1::spec::lower(&document, None).into_spec();
+    let ordered =
+        crate::resolution::prune_lowered(&document, &spec, crate::resolution::Order::Dependencies)
+            .unwrap();
+    let columns = crate::front_end::v1::spec::lower(&ordered.document, None)
+        .into_spec()
+        .columns
+        .iter()
+        .map(|column| column.name.name.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(columns, ["STUDYID", "USUBJID", "AGE"]);
+}

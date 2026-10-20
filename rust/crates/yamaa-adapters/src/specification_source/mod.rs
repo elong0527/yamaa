@@ -366,11 +366,17 @@ impl CapturedSchema {
             parents: Vec::new(),
             dictionaries: None,
             resource_aliases: Default::default(),
+            legacy_tree: Default::default(),
         })
     }
 
     /// Select the shared preparation lifecycle from one decoded raw entry.
     /// Hosts never inspect YAML or retry standalone errors as inheritance.
+    ///
+    /// An entry that declares the 1.x header is a 1.x specification, read
+    /// with the 1.0 closures the package ships whatever this closure is
+    /// (SCHEMA-2, #3030 D76); every other entry is read by this closure under
+    /// the rules at the `yamaa-v0.5.0` tag (D75).
     pub fn prepare_document<P: InheritancePort>(
         self: &Arc<Self>,
         source: Source,
@@ -378,6 +384,13 @@ impl CapturedSchema {
         port: &mut P,
     ) -> Result<PreparedDocument, InheritanceError<P::Error>> {
         use yamaa_core::document_preparation::{self as application, Content, Error as Failure};
+        // An entry that does not decode is reported by the 0.5 lifecycle,
+        // which decodes it again, as before the engine read 1.0 files.
+        if decode_yaml(&source.bytes)
+            .is_ok_and(|decoded| yamaa_core::language::declares_header(&decoded.document))
+        {
+            return prepare_versioned(source, display_path, port);
+        }
         let prepared = application::prepare(
             &self.structure,
             source,
@@ -434,6 +447,7 @@ impl CapturedSchema {
             parents,
             dictionaries: None,
             resource_aliases: Default::default(),
+            legacy_tree: Default::default(),
         };
         document.prepare_dictionaries(port)
     }
@@ -494,6 +508,7 @@ pub struct LinkedSpecification {
 }
 /// Borrow the engine's link metadata for one consuming document. Only the
 /// producers' output contracts are read; no producer is compiled or executed.
+/// A consumer and a producer may each be written in either language.
 pub fn link_metadata<'a>(
     consumer: &'a PreparedDocument,
     links: &'a [LinkedSpecification],
@@ -506,9 +521,21 @@ pub fn link_metadata<'a>(
             document: link
                 .document
                 .as_deref()
-                .map_or(consumer.model(), PreparedDocument::model),
+                .map_or(consumer.document(), PreparedDocument::document),
         })
         .collect()
+}
+
+/// What compilation reads of a prepared specification: a 0.5 model, which
+/// the 0.5 front end lowers, or the tree the 1.0 front end lowered, beside
+/// the resolved document that declares its linked inputs (#3030 D76).
+#[derive(Clone, Copy, Debug)]
+pub enum Compilation<'a> {
+    Legacy(&'a SpecificationDocument),
+    Versioned {
+        tree: &'a yamaa_core::ast::Spec,
+        document: &'a yamaa_core::schema::Document,
+    },
 }
 
 /// Retains every final occurrence's raw/schema-default origin and schema snapshot.
@@ -520,8 +547,10 @@ pub struct PreparedDocument {
     raw: DecodedYaml,
     content: PreparedContent,
     parents: Vec<CapturedParent>,
-    dictionaries: Option<yamaa_core::dictionary_preparation::Prepared<DecodedYaml>>,
+    dictionaries: Option<Dictionaries>,
     resource_aliases: std::collections::BTreeMap<String, Vec<(String, String)>>,
+    /// A 0.5 model lowered into the AST on first use ([`PreparedDocument::tree`]).
+    legacy_tree: std::sync::OnceLock<yamaa_core::ast::Spec>,
 }
 #[derive(Debug)]
 enum PreparedContent {
@@ -531,6 +560,80 @@ enum PreparedContent {
         windows: Vec<WindowReference>,
     },
     Inherited(Box<yamaa_core::inheritance_preparation::PreparedInheritance>),
+    /// A specification that declares the 1.x header, prepared by the 1.0
+    /// front end (#3030 D76).
+    Versioned(Box<crate::document::PreparedSpecification>),
+}
+/// The dictionary files a specification's `mapping.dict` paths name.
+#[derive(Debug)]
+enum Dictionaries {
+    /// A 0.5 model with each dictionary's content in place of its path,
+    /// which compilation reads.
+    Legacy(yamaa_core::dictionary_preparation::Prepared<DecodedYaml>),
+    /// The files a 1.x specification read; its lowering holds their content.
+    Versioned(Vec<yamaa_core::dictionary_preparation::Captured<DecodedYaml>>),
+}
+impl Dictionaries {
+    fn captures(&self) -> &[yamaa_core::dictionary_preparation::Captured<DecodedYaml>] {
+        match self {
+            Self::Legacy(prepared) => &prepared.captures,
+            Self::Versioned(captures) => captures,
+        }
+    }
+}
+
+/// Prepare a specification that declares the 1.x header, read from `source`,
+/// with the 1.0 closures the package ships, by an engine that reads
+/// [`yamaa_core::language::LANGUAGE_VERSION`] (#3030 D76): its layers are read
+/// and composed, the dictionary files it names are read, and what it writes
+/// that the engine does not build yet is refused.
+pub(crate) fn prepare_versioned<P: InheritancePort>(
+    source: Source,
+    display_path: String,
+    port: &mut P,
+) -> Result<PreparedDocument, InheritanceError<P::Error>> {
+    use crate::document::{self, Closures, Decoded};
+    use yamaa_core::language::{FileType, LANGUAGE_VERSION};
+    let closures = Closures::shipped().map_err(InheritanceError::Entry)?;
+    let entry = source.identity.clone();
+    let versioned =
+        match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures) {
+            Ok(Decoded::Versioned(versioned)) => versioned,
+            // The caller routes only a root that declares the header here.
+            Ok(Decoded::Legacy { .. }) => {
+                return Err(InheritanceError::Entry(Error::VersionedRootRequired))
+            }
+            Err(error) => return Err(InheritanceError::Entry(error)),
+        };
+    let schema = Arc::clone(versioned.schema());
+    let refuse = |error| InheritanceError::Versioned {
+        schema: Arc::clone(&schema),
+        entry: entry.clone(),
+        error: Box::new(error),
+    };
+    let prepared = versioned
+        .prepare_sources(display_path, port)
+        .map_err(refuse)?;
+    // A 1.0 feature the engine does not build yet is refused before binding
+    // or rendering reads the specification (D76).
+    let unbuilt =
+        yamaa_core::front_end::v1::spec::checks::unbuilt(prepared.specification.lowered().spec());
+    if !unbuilt.is_empty() {
+        return Err(refuse(crate::document::SpecificationError::Unsupported(
+            unbuilt,
+        )));
+    }
+    PreparedDocument {
+        schema,
+        source: prepared.source,
+        raw: prepared.raw,
+        content: PreparedContent::Versioned(Box::new(prepared.specification)),
+        parents: prepared.parents,
+        dictionaries: None,
+        resource_aliases: Default::default(),
+        legacy_tree: Default::default(),
+    }
+    .prepare_dictionaries(port)
 }
 impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
     type Parent = CapturedParent;
@@ -541,9 +644,7 @@ impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
         parent.source()
     }
     fn resources(&self) -> impl Iterator<Item = &Source> {
-        self.dictionaries
-            .iter()
-            .flat_map(|prepared| prepared.captures.iter().map(|capture| capture.source()))
+        self.dictionary_sources()
     }
     fn resource_diagnostic(
         &self,
@@ -570,7 +671,7 @@ impl yamaa_core::file_preparation::PreparedView for PreparedDocument {
         let references = self
             .schema
             .structure
-            .mapping_dictionary_references(self.model().document())
+            .mapping_dictionary_references(self.document())
             .ok()?;
         references.into_iter().find_map(|reference| {
             (reference.written() == written
@@ -606,25 +707,81 @@ impl PreparedDocument {
     pub fn raw(&self) -> &DecodedYaml {
         &self.raw
     }
+    /// The 0.5 model of a specification that declares `schema_version`; a 1.x
+    /// specification has none ([`PreparedDocument::legacy_model`]).
+    ///
+    /// # Panics
+    ///
+    /// On a 1.x specification, which the engine reads through
+    /// [`PreparedDocument::document`] and [`PreparedDocument::compilation`].
     pub fn model(&self) -> &SpecificationDocument {
+        self.legacy_model()
+            .expect("a 1.x specification has no 0.5 model")
+    }
+    /// The 0.5 model, or none for a specification that declares the 1.x
+    /// header.
+    pub fn legacy_model(&self) -> Option<&SpecificationDocument> {
         match &self.content {
-            PreparedContent::Standalone { model, .. } => model,
-            PreparedContent::Inherited(prepared) => prepared.model(),
+            PreparedContent::Standalone { model, .. } => Some(model),
+            PreparedContent::Inherited(prepared) => Some(prepared.model()),
+            PreparedContent::Versioned(_) => None,
+        }
+    }
+    /// The 1.x specification the 1.0 front end prepared, or none for a 0.5
+    /// specification.
+    pub fn versioned(&self) -> Option<&crate::document::PreparedSpecification> {
+        match &self.content {
+            PreparedContent::Versioned(prepared) => Some(prepared),
+            _ => None,
+        }
+    }
+    /// The resolved specification, normalized, in the language it is written
+    /// in: a 0.5 model's document, or a 1.x specification's layers composed,
+    /// pruned and ordered. Fields both languages spell alike are read here.
+    pub fn document(&self) -> &yamaa_core::schema::Document {
+        match &self.content {
+            PreparedContent::Versioned(prepared) => prepared.resolved(),
+            _ => self.model().document(),
+        }
+    }
+    /// The specification lowered into the AST: a 1.x specification's
+    /// lowering, or a 0.5 model's, lowered once on first use. Composition
+    /// reads each specification's derivations here (SUB-19, SUB-20).
+    pub fn tree(&self) -> &yamaa_core::ast::Spec {
+        match &self.content {
+            PreparedContent::Versioned(prepared) => prepared.lowered().spec(),
+            _ => self.legacy_tree.get_or_init(|| {
+                yamaa_core::front_end::v0_5::lower(self.compilation_model(), None).into_spec()
+            }),
+        }
+    }
+    /// What compilation reads: the 0.5 model with its dictionaries in place,
+    /// or the 1.0 lowering, which holds them.
+    pub fn compilation(&self) -> Compilation<'_> {
+        match &self.content {
+            PreparedContent::Versioned(prepared) => Compilation::Versioned {
+                tree: prepared.lowered().spec(),
+                document: prepared.resolved(),
+            },
+            _ => Compilation::Legacy(self.compilation_model()),
         }
     }
     /// The specification's `domain`, when it is written as text: the dataset
     /// name a run's printed summary names.
     pub fn domain(&self) -> Option<&str> {
-        let model = self.model().document();
+        let model = self.document();
         match &model.nodes()[model.field(model.root(), "domain")?] {
             yamaa_core::schema::DocumentNode::Text(text) => Some(text),
             _ => None,
         }
     }
     pub fn dictionary_sources(&self) -> impl Iterator<Item = &Source> {
-        self.dictionaries
-            .iter()
-            .flat_map(|prepared| prepared.captures.iter().map(|capture| capture.source()))
+        self.dictionaries.iter().flat_map(|dictionaries| {
+            dictionaries
+                .captures()
+                .iter()
+                .map(|capture| capture.source())
+        })
     }
     pub(crate) fn dictionary_input<'a, E>(
         &'a self,
@@ -645,19 +802,16 @@ impl PreparedDocument {
         }
     }
     pub(crate) fn compilation_model(&self) -> &SpecificationDocument {
-        self.dictionaries
-            .as_ref()
-            .map_or_else(|| self.model(), |prepared| &prepared.model)
+        match &self.dictionaries {
+            Some(Dictionaries::Legacy(prepared)) => &prepared.model,
+            _ => self.model(),
+        }
     }
     fn prepare_dictionaries<P: InheritancePort>(
         mut self,
         port: &mut P,
     ) -> Result<Self, InheritanceError<P::Error>> {
         use yamaa_core::dictionary_preparation::{self as application, Origins, Seed};
-        let origins = self.inheritance().map_or(
-            Origins::Standalone(&self.source.identity),
-            Origins::Inherited,
-        );
         let seeds = core::iter::once(Seed {
             source: &self.source,
             raw: &self.raw,
@@ -667,6 +821,53 @@ impl PreparedDocument {
             raw: parent.raw(),
         }))
         .collect::<Vec<_>>();
+        if let PreparedContent::Versioned(prepared) = &self.content {
+            // A 1.x specification's dictionary paths are read from the layer
+            // that wrote each, and the lowering binding reads holds their
+            // content; the resolved specification keeps the paths.
+            let origins = Origins::Versioned {
+                provenance: prepared.provenance(),
+                layers: prepared.layers(),
+            };
+            let materialized = application::prepare_document(
+                self.schema.structure(),
+                prepared.resolved(),
+                origins,
+                &seeds,
+                port,
+                &mut inheritance::Decoder,
+            );
+            drop(seeds);
+            return match materialized {
+                Ok(None) => Ok(self),
+                Ok(Some(materialized)) => {
+                    let Self {
+                        source,
+                        raw,
+                        parents,
+                        content,
+                        ..
+                    } = &mut self;
+                    if let PreparedContent::Versioned(prepared) = content {
+                        prepared.lower_materialized(
+                            &materialized.document,
+                            &materialized.sources,
+                            |layer| crate::document::layer_locations(source, raw, parents, layer),
+                        );
+                    }
+                    self.dictionaries = Some(Dictionaries::Versioned(materialized.captures));
+                    Ok(self)
+                }
+                Err(error) => Err(InheritanceError::Dictionary {
+                    document: Box::new(self),
+                    error,
+                }),
+            };
+        }
+        let origins = self.inheritance().map_or(
+            Origins::Standalone(&self.source.identity),
+            Origins::Inherited,
+        );
         let prepared = application::prepare(
             self.schema.structure(),
             self.model(),
@@ -675,9 +876,10 @@ impl PreparedDocument {
             port,
             &mut inheritance::Decoder,
         );
+        drop(seeds);
         match prepared {
             Ok(prepared) => {
-                self.dictionaries = prepared;
+                self.dictionaries = prepared.map(Dictionaries::Legacy);
                 Ok(self)
             }
             Err(error) => Err(InheritanceError::Dictionary {
@@ -686,29 +888,37 @@ impl PreparedDocument {
             }),
         }
     }
+    /// The schema origin of each node of a 0.5 model; a 1.x specification
+    /// keeps its origins with its layers ([`PreparedDocument::versioned`]).
     pub fn origins(&self) -> &[SchemaOrigin] {
         match &self.content {
             PreparedContent::Standalone { origins, .. } => origins,
             PreparedContent::Inherited(prepared) => prepared.origins(),
+            PreparedContent::Versioned(_) => &[],
         }
     }
+    /// The named windows a 0.5 model expanded; a 1.x specification's
+    /// composition expands its own.
     pub fn windows(&self) -> &[WindowReference] {
         match &self.content {
             PreparedContent::Standalone { windows, .. } => windows,
             PreparedContent::Inherited(prepared) => prepared.windows(),
+            PreparedContent::Versioned(_) => &[],
         }
     }
     /// Input occurrences in final origins address this retained document.
     pub fn normalization_input(&self) -> &yamaa_core::schema::Document {
         match &self.content {
-            PreparedContent::Standalone { .. } => &self.raw.document,
+            PreparedContent::Standalone { .. } | PreparedContent::Versioned(_) => {
+                &self.raw.document
+            }
             PreparedContent::Inherited(prepared) => prepared.normalization_input(),
         }
     }
     pub fn inheritance(&self) -> Option<&yamaa_core::inheritance_preparation::PreparedInheritance> {
         match &self.content {
-            PreparedContent::Standalone { .. } => None,
             PreparedContent::Inherited(prepared) => Some(prepared),
+            PreparedContent::Standalone { .. } | PreparedContent::Versioned(_) => None,
         }
     }
     /// Raw parent snapshots remain in first-capture order, separately from postorder layers.
@@ -719,6 +929,10 @@ impl PreparedDocument {
     /// descendants retain their nearest composed ancestor's source. A missing
     /// inheritance origin remains unavailable rather than inventing one.
     pub fn declaring_source(&self, path: &str) -> Option<&str> {
+        if let PreparedContent::Versioned(prepared) = &self.content {
+            // A 1.x path names keyed members by identity already (P-CLR-2).
+            return prepared.declaring_source(path);
+        }
         match self.inheritance() {
             None => Some(&self.source.identity),
             Some(inherited) => {
@@ -793,7 +1007,7 @@ impl PreparedDocument {
         }
         use yamaa_core::schema::DocumentNode;
         let (identity, raw) = self.authored_document(&format!("input.{dataset}.{field}"))?;
-        let resolved = self.model().document();
+        let resolved = self.document();
         let inputs = resolved.field(resolved.root(), "input")?;
         let declaration = resolved.field(inputs, dataset)?;
         let base_source = if entry_relative(resolved, declaration) {
@@ -828,9 +1042,14 @@ impl PreparedDocument {
         if !["path", "report"].contains(&field) {
             return None;
         }
-        // Output is an atomic top-level field in shared layer composition.
-        let (identity, raw) = self.authored_document("output")?;
-        let resolved = self.model().document();
+        // Output is an atomic top-level field in a 0.5 chain's composition; a
+        // 1.x chain's field names the layer that wrote it.
+        let written = match &self.content {
+            PreparedContent::Versioned(_) => format!("output.{field}"),
+            _ => "output".into(),
+        };
+        let (identity, raw) = self.authored_document(&written)?;
+        let resolved = self.document();
         let output = resolved.field(resolved.root(), "output")?;
         let base_source = if entry_relative(resolved, output) {
             self.source.identity.as_str()
@@ -851,6 +1070,12 @@ impl PreparedDocument {
         }
     }
     fn authored_document(&self, path: &str) -> Option<(&str, &yamaa_core::schema::Document)> {
+        if let PreparedContent::Versioned(prepared) = &self.content {
+            // The layer that wrote `path`, or the nearest value holding it,
+            // as that layer was written.
+            let layer = prepared.declaring_layer(path)?;
+            return Some((layer.source.identity.as_str(), &layer.document));
+        }
         if let Some(inherited) = self.inheritance() {
             let origin = inherited.provenance().iter().find(|p| p.path == path)?;
             let identity = &inherited.layers().get(origin.layer)?.source.identity;

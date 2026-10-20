@@ -54,7 +54,7 @@ one. A file declaring a version the engine does not read fails as
 field does not expect fails as `unexpected_file_type`.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `unknown_field`, `value_not_permitted`, `schema_version_mismatch`.
-Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_yamaa_beside_schema_version_routes_to_the_0_5_path_wherever_it_is_read`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
+Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::the_calling_function_refuses_an_unread_version_or_another_type`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_referencing_field_checks_the_file_it_names`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_whose_header_the_engine_does_not_read_fails_at_the_field_that_lists_it`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_document_is_admitted_at_the_version_it_declares`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_yamaa_beside_schema_version_routes_to_the_0_5_path_wherever_it_is_read`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_public_check_reads_a_1_0_specification_and_refuses_a_newer_one`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_project_reads_its_files_under_the_0_5_rules`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_schema_link_reads_a_1_0_producer_by_its_header`, `rust/crates/yamaa/tests/language_header.rs`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
 
 The header is read before the file is checked against any schema: `yamaa`
 first, then `type`. A version is written `1.N`, with `N` a decimal number
@@ -73,14 +73,17 @@ referencing field checks the header of the file it names: a project's
 an input's `schema`. A version the engine does not read, or a type the field
 does not expect, is reported at that field; a malformed header is reported in
 the named file. A dictionary file that `mapping.dict` names carries no header,
-like a data file. Until the engine reads 1.0 files it reads no 1.x version: a
-file that declares `yamaa` fails as `unsupported_language_version` wherever it
-is read, at its own `yamaa`, or at the `parent` naming a parent layer.
+like a data file.
 
 A file that declares `schema_version`, or no `yamaa`, is read under the rules
 at the `yamaa-v0.5.0` tag ([Rules](../README.md)), where a version other than
 the bundle's fails as `schema_version_mismatch`, and a `yamaa` beside
-`schema_version` is an unknown field.
+`schema_version` is an unknown field. Such a file reads its parent layer, and
+a project of that language its environment files and codelist files, under
+the same rules, so a file there that declares `yamaa` fails as that language
+reads it: without `schema_version`, and with `yamaa` an unknown field. A file
+a call names, a specification a project lists and a producing specification
+an input's `schema` names are each read by the header they declare.
 
 <a id="schema-3"></a>
 

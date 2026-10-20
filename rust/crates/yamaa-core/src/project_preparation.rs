@@ -13,8 +13,7 @@
 //! - A 1.0 project lists its function files in `functions` and holds each host
 //!   language's lock in `environments.<host>.lock` (D8). Each listed function
 //!   file is read, whichever host languages it implements; the host reads only
-//!   its own lock (PROJECT-2). Until the engine reads 1.0 files (D76) only
-//!   tests decode one.
+//!   its own lock (PROJECT-2).
 use crate::{
     ast::{self, CodelistSource, FunctionSource},
     front_end::{v0_5::project as lower, v1::project as lower_v1},

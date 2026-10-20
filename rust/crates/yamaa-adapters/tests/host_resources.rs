@@ -473,13 +473,20 @@ fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
     let directory = yamaa_adapters::canonical_path::canonicalize(&directory).unwrap();
     let child = directory.join("child.yaml");
     let child = child.to_str().unwrap();
-    for parent in [
-        "std//base.yaml",
-        "std/base.yaml/",
-        "//server/share/std/base.yaml",
-        "std\\base.yaml",
-    ] {
-        let entry = format!("schema_version: '1.0'\nparent: '{parent}'\ndomain: CHILD\n");
+    // A 0.5 entry and a 1.0 entry judge their parent the same way (D76).
+    for (header, parent) in ["schema_version: '1.0'\n", "yamaa: \"1.0\"\ntype: spec\n"]
+        .into_iter()
+        .flat_map(|header| {
+            [
+                "std//base.yaml",
+                "std/base.yaml/",
+                "//server/share/std/base.yaml",
+                "std\\base.yaml",
+            ]
+            .map(|parent| (header, parent))
+        })
+    {
+        let entry = format!("{header}parent: '{parent}'\ndomain: CHILD\n");
         let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str| {
             assert_eq!(issues.len(), 1, "{parent} {route}: {issues:?}");
             let issue = &issues[0];

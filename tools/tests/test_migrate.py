@@ -257,6 +257,27 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("    absent: null\n", text)
         self.assertIn("        missing: null\n        unmapped: null\n", text)
 
+    def test_an_absence_answer_beside_require_match_is_kept(self):
+        # A declared absence answer conflicts with an intermediate's own
+        # require_match and exempts a read from its input's (LOOKUP-24), so
+        # it restates nothing and the converter keeps it as YAML null.
+        own = (
+            "schema_version: '1.0'\nintermediates:\n  - id: I\n    dataset: X\n"
+            "    key: [K]\n    no_match: {literal: null}\n    require_match: true\n"
+        )
+        text, _ = run(own)
+        self.assertIn("    absent: null\n    require_match: true\n", text)
+        read = (
+            "schema_version: '1.0'\ninput:\n  X: {path: x.csv, require_match: true}\n"
+            "columns:\n  - name: A\n    derivation:\n"
+            "      source: {variable: X.A, absent: {literal: null}}\n"
+        )
+        text, _ = run(read)
+        self.assertIn("source: {variable: X.A, absent: null}", text)
+        # Without require_match the null restates the default and goes.
+        text, _ = run(own.replace("    require_match: true\n", ""))
+        self.assertNotIn("absent", text)
+
     def test_a_yaml_null_in_a_single_layer_is_deleted_with_its_comment_kept(self):
         source = (
             "schema_version: '1.0'\nintermediates:\n  - id: I\n    dataset: X\n"
