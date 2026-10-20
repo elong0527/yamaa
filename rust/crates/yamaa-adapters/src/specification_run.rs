@@ -92,10 +92,14 @@ pub struct Attempt<C, E> {
     pub dataset: CapturedAttempt<C, E>,
 }
 
-/// The host-functions port of a run that has no project functions to call:
-/// it activates nothing, so a specification that calls a project function
-/// fails at its lock or binding. A specification without a project never
-/// enters it, because it calls no project function.
+/// The activation port of an adapter-level run that has no project functions
+/// to call, for the adapters' own tests ([`PreparedRun::execute`],
+/// `file_application::domain`): it activates nothing, so a specification
+/// that calls a project function fails at its lock or binding. A
+/// specification without a project never enters it, because it calls no
+/// project function. The facade runs every member through its one
+/// host-functions port instead, empty when the embedder supplies no
+/// functions.
 pub struct NoActivation;
 /// The failure [`NoActivation`] reports for every request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
