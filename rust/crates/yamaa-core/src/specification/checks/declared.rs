@@ -1,10 +1,12 @@
-//! The declaration findings `check()` reports: every finding binding makes
-//! that the declarations decide (#2844 decision 3), over the tree and typed
-//! by [`DeclaredTypes`]. `run()` reports the same findings from binding, in
+//! The declaration findings `check()` reports: what binding finds that the
+//! declarations decide (#2844 decision 3), over the tree and typed by
+//! [`DeclaredTypes`]. `run()` reports the same findings from binding, in
 //! binding's order, and this pass reports them in that order too: the root
 //! filter, the intermediates in the order they are derived, then each column
 //! (or each row template's derivations and the column phase), column order,
-//! and the lookup ranges each row reads.
+//! and the lookup ranges each row reads. Phase boundaries, group scope and
+//! driver scope inside row templates are not among them yet: they need each
+//! template's phase set (#2754).
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -304,9 +306,10 @@ impl Checks<'_> {
     }
 
     /// The record selections at the positions below `root`: each source
-    /// binding's declaration and filter, each window's, each aggregate's and
-    /// each ODM read's filter. `output` types a column window's baseline
-    /// operands, which only a spec without row templates does here.
+    /// binding's declaration and filter, a mapping or cut's source type, each
+    /// window's, each aggregate's header and filter, and each ODM read's
+    /// filter. `output` types a column window's baseline operands, which only
+    /// a spec without row templates does here.
     fn selections(
         &self,
         root: ExprId,
@@ -388,8 +391,8 @@ impl Checks<'_> {
         Ok(())
     }
 
-    /// A mapping or cut reads a source of a type it accepts (REQ-0306): a
-    /// bare output column's or a stored field's declared type.
+    /// A mapping or cut reads a source of a type it accepts (REQ-0304,
+    /// REQ-0306): a bare output column's or a stored field's declared type.
     fn mapping_type(
         &self,
         e: ExprId,
@@ -427,11 +430,11 @@ impl Checks<'_> {
     /// What binding decides of an aggregate from its declarations before it
     /// reads a field: a reduction of several relations, a derive binding's
     /// names, groups outside its relation, a context it cannot reduce in
-    /// (REQ-0142) and an undeclared relation; then, at column level, each
-    /// name outside a reduction that is no group key (REQ-0503), a group
-    /// that is no key (REQ-0470) and its operands' types (REQ-0510). A row template's groups are fields of its
-    /// driver, which binding reads first. False when binding binds nothing
-    /// more of the aggregate.
+    /// and an undeclared relation; then, at column level, each name outside
+    /// a reduction that is no group key (REQ-0503), a group that is no key
+    /// (REQ-0470) and its operands' types (REQ-0510). A row template's
+    /// groups are fields of its driver, which binding reads first. False
+    /// when binding binds nothing more of the aggregate.
     fn aggregate(
         &self,
         e: ExprId,
@@ -730,8 +733,9 @@ impl Checks<'_> {
 
     /// A structured source binding's declaration defects, reported before
     /// any field is bound: a range without a bound, an unpaired selection
-    /// and two absence policies; then a filter on a group key, which is one
-    /// value already, and the filter's grammar. A bare name selects nothing.
+    /// and two absence policies; then a filter on one value (a group key, an
+    /// output column, a row's value or a named intermediate's field), the
+    /// filter's grammar and each name it reads outside its variable's input.
     fn source(
         &self,
         e: ExprId,
