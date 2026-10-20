@@ -106,7 +106,7 @@ class HostBindings(unittest.TestCase):
             ],
         )
 
-    def test_only_the_r_job_installs_r(self):
+    def test_only_jobs_that_check_the_r_host_install_r(self):
         workflow = yaml.load(
             (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
             Loader=UniqueKeyLoader,
@@ -119,7 +119,8 @@ class HostBindings(unittest.TestCase):
             ]
             with self.subTest(job=name):
                 self.assertEqual(
-                    setup.get("with", {}).get("r", "none") != "none", name == "r"
+                    setup.get("with", {}).get("r", "none"),
+                    "check" if name in {"r", "equivalence"} else "none",
                 )
         self.assertIn(
             "make test-r", [step.get("run") for step in workflow["jobs"]["r"]["steps"]]
