@@ -14,7 +14,7 @@ arrow-ipc	55.2.0	Apache-2.0	crates.io	Arrow IPC streams of tables, and the Arrow
 arrow-schema	55.2.0	Apache-2.0	crates.io	Arrow schemas and data types of those tables (yamaa-adapters and the Rust facade)
 arrow-select	55.2.0	Apache-2.0	crates.io	transitive dependency of parquet and arrow-cast: Arrow selection kernels
 atoi	2.0.0	MIT	crates.io	transitive dependency of arrow-cast: integer parsing
-autocfg	1.5.1	Apache-2.0 OR MIT	crates.io	build script: compiler feature probes of num-traits and memoffset
+autocfg	1.5.1	Apache-2.0 OR MIT	crates.io	build script: compiler feature probes of num-traits, and of memoffset in the Python binding
 base64	0.22.1	MIT OR Apache-2.0	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
 base64	0.23.1	MIT OR Apache-2.0	crates.io	decodes the base64 Arrow schema in Parquet metadata (the parquet feature); an older release comes with parquet and arrow-cast
 bitflags	2.13.2	MIT OR Apache-2.0	crates.io	transitive dependency of arrow-schema, flatbuffers and rustix: typed flag sets
@@ -59,7 +59,7 @@ lexical-parse-integer	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of
 lexical-util	1.0.7	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: shared parsing and formatting utilities
 lexical-write-float	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: float formatting
 lexical-write-integer	1.0.6	MIT OR Apache-2.0	crates.io	transitive dependency of lexical-core: integer formatting
-libc	0.2.191	MIT OR Apache-2.0	crates.io	transitive dependency of pyo3, rustix, getrandom and errno: C library bindings
+libc	0.2.191	MIT OR Apache-2.0	crates.io	transitive dependency of rustix, getrandom and errno, and of pyo3 in the Python binding: C library bindings
 libm	0.2.16	MIT	crates.io	portable mathematics, pinned exactly so that results agree on every platform (yamaa-core); num-traits uses it too, through a feature that half enables
 libzstd	1.5.7	BSD-3-Clause OR GPL-2.0-only	bundled in zstd-sys 2.1.2+zstd.1.5.7	the Zstandard C library that zstd-sys compiles and links: the zstd codec of Parquet pages (the parquet feature)
 linux-raw-sys	0.12.1	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	transitive dependency of rustix on Linux: raw Linux system call bindings
@@ -77,10 +77,10 @@ num-integer	0.1.47	MIT OR Apache-2.0	crates.io	transitive dependency of num-bigi
 num-iter	0.1.46	MIT OR Apache-2.0	crates.io	transitive dependency of num: numeric range iterators
 num-rational	0.4.2	MIT OR Apache-2.0	crates.io	transitive dependency of num: rational numbers
 num-traits	0.2.19	MIT OR Apache-2.0	crates.io	transitive dependency of num, num-bigint, chrono and half: numeric traits
-once_cell	1.21.4	MIT OR Apache-2.0	crates.io	transitive dependency of ahash, pyo3 and extendr-api: lazily initialized values
+once_cell	1.21.4	MIT OR Apache-2.0	crates.io	transitive dependency of ahash, of pyo3 in the Python binding and of extendr-api in the R binding: lazily initialized values
 ordered-float	2.10.1	MIT	crates.io	transitive dependency of thrift: totally ordered floating-point values
 parquet	55.2.0	Apache-2.0	crates.io	Parquet reader and writer (the parquet feature)
-paste	1.0.15	MIT OR Apache-2.0	crates.io	procedural macro: identifier pasting in parquet and extendr-api
+paste	1.0.15	MIT OR Apache-2.0	crates.io	procedural macro: identifier pasting in parquet, and in extendr-api in the R binding
 pin-project-lite	0.2.17	Apache-2.0 OR MIT	crates.io	not compiled: transitive dependency of futures-util (wasm32 only)
 pkg-config	0.3.34	MIT OR Apache-2.0	crates.io	build script: lets zstd-sys use a system zstd when asked; the bundled one is the default
 portable-atomic	1.15.0	Apache-2.0 OR MIT	crates.io	not compiled: pyo3's atomics on targets without 64-bit atomics
@@ -99,7 +99,7 @@ regex-automata	0.4.18	MIT OR Apache-2.0	crates.io	transitive dependency of regex
 regex-syntax	0.8.11	MIT OR Apache-2.0	crates.io	transitive dependency of regex: its pattern parser
 rustc_version	0.4.1	MIT OR Apache-2.0	crates.io	build script: the compiler version check of flatbuffers
 rustix	1.1.5	Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT	crates.io	descriptor-relative file IO and atomic publication on Linux and macOS (yamaa-adapters)
-rustversion	1.0.23	MIT OR Apache-2.0	crates.io	procedural macro: compiler version conditions in indoc's build script
+rustversion	1.0.23	MIT OR Apache-2.0	crates.io	procedural macro: compiler version conditions in indoc's build script, which only the Python binding compiles, and in wasm-bindgen's, which no supported target compiles
 ryu	1.0.23	Apache-2.0 OR BSL-1.0	crates.io	shortest round-trip formatting of floating-point numbers (yamaa-core); arrow-cast uses it too
 semver	1.0.28	MIT OR Apache-2.0	crates.io	build script: version parsing for rustc_version
 seq-macro	0.3.6	MIT OR Apache-2.0	crates.io	procedural macro: parquet's unrolled bit-packing loops

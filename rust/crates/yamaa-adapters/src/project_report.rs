@@ -448,8 +448,11 @@ pub(crate) fn supplied<'a, 'f, C, E>(
         if !held.contains(&pointer) || supplied.insert(pointer, fact).is_some() {
             return Err(invalid());
         }
+        // Lock findings belong to the lock failure alone. A host fact about
+        // the lock failure carries no lock findings, so that failure stays
+        // opaque.
         let lock = matches!(&attempt.boundary, Err(BoundaryFailure::Activation(Failure::Lock(error))) if std::ptr::eq(fact.failure(), error));
-        if lock != matches!(fact, Classified::Lock { .. }) {
+        if !lock && matches!(fact, Classified::Lock { .. }) {
             return Err(invalid());
         }
     }
