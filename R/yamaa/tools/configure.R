@@ -163,6 +163,43 @@ target_directories <- function(windows) {
   c(CARGO_TARGET_DIR = make_path(directory), UNTAR_DIR = make_path(directory))
 }
 
+# The settings that keep the build in the package's target directory, which
+# the Makevars pass to Cargo: ISOLATION_ENV as environment variables and
+# ISOLATION_CONFIG as options. Without them, the caller's environment or a
+# .cargo/config.toml in a directory above the package could send Cargo's
+# intermediate files elsewhere (CARGO_BUILD_BUILD_DIR or build.build-dir,
+# which current Cargo reads and older Cargo ignores), or run a rustc wrapper,
+# such as a compiler cache with its own cache directory (RUSTC_WRAPPER and
+# RUSTC_WORKSPACE_WRAPPER, or build.rustc-wrapper and
+# build.rustc-workspace-wrapper, which CARGO_BUILD_ variables also set).
+# - The build directory is the target directory, Cargo's default. The
+#   variable outranks every configuration file. Cargo refuses an empty build
+#   directory, and an older Cargo, which does not know the key, warns about a
+#   --config value for it.
+# - An empty RUSTC_WRAPPER or RUSTC_WORKSPACE_WRAPPER runs no wrapper; only
+#   the variable itself overrides one that the caller sets. The empty
+#   --config values outrank the configuration keys and their CARGO_BUILD_
+#   variables, even where an empty environment variable does not reach Cargo.
+#   They are TOML literal strings, so no double quote has to pass through a
+#   Windows command line.
+# YAMAA_R_CARGO_TARGET_DIR moves the build out of the package anyway, so with
+# it set these settings apply as to any Cargo build.
+isolation <- function() {
+  if (nzchar(Sys.getenv("YAMAA_R_CARGO_TARGET_DIR"))) {
+    return(c(ISOLATION_ENV = "", ISOLATION_CONFIG = ""))
+  }
+  c(
+    ISOLATION_ENV = paste(
+      "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=",
+      'CARGO_BUILD_BUILD_DIR="$(CARGO_TARGET_DIR)"'
+    ),
+    ISOLATION_CONFIG = paste(
+      "--config \"build.rustc-wrapper=''\"",
+      "--config \"build.rustc-workspace-wrapper=''\""
+    )
+  )
+}
+
 main <- function(windows = .Platform$OS.type == "windows",
                  darwin = Sys.info()[["sysname"]] == "Darwin") {
   Sys.setenv(RUSTUP_AUTO_INSTALL = "0")
@@ -189,7 +226,7 @@ main <- function(windows = .Platform$OS.type == "windows",
   makevars <- file.path("src", if (windows) "Makevars.win" else "Makevars")
   lines <- readLines(paste0(makevars, ".in"), warn = FALSE)
   values <- c(CARGO = make_path(cargo$path), RUSTC = make_path(rustc$path),
-              CARGO_ENV = environment, target_directories(windows))
+              CARGO_ENV = environment, target_directories(windows), isolation())
   for (name in names(values)) {
     lines <- gsub(sprintf("@%s@", name), values[[name]], lines, fixed = TRUE)
   }

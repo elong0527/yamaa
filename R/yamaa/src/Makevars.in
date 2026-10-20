@@ -19,11 +19,17 @@
 # an absolute directory where Cargo then builds, keeps its home and unpacks
 # the crates, and which the cleanup leaves for the next installation to reuse,
 # one installation at a time. The project's CI points it at its Rust cache.
+# Without it, configure also writes ISOLATION_ENV and ISOLATION_CONFIG: then
+# neither the caller's environment nor a .cargo/config.toml in a parent
+# directory can move Cargo's build directory out of the target directory or
+# run a rustc wrapper, such as a compiler cache. With it, both are empty.
 # Paths are relative to this directory, where make and Cargo run.
 CARGO = @CARGO@
 RUSTC = @RUSTC@
 CARGO_ENV = @CARGO_ENV@
 CARGO_TARGET_DIR = @CARGO_TARGET_DIR@
+ISOLATION_ENV = @ISOLATION_ENV@
+ISOLATION_CONFIG = @ISOLATION_CONFIG@
 CARGO_HOME_DIR = $(CARGO_TARGET_DIR)/cargo-home
 RUST_LIB = $(CARGO_TARGET_DIR)/release/libyamaa_r.a
 PKG_LIBS = $(RUST_LIB)
@@ -37,9 +43,9 @@ $(RUST_LIB): FORCE
 	mkdir -p "$(CARGO_HOME_DIR)"
 	"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" --vanilla -e 'untar("rust/vendor.tar.xz", exdir = "$(CARGO_TARGET_DIR)", tar = "internal")'
 	cp rust/vendor-config.toml "$(CARGO_HOME_DIR)/config.toml"
-	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(CARGO_ENV) \
+	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 $(CARGO_ENV) $(ISOLATION_ENV) \
 	  CARGO_HOME="$(CARGO_HOME_DIR)" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" \
-	  "$(CARGO)" build --locked --offline -j 2 --release --manifest-path rust/Cargo.toml -p yamaa-r
+	  "$(CARGO)" build --locked --offline -j 2 --release --manifest-path rust/Cargo.toml -p yamaa-r $(ISOLATION_CONFIG)
 
 .PHONY: clean rust_clean FORCE
 FORCE:
