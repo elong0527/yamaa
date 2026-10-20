@@ -19,6 +19,7 @@ pub mod submission_xpt;
 
 pub mod scalar_bytes;
 
+pub mod lint;
 pub mod style_values;
 pub mod yaml_decode;
 #[cfg(feature = "yaml")]

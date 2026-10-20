@@ -104,3 +104,7 @@
 .native_submission_save <- function(handle) {
   .Call(wrap__submission_save, handle)
 }
+
+.native_lint <- function(paths, fix) {
+  .Call(wrap__lint, paths, fix)
+}

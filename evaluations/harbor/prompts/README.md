@@ -155,5 +155,4 @@ checks that the writer's sources are byte for byte the same without the
 benchmark's `expected/`.
 
 The Harbor workflow runs these checks and the R and Python reference
-solutions every six hours on main and on manual dispatch. Its oracle job
-exercises the image verifier.
+solutions on manual dispatch. Its oracle job exercises the image verifier.

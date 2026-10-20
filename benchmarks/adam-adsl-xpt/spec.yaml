@@ -38,7 +38,7 @@ columns:
     label: Actual Treatment for Period 01
     derivation: ADSL_RAW.TRT01A
     submission:
-      core: Req
+      core: Cond
       mandatory: true
       length: 20
       origin:

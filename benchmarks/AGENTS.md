@@ -310,6 +310,13 @@ following a link out of the repository.
 - Declare columns in dependency order: source and independent columns first,
   then each column only after every declared column it reads. Preserve the
   artifact layout independently in `output.columns`.
+- Keep the identifier columns `DOMAIN`, `STUDYID` and `USUBJID` in that order
+  wherever a benchmark carries them: in the declared columns, in
+  `output.columns` and in each golden CSV header, as the repository checks
+  require. This deliberately departs from SDTMIG 3.4 section 4.1.4, which
+  asks for the order SDTM v2.0 section 3.1.4 lists: `STUDYID`, `DOMAIN`,
+  `USUBJID`. The benchmarks keep `DOMAIN` first for 1.0, since moving it
+  would rewrite the expected files of every benchmark that carries it.
 
 ## Golden output
 
@@ -418,10 +425,12 @@ uv run --project python --no-sync python -m yamaa.style benchmarks/<name>/
 ```
 
 Conformance qualification compares both hosts with the authored expected data.
-When prompts or independent solutions change, also run the Harbor controls:
+When prompts or independent solutions change, also run the Harbor controls in
+the evaluation's own locked environment:
 
 ```sh
-uv run --project python --no-sync pytest evaluations/harbor/tests
+uv sync --project evaluations/harbor
+uv run --project evaluations/harbor --no-sync pytest evaluations/harbor/tests
 ```
 
 ## Adding a benchmark

@@ -9,13 +9,29 @@ package version.
 
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _distribution_version
+from os import PathLike
 from os import fspath as _fspath
 
 import polars as _pl
 
 from yamaa import _native
 
-__all__ = ["__version__", "_fspath", "_Lazy", "_optional_table", "_pl", "_table"]
+__all__ = [
+    "__version__",
+    "_fspath",
+    "_fspaths",
+    "_Lazy",
+    "_optional_table",
+    "_pl",
+    "_table",
+]
+
+
+def _fspaths(paths) -> list[str]:
+    """One path or a list of paths, each as a string."""
+    if isinstance(paths, (str, PathLike)):
+        return [_fspath(paths)]
+    return [_fspath(path) for path in paths]
 
 
 def _table(table) -> _pl.DataFrame:

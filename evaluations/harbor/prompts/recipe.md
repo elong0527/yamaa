@@ -324,7 +324,7 @@ session that runs them:
   failed by the session's own environment. Packages installed this way
   belong to the session only: they never make a solver's program
   eligible as a reference, which the commit step checks in the project's
-  locked environment;
+  locked environments;
 - runs at least two independent solver attempts per candidate, in
   separate folder sets: two models where the agent tool allows a choice,
   and where it does not, two fresh sessions, with the round's report
@@ -350,13 +350,14 @@ session that runs them:
   a passing solver's program per language as its reference, and write
   the conventions prompt the same way (`--tier conventions --prompts
   <prompts>`). Name the jobs or workspaces in the pull request. A program
-  becomes a reference only if it also reproduces the golden in the
-  project's locked environment, the environment the finishing checks and
-  Harbor's oracle run in, so rerun it there before committing it. A
-  program that passes only in the session's parity environment is not a
-  reference: take another passing solver's program that runs in the
-  locked environment, or keep the reference already committed for that
-  benchmark and say so in the pull request.
+  becomes a reference only if it also reproduces the golden in both of
+  the project's locked environments: the development environment, where
+  the finishing checks grade references, and the evaluation's own
+  environment, where the Harbor workflow's oracle job does. Rerun it in
+  each before committing it. A program that passes only in the session's
+  parity environment is not a reference: take another passing solver's
+  program that runs in the locked environments, or keep the reference
+  already committed for that benchmark and say so in the pull request.
 
 ## Checks to run before finishing
 
@@ -365,7 +366,7 @@ Run from the repository root:
 ```bash
 uv run --project python --no-sync pytest evaluations/harbor/tests/test_harbor_evaluation.py \
 	-k "prompt or reference_solution"
-uv run --project python --no-sync pytest evaluations/harbor/tests/test_harbor_authoring.py
+uv run --project evaluations/harbor --no-sync pytest evaluations/harbor/tests/test_harbor_authoring.py
 ```
 
 The prompt tests check every tier of every benchmark: the four blocks of
@@ -376,9 +377,10 @@ benchmark it does not build yet, `schema-adsl-age-quality`, is skipped), the
 full prompt's fixed parts against `scaffold.py`, the 79-column width, the
 words a prompt never uses, and the fixture identifiers and dates and
 specification-only names it never says. The authoring tests check that the
-writer's sources are the same without `expected/`. The reference test
-grades every solution in `evaluations/harbor/solutions/` against the
-benchmark's current data; an R one is skipped when R lacks a package its
-script loads. The Harbor workflow runs the same tests with R
-installed every six hours on main and on manual dispatch; there a missing
-R package fails instead.
+writer's sources are the same without `expected/`, and validate the writing
+tasks, solver tasks and writing job with Harbor itself, so they run in the
+evaluation's own environment. The reference test grades every solution in
+`evaluations/harbor/solutions/` against the benchmark's current data; an R
+one is skipped when R lacks a package its script loads. The Harbor workflow
+runs the same tests with R installed on manual dispatch; there a missing R
+package fails instead.

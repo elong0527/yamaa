@@ -27,4 +27,5 @@ extendr_module! {
     fn project_submission;
     fn submission_issues;
     fn submission_save;
+    fn lint;
 }

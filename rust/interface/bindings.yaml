@@ -77,6 +77,20 @@ values:
   report_outcome:
     rust: yamaa::REPORT_OUTCOMES
     values: [succeeded, failed, held, violated]
+  # The findings of lint() (D40, P-LINT-2), in the order the style guide names
+  # them; the five 1.0 findings follow the 1.0 specification language.
+  lint_finding:
+    rust: yamaa::LINT_FINDINGS
+    values:
+      - field_order
+      - root_spacing
+      - entry_spacing
+      - blank_lines
+      - line_width
+      - invalid_suppression
+      - repeated_row_derivation
+      - redundant_intermediate
+      - missing_label
 
 # Table columns, in order. Each table names the facade constant that holds
 # its column names, and the generator refuses any difference. Column types are
@@ -117,6 +131,16 @@ tables:
       - {name: TOTAL, type: optional<int>}
       - {name: KEYS, type: optional<str>}
       - {name: DETAILS, type: str}
+  lint:
+    rust: yamaa::LINT_COLUMNS
+    order: files in argument order, a directory's files in sorted path order, then line, column and finding
+    columns:
+      - {name: file, type: str, meaning: "absolute path, forward slashes"}
+      - {name: line, type: int, meaning: one-based}
+      - {name: column, type: int, meaning: "one-based, in Unicode scalar values"}
+      - {name: finding, type: str, values: lint_finding}
+      - {name: spec_path, type: str, meaning: "spec path of the departure, `$` for the root"}
+      - {name: message, type: str, meaning: rendered in Rust; not frozen}
   odm_items:
     rust: yamaa::ODM_COLUMNS
     order: the clinical items in source order
@@ -175,6 +199,7 @@ public:
   # Host projections of the type tokens used below.
   types:
     path: {python: "str or os.PathLike, unannotated", r: "character(1)"}
+    path_list: {python: "a path or a list of paths, unannotated", r: "character()"}
     text: {python: str, r: "character(1)"}
     optional_text: {python: "str | None", r: "character(1) or NULL"}
     count: {python: int, r: "numeric(1), a whole number"}
@@ -213,6 +238,15 @@ public:
       raises: refusal
       calls: read_odm
       doc: Read the clinical items of an ODM XML file, or of one member of a TAR.
+    - name: lint
+      python: yamaa.lint
+      r: yamaa_lint
+      args: {paths: path_list, fix: flag = false}
+      returns: table
+      table: lint
+      raises: refusal
+      calls: lint
+      doc: Lint specification files, first applying the proved layout fixes when fix is true.
 
   # Result and lazy classes, in definition order: a class is defined before
   # any class that returns it.
@@ -485,10 +519,10 @@ python:
         max_xml_depth: "index = 64"
       returns: _ArrowTable
     - kind: function
-      name: _style_same_value
-      rust: style::_style_same_value
-      args: {before: bytes, after: bytes}
-      returns: bool
+      name: _lint
+      rust: api_entry::_lint
+      args: {paths: "list<text>", fix: "bool = false"}
+      returns: _ArrowTable
 
 r:
   module: yamaa
@@ -536,6 +570,7 @@ r:
           returns: r_reply
         - {name: submission_issues, args: {handle: robj}, returns: r_reply}
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
+        - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
 
 # Every Python export and every R export names its counterpart here; the
 # generator refuses an export missing from both this table and host_only.
@@ -564,8 +599,9 @@ operations:
   project_submission: {python: [_project_submission], r: [project_submission]}
   submission_issues: {python: [_Submission.issues], r: [submission_issues]}
   submission_save: {python: [_Submission.save], r: [submission_save]}
+  lint: {python: [_lint], r: [lint]}
 # Host transport: Python checks interrupts inside the native calls, R through
-# these two helpers; the style command and the Arrow capsule are Python-only.
+# these two helpers; the Arrow capsule is Python-only.
 host_only:
-  python: [_style_same_value, _ArrowTable.__arrow_c_stream__]
+  python: [_ArrowTable.__arrow_c_stream__]
   r: [run_interrupt, project_run_interrupt]

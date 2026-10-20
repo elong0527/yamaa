@@ -45,7 +45,7 @@ other configuration.
 
 | Feature | Dependency edge and capability |
 | --- | --- |
-| `yaml` | Saphyr parser and adapter scalar decoding; admits specification, schema, environment, project-lock and style YAML bytes. |
+| `yaml` | Saphyr parser and adapter scalar decoding; admits specification, schema, environment and project-lock YAML bytes, and the files `lint` checks. |
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
 | `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table. |
@@ -580,7 +580,7 @@ was removed. Any module not listed here is internal by default.
 | `resolved_artifact` | Facade -- `ResolvedSpecification` (#2725). |
 | `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
 | `specification_report` | Facade -- its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
-| `style_values` | Internal -- style comparison is applied inside the workflow from resolver-supplied resources. |
+| `style_values` | Internal -- the value comparison that proves `lint`'s fixes; `style_same_value` exposes it for embedders. |
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
 | `yamaa_core::application_observer` | Facade -- the `Progress` trait with facade `Phase`/`Outcome` enums; the `Scope` guard stays internal. |
 | `yamaa_core::domain_entry` | Internal -- entry dispatch behind `Engine`. |
