@@ -1500,6 +1500,7 @@ mod project {
             let origins = LockOrigins {
                 source,
                 entry: "study/project.yaml",
+                field: "lock",
                 lock_source: captured,
                 written: &lock.written,
             };

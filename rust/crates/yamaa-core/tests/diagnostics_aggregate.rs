@@ -920,6 +920,7 @@ mod diagnostics {
                     Some(LockOrigins {
                         source: "é\0🙂/environment.yaml",
                         entry: "\u{e9}\0\u{1f642}/project.yaml",
+                        field: "lock",
                         lock_source: "captured-lock",
                         written: "../declared/uv.lock",
                     }),

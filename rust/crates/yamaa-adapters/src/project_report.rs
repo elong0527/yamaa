@@ -261,6 +261,12 @@ pub(crate) fn validate_activation<E>(
     Ok(())
 }
 
+/// Place each activation finding in the file that holds its definition: a
+/// definition file or 1.0 function file holds its definition alone, so a
+/// finding's path starts at that file's root, and an inline 0.5 definition is
+/// held by the environment file at `functions.<name>`. Each finding names
+/// that file as `source`, the project file as `entry` and the declaration as
+/// `environment_path` (FUNC-2, D8).
 pub(crate) fn activation_origins(
     run: &PreparedRun,
     paths: &[String],
@@ -274,20 +280,6 @@ pub(crate) fn activation_origins(
         return Err(report::Error::InvalidObservation);
     }
     let entry = captured.root().source().identity.as_str();
-    // Inline functions are declared by the linked environment file.
-    let declaring = captured
-        .environment_file()
-        .map_or(entry, |file| file.source().identity.as_str());
-    let external = captured
-        .captures()
-        .iter()
-        .filter_map(|capture| match &capture.origin {
-            crate::project_source::Origin::Function(name) => {
-                Some((name.as_str(), capture.document.source().identity.as_str()))
-            }
-            _ => None,
-        })
-        .collect::<std::collections::BTreeMap<_, _>>();
     let mut metadata = Vec::new();
     for &selected in &functions {
         let &index = run
@@ -307,9 +299,11 @@ pub(crate) fn activation_origins(
         let declaration = paths
             .get(selected)
             .ok_or(report::Error::InvalidObservation)?;
-        let external = external.get(name).copied();
-        let source = external.unwrap_or(declaring);
-        metadata.push((source, declaration, external.is_some()));
+        let origin = captured
+            .function_origin(index)
+            .filter(|origin| origin.declaration.to_string() == *declaration)
+            .ok_or(report::Error::InvalidObservation)?;
+        metadata.push((origin.source, declaration, origin.external));
     }
     issues
         .into_iter()
@@ -338,6 +332,19 @@ pub(crate) fn activation_origins(
         .collect()
 }
 
+/// Each called function's definition beside its declaration in `paths`.
+fn definition_sources<'p>(run: &'p PreparedRun, paths: &'p [String]) -> Vec<DefinitionSource<'p>> {
+    run.compiled()
+        .called_functions()
+        .iter()
+        .zip(paths)
+        .map(|(&index, path)| DefinitionSource {
+            function: &run.environment().functions()[index],
+            path,
+        })
+        .collect()
+}
+
 /// The report of an activation-boundary failure: its findings, in the
 /// original order, over an attempt that captured no source.
 pub(crate) fn activation_failure<'a, C, E>(
@@ -350,22 +357,19 @@ pub(crate) fn activation_failure<'a, C, E>(
     let BoundaryFailure::Activation(failure) = boundary else {
         return Err(Refusal::Boundary(boundary));
     };
+    // Each called function's declaration, which its findings' paths start
+    // with: `functions.<name>` in a 0.5 environment file, and `functions[i]`
+    // in a 1.0 project file.
     let paths = run
         .compiled()
         .called_functions()
         .iter()
-        .map(|&index| format!("functions.{}", run.environment().functions()[index].name()))
-        .collect::<Vec<_>>();
-    let definitions = run
-        .compiled()
-        .called_functions()
-        .iter()
-        .zip(&paths)
-        .map(|(&index, path)| DefinitionSource {
-            function: &run.environment().functions()[index],
-            path,
+        .map(|&index| {
+            run.captured_environment()
+                .function_origin(index)
+                .map(|origin| origin.declaration.to_string())
         })
-        .collect::<Vec<_>>();
+        .collect::<Option<Vec<_>>>();
     let issues = match failure {
         Failure::Lock(error) => {
             let Some(Classified::Lock { findings, .. }) = supplied.get(&std::ptr::from_ref(error))
@@ -375,10 +379,16 @@ pub(crate) fn activation_failure<'a, C, E>(
             if findings.is_empty() {
                 return Err(invalid());
             }
-            crate::project_lock_diagnostics::issues(run.captured_environment(), findings)
-                .map_err(|_| invalid())?
+            crate::project_lock_diagnostics::issues(
+                run.captured_environment(),
+                run.environment().host(),
+                findings,
+            )
+            .map_err(|_| invalid())?
         }
         Failure::Bindings(failures) => {
+            let paths = paths.ok_or_else(invalid)?;
+            let definitions = definition_sources(run, &paths);
             let details = failures
                 .iter()
                 .map(|failure| host(supplied, &failure.error))
@@ -393,6 +403,8 @@ pub(crate) fn activation_failure<'a, C, E>(
             )?
         }
         Failure::Tests(failures) => {
+            let paths = paths.ok_or_else(invalid)?;
+            let definitions = definition_sources(run, &paths);
             let details = failures
                 .iter()
                 .map(|failure| match failure {

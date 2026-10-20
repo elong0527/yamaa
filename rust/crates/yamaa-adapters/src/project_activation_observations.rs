@@ -1,7 +1,7 @@
 //! Complete activation evidence from one owned build. This reads held metadata
 //! and actual engine observations; it never queries a host or invokes a case.
 use crate::json;
-use crate::{project_source::Origin, report_scalar::ScalarValue, specification_run::PreparedRun};
+use crate::{report_scalar::ScalarValue, specification_run::PreparedRun};
 use yamaa_core::json::Value as Json;
 use yamaa_core::project_activation::{BindingOutcome, LockObservation, Observations, TestOutcome};
 use yamaa_core::{project_function::Function, value::Value};
@@ -36,19 +36,13 @@ fn function(run: &PreparedRun, selected: usize) -> Result<(&Function, &str), Err
     {
         return Err(Error::InvalidObservation);
     }
+    // The file that holds the definition: its 0.5 definition file, the 0.5
+    // environment file that declares it inline, or its 1.0 function file.
     let source = run
         .captured_environment()
-        .captures()
-        .iter()
-        .find(|capture| matches!(&capture.origin, Origin::Function(held) if held == name))
-        .map(|capture| capture.document.source().identity.as_str())
-        .or_else(|| {
-            // Inline functions are declared by the linked environment file.
-            run.captured_environment()
-                .environment_file()
-                .map(|file| file.source().identity.as_str())
-        })
-        .ok_or(Error::InvalidObservation)?;
+        .function_origin(index)
+        .ok_or(Error::InvalidObservation)?
+        .source;
     Ok((function, source))
 }
 
