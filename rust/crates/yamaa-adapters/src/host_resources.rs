@@ -131,6 +131,11 @@ pub struct Reply {
     /// it the engine names the resource by its lexical location, the
     /// declaring identity's directory joined with the written path.
     pub location: Option<String>,
+    /// The physical file the name reaches, when the resolver knows it, as
+    /// the local file resolver does. A hint, not a key: snapshots stay keyed
+    /// by reference, and a capture that names a held file under another
+    /// reference, such as a hard link to it, binds that file's snapshot.
+    pub physical: Option<PhysicalFile>,
 }
 impl Reply {
     /// A reply with a reference and nothing else.
@@ -140,8 +145,16 @@ impl Reply {
             reference,
             bytes: None,
             location: None,
+            physical: None,
         }
     }
+}
+/// A physical file: its device and inode on Unix, its volume serial number
+/// and file ID on Windows. File metadata, never a digest of its content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhysicalFile {
+    pub volume: i128,
+    pub file: i128,
 }
 /// A local path the file resolver refuses before it walks anything.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -229,6 +242,9 @@ struct Snapshot {
     reference: String,
     /// The identity the capture's reply gave the resource, if any.
     location: Option<String>,
+    /// The physical file the capture's reply reported, while no later
+    /// capture has found it reused by another file.
+    physical: Option<PhysicalFile>,
     bytes: Arc<[u8]>,
     frame: Option<Arc<crate::arrow_table::ArrowTable>>,
 }
@@ -340,7 +356,10 @@ impl Resources {
     /// snapshot, the same request again or another spelling the resolver
     /// gives the same reference, captures each request that snapshot holds
     /// again and requires it unchanged (FILE-9, FILE-10), so a substituted
-    /// name cannot redirect a read silently.
+    /// name cannot redirect a read silently. A capture that reaches, under
+    /// another reference, the physical file a held snapshot holds, such as
+    /// a hard link to it, binds that snapshot and must read its bytes
+    /// (FILE-9): two names of one file never observe different bytes.
     pub fn capture(
         &self,
         declaring: &str,
@@ -388,11 +407,17 @@ impl Resources {
             .iter()
             .find(|s| s.reference == reply.reference)
             .cloned();
+        let known = match known {
+            Some(known) => Some(known),
+            None => self.same_file(reply.physical)?,
+        };
         if let Some(known) = &known {
             if known.bytes != bytes || !same_frame(&known.frame, &reply.frame) {
                 return Err(Failure::Changed);
             }
-            self.check_aliases(&known.reference)?;
+            if known.reference == reply.reference {
+                self.check_aliases(&known.reference)?;
+            }
         }
         let mut snapshots = self.snapshots.lock().map_err(|_| Failure::Rejected)?;
         if let Some(old) = snapshots.iter().find(|s| same(s)) {
@@ -416,10 +441,53 @@ impl Resources {
             kind,
             reference: reply.reference,
             location: reply.location,
+            physical: reply.physical,
             bytes: Arc::clone(&bytes),
             frame,
         });
         Ok((bytes, created))
+    }
+    /// A held snapshot of the physical file `physical` under another
+    /// reference: the file a new capture reached under a name such as a hard
+    /// link to it. A held name confirms it only while an inspection finds it
+    /// still reaching that file. A held name that reaches another file, or
+    /// none, reported an identity the file system has since given a new file,
+    /// and forgets it.
+    fn same_file(&self, physical: Option<PhysicalFile>) -> Result<Option<Snapshot>, Failure> {
+        let Some(physical) = physical else {
+            return Ok(None);
+        };
+        let held = self
+            .snapshots
+            .lock()
+            .map_err(|_| Failure::Rejected)?
+            .iter()
+            .filter(|s| s.physical == Some(physical))
+            .cloned()
+            .collect::<Vec<_>>();
+        for snapshot in &held {
+            match self.call(
+                Operation::Inspect,
+                snapshot.kind,
+                &snapshot.declaring,
+                &snapshot.written,
+                Some(&snapshot.reference),
+                None,
+            ) {
+                Ok(reply) if reply.physical == Some(physical) => return Ok(Some(snapshot.clone())),
+                Err(Failure::Cancelled) => return Err(Failure::Cancelled),
+                _ => {}
+            }
+        }
+        if !held.is_empty() {
+            self.snapshots
+                .lock()
+                .map_err(|_| Failure::Rejected)?
+                .iter_mut()
+                .filter(|s| s.physical == Some(physical))
+                .for_each(|s| s.physical = None);
+        }
+        Ok(None)
     }
     /// Capture every held request for `reference` again, each unchanged.
     fn check_aliases(&self, reference: &str) -> Result<(), Failure> {
@@ -725,6 +793,105 @@ mod tests {
         }
         assert_eq!(Failure::from(ResourceKind::Missing), Failure::Missing);
         assert_eq!(ResourceKind::from_name("link"), None);
+    }
+
+    /// Names that reach physical files, as a file system holds them: a hard
+    /// link is a second name of one file, and a rewrite changes what every
+    /// name of that file reads.
+    #[derive(Default)]
+    struct Files {
+        names: Mutex<BTreeMap<String, i128>>,
+        contents: Mutex<BTreeMap<i128, Arc<[u8]>>>,
+    }
+    impl Files {
+        fn link(&self, name: &str, file: i128) {
+            self.names.lock().unwrap().insert(name.into(), file);
+        }
+        fn unlink(&self, name: &str) {
+            self.names.lock().unwrap().remove(name);
+        }
+        fn write(&self, file: i128, bytes: &[u8]) {
+            self.contents.lock().unwrap().insert(file, Arc::from(bytes));
+        }
+    }
+    impl Resolver for Files {
+        fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+            let file = *self
+                .names
+                .lock()
+                .unwrap()
+                .get(request.written)
+                .ok_or(Failure::Missing)?;
+            let reference = format!("/{}", request.written);
+            if request.reference.is_some_and(|held| held != reference) {
+                return Err(Failure::Changed);
+            }
+            let bytes = Arc::clone(&self.contents.lock().unwrap()[&file]);
+            Ok(Reply {
+                bytes: (request.operation == Operation::Capture).then_some(bytes),
+                physical: Some(PhysicalFile { volume: 1, file }),
+                ..Reply::reference(reference)
+            })
+        }
+    }
+    fn capture(resources: &Resources, name: &str) -> Result<(Arc<[u8]>, bool), Failure> {
+        resources.capture("/spec.yaml", name, Kind::Input, 64)
+    }
+
+    #[test]
+    fn names_of_one_physical_file_bind_one_snapshot_and_never_read_two_contents() {
+        let files = Arc::new(Files::default());
+        files.write(1, b"one");
+        files.link("a", 1);
+        files.link("b", 1);
+        let resources = Resources::at(files.clone(), "/spec.yaml".into());
+        let (a, created) = capture(&resources, "a").unwrap();
+        assert!(created);
+        let (b, created) = capture(&resources, "b").unwrap();
+        assert!(!created);
+        assert!(Arc::ptr_eq(&a, &b));
+        // The file is rewritten in place, then reached by a third name.
+        files.write(1, b"two");
+        files.link("c", 1);
+        assert_eq!(capture(&resources, "c"), Err(Failure::Changed));
+        assert_eq!(a.as_ref(), b"one");
+        assert_eq!(resources.len(), 2);
+        // Each name is still verified at its own reference and bytes.
+        assert_eq!(resources.verify(2), Err(("/a".into(), Failure::Changed)));
+    }
+
+    #[test]
+    fn an_identity_a_held_name_no_longer_reaches_binds_nothing() {
+        let files = Arc::new(Files::default());
+        files.write(1, b"one");
+        files.link("a", 1);
+        let resources = Resources::at(files.clone(), "/spec.yaml".into());
+        capture(&resources, "a").unwrap();
+        // `a` is removed and a new file takes its identity.
+        files.unlink("a");
+        files.write(1, b"new");
+        files.link("c", 1);
+        let (c, created) = capture(&resources, "c").unwrap();
+        assert!(created);
+        assert_eq!(c.as_ref(), b"new");
+        assert_eq!(capture(&resources, "a"), Err(Failure::Missing));
+        // `c` holds the identity now: a hard link to it binds its snapshot.
+        files.link("d", 1);
+        let (d, created) = capture(&resources, "d").unwrap();
+        assert!(!created);
+        assert!(Arc::ptr_eq(&c, &d));
+        // `c` now names another file, and the file it held is rewritten:
+        // while `d` still reaches that file, a new name of it is a change.
+        files.link("c", 2);
+        files.write(2, b"other");
+        files.write(1, b"rewritten");
+        files.link("e", 1);
+        assert_eq!(capture(&resources, "e"), Err(Failure::Changed));
+        // Once no held name reaches it, a new name is its own snapshot.
+        files.unlink("d");
+        let (e, created) = capture(&resources, "e").unwrap();
+        assert!(created);
+        assert_eq!(e.as_ref(), b"rewritten");
     }
 
     #[test]

@@ -366,4 +366,20 @@ On Windows, a specification, project or ODM file you pass may sit on a network
 share (`\\server\share\study\project.yaml`) or a mapped drive, and the paths
 its YAML writes resolve on that share. Paths inside YAML keep forward slashes.
 Below the directory you pass, symbolic links, junctions and other reparse
-points are refused on every drive.
+points are refused on every drive. On a share, a link is refused when the file
+server reports it as one, as Windows servers do. A server that follows links
+itself, as Samba does with its default `follow symlinks = yes`, shows the
+link's target instead, and that target is read like any other file.
+
+A parent specification's relative input and output paths resolve beside the
+parent, even when it sits on another drive than the specification you pass. A
+parent on a network share that the specification you pass is not on cannot
+declare relative input or output paths, because a path in YAML cannot name a
+share: such a parent is refused. Keep it on the same share, or write those
+paths with `relative_to: entry`.
+
+While a save replaces a file, it locks the file's folder, and another save on
+the same computer that reaches that folder meanwhile fails rather than waits.
+The lock does not reach other computers: saves from two computers into one
+network folder are not serialized, so save into a shared folder from one
+computer at a time.

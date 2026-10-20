@@ -1754,6 +1754,114 @@ mod inputs {
         );
     }
 
+    /// Options are checked once the source is found and before any of it is
+    /// read: a file whose content would be refused, or a resolver asked for
+    /// nothing, reports the option.
+    #[test]
+    fn options_are_checked_before_the_source_is_read() {
+        use std::sync::{Arc, Mutex};
+        use yamaa_adapters::host_resources::{Failure, Reply, Request, Resolver};
+        let invalid = Options {
+            max_xml_depth: 1,
+            ..Options::default()
+        };
+        refused(
+            read_bytes("odm13.xml", b"<not xml", &invalid),
+            "invalid_option",
+            "max_xml_depth must be at least 8",
+        );
+        // A sparse file over the ten-gigabyte source bound is never read.
+        #[cfg(unix)]
+        {
+            let scratch = Scratch::new("sparse-options");
+            let path = scratch.write("odm.xml", ODM_13);
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_len(yamaa_core::limits::Limits::SOURCE_BYTES as u64 + 1)
+                .unwrap();
+            refused(
+                read_with(&path, &invalid),
+                "invalid_option",
+                "max_xml_depth must be at least 8",
+            );
+        }
+        #[derive(Default)]
+        struct Counting(Mutex<usize>);
+        impl Resolver for Counting {
+            fn request(&self, _: Request<'_>) -> Result<Reply, Failure> {
+                *self.0.lock().unwrap() += 1;
+                Err(Failure::Missing)
+            }
+        }
+        let resolver = Arc::new(Counting::default());
+        let result = odm_xml::read_with_resolver(resolver.clone(), "edc/odm.xml", &invalid);
+        let Err(Error::Read(error)) = result else {
+            panic!("invalid options were not refused: {result:?}");
+        };
+        assert_eq!(error.code(), "invalid_option");
+        assert_eq!(*resolver.0.lock().unwrap(), 0);
+    }
+
+    /// A source over the capture's bound is over the read's limit, not an
+    /// I/O failure, whether the local file resolver or a caller's resolver
+    /// refuses it.
+    #[test]
+    fn a_capture_over_its_bound_reports_the_limit() {
+        use std::sync::Arc;
+        use yamaa_adapters::host_resources::{Failure, Reply, Request, Resolver};
+        struct Oversized;
+        impl Resolver for Oversized {
+            fn request(&self, _: Request<'_>) -> Result<Reply, Failure> {
+                Err(Failure::Limit(Some(u64::MAX)))
+            }
+        }
+        let result =
+            odm_xml::read_with_resolver(Arc::new(Oversized), "edc/odm.xml", &Options::default());
+        let Err(Error::Read(error)) = result else {
+            panic!("an oversized source was not refused: {result:?}");
+        };
+        assert_eq!(error.code(), "limit", "{error}");
+        // A sparse plain XML file over the ten-gigabyte source bound is
+        // refused at its own limit before any of it is read.
+        #[cfg(unix)]
+        {
+            let scratch = Scratch::new("sparse-xml");
+            let path = scratch.write("odm.xml", ODM_13);
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_len(yamaa_core::limits::Limits::SOURCE_BYTES as u64 + 1)
+                .unwrap();
+            refused(
+                read_with(&path, &Options::default()),
+                "limit",
+                &format!(
+                    "ODM XML exceeds {} bytes",
+                    Options::DEFAULT_MAX_EXPANDED_BYTES
+                ),
+            );
+        }
+    }
+
+    /// A caller's own file name is a host name, not a written path: a `:`, or
+    /// a backslash on Unix, reads as any other name.
+    #[cfg(unix)]
+    #[test]
+    fn caller_file_names_with_colons_and_backslashes_are_read() {
+        for name in ["odm:v2.xml", "odm\\v2.xml", "c:odm.xml", "file:odm.xml"] {
+            let scratch = Scratch::new("names");
+            let path = scratch.write(name, ODM_13);
+            assert_eq!(
+                read_with(&path, &Options::default()).unwrap().rows(),
+                3,
+                "{name}"
+            );
+        }
+    }
+
     #[test]
     fn archive_names_without_archives_are_refused() {
         for name in ["odm.tar", "ODM.TAR.GZ", "odm.tgz"] {
@@ -1994,6 +2102,33 @@ mod archives {
             read_bytes("odm.tgz", &concatenated, &roomy).unwrap().rows(),
             3
         );
+    }
+
+    /// A local archive streams from its file: only the members a pass
+    /// reaches are read, so a sparse archive over the ten-gigabyte source
+    /// bound, whose tail is the zero blocks that end it, reads its one member.
+    #[cfg(unix)]
+    #[test]
+    fn local_archives_stream_without_a_source_bound() {
+        for (name, gzipped) in [("odm.tar", false), ("odm.tar.gz", true)] {
+            let archive = Tar::new().file("odm.xml", ODM_13.as_bytes()).finish();
+            let scratch = Scratch::new("sparse-tar");
+            let path = scratch.write(name, if gzipped { gzip(&archive) } else { archive });
+            if !gzipped {
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(&path)
+                    .unwrap()
+                    .set_len(yamaa_core::limits::Limits::SOURCE_BYTES as u64 + 1)
+                    .unwrap();
+            }
+            // The bytes the member, its header and the archive's end take.
+            let small = Options {
+                max_expanded_bytes: (512 + ODM_13.len().next_multiple_of(512) + 1024) as u64,
+                ..Options::default()
+            };
+            assert_eq!(read_with(&path, &small).unwrap().rows(), 3, "{name}");
+        }
     }
 
     #[test]

@@ -24,7 +24,7 @@ impl Prepared {
     }
     pub(super) fn new(
         d: &Document,
-        output: &TableSchema,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<PreflightFinding>,
     ) -> Result<Self, PrepareError> {
         let mut searches = BTreeMap::new();
@@ -79,19 +79,10 @@ impl Prepared {
                 Admitted::Replace(operation) => operation.search(),
             };
             // Row availability/group scope belongs to binding. Declared columns
-            // and CSV fields have complete static types in the no-rows model.
-            let known_output = if rows {
-                None
-            } else {
-                output.columns().iter().find(|item| item.name == source)
-            };
-            let kind = if rows {
-                None
-            } else {
-                known_output
-                    .map(|item| item.kind)
-                    .or(temporal::declared_source_type(d, source)?)
-            };
+            // and stored fields have their declared types in the no-rows model.
+            let kind = (!rows)
+                .then(|| declared.operand(source).column_type())
+                .flatten();
             if let Some(kind) = kind.filter(|kind| *kind != ColumnType::Str) {
                 findings.push(PreflightFinding::TextExtract(
                     operation.input_diagnostic(kind_name(kind)),

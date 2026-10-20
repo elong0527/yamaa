@@ -25,6 +25,7 @@ fn unknown(predicate: &BoundPredicate, name: &str) -> Diagnostic {
 fn bind_predicate(
     predicate: &BoundPredicate,
     spec: &PreparedSpecification,
+    declared: &types::DeclaredTypes<'_>,
     secondary: &[SecondarySource],
     intermediates: &[Option<Intermediate>],
 ) -> Result<Result<BoundPredicate, Diagnostic>, BindError> {
@@ -54,7 +55,7 @@ fn bind_predicate(
     }
     let typed = predicate.plan().typed(|name| {
         kinds.iter().find(|(bound, _)| *bound == name).map_or_else(
-            || spec.declared_input(name),
+            || declared.name(name),
             |&(_, kind)| crate::result_type::ResultType::declared(kind),
         )
     });
@@ -68,6 +69,7 @@ pub(super) fn bind(
     secondary: &[SecondarySource],
     intermediates: &[Option<Intermediate>],
 ) -> Result<Vec<Verification>, BindError> {
+    let declared = spec.declared_types();
     let mut result = Vec::new();
     for verification in checks {
         let mut bound = verification.clone();
@@ -76,7 +78,7 @@ pub(super) fn bind(
             Check::Assert { when, require } => {
                 let when = match when
                     .as_ref()
-                    .map(|p| bind_predicate(p, spec, secondary, intermediates))
+                    .map(|p| bind_predicate(p, spec, &declared, secondary, intermediates))
                     .transpose()?
                 {
                     Some(Ok(p)) => Some(p),
@@ -87,7 +89,7 @@ pub(super) fn bind(
                     None => None,
                 };
                 if failure.is_none() {
-                    match bind_predicate(require, spec, secondary, intermediates)? {
+                    match bind_predicate(require, spec, &declared, secondary, intermediates)? {
                         Ok(require) => bound.check = Check::Assert { when, require },
                         Err(d) => {
                             if let Some(when) = when {
@@ -108,7 +110,7 @@ pub(super) fn bind(
                     [&mut check.filter, &mut check.when].into_iter().enumerate()
                 {
                     if let Some(original) = predicate {
-                        match bind_predicate(original, spec, secondary, intermediates)? {
+                        match bind_predicate(original, spec, &declared, secondary, intermediates)? {
                             Ok(bound) => {
                                 *original = bound;
                                 filter_bound |= position == 0;
@@ -132,7 +134,7 @@ pub(super) fn bind(
                 }
             }
             Check::PredicateDeclaration(p) => {
-                match bind_predicate(p, spec, secondary, intermediates)? {
+                match bind_predicate(p, spec, &declared, secondary, intermediates)? {
                     Ok(p) => bound.check = Check::PredicateDeclaration(p),
                     Err(d) => failure = Some(d),
                 }

@@ -35,25 +35,18 @@ impl Derivation {
         }
     }
     /// The derived field's type: a typed entry's declared type, and otherwise
-    /// its expression's result type (EXPR-14) over the names `input` types.
-    pub(super) fn field_type(&self, input: &dyn Fn(&str) -> ResultType) -> ResultType {
-        self.typed.map_or_else(
-            || self.branch.operation.result_type(input),
-            ResultType::column,
-        )
+    /// `result`, its expression's result type (EXPR-14).
+    pub(super) fn field_type(&self, result: ResultType) -> ResultType {
+        self.typed.map_or(result, ResultType::column)
     }
-    /// VALUE-24: a typed entry whose expression's result type can never
-    /// convert to the declared type, unless `unconvertible` answers it.
+    /// VALUE-24: a typed entry whose expression's result type, `result`, can
+    /// never convert to the declared type, unless `unconvertible` answers it.
     pub(super) fn conversion_finding(
         &self,
-        input: &dyn Fn(&str) -> ResultType,
+        result: ResultType,
     ) -> Option<crate::diagnostic::Diagnostic> {
         let typed = self.typed.filter(|_| self.handler.is_none())?;
-        result_types::conversion_finding(
-            &self.path,
-            self.branch.operation.result_type(input),
-            typed,
-        )
+        types::conversion_finding(&self.path, result, typed)
     }
 }
 /// Both admitted entry forms expose the same normalized expression boundary.
@@ -159,11 +152,13 @@ fn resolve_field_kinds(
     sources: &[SourceDeclaration],
     schemas: &[&TableSchema],
     driver: usize,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     previous: &[Option<Intermediate>],
     before: usize,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<FieldKinds>, BindError> {
+    let scope = tree.donor(reader)?;
     // Shared earlier donor plans do not recursively copy their expression trees.
     // Admit aggregate retained schema/catalog copies before making the first copy.
     let original_secondary = outer_secondary(sources, schemas, driver);
@@ -209,8 +204,8 @@ fn resolve_field_kinds(
                 )
             }
         };
-        let field_type = declaration.field_type(&input);
-        let operation_type = declaration.branch.operation.result_type(&input);
+        let operation_type = tree.result_type(declaration.branch.value, scope, &input)?;
+        let field_type = declaration.field_type(operation_type);
         if fields.iter().any(|field| field.name == declaration.name) {
             let mut finding = LookupFinding::new(
                 &declaration.path,
@@ -424,6 +419,7 @@ fn select_earlier(
     source: &TableSchema,
     outer_output: &TableSchema,
     output: &TableSchema,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     project: Option<&crate::project_calls::ProjectCalls>,
     catalog: Catalog,
@@ -475,6 +471,7 @@ fn select_earlier(
         source,
         outer_output,
         output,
+        tree,
         named,
         project,
         &catalog,
@@ -533,6 +530,7 @@ pub(super) fn bind(
     named: &intermediates::Declarations,
     previous: &[Option<Intermediate>],
     project: Option<&crate::project_calls::ProjectCalls>,
+    tree: &types::Tree,
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<IntermediateDerivations>, BindError> {
     if declarations.is_empty() {
@@ -548,6 +546,7 @@ pub(super) fn bind(
         sources,
         schemas,
         driver,
+        tree,
         named,
         previous,
         before,
@@ -578,6 +577,7 @@ pub(super) fn bind(
         &source,
         outer_output,
         &output,
+        tree,
         named,
         project,
         catalog,
@@ -609,6 +609,7 @@ pub(super) fn bind(
             false,
             &output,
             project,
+            tree,
             &contextual_names,
             &secondary,
             &earlier,
@@ -618,7 +619,7 @@ pub(super) fn bind(
             .typed
             .filter(|_| expression.is_some() && declaration.handler.is_none())
             .and_then(|typed| {
-                result_types::conversion_finding(&declaration.path, operation_types[index], typed)
+                types::conversion_finding(&declaration.path, operation_types[index], typed)
             })
         {
             findings.push(BindFinding::Scalar(finding));
@@ -810,6 +811,7 @@ fn rebase(
     source: &TableSchema,
     outer: &TableSchema,
     output: &TableSchema,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     project: Option<&crate::project_calls::ProjectCalls>,
     catalog: &Catalog,
@@ -986,6 +988,7 @@ fn rebase(
                         row: None,
                         phase: crate::reference_scope::Phase::Row { group_by: None },
                         project,
+                        tree,
                         named,
                         secondary,
                         intermediates: previous,

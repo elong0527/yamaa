@@ -151,22 +151,13 @@ pub(super) fn bind(
             findings.push(unknown(plan.spec_path(), name));
         }
     }
-    static_types::predicate(
-        plan,
-        &spec.intermediates,
-        catalog,
-        secondary,
-        intermediates,
-        findings,
-    )?;
+    let captured =
+        types::CapturedTypes::new(&spec.intermediates, catalog, secondary, intermediates);
+    captured.predicate(plan, findings);
     if findings.len() != start {
         return Ok(None);
     }
-    BoundPredicate::new_contextual(
-        static_types::typed(plan, &spec.intermediates, catalog, secondary, intermediates),
-        bindings,
-        collected,
-    )
-    .map(Some)
-    .map_err(BindError::InvalidPredicateBinding)
+    BoundPredicate::new_contextual(captured.typed(plan), bindings, collected)
+        .map(Some)
+        .map_err(BindError::InvalidPredicateBinding)
 }

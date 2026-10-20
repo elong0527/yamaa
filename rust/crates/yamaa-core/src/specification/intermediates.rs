@@ -212,6 +212,7 @@ fn bind_one(
     keys: &[usize],
     self_columns: Option<&[usize]>,
     project: Option<&crate::project_calls::ProjectCalls>,
+    tree: &types::Tree,
     secondary: &[SecondarySource],
     result: &[Option<Intermediate>],
     findings: &mut Vec<BindFinding>,
@@ -237,6 +238,7 @@ fn bind_one(
         named,
         result,
         project,
+        tree,
         findings,
     )?;
     let schema = pending_schema.as_ref().unwrap_or_else(|| {
@@ -358,7 +360,7 @@ fn bind_one(
             .position(|column| column.name == *field)
             .and_then(donor_kind)
         {
-            let expected = declaration.result_type(&catalog);
+            let expected = declaration.result_type(tree, &catalog)?;
             if !expected.comparable(donor.into()) {
                 findings.push(BindFinding::Lookup(LookupFinding::key_type(
                     &format!("{}.key", item.path),
@@ -410,6 +412,7 @@ fn bind_one(
             row: None,
             phase: crate::reference_scope::Phase::Row { group_by: None },
             project,
+            tree,
             named,
             secondary,
             intermediates: result,
@@ -1010,6 +1013,7 @@ impl Declarations {
         keys: &[usize],
         self_columns: Option<&[usize]>,
         project: Option<&crate::project_calls::ProjectCalls>,
+        tree: &types::Tree,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(Vec<SecondarySource>, Vec<Option<Intermediate>>), BindError> {
         let secondary = sources
@@ -1034,6 +1038,7 @@ impl Declarations {
                 keys,
                 self_columns,
                 project,
+                tree,
                 &secondary,
                 &result,
                 findings,
@@ -1124,6 +1129,7 @@ impl Declarations {
         &self,
         sources: &[SourceDeclaration],
         output: &TableSchema,
+        tree: &types::Tree,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
         let output_fields = output
@@ -1210,15 +1216,17 @@ impl Declarations {
                         ResultType::declared(stored(inputs.get(owner).unwrap_or(&owner), field))
                     }
                 };
-                if let Some(finding) = derived.conversion_finding(&input) {
+                let scope = tree.donor(&declaration.name)?;
+                let result = tree.result_type(derived.branch.value, scope, &input)?;
+                if let Some(finding) = derived.conversion_finding(result) {
                     findings.push(BindFinding::Scalar(finding));
                 }
-                let kind = derived.field_type(&input);
+                let kind = derived.field_type(result);
                 donor.insert(derived.name.clone(), kind);
             }
             if let Some(Ok(filter)) = &declaration.filter {
                 findings.extend(
-                    static_types::predicate_kinds(filter, |name| {
+                    types::predicate_kinds(filter, |name| {
                         let (owner, field) = name
                             .split_once('.')
                             .or_else(|| (dataset == "SELF").then_some((dataset, name)))?;
@@ -1234,7 +1242,7 @@ impl Declarations {
             }
             for (field, value) in declaration.keys.iter().flatten() {
                 if let Some(actual) = donor_type(&donor, field).and_then(ResultType::column_type) {
-                    let expected = value.result_type(&catalog);
+                    let expected = value.result_type(tree, &catalog)?;
                     if !expected.comparable(actual.into()) {
                         findings.push(BindFinding::Lookup(LookupFinding::key_type(
                             &format!("{}.key", declaration.path),
