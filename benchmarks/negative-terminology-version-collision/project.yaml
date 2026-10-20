@@ -1,0 +1,54 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+schema_version: '1.0'
+study:
+  id: CATH
+  name: CATH
+  description: Example study coding demographics with SDTM terminology
+  protocol_name: CATH-01
+codelists:
+- standard:
+    name: CDISC/NCI
+    publishing_set: SDTM
+    version: '2023-12-15'
+  codelists:
+  - id: SEX
+    name: Sex
+    alias: C66731
+    items:
+    - value: F
+      decode: Female
+      alias: C16576
+    - value: M
+      decode: Male
+      alias: C20197
+    - value: U
+      decode: Unknown
+      alias: C17998
+    data_type: text
+- standard:
+    name: CDISC/NCI
+    publishing_set: SDTM
+    version: '2024-03-29'
+  codelists:
+  - id: AGEU
+    name: Age Unit
+    alias: C66781
+    items:
+    - value: YEARS
+      alias: C29848
+    data_type: text
+sdtm:
+  standard:
+    name: SDTMIG
+    version: '3.4'
+    status: Final
+  specs:
+  - spec.yaml
+  define: define.xml
+  context: Submission
+  source_system_version: '1.0'
+  documents:
+  - id: acrf
+    kind: annotated_crf
+    link: acrf.pdf
+    title: Annotated Case Report Form

@@ -215,7 +215,8 @@ Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-core/test
 |---|---|
 | `Study` | `STDY.<study.id>` |
 | `MetaDataVersion` | `MDV.<metadata_version.id>` |
-| `def:Standard` | `STD.<standard.id>` |
+| `def:Standard`, implementation guide | `STD.<standard.name>` |
+| `def:Standard`, terminology | `STD.CT_<standard.publishing_set>` |
 | `ItemGroupDef` | `IG.<dataset.id>` |
 | `ItemDef` | `IT.<dataset.id>.<column>` |
 | `ItemDef`, per value | `IT.<dataset.id>.<column>.<entry id>` |
@@ -229,6 +230,14 @@ Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-core/test
 | `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<entry id>` |
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
+
+In the `def:Standard` rows, `standard` is the selected section's `standard`
+for the implementation guide ([DEFINE-6](#define-6)), and for a terminology
+standard the `standard` of a codelist source whose codelists the document binds
+([CT-2](terminology.md#ct-2)). Sources that declare the same `name`,
+`publishing_set` and `version` cite one terminology standard and share its
+`def:Standard`; two terminology standards with one `publishing_set` fail under
+[DEFINE-10](#define-10).
 
 A per-value entry id is the `id` of the column's value-level entry
 ([SUB-12](submission.md#sub-12)), an identifier unique within the column. It
@@ -253,11 +262,16 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
-`id`, standard `id`, codelist `id` or document `id`, or a document `id` equal
-to a dataset `id`, fails with `duplicate_define_identifier`.
+`id`, codelist `id` or document `id`, or a document `id` equal to a dataset
+`id`, fails with `duplicate_define_identifier`. A terminology standard's
+identifier is generated from its `publishing_set` alone
+([DEFINE-9](#define-9)), so when two codelist sources whose codelists the
+document binds declare one `publishing_set` with a different `name` or
+`version`, the later source's `publishing_set` fails with
+`duplicate_define_identifier`, reporting the identifier.
 
 ## Document structure
 

@@ -1,0 +1,7 @@
+phase: validation
+condition: duplicate_define_identifier
+spec_paths:
+  - codelists[1].standard.publishing_set
+rule: DEFINE-10
+context:
+  detail: STD.CT_SDTM
