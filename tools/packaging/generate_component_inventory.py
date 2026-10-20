@@ -3,8 +3,9 @@
 Every package carries COMPONENTS.tsv beside LICENSE-THIRD-PARTY.txt: each
 wheel in its .dist-info/licenses directory, the Python source archive at its
 root and the R source package in inst/, from which R installs it at the
-package root. The wheels and the Python source archive carry the Python
-inventory, python/COMPONENTS.tsv, and the R source package the R inventory,
+package root. The wheels carry the Python inventory, python/COMPONENTS.tsv,
+and the Python source archive the same inventory without its rust-std row
+(source_inventory); the R source package carries the R inventory,
 R/yamaa/inst/COMPONENTS.tsv.
 
 A host's inventory lists the components that its packages are built from:
@@ -16,30 +17,40 @@ A host's inventory lists the components that its packages are built from:
   only build scripts and procedural macros use and those that no supported
   target compiles;
 - the C code that those crates compile from sources that they carry: ReadStat,
-  vendored in yamaa-adapters, and the zstd library that zstd-sys bundles.
+  vendored in yamaa-adapters, and the zstd library that zstd-sys bundles;
+- for a host in BINARY_HOSTS, whose committed inventory is that of binary
+  packages that the pinned toolchain builds, the Rust standard library of
+  that toolchain, which those packages link. A source archive links the
+  standard library of whatever toolchain builds it, so its inventory has no
+  such row.
 
 It is tab-separated UTF-8 text with LF line endings: a header row, then one
 row per component, sorted by name and version, with these columns:
 
-- name and version: the locked crate's, or the C code's upstream release;
+- name and version: the locked crate's, the C code's upstream release, or
+  rust-std and the Rust release that rust/rust-toolchain.toml pins;
 - license: the SPDX expression that the crate's manifest declares, with
-  Cargo's legacy `/` written as OR, or the C code's upstream license;
+  Cargo's legacy `/` written as OR, or the C code's or the standard library's
+  upstream license;
 - source: crates.io for a registry crate; for a path crate, its directory in
   the yamaa repository, followed for a vendored copy of third-party code by
   the upstream repository and the commit that its provenance names; for
-  bundled C code, the crate that bundles it;
+  bundled C code, the crate that bundles it; for the standard library, the
+  Rust repository at the release's tag;
 - purpose: the crate's purpose in tools/packaging/crate_purposes.toml, or the
-  C code's in VENDORED below.
+  C code's in VENDORED below, or the standard library's in
+  standard_library().
 
 No column holds a digest: a component is named by its name, version, license,
 source and purpose (AGENTS.md, no content hashing).
 
 By default this checks the committed inventories against the trimmed locks,
-the purposes, the locked crates' manifests and the provenance of the vendored
-sources, and that the Python project lists COMPONENTS.tsv among its license
-files. `--write` regenerates the committed inventories. `--host <host>` writes
-the inventory of any host that tools/staging/engine_bundle.py stages to
-standard output instead, for a package whose inventory is not committed.
+the purposes, the locked crates' manifests, the provenance of the vendored
+sources and the pinned toolchain, and that the Python project lists
+COMPONENTS.tsv among its license files. `--write` regenerates the committed
+inventories. `--host <host>` writes the inventory of any host that
+tools/staging/engine_bundle.py stages to standard output instead, for a
+package whose inventory is not committed.
 """
 
 import argparse
@@ -51,6 +62,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.ci import toolchain
 from tools.packaging import check_crate_purposes as purposes
 from tools.packaging import generate_third_party_notices as notices
 from tools.staging import engine_bundle
@@ -58,6 +70,14 @@ from tools.staging import engine_bundle
 NAME = notices.INVENTORY
 COLUMNS = ("name", "version", "license", "source", "purpose")
 REGISTRY = "crates.io"
+# The hosts whose committed inventory is that of binary packages that the
+# pinned toolchain builds: the Python wheels. Their inventory names that
+# toolchain's standard library, which they link; the R source package's names
+# none, and the Python source archive's leaves it out (source_inventory).
+BINARY_HOSTS = frozenset({"python"})
+# The standard library's row: rustup's name for the component that holds it.
+STANDARD_LIBRARY = "rust-std"
+RUST_REPOSITORY = "https://github.com/rust-lang/rust"
 # A vendored crate's PROVENANCE.md names the upstream commit it was taken from.
 UPSTREAM_COMMIT = re.compile(r"The upstream release commit is `([0-9a-f]{40})`\.")
 # The README of the vendored ReadStat sources names their upstream release,
@@ -155,6 +175,25 @@ VENDORED = (
 )
 
 
+def standard_library(release):
+    """The row of the Rust standard library of the pinned toolchain, whose
+    release rust/rust-toolchain.toml names."""
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", release):
+        raise ValueError(
+            f"rust/rust-toolchain.toml pins {release!r}, not a Rust release such "
+            "as 1.99.1, which the binary packages' inventory names"
+        )
+    return Component(
+        STANDARD_LIBRARY,
+        release,
+        "MIT OR Apache-2.0",
+        f"{RUST_REPOSITORY} at {release}",
+        "the Rust standard library (core, alloc and std) of the pinned toolchain "
+        "that builds this package, statically linked into its native code; "
+        "LICENSE-THIRD-PARTY.txt reproduces its notice",
+    )
+
+
 def license_expression(declared, label):
     """A crate's declared license as an SPDX expression; `/` is Cargo's OR."""
     if not declared or not declared.strip():
@@ -184,12 +223,14 @@ def crate_source(package):
     return f"{directory}, from {repository} at {match[1]}"
 
 
-def components(kept, metadata, crate_purposes):
+def components(kept, metadata, crate_purposes, release=None):
     """The inventory rows of a host, sorted by name and version.
 
     `kept` holds the (name, version, source) keys of the host's trimmed lock,
     `metadata` is the canonical lock's `cargo metadata` and `crate_purposes`
-    maps crate names to purposes.
+    maps crate names to purposes. `release` is the pinned Rust release for a
+    host in BINARY_HOSTS, whose packages link its standard library, and None
+    for a host whose packages are source archives.
     """
     packages = {
         (package["name"], package["version"], package["source"]): package
@@ -216,16 +257,18 @@ def components(kept, metadata, crate_purposes):
         )
         for vendored in VENDORED:
             if vendored.crate == name:
-                release, source = vendored.provenance(package)
+                upstream, source = vendored.provenance(package)
                 rows.append(
                     Component(
                         vendored.name,
-                        release,
+                        upstream,
                         vendored.license,
                         source,
                         vendored.purpose,
                     )
                 )
+    if release is not None:
+        rows.append(standard_library(release))
     seen = set()
     for row in rows:
         if (row.name, row.version) in seen:
@@ -255,12 +298,30 @@ def generate(hosts):
     """The inventory text of each host, by host."""
     metadata = notices.locked_metadata()
     crate_purposes = purposes.read()
+    pinned = toolchain.channel()
     inventories = {}
     with tempfile.TemporaryDirectory(prefix="yamaa-component-inventory-") as scratch:
         for host in hosts:
             kept = engine_bundle.stage_workspace(host, Path(scratch) / host)
-            inventories[host] = render(components(kept, metadata, crate_purposes))
+            release = pinned if host in BINARY_HOSTS else None
+            inventories[host] = render(
+                components(kept, metadata, crate_purposes, release)
+            )
     return inventories
+
+
+def source_inventory(text):
+    """The inventory of the Python source archive: the wheels' inventory, the
+    text of python/COMPONENTS.tsv, without its rust-std row. A build from the
+    archive links the standard library of whatever toolchain builds it."""
+    lines = text.splitlines(keepends=True)
+    rows = [line for line in lines if line.partition("\t")[0] != STANDARD_LIBRARY]
+    if len(lines) - len(rows) != 1:
+        raise ValueError(
+            f"python/{NAME}: the wheels' inventory must hold one {STANDARD_LIBRARY} "
+            "row, which the Python source archive leaves out"
+        )
+    return "".join(rows)
 
 
 def committed():
