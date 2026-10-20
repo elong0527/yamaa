@@ -14,6 +14,9 @@ crate-type = ["staticlib"]
 # a test harness would link against R.
 test = false
 doctest = false
+# No benches: bench defaults to true, and --all-targets would check the
+# library a second time, under cfg(test).
+bench = false
 
 [dependencies]
 yamaa = { path = "../yamaa" }
