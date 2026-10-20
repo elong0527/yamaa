@@ -22,6 +22,7 @@ imports and field deserializers, are refused elsewhere outside test-only code.
 """
 
 import argparse
+import bisect
 import json
 import re
 from pathlib import Path
@@ -72,7 +73,9 @@ CONDITION_SITE = re.compile(
 )
 CONDITION_KEY = re.compile(r'"condition"\s*:\s*("(?:[^"\\]|\\.)*")')
 RUST_NAME = r"(?:r#)?[A-Za-z_][A-Za-z_0-9]*"
-RUST_PATH = re.compile(rf"\b{RUST_NAME}(?:\s*::\s*{RUST_NAME})*")
+RUST_PATH = re.compile(
+    rf"(?<![A-Za-z_0-9#])(?:::\s*)?{RUST_NAME}(?:\s*::\s*{RUST_NAME})*"
+)
 # The codecs that read JSON text they own: the wire module itself, the
 # package-lock reader, the stored report rows and the resolved artifact.
 JSON_CODECS = {
@@ -460,33 +463,14 @@ def json_decodes(source: str) -> list[int]:
     code = blank(source, tokens, {"comment", "character", "string"})
     tests = cfg_test_items(code)
     code = blank(code, [("test", low, high, 0, None) for low, high in tests], {"test"})
-    imports = []
-    for match in re.finditer(r"\buse\s+([^;]+);", code):
-        imports.extend(rust_imports(match[1], match.start(1)))
-    aliases: dict[str, set[tuple[str, ...]]] = {}
-    for path, alias, _ in imports:
-        if alias is not None:
-            aliases.setdefault(alias.removeprefix("r#"), set()).add(
-                tuple(part.removeprefix("r#") for part in path)
-            )
+    imports = RustImports(code)
 
-    def resolve(path):
-        path = tuple(part.removeprefix("r#") for part in path)
-        pending = [(path, frozenset())]
-        resolved = set()
-        while pending:
-            path, seen = pending.pop()
-            if path and path[0] in aliases and path[0] not in seen:
-                pending.extend(
-                    (replacement + path[1:], seen | {path[0]})
-                    for replacement in aliases[path[0]]
-                )
-            else:
-                resolved.add(path)
-        return resolved
-
-    def reader(path):
-        return any(reader_path(candidate) for candidate in resolve(path))
+    def reader(path, offset):
+        return any(
+            reader_path(candidate)
+            for candidate in imports.resolve(path, imports.scope_at(offset))
+            if isinstance(candidate, tuple)
+        )
 
     def reader_path(path):
         for owner in ("json_wire", "serde_json"):
@@ -500,7 +484,7 @@ def json_decodes(source: str) -> list[int]:
                     or tail[0] in {"deserialize_value", "WireValueOwned"}
                 )
             return bool(tail) and (
-                tail[-1] == "*"
+                tail in {("*",), ("de", "*")}
                 or any(
                     part in {"from_str", "from_slice", "from_reader", "Deserializer"}
                     for part in tail
@@ -509,9 +493,17 @@ def json_decodes(source: str) -> list[int]:
             )
         return False
 
-    sites = {offset for path, _, offset in imports if reader(path)}
-    for match in RUST_PATH.finditer(code):
-        if reader(tuple(re.split(r"\s*::\s*", match[0]))):
+    sites = {
+        offset
+        for path, _, offset, scope in imports.leaves
+        if any(
+            reader_path(candidate)
+            for candidate in imports.resolve(path, scope)
+            if isinstance(candidate, tuple)
+        )
+    }
+    for match in RUST_PATH.finditer(imports.code_without_uses):
+        if reader(tuple(re.split(r"\s*::\s*", match[0])), match.start()):
             sites.add(match.start())
     # A qualified trait call separates the receiver from `deserialize`:
     # `<Value as serde::Deserialize>::deserialize(deserializer)`.
@@ -519,7 +511,9 @@ def json_decodes(source: str) -> list[int]:
         rf"<\s*({RUST_PATH.pattern})\s+as\s+{RUST_PATH.pattern}(?:\s*<[^>]*>)?\s*>\s*::\s*deserialize\b",
         code,
     ):
-        if reader(tuple(re.split(r"\s*::\s*", match[1])) + ("deserialize",)):
+        if reader(
+            tuple(re.split(r"\s*::\s*", match[1])) + ("deserialize",), match.start()
+        ):
             sites.add(match.start())
     for attribute in re.finditer(r"#\s*\[\s*serde\s*\(", code):
         end = balanced(code, code.index("[", attribute.start()), "[", "]")
@@ -532,9 +526,7 @@ def json_decodes(source: str) -> list[int]:
                 and re.search(
                     r"\bdeserialize_with\s*=\s*$", code[attribute.end() : start]
                 )
-                and reader(
-                    tuple(re.split(r"\s*::\s*", value.strip().removeprefix("::")))
-                )
+                and reader(tuple(re.split(r"\s*::\s*", value.strip())), start)
             ):
                 sites.add(start)
     return sorted({source.count("\n", 0, offset) + 1 for offset in sites})
@@ -557,6 +549,8 @@ def rust_imports(
             token = tokens[index][0]
             index += 1
             if token == "::":
+                if not path:
+                    path = ("",)
                 continue
             if token == "{":
                 while index < len(tokens) and tokens[index][0] != "}":
@@ -582,6 +576,162 @@ def rust_imports(
 
     branch(())
     return result
+
+
+class RustImports:
+    """Resolve use items within their Rust block and module scopes.
+
+    Items apply throughout their block. Blocks inherit imports; child modules
+    do not, and `super` skips enclosing function blocks. Each alias resolves
+    in its declaration scope, so a caller's shadow cannot retarget it. Multiple
+    declarations in one scope are kept for conditional compilation alternatives.
+    This resolves source ownership, not Rust's privacy or type checking.
+    """
+
+    def __init__(self, code: str):
+        uses = list(re.finditer(r"\buse\s+([^;]+);", code))
+        self.code_without_uses = blank(
+            code,
+            [("use", match.start(), match.end(), 0, None) for match in uses],
+            {"use"},
+        )
+        # Import-tree braces are not lexical blocks.
+        modules = {
+            match.end() - 1: match[1].removeprefix("r#")
+            for match in re.finditer(
+                rf"\bmod\s+({RUST_NAME})\s*\{{", self.code_without_uses
+            )
+        }
+        self.starts = [0]
+        self.ends = [len(code)]
+        self.parents = [None]
+        self.module = [0]
+        self.module_paths = [("crate",)]
+        self.bindings = [{}]
+        self.globs = [[]]
+        stack = [0]
+        for match in re.finditer(r"[{}]", self.code_without_uses):
+            if match[0] == "}":
+                if len(stack) > 1:
+                    self.ends[stack.pop()] = match.end()
+                continue
+            parent = stack[-1]
+            scope = len(self.starts)
+            self.starts.append(match.start())
+            self.ends.append(len(code))
+            self.parents.append(parent)
+            name = modules.get(match.start())
+            self.module.append(scope if name is not None else self.module[parent])
+            self.module_paths.append(
+                self.module_paths[self.module[parent]] + (name,)
+                if name is not None
+                else self.module_paths[self.module[parent]]
+            )
+            self.bindings.append({})
+            self.globs.append([])
+            if name is not None:
+                self.bindings[parent].setdefault(name, []).append(
+                    (scope, parent, match.start())
+                )
+            stack.append(scope)
+        self.leaves = []
+        for match in uses:
+            scope = self.scope_at(match.start())
+            for path, alias, offset in rust_imports(match[1], match.start(1)):
+                path = tuple(part.removeprefix("r#") for part in path)
+                self.leaves.append((path, alias, offset, scope))
+                binding = (path, scope, offset)
+                if alias is None:
+                    self.globs[scope].append(binding)
+                else:
+                    self.bindings[scope].setdefault(
+                        alias.removeprefix("r#"), []
+                    ).append(binding)
+
+    def scope_at(self, offset):
+        scope = bisect.bisect_right(self.starts, offset) - 1
+        while offset >= self.ends[scope] and self.parents[scope] is not None:
+            scope = self.parents[scope]
+        return scope
+
+    def resolve(self, path, scope, seen=frozenset()):
+        path = tuple(part.removeprefix("r#") for part in path)
+        if not path:
+            return set()
+        if path[0] == "":  # Absolute paths name the extern prelude.
+            return {path}
+        if path[0] in {"crate", "self", "super"}:
+            target = 0 if path[0] == "crate" else self.module[scope]
+            if path[0] == "super":
+                parent = self.parents[target]
+                target = self.module[parent] if parent is not None else 0
+            path = path[1:]
+            while path and path[0] == "super":
+                parent = self.parents[target]
+                target = self.module[parent] if parent is not None else 0
+                path = path[1:]
+            targets = {target}
+        else:
+            targets = self.lookup(path[0], scope, seen, lexical=True)
+            if not targets:
+                targets = {(path[0],)}
+            path = path[1:]
+        for name in path:
+            expanded = set()
+            for target in targets:
+                if isinstance(target, tuple):
+                    expanded.add(target + (name,))
+                else:
+                    members = self.lookup(name, target, seen, lexical=False)
+                    expanded.update(members or {self.module_paths[target] + (name,)})
+            targets = expanded
+        return targets
+
+    def lookup(self, name, scope, seen, *, lexical):
+        while True:
+            bindings = self.bindings[scope].get(name)
+            if bindings:
+                targets = set()
+                for path, declaration, offset in bindings:
+                    key = (declaration, offset)
+                    if key in seen:
+                        continue
+                    if isinstance(path, int):
+                        targets.add(path)
+                    else:
+                        targets.update(self.resolve(path, declaration, seen | {key}))
+                return targets
+            targets = set()
+            for path, declaration, offset in self.globs[scope]:
+                key = (declaration, offset)
+                if key in seen:
+                    continue
+                for owner in self.resolve(path[:-1], declaration, seen | {key}):
+                    if isinstance(owner, int):
+                        targets.update(
+                            self.lookup(name, owner, seen | {key}, lexical=False)
+                        )
+                    elif owner[-2:] == ("serde_json", "value") and name in {
+                        "Value",
+                        "Map",
+                        "Number",
+                        "Serializer",
+                        "from_value",
+                        "to_value",
+                    }:
+                        # The value module exports trees and projections, not
+                        # text readers. Resolve its types only when used, so
+                        # Value::deserialize is caught without banning trees.
+                        targets.add(owner + (name,))
+            if targets:
+                return targets
+            if (
+                not lexical
+                or self.module[scope] == scope
+                or self.parents[scope] is None
+            ):
+                return set()
+            scope = self.parents[scope]
 
 
 def json_test_sources(sources: dict[Path, str]) -> set[Path]:

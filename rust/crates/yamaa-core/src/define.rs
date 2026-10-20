@@ -848,11 +848,12 @@ pub fn resource_diagnostic(
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PublicationFailure {
     #[error("define target admission")]
-    TargetAdmission,
+    TargetAdmission(Fault),
     #[error("define publication")]
     Publication,
 }
-/// Project the entered publication stage, not an inferred exception message.
+/// Project the entered publication stage and the adapter's typed admission fault,
+/// never a classification inferred from an exception message.
 /// The native original error remains held separately from its display text.
 pub fn publication_diagnostic(
     index: usize,
@@ -860,10 +861,9 @@ pub fn publication_diagnostic(
     cause: String,
 ) -> Diagnostic {
     let mut diagnostic = match stage {
-        PublicationFailure::TargetAdmission => crate::application_issue::rejected(
-            Stage::PublicationTargetAdmission,
-            Fault::InvalidTarget,
-        ),
+        PublicationFailure::TargetAdmission(fault) => {
+            crate::application_issue::rejected(Stage::PublicationTargetAdmission, fault)
+        }
         PublicationFailure::Publication => Diagnostic {
             code: ConditionCode::OutputPublicationFailed,
             spec_paths: Vec::new(),
