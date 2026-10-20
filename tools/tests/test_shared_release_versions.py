@@ -1,5 +1,5 @@
-"""Refuse incoherent host/core versions, drifting author lists and
-ambiguous packaging owners."""
+"""Refuse incoherent host/core versions, Python README links to another
+release's tag, drifting author lists and ambiguous packaging owners."""
 
 import shutil
 import tempfile
@@ -29,6 +29,7 @@ class ReleaseTree(unittest.TestCase):
             "LICENSE",
             "mkdocs.yml",
             release_identity.DECLARATION,
+            checker.PYTHON_README,
             "python/pyproject.toml",
             "python/uv.lock",
             "R/yamaa/DESCRIPTION",
@@ -233,6 +234,9 @@ class CoherentRelease(ReleaseTree):
         def missing_python_lock(root):
             (root / "python/uv.lock").unlink()
 
+        def missing_python_readme(root):
+            (root / checker.PYTHON_README).unlink()
+
         for mutate in (
             missing_project,
             invalid_python_toml,
@@ -241,6 +245,7 @@ class CoherentRelease(ReleaseTree):
             missing_workspace_package,
             cargo_lock_entry_without_version,
             missing_python_lock,
+            missing_python_readme,
         ):
             with self.subTest(mutation=mutate.__name__):
                 # Rebuild a pristine copy for each mutation.
@@ -260,6 +265,77 @@ class CoherentRelease(ReleaseTree):
         )
 
 
+class PythonReadmeLinks(ReleaseTree):
+    """python/README.md is the wheels' PyPI description, so each of its links
+    that names a release tag names the tag of the release it ships with."""
+
+    FINAL = release_identity.Identity("1.0.0")
+    CANDIDATE = release_identity.Identity("1.0.0", 2)
+
+    def write_readme(self, ref):
+        """Link the logo, License, R package and release page at `ref`, then
+        the contributing guide on main, one link per line."""
+        (self.root / checker.PYTHON_README).write_text(
+            '# yamaa for Python <img src="https://raw.githubusercontent.com/'
+            f'elong0527/yamaa/{ref}/docs/assets/logo.jpeg" alt="yamaa logo" />\n'
+            "\n"
+            f"[License](https://github.com/elong0527/yamaa/blob/{ref}/LICENSE)\n"
+            f"[R package](https://github.com/elong0527/yamaa/tree/{ref}/R/yamaa)\n"
+            f"[release](https://github.com/elong0527/yamaa/releases/tag/{ref})\n"
+            "[contributing guide]"
+            "(https://github.com/elong0527/yamaa/blob/main/CONTRIBUTING.md)\n"
+        )
+
+    def stale(self, tag, identity):
+        """The violations of `write_readme(tag)` for release `identity`."""
+        return [
+            f"python/README.md:{line}: link names tag {tag!r}, not "
+            f"{identity.tag!r}, the tag of release {identity}"
+            for line in (1, 3, 4, 5)
+        ]
+
+    def test_the_tree_links_to_the_prepared_tag(self):
+        text = (self.root / checker.PYTHON_README).read_text()
+        self.assertIn(f"/{IDENTITY.tag}/", text)
+        self.assertEqual(checker.violations(self.root), [])
+
+    def test_the_current_tag_passes(self):
+        for identity in (self.FINAL, self.CANDIDATE):
+            with self.subTest(identity=str(identity)):
+                self.write_readme(identity.tag)
+                self.assertEqual(
+                    checker.python_readme_violations(self.root, identity), []
+                )
+
+    def test_a_stale_tag_fails_in_every_link(self):
+        for identity, tag in (
+            # The previous release, and a candidate's tag on the final release.
+            (self.FINAL, "yamaa-v0.5.0"),
+            (self.FINAL, "yamaa-v1.0.0-rc.2"),
+            # The previous candidate, the final release's tag on a candidate,
+            # and the candidate spelled as its Python version.
+            (self.CANDIDATE, "yamaa-v1.0.0-rc.1"),
+            (self.CANDIDATE, "yamaa-v1.0.0"),
+            (self.CANDIDATE, "yamaa-v1.0.0rc2"),
+        ):
+            with self.subTest(identity=str(identity), tag=tag):
+                self.write_readme(tag)
+                self.assertEqual(
+                    checker.python_readme_violations(self.root, identity),
+                    self.stale(tag, identity),
+                )
+
+    def test_the_main_link_is_ignored(self):
+        self.write_readme("main")
+        self.assertEqual(checker.python_readme_violations(self.root, self.FINAL), [])
+
+    def test_a_stale_tag_fails_the_check(self):
+        self.write_readme("yamaa-v0.4.0")
+        self.assertEqual(
+            checker.violations(self.root), self.stale("yamaa-v0.4.0", IDENTITY)
+        )
+
+
 class CandidateRelease(ReleaseTree):
     """#3030 D53: Python 1.0.0rcN, Cargo 1.0.0-rc.N and R 1.0.0 agree."""
 
@@ -267,9 +343,17 @@ class CandidateRelease(ReleaseTree):
         super().setUp()
         self.declare('version = "1.0.0"\ncandidate = 2\n')
         self.spell(python="1.0.0rc2", cargo="1.0.0-rc.2", r="1.0.0")
+        self.pin("yamaa-v1.0.0-rc.2")
 
     def declare(self, text):
         (self.root / release_identity.DECLARATION).write_text(text)
+
+    def pin(self, tag):
+        """Move the Python README's tag links to `tag`, as a version bump does."""
+        path = self.root / checker.PYTHON_README
+        text = path.read_text()
+        self.assertIn(f"/{IDENTITY.tag}/", text)
+        path.write_text(text.replace(f"/{IDENTITY.tag}/", f"/{tag}/"))
 
     def spell(self, python, cargo, r):
         """Rewrite every manifest and lock version of the tree."""
@@ -384,6 +468,7 @@ class CandidateRelease(ReleaseTree):
                 super().setUp()
                 self.declare('version = "1.0.0"\ncandidate = 2\n')
                 self.spell(python, cargo, r)
+                self.pin("yamaa-v1.0.0-rc.2")
                 self.assertNotEqual(checker.violations(self.root), [])
 
     def test_a_final_declaration_refuses_the_candidate_spellings(self):

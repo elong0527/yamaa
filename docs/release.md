@@ -79,7 +79,8 @@ A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
 package format spells it in its own syntax, and
 `tools.packaging.check_shared_release_versions` requires every package
-manifest, lock and benchmark R environment to carry its spelling:
+manifest, lock and benchmark R environment to carry its spelling, and every
+link of `python/README.md` that names a release tag to name its tag:
 
 | Release | Python | Cargo | R | Tag |
 | --- | --- | --- | --- | --- |
@@ -90,6 +91,10 @@ An R version cannot mark a candidate, so the R package keeps the final version
 through the candidates (#3030 D53), and R does not offer the final release as
 an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
 tag.
+
+The commit that changes the identity also re-pins the tag links of
+`python/README.md`, the wheels' PyPI description: the check fails until they
+name the new tag, and they return 404 on GitHub until that tag is pushed.
 
 ## Saved artifact readers
 
@@ -393,8 +398,12 @@ Upload those files unchanged with twine, which asks for the owner's PyPI API
 token or reads it from `TWINE_PASSWORD`:
 
 ```sh
-uvx twine upload <new directory>/*
+uvx twine@latest upload <new directory>/*
 ```
+
+Without `@latest`, uvx reuses a twine cached by an earlier run or installed
+with `uv tool install`, and an older twine can refuse the wheels' metadata
+version, 2.4.
 
 A candidate needs no option: its version, X.Y.ZrcN, makes it a pre-release on
 PyPI. PyPI refuses a file name that it already holds, so if an upload stops
@@ -533,7 +542,11 @@ directory. The recipe passes the target directory to Cargo, so a
 moves Cargo's build, its home and the unpacked crates there, where the next
 installation reuses them. CI's `r` job points it at the Rust cache that the job
 restores, so the installation in `R CMD check` reuses the build of the one
-before it; CRAN, users and the native R lanes leave it unset. The Makevars
+before it; CRAN, users and the native R lanes leave it unset. Unset, the
+recipe also keeps Cargo's build directory in the target directory and runs no
+rustc wrapper, whatever the environment or a `.cargo/config.toml` in a parent
+directory sets (`CARGO_BUILD_BUILD_DIR` or `build.build-dir`, and
+`RUSTC_WRAPPER`, `RUSTC_WORKSPACE_WRAPPER` or their `build.` keys). The Makevars
 build the release profile, which strips nothing, so the shared object keeps
 its symbols: CRAN's Repository Policy asks a package not to remove diagnostic
 information such as symbols in shared objects. `check_cargo_lock` refuses an
@@ -603,13 +616,15 @@ SPDX expression that a crate's manifest declares, with Cargo's legacy `/`
 written as `OR`, or the C code's upstream license; its source, `crates.io`
 or the component's directory in this repository, with the upstream
 repository and commit of vendored code, or the crate that bundles it; and its
-purpose, from `tools/packaging/crate_purposes.toml`. It records no digests.
-Packages that pip or R install beside yamaa, such as Polars, are not among
-its components. `tools.packaging.generate_component_inventory` writes both
-inventories, and the repository check fails while one differs from what its
-host's trimmed lock, the crates' manifests, the purposes and the vendored
-sources' provenance give. The package notice checks require each package to
-carry its own host's inventory unchanged.
+purpose, from `tools/packaging/crate_purposes.toml` for a crate or from
+`tools/packaging/generate_component_inventory.py` for the C code. It records
+no digests. Packages that pip or R install beside yamaa, such as Polars, are
+not among its components. `tools.packaging.generate_component_inventory`
+writes both inventories, and the repository check and native qualification
+fail while one differs from what its host's trimmed lock, the crates'
+manifests, the purposes and the vendored sources' provenance give. The
+package notice checks require each package to carry its own host's inventory
+unchanged.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary

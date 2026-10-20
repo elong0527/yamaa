@@ -133,7 +133,9 @@ and supported targets. Its inventory is the command reference. Set
 The R package's build ignores it: `make test-r` installs the package twice,
 each time building the engine inside the package, unless
 `YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
-to share, as CI's `r` job does.
+to share, as CI's `r` job does. Unset, the build also ignores a rustc wrapper,
+such as sccache, and a Cargo build directory that the environment or a parent
+`.cargo/config.toml` sets.
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
