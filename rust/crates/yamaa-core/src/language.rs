@@ -119,8 +119,9 @@ pub struct Header {
 /// Why a document's header is refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeaderFault {
-    /// The root is not a non-empty mapping, or `yamaa` or `type` is missing or
-    /// not text: a schema finding in the document, at that field.
+    /// The root is not a non-empty mapping, `yamaa` or `type` is missing or
+    /// not text, or `yamaa` stands beside `schema_version`: a schema finding
+    /// in the document, at that field.
     Shape(SchemaDiagnostic),
     /// The document declares a version the engine does not read.
     Version {
@@ -186,6 +187,11 @@ fn header_field<'a>(
 /// not checked further; `type` must be text naming the expected type, else
 /// it fails as `unexpected_file_type`. An unquoted `1.0` is a float and fails
 /// as `invalid_field_type` (SCHEMA-2, SCHEMA-4).
+///
+/// A root that declares `schema_version` is a 0.5 document wherever it is
+/// read, as [`declares_header`] routes it (D75): a `yamaa` beside it is not a
+/// header but the field the 0.5 path reports as `unknown_field`, and it fails
+/// so here too, whether a call, a `parent` or a referencing field reads it.
 pub fn read_header(
     document: &Document,
     reads: Option<LanguageVersion>,
@@ -200,6 +206,16 @@ pub fn read_header(
             vec![
                 ("expected", C::Text(class.into())),
                 ("actual", C::ValueKind(root.kind())),
+            ],
+        ));
+    }
+    if !declares_header(document) && document.field(document.root(), "yamaa").is_some() {
+        return Err(shape(
+            "yamaa",
+            ConditionCode::SchemaUnknownField,
+            vec![
+                ("field", C::Text("yamaa".into())),
+                ("class", C::Text(class.into())),
             ],
         ));
     }
@@ -283,6 +299,16 @@ pub(crate) fn file_type_context(context: &mut Context, file_type: &str, expected
     context.insert("expected".into(), text(expected.name()));
 }
 
+/// The directory a relative path resolves from (FILE-2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PathBase {
+    /// The directory of the file that writes the path.
+    Declaring,
+    /// The directory of the specification's entry file, which an input
+    /// selects with `relative_to: entry` for its `path` and `schema`.
+    Entry,
+}
+
 /// A field of a 1.x document that names another yamaa file, and the type that
 /// file must declare (SCHEMA-2): an input's `schema`, and a project's
 /// `functions`, `codelists` and section `specs`. A layer's `parent` is read
@@ -294,6 +320,9 @@ pub struct Reference {
     /// The path the field writes.
     pub written: String,
     pub expected: FileType,
+    /// The directory `written` resolves from: the input's `relative_to` for
+    /// a `schema`, and the declaring file for every project field.
+    pub base: PathBase,
 }
 
 /// Why the file a referencing field names is refused.
@@ -321,64 +350,88 @@ fn text_items(document: &Document, node: Option<usize>) -> Vec<(usize, &str)> {
         .collect()
 }
 
-/// The referencing fields a 1.x document of `file_type` writes, in document
-/// order. Only written paths are references: an inline codelist source is not.
+fn entries(document: &Document, node: usize) -> &[(usize, usize)] {
+    match &document.nodes()[node] {
+        N::Mapping(entries) => entries,
+        _ => &[],
+    }
+}
+
+/// The `schema` each input of `inputs` writes, in written order, resolved
+/// from the base its `relative_to` selects (FILE-2).
+fn schema_links(document: &Document, inputs: usize) -> Vec<Reference> {
+    let mut links = Vec::new();
+    for &(name, declaration) in entries(document, inputs) {
+        let (N::Text(name), Some(schema)) = (
+            &document.nodes()[name],
+            document.field(declaration, "schema"),
+        ) else {
+            continue;
+        };
+        let N::Text(written) = &document.nodes()[schema] else {
+            continue;
+        };
+        let from_entry = document.field(declaration, "relative_to").is_some_and(
+            |base| matches!(&document.nodes()[base], N::Text(base) if base == "entry"),
+        );
+        links.push(Reference {
+            field: format!("input.{name}.schema"),
+            written: written.clone(),
+            expected: FileType::Spec,
+            base: if from_entry {
+                PathBase::Entry
+            } else {
+                PathBase::Declaring
+            },
+        });
+    }
+    links
+}
+
+/// The paths a project field lists, at `prefix[i]`, each naming a file of
+/// type `expected` beside the project file.
+fn listed(
+    document: &Document,
+    items: Option<usize>,
+    prefix: &str,
+    expected: FileType,
+) -> Vec<Reference> {
+    text_items(document, items)
+        .into_iter()
+        .map(|(index, written)| Reference {
+            field: format!("{prefix}[{index}]"),
+            written: written.into(),
+            expected,
+            base: PathBase::Declaring,
+        })
+        .collect()
+}
+
+/// The referencing fields a 1.x document of `file_type` writes, in the order
+/// they are written, which decides the refused file a check reports first.
+/// Only written paths are references: an inline codelist source is not.
 pub fn references(document: &Document, file_type: FileType) -> Vec<Reference> {
-    let root = document.root();
-    let reference = |field: String, written: &str, expected| Reference {
-        field,
-        written: written.into(),
-        expected,
-    };
     let mut references = Vec::new();
-    match file_type {
-        FileType::Spec => {
-            let inputs = match document
-                .field(root, "input")
-                .map(|node| &document.nodes()[node])
-            {
-                Some(N::Mapping(inputs)) => inputs.as_slice(),
-                _ => &[],
-            };
-            for &(name, declaration) in inputs {
-                let (N::Text(name), Some(schema)) = (
-                    &document.nodes()[name],
-                    document.field(declaration, "schema"),
-                ) else {
-                    continue;
-                };
-                if let N::Text(written) = &document.nodes()[schema] {
-                    references.push(reference(
-                        format!("input.{name}.schema"),
-                        written,
-                        FileType::Spec,
-                    ));
-                }
+    for &(key, value) in entries(document, document.root()) {
+        let N::Text(field) = &document.nodes()[key] else {
+            continue;
+        };
+        references.extend(match (file_type, field.as_str()) {
+            (FileType::Spec, "input") => schema_links(document, value),
+            (FileType::Project, "functions") => {
+                listed(document, Some(value), field, FileType::Function)
             }
-        }
-        FileType::Project => {
-            for (field, expected) in [
-                ("functions", FileType::Function),
-                ("codelists", FileType::Codelists),
-            ] {
-                for (index, written) in text_items(document, document.field(root, field)) {
-                    references.push(reference(format!("{field}[{index}]"), written, expected));
-                }
+            (FileType::Project, "codelists") => {
+                listed(document, Some(value), field, FileType::Codelists)
             }
-            for section in ["sdtm", "adam", "send"] {
-                let specs = document
-                    .field(root, section)
-                    .and_then(|node| document.field(node, "specs"));
-                for (index, written) in text_items(document, specs) {
-                    references.push(reference(
-                        format!("{section}.specs[{index}]"),
-                        written,
-                        FileType::Spec,
-                    ));
-                }
-            }
-        }
-        FileType::Codelists | FileType::Function => {}
+            (FileType::Project, section @ ("sdtm" | "adam" | "send")) => listed(
+                document,
+                document.field(value, "specs"),
+                &format!("{section}.specs"),
+                FileType::Spec,
+            ),
+            _ => Vec::new(),
+        });
     }
     references
 }
@@ -386,6 +439,9 @@ pub fn references(document: &Document, file_type: FileType) -> Vec<Reference> {
 impl Reference {
     /// Check the header of the file this field names, read from `source` as
     /// `document`, by an engine whose newest version is `reads` (SCHEMA-2).
+    /// A named file is routed as [`read_header`] routes every root: one that
+    /// declares `schema_version` is a 0.5 document, whose `yamaa` is a
+    /// finding in that file.
     pub fn check(
         &self,
         source: &str,
@@ -658,6 +714,47 @@ mod tests {
     }
 
     #[test]
+    fn a_yamaa_beside_schema_version_is_an_unknown_field_wherever_it_is_read() {
+        // The root routes as `declares_header` routes it: `schema_version`
+        // makes it a 0.5 document, where `yamaa` is an unknown field, so a
+        // parent or a referencing field reads it as the decoder does.
+        for expected in FileType::ALL {
+            let both = document(T::map(vec![
+                ("schema_version", T::text("1.0")),
+                ("yamaa", T::text("1.0")),
+                ("type", T::text(expected.name())),
+            ]));
+            let Err(HeaderFault::Shape(finding)) =
+                read_header(&both, Some(LANGUAGE_VERSION), expected)
+            else {
+                panic!("{expected:?}: a 0.5 document");
+            };
+            assert_eq!(
+                (finding.path.as_str(), finding.code),
+                ("yamaa", ConditionCode::SchemaUnknownField)
+            );
+            assert_eq!(
+                finding.context,
+                [
+                    ("field", C::Text("yamaa".into())),
+                    ("class", C::Text(expected.root_class().into())),
+                ]
+            );
+        }
+        // A 0.5 document without `yamaa` misses the header.
+        let legacy = document(T::map(vec![("schema_version", T::text("1.0"))]));
+        let Err(HeaderFault::Shape(finding)) =
+            read_header(&legacy, Some(LANGUAGE_VERSION), FileType::Spec)
+        else {
+            panic!("a 0.5 document");
+        };
+        assert_eq!(
+            (finding.path.as_str(), finding.code),
+            ("yamaa", ConditionCode::SchemaMissingRequiredField)
+        );
+    }
+
+    #[test]
     fn referencing_fields_name_the_type_their_file_declares() {
         let spec = document(T::map(vec![
             ("yamaa", T::text("1.0")),
@@ -674,16 +771,35 @@ mod tests {
                         ]),
                     ),
                     ("AE", T::map(vec![("path", T::text("ae.csv"))])),
+                    (
+                        "SV",
+                        T::map(vec![
+                            ("path", T::text("sv.csv")),
+                            ("relative_to", T::text("entry")),
+                            ("schema", T::text("sv.yaml")),
+                        ]),
+                    ),
                 ]),
             ),
         ]));
         assert_eq!(
             references(&spec, FileType::Spec),
-            [Reference {
-                field: "input.DM.schema".into(),
-                written: "dm.yaml".into(),
-                expected: FileType::Spec,
-            }]
+            [
+                Reference {
+                    field: "input.DM.schema".into(),
+                    written: "dm.yaml".into(),
+                    expected: FileType::Spec,
+                    base: PathBase::Declaring,
+                },
+                // `relative_to` selects the entry's directory for `schema`
+                // as for `path` (FILE-2).
+                Reference {
+                    field: "input.SV.schema".into(),
+                    written: "sv.yaml".into(),
+                    expected: FileType::Spec,
+                    base: PathBase::Entry,
+                },
+            ]
         );
         let project = document(T::map(vec![
             (
@@ -708,18 +824,37 @@ mod tests {
         ]));
         let found = references(&project, FileType::Project)
             .into_iter()
-            .map(|reference| (reference.field, reference.written, reference.expected))
+            .map(|reference| {
+                assert_eq!(reference.base, PathBase::Declaring);
+                (reference.field, reference.written, reference.expected)
+            })
             .collect::<Vec<_>>();
+        // In the order the fields are written: `adam` before `sdtm` here.
         assert_eq!(
             found,
             [
                 ("functions[0]".into(), "f.yaml".into(), FileType::Function),
                 ("functions[1]".into(), "g.yaml".into(), FileType::Function),
                 ("codelists[1]".into(), "ct.yaml".into(), FileType::Codelists),
-                ("sdtm.specs[0]".into(), "dm.yaml".into(), FileType::Spec),
                 ("adam.specs[0]".into(), "adsl.yaml".into(), FileType::Spec),
+                ("sdtm.specs[0]".into(), "dm.yaml".into(), FileType::Spec),
             ]
         );
+        let reordered = document(T::map(vec![
+            (
+                "send",
+                T::map(vec![("specs", T::list(vec![T::text("tx.yaml")]))]),
+            ),
+            ("codelists", T::list(vec![T::text("ct.yaml")])),
+            ("functions", T::list(vec![T::text("f.yaml")])),
+        ]));
+        let fields = references(&reordered, FileType::Project)
+            .into_iter()
+            .map(|reference| reference.field)
+            .collect::<Vec<_>>();
+        assert_eq!(fields, ["send.specs[0]", "codelists[0]", "functions[0]"]);
         assert!(references(&project, FileType::Function).is_empty());
+        // A specification's fields are not a project's.
+        assert!(references(&reordered, FileType::Spec).is_empty());
     }
 }

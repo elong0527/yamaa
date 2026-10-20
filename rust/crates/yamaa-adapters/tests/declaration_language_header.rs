@@ -743,7 +743,14 @@ mod declaration {
                 let document = yamaa_adapters::yaml_decode::decode_yaml(&text)
                     .unwrap()
                     .document;
-                check_references(&document, file_type, &path, LANGUAGE_VERSION, &mut Files)
+                check_references(
+                    &document,
+                    file_type,
+                    &path,
+                    &path,
+                    LANGUAGE_VERSION,
+                    &mut Files,
+                )
             };
             study.write("dm.yaml", SPEC);
             study.write("bmi.yaml", "yamaa: \"1.0\"\ntype: function\n");
@@ -855,6 +862,134 @@ mod declaration {
                 check("project.yaml", FileType::Project).unwrap_err(),
                 ReferenceError::Unavailable { reference } if reference.field == "functions[0]"
             ));
+            // Fields are checked in the order they are written, so the first
+            // refused file written is the one reported.
+            study.write("bmi.yaml", "yamaa: \"1.0\"\ntype: spec\n");
+            study.write("dm.yaml", "yamaa: \"1.0\"\ntype: function\n");
+            for (text, field) in [
+                (
+                    "yamaa: \"1.0\"\ntype: project\nsdtm: {specs: [dm.yaml]}\nfunctions: [bmi.yaml]\n",
+                    "sdtm.specs[0]",
+                ),
+                (
+                    "yamaa: \"1.0\"\ntype: project\nfunctions: [bmi.yaml]\nsdtm: {specs: [dm.yaml]}\n",
+                    "functions[0]",
+                ),
+            ] {
+                study.write("project.yaml", text);
+                let finding = reference_refusal(check("project.yaml", FileType::Project).unwrap_err());
+                assert_eq!(finding.spec_paths, [field]);
+            }
+        }
+
+        #[test]
+        fn an_entry_relative_schema_resolves_from_the_entry_in_every_layer() {
+            let study = Study::new();
+            // A shared layer in another directory reads each study's own
+            // producer through `relative_to: entry` (FILE-2).
+            study.write(
+                "shared/base.yaml",
+                "yamaa: \"1.0\"\ntype: spec\ninput: {DM: {path: dm.csv, relative_to: entry, schema: dm.yaml}}\n",
+            );
+            study.write(
+                "study/spec.yaml",
+                CHILD.replace("base.yaml", "../shared/base.yaml").as_str(),
+            );
+            study.write("study/dm.yaml", SPEC);
+            let base = study.path("shared/base.yaml");
+            let entry = study.path("study/spec.yaml");
+            let check = |declaring: &str| {
+                let text = fs::read(declaring).unwrap();
+                let document = yamaa_adapters::yaml_decode::decode_yaml(&text)
+                    .unwrap()
+                    .document;
+                check_references(
+                    &document,
+                    FileType::Spec,
+                    declaring,
+                    &entry,
+                    LANGUAGE_VERSION,
+                    &mut Files,
+                )
+            };
+            let [checked] = check(&base).unwrap().try_into().unwrap();
+            assert_eq!(checked.reference.field, "input.DM.schema");
+            assert_eq!(checked.source.identity, study.path("study/dm.yaml"));
+            // Nothing is read beside the layer that writes the link: with no
+            // producer beside the entry, the link is unavailable there.
+            study.write("shared/dm.yaml", SPEC);
+            fs::remove_file(study.0.join("study/dm.yaml")).unwrap();
+            assert!(matches!(
+                check(&base).unwrap_err(),
+                ReferenceError::Unavailable { reference } if reference.field == "input.DM.schema"
+            ));
+            // With the default base the link resolves beside its layer.
+            study.write(
+                "shared/base.yaml",
+                "yamaa: \"1.0\"\ntype: spec\ninput: {DM: {path: dm.csv, schema: dm.yaml}}\n",
+            );
+            let [checked] = check(&base).unwrap().try_into().unwrap();
+            assert_eq!(checked.source.identity, study.path("shared/dm.yaml"));
+        }
+
+        #[test]
+        fn a_yamaa_beside_schema_version_routes_to_the_0_5_path_wherever_it_is_read() {
+            let study = Study::new();
+            let closures = closures();
+            let both = format!("{LEGACY}yamaa: \"1.0\"\ntype: spec\n");
+            // The decoder hands the file to the 0.5 path, where `yamaa` is
+            // an unknown field (`schema_version_keeps_the_0_5_path_unchanged`).
+            assert!(matches!(
+                document::decode(
+                    source("both.yaml", &both),
+                    FileType::Spec,
+                    Some(LANGUAGE_VERSION),
+                    &closures
+                ),
+                Ok(Decoded::Legacy { .. })
+            ));
+            let unknown = |found: &[(ConditionCode, String)]| {
+                assert_eq!(
+                    found,
+                    [(ConditionCode::SchemaUnknownField, "yamaa".to_string())]
+                );
+            };
+            // As a parent of a 1.x chain it fails in that layer the same way.
+            study.write("spec.yaml", CHILD);
+            study.write("base.yaml", &both);
+            let (layer, found) = layer_findings(
+                prepare(&study, "spec.yaml", LANGUAGE_VERSION, &closures).unwrap_err(),
+            );
+            assert_eq!(layer, study.path("base.yaml"));
+            unknown(&found);
+            // And as the file a referencing field names.
+            study.write(
+                "consumer.yaml",
+                &SPEC.replace(
+                    "input: {SRC: input.csv}",
+                    "input: {SRC: {path: dm.csv, schema: base.yaml}}",
+                ),
+            );
+            let consumer = study.path("consumer.yaml");
+            let text = fs::read(&consumer).unwrap();
+            let document = yamaa_adapters::yaml_decode::decode_yaml(&text)
+                .unwrap()
+                .document;
+            let ReferenceError::Refused(refused) = check_references(
+                &document,
+                FileType::Spec,
+                &consumer,
+                &consumer,
+                LANGUAGE_VERSION,
+                &mut Files,
+            )
+            .unwrap_err() else {
+                panic!("a refused producer");
+            };
+            let ReferenceFault::Finding(finding) = refused.fault else {
+                panic!("a finding in the producer: {refused:?}");
+            };
+            unknown(&[(finding.code, finding.path)]);
         }
     }
 }
