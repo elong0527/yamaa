@@ -35,6 +35,7 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
     let hint = findings[0]["context"]["hint"].as_str().unwrap();
     assert!(hint.contains("parent: compound.yaml in the entry"));
     assert!(hint.contains("parent: organization.yaml in compound.yaml"));
+    assert!(hint.contains("organization.yaml has no parent"));
 
     // Inheritance admission reports the same hint before following a parent.
     let decoded = yamaa_adapters::yaml_decode::decode_yaml(raw.as_bytes()).unwrap();
@@ -67,10 +68,12 @@ fn a_retired_parent_list_names_the_chain_without_missing_root_fields() {
         .all(|f| { f["spec_paths"][0].as_str().unwrap().starts_with("columns") }));
 
     // An ordinary incomplete specification still asks for its root fields.
-    let findings = diagnostics("schema_version: '1.0'\n");
-    assert!(findings.iter().any(|f| {
-        f["condition"] == "missing_required_field" && f["spec_paths"] == json!(["domain"])
-    }));
+    for parents in ["", "parents: []\n", "parents: null\n"] {
+        let findings = diagnostics(&format!("schema_version: '1.0'\n{parents}"));
+        assert!(findings.iter().any(|f| {
+            f["condition"] == "missing_required_field" && f["spec_paths"] == json!(["domain"])
+        }));
+    }
 }
 
 #[test]

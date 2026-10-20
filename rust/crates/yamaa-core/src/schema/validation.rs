@@ -208,7 +208,7 @@ pub(super) fn unknown_field_context(
         context.push((
             "hint",
             SchemaContext::Text(
-                "write one parent: next.yaml per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml".into(),
+                "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent".into(),
             ),
         ));
     }
@@ -507,7 +507,9 @@ impl Run<'_> {
             && name == "root_class"
             && fields.iter().any(|field| field.name == "parent")
             && !fields.iter().any(|field| field.name == "parents")
-            && self.input.field(site.value, "parents").is_some()
+            && self.input.field(site.value, "parents").is_some_and(|node| {
+                matches!(&self.input.nodes()[node], N::Sequence(parents) if !parents.is_empty())
+            })
             && self.input.field(site.value, "parent").is_none();
         for field in fields {
             let path = self.joined(site.path, &field.name, false)?;
