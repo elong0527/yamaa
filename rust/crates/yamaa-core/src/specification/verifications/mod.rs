@@ -469,7 +469,7 @@ pub(super) fn prepare_columns(
             Err(error) => return Err(error),
         }
     }
-    value_level::admit(spec, output, &mut groups, findings)?;
+    value_level::admit(spec, output, catalogue, &mut groups, findings)?;
     mandatory::admit(spec, output, &mut groups, findings);
     redundant_unique(spec, findings);
     submission::admit(spec, output, inventory, &mut groups, findings)?;

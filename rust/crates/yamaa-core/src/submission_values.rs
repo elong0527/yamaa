@@ -3,8 +3,10 @@
 //! each row construction proves about the rows an entry selects. Shared by the
 //! domain build, which reads the typed tree, and by composition, which still
 //! reads each specification's document; no study, host or data access.
-use crate::ast::{self, ExprId, ExprKind, Literal};
+use crate::ast::{self, CodelistType, ExprId, ExprKind, Literal};
+use crate::project_terminology::Catalogue;
 use crate::schema::{Document, DocumentNode as N};
+use crate::value::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// One where clause as written: each column and the values it admits.
@@ -95,6 +97,8 @@ pub(crate) enum WhereFault {
     NoValues,
     /// A clause column lists one value twice.
     DuplicateValue,
+    /// A clause column lists a value its codelists do not admit.
+    NotInCodelist,
 }
 impl WhereFault {
     pub(crate) fn reason(self) -> &'static str {
@@ -106,6 +110,7 @@ impl WhereFault {
             Self::NotText => "not_str",
             Self::NoValues => "no_values",
             Self::DuplicateValue => "duplicate_value",
+            Self::NotInCodelist => "not_in_codelist",
         }
     }
 }
@@ -126,21 +131,52 @@ pub(crate) enum Finding<'a> {
 }
 
 /// A declared column a where clause may name: whether `output.columns`
-/// carries it and whether its declared type is `str`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Declared {
+/// carries it, whether its declared type is `str`, and the values its
+/// codelists admit when they govern every one of its rows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Declared<'c> {
     pub(crate) output: bool,
     pub(crate) text: bool,
+    pub(crate) codelist: Option<BTreeSet<&'c str>>,
+}
+
+/// The values the rows of a where column can hold under its terminology
+/// (CT-7): the items of its own codelist and of the codelist each of its
+/// entries declares, sponsor-extended items included. `None` when a row may
+/// hold any value: the column declares no codelist of its own, or one of
+/// these codelists is external. An undeclared or non-text codelist, which its
+/// binding refuses on its own, checks nothing either.
+pub(crate) fn admitted<'c, 'n>(
+    catalogue: &'c Catalogue,
+    column: Option<&'n str>,
+    entries: impl IntoIterator<Item = &'n str>,
+) -> Option<BTreeSet<&'c str>> {
+    let mut values = BTreeSet::new();
+    for id in std::iter::once(column?).chain(entries) {
+        let list = catalogue
+            .get(id)
+            .filter(|list| list.data_type == CodelistType::Text)?;
+        values.extend(
+            list.items
+                .as_deref()?
+                .iter()
+                .filter_map(|item| match &item.value {
+                    Value::Str(value) => Some(value.as_str()),
+                    _ => None,
+                }),
+        );
+    }
+    Some(values)
 }
 
 /// The static checks of SUB-12 over one column's entries: identifiers unique
 /// within the column, where clauses over declared `str` output columns other
-/// than the column itself with nonempty distinct values, and no two entries
-/// whose where clauses can select one row.
-pub(crate) fn admit<'a, 'b>(
+/// than the column itself with nonempty distinct values their codelists
+/// admit, and no two entries whose where clauses can select one row.
+pub(crate) fn admit<'a, 'b, 'c>(
     entries: impl IntoIterator<Item = (&'a str, &'b Clause<'a>)>,
     column: &str,
-    declared: impl Fn(&str) -> Option<Declared>,
+    declared: impl Fn(&str) -> Option<Declared<'c>>,
 ) -> Vec<Finding<'a>>
 where
     'a: 'b,
@@ -161,6 +197,7 @@ where
             });
         }
         for (name, values) in clause {
+            let mut codelist = None;
             let fault = if *name == column {
                 Some(WhereFault::Itself)
             } else {
@@ -168,7 +205,10 @@ where
                     None => Some(WhereFault::Undeclared),
                     Some(Declared { output: false, .. }) => Some(WhereFault::NotOutput),
                     Some(Declared { text: false, .. }) => Some(WhereFault::NotText),
-                    Some(_) => None,
+                    Some(declared) => {
+                        codelist = declared.codelist;
+                        None
+                    }
                 }
             }
             .or_else(|| values.is_empty().then_some(WhereFault::NoValues))
@@ -178,6 +218,11 @@ where
                     .enumerate()
                     .any(|(index, value)| values[..index].contains(value))
                     .then_some(WhereFault::DuplicateValue)
+            })
+            .or_else(|| {
+                codelist
+                    .is_some_and(|admitted| values.iter().any(|value| !admitted.contains(*value)))
+                    .then_some(WhereFault::NotInCodelist)
             });
             if let Some(fault) = fault {
                 findings.push(Finding::Where {
@@ -507,18 +552,27 @@ mod tests {
 
     #[test]
     fn static_findings_name_the_entry_column_and_fault() {
+        // PARAMCD's codelists admit X and Y; AVISIT binds none.
         let declared = |name: &str| match name {
-            "PARAMCD" | "AVISIT" => Some(Declared {
+            "PARAMCD" => Some(Declared {
                 output: true,
                 text: true,
+                codelist: Some(BTreeSet::from(["X", "Y"])),
+            }),
+            "AVISIT" => Some(Declared {
+                output: true,
+                text: true,
+                codelist: None,
             }),
             "INTERNAL" => Some(Declared {
                 output: false,
                 text: true,
+                codelist: None,
             }),
             "AVISITN" => Some(Declared {
                 output: true,
                 text: false,
+                codelist: None,
             }),
             _ => None,
         };
@@ -538,6 +592,12 @@ mod tests {
             entry("G", clause(&[("AVISIT", &[])])),
             entry("H", clause(&[("AVISIT", &["V1", "V1"])])),
             entry("I", clause(&[("PARAMCD", &["X"]), ("AVISIT", &["V1"])])),
+            // A value outside the codelists fails; a repeated value is
+            // reported first.
+            entry("J", clause(&[("PARAMCD", &["Y", "Z"])])),
+            entry("K", clause(&[("PARAMCD", &["Z", "Z"])])),
+            // A where column without a codelist admits any value.
+            entry("L", clause(&[("AVISIT", &["V2"])])),
         ];
         let fault = |id, column, fault| Finding::Where { id, column, fault };
         assert_eq!(
@@ -559,6 +619,8 @@ mod tests {
                     id: "I",
                     other: "A"
                 },
+                fault("J", Some("PARAMCD"), WhereFault::NotInCodelist),
+                fault("K", Some("PARAMCD"), WhereFault::DuplicateValue),
             ]
         );
     }

@@ -1,0 +1,49 @@
+schema_version: "1.0"
+domain: VS
+keys: [STUDYID, USUBJID, VSTESTCD]
+input:
+  VS_RAW: input/vs_raw.csv
+
+output:
+  path: vs.csv
+  columns: [STUDYID, USUBJID, VSTESTCD, VSORRES]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS_RAW.USUBJID
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: VS_RAW.VSTESTCD
+    submission:
+      codelist: VSTESTCD
+      origin:
+        type: Assigned
+
+  # Each test's results have their own description. The pulse description
+  # selects its records by HR, a test code the study's list does not carry.
+  - name: VSORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: VS_RAW.VSORRES
+    submission:
+      origin:
+        type: Collected
+      value_level:
+        - id: SYSBP
+          where: {VSTESTCD: [SYSBP]}
+          label: Systolic Blood Pressure
+        - id: DIABP
+          where: {VSTESTCD: [DIABP]}
+          label: Diastolic Blood Pressure
+        - id: PULSE
+          where: {VSTESTCD: [HR]}
+          label: Pulse Rate

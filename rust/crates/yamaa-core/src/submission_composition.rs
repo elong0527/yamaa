@@ -1124,6 +1124,17 @@ fn compose_values(
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),
                 text: declared.column_type.value == spec::ColumnType::String,
+                codelist: declared.submission.as_ref().and_then(|metadata| {
+                    values::admitted(
+                        admission.catalogue,
+                        metadata.codelist.as_ref().map(|list| list.value.as_str()),
+                        metadata
+                            .value_level
+                            .iter()
+                            .filter_map(|entry| entry.metadata.codelist.as_ref())
+                            .map(|list| list.value.as_str()),
+                    )
+                }),
             })
         });
         for finding in &static_findings {

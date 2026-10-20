@@ -1,0 +1,10 @@
+phase: validation
+condition: value_level_where_invalid
+spec_paths:
+  - columns.VSORRES.submission.value_level.PULSE.where.VSTESTCD
+rule: SUB-12
+context:
+  column: VSORRES
+  entry: PULSE
+  reason: not_in_codelist
+  where_column: VSTESTCD
