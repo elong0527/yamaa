@@ -139,20 +139,75 @@ class SourceTests(unittest.TestCase):
                     self.assertIn(required, relatives)
                 self.assertFalse(any(other in relative for relative in relatives))
 
-    def test_the_manifest_names_the_bundle_crates_and_keeps_the_rest(self):
-        manifest = tomllib.loads(bundle.workspace_manifest())
-        canonical = tomllib.loads((WORKSPACE / "Cargo.toml").read_text())
-        self.assertEqual(manifest["workspace"].pop("members"), ["crates/*"])
-        canonical["workspace"].pop("members")
-        canonical["workspace"].pop("default-members")
-        self.assertEqual(manifest, canonical)
+    def test_each_manifest_names_its_crates_and_keeps_its_hosts_profiles(self):
+        for host in ("python", "r"):
+            with self.subTest(host=host):
+                text = bundle.workspace_manifest(host)
+                manifest = tomllib.loads(text)
+                canonical = tomllib.loads((WORKSPACE / "Cargo.toml").read_text())
+                self.assertEqual(manifest["workspace"].pop("members"), ["crates/*"])
+                canonical["workspace"].pop("members")
+                canonical["workspace"].pop("default-members")
+                if host == "r":
+                    # The R bundle leaves out the wheels' stripping profile, so
+                    # the R source package's manifest names no stripping.
+                    del canonical["profile"]["dist"]
+                    self.assertNotIn("[profile.dist]", text)
+                    self.assertNotIn('strip = "symbols"', text)
+                self.assertEqual(manifest, canonical)
+        # The Python source archive keeps it: its pyproject selects it.
+        profiles = tomllib.loads(bundle.workspace_manifest("python"))["profile"]
+        self.assertEqual(profiles["dist"]["strip"], "symbols")
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory)
             (workspace / "Cargo.toml").write_text(
                 '[workspace]\nmembers = [\n  "crates/yamaa-core",\n]\n'
             )
             with self.assertRaisesRegex(ValueError, "on one line each"):
-                bundle.workspace_manifest(workspace)
+                bundle.workspace_manifest("python", workspace)
+
+    def test_the_r_manifest_leaves_out_the_wheels_profile_as_one_block(self):
+        members = '[workspace]\nmembers = ["crates/yamaa-core"]\n'
+        release = '\n[profile.release]\nlto = "thin"\n'
+        dist = (
+            '\n# The wheels.\n[profile.dist]\ninherits = "release"\nstrip = "symbols"\n'
+        )
+        tests = '\n# The tests.\n[profile.release-test]\ninherits = "release"\n'
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            manifest = workspace / "Cargo.toml"
+            manifest.write_text(members + release + dist + tests)
+            # The table goes with its comment and the blank line after it.
+            self.assertEqual(
+                bundle.workspace_manifest("r", workspace),
+                members.replace("crates/yamaa-core", "crates/*") + release + tests,
+            )
+            for text, message in (
+                # Without the table, or with it written so that no line holds
+                # its header alone, the R bundle refuses rather than ship it.
+                (members + release + tests, "must appear once"),
+                (
+                    members
+                    + release
+                    + '\n[profile]\ndist = { inherits = "release", strip = "symbols" }\n',
+                    "must appear once",
+                ),
+                (
+                    members + release + dist.replace("]\n", "] # wheels\n"),
+                    "appear once",
+                ),
+                # A blank line inside it would leave its strip to release.
+                (
+                    members + release + dist.replace("\nstrip", "\n\nstrip"),
+                    "as one block that a blank line ends",
+                ),
+            ):
+                manifest.write_text(text)
+                with self.subTest(text=text):
+                    with self.assertRaisesRegex(ValueError, message):
+                        bundle.workspace_manifest("r", workspace)
+                    # The Python bundle keeps the profiles as they are written.
+                    bundle.workspace_manifest("python", workspace)
 
     def test_member_sources_carry_readstat_and_refuse_links(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -361,7 +416,7 @@ class StagingTests(unittest.TestCase):
             # pip builds the wheel with the native wheels' profile, which the
             # bundle's manifest carries: release without the symbol table.
             # Panics still unwind, as the Parquet reader's containment needs.
-            profiles = tomllib.loads(bundle.workspace_manifest())["profile"]
+            profiles = tomllib.loads(bundle.workspace_manifest("python"))["profile"]
             wheel = profiles[maturin["profile"]]
             self.assertEqual(wheel["inherits"], "release")
             self.assertEqual(wheel["strip"], "symbols")

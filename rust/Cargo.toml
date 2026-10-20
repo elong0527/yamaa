@@ -42,7 +42,8 @@ lto = "thin"
 # The Python wheels build with this profile: release, without the symbol
 # table. The R package builds with release and keeps its symbols, as CRAN's
 # Repository Policy asks; tools/packaging/check_cargo_lock.py checks that the
-# R build strips nothing.
+# R build strips nothing. The R bundle's manifest leaves out this table with
+# this comment (tools/staging/engine_bundle.py), so keep them one block.
 [profile.dist]
 inherits = "release"
 strip = "symbols"
