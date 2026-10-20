@@ -72,17 +72,21 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
     BTreeSet::from([rendered(&finding)])
 }
 /// CT-12: a text codelist names a character format, so its `format_name`
-/// begins with `$`; the compliant list beside it passes.
+/// begins with `$`, and a numeric codelist names a numeric format, so its
+/// does not; the compliant lists beside them pass.
 pub fn format_name_reached() -> BTreeSet<ConditionCode> {
-    let list = |id: &str, format: &str| Codelist {
+    let list = |id: &str, data_type, format: &str| Codelist {
         id: id.into(),
         name: id.into(),
-        data_type: CodelistType::Text,
+        data_type,
         extensible: false,
         alias: None,
         format_name: Some(format.into()),
         items: Some(vec![Item {
-            value: Value::Str("Y".into()),
+            value: match data_type {
+                CodelistType::Text => Value::Str("Y".into()),
+                _ => Value::Int(1),
+            },
             decode: None,
             rank: None,
             alias: None,
@@ -93,32 +97,45 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
     let mut draft = draft();
     draft.codelists = vec![Source {
         standard: None,
-        codelists: vec![list("NY", "$NY"), list("SEX", "SEX")],
+        codelists: vec![
+            list("NY", CodelistType::Text, "$NY"),
+            list("SEX", CodelistType::Text, "SEXF"),
+            list("AGEGR1N", CodelistType::Integer, "$AGEGRN"),
+            list("DOSE", CodelistType::Float, "DOSEF"),
+        ],
     }
     .root()];
     let findings = project_environment::validate(Language::Python, &draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
-    assert_eq!(projected.len(), 1, "{projected:?}");
-    let finding = &projected[0];
-    assert_eq!(
-        (
-            finding.definition().phase,
-            finding.definition().condition,
-            finding.definition().rule
-        ),
-        ("validation", "value_not_permitted", Some("CT-12"))
-    );
-    assert_eq!(
-        finding.spec_paths,
-        ["codelists[0].codelists[1].format_name"]
-    );
-    for (key, value) in [("codelist", "SEX"), ("value", "SEX"), ("data_type", "text")] {
-        assert_eq!(finding.context[key], JsonValue::String(value.into()));
+    assert_eq!(projected.len(), 2, "{projected:?}");
+    for (finding, (index, codelist, value, data_type)) in projected.iter().zip([
+        (1, "SEX", "SEXF", "text"),
+        (2, "AGEGR1N", "$AGEGRN", "integer"),
+    ]) {
+        assert_eq!(
+            (
+                finding.definition().phase,
+                finding.definition().condition,
+                finding.definition().rule
+            ),
+            ("validation", "value_not_permitted", Some("CT-12"))
+        );
+        assert_eq!(
+            finding.spec_paths,
+            [format!("codelists[0].codelists[{index}].format_name")]
+        );
+        for (key, expected) in [
+            ("codelist", codelist),
+            ("value", value),
+            ("data_type", data_type),
+        ] {
+            assert_eq!(finding.context[key], JsonValue::String(expected.into()));
+        }
+        assert_eq!(finding.context.len(), 3);
+        assert_eq!(finding.source_span, None);
+        assert_eq!(finding.operand_route, None);
     }
-    assert_eq!(finding.context.len(), 3);
-    assert_eq!(finding.source_span, None);
-    assert_eq!(finding.operand_route, None);
-    BTreeSet::from([rendered(&finding)])
+    projected.iter().map(rendered).collect()
 }
 /// FUNC-2, FUNC-3 (P-FN-2): a finding in a 1.0 function file fails as
 /// `function_file_invalid` at that file's own path, and a lock whose kind is

@@ -60,13 +60,18 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
         Finding::Where {
             id,
             column: where_column,
-            fault,
+            ref fault,
         } => {
             let mut context = vec![
                 ("column", text(column)),
                 ("entry", text(id)),
                 ("reason", text(fault.reason())),
             ];
+            // The refused where values, in declared order.
+            if let Some(refused) = fault.values() {
+                let refused = refused.iter().map(|value| text(value)).collect();
+                context.push(("values", V::Array(refused)));
+            }
             let path = match where_column {
                 Some(where_column) => {
                     context.push(("where_column", text(where_column)));

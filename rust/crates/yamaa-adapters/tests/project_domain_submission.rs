@@ -744,7 +744,7 @@ mod project {
                         );
                         assert_eq!(
                             yamaa_core::json::Value::Object(issues[0].context.clone()),
-                            yamaa_adapters::json!({"column": "RESULT", "entry": "GLUC", "reason": "not_in_codelist", "where_column": "LBTESTCD"})
+                            yamaa_adapters::json!({"column": "RESULT", "entry": "GLUC", "reason": "not_in_codelist", "values": [code], "where_column": "LBTESTCD"})
                         );
                     }
                 }
