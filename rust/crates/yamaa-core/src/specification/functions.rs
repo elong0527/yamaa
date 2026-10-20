@@ -36,7 +36,6 @@ pub struct FunctionFinding {
     pub path: String,
     pub function: String,
     pub argument: Option<String>,
-    pub node: usize,
     pub cause: Cause,
 }
 fn type_name(kind: ValueType) -> &'static str {
@@ -117,28 +116,34 @@ impl FunctionFinding {
 
 pub(super) struct Prepared {
     pub calls: ProjectCalls,
-    pub nodes: BTreeMap<usize, usize>,
-    pub returns: BTreeMap<usize, ColumnType>,
-    /// The calls each derivation evaluates, by its operation's document node.
-    sites: BTreeMap<usize, Vec<usize>>,
+    /// Each admitted call's index, by its call expression.
+    pub indices: BTreeMap<ExprId, usize>,
+    /// The return type each call's definition declares, by its expression.
+    pub returns: BTreeMap<ExprId, ColumnType>,
+    /// The calls each derivation evaluates, by the derivation's root.
+    sites: BTreeMap<ExprId, Vec<usize>>,
     /// The calls intermediate derivations evaluate.
     bindings: Vec<usize>,
 }
 impl Prepared {
-    /// The calls of the derivation whose operation is the document node `value`.
-    pub(super) fn site_calls(&self, value: usize) -> &[usize] {
-        self.sites.get(&value).map_or(&[], Vec::as_slice)
+    /// The admitted call of the call expression `call`.
+    pub(super) fn call(&self, call: ExprId) -> Option<usize> {
+        self.indices.get(&call).copied()
+    }
+    /// The calls of the derivation whose root is `root`.
+    pub(super) fn site_calls(&self, root: ExprId) -> &[usize] {
+        self.sites.get(&root).map_or(&[], Vec::as_slice)
     }
     /// Each call's uses in a spec with row templates: one for each row
-    /// declaration (by its operation node) that evaluates it, and one for
-    /// each intermediate derivation.
+    /// declaration (by its root) that evaluates it, and one for each
+    /// intermediate derivation.
     pub(super) fn row_uses(
         &self,
-        declarations: impl Iterator<Item = usize>,
+        declarations: impl Iterator<Item = ExprId>,
     ) -> Result<Vec<usize>, PrepareError> {
         let mut uses = std::vec![0usize; self.calls.calls().len()];
         for &call in declarations
-            .flat_map(|value| self.site_calls(value))
+            .flat_map(|root| self.site_calls(root))
             .chain(&self.bindings)
         {
             let count = uses.get_mut(call).ok_or(PrepareError::Internal)?;
@@ -151,22 +156,18 @@ fn invalid(finding: FunctionFinding) -> PreflightFinding {
     PreflightFinding::ProjectFunction(finding)
 }
 
-/// One call a derivation evaluates: its payload node, path and whether its
+/// One call a derivation evaluates: its expression, path and whether its
 /// references read a record context (an aggregate binding or a donor).
 struct Request {
-    node: usize,
+    call: ExprId,
     path: String,
     contextual: bool,
 }
 
 /// Every call the derivations evaluate, in today's occurrence order:
 /// columns, then intermediate derivations, then row template overrides.
-fn requests(
-    d: &Document,
-    lowered: &crate::front_end::v0_5::Lowered,
-) -> (Vec<Request>, BTreeMap<usize, Vec<usize>>, Vec<usize>) {
-    use crate::ast::{ExprKind, Notation, Owner, Scope, Step};
-    let spec = lowered.spec();
+fn requests(spec: &ast::Spec) -> (Vec<Request>, BTreeMap<ExprId, Vec<usize>>, Vec<usize>) {
+    use crate::ast::{Owner, Scope, Step};
     let sites = spec.sites();
     let mut requests = Vec::new();
     let mut by_site = BTreeMap::new();
@@ -178,38 +179,114 @@ fn requests(
     ];
     for pass in passes {
         for site in sites.iter().filter(|site| pass(&site.owner)) {
-            let mut found = Vec::new();
+            let mut indices = Vec::new();
             spec.walk(site.root, site.scope, |at, scope| {
                 if matches!(spec.expr(at).kind, ExprKind::Call { .. }) {
-                    found.push((at, scope != Scope::Row));
+                    indices.push(requests.len());
+                    requests.push(Request {
+                        call: at,
+                        path: checks::path(spec, at),
+                        contextual: scope != Scope::Row,
+                    });
                 }
                 Step::Continue
             });
-            let mut indices = Vec::new();
-            for (call, contextual) in found {
-                let Some(node) = d.field(lowered.origin(call), "function") else {
-                    continue;
-                };
-                indices.push(requests.len());
-                requests.push(Request {
-                    node,
-                    path: spec.render(spec.expr(call).meta.path, Notation::V0_5),
-                    contextual,
-                });
-            }
             if matches!(site.owner, Owner::Binding { .. }) {
                 bindings.extend(&indices);
             }
-            by_site.insert(lowered.origin(site.root), indices);
+            by_site.insert(site.root, indices);
         }
     }
     (requests, by_site, bindings)
 }
 
+/// A call as written: its function's name and each argument, a name read
+/// or a written value. Every value the engine cannot run with is refused
+/// at its argument, and no partial call is admitted.
+fn decode(
+    spec: &ast::Spec,
+    call: ExprId,
+    path: &str,
+) -> Result<project_call_document::Call, Vec<crate::project_function_document::Finding>> {
+    use crate::project_function_document::{Finding, Kind};
+    use crate::value::Value;
+    let shape_fault = |path: String| Finding {
+        path,
+        node: call.index(),
+        kind: Kind::NormalizedShape,
+        value: None,
+    };
+    let ExprKind::Call {
+        function,
+        args,
+        shape,
+    } = &spec.expr(call).kind
+    else {
+        return Err(vec![shape_fault(path.into())]);
+    };
+    let mut findings = Vec::new();
+    // Only `name` and `args`, a mapping, as a normalized call writes them.
+    if !shape.closed {
+        findings.push(shape_fault(path.into()));
+    }
+    if !shape.args {
+        findings.push(shape_fault(format!("{path}.args")));
+    }
+    let mut arguments = Vec::new();
+    for (name, value) in args {
+        let path = format!("{path}.args.{}", name.name);
+        let mut refuse = |kind, value: Option<&String>| {
+            findings.push(Finding {
+                path: path.clone(),
+                node: call.index(),
+                kind,
+                value: value.cloned(),
+            });
+            Value::Missing
+        };
+        let input = match &spec.expr(*value).kind {
+            ExprKind::Ref(reference) => Input::Reference(reference.0.clone()),
+            ExprKind::Literal(literal) => Input::Literal(match literal {
+                ast::Literal::Missing => Value::Missing,
+                ast::Literal::Bool(value) => Value::Bool(*value),
+                ast::Literal::Text(value) => Value::Str(value.clone()),
+                ast::Literal::Float(value) => Value::float(*value),
+                ast::Literal::Int(text) => match text.parse::<i64>() {
+                    Ok(value) => Value::Int(value),
+                    Err(_) => refuse(Kind::IntegerRange, Some(text)),
+                },
+                ast::Literal::Date(text) => match text.parse() {
+                    Ok(value) => Value::Date(value),
+                    Err(_) => refuse(Kind::InvalidDate, Some(text)),
+                },
+                ast::Literal::DateTime(text) => match text.parse() {
+                    Ok(value) => Value::DateTime(value),
+                    Err(_) => refuse(Kind::InvalidDateTime, Some(text)),
+                },
+                ast::Literal::Unsupported => refuse(Kind::NormalizedShape, None),
+            }),
+            _ => Input::Literal(refuse(Kind::NormalizedShape, None)),
+        };
+        arguments.push(project_call_document::Argument {
+            name: name.name.clone(),
+            node: value.index(),
+            input,
+        });
+    }
+    if findings.is_empty() {
+        Ok(project_call_document::Call {
+            name: function.name.clone(),
+            name_node: call.index(),
+            node: call.index(),
+            arguments,
+        })
+    } else {
+        Err(findings)
+    }
+}
+
 pub(super) fn prepare(
-    d: &Document,
-    lowered: &crate::front_end::v0_5::Lowered,
-    columns: &[usize],
+    spec: &ast::Spec,
     functions: &[Function],
     undeclared: Option<crate::project_function::Language>,
 ) -> Result<Prepared, PrepareError> {
@@ -225,48 +302,44 @@ pub(super) fn prepare(
             return Err(PrepareError::Internal);
         }
     }
-    let (requests, sites, bindings) = requests(d, lowered);
-    let has_rows = present(d, d.root(), "rows");
+    let (requests, sites, bindings) = requests(spec);
+    let has_rows = !spec.rows.templates.is_empty();
     let mut calls = Vec::new();
     let mut origins = Vec::new();
     let mut findings = Vec::new();
-    for (request, Request { node, path, .. }) in requests.iter().enumerate() {
-        match project_call_document::decode(d, *node, path) {
+    for (request, Request { call, path, .. }) in requests.iter().enumerate() {
+        match decode(spec, *call, path) {
             // A 1.0 function file may name no callable for the host: the
             // call fails here, before any data is read, and no other finding
             // of it is reported (FUNC-1).
-            Ok(call)
+            Ok(decoded)
                 if function_index
-                    .get(call.name.as_str())
+                    .get(decoded.name.as_str())
                     .is_some_and(|function| !function.implemented()) =>
             {
-                let function = function_index[call.name.as_str()];
+                let function = function_index[decoded.name.as_str()];
                 findings.push((
                     request,
                     invalid(FunctionFinding {
                         path: format!("{path}.name"),
-                        function: call.name,
+                        function: decoded.name,
                         argument: None,
-                        node: *node,
                         cause: Cause::MissingImplementation(function.language()),
                     }),
                 ));
             }
-            Ok(call) => {
-                origins.push((request, *node, path.clone(), call.name.clone()));
+            Ok(decoded) => {
+                origins.push((request, *call, path.clone(), decoded.name.clone()));
                 calls.push(LocatedCall {
                     path: path.clone(),
-                    call,
+                    call: decoded,
                 });
             }
             Err(errors) => {
-                let function = d
-                    .field(*node, "name")
-                    .and_then(|id| match &d.nodes()[id] {
-                        N::Text(s) => Some(s.as_str()),
-                        _ => None,
-                    })
-                    .unwrap_or("");
+                let function = match &spec.expr(*call).kind {
+                    ExprKind::Call { function, .. } => function.name.as_str(),
+                    _ => "",
+                };
                 if !function.is_empty() && !function_index.contains_key(function) {
                     findings.push((
                         request,
@@ -274,7 +347,6 @@ pub(super) fn prepare(
                             path: format!("{path}.name"),
                             function: function.into(),
                             argument: None,
-                            node: *node,
                             cause: unknown(),
                         }),
                     ));
@@ -286,7 +358,6 @@ pub(super) fn prepare(
                             path: error.path,
                             function: function.into(),
                             argument: None,
-                            node: error.node,
                             cause: Cause::Scalar(error.kind),
                         }),
                     )
@@ -304,7 +375,6 @@ pub(super) fn prepare(
                 .map(|a| {
                     (
                         a.name.clone(),
-                        a.node,
                         match &a.input {
                             Input::Reference(name) => Some(name.clone()),
                             _ => None,
@@ -314,21 +384,11 @@ pub(super) fn prepare(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let types = columns
+    let types = spec
+        .columns
         .iter()
-        .map(|&id| {
-            let name = text(d, field(d, id, "name")?)?;
-            let kind = match text(d, field(d, id, "type")?)? {
-                "str" => ValueType::Str,
-                "int" => ValueType::Int,
-                "float" => ValueType::Float,
-                "date" => ValueType::Date,
-                "datetime" => ValueType::DateTime,
-                _ => return Err(PrepareError::Internal),
-            };
-            Ok((name, kind))
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
+        .map(|column| (column.name.name.as_str(), ValueType::from(column.kind)))
+        .collect::<BTreeMap<_, _>>();
     let definitions = origins
         .iter()
         .map(|(_, _, _, name)| function_index.get(name.as_str()).copied())
@@ -348,20 +408,19 @@ pub(super) fn prepare(
             ) => return Err(PrepareError::Internal),
             Err(project_calls::Error::Findings(errors)) => {
                 for error in errors {
-                    let (origin, node, path, function) = &origins[error.call];
+                    let (origin, _, path, function) = &origins[error.call];
                     let arguments = &argument_origins[error.call];
-                    let (cause, argument, node, path) = match error.kind {
+                    let (cause, argument, path) = match error.kind {
                         project_calls::Kind::UnknownFunction => {
-                            (unknown(), None, *node, format!("{path}.name"))
+                            (unknown(), None, format!("{path}.name"))
                         }
                         project_calls::Kind::UnknownReference { argument } => {
-                            let (name, node, reference) = &arguments[argument];
+                            let (name, reference) = &arguments[argument];
                             (
                                 Cause::UnknownReference(
                                     reference.clone().ok_or(PrepareError::Internal)?,
                                 ),
                                 Some(name.clone()),
-                                *node,
                                 format!("{path}.args.{name}"),
                             )
                         }
@@ -395,19 +454,16 @@ pub(super) fn prepare(
                                             path: format!("{path}.args"),
                                             function: function.clone(),
                                             argument: Some(argument),
-                                            node: *node,
                                             cause: Cause::MissingRequiredArgument,
                                         }),
                                     ));
                                     continue;
                                 }
                             };
-                            let (argument, value, _) =
-                                &arguments[index.ok_or(PrepareError::Internal)?];
+                            let (argument, _) = &arguments[index.ok_or(PrepareError::Internal)?];
                             (
                                 cause,
                                 Some(argument.clone()),
-                                *value,
                                 format!("{path}.args.{argument}"),
                             )
                         }
@@ -418,7 +474,6 @@ pub(super) fn prepare(
                             path,
                             function: function.clone(),
                             argument,
-                            node,
                             cause,
                         }),
                     ));
@@ -436,9 +491,9 @@ pub(super) fn prepare(
     let returns = origins
         .iter()
         .enumerate()
-        .map(|(index, (_, node, _, _))| {
+        .map(|(index, (_, call, _, _))| {
             Ok((
-                *node,
+                *call,
                 definitions[index]
                     .ok_or(PrepareError::Internal)?
                     .definition()
@@ -446,14 +501,14 @@ pub(super) fn prepare(
             ))
         })
         .collect::<Result<_, PrepareError>>()?;
-    let nodes = origins
+    let indices = origins
         .into_iter()
         .enumerate()
-        .map(|(index, (_, node, _, _))| (node, index))
+        .map(|(index, (_, call, _, _))| (call, index))
         .collect();
     Ok(Prepared {
         calls,
-        nodes,
+        indices,
         returns,
         sites,
         bindings,
@@ -479,11 +534,11 @@ pub(super) fn select_rows(
 /// reading one, which are the ones its derivations may read.
 pub(super) fn donor_keep_findings(
     project: &Prepared,
-    value: usize,
+    root: ExprId,
     named: &intermediates::Declarations,
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut findings = Vec::new();
-    for &call in project.site_calls(value) {
+    for &call in project.site_calls(root) {
         let located = &project
             .calls
             .calls()
@@ -563,7 +618,6 @@ pub(super) fn bind_findings(
                             path,
                             function: call.call.name.clone(),
                             argument: Some(argument.name.clone()),
-                            node: argument.node,
                             cause: Cause::RowPhase {
                                 identifier: name.clone(),
                                 row: row.ok_or(BindError::Internal)?.into(),
@@ -598,7 +652,6 @@ pub(super) fn bind_findings(
                     path,
                     function: call.call.name.clone(),
                     argument: Some(argument.name.clone()),
-                    node: argument.node,
                     cause: Cause::RowPhase {
                         identifier: name.clone(),
                         row: row.ok_or(BindError::Internal)?.into(),
@@ -632,7 +685,6 @@ pub(super) fn bind_findings(
                         path,
                         function: call.call.name.clone(),
                         argument: Some(argument.name.clone()),
-                        node: argument.node,
                         cause: Cause::ArgumentType { expected, actual },
                     })
                 }

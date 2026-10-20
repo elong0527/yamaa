@@ -59,12 +59,30 @@ def compact(value, *, sort_keys=True):
     )
 
 
+class AnyMessage:
+    """Equal to any rendered message: these cases pin what an issue is, and
+    the registry's message tests pin its words."""
+
+    def __eq__(self, other):
+        return isinstance(other, str) and bool(other)
+
+    def __repr__(self):
+        return "<a message>"
+
+
 def issue(condition, rule, spec_paths, context, phase="validation"):
+    """One row of the twelve-column issues table (D28): an error with no
+    location recorded yet (#3262)."""
     return {
+        "severity": "error",
         "phase": phase,
         "condition": condition,
         "rule": rule,
         "spec_paths": spec_paths,
+        "file": None,
+        "line": None,
+        "column": None,
+        "message": AnyMessage(),
         "context": compact(context),
         "source_span": None,
         "operand_route": None,
@@ -785,7 +803,15 @@ class PublicEnvironment(unittest.TestCase):
         case = self.study("negative-function-contract")
         shutil.rmtree(case / "input")
         expected = yaml.safe_load((case / "expected/error.yaml").read_text())
-        expected.update(source_span=None, operand_route=None)
+        expected.update(
+            severity="error",
+            file=None,
+            line=None,
+            column=None,
+            message=AnyMessage(),
+            source_span=None,
+            operand_route=None,
+        )
         project = self.project(case)
         spec_path = (case / "spec.yaml").as_posix()
         with no_activation():

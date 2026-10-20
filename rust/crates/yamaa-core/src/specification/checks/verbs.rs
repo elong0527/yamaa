@@ -1,7 +1,7 @@
 //! The scalar verbs' declaration and operand checks, one per verb kind, in
 //! the order preparation has always reported them: rounding, temporal
 //! verbs, imputation, `str_case`, the extremes, then text extraction and
-//! templates, whose admitted operations preparation keeps.
+//! templates.
 //!
 //! Each verb keeps its site filter. Every verb checks the column defaults
 //! and the key values of aggregates and intermediates; imputation,
@@ -12,20 +12,12 @@
 use super::*;
 use crate::ast::{ScalarOp, Slot};
 
-/// What the text verbs admit, which preparation keeps for binding.
-pub(in crate::specification) struct Text {
-    pub(in crate::specification) extraction: str_extract::Prepared,
-    pub(in crate::specification) templates: str_template::Prepared,
-}
-
 /// Every verb's findings, appended to `findings` in the established order.
 pub(in crate::specification) fn findings(
-    d: &Document,
-    lowered: &Lowered,
+    spec: &Spec,
     declared: &types::DeclaredTypes<'_>,
     findings: &mut Vec<PreflightFinding>,
-) -> Result<Text, PrepareError> {
-    let spec = lowered.spec();
+) -> Result<(), PrepareError> {
     let rows = has_rows(spec);
     let defaults = spec
         .columns
@@ -73,16 +65,7 @@ pub(in crate::specification) fn findings(
     for (e, rows) in sites(false) {
         if let Some((op, _)) = scalar(e) {
             if temporal(op) {
-                let (keyword, payload) = operation(d, lowered, e)?;
-                temporal::operand_findings(
-                    d,
-                    payload,
-                    keyword,
-                    &path(spec, e),
-                    declared,
-                    rows,
-                    findings,
-                )?;
+                temporal::operand_findings(spec, e, declared, rows, findings)?;
             }
         }
     }
@@ -95,22 +78,12 @@ pub(in crate::specification) fn findings(
             _,
         )) = scalar(e)
         {
-            let (keyword, payload) = operation(d, lowered, e)?;
-            imputation::operand_findings(
-                d,
-                payload,
-                keyword,
-                &path(spec, e),
-                declared,
-                rows,
-                findings,
-            )?;
+            imputation::operand_findings(spec, e, declared, rows, findings)?;
         }
     }
     for (e, rows) in sites(true) {
         if let Some((ScalarOp::StrCase { .. }, _)) = scalar(e) {
-            let (_, payload) = operation(d, lowered, e)?;
-            str_case::operand_findings(d, payload, &path(spec, e), declared, rows, findings)?;
+            str_case::operand_findings(spec, e, declared, rows, findings)?;
         }
     }
     for (e, _) in sites(true) {
@@ -123,30 +96,24 @@ pub(in crate::specification) fn findings(
     for (e, rows) in text_sites(spec) {
         match scalar(e) {
             Some((ScalarOp::StrExtract { .. } | ScalarOp::StrReplace { .. }, _)) => {
-                let (_, payload) = operation(d, lowered, e)?;
-                extraction.push((payload, path(spec, e), rows));
+                extraction.push((e, rows));
             }
             Some((ScalarOp::StrTemplate { .. }, _)) => {
-                let (_, payload) = operation(d, lowered, e)?;
-                templates.push((payload, path(spec, e), rows));
+                templates.push((e, rows));
             }
             _ => {}
         }
     }
-    let extraction = str_extract::Prepared::new(d, extraction, declared, findings)?;
+    str_extract::findings(spec, extraction, declared, findings)?;
     let columns = spec
         .columns
         .iter()
         .map(|column| column.name.name.as_str())
         .collect::<Vec<_>>();
-    let templates = str_template::Prepared::new(d, &columns, templates, declared, findings)?;
-    Ok(Text {
-        extraction,
-        templates,
-    })
+    str_template::findings(spec, &columns, templates, declared, findings)
 }
 
-fn temporal(op: &ScalarOp) -> bool {
+pub(in crate::specification) fn temporal(op: &ScalarOp) -> bool {
     matches!(
         op,
         ScalarOp::Diff { .. }

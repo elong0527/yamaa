@@ -57,9 +57,12 @@ impl PreflightFinding {
                 source,
                 actual,
             } => return crate::dataset::Temporal::input_diagnostic(source, path, actual),
-            Self::TemporalBounds { path, value } => {
-                return crate::dataset::Temporal::bounds_diagnostic(path, value)
-            }
+            Self::TemporalBounds {
+                path,
+                field,
+                value,
+                permitted,
+            } => return crate::dataset::Temporal::bounds_diagnostic(path, field, value, permitted),
             Self::ProjectFunction(finding) => return finding.diagnostic(),
             Self::ProjectCodelist(finding) => return finding.diagnostic(),
             Self::RowPhase {

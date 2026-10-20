@@ -5,6 +5,7 @@ installed host returns for the same two documents, which R reads too.
 """
 
 import io
+import os
 import tarfile
 import tempfile
 import unittest
@@ -83,13 +84,17 @@ class ReadOdm(unittest.TestCase):
                     name: value if name == "archive_member" else int(value)
                     for name, value in refusal["options"].items()
                 }
+                source = self.source(refusal["document"])
                 with self.assertRaises(yamaa.Error) as caught:
-                    yamaa.read_odm(self.source(refusal["document"]), **options)
+                    yamaa.read_odm(source, **options)
                 error = caught.exception
                 self.assertIs(type(error), yamaa.Error)
+                # D39: the call names the source as given; a reader failure
+                # carries no issue, so its own text follows.
                 self.assertTrue(
                     str(error).startswith(
-                        f"cannot read ODM: ODM read failure ({refusal['code']}): "
+                        f"cannot read {os.fspath(source)}: "
+                        f"ODM read failure ({refusal['code']}): "
                     ),
                     str(error),
                 )

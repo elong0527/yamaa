@@ -63,11 +63,23 @@ pub enum ExprKind {
     Call {
         function: Named,
         args: Vec<(Named, ExprId)>,
+        shape: CallShape,
     },
     /// An operation, or an operation payload, outside the language. Only a
     /// document admitted without schema validation can hold one, and
     /// preparation refuses it; the text is the operation's key.
     Unsupported(String),
+}
+
+/// How a call's payload is written. The schema admits only `name` beside
+/// `args`, a mapping; a document admitted without validation may write
+/// another shape, which the call's admission refuses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallShape {
+    /// Whether the payload writes `name` and `args` and no other field.
+    pub closed: bool,
+    /// Whether `args` is written as a mapping.
+    pub args: bool,
 }
 
 /// A written scalar, kept as written so that lowering never fails: a value
@@ -142,6 +154,9 @@ pub struct SourceRead {
     /// D67).
     pub absent: Option<Constant>,
     pub require_match: bool,
+    /// Of `between`, `filter`, `order_by`, `keep`, `absent` and
+    /// `require_match`.
+    pub written: super::Written,
 }
 
 /// A record range: a current-row value between two donor-record fields.
@@ -437,6 +452,8 @@ pub struct Aggregate {
     /// Per-record bindings evaluated before the reduction (P-BIND-1).
     pub bindings: Vec<Binding>,
     pub expr: ExprId,
+    /// Of the bindings: 0.5 writes them `derive`, 1.0 `derivations`.
+    pub written: super::Written,
 }
 
 /// A named per-record value: an intermediate derivation or an aggregate
@@ -454,8 +471,10 @@ pub struct Binding {
 pub struct OdmRead {
     /// `DATASET.ItemOID`, a [`ExprKind::Ref`].
     pub item: ExprId,
-    pub event: Vec<Text>,
-    pub form: Vec<Text>,
-    pub item_group: Vec<Text>,
+    /// Each selector is `None` when omitted; a written list, even an empty
+    /// one, selects only the records carrying one of its values.
+    pub event: Option<Vec<Text>>,
+    pub form: Option<Vec<Text>>,
+    pub item_group: Option<Vec<Text>>,
     pub filter: Option<ExprId>,
 }

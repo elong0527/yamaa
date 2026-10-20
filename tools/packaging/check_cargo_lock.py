@@ -47,7 +47,8 @@ LAYOUTS = {
 # The R package's shared object keeps its symbols: CRAN's Repository Policy asks
 # a package not to remove diagnostic information such as symbols in shared
 # objects. Its Makevars build with the release profile; the Python wheels strip
-# theirs with the dist profile (rust/Cargo.toml).
+# theirs with the dist profile (rust/Cargo.toml), which the R bundle's manifest
+# leaves out (tools/staging/engine_bundle.py).
 R_PACKAGE = ROOT / "R/yamaa"
 R_MAKEVARS = ("src/Makevars.in", "src/Makevars.win.in")
 KEEPS_SYMBOLS = "the R package keeps its symbols, as CRAN's Repository Policy asks"
@@ -328,7 +329,7 @@ def bundle_files(host, workspace=WORKSPACE):
         for relative, source in engine_bundle.sources(host, workspace)
     }
     files[layout.workspace + "Cargo.toml"] = engine_bundle.workspace_manifest(
-        workspace
+        host, workspace
     ).encode()
     files[layout.config] = engine_bundle.CARGO_CONFIG.encode()
     return files
@@ -515,7 +516,7 @@ def main():
                 )
         check_r_symbols(
             "R/yamaa",
-            engine_bundle.workspace_manifest(),
+            engine_bundle.workspace_manifest("r"),
             engine_bundle.CARGO_CONFIG,
             {
                 name: (R_PACKAGE / name).read_text(encoding="utf-8")

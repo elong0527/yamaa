@@ -31,7 +31,7 @@ the held bytes.
 | public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
-| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages, typed plain values and the failed run's report bytes; distinct host i64 vectors |
+| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave), typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection and refusal codes |

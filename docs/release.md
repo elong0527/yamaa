@@ -476,7 +476,9 @@ notices remain in the distributed `LICENSE-YAML.txt`.
 from which both source packages build (#3030 D55). The bundle holds the
 engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with that host's
 binding crate; the canonical workspace manifest with `crates/*` as its
-members, which in the bundle are exactly those crates; a lock trimmed from
+members, which in the bundle are exactly those crates, and with the profiles
+that the host builds with, so that the R bundle's leaves out
+`[profile.dist]`, which only the wheels select; a lock trimmed from
 the canonical `rust/Cargo.lock`; the vendored YAML parser, without its tests,
 and the ReadStat sources; and the crates.io crates of that lock, as
 `cargo vendor --locked --versioned-dirs` writes them, apart from the files
@@ -554,8 +556,10 @@ directory sets (`CARGO_BUILD_BUILD_DIR` or `build.build-dir`, and
 `RUSTC_WRAPPER`, `RUSTC_WORKSPACE_WRAPPER` or their `build.` keys). The Makevars
 build the release profile, which strips nothing, so the shared object keeps
 its symbols: CRAN's Repository Policy asks a package not to remove diagnostic
-information such as symbols in shared objects. `check_cargo_lock` refuses an
-R source package whose build would strip.
+information such as symbols in shared objects. The package's
+`src/rust/Cargo.toml` leaves out the wheels' stripping `dist` profile, so it
+names no stripping, and `check_cargo_lock` refuses an R source package whose
+build would strip.
 
 CRAN's policy admits no binary executable code in a source package, and
 neither package carries any: the vendoring script leaves out the prebuilt
@@ -675,9 +679,10 @@ owns decoding behavior.
   output and in project function calls, raising on an integer beyond 2^53 or
   text containing NUL. R has no exact-value classes.
 - Report every finding in one issues table, built in Rust and identical in
-  both hosts: `phase`, `condition`, `rule`, `spec_paths`, `context` as
-  canonical JSON text, and the optional `source_span` and `operand_route`. No
-  host interprets conditions, and there are no separate diagnostic records.
+  both hosts: the twelve columns `severity`, `phase`, `condition`, `rule`,
+  `spec_paths`, `file`, `line`, `column`, `message`, `context` as canonical
+  JSON text, `source_span` and `operand_route` (#3030 D28). No host
+  interprets conditions, and there are no separate diagnostic records.
 - Give each run one run report, written to `output.report`, in place of the
   verification and warning logs (#2912).
 - Resolve resources from their original declaring file by default; explicit

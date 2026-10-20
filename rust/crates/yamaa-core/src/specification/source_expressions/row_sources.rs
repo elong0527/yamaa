@@ -50,7 +50,7 @@ pub(in crate::specification) fn bind(
             );
         };
         declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
-        if declaration.absent.is_some()
+        if declaration.answers_unknown
             && !item.source.is_self()
             && item.source_column(secondary, field).is_none()
         {
@@ -116,7 +116,7 @@ pub(in crate::specification) fn bind(
         } else {
             catalog.bind(name).is_none()
         };
-        if missing_field && declaration.absent.is_some() {
+        if missing_field && declaration.answers_unknown {
             variable_absent = true;
             Some(Expression::Literal(Value::Missing))
         } else {

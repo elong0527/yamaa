@@ -93,6 +93,17 @@ rm(built);invisible(gc())
 stopifnot(nrow(held)==8L,identical(held$TOTAL[held$KIND=="check"],truth$TOTAL[truth$KIND=="check"]))
 cat(case_name,"public domain complete Rust run report and successful save observations passed\n")
 
+# D39's error text: `cannot save <subject>`, then the first issue's line,
+# `<message> [<condition>, <rule>]`, and the count of the other issues.
+save_refusal_text <- function(failure, issues) {
+  rule <- issues$rule[[1L]]
+  line <- sprintf("%s [%s]", issues$message[[1L]],
+    if (is.na(rule)) issues$condition[[1L]] else paste(issues$condition[[1L]], rule, sep = ", "))
+  others <- nrow(issues) - 1L
+  if (others > 0L) line <- sprintf("%s (and %d more %s)", line, others, if (others == 1L) "issue" else "issues")
+  text <- conditionMessage(failure)
+  startsWith(text, "cannot save ") && endsWith(text, paste0(": ", line))
+}
 # A failed run keeps its report: the checks it evaluated, up to the violated
 # error, and no column rows (CHECK-23). Save writes only the report file, for
 # a failed run too (CHECK-22), and then signals the run's issues.
@@ -115,7 +126,7 @@ removed <- c(entry,file.path(case,"input","dm.csv"))
 stopifnot(unlink(removed)==0L,!any(file.exists(removed)))
 for(attempt in seq_len(2L)) {
   failure <- tryCatch(failed$save(),error=identity)
-  stopifnot(inherits(failure,"yamaa_error"),identical(conditionMessage(failure),"cannot save a failed run; see issues"),
+  stopifnot(inherits(failure,"yamaa_error"),save_refusal_text(failure,issues),
     identical(failure$issues,issues),identical(failed$issues,issues),
     identical(failure$paths,normalizePath(file.path(case,names[[1L]]),winslash="/")),
     identical(rawfile(file.path(case,names[[1L]])),report_csv(fatal)),
@@ -148,7 +159,8 @@ stopifnot(nrow(warn$issues)==0L,identical(warn$report$ID[warn$report$KIND=="chec
 check_report_view(warn$report,report_view(rawToChar(report_csv(warned))))
 writeBin(charToRaw("stale"),file.path(case,"checks.csv"))
 failure <- tryCatch(warn$save(),error=identity)
-stopifnot(inherits(failure,"yamaa_error"),identical(conditionMessage(failure),"nothing was saved; see issues"),
+stopifnot(inherits(failure,"yamaa_error"),save_refusal_text(failure,failure$issues),
+  startsWith(conditionMessage(failure),"cannot save TEST: "),
   identical(failure$paths,character()),
   identical(failure$issues,warn$issues),identical(rawfile(file.path(case,"checks.csv")),charToRaw("stale")))
 dir.create(file.path(case,"absent"))
