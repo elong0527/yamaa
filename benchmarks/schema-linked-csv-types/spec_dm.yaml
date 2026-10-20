@@ -1,0 +1,30 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  SUBJECTS: {path: input/subjects.csv, types: {RFXSTDT: date, RFXENDT: date}}
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, RFXSTDT, RFXENDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SUBJECTS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SUBJECTS.USUBJID
+
+  - name: RFXSTDT
+    type: date
+    label: Date of First Study Treatment
+    derivation: SUBJECTS.RFXSTDT
+
+  - name: RFXENDT
+    type: date
+    label: Date of Last Study Treatment
+    derivation: SUBJECTS.RFXENDT

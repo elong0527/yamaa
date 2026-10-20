@@ -10,13 +10,16 @@ use crate::{
 pub(super) struct Branch {
     when: Option<std::boxed::Box<Result<CompiledExpression, InvalidPredicate>>>,
     pub(super) path: String,
+    /// The document node of the operation, which the tree types.
+    pub(super) value: usize,
     pub(super) operation: std::boxed::Box<Operation>,
 }
 impl Branch {
-    pub(super) fn value(operation: Operation, path: String) -> Self {
+    pub(super) fn value(operation: Operation, path: String, value: usize) -> Self {
         Self {
             when: None,
             path,
+            value,
             operation: std::boxed::Box::new(operation),
         }
     }
@@ -313,28 +316,13 @@ fn bind_compute_operation(
             }),
         }
     }
-    static_types::numeric(
-        compiled,
-        &bindings,
-        &spec.intermediates,
-        catalog,
-        secondary,
-        intermediates,
-        findings,
-    )?;
+    let captured =
+        types::CapturedTypes::new(&spec.intermediates, catalog, secondary, intermediates);
+    captured.numeric(compiled, &bindings, findings);
     Ok(if findings.len() == start {
         Some(Expression::Compute(
-            BoundNumeric::new(
-                static_types::typed(
-                    compiled,
-                    &spec.intermediates,
-                    catalog,
-                    secondary,
-                    intermediates,
-                ),
-                bindings,
-            )
-            .map_err(BindError::InvalidNumericBinding)?,
+            BoundNumeric::new(captured.typed(compiled), bindings)
+                .map_err(BindError::InvalidNumericBinding)?,
         ))
     } else {
         None
@@ -523,6 +511,7 @@ fn bind_operation(
             None,
             crate::reference_scope::Phase::Column { groups: &[] },
             &spec.output,
+            &spec.tree,
             &spec.intermediates,
             secondary,
             intermediates,
