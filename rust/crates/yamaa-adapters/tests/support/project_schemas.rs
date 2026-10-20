@@ -61,5 +61,6 @@ pub fn candidate_schemas() -> ProjectSchemas {
             "environment_class",
         )
         .unwrap(),
+        versioned: None,
     }
 }

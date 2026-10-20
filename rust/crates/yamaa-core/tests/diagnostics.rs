@@ -410,6 +410,7 @@ mod diagnostics {
             reached.extend(project_lock::reached());
             reached.extend(project_scope::reached());
             let lock = yamaa_core::application_issue::lock_mismatch(
+                "lock",
                 [("package".into(), JsonValue::String("project".into()))].into(),
             );
             assert_eq!(

@@ -140,10 +140,12 @@ vocabulary! {
 
 /// Format classified installed-package disagreement. Packaging tools supply the
 /// facts; this owns the stable normative issue identity without comparing versions.
-pub fn lock_mismatch(context: crate::diagnostic::Context) -> Diagnostic {
+/// `field` declares the lock: `lock` in a 0.5 environment file, and
+/// `environments.<host>.lock` in a 1.0 project file (FUNC-3).
+pub fn lock_mismatch(field: &str, context: crate::diagnostic::Context) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ProjectLockMismatch,
-        spec_paths: vec!["lock".into()],
+        spec_paths: vec![field.into()],
         context,
         source_span: None,
         operand_route: None,
