@@ -756,7 +756,20 @@
           }
         }
       ],
-      "check_issues": [],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "key_dependency",
+          "requirement": "REQ-0074",
+          "spec_paths": [
+            "columns.ID.derivation"
+          ],
+          "context": {
+            "column": "ID",
+            "dependency": "VALUE"
+          }
+        }
+      ],
       "handlers": [],
       "source_reads": [
         "input.csv"
@@ -780,7 +793,19 @@
           }
         }
       ],
-      "check_issues": [],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "requirement": "REQ-0148",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "BASE"
+          }
+        }
+      ],
       "handlers": [],
       "source_reads": [
         "input.csv"

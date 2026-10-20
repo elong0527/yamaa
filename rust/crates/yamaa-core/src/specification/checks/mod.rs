@@ -1,0 +1,167 @@
+//! Preflight and `check()` over the typed tree (#2844, design section 3).
+//!
+//! The root checks read the tree's typed fields ([`root`]). Every other
+//! check runs once per node kind: [`ast::Spec::sites`] names the roots, each
+//! check keeps the site filter it has always had (rounding, for example,
+//! skips a spec with row templates), a walk from each root finds the nodes
+//! of its kind, and [`DeclaredTypes`] types what they read before any schema
+//! is captured.
+//!
+//! `check()` and `run()` run the same checks. A check that refuses a spec
+//! before binding ([`verbs`], [`odm`], [`lookups`]) refuses it in both. The
+//! declaration findings ([`declared`]) are what `check()` reports; `run()`
+//! reports each of them from binding, in binding's order, together with
+//! what only the captured schemas decide.
+//!
+//! A check that needs an operation's executor type constructs it with the
+//! preparation's own constructor, from the document node the tree was
+//! lowered from, until binding reads the tree.
+
+pub(super) mod declared;
+pub(super) mod lookups;
+pub(super) mod odm;
+pub(super) mod root;
+pub(super) mod verbs;
+
+use super::*;
+use crate::ast::{self, ExprId, ExprKind, JoinKey, Notation, Spec};
+use crate::front_end::v0_5::Lowered;
+
+/// A node's path in today's notation.
+pub(super) fn path(spec: &Spec, e: ExprId) -> String {
+    spec.render(spec.expr(e).meta.path, Notation::V0_5)
+}
+
+/// A node's written position in today's notation.
+pub(super) fn render(spec: &Spec, meta: ast::Meta) -> String {
+    spec.render(meta.path, Notation::V0_5)
+}
+
+/// The derivation positions at and below `root`: the root, then each case
+/// result in written order, depth first. These are the only places a
+/// verb, a window or an aggregate nests (EXPR-3).
+pub(super) fn positions(spec: &Spec, root: ExprId) -> Vec<ExprId> {
+    let mut found = Vec::new();
+    let mut stack = vec![root];
+    while let Some(e) = stack.pop() {
+        found.push(e);
+        if let ExprKind::Case(arms) = &spec.expr(e).kind {
+            stack.extend(arms.iter().rev().map(|arm| arm.result));
+        }
+    }
+    found
+}
+
+/// The current-row values each aggregate at a position below `root` pairs
+/// with a donor column.
+pub(super) fn aggregate_key_values(spec: &Spec, root: ExprId) -> Vec<ExprId> {
+    positions(spec, root)
+        .into_iter()
+        .filter_map(|e| match &spec.expr(e).kind {
+            ExprKind::Aggregate(aggregate) => match &aggregate.key {
+                Some(JoinKey::Pairs { pairs, .. }) => {
+                    Some(pairs.iter().map(|&(_, value)| value).collect::<Vec<_>>())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// Every key value a verb check visits besides the column and row
+/// derivations: the aggregates' key values in column defaults, then in row
+/// overrides, then each intermediate's own key values and those of the
+/// aggregates in its derivations.
+pub(super) fn key_sites(spec: &Spec) -> Vec<ExprId> {
+    let mut sites = Vec::new();
+    for column in &spec.columns {
+        if let Some(derivation) = &column.derivation {
+            sites.extend(aggregate_key_values(spec, derivation.expr));
+        }
+    }
+    for template in &spec.rows.templates {
+        for (_, derivation) in &template.overrides {
+            sites.extend(aggregate_key_values(spec, derivation.expr));
+        }
+    }
+    for item in &spec.intermediates {
+        if let Some(JoinKey::Pairs { pairs, .. }) = &item.key {
+            sites.extend(pairs.iter().map(|&(_, value)| value));
+        }
+        for binding in &item.bindings {
+            sites.extend(aggregate_key_values(spec, binding.derivation.expr));
+        }
+    }
+    sites
+}
+
+/// Whether the spec builds its rows with row templates.
+pub(super) fn has_rows(spec: &Spec) -> bool {
+    !spec.rows.templates.is_empty()
+}
+
+/// The driver without row templates: `base`, or the one declared input.
+pub(super) fn default_driver(spec: &Spec) -> Option<&str> {
+    if let Some(base) = &spec.rows.base {
+        return Some(&base.name);
+    }
+    match spec.inputs.as_slice() {
+        [input] => Some(&input.name.name),
+        _ => None,
+    }
+}
+
+/// A row template's driver: its `dataset`, or the one declared input.
+pub(super) fn template_driver<'a>(spec: &'a Spec, template: &'a ast::Template) -> Option<&'a str> {
+    match &template.driver {
+        Some(driver) => Some(&driver.name),
+        None => match spec.inputs.as_slice() {
+            [input] => Some(&input.name.name),
+            _ => None,
+        },
+    }
+}
+
+/// The name a reference reads.
+pub(super) fn name(spec: &Spec, e: ExprId) -> Option<&str> {
+    match &spec.expr(e).kind {
+        ExprKind::Ref(name) => Some(name.as_str()),
+        _ => None,
+    }
+}
+
+/// The variable a source operand reads: a reference, or a structured
+/// source binding's variable.
+pub(super) fn variable(spec: &Spec, e: ExprId) -> Option<&str> {
+    match &spec.expr(e).kind {
+        ExprKind::Ref(name) => Some(name.as_str()),
+        ExprKind::Source(source) => name(spec, source.variable),
+        _ => None,
+    }
+}
+
+/// The document operation an expression was lowered from: its keyword and
+/// payload node.
+pub(super) fn operation<'d>(
+    d: &'d Document,
+    lowered: &Lowered,
+    e: ExprId,
+) -> Result<(&'d str, usize), PrepareError> {
+    let &[(keyword, payload)] = mapping(d, lowered.origin(e))? else {
+        return Err(PrepareError::Internal);
+    };
+    Ok((text(d, keyword)?, payload))
+}
+
+/// A written type's name.
+pub(super) fn type_name(kind: ColumnType) -> &'static str {
+    match kind {
+        ColumnType::Str => "str",
+        ColumnType::Int => "int",
+        ColumnType::Float => "float",
+        ColumnType::Date => "date",
+        ColumnType::DateTime => "datetime",
+    }
+}

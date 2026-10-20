@@ -161,156 +161,78 @@ fn declared_kind(
     }))
 }
 
-pub(super) fn declaration_findings(
+/// One temporal verb's declaration findings at `path`: a unit, bounds or
+/// field its `type` does not take, a gap in its date parts, and each operand
+/// whose declared type it does not accept. With `rows` a bare name's phase
+/// is binding's to decide, so its type is not checked here.
+pub(super) fn operand_findings(
     d: &Document,
-    columns: &[usize],
-    output: &TableSchema,
+    payload: usize,
+    op: &str,
+    path: &str,
     declared: &types::DeclaredTypes<'_>,
+    rows: bool,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    #[allow(clippy::too_many_arguments)]
-    fn visit(
-        d: &Document,
-        value: usize,
-        prefix: &str,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<PreflightFinding>,
-        depth: usize,
-        rows: bool,
-    ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                Some(depth),
-                Some(prefix),
+    let operation = match declared_kind(d, payload, op, path)? {
+        Ok(operation) => operation,
+        Err(errors) => {
+            findings.extend(errors);
+            return Ok(());
+        }
+    };
+    if let TemporalKind::Difference { unit, bounds } = operation {
+        if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive {
+            let value = text(d, field(d, payload, "bounds")?)?;
+            findings.push(PreflightFinding::TemporalBounds {
+                path: path.into(),
+                value: value.into(),
+            });
+        }
+    }
+    // Bounds and operand types are independent declaration findings.
+    let witness_kind = match operation {
+        TemporalKind::Difference { unit, .. } => TemporalKind::Difference {
+            unit,
+            bounds: DateBounds::Exclusive,
+        },
+        other => other,
+    };
+    let witness = Temporal::new(
+        witness_kind,
+        operation
+            .fields()
+            .iter()
+            .map(|name| {
+                let id = field(d, payload, name)?;
+                Ok(match &d.nodes()[id] {
+                    N::Text(source) => source.clone(),
+                    _ => String::from(*name),
+                })
+            })
+            .collect::<Result<Vec<_>, PrepareError>>()?,
+        path.into(),
+    )
+    .map_err(|_| PrepareError::Internal)?;
+    for (index, field_name) in operation.fields().iter().enumerate() {
+        let id = field(d, payload, field_name)?;
+        let N::Text(source) = &d.nodes()[id] else {
+            if matches!(d.nodes()[id], N::Float(_)) && witness.expected(index) == "int" {
+                findings.push(PreflightFinding::Scalar(
+                    witness.operand_diagnostic(index, "float"),
+                ));
+            }
+            continue;
+        };
+        let kind = (source.contains('.') || !rows)
+            .then(|| declared.name(source).column_type())
+            .flatten();
+        if let Some(kind) = kind.filter(|&kind| !witness.accepts(index, kind)) {
+            findings.push(PreflightFinding::Scalar(
+                witness.operand_diagnostic(index, checks::type_name(kind)),
             ));
         }
-        for &op in OPERATIONS {
-            if let Some(payload) = d.field(value, op) {
-                let path = format!("{prefix}.{op}");
-                let operation = match declared_kind(d, payload, op, &path)? {
-                    Ok(operation) => operation,
-                    Err(errors) => {
-                        findings.extend(errors);
-                        continue;
-                    }
-                };
-                if let TemporalKind::Difference { unit, bounds } = operation {
-                    if unit != CalendarUnit::Day && bounds != DateBounds::Exclusive {
-                        let value = text(d, field(d, payload, "bounds")?)?;
-                        findings.push(PreflightFinding::TemporalBounds {
-                            path: path.clone(),
-                            value: value.into(),
-                        });
-                    }
-                }
-                // Bounds and operand types are independent declaration findings.
-                let witness_kind = match operation {
-                    TemporalKind::Difference { unit, .. } => TemporalKind::Difference {
-                        unit,
-                        bounds: DateBounds::Exclusive,
-                    },
-                    other => other,
-                };
-                let witness = Temporal::new(
-                    witness_kind,
-                    operation
-                        .fields()
-                        .iter()
-                        .map(|name| {
-                            let id = field(d, payload, name)?;
-                            Ok(match &d.nodes()[id] {
-                                N::Text(source) => source.clone(),
-                                _ => String::from(*name),
-                            })
-                        })
-                        .collect::<Result<Vec<_>, PrepareError>>()?,
-                    path.clone(),
-                )
-                .map_err(|_| PrepareError::Internal)?;
-                for (index, field_name) in operation.fields().iter().enumerate() {
-                    let id = field(d, payload, field_name)?;
-                    let N::Text(source) = &d.nodes()[id] else {
-                        if matches!(d.nodes()[id], N::Float(_)) && witness.expected(index) == "int"
-                        {
-                            findings.push(PreflightFinding::Scalar(
-                                witness.operand_diagnostic(index, "float"),
-                            ));
-                        }
-                        continue;
-                    };
-                    // With row templates a bare name's phase is binding's to decide.
-                    let kind = (source.contains('.') || !rows)
-                        .then(|| declared.operand(source).column_type())
-                        .flatten();
-                    if let Some(kind) = kind.filter(|&kind| !witness.accepts(index, kind)) {
-                        let actual = match kind {
-                            ColumnType::Str => "str",
-                            ColumnType::Int => "int",
-                            ColumnType::Float => "float",
-                            ColumnType::DateTime => "datetime",
-                            ColumnType::Date => "date",
-                        };
-                        findings.push(PreflightFinding::Scalar(
-                            witness.operand_diagnostic(index, actual),
-                        ));
-                    }
-                }
-            }
-        }
-        if let Some(case) = d.field(value, "case") {
-            for (index, &branch) in sequence(d, case)?.iter().enumerate() {
-                let (field, child) = d
-                    .field(branch, "then")
-                    .map(|child| ("then", child))
-                    .or_else(|| {
-                        d.field(branch, "otherwise")
-                            .map(|child| ("otherwise", child))
-                    })
-                    .ok_or(PrepareError::Internal)?;
-                visit(
-                    d,
-                    child,
-                    &format!("{prefix}.case[{index}].{field}"),
-                    declared,
-                    findings,
-                    depth + 1,
-                    rows,
-                )?;
-            }
-        }
-        Ok(())
     }
-
-    let rows = present(d, d.root(), "rows");
-    for (column, &id) in columns.iter().enumerate() {
-        if let Some(value) = d
-            .field(id, "derivation")
-            .and_then(|id| d.field(id, "value"))
-        {
-            visit(
-                d,
-                value,
-                &format!("columns.{}.derivation", output.columns()[column].name),
-                declared,
-                findings,
-                0,
-                rows,
-            )?;
-        }
-    }
-    match_values::visit_keys(d, &mut |value, path| {
-        visit(
-            d,
-            value,
-            path,
-            declared,
-            findings,
-            0,
-            present(d, d.root(), "rows"),
-        )
-    })?;
     Ok(())
 }
 
