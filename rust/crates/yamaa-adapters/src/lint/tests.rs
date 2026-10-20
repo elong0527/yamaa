@@ -986,6 +986,32 @@ fn a_redundant_intermediate_is_not_read_by_a_longer_name() {
     assert!(paths(&reads_suffix).contains(&repeated("DOMAIN")));
 }
 
+#[test]
+fn qualified_reads_after_escaped_unicode_preserve_identifier_boundaries() {
+    // ASCII YAML source can decode to two-, three- or four-byte UTF-8 scalars.
+    for escape in [r"\u00e9", r"\u4e2d", r"\U0001f600"] {
+        let redundant = REDUNDANT.replace(
+            "derivation: ADSL1.AGE",
+            &format!("derivation: \"{escape} ADSL1.AGE\""),
+        );
+        assert_eq!(paths(&redundant), paths(REDUNDANT));
+        assert!(!names(&redundant.replace(" ADSL1.AGE", " XADSL1.AGE"))
+            .contains(&"redundant_intermediate"));
+
+        let repeated_read = REPEATED
+            .replace(
+                "columns:\n  - name:",
+                "intermediates:\n  - id: PICK\n    dataset: DM\n\ncolumns:\n  - name:",
+            )
+            .replace(
+                "DOMAIN: {literal: DM}",
+                &format!("DOMAIN: \"{escape} PICK.X\""),
+            );
+        assert!(!paths(&repeated_read).contains(&repeated("DOMAIN")));
+        assert!(paths(&repeated_read.replace(" PICK.X", " XPICK.X")).contains(&repeated("DOMAIN")));
+    }
+}
+
 const MISSING_LABEL: &str = r#"schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID]
@@ -1174,6 +1200,86 @@ mod files {
         assert_eq!(linted[0].file, display(&environment));
         assert_eq!(linted[0].findings[0].finding, "root_spacing");
         assert!(linted[1].findings.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_directories_refuse_before_any_file_is_fixed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        for nested in [false, true] {
+            let directory = Directory::new("unreadable-directory");
+            let packed_text = super::packed();
+            let packed = directory.write("packed.yaml", &packed_text);
+            directory.write("specs/nested/adsl.yaml", CANONICAL);
+            let root = directory.0.join("specs");
+            let blocked = if nested {
+                root.join("nested")
+            } else {
+                root.clone()
+            };
+            let permissions = std::fs::metadata(&blocked).unwrap().permissions();
+            std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o0)).unwrap();
+            if std::fs::read_dir(&blocked).is_ok() {
+                std::fs::set_permissions(&blocked, permissions).unwrap();
+                eprintln!("process bypasses DAC; unreadable-directory case not exercised");
+                return;
+            }
+            let results = [false, true].map(|fix| lint(&[text(&packed), text(&root)], fix));
+            std::fs::set_permissions(&blocked, permissions).unwrap();
+            for result in results {
+                let error = result.unwrap_err();
+                assert_eq!(error.file(), Some(display(&blocked).as_str()));
+                assert!(matches!(
+                    error,
+                    super::super::Error::Read {
+                        error: crate::file_resources::Error::Unreadable,
+                        ..
+                    }
+                ));
+                assert_eq!(
+                    error.diagnostics(),
+                    [yamaa_core::application_issue::rejected(
+                        "prepare",
+                        "resource_unreadable"
+                    )]
+                );
+            }
+            assert_eq!(std::fs::read_to_string(&packed).unwrap(), packed_text);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_yaml_candidates_refuse_before_any_file_is_fixed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = Directory::new("unreadable-candidate");
+        let packed_text = super::packed();
+        let packed = directory.write("packed.yaml", &packed_text);
+        let blocked = directory.write("specs/adsl.yaml", CANONICAL);
+        let permissions = std::fs::metadata(&blocked).unwrap().permissions();
+        std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o0)).unwrap();
+        if std::fs::File::open(&blocked).is_ok() {
+            std::fs::set_permissions(&blocked, permissions).unwrap();
+            eprintln!("process bypasses DAC; unreadable-candidate case not exercised");
+            return;
+        }
+        let results =
+            [false, true].map(|fix| lint(&[text(&packed), text(&directory.0.join("specs"))], fix));
+        std::fs::set_permissions(&blocked, permissions).unwrap();
+        for result in results {
+            let error = result.unwrap_err();
+            assert_eq!(error.file(), Some(display(&blocked).as_str()));
+            assert_eq!(
+                error.diagnostics(),
+                [yamaa_core::application_issue::rejected(
+                    "prepare",
+                    "resource_unreadable"
+                )]
+            );
+        }
+        assert_eq!(std::fs::read_to_string(&packed).unwrap(), packed_text);
     }
 
     #[test]

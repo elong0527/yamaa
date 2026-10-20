@@ -311,10 +311,11 @@ fn bare_identifiers(text: &str) -> HashSet<&str> {
 /// `ADSL.AGE` reads ADSL, never an intermediate named DSL.
 fn reads_qualified_name(text: &str, identifier: &str) -> bool {
     let bytes = text.as_bytes();
+    let wanted = identifier.as_bytes();
     let width = identifier.len();
     (0..bytes.len().saturating_sub(width)).any(|start| {
         (start == 0 || !is_word(bytes[start - 1]))
-            && text[start..].starts_with(identifier)
+            && bytes[start..].starts_with(wanted)
             && bytes.get(start + width) == Some(&b'.')
     })
 }

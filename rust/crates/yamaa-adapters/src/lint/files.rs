@@ -41,10 +41,10 @@ impl File {
 }
 
 pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
-    let files = paths
-        .iter()
-        .flat_map(|path| expand(Path::new(path)))
-        .collect::<Vec<_>>();
+    let mut files = Vec::new();
+    for path in paths {
+        files.extend(expand(Path::new(path))?);
+    }
     // Read and admit every file before writing any, so a file that cannot be
     // read or admitted refuses the call with nothing changed.
     let mut sources = Vec::with_capacity(files.len());
@@ -85,43 +85,60 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
 /// specifications: a root mapping holding `schema_version` and only root
 /// fields, so a study document, a project environment and a project
 /// configuration are left out.
-fn expand(path: &Path) -> Vec<File> {
+fn expand(path: &Path) -> Result<Vec<File>, Error> {
     if !path.is_dir() {
-        return vec![File::new(path.to_path_buf())];
+        return Ok(vec![File::new(path.to_path_buf())]);
     }
     let mut found = Vec::new();
-    collect(path, &mut Vec::new(), &mut found);
+    collect(path, &mut Vec::new(), &mut found)?;
     found.sort();
-    found
-        .into_iter()
-        .map(|parts| {
-            parts
-                .iter()
-                .fold(path.to_path_buf(), |path, part| path.join(part))
-        })
-        .filter(|candidate| is_specification(candidate))
-        .map(File::new)
-        .collect()
+    let mut files = Vec::new();
+    for parts in found {
+        let candidate = parts
+            .iter()
+            .fold(path.to_path_buf(), |path, part| path.join(part));
+        if is_specification(&candidate)? {
+            files.push(File::new(candidate));
+        }
+    }
+    Ok(files)
+}
+
+/// Discovery failures refuse the call just as failures capturing a named file
+/// do; a partial list must never reach the fix pass.
+fn discovery_error(path: &Path, error: std::io::Error) -> Error {
+    Error::Read {
+        file: File::new(path.to_path_buf()).display,
+        error: if error.kind() == std::io::ErrorKind::NotFound {
+            crate::file_resources::Error::Missing
+        } else {
+            crate::file_resources::Error::Unreadable
+        },
+    }
 }
 
 /// Every `.yaml` file beneath `directory`, as path components relative to the
 /// directory expanded; hidden directories and linked directories are not
 /// entered.
-fn collect(directory: &Path, parents: &mut Vec<String>, found: &mut Vec<Vec<String>>) {
-    let Ok(entries) = std::fs::read_dir(directory) else {
-        return;
-    };
-    for entry in entries.flatten() {
+fn collect(
+    directory: &Path,
+    parents: &mut Vec<String>,
+    found: &mut Vec<Vec<String>>,
+) -> Result<(), Error> {
+    let entries =
+        std::fs::read_dir(directory).map_err(|error| discovery_error(directory, error))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| discovery_error(directory, error))?;
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
+        let kind = entry
+            .file_type()
+            .map_err(|error| discovery_error(&entry.path(), error))?;
         if kind.is_dir() {
             if !name.starts_with('.') {
                 parents.push(name);
-                collect(&entry.path(), parents, found);
+                collect(&entry.path(), parents, found)?;
                 parents.pop();
             }
         } else if name.ends_with(".yaml") {
@@ -130,14 +147,13 @@ fn collect(directory: &Path, parents: &mut Vec<String>, found: &mut Vec<Vec<Stri
             found.push(parts);
         }
     }
+    Ok(())
 }
 
-fn is_specification(path: &Path) -> bool {
-    let Some(text) = std::fs::read(path)
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-    else {
-        return false;
+fn is_specification(path: &Path) -> Result<bool, Error> {
+    let bytes = std::fs::read(path).map_err(|error| discovery_error(path, error))?;
+    let Ok(text) = String::from_utf8(bytes) else {
+        return Ok(false);
     };
     // Admission refuses any text that is not ASCII, which linting then
     // reports; for telling a specification apart, each other character only
@@ -147,24 +163,24 @@ fn is_specification(path: &Path) -> bool {
         .map(|character| if character.is_ascii() { character } else { 'x' })
         .collect::<String>();
     let Ok(document) = Document::structure(ascii.as_bytes()) else {
-        return false;
+        return Ok(false);
     };
     let Some(Value::Mapping { pairs, .. }) = document.root.map(|root| &document.node(root).value)
     else {
-        return false;
+        return Ok(false);
     };
     let mut schema_version = false;
     for &(key, _) in pairs {
         // A key that is not text is never a root field.
         let Some(name) = document.scalar(key) else {
-            return false;
+            return Ok(false);
         };
         if !fields::ROOT_CLASS.contains(&name) {
-            return false;
+            return Ok(false);
         }
         schema_version |= name == "schema_version";
     }
-    schema_version
+    Ok(schema_version)
 }
 
 /// Capture a file once through the local file resolver: its parent is
