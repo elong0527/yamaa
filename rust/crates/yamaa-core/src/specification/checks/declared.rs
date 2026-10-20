@@ -64,6 +64,7 @@ type Typing<'a> = dyn Fn(&str, &str) -> Option<ResultType> + 'a;
 
 /// An intermediate's donor record as a check types it.
 struct Donor<'s> {
+    index: usize,
     item: &'s ast::Intermediate,
     /// Whether the record is a completed row of the rows being built.
     self_rows: bool,
@@ -1525,6 +1526,7 @@ impl Checks<'_> {
             };
             let dataset = item.dataset.name.as_str();
             let mut donor = Donor {
+                index,
                 item,
                 self_rows: dataset == "SELF" && has_rows(spec),
                 results: Vec::new(),
@@ -1632,7 +1634,7 @@ impl Checks<'_> {
         let donors = self.donors(&stored, &current)?;
         let mut refused = BTreeSet::new();
         for (position, donor) in donors.iter().enumerate() {
-            let item = donor.item;
+            let (index, item) = (donor.index, donor.item);
             let identifier = item.id.name.as_str();
             if let Some(filter) = item.filter {
                 self.grammar(filter, findings)?;
