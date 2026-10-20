@@ -59,6 +59,7 @@ fn resolve<'a>(
             V::Text(schema_diagnostic_kind_label(value).ok_or(Invalid)?)
         }
         C::Count(count) => V::Count(*count),
+        C::TextList(values) => V::TextList(values),
         C::Null => V::Null,
         C::InputValue(node) => match document.and_then(|d| d.nodes().get(*node)).ok_or(Invalid)? {
             N::Null => V::Null,

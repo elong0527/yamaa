@@ -1,6 +1,8 @@
-//! Package-owned schema closure; no directory search or caller-provided schema.
-//! The current release ships one version. Shared schema admission checks the
-//! entry and each parent's declared version before preparing an executable model.
+//! Package-owned schema closures; no directory search or caller-provided schema.
+//! The package ships the 0.5 closures the engine reads and, beside them, the
+//! 1.0 closure of each file type (`yaml/v1/`), which a document's header
+//! selects (SCHEMA-2). Shared schema admission checks the entry and each
+//! parent's declared version before preparing an executable model.
 //!
 //! Each closure is fixed when the package is built, so the process admits it
 //! once, on first use, and every later check, compilation and run shares that
@@ -36,6 +38,40 @@ pub fn capture_project() -> Result<crate::project_source::ProjectSchemas, Error>
             admit_root(data::PROJECT_MODULES, "project_class")
         })?,
         environment: capture_environment()?,
+    })
+}
+
+/// Admit the 1.0 closure of one file type (`yaml/v1/`): its entry module and
+/// every module it includes, with the type's root class (SCHEMA-2).
+pub fn capture_versioned(
+    file_type: yamaa_core::language::FileType,
+) -> Result<Arc<CapturedSchema>, Error> {
+    use yamaa_core::language::FileType;
+    static SPEC: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
+    static PROJECT: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
+    static CODELISTS: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
+    static FUNCTION: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
+    let admitted = match file_type {
+        FileType::Spec => &SPEC,
+        FileType::Project => &PROJECT,
+        FileType::Codelists => &CODELISTS,
+        FileType::Function => &FUNCTION,
+    };
+    once(admitted, || {
+        let (_, names) = data::V1_CLOSURES
+            .iter()
+            .find(|(name, _)| *name == file_type.name())
+            .expect("every file type has a closure");
+        let modules = names
+            .iter()
+            .map(|name| {
+                *data::V1_MODULES
+                    .iter()
+                    .find(|(module, _)| module == name)
+                    .expect("a closure names embedded modules")
+            })
+            .collect::<Vec<_>>();
+        admit_root(&modules, file_type.root_class())
     })
 }
 
@@ -95,6 +131,19 @@ mod tests {
         ));
         let shared = std::thread::spawn(|| capture().unwrap()).join().unwrap();
         assert!(Arc::ptr_eq(&shared, &specification));
+        for file_type in yamaa_core::language::FileType::ALL {
+            let versioned = capture_versioned(file_type).unwrap();
+            assert!(Arc::ptr_eq(
+                &versioned,
+                &capture_versioned(file_type).unwrap()
+            ));
+            assert_eq!(
+                versioned.structure().root_class().name,
+                file_type.root_class()
+            );
+            // The 1.0 bundle names the version its files declare.
+            assert_eq!(versioned.structure().version(), "1.0");
+        }
         // The shared closure is the one a fresh admission captures.
         let fresh = CapturedSchema::admit(sources(data::MODULES), 0).unwrap();
         assert_eq!(fresh.sources().len(), specification.sources().len());

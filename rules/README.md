@@ -92,6 +92,12 @@ profiles to `rules/profiles/`. During the 0.5.0 conversion, contracts not yet
 converted keep their `REQ-NNNN` requirements and are listed with the prefix
 `REQ`.
 
+While the 0.5 and 1.0 surfaces coexist
+([#3030](https://github.com/elong0527/yamaa/issues/3030)), a file that
+declares `schema_version` is read under the rules at the `yamaa-v0.5.0` tag,
+and until Phase 2 removes the 0.5 path (P2-13) cards keep on their Fails lines
+the conditions that path still raises.
+
 | File | Prefix | Covers |
 | --- | --- | --- |
 | [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal columns, and ASCII source. |

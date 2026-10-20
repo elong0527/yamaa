@@ -8,6 +8,7 @@ pub mod grammar;
 pub mod inheritance;
 pub mod intermediate_ranges;
 pub mod intermediate_scopes;
+pub mod language;
 pub mod mapping_cut;
 pub mod odm;
 pub mod parquet;

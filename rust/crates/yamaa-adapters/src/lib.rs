@@ -32,6 +32,7 @@ pub mod parquet_artifact;
 pub mod parquet_source;
 pub mod sas_source;
 
+pub mod document;
 pub mod shipped_schema;
 pub mod specification_source;
 

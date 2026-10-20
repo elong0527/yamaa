@@ -42,6 +42,21 @@ pub struct CapturedFindings {
     findings: Vec<SchemaDiagnostic>,
 }
 impl CapturedFindings {
+    /// Findings of one pass over `document`, read from `source`, whose context
+    /// resolves against `schema` and `document`.
+    pub(crate) fn new(
+        schema: Arc<CapturedSchema>,
+        source: Source,
+        document: Option<yamaa_core::schema::Document>,
+        findings: Vec<SchemaDiagnostic>,
+    ) -> Self {
+        Self {
+            schema,
+            source,
+            document,
+            findings,
+        }
+    }
     pub fn schema(&self) -> &CapturedSchema {
         &self.schema
     }

@@ -1007,6 +1007,32 @@ class SchemaNotationTests(unittest.TestCase):
         ):
             bundle.fields("example_class")
 
+    def test_a_class_field_declares_the_version_that_introduced_it(self):
+        bundle = self.bundle(
+            "example_class:\n"
+            "    - name: {type: str}\n"
+            '    - added: {type: str, since: "1.1"}\n'
+        )
+        name, added = bundle.fields("example_class")
+        self.assertNotIn("since", name.descriptor)
+        self.assertEqual(added.descriptor["since"], "1.1")
+        properties = generator.Renderer(bundle).properties(
+            "example_class", bundle.fields("example_class"), lambda item: False
+        )
+        self.assertNotIn("x-yamaa-since", properties["name"])
+        self.assertEqual(properties["added"]["x-yamaa-since"], "1.1")
+        for since in ("1.1", '"1.01"', '"2.0"', '"1."'):
+            bundle = self.bundle(
+                f"example_class:\n    - added: {{type: str, since: {since}}}\n"
+            )
+            with (
+                self.subTest(since=since),
+                self.assertRaisesRegex(SchemaSourceError, "since must be"),
+            ):
+                bundle.fields("example_class")
+        with self.assertRaisesRegex(SchemaSourceError, "unknown keyword since"):
+            self.bundle('identifier:\n    type: str\n    since: "1.1"\n')
+
     def test_type_expressions_parse_as_the_notation_writes_them(self):
         self.assertEqual(
             str(parse_type("dict[ identifier , list[str] ]")),

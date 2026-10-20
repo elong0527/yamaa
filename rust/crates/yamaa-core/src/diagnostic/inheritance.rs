@@ -37,6 +37,23 @@ pub enum InheritanceFinding<'a> {
         actual: &'a str,
         is_entry: bool,
     },
+    /// A layer declares a language version the engine does not read (SCHEMA-2,
+    /// LAYER-4): reported at the entry's `yamaa`, or at the `parent` naming it.
+    LanguageVersion {
+        source: &'a str,
+        entry: &'a str,
+        version: &'a str,
+        reads: &'a [String],
+        is_entry: bool,
+    },
+    /// A layer declares a type other than `spec` (SCHEMA-2, LAYER-4): reported
+    /// at the entry's `type`, or at the `parent` naming it.
+    FileType {
+        source: &'a str,
+        entry: &'a str,
+        file_type: &'a str,
+        is_entry: bool,
+    },
 }
 
 fn text(value: &str) -> JsonValue {
@@ -111,6 +128,41 @@ impl InheritanceFinding<'_> {
                     context.insert("entry_version".into(), text(expected));
                     context.insert("parent_version".into(), text(actual));
                     (C::InheritanceParentVersion, "parent")
+                }
+            }
+            Self::LanguageVersion {
+                source,
+                entry,
+                version,
+                reads,
+                is_entry,
+            } => {
+                context.insert("source".into(), text(source));
+                context.insert("entry".into(), text(entry));
+                crate::language::version_context(&mut context, version, reads);
+                if is_entry {
+                    (C::HeaderLanguageVersion, "yamaa")
+                } else {
+                    (C::InheritanceParentLanguageVersion, "parent")
+                }
+            }
+            Self::FileType {
+                source,
+                entry,
+                file_type,
+                is_entry,
+            } => {
+                context.insert("source".into(), text(source));
+                context.insert("entry".into(), text(entry));
+                crate::language::file_type_context(
+                    &mut context,
+                    file_type,
+                    crate::language::FileType::Spec,
+                );
+                if is_entry {
+                    (C::HeaderFileType, "type")
+                } else {
+                    (C::InheritanceParentFileType, "parent")
                 }
             }
         };
