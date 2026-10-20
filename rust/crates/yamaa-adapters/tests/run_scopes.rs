@@ -15,10 +15,10 @@ use yamaa_adapters::{
     file_resources::RunScope,
     file_workflow,
     host_resources::{MemoryResolver, Resolver},
-    issue_rows::Issue,
     project_report,
     specification_report::Identity,
 };
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
     application_observer::Scope,
     build::{Prepared, Request},
@@ -127,11 +127,11 @@ enum Compiled {
 /// One run's public result, whichever route produced it.
 enum Outcome {
     Domain(Box<Domain>),
-    Refused(Vec<Issue>),
+    Refused(Vec<Diagnostic>),
 }
 
 impl Outcome {
-    fn issues(&self) -> Vec<Issue> {
+    fn issues(&self) -> Vec<Diagnostic> {
         match self {
             Outcome::Domain(domain) => domain.issues(),
             Outcome::Refused(issues) => issues.clone(),
@@ -246,13 +246,13 @@ fn each_route_fails_a_run_then_succeeds_on_the_same_prepared_value() {
         assert!(!failed.has_output());
         let issues = failed.issues();
         let issue = &issues[0];
-        assert_eq!(issue.phase, "validation");
-        assert_eq!(issue.condition, "resource_path_missing");
-        assert_eq!(issue.requirement.as_deref(), Some("REQ-0785"));
+        assert_eq!(issue.phase(), "validation");
+        assert_eq!(issue.condition(), "resource_path_missing");
+        assert_eq!(issue.requirement(), Some("REQ-0785"));
         let (dataset, path) = route.input();
         assert_eq!(issue.spec_paths, [format!("input.{dataset}.path")]);
         assert_eq!(
-            issue.context,
+            yamaa_core::json::Value::Object(issue.context.clone()),
             yamaa_adapters::json!({"dataset": dataset, "path": path})
         );
         assert!(route
@@ -285,7 +285,7 @@ fn a_second_run_through_the_compile_authority_holds_no_snapshot_of_the_first() {
         let stale = compiled.run(&mut first);
         assert!(!stale.has_output());
         assert_eq!(
-            stale.issues()[0].condition,
+            stale.issues()[0].condition(),
             "resource_path_content_changed",
             "{:?}",
             stale.issues()

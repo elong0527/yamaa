@@ -43,8 +43,10 @@ specify a boundary version starting at 1 in `yamaa-adapters`, severity
 `error`/`warning` (all current conditions are errors), and unchanged optional core
 span/route geometry. The `records` import names roles, not guessed Rust symbols
 or a second schema. The generator resolves each role to its public symbol in
-`yamaa_adapters::diagnostic_record` (`BOUNDARY_VERSION`, `DiagnosticRecord`,
-`ResultRecord` and `PlanRecord`); an unresolved role is a generation error.
+`yamaa_adapters::diagnostic_record` (`BOUNDARY_VERSION`, `ResultRecord` and
+`PlanRecord`), and the diagnostic role to core's
+`yamaa_core::diagnostic::Diagnostic`, the one record from the failure site to
+the edge; an unresolved role is a generation error.
 The imported version constant is the single
 runtime source for both hosts; neither generator embeds a separately maintained
 version number. `format_version` versions the IDL grammar only.
@@ -77,12 +79,12 @@ draft.
 columns of each table a host returns, in order, and `records` the named
 records a host returns as a dict or named list (none today). Each vocabulary
 and table names, as `rust: yamaa::NAME`, the facade constant that owns it: the
-issues and run report columns, the ODM item columns, the phases, the report's
-kinds and outcomes, and the severities. The generator reads the constant from
-the facade sources, following an alias such as
-`pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into the
-core crate, and refuses a declaration that differs from it in any value or
-column, or in their order. A value or column added in Rust therefore fails
+issues, run report and lint columns, the ODM item columns, the phases, the
+report's kinds and outcomes, the severities and the lint findings. The
+generator reads the constant from the facade sources, following an alias such
+as `pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
+the core or adapters crate, and refuses a declaration that differs from it in
+any value or column, or in their order. A value or column added in Rust therefore fails
 generation until it is declared here. A column or record field has a `name`,
 the language's column `type` (`str`, `int`, `float`, `date` or `datetime`,
 with `list<T>` and `optional<T>`), and optionally the vocabulary its `values`
@@ -183,13 +185,11 @@ counterpart, such as `_project_run` and `project_run`. Every Python export,
 each class method included, and every R function names its counterpart under
 `operations` unless `host_only` declares it host transport. The generator
 refuses an export that has neither and an operation that names only one host.
-`host_only` holds Python's `_style_same_value`, behind the private style
-command, and the Arrow capsule `_ArrowTable.__arrow_c_stream__`, and R's two
-interrupt helpers, `run_interrupt` and `project_run_interrupt`. Python checks
-for a host interrupt inside each native call; R asks a returned run or project
-run handle for the interrupt it retained and rethrows that original condition.
-Generating both hosts does not mean inventing a public style API in R.
-extendr-generated `wrap__*`, metadata, registration and finalizer functions are
+`host_only` holds Python's Arrow capsule `_ArrowTable.__arrow_c_stream__` and
+R's two interrupt helpers, `run_interrupt` and `project_run_interrupt`. Python
+checks for a host interrupt inside each native call; R asks a returned run or
+project run handle for the interrupt it retained and rethrows that original
+condition. extendr-generated `wrap__*`, metadata, registration and finalizer functions are
 framework machinery, not additional engine operations.
 
 ### Outputs and the manifest

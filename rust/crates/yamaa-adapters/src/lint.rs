@@ -1,0 +1,282 @@
+//! The specification lint: departures from the written form the style guide
+//! (`docs/articles/style.md`) fixes, and the layout fixes proved safe.
+//!
+//! A lint finding names how a file is written, never what it means: it has no
+//! phase and no condition, and a file with findings stays valid and runs as
+//! its canonical form does. Each file is read once through the local file
+//! resolver, admitted by the shared YAML document admission, and judged from
+//! the shared scanner's located events with the positions a reader sees.
+//!
+//! [`lint`] returns each file's findings in file order, then by line, column
+//! and finding. With `fix`, a file is rewritten only when the edited text
+//! reads, under that same admission, as exactly the values of the original
+//! with the same comment lines, and does not change when it is fixed again;
+//! each rewritten file is replaced atomically. Every file is read and admitted
+//! before any is written, so a file that cannot be read or admitted refuses
+//! the whole call and writes nothing.
+
+#[cfg(feature = "yaml")]
+mod authoring;
+#[cfg(feature = "yaml")]
+mod checks;
+#[cfg(feature = "yaml")]
+mod document;
+#[cfg(feature = "yaml")]
+mod fields;
+#[cfg(feature = "yaml")]
+mod files;
+#[cfg(feature = "yaml")]
+mod fix;
+
+#[cfg(all(test, feature = "yaml"))]
+mod tests;
+
+use crate::yaml_decode::DecodeFailure;
+use yamaa_core::diagnostic::Diagnostic;
+
+/// Every finding the lint reports, in the order the style guide names them.
+pub const FINDINGS: [&str; 9] = [
+    "field_order",
+    "root_spacing",
+    "entry_spacing",
+    "blank_lines",
+    "line_width",
+    "invalid_suppression",
+    "repeated_row_derivation",
+    "redundant_intermediate",
+    "missing_label",
+];
+
+/// One departure, at the one-based line and column where it starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Finding {
+    pub line: usize,
+    pub column: usize,
+    /// One of [`FINDINGS`].
+    pub finding: &'static str,
+    /// The spec path of the departure, `$` for the root.
+    pub spec_path: String,
+    pub message: String,
+}
+
+/// The findings that remain in one file, and whether a fix rewrote it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Linted {
+    /// The file's absolute path with forward slashes.
+    pub file: String,
+    pub findings: Vec<Finding>,
+    pub fixed: bool,
+}
+
+/// Why a lint call refused, naming the file concerned.
+#[derive(Debug)]
+pub enum Error {
+    /// This build omits the optional YAML parser.
+    Unavailable,
+    /// The file could not be read as a regular file through the resolver.
+    Read {
+        file: String,
+        error: crate::file_resources::Error,
+    },
+    /// The file's text is not an admitted YAML document.
+    Source {
+        file: String,
+        failure: DecodeFailure,
+    },
+    /// A fixed file could not be replaced.
+    Write {
+        file: String,
+        error: crate::file_publication::Error,
+    },
+}
+
+impl Error {
+    /// The file the refusal concerns, when it concerns one.
+    pub fn file(&self) -> Option<&str> {
+        match self {
+            Self::Unavailable => None,
+            Self::Read { file, .. } | Self::Source { file, .. } | Self::Write { file, .. } => {
+                Some(file)
+            }
+        }
+    }
+
+    /// The registered findings that say why: a resource refusal for a file
+    /// that cannot be read, the source finding for text that cannot be
+    /// admitted, and the publication refusal for a file that cannot be
+    /// replaced.
+    pub fn diagnostics(&self) -> Vec<Diagnostic> {
+        use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
+        match self {
+            Self::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
+            Self::Read { file, error } => vec![read_diagnostic(file, error)],
+            Self::Source { file, failure } => source_diagnostics(file, failure),
+            Self::Write { error, .. } => {
+                if let crate::file_publication::Error::Limit(limit) = error {
+                    return vec![resource_rejected(
+                        Stage::Output,
+                        Fault::PublicationLimit,
+                        limit.resource,
+                        limit.limit,
+                        limit.actual,
+                        Vec::new(),
+                    )];
+                }
+                // A replaced file fails as any published output does.
+                vec![rejected(
+                    Stage::Output,
+                    crate::file_application::publication_fault(error),
+                )]
+            }
+        }
+    }
+}
+
+/// A classified resource failure names the path as given; any other read
+/// failure stays an opaque resource refusal.
+fn read_diagnostic(file: &str, error: &crate::file_resources::Error) -> Diagnostic {
+    use crate::file_resources::Error as E;
+    use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
+    use yamaa_core::resource::ResourceFailure;
+    match crate::file_resources::resource_failure(error) {
+        Some(ResourceFailure::Boundary(limit)) => resource_rejected(
+            Stage::Prepare,
+            Fault::ResourceLimit,
+            limit.resource,
+            limit.limit,
+            limit.actual,
+            Vec::new(),
+        ),
+        Some(failure) => Diagnostic {
+            code: failure.code(),
+            spec_paths: Vec::new(),
+            context: [(
+                "path".to_owned(),
+                yamaa_core::json::Value::String(file.into()),
+            )]
+            .into(),
+            source_span: None,
+            operand_route: None,
+        },
+        None => rejected(
+            Stage::Prepare,
+            match error {
+                E::Host(_) => Fault::HostResourceFailure,
+                E::Unreadable => Fault::ResourceUnreadable,
+                E::InvalidRoot => Fault::ResourceRoot,
+                E::InvalidBase => Fault::ResourceBase,
+                E::OutsideRoots => Fault::ResourceOutsideRoots,
+                E::InvalidLock => Fault::InvalidPackagingLock,
+                _ => Fault::ResourcePath,
+            },
+        ),
+    }
+}
+
+/// The findings document admission gives a specification's own text.
+fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
+    use yamaa_core::application_issue::{rejected, resource_rejected, Fault, Stage};
+    use yamaa_core::diagnostic::ConditionCode;
+    use yamaa_core::json::Value;
+    let finding = |code, spec_path: String, context: Vec<(&str, Value)>| Diagnostic {
+        code,
+        spec_paths: vec![spec_path],
+        context: context
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+        source_span: None,
+        operand_route: None,
+    };
+    match failure {
+        DecodeFailure::NonAscii(position) => vec![finding(
+            ConditionCode::SourceNonAscii,
+            "$".into(),
+            vec![
+                ("line", Value::from(position.line)),
+                ("column", Value::from(position.column)),
+                ("path", Value::String(file.into())),
+            ],
+        )],
+        DecodeFailure::InvalidYaml { position, reason } => vec![finding(
+            ConditionCode::SourceInvalidYaml,
+            "$".into(),
+            vec![
+                ("line", Value::from(position.line)),
+                ("column", Value::from(position.column)),
+                ("reason", Value::String(reason.clone())),
+            ],
+        )],
+        DecodeFailure::InvalidText(issues) => issues
+            .iter()
+            .map(|issue| {
+                finding(
+                    ConditionCode::SourceInvalidText,
+                    issue.path.clone(),
+                    vec![
+                        (
+                            "code_point",
+                            Value::String(format!("U+{:04X}", issue.code_point)),
+                        ),
+                        ("offset", Value::from(issue.offset)),
+                    ],
+                )
+            })
+            .collect(),
+        DecodeFailure::Limit(limit) => vec![resource_rejected(
+            Stage::Prepare,
+            Fault::ResourceLimit,
+            limit.resource,
+            limit.limit,
+            limit.actual,
+            Vec::new(),
+        )],
+        DecodeFailure::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
+        // An admission defect, as specification capture reports it.
+        DecodeFailure::Internal => vec![rejected(Stage::Prepare, Fault::YamlDecode)],
+    }
+}
+
+/// Lint every file `paths` names, in argument order; a directory names the
+/// specification files beneath it in sorted path order, leaving out hidden
+/// directories and any `.yaml` file whose root holds anything but root fields
+/// or no `schema_version`, and refuses when it cannot be listed or such a
+/// file cannot be read. With `fix`, apply the proved layout fixes first.
+pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
+    #[cfg(feature = "yaml")]
+    {
+        files::lint(paths, fix)
+    }
+    #[cfg(not(feature = "yaml"))]
+    {
+        let _ = (paths, fix);
+        Err(Error::Unavailable)
+    }
+}
+
+/// The findings in `text`, a specification file's complete contents.
+pub fn check_text(text: &[u8]) -> Result<Vec<Finding>, DecodeFailure> {
+    #[cfg(feature = "yaml")]
+    {
+        files::findings(text)
+    }
+    #[cfg(not(feature = "yaml"))]
+    {
+        let _ = text;
+        Err(DecodeFailure::Unavailable)
+    }
+}
+
+/// `text` with every proved layout fix applied; unchanged when no fix holds.
+pub fn fix_text(text: &[u8]) -> Result<Vec<u8>, DecodeFailure> {
+    #[cfg(feature = "yaml")]
+    {
+        let document = document::Document::parse(text)?;
+        Ok(fix::fix_text(&document.text).into_bytes())
+    }
+    #[cfg(not(feature = "yaml"))]
+    {
+        let _ = text;
+        Err(DecodeFailure::Unavailable)
+    }
+}

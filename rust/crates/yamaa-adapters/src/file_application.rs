@@ -2,73 +2,63 @@
 use crate::report_storage::StoredReport;
 use crate::{
     file_preparation::{self, FileSpecification},
-    issue_rows::Issue,
     specification_report::{self, BuildResult, Identity},
 };
 use std::{
     any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
 };
+use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::application_observer::Scope;
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::{self, Request};
 use yamaa_core::json::Value;
 use yamaa_core::project_function::Language;
 
-pub type Failure = Vec<Issue>;
+/// The diagnostics of a refused operation, in authored order.
+pub type Failure = Vec<Diagnostic>;
 
 pub fn unsupported(operation: &str, path: Option<&str>) -> Failure {
-    vec![
-        Issue::from_core(yamaa_core::application_issue::unsupported(operation, path))
-            .expect("application issue"),
-    ]
+    vec![yamaa_core::application_issue::unsupported(operation, path)]
 }
-pub fn rejected(stage: &str, code: &str) -> Failure {
-    vec![
-        Issue::from_core(yamaa_core::application_issue::rejected(stage, code))
-            .expect("application issue"),
-    ]
+pub fn rejected(stage: Stage, fault: Fault) -> Failure {
+    vec![yamaa_core::application_issue::rejected(stage, fault)]
 }
-pub(crate) fn resource_rejected(
-    stage: &str,
-    code: &str,
-    resource: &str,
-    limit: usize,
-    actual: Option<usize>,
-    paths: Vec<String>,
-) -> Failure {
-    vec![
-        Issue::from_core(yamaa_core::application_issue::resource_rejected(
-            stage, code, resource, limit, actual, paths,
-        ))
-        .expect("application resource issue"),
-    ]
+/// The public issues of one result: every finding up to the findings limit.
+/// Raw facts and retained reports remain complete; taking the prefix here
+/// preserves authored stage order across one result.
+pub fn collect(issues: impl IntoIterator<Item = Diagnostic>) -> Failure {
+    issues
+        .into_iter()
+        .take(yamaa_core::limits::Limits::FINDINGS)
+        .collect()
 }
 /// A build that produced no public result: its closed refusal code and, for a
 /// classified resource limit, the limit facts. Both hosts convert this value;
 /// neither chooses the code.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuildRefusal {
-    pub code: &'static str,
+    pub code: Fault,
     pub limit: Option<crate::resource_diagnostics::Refusal>,
 }
 impl BuildRefusal {
     pub fn issues(&self) -> Failure {
         self.limit.as_ref().map_or_else(
-            || rejected("build", self.code),
-            |limit| limit.issues("build", self.code),
+            || rejected(Stage::Build, self.code),
+            |limit| limit.issues(Stage::Build, self.code),
         )
     }
 }
-fn report_failure(stage: &str, code: &str, error: &specification_report::Error) -> Failure {
+fn report_failure(stage: Stage, code: Fault, error: &specification_report::Error) -> Failure {
     match error {
         specification_report::Error::ResourceLimit(refusal) => refusal.issues(stage, code),
         _ => rejected(stage, code),
     }
 }
-pub(crate) fn classified_resource(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Failure {
-    vec![Issue::from_core(diagnostic.clone()).expect("classified resource finding")]
+pub(crate) fn classified_resource(diagnostic: &Diagnostic) -> Failure {
+    vec![diagnostic.clone()]
 }
-pub(crate) fn resource_failure(stage: &str, error: &crate::file_resources::Error) -> Failure {
+pub(crate) fn resource_failure(stage: Stage, error: &crate::file_resources::Error) -> Failure {
     with_source(resource_diagnostic(stage, error), None)
 }
 /// Verify a compiled value's held metadata at the start of a run, before
@@ -92,95 +82,87 @@ pub(crate) fn verify_held(
             .filter(|failure| matches!(failure, R::ContentChanged | R::Missing))
             .and_then(|failure| declared(&identity, failure))
             .map_or_else(
-                || resource_failure_from("prepare", &error, &identity),
+                || resource_failure_from(Stage::Prepare, &error, &identity),
                 |diagnostic| classified_resource(&diagnostic),
             )
     })
 }
 /// A failure observed on an already captured file also names that file.
 pub(crate) fn resource_failure_from(
-    stage: &str,
+    stage: Stage,
     error: &crate::file_resources::Error,
     source: &str,
 ) -> Failure {
     with_source(resource_diagnostic(stage, error), Some(source))
 }
-fn with_source(
-    mut diagnostic: yamaa_core::diagnostic::Diagnostic,
-    source: Option<&str>,
-) -> Failure {
+fn with_source(mut diagnostic: Diagnostic, source: Option<&str>) -> Failure {
     if let Some(source) = source {
         diagnostic
             .context
             .insert("source".into(), Value::String(source.into()));
     }
-    vec![Issue::from_core(diagnostic).expect("application issue")]
+    vec![diagnostic]
 }
-fn limit_diagnostic(
-    stage: &str,
-    limit: &yamaa_core::limits::LimitExceeded,
-) -> yamaa_core::diagnostic::Diagnostic {
-    yamaa_core::application_issue::resource_rejected(
-        stage,
-        "resource_limit",
-        limit.resource,
-        limit.limit,
-        limit.actual,
-        Vec::new(),
-    )
-}
-fn resource_diagnostic(
-    stage: &str,
-    error: &crate::file_resources::Error,
-) -> yamaa_core::diagnostic::Diagnostic {
+fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Diagnostic {
     use crate::file_resources::Error as E;
     let code = match error {
-        E::Host(_) => "host_resource_failure",
-        E::Missing => "resource_missing",
-        E::Unreadable => "resource_unreadable",
-        E::NotRegularFile => "resource_not_regular",
-        E::InvalidRoot => "resource_root",
-        E::InvalidBase => "resource_base",
-        E::InvalidPath => "resource_path",
-        E::WrittenForm(_) => "resource_path",
-        E::OutsideRoots => "resource_outside_roots",
-        E::Symlink => "resource_link",
-        E::Changed => "resource_changed",
-        E::InvalidLock => "invalid_packaging_lock",
-        E::Limit(limit) => return limit_diagnostic(stage, limit),
+        E::Host(_) => Fault::HostResourceFailure,
+        E::Missing => Fault::ResourceMissing,
+        E::Unreadable => Fault::ResourceUnreadable,
+        E::NotRegularFile => Fault::ResourceNotRegular,
+        E::InvalidRoot => Fault::ResourceRoot,
+        E::InvalidBase => Fault::ResourceBase,
+        E::InvalidPath => Fault::ResourcePath,
+        E::WrittenForm(_) => Fault::ResourcePath,
+        E::OutsideRoots => Fault::ResourceOutsideRoots,
+        E::Symlink => Fault::ResourceLink,
+        E::Changed => Fault::ResourceChanged,
+        E::InvalidLock => Fault::InvalidPackagingLock,
+        E::Limit(limit) => {
+            return yamaa_core::application_issue::resource_rejected(
+                stage,
+                Fault::ResourceLimit,
+                limit.resource,
+                limit.limit,
+                limit.actual,
+                Vec::new(),
+            )
+        }
     };
     yamaa_core::application_issue::rejected(stage, code)
+}
+/// The closed code a refused publication reports, selected from its typed cause.
+pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault {
+    use crate::file_publication::Error as E;
+    match error {
+        E::Host(crate::host_resources::Failure::Cleanup) => Fault::CleanupIncomplete,
+        E::Host(crate::host_resources::Failure::Cancelled) => Fault::PublicationCancelled,
+        E::Host(_) => Fault::HostPublicationFailure,
+        E::Cleanup { .. } => Fault::CleanupIncomplete,
+        E::Changed => Fault::TargetChanged,
+        E::Limit(_) => Fault::PublicationLimit,
+        E::StagingCollision => Fault::StagingCollision,
+        E::InvalidTarget => Fault::InvalidTarget,
+        E::PathMismatch => Fault::PathMismatch,
+        E::Io(_) => Fault::PublicationFailed,
+    }
 }
 pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Failure {
     use crate::file_publication::Error as E;
     use yamaa_core::json::Value as JsonValue;
 
-    let code = match error {
-        E::Host(crate::host_resources::Failure::Cleanup) => "cleanup_incomplete",
-        E::Host(crate::host_resources::Failure::Cancelled) => "publication_cancelled",
-        E::Host(_) => "host_publication_failure",
-        E::Cleanup { .. } => "cleanup_incomplete",
-        E::Changed => "target_changed",
-        E::Limit(error) => {
-            return resource_rejected(
-                "output",
-                "publication_limit",
-                error.resource,
-                error.limit,
-                error.actual,
-                Vec::new(),
-            )
-        }
-        E::StagingCollision => "staging_collision",
-        E::InvalidTarget => "invalid_target",
-        E::PathMismatch => "path_mismatch",
-        E::Io(_) => {
-            yamaa_core::diagnostic::ConditionCode::OutputPublicationFailed
-                .definition()
-                .condition
-        }
-    };
-    let mut finding = yamaa_core::application_issue::rejected("output", code);
+    if let E::Limit(error) = error {
+        return vec![yamaa_core::application_issue::resource_rejected(
+            Stage::Output,
+            Fault::PublicationLimit,
+            error.resource,
+            error.limit,
+            error.actual,
+            Vec::new(),
+        )];
+    }
+    let mut finding =
+        yamaa_core::application_issue::rejected(Stage::Output, publication_fault(error));
     if let E::Cleanup {
         operation,
         staging,
@@ -197,85 +179,7 @@ pub(crate) fn publication_failure(error: &crate::file_publication::Error) -> Fai
                 .insert(name.into(), JsonValue::String(value));
         }
     }
-    vec![Issue::from_core(finding).expect("application issue")]
-}
-pub(crate) fn preparation_failure(message: String) -> Failure {
-    let Ok(value) = crate::json_wire::decode(&message) else {
-        return rejected("prepare", "resource_boundary");
-    };
-    let outcome = &value["outcome"];
-    match outcome["status"].as_str() {
-        Some("invalid") => {
-            let Some(rows) = outcome["diagnostics"].as_array() else {
-                return rejected("prepare", "issue_projection");
-            };
-            let Ok(issues) = rows
-                .iter()
-                .cloned()
-                .map(Issue::from_diagnostic)
-                .collect::<Result<Vec<_>, _>>()
-            else {
-                return rejected("prepare", "issue_projection");
-            };
-
-            issues
-        }
-        Some("unsupported") => {
-            let Some(features) = outcome["features"].as_array() else {
-                return rejected("prepare", "issue_projection");
-            };
-            let mut issues = Vec::new();
-            for feature in features {
-                let (Some(operation), Some(path)) =
-                    (feature["operation"].as_str(), feature["spec_path"].as_str())
-                else {
-                    return rejected("prepare", "issue_projection");
-                };
-                issues.extend(unsupported(operation, Some(path)));
-            }
-            issues
-        }
-        Some("rejected" | "resource_limit") => {
-            let stage = outcome["stage"].as_str().unwrap_or("prepare");
-            let code = if outcome["status"] == "resource_limit" {
-                "resource_limit"
-            } else {
-                outcome["code"].as_str().unwrap_or("preparation_boundary")
-            };
-            let (Some(resource), Some(limit)) =
-                (outcome["resource"].as_str(), outcome["limit"].as_u64())
-            else {
-                return rejected(stage, code);
-            };
-            let Ok(limit) = usize::try_from(limit) else {
-                return rejected("prepare", "issue_projection");
-            };
-            let actual = outcome["actual"]
-                .as_u64()
-                .and_then(|v| usize::try_from(v).ok());
-            let paths = outcome["spec_paths"]
-                .as_array()
-                .map(|paths| {
-                    paths
-                        .iter()
-                        .map(|path| path.as_str().map(String::from))
-                        .collect::<Option<Vec<_>>>()
-                })
-                .unwrap_or_else(|| Some(Vec::new()));
-            let Some(paths) = paths else {
-                return rejected("prepare", "issue_projection");
-            };
-            let mut issues = resource_rejected(stage, code, resource, limit, actual, paths);
-            if let Some(phase) = outcome["phase"].as_str() {
-                for issue in &mut issues {
-                    issue.context["phase"] = crate::json!(phase);
-                }
-            }
-
-            issues
-        }
-        _ => rejected("prepare", "preparation_boundary"),
-    }
+    vec![finding]
 }
 
 pub struct Domain {
@@ -300,9 +204,13 @@ fn publication_at(
 ) -> Failure {
     for issue in &mut issues {
         issue.spec_paths = vec![format!("output.{field}")];
-        issue.context["path"] = crate::json!(path);
-        issue.context["entered"] = crate::json!(attempt.entered);
-        issue.context["completed"] = crate::json!(attempt.completed);
+        for (key, value) in [
+            ("path", Value::String(path.into())),
+            ("entered", Value::from(attempt.entered)),
+            ("completed", Value::from(attempt.completed)),
+        ] {
+            issue.context.insert(key.into(), value);
+        }
     }
     issues
 }
@@ -342,7 +250,7 @@ impl Domain {
             .collect::<Result<Vec<_>, _>>();
         let (targets, publication_issues) = match targets {
             Ok(targets) => (Some(targets), Vec::new()),
-            Err(error) => (None, resource_failure("output", &error)),
+            Err(error) => (None, resource_failure(Stage::Output, &error)),
         };
         Ok(Self {
             result,
@@ -366,7 +274,7 @@ impl Domain {
         self.result.report_table()
     }
     pub fn issues(&self) -> Failure {
-        crate::issue_rows::collect(
+        collect(
             self.result
                 .issues()
                 .iter()
@@ -494,7 +402,7 @@ impl Domain {
             Ok(report) => report,
             Err(error) => {
                 self.publication_issues =
-                    report_failure("output", "publication_report_limit", &error);
+                    report_failure(Stage::Output, Fault::PublicationReportLimit, &error);
                 return if failed { Err(FailedBuild) } else { Ok(false) };
             }
         };
@@ -560,7 +468,7 @@ impl Domain {
                 Err(payload) => {
                     self.publication_attempt.unwind = Some(payload);
                     self.publication_issues = publication_at(
-                        rejected("output", "publication_unwind"),
+                        rejected(Stage::Output, Fault::PublicationUnwind),
                         fields[index],
                         path,
                         &self.publication_attempt,
@@ -630,12 +538,10 @@ impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
         .map_err(ApplicationError::Preparation)
     }
     fn check_plain(&mut self, prepared: FileSpecification) -> Result<Failure, Self::Failure> {
-        Ok(crate::specification_check::issue_rows(prepared.run())
-            .unwrap_or_else(|_| rejected("check", "issue_projection")))
+        Ok(crate::specification_check::issues(prepared.run()))
     }
     fn check_project(&mut self, prepared: Self::Project) -> Result<Failure, Self::Failure> {
-        Ok(crate::project_check::prepared(prepared.run())
-            .unwrap_or_else(|_| rejected("check", "issue_projection")))
+        Ok(crate::project_check::prepared(prepared.run()))
     }
     fn build_plain(
         &mut self,
@@ -692,12 +598,12 @@ pub fn plain(
 ) -> Result<Domain, Failure> {
     let attempt = prepared.build(run, scope);
     if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
-        return Err(resource_failure("capture", error));
+        return Err(resource_failure(Stage::Capture, error));
     }
     scope.phase(yamaa_core::application_observer::Phase::Output);
     let converted = (|| {
         let result = specification_report::build_result(prepared.run(), &attempt, identity)
-            .map_err(|error| report_failure("build", "result_projection", &error))?;
+            .map_err(|error| report_failure(Stage::Build, Fault::ResultProjection, &error))?;
         Domain::from_build(result, |field| {
             if field == "path" {
                 prepared.publication_target(run)
@@ -738,7 +644,7 @@ pub fn check_with_resolver(
 ) -> Failure {
     let mut application = native(host, identity);
     application.runtime.resolver = resolver;
-    crate::issue_rows::collect(
+    collect(
         domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
             ApplicationError::Preparation(error) => {
                 crate::project_application::selection_failure(&error)
@@ -760,7 +666,39 @@ pub fn domain(
             }
             ApplicationError::Runtime(issues) => issues,
         })
-        .map_err(crate::issue_rows::collect)
+        .map_err(collect)
+}
+
+#[cfg(test)]
+mod collect_tests {
+    use super::*;
+
+    #[test]
+    fn the_findings_limit_keeps_the_first_ten_thousand_across_stages() {
+        use yamaa_core::application_issue::{rejected, Fault, Stage};
+        fn row(index: usize) -> Diagnostic {
+            let stage = if index < 6_000 {
+                Stage::Ingest
+            } else {
+                Stage::Output
+            };
+            let mut finding = rejected(stage, Fault::Internal);
+            finding.spec_paths = vec![format!("columns.C{index}")];
+            finding
+        }
+        for length in [0, 9_999, 10_000, 10_001] {
+            let actual = collect((0..length).map(row));
+            assert_eq!(actual.len(), length.min(10_000));
+            for (index, actual) in actual.iter().enumerate() {
+                assert_eq!(actual, &row(index));
+            }
+        }
+        let mut complete = row(0);
+        complete
+            .context
+            .insert("detail".into(), Value::String("é🙂".repeat(50_000)));
+        assert_eq!(collect([complete.clone()]), [complete]);
+    }
 }
 
 #[cfg(all(test, feature = "yaml"))]
@@ -917,12 +855,12 @@ mod tests {
                 observed
                     .issues()
                     .iter()
-                    .map(|issue| (&issue.condition, &issue.context))
+                    .map(|issue| (issue.condition(), &issue.context))
                     .collect::<Vec<_>>(),
                 ordinary
                     .issues()
                     .iter()
-                    .map(|issue| (&issue.condition, &issue.context))
+                    .map(|issue| (issue.condition(), &issue.context))
                     .collect::<Vec<_>>()
             );
             observed
@@ -1081,7 +1019,7 @@ mod tests {
                 issue.spec_paths,
                 [format!("output.{}", ["report", "path"][fail_at])]
             );
-            let context: Value = issue.context.clone();
+            let context = Value::Object(issue.context.clone());
             assert_eq!(context["entered"], fail_at + 1);
             assert_eq!(context["completed"], fail_at);
             assert!(result.save().unwrap());

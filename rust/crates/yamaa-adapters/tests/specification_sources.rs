@@ -371,21 +371,30 @@ output: {{path: output.csv, columns: [I, S]}}
                     "division_by_zero" => ((0, 26), Vec::new()),
                     _ => ((0, 16), Vec::new()),
                 };
-                let expected = json!({"protocol":"execution/1","outcome":{
-                    "status":"condition","diagnostic":{"phase":"derivation","condition":condition,"requirement":requirement,
+                let expected = json!({"phase":"derivation","condition":condition,"requirement":requirement,
                     "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context,
-                    "source_span":{"start":span.0,"end":span.1},"operand_route":route},
-                    "identity":{"position":"1","keys":keys.iter().map(|key|json!({"str":key})).collect::<Vec<_>>()}
-                }});
+                    "source_span":{"start":span.0,"end":span.1},"operand_route":route});
+                let row = keys
+                    .iter()
+                    .map(|key| yamaa_core::value::Value::Str((*key).into()))
+                    .collect::<Vec<_>>();
                 for _ in 0..2 {
                     let response = run
                         .execute_csv(&std::fs::read(case.join("input/lb.csv")).unwrap())
                         .unwrap();
                     assert!(response.table.is_none());
+                    let yamaa_adapters::dataset_result::Outcome::Condition(found) =
+                        &response.outcome
+                    else {
+                        panic!("an arithmetic failure is a condition outcome");
+                    };
                     assert_eq!(
-                        yamaa_adapters::json_wire::decode(&response.outcome).unwrap(),
+                        yamaa_adapters::report_storage::diagnostic_value(&found.diagnostic),
                         expected
                     );
+                    let identity = found.identity.as_ref().unwrap();
+                    assert_eq!((identity.position, &identity.values), (1, &row));
+                    assert!(found.partition.is_none() && found.matched_key.is_none());
                 }
             }
         }
@@ -507,12 +516,11 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let response = run.execute_csv(&data).unwrap();
-            let response: yamaa_core::json::Value =
-                yamaa_adapters::json_wire::decode(&response.outcome).unwrap();
-            assert_eq!(
-                response["outcome"]["diagnostic"]["condition"],
-                "division_by_zero"
-            );
+            let yamaa_adapters::dataset_result::Outcome::Condition(found) = &response.outcome
+            else {
+                panic!("the division fails as a condition outcome");
+            };
+            assert_eq!(found.diagnostic.condition(), "division_by_zero");
         }
 
         #[test]
@@ -557,12 +565,14 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(fields.len(), 3);
                 let error =
                     PreparedRun::prepare(prepare(&schema, fields[1].as_bytes())).unwrap_err();
-                let actual: Value = yamaa_adapters::json_wire::decode(
-                    &specification_diagnostics::failure(&error, None),
-                )
-                .unwrap();
                 let expected: Value = yamaa_adapters::json_wire::decode(fields[2]).unwrap();
-                assert_eq!(actual, expected, "{}", fields[0]);
+                assert_eq!(expected["outcome"]["status"], "invalid", "{}", fields[0]);
+                assert_eq!(
+                    crate::support::findings(specification_diagnostics::failure(&error, None)),
+                    expected["outcome"]["diagnostics"],
+                    "{}",
+                    fields[0]
+                );
                 count += 1;
             }
             assert_eq!(count, 5);
@@ -743,7 +753,11 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(attempt.sources[0].table.as_ref().unwrap().row_count(), 2);
                 let response = attempt.result.unwrap();
                 assert!(response.table.is_none());
-                assert!(response.outcome.contains("division_by_zero"));
+                assert!(matches!(
+                    &response.outcome,
+                    yamaa_adapters::dataset_result::Outcome::Condition(found)
+                        if found.diagnostic.condition() == "division_by_zero"
+                ));
             }
             assert_eq!(port.requests, 2);
             let invalid = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
@@ -2214,13 +2228,14 @@ output: {{path: output.csv, columns: [I, S]}}
                 .execute_csv(&std::fs::read(case.join("input/dm.csv")).unwrap())
                 .err()
                 .unwrap();
-            let actual: yamaa_core::json::Value = yamaa_adapters::json_wire::decode(
-                &specification_diagnostics::failure(&error, Some(run.source())),
-            )
-            .unwrap();
             assert_eq!(
-                actual,
-                yamaa_adapters::json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"bind","code":"source_count"}})
+                specification_diagnostics::failure(&error, Some(run.source())),
+                specification_diagnostics::Rejection::Fault(
+                    yamaa_core::application_issue::rejected(
+                        yamaa_core::application_issue::Stage::Bind,
+                        yamaa_core::application_issue::Fault::SourceCount,
+                    )
+                )
             );
         }
 

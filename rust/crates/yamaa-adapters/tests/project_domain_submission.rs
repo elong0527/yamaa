@@ -24,7 +24,7 @@ mod project {
                 fs::create_dir_all(&root).unwrap();
                 Self(fs::canonicalize(root).unwrap())
             }
-            fn check(&self, raw: &str) -> Vec<yamaa_adapters::issue_rows::Issue> {
+            fn check(&self, raw: &str) -> Vec<yamaa_core::diagnostic::Diagnostic> {
                 fs::write(self.0.join("spec.yaml"), raw).unwrap();
                 let path = self.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
@@ -163,27 +163,23 @@ mod project {
             assert_eq!(issues.len(), 1);
             assert_eq!(
                 (
-                    &issues[0].phase,
-                    &issues[0].condition,
-                    issues[0].requirement.as_deref()
+                    issues[0].phase(),
+                    issues[0].condition(),
+                    issues[0].requirement()
                 ),
-                (
-                    &"validation".into(),
-                    &"reserved_metadata_key".into(),
-                    Some("REQ-0910")
-                )
+                ("validation", "reserved_metadata_key", Some("REQ-0910"))
             );
             assert_eq!(issues[0].spec_paths, ["metadata.label"]);
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"key\":\"label\",\"level\":\"root\"}"
             );
             let issues =
                 study.check(&VALID.replace("length: 3", "length: -99999999999999999999999999999"));
-            assert_eq!(issues[0].condition, "submission_length_invalid");
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0911"));
+            assert_eq!(issues[0].condition(), "submission_length_invalid");
+            assert_eq!(issues[0].requirement(), Some("REQ-0911"));
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"column\":\"VALUE\",\"length\":-99999999999999999999999999999}"
             );
             // A bare source admits Derived, which still needs its method.
@@ -192,7 +188,7 @@ mod project {
             assert_eq!(
                 issues
                     .iter()
-                    .map(|issue| issue.condition.as_str())
+                    .map(|issue| issue.condition())
                     .collect::<Vec<_>>(),
                 ["method_missing"]
             );
@@ -201,9 +197,9 @@ mod project {
                 "verifications: [{max_length: {max: 4}}]\n    submission: {length: 3",
             );
             let issues = study.check(&raw);
-            assert_eq!(issues[0].condition, "declared_length_conflict");
+            assert_eq!(issues[0].condition(), "declared_length_conflict");
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"column\":\"VALUE\",\"length\":3,\"max_length\":4}"
             );
             assert!(!study.0.join("output.csv").exists());
@@ -226,10 +222,10 @@ mod project {
             .unwrap();
             let issues = run.issues();
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "length_failed");
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0378"));
+            assert_eq!(issues[0].condition(), "length_failed");
+            assert_eq!(issues[0].requirement(), Some("REQ-0378"));
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"max\":3}"
             );
             assert!(run.save().is_err());
@@ -267,16 +263,12 @@ mod project {
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             let issue = &run.issues()[0];
             assert_eq!(
-                (
-                    issue.phase.as_str(),
-                    issue.condition.as_str(),
-                    issue.requirement.as_deref()
-                ),
+                (issue.phase(), issue.condition(), issue.requirement()),
                 ("verification", "data_type_failed", Some("SUB-26"))
             );
             assert_eq!(issue.spec_paths, ["columns.LBDTC.submission.data_type"]);
             assert_eq!(
-                issue.context,
+                yamaa_core::json::Value::Object(issue.context.clone()),
                 yamaa_adapters::json!({"column": "LBDTC", "data_type": "partialDatetime", "failure_count": 2, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
             );
             // The run report names the check `data_type` (CHECK-24).
@@ -300,13 +292,13 @@ mod project {
             );
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             let issue = &run.issues()[0];
-            assert_eq!(issue.condition, "data_type_failed");
+            assert_eq!(issue.condition(), "data_type_failed");
             assert_eq!(
                 issue.spec_paths,
                 ["columns.LBORRES.submission.value_level.ONSET.data_type"]
             );
             assert_eq!(
-                issue.context,
+                yamaa_core::json::Value::Object(issue.context.clone()),
                 yamaa_adapters::json!({"column": "LBORRES", "data_type": "date", "failure_count": 2, "keys": [{"ID": 1, "LBTESTCD": "ONSET"}, {"ID": 2, "LBTESTCD": "ONSET"}]})
             );
             // Every value of its form, and a missing one, passes and saves.
@@ -339,10 +331,7 @@ mod project {
             );
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
-                (
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
-                ),
+                (issues[0].condition(), issues[0].requirement()),
                 ("value_level_where_invalid", Some("SUB-12"))
             );
             assert_eq!(
@@ -400,7 +389,11 @@ mod project {
                         "columns.LBORRES.submission.value_level.ONSET.{field}"
                     )]
                 );
-                assert_eq!(issue.context, context, "{entry}");
+                assert_eq!(
+                    yamaa_core::json::Value::Object(issue.context.clone()),
+                    context,
+                    "{entry}"
+                );
             }
         }
 
@@ -419,15 +412,15 @@ mod project {
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
                 (
-                    issues[0].phase.as_str(),
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
+                    issues[0].phase(),
+                    issues[0].condition(),
+                    issues[0].requirement()
                 ),
                 ("validation", "value_not_permitted", Some("SUB-27"))
             );
             assert_eq!(issues[0].spec_paths, ["columns.VSDTM.type"]);
             assert_eq!(
-                issues[0].context,
+                yamaa_core::json::Value::Object(issues[0].context.clone()),
                 yamaa_adapters::json!({"column": "VSDTM", "value": "datetime", "class": "FINDINGS", "permitted": ["str", "date"]})
             );
             for spec in [
@@ -459,11 +452,7 @@ mod project {
             assert_eq!(run.issues().len(), 2, "{:?}", run.issues());
             for issue in run.issues() {
                 assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
+                    (issue.phase(), issue.condition(), issue.requirement()),
                     ("verification", "allowed_values_failed", Some("REQ-0957"))
                 );
                 assert_eq!(issue.spec_paths, ["columns.RESULT.submission.codelist"]);
@@ -471,7 +460,7 @@ mod project {
             let contexts = run
                 .issues()
                 .iter()
-                .map(|issue| issue.context.clone())
+                .map(|issue| yamaa_core::json::Value::Object(issue.context.clone()))
                 .collect::<Vec<_>>();
             assert_eq!(
                 contexts[0],
@@ -504,16 +493,16 @@ mod project {
             assert_eq!(run.issues().len(), 2, "{:?}", run.issues());
             assert_eq!(
                 (
-                    run.issues()[0].phase.as_str(),
-                    run.issues()[0].condition.as_str(),
-                    run.issues()[0].requirement.as_deref()
+                    run.issues()[0].phase(),
+                    run.issues()[0].condition(),
+                    run.issues()[0].requirement()
                 ),
                 ("verification", "allowed_values_failed", Some("REQ-0957"))
             );
             assert_eq!(
                 run.issues()
                     .iter()
-                    .map(|issue| issue.context.clone())
+                    .map(|issue| yamaa_core::json::Value::Object(issue.context.clone()))
                     .collect::<Vec<_>>(),
                 [
                     yamaa_adapters::json!({"column":"RESULT", "codelist":"DEFAULT", "failure_count":1, "keys":[{"ID":2,"LBTESTCD":"CREAT"}], "values":["X"]}),
@@ -566,7 +555,7 @@ mod project {
                 };
                 let issues = yamaa_adapters::project_application::selection_failure(&error);
                 assert_eq!(issues.len(), 1, "{issues:?}");
-                assert_eq!(issues[0].condition, expected);
+                assert_eq!(issues[0].condition(), expected);
                 assert_eq!(
                     issues[0].spec_paths,
                     ["columns.RESULT.submission.value_level.GLUC.codelist"]
@@ -599,15 +588,15 @@ mod project {
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
                 (
-                    issues[0].phase.as_str(),
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
+                    issues[0].phase(),
+                    issues[0].condition(),
+                    issues[0].requirement()
                 ),
                 ("verification", "allowed_values_failed", Some("REQ-0957"))
             );
             assert_eq!(issues[0].spec_paths, ["columns.CODE.submission.codelist"]);
             assert_eq!(
-                issues[0].context,
+                yamaa_core::json::Value::Object(issues[0].context.clone()),
                 yamaa_adapters::json!({"column": "CODE", "codelist": "CODES", "failure_count": 1, "keys": [{"ID": 1}], "values": [9007199254740992.0]})
             );
             assert!(run.save().is_err());
@@ -769,9 +758,9 @@ mod project {
                     assert_eq!(run.issues().len(), 1);
                     assert_eq!(
                         (
-                            run.issues()[0].phase.as_str(),
-                            run.issues()[0].condition.as_str(),
-                            run.issues()[0].requirement.as_deref()
+                            run.issues()[0].phase(),
+                            run.issues()[0].condition(),
+                            run.issues()[0].requirement()
                         ),
                         ("verification", "allowed_values_failed", Some("REQ-1156"))
                     );
@@ -779,7 +768,7 @@ mod project {
                         run.issues()[0].spec_paths,
                         ["columns.VALUE.submission.inventory_vocabulary"]
                     );
-                    assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":1}],\"values\":[\"DM\"]}");
+                    assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":1}],\"values\":[\"DM\"]}");
                 } else {
                     assert!(run.issues().is_empty(), "{:?}", run.issues());
                 }
@@ -851,8 +840,8 @@ mod project {
                 let run =
                     file_application::Domain::from_project(result, &project, &run_scope).unwrap();
                 assert_eq!(run.issues().len(), 1);
-                assert_eq!(run.issues()[0].requirement.as_deref(), Some("REQ-1156"));
-                assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");
+                assert_eq!(run.issues()[0].requirement(), Some("REQ-1156"));
+                assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");
                 assert!(!study.0.join("define.xml").exists());
             }
         }
@@ -876,7 +865,7 @@ mod project {
             )
             .unwrap();
             assert_eq!(run.issues().len(), 1);
-            assert_eq!(yamaa_adapters::json_wire::encode(&run.issues()[0].context),"{\"column\":\"RESULT\",\"failure_count\":1,\"keys\":[{\"ID\":1,\"LBTESTCD\":\"CREAT\"}],\"values\":[\"DM\"]}");
+            assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"RESULT\",\"failure_count\":1,\"keys\":[{\"ID\":1,\"LBTESTCD\":\"CREAT\"}],\"values\":[\"DM\"]}");
         }
 
         #[test]
@@ -962,16 +951,12 @@ mod project {
                 assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
                 let issue = &run.issues()[0];
                 assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
+                    (issue.phase(), issue.condition(), issue.requirement()),
                     ("verification", "length_failed", Some("REQ-0378"))
                 );
                 assert_eq!(issue.spec_paths, [expected_path]);
                 assert_eq!(
-                    issue.context.clone(),
+                    yamaa_core::json::Value::Object(issue.context.clone()),
                     yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":1,"LBTESTCD":expected_key}],"max":maximum})
                 );
                 assert!(run.save().is_err());
@@ -1024,13 +1009,13 @@ mod project {
                     .replace("{literal: GLUC}", "{literal: '1'}")
                     .replace("{literal: CREAT}", "{literal: '2'}")
             };
-            let refused = |issues: &[yamaa_adapters::issue_rows::Issue]| {
+            let refused = |issues: &[yamaa_core::diagnostic::Diagnostic]| {
                 assert_eq!(issues.len(), 1, "{issues:?}");
                 assert_eq!(
                     (
-                        issues[0].phase.as_str(),
-                        issues[0].condition.as_str(),
-                        issues[0].requirement.as_deref()
+                        issues[0].phase(),
+                        issues[0].condition(),
+                        issues[0].requirement()
                     ),
                     ("validation", "value_level_where_invalid", Some("SUB-12"))
                 );
@@ -1039,7 +1024,7 @@ mod project {
                     ["columns.RESULT.submission.value_level.GLUC.where.LBTESTCD"]
                 );
                 assert_eq!(
-                    yamaa_adapters::json_wire::encode(&issues[0].context),
+                    yamaa_adapters::json_wire::encode_object(&issues[0].context),
                     "{\"column\":\"RESULT\",\"entry\":\"GLUC\",\"reason\":\"not_str\",\"where_column\":\"LBTESTCD\"}"
                 );
             };
@@ -1099,7 +1084,7 @@ mod project {
                     .replace("codelist: GLUCOSE", declaration);
                 let issues = study.check(&raw);
                 assert_eq!(issues.len(), 1, "{declaration}: {issues:?}");
-                assert_eq!(issues[0].condition, condition);
+                assert_eq!(issues[0].condition(), condition);
                 assert_eq!(issues[0].spec_paths, [path]);
                 assert!(!study.0.join("input.csv").exists());
             }
@@ -1111,10 +1096,7 @@ mod project {
             let issues = study.check(&raw);
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
-                (
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
-                ),
+                (issues[0].condition(), issues[0].requirement()),
                 ("declared_length_conflict", Some("REQ-0913"))
             );
             assert_eq!(
@@ -1122,7 +1104,7 @@ mod project {
                 ["columns.RESULT.submission.value_level.GLUC"]
             );
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&issues[0].context),
+                yamaa_adapters::json_wire::encode_object(&issues[0].context),
                 "{\"column\":\"RESULT\",\"length\":4,\"max_length\":3}"
             );
         }
@@ -1200,16 +1182,12 @@ mod project {
                 assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
                 let issue = &run.issues()[0];
                 assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
+                    (issue.phase(), issue.condition(), issue.requirement()),
                     ("verification", "not_missing_failed", Some("REQ-0885"))
                 );
                 assert_eq!(issue.spec_paths, [path]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::encode(&issue.context),
+                    yamaa_adapters::json_wire::encode_object(&issue.context),
                     "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}]}"
                 );
                 assert!(run.save().is_err());
@@ -1259,12 +1237,12 @@ mod project {
                 assert_eq!(run.issues().len(), 1, "{path}: {:?}", run.issues());
                 let issue = &run.issues()[0];
                 assert_eq!(
-                    (issue.condition.as_str(), issue.requirement.as_deref()),
+                    (issue.condition(), issue.requirement()),
                     ("not_missing_failed", Some("REQ-0885"))
                 );
                 assert_eq!(issue.spec_paths, [path]);
                 assert_eq!(
-                    issue.context.clone(),
+                    yamaa_core::json::Value::Object(issue.context.clone()),
                     yamaa_adapters::json!({"column":"RESULT","failure_count":1,"keys":[{"ID":2,"LBTESTCD":code}]})
                 );
                 assert!(run.save().is_err());
@@ -1285,11 +1263,7 @@ mod project {
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             let issue = &run.issues()[0];
             assert_eq!(
-                (
-                    issue.phase.as_str(),
-                    issue.condition.as_str(),
-                    issue.requirement.as_deref()
-                ),
+                (issue.phase(), issue.condition(), issue.requirement()),
                 (
                     "verification",
                     "value_level_multiple_matches",
@@ -1298,7 +1272,7 @@ mod project {
             );
             assert_eq!(issue.spec_paths, ["columns.RESULT.submission.value_level"]);
             assert_eq!(
-                issue.context.clone(),
+                yamaa_core::json::Value::Object(issue.context.clone()),
                 yamaa_adapters::json!({"column": "RESULT", "entries": [["GLUC", "URINE"]], "failure_count": 1, "keys": [{"ID": 2, "LBTESTCD": "GLUC"}]})
             );
             assert!(run.save().is_err());
@@ -1352,13 +1326,13 @@ mod project {
             let mut run = domain(&study, SELECTED, "ID,SPEC,VALUE\n1,SERUM,\n");
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             let issue = &run.issues()[0];
-            assert_eq!(issue.condition, "not_missing_failed");
+            assert_eq!(issue.condition(), "not_missing_failed");
             assert_eq!(
                 issue.spec_paths,
                 ["columns.RESULT.submission.value_level.GLUC.mandatory"]
             );
             assert_eq!(
-                issue.context.clone(),
+                yamaa_core::json::Value::Object(issue.context.clone()),
                 yamaa_adapters::json!({"column": "RESULT", "failure_count": 1, "keys": [{"ID": 1, "LBTESTCD": "GLUC"}]})
             );
             assert!(run.save().is_err());
@@ -1406,7 +1380,7 @@ mod project {
                 let issues = study.check(&raw);
                 assert_eq!(issues.len(), 1, "{to}: {issues:?}");
                 assert_eq!(
-                    (issues[0].phase.as_str(), issues[0].condition.as_str()),
+                    (issues[0].phase(), issues[0].condition()),
                     ("validation", condition)
                 );
                 assert_eq!(issues[0].spec_paths, path);
@@ -1463,15 +1437,15 @@ mod project {
                 assert_eq!(issues.len(), 1, "{path}: {issues:?}");
                 assert_eq!(
                     (
-                        issues[0].phase.as_str(),
-                        issues[0].condition.as_str(),
-                        issues[0].requirement.as_deref()
+                        issues[0].phase(),
+                        issues[0].condition(),
+                        issues[0].requirement()
                     ),
                     ("validation", condition, Some(requirement))
                 );
                 assert_eq!(issues[0].spec_paths, [path]);
                 assert_eq!(
-                    yamaa_adapters::json_wire::encode(&issues[0].context),
+                    yamaa_adapters::json_wire::encode_object(&issues[0].context),
                     context
                 );
                 assert!(!study.0.join("input.csv").exists());
@@ -1514,10 +1488,7 @@ mod project {
                 let issues = study.check(&raw);
                 assert_eq!(issues.len(), 1, "{entry}: {issues:?}");
                 assert_eq!(
-                    (
-                        issues[0].condition.as_str(),
-                        issues[0].requirement.as_deref()
-                    ),
+                    (issues[0].condition(), issues[0].requirement()),
                     ("submission_length_not_applicable", Some("REQ-0912"))
                 );
                 assert_eq!(
@@ -1670,10 +1641,10 @@ columns:
                 let issues = study.check(&raw);
                 let refuted: Vec<_> = issues
                     .iter()
-                    .filter(|issue| issue.condition == "origin_contradicts_derivation")
+                    .filter(|issue| issue.condition() == "origin_contradicts_derivation")
                     .collect();
                 assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
-                assert_eq!(refuted[0].requirement.as_deref(), Some("REQ-0922"));
+                assert_eq!(refuted[0].requirement(), Some("REQ-0922"));
                 assert_eq!(
                     refuted[0].spec_paths,
                     [format!("columns.{column}.submission")]
@@ -1750,7 +1721,7 @@ rows:
                 let issues = study.check(&READS.replacen(from, to, 1));
                 let refuted: Vec<_> = issues
                     .iter()
-                    .filter(|issue| issue.condition == "origin_contradicts_derivation")
+                    .filter(|issue| issue.condition() == "origin_contradicts_derivation")
                     .collect();
                 assert_eq!(refuted.len(), 1, "{column}: {issues:?}");
                 assert_eq!(
@@ -1769,7 +1740,7 @@ rows:
                 "{origin: {type: Predecessor, description: RANGE.LOW}}",
             ));
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "origin_contradicts_derivation");
+            assert_eq!(issues[0].condition(), "origin_contradicts_derivation");
             assert_eq!(issues[0].context["reason"], "predecessor_source");
             assert!(!study.0.join("input.csv").exists());
         }
@@ -1818,8 +1789,8 @@ columns:
                 assert_eq!(issues.len(), 1, "{column}: {issues:?}");
                 assert_eq!(
                     (
-                        issues[0].condition.as_str(),
-                        issues[0].requirement.as_deref()
+                        issues[0].condition(),
+                        issues[0].requirement()
                     ),
                     ("origin_contradicts_derivation", Some("REQ-0922"))
                 );
@@ -1837,10 +1808,7 @@ columns:
             ));
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
-                (
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
-                ),
+                (issues[0].condition(), issues[0].requirement()),
                 ("origin_description_missing", Some("REQ-0920"))
             );
             assert_eq!(
@@ -1854,7 +1822,7 @@ columns:
                 "derivation: {str_template: \"{DM.AGE} years\"}",
             ));
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "origin_contradicts_derivation");
+            assert_eq!(issues[0].condition(), "origin_contradicts_derivation");
             // A value-level Predecessor is checked against the derivations
             // that can produce the rows its where clause selects.
             let values = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBTESTCD, LBORRES]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBTESTCD, type: str}\n  - {name: LBORRES, type: str, submission: {origin: {type: Assigned}, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, origin: {type: Predecessor, description: SRC.GLUC}}]}}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}, LBORRES: SRC.GLUC}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}, LBORRES: SRC.CREAT}\n";
@@ -1863,10 +1831,7 @@ columns:
                 study.check(&values.replacen("LBORRES: SRC.GLUC", "LBORRES: SRC.CREAT", 1));
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(
-                (
-                    issues[0].condition.as_str(),
-                    issues[0].requirement.as_deref()
-                ),
+                (issues[0].condition(), issues[0].requirement()),
                 ("refuted_value_origin", Some("SUB-13"))
             );
             assert_eq!(
@@ -1874,7 +1839,7 @@ columns:
                 ["columns.LBORRES.submission.value_level.GLUC"]
             );
             assert_eq!(
-                issues[0].context,
+                yamaa_core::json::Value::Object(issues[0].context.clone()),
                 yamaa_adapters::json!({"column": "LBORRES", "derivation_kind": "source", "entry": "GLUC", "origin_type": "Predecessor", "reason": "predecessor_source"})
             );
             assert!(!study.0.join("dm.csv").exists());
@@ -1912,14 +1877,14 @@ columns:
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             assert_eq!(
                 (
-                    run.issues()[0].phase.as_str(),
-                    run.issues()[0].condition.as_str(),
-                    run.issues()[0].requirement.as_deref()
+                    run.issues()[0].phase(),
+                    run.issues()[0].condition(),
+                    run.issues()[0].requirement()
                 ),
                 ("verification", "allowed_values_failed", Some("REQ-1156"))
             );
             assert_eq!(
-                yamaa_adapters::json_wire::encode(&run.issues()[0].context),
+                yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),
                 "{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":3}],\"values\":[\"XX\"]}"
             );
             assert!(!study.0.join("sdtm/never-read.csv").exists());
@@ -2229,11 +2194,7 @@ columns:
             assert_eq!(issues.len(), 2);
             for (index, issue) in issues.iter().enumerate() {
                 assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
+                    (issue.phase(), issue.condition(), issue.requirement()),
                     (
                         "validation",
                         "function_conformance_failed",
@@ -2244,7 +2205,7 @@ columns:
                     issue.spec_paths,
                     [format!("{}.tests[0]", sources(&functions)[index].path)]
                 );
-                let context: yamaa_core::json::Value = issue.context.clone();
+                let context = yamaa_core::json::Value::Object(issue.context.clone());
                 assert_eq!(context["function"], functions[index].definition().name);
                 assert_eq!(context["case"], "normal");
                 assert_eq!(context["args"]["x"], 7);
@@ -2284,7 +2245,7 @@ columns:
             let issues = binding_issues(&sources(&functions), &failures, &[host, host]).unwrap();
             assert_eq!(issues.len(), 2);
             assert_eq!(issues[0].spec_paths, ["functions.first.function"]);
-            assert_eq!(issues[0].requirement.as_deref(), Some("REQ-0695"));
+            assert_eq!(issues[0].requirement(), Some("REQ-0695"));
             port.bindings_fail = false;
             port.calls_fail = true;
             let Failure::Tests(failures) =
@@ -2302,7 +2263,7 @@ columns:
             assert!(Rc::ptr_eq(held, &port.payload));
             let issues =
                 test_issues(&sources(&functions), &failures, &[host, host, host, host]).unwrap();
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["failure"]["condition"], "function_call_failed");
             assert_eq!(context["failure"]["requirement"], "REQ-0701");
             assert_eq!(context["failure"]["context"]["host_message"], "é\0🙂");
@@ -2410,7 +2371,7 @@ columns:
                 })],
             )
             .unwrap();
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["host_error"], "ValueError");
             assert_eq!(context["host_message"], text);
             assert!(context.get("host_details_truncated").is_none());
@@ -2463,7 +2424,7 @@ columns:
                 expected: float(0.0),
             }];
             let issues = test_issues(&selected, &correct, &[None]).unwrap();
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(
                 context["expected"].as_f64().unwrap().to_bits(),
                 0.0_f64.to_bits()
@@ -2482,7 +2443,7 @@ columns:
                 expected: Value::Int(i64::MIN),
             }];
             let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["expected"].as_i64(), Some(i64::MIN));
             assert_eq!(context["args"]["x"].as_i64(), Some(i64::MIN));
             assert_eq!(context["actual"].as_i64(), Some(i64::MAX));
@@ -2517,7 +2478,7 @@ columns:
                 expected: Value::Str("authored é\0🙂".into()),
             }];
             let issues = test_issues(&selected, &failures, &[None]).unwrap();
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["expected"], "authored é\0🙂");
             assert_eq!(context["actual"], "actual é\0🙂");
         }
@@ -2610,15 +2571,11 @@ columns:
             assert_eq!(issues.len(), 1);
             let issue = &issues[0];
             assert_eq!(
-                (
-                    issue.phase.as_str(),
-                    issue.condition.as_str(),
-                    issue.requirement.as_deref()
-                ),
+                (issue.phase(), issue.condition(), issue.requirement()),
                 ("verification", "allowed_values_failed", Some("REQ-0957"))
             );
             assert_eq!(issue.spec_paths, ["columns.CODE.submission.codelist"]);
-            let context: yamaa_core::json::Value = issue.context.clone();
+            let context = yamaa_core::json::Value::Object(issue.context.clone());
             assert_eq!(context["column"], "CODE");
             assert_eq!(context["codelist"], "SEX");
             assert_eq!(context["keys"][0]["ID"].as_i64(), Some(i64::MAX));
@@ -2664,7 +2621,7 @@ columns:
             let text = "\0".repeat(1_500_000);
             let records = vec![record(Value::Str(text.clone()))];
             let issues = codelist_issues(&compiled, &records).unwrap();
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["values"], yamaa_adapters::json!([text]));
             let mut many = record(Value::Str("bad".into()));
             many.failed_count = 65_537;
@@ -2679,7 +2636,7 @@ columns:
                 .collect();
             let issues = codelist_issues(&compiled, &[many]).unwrap();
             assert_eq!(issues.len(), 1);
-            let context: yamaa_core::json::Value = issues[0].context.clone();
+            let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["failure_count"], 65_537);
             assert_eq!(context["values"].as_array().unwrap().len(), 65_537);
             assert_eq!(context["keys"].as_array().unwrap().len(), 65_537);
@@ -2776,8 +2733,8 @@ columns:
             assert_eq!(port.reads, 5);
             (rejected, payload)
         }
-        fn context(issue: &yamaa_adapters::issue_rows::Issue) -> Value {
-            issue.context.clone()
+        fn context(issue: &yamaa_core::diagnostic::Diagnostic) -> Value {
+            Value::Object(issue.context.clone())
         }
         #[test]
         fn static_admission_restores_external_and_inline_origins_after_an_earlier_capture_failure()
@@ -2798,7 +2755,7 @@ columns:
             assert_eq!(context(function)["value"], true);
             let lists = issues
                 .iter()
-                .filter(|i| i.requirement.as_deref() == Some("REQ-0950"))
+                .filter(|i| i.requirement() == Some("REQ-0950"))
                 .collect::<Vec<_>>();
             assert_eq!(lists.len(), 2);
             assert_eq!(lists[0].spec_paths, ["codelists[0].items[0].value"]);
@@ -2868,7 +2825,7 @@ columns:
             assert!(rejected.environment_file.is_none());
             (rejected, port.reads)
         }
-        fn assert_environment_provenance(issue: &yamaa_adapters::issue_rows::Issue) {
+        fn assert_environment_provenance(issue: &yamaa_core::diagnostic::Diagnostic) {
             assert_eq!(context(issue)["source"], ENVIRONMENT);
             assert_eq!(context(issue)["entry"], PROJECT);
             assert_eq!(context(issue)["environment_path"], "environments.python");
@@ -2924,11 +2881,7 @@ columns:
             assert_eq!(context(&issues[2])["value"], "2024-01-01T25:00:00");
             for issue in &issues {
                 assert_eq!(
-                    (
-                        issue.phase.as_str(),
-                        issue.condition.as_str(),
-                        issue.requirement.as_deref()
-                    ),
+                    (issue.phase(), issue.condition(), issue.requirement()),
                     (
                         "validation",
                         "project_environment_invalid",
@@ -2961,11 +2914,7 @@ columns:
             assert_eq!(issues.len(), 1);
             let issue = &issues[0];
             assert_eq!(
-                (
-                    issue.phase.as_str(),
-                    issue.condition.as_str(),
-                    issue.requirement.as_deref()
-                ),
+                (issue.phase(), issue.condition(), issue.requirement()),
                 (
                     "validation",
                     "project_environment_invalid",
@@ -3050,8 +2999,8 @@ columns:
             assert_eq!(issues.len(), 3);
             for (issue, field) in issues.iter().zip(["parent", "runtime", "version"]) {
                 assert_eq!(issue.spec_paths, [field]);
-                assert_eq!(issue.condition, "unknown_field");
-                assert_eq!(issue.requirement, Some("REQ-0285".into()));
+                assert_eq!(issue.condition(), "unknown_field");
+                assert_eq!(issue.requirement(), Some("REQ-0285"));
                 assert_eq!(context(issue)["field"], field);
                 assert_eq!(context(issue)["class"], "project_class");
                 assert_eq!(context(issue)["source"], PROJECT);
@@ -3096,8 +3045,8 @@ columns:
             assert_eq!(issues.len(), 1);
             let issue = &issues[0];
             assert_eq!(issue.spec_paths, ["language"]);
-            assert_eq!(issue.condition, "unknown_field");
-            assert_eq!(issue.requirement, Some("REQ-0285".into()));
+            assert_eq!(issue.condition(), "unknown_field");
+            assert_eq!(issue.requirement(), Some("REQ-0285"));
             assert_eq!(context(issue)["field"], "language");
             assert_eq!(context(issue)["class"], "environment_class");
             assert_environment_provenance(issue);
@@ -3148,8 +3097,8 @@ columns:
                 ),
             ] {
                 assert_eq!(issue.spec_paths, [format!("<normalization>.{field}")]);
-                assert_eq!(issue.condition, "unknown_field");
-                assert_eq!(issue.requirement, Some("REQ-0285".into()));
+                assert_eq!(issue.condition(), "unknown_field");
+                assert_eq!(issue.requirement(), Some("REQ-0285"));
                 assert_eq!(context(issue)["field"], field);
                 assert_eq!(context(issue)["class"], class);
                 assert_eq!(context(issue)["source"], source);
@@ -3263,7 +3212,7 @@ columns:
                     assert_eq!(issues.len(), 129 + 2 * 128);
                     for (issue, (index, condition, field, path)) in issues.iter().zip(wanted) {
                         let context = context(issue);
-                        assert_eq!(issue.condition, condition);
+                        assert_eq!(issue.condition(), condition);
                         assert_eq!(issue.spec_paths, [path]);
                         assert_eq!(context["field"].as_str(), field);
                         assert_eq!(context["environment_path"], format!("codelists[{index}]"));

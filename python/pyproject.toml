@@ -38,13 +38,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-style = [
-  # Source nodes and marks for layout fixes, and YAML 1.2 values for lints.
-  "pyyaml>=6.0.3",
-  "py-yaml12>=0.2",
-]
 test = [
-  # Tests include style checks and independent artifact/report readers.
+  # Independent artifact, report and conformance readers.
   "pyyaml>=6.0.3",
   "py-yaml12>=0.2",
   # lxml 6.1.3 disables external parameter entities by default; 6.1.1 also

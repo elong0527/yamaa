@@ -134,8 +134,9 @@ Python interpreter for PyO3. On Windows, run
 `python -m tools.ci.r_import_library` after installing R and the MSVC build tools
 to create the required import library. The Python extension feature belongs to
 maturin packaging; enabling every feature would select extension linking instead of
-normal Python linking for these Cargo tests. Native qualification also runs
-the workspace tests with the optimized `release-test` profile.
+normal Python linking for these Cargo tests. Ordinary CI runs them in the
+development profile, with Clippy, on Linux; native qualification runs them on
+Linux, macOS and Windows with the optimized `release-test` profile alone.
 Cargo discovers integration tests in each crate's `tests/*.rs` files. Add a
 feature file there to run new cases with the workspace command; no harness
 registration is needed. Keep test bodies in those files and shared private

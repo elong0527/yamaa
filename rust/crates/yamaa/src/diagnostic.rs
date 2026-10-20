@@ -1,16 +1,18 @@
 //! Facade-owned diagnostics: typed records, never JSON text or tuples.
 //!
-//! This is the public form of the adapter issue rows (phase, condition,
-//! requirement, spec paths, structured context and optional geometry).
-//! Severity is error for every record the portable shape carries today: only
-//! error-severity findings become issue rows, while warning-severity findings
-//! surface as rows of the run report. Context numbers keep their exact identity: an
-//! integer token wider than both 64-bit machine types keeps its decimal
-//! spelling instead of passing through binary64. The original context text is
-//! retained privately so host data-frame conversion stays byte-identical; the
-//! public shape is the value map. Geometry is optional, and absent means
-//! unavailable: a present zero-width span or a present empty route is a
-//! recorded fact, never a default.
+//! This is the edge where core's diagnostic record (cause, spec paths,
+//! structured context and optional geometry) becomes its public form: the
+//! registry names the phase, condition and requirement, and the context
+//! becomes JSON text here and nowhere earlier. Severity is error for every
+//! issue today: only error-severity findings become issues, while
+//! warning-severity findings surface as rows of the run report. Context
+//! numbers keep their exact identity: an integer token wider than both 64-bit
+//! machine types keeps its decimal spelling instead of passing through
+//! binary64. The canonical context text is retained privately so host
+//! data-frame conversion stays byte-identical; the public shape is the value
+//! map. Geometry is optional, and absent means unavailable: a present
+//! zero-width span or a present empty route is a recorded fact, never a
+//! default.
 
 use std::collections::BTreeMap;
 
@@ -60,7 +62,7 @@ pub const REPORT_OUTCOMES: [&str; 4] = yamaa_core::run_report::OUTCOMES;
 /// Values of the run report's `SEVERITY` column: the severity of a check.
 pub const SEVERITIES: [&str; 2] = yamaa_core::dataset::SEVERITIES;
 
-/// Diagnostic severity. Every portable issue row carries error severity today.
+/// Diagnostic severity. Every issue carries error severity today.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
@@ -144,17 +146,13 @@ pub struct DiagnosticContext {
 }
 
 impl DiagnosticContext {
-    pub(crate) fn from_issue(issue: &yamaa_adapters::issue_rows::Issue) -> Self {
-        let values = match &issue.context {
-            yamaa_core::json::Value::Object(values) => values
+    pub(crate) fn from_core(context: &yamaa_core::diagnostic::Context) -> Self {
+        Self {
+            values: context
                 .iter()
                 .map(|(key, value)| (key.clone(), context_value_from_core(value)))
                 .collect(),
-            _ => BTreeMap::new(),
-        };
-        Self {
-            values,
-            text: yamaa_adapters::json_wire::encode(&issue.context),
+            text: yamaa_adapters::json_wire::encode_object(context),
         }
     }
 
@@ -186,7 +184,8 @@ impl DiagnosticContext {
     }
 }
 
-/// A typed diagnostic record, the public form of one issue row.
+/// A typed diagnostic record, the public form of one issue: one row of the
+/// issues table.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagnostic {
@@ -205,19 +204,20 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub(crate) fn from_issue(issue: &yamaa_adapters::issue_rows::Issue) -> Self {
+    pub(crate) fn from_core(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Self {
+        let definition = diagnostic.definition();
         Self {
             severity: Severity::Error,
-            phase: issue.phase.clone(),
-            code: issue.condition.clone(),
-            requirement: issue.requirement.clone(),
-            spec_path: issue.spec_paths.clone(),
-            context: DiagnosticContext::from_issue(issue),
-            source_span: issue.source_span.map(|span| SourceSpan {
+            phase: definition.phase.to_owned(),
+            code: definition.condition.to_owned(),
+            requirement: definition.requirement.map(str::to_owned),
+            spec_path: diagnostic.spec_paths.clone(),
+            context: DiagnosticContext::from_core(&diagnostic.context),
+            source_span: diagnostic.source_span.map(|span| SourceSpan {
                 start: span.start,
                 end: span.end,
             }),
-            operand_route: issue.operand_route.clone(),
+            operand_route: diagnostic.operand_route.clone(),
         }
     }
 }
@@ -230,9 +230,9 @@ pub struct Report {
 }
 
 impl Report {
-    pub(crate) fn from_issues(issues: &[yamaa_adapters::issue_rows::Issue]) -> Self {
+    pub(crate) fn from_issues(issues: &[yamaa_core::diagnostic::Diagnostic]) -> Self {
         Self {
-            diagnostics: issues.iter().map(Diagnostic::from_issue).collect(),
+            diagnostics: issues.iter().map(Diagnostic::from_core).collect(),
         }
     }
 
@@ -333,22 +333,25 @@ impl Report {
 mod tests {
     use super::*;
 
-    // NOTE: the condition below is deliberately NOT a registered condition
-    // code and the requirement is None: tools/validation/check_diagnostics.py
-    // forbids registered condition/requirement literals in crate sources
-    // (they live in the core registry and in tests/ instead). The conversion
-    // under test is a pure field mapping, so registry membership is
-    // irrelevant here; tests/diagnostic_records.rs covers real registry
+    // NOTE: tools/validation/check_diagnostics.py forbids registered
+    // condition/requirement literals in crate sources (they live in the core
+    // registry and in tests/ instead), so the expected vocabulary below is read
+    // from the registry. tests/diagnostic_records.rs covers real registry
     // diagnostics end to end through the public Engine API.
     const CONTEXT: &str = r#"{"beyond":18446744073709551615,"maximum":9223372036854775807,"minimum":-9223372036854775808,"ratio":1.5,"values":[null,"é🙂",true],"wide":[-18446744073709551617,340282366920938463463374607431768211456]}"#;
+    const CODE: yamaa_core::diagnostic::ConditionCode =
+        yamaa_core::diagnostic::ConditionCode::ApplicationRejected;
 
-    fn issue() -> yamaa_adapters::issue_rows::Issue {
-        yamaa_adapters::issue_rows::Issue {
-            phase: "input".into(),
-            condition: "conversion_probe".into(),
-            requirement: None,
+    fn issue() -> yamaa_core::diagnostic::Diagnostic {
+        let yamaa_core::json::Value::Object(context) =
+            yamaa_adapters::json_wire::decode(CONTEXT).unwrap()
+        else {
+            panic!("object context fixture")
+        };
+        yamaa_core::diagnostic::Diagnostic {
+            code: CODE,
             spec_paths: vec!["columns.A".into()],
-            context: yamaa_adapters::json_wire::decode(CONTEXT).unwrap(),
+            context,
             source_span: None,
             operand_route: None,
         }
@@ -361,8 +364,8 @@ mod tests {
         assert!(!report.is_empty());
         let diagnostic = &report.diagnostics[0];
         assert_eq!(diagnostic.severity, Severity::Error);
-        assert_eq!(diagnostic.phase, "input");
-        assert_eq!(diagnostic.code, "conversion_probe");
+        assert_eq!(diagnostic.phase, CODE.definition().phase);
+        assert_eq!(diagnostic.code, CODE.definition().condition);
         assert_eq!(diagnostic.requirement.as_deref(), None);
         assert_eq!(diagnostic.spec_path, ["columns.A"]);
         assert_eq!(diagnostic.context.to_json(), CONTEXT);
@@ -438,13 +441,13 @@ mod tests {
     }
 
     #[test]
-    fn non_object_context_yields_an_empty_map_with_encoded_text() {
-        let mut bad = issue();
-        bad.context = yamaa_core::json::Value::Null;
-        let report = Report::from_issues(&[bad]);
+    fn an_empty_context_yields_an_empty_map_and_an_empty_object() {
+        let mut empty = issue();
+        empty.context.clear();
+        let report = Report::from_issues(&[empty]);
         let context = &report.diagnostics[0].context;
         assert!(context.is_empty());
-        assert_eq!(context.to_json(), "null");
+        assert_eq!(context.to_json(), "{}");
         assert_eq!(context.iter().count(), 0);
     }
 
@@ -452,7 +455,7 @@ mod tests {
     fn issues_table_keeps_every_field_and_absent_geometry() {
         use arrow_array::{Array, Int64Array, ListArray, StringArray};
         let mut located = issue();
-        located.requirement = Some("probe-requirement".into());
+        located.code = yamaa_core::diagnostic::ConditionCode::IntegerOverflow;
         located.source_span = Some(yamaa_core::expression::SourceSpan { start: 3, end: 9 });
         located.operand_route = Some(vec!["left".into()]);
         let table = Report::from_issues(&[issue(), located]).table();
@@ -479,10 +482,11 @@ mod tests {
                 .unwrap()
                 .clone()
         };
-        assert_eq!(text(0).value(0), "input");
-        assert_eq!(text(1).value(1), "conversion_probe");
+        let overflow = yamaa_core::diagnostic::ConditionCode::IntegerOverflow.definition();
+        assert_eq!(text(0).value(0), CODE.definition().phase);
+        assert_eq!(text(1).value(1), overflow.condition);
         assert!(text(2).is_null(0));
-        assert_eq!(text(2).value(1), "probe-requirement");
+        assert_eq!(Some(text(2).value(1)), overflow.requirement);
         assert_eq!(text(4).value(0), CONTEXT);
         let list = |index: usize| {
             batch

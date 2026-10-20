@@ -122,8 +122,10 @@ that layer, unless `relative_to: entry` selects the entry, and composition
 writes them from the entry ([LAYER-10](../inheritance.md#layer-10)). A
 parent step never leaves the entry's root, so a location beside a layer on
 another drive is written as its absolute path. A location beside a layer on a
-network share that the entry is not on has no written path, and its
-declaration is refused rather than resolved below the entry's root.
+network share that the entry is not on has no written path: composition
+refuses that layer with `parent_on_another_share`
+([LAYER-10](../inheritance.md#layer-10)) rather than resolving the location
+below the entry's root.
 
 <a id="file-5"></a>
 

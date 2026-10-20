@@ -159,9 +159,9 @@ class ArtifactObservation(_FrozenModel):
 
 
 # The recorded-geometry fields of a diagnostic. They are optional on the wire
-# the way the adapter boundary (Issue::from_diagnostic) defines it: an omitted
-# key means no geometry was recorded, and a present key carries a recorded
-# value, never null.
+# the way the run report renders a diagnostic record
+# (report_storage::diagnostic_value): an omitted key means no geometry was
+# recorded, and a present key carries a recorded value, never null.
 GEOMETRY_FIELDS = frozenset({"source_span", "operand_route"})
 
 

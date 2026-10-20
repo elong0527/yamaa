@@ -2,13 +2,16 @@
 //! Classified resource findings retain observations; opaque host failures stay opaque.
 use crate::json;
 use crate::{
-    report_scalar::ScalarValue,
+    dataset_result::{Condition, Outcome},
     report_storage::{StoredReport, StoredTable},
     specification_diagnostics,
     specification_run::{CapturedAttempt, PortError},
     specification_run_view::RunView,
 };
+use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::{Map, Value};
+use yamaa_core::numeric_lifecycle::HandlerCount;
 use yamaa_core::specification_run::SourceOrigin;
 use yamaa_core::{table::TableAccess, value::Value as Scalar};
 
@@ -67,93 +70,58 @@ impl From<crate::source_diagnostics::SourceProjectionError> for Error {
         }
     }
 }
-fn plain(value: &Value) -> Result<Value, Error> {
-    if let Ok(scalar) = ScalarValue::from_json(value) {
-        return Ok(
-            match scalar.into_core().map_err(|_| Error::InvalidObservation)? {
-                Scalar::Missing => Value::Null,
-                Scalar::Str(v) => json!(v),
-                Scalar::Int(v) => json!(v),
-                Scalar::Float(v) => json!(v.get()),
-                Scalar::Bool(v) => json!(v),
-                Scalar::Date(v) => json!(v.to_string()),
-                Scalar::DateTime(v) => json!(v.to_string()),
-            },
-        );
+/// One authored scalar as a plain context value: text, number, boolean or null.
+fn plain(value: &Scalar) -> Value {
+    match value {
+        Scalar::Missing => Value::Null,
+        Scalar::Str(v) => json!(v),
+        Scalar::Int(v) => json!(v),
+        Scalar::Float(v) => json!(v.get()),
+        Scalar::Bool(v) => json!(v),
+        Scalar::Date(v) => json!(v.to_string()),
+        Scalar::DateTime(v) => json!(v.to_string()),
     }
-    if let Value::Array(values) = value {
-        return values
-            .iter()
-            .map(plain)
-            .collect::<Result<Vec<_>, _>>()
-            .map(Value::Array);
-    }
-    if let Value::Object(values) = value {
-        if values.len() == 1 {
-            if let Some(integer) = values.get("integer").and_then(Value::as_str) {
-                return integer
-                    .parse()
-                    .map(Value::Number)
-                    .map_err(|_| Error::InvalidObservation);
-            }
-        }
-        return values
-            .iter()
-            .map(|(key, value)| Ok((key.clone(), plain(value)?)))
-            .collect::<Result<Map<_, _>, Error>>()
-            .map(Value::Object);
-    }
-    Err(Error::InvalidObservation)
 }
-pub(crate) fn condition(run: &dyn RunView, value: &Value) -> Result<Value, Error> {
-    let diagnostic = value.get("diagnostic").ok_or(Error::InvalidObservation)?;
-    let mut context = diagnostic
-        .get("context")
-        .and_then(Value::as_object)
-        .ok_or(Error::InvalidObservation)?
-        .clone();
-    if let Some(identity) = value.get("identity").filter(|v| !v.is_null()) {
-        let keys = identity
-            .get("keys")
-            .and_then(Value::as_array)
-            .ok_or(Error::InvalidObservation)?;
+fn fields(values: &[(String, Scalar)]) -> Map<String, Value> {
+    values
+        .iter()
+        .map(|(name, value)| (name.clone(), plain(value)))
+        .collect()
+}
+/// An execution finding with the row keys, matched intermediate key or
+/// baseline partition it names added to its context.
+pub(crate) fn condition(run: &dyn RunView, condition: &Condition) -> Result<Diagnostic, Error> {
+    let mut diagnostic = condition.diagnostic.clone();
+    if let Some(identity) = &condition.identity {
         let names = run.compiled().key_names().collect::<Vec<_>>();
-        if names.len() != keys.len() {
+        if names.len() != identity.values.len() {
             return Err(Error::InvalidObservation);
         }
         let keys = names
             .into_iter()
-            .zip(keys)
-            .map(|(name, v)| Ok((name.to_owned(), plain(v)?)))
-            .collect::<Result<Map<_, _>, Error>>()?;
-        context.insert("keys".into(), json!([keys]));
+            .zip(&identity.values)
+            .map(|(name, value)| (name.to_owned(), plain(value)))
+            .collect::<Map<_, _>>();
+        diagnostic
+            .context
+            .insert("keys".into(), json!([Value::Object(keys)]));
     }
-    if let Some(matched) = value.get("matched_key").filter(|v| !v.is_null()) {
-        let matched = matched.as_array().ok_or(Error::InvalidObservation)?;
-        let mut names = Vec::new();
-        let mut key = Map::new();
-        for field in matched {
-            let name = field["name"].as_str().ok_or(Error::InvalidObservation)?;
-            names.push(name);
-            key.insert(name.into(), plain(&field["value"])?);
-        }
-        context.insert("key".into(), json!(names));
-        context.insert("intermediate_key".into(), key.into());
+    if let Some(matched) = &condition.matched_key {
+        let names = matched
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+        diagnostic.context.insert("key".into(), json!(names));
+        diagnostic
+            .context
+            .insert("intermediate_key".into(), Value::Object(fields(matched)));
     }
-    if let Some(partition) = value.get("partition").filter(|v| !v.is_null()) {
-        let partition = partition.as_array().ok_or(Error::InvalidObservation)?;
-        let mut keys: Map<String, Value> = Map::new();
-        for field in partition {
-            let name = field["name"].as_str().ok_or(Error::InvalidObservation)?;
-            keys.insert(name.into(), plain(&field["value"])?);
-        }
-        context.insert("keys".into(), json!([keys]));
+    if let Some(partition) = &condition.partition {
+        diagnostic
+            .context
+            .insert("keys".into(), json!([Value::Object(fields(partition))]));
     }
-    let mut diagnostic = diagnostic.clone();
-    diagnostic["context"] = context.into();
-    crate::issue_rows::Issue::from_diagnostic(diagnostic)
-        .map(|issue| issue.as_value())
-        .map_err(|_| Error::InvalidObservation)
+    Ok(diagnostic)
 }
 /// A classified capture failure terminates the request sequence. Reject malformed
 /// observations rather than attaching a resource finding to an unrelated failure.
@@ -218,8 +186,6 @@ pub fn failure<E>(
             if response.table.is_some() {
                 return Err(Error::UnsupportedOutcome);
             }
-            let value: Value = crate::json_wire::decode(&response.outcome)
-                .map_err(|_| Error::InvalidObservation)?;
             if !response.retained_verifications.is_empty() {
                 verifications.extend(
                     check_observations(
@@ -231,24 +197,18 @@ pub fn failure<E>(
                     .0,
                 );
             }
-            match value["outcome"]["status"].as_str() {
-                Some("condition") => {
+            match &response.outcome {
+                Outcome::Condition(found) => {
                     if let Some((phase, completed)) = &response.failed_verifications {
                         verifications.extend(check_observations(run, completed, *phase, &id)?.0);
                     }
                     if response.intermediate_diagnostics.is_empty() {
-                        vec![condition(run, &value["outcome"])?]
+                        vec![condition(run, found)?]
                     } else {
-                        response
-                            .intermediate_diagnostics
-                            .iter()
-                            .map(|diagnostic| {
-                                specification_diagnostics::portable_diagnostic(diagnostic.clone())
-                            })
-                            .collect::<Vec<_>>()
+                        response.intermediate_diagnostics.clone()
                     }
                 }
-                Some("failure") => {
+                Outcome::Failure => {
                     let (phase, completed) = response
                         .failed_verifications
                         .as_ref()
@@ -257,14 +217,14 @@ pub fn failure<E>(
                     verifications.extend(records);
                     diagnostics
                 }
-                Some("limit") => vec![crate::resource_diagnostics::outcome(
-                    &value["outcome"],
+                Outcome::Limit(bound) => vec![crate::resource_diagnostics::outcome(
+                    bound,
                     run.compiled().sources(),
                     run.compiled().driver_index(),
                 )
-                .map(|refusal| refusal.value("execute", "execution_limit"))
+                .map(|refusal| refusal.diagnostic(Stage::Execute, Fault::ExecutionLimit))
                 .ok_or(Error::UnsupportedOutcome)?],
-                _ => return Err(Error::UnsupportedOutcome),
+                Outcome::Success => return Err(Error::UnsupportedOutcome),
             }
         }
         Err(PortError::Run(error)) => {
@@ -278,12 +238,11 @@ pub fn failure<E>(
                 .document()
                 .written_source_path(&source.read.source.name)
                 .ok_or(Error::InvalidObservation)?;
-            let diagnostic = source
+            vec![source
                 .read
                 .failure
                 .ok_or(Error::InvalidObservation)?
-                .diagnostic(&source.read.source.name, written);
-            vec![specification_diagnostics::portable_diagnostic(diagnostic)]
+                .diagnostic(&source.read.source.name, written)]
         }
         Err(PortError::Inspect(_)) => {
             let failures = inspected_failures(run, attempt)?;
@@ -293,7 +252,6 @@ pub fn failure<E>(
                     failures,
                 )
                 .cloned()
-                .map(specification_diagnostics::portable_diagnostic)
                 .collect::<Vec<_>>();
             if !known_filter_types.is_empty() {
                 known_filter_types
@@ -305,12 +263,10 @@ pub fn failure<E>(
                             .document()
                             .written_source_path(&failure.source.name)
                             .ok_or(Error::InvalidObservation)?;
-                        Ok(specification_diagnostics::portable_diagnostic(
-                            failure
-                                .failure
-                                .ok_or(Error::InvalidObservation)?
-                                .diagnostic(&failure.source.name, written),
-                        ))
+                        Ok(failure
+                            .failure
+                            .ok_or(Error::InvalidObservation)?
+                            .diagnostic(&failure.source.name, written))
                     })
                     .collect::<Result<Vec<_>, Error>>()?
             }
@@ -319,11 +275,9 @@ pub fn failure<E>(
     };
     let mut report = envelope(run, attempt, &id)?;
     if let Ok(response) = &attempt.result {
-        let value: Value =
-            crate::json_wire::decode(&response.outcome).map_err(|_| Error::InvalidObservation)?;
-        set_handler_counts(&mut report, &value)?;
+        set_handler_counts(&mut report, &response.handler_counts);
     }
-    set_diagnostics(&mut report, diagnostics);
+    report.set_diagnostics(diagnostics);
     report["verifications"] = json!(verifications);
     Ok(report)
 }
@@ -401,29 +355,17 @@ pub(crate) fn envelope_sources<T: TableAccess>(
         tables,
     ))
 }
-pub(crate) fn set_handler_counts(report: &mut Value, response: &Value) -> Result<(), Error> {
-    let Some(raw) = response.get("handler_counts") else {
-        return Ok(());
-    };
-    let counts = raw
-        .as_array()
-        .ok_or(Error::InvalidObservation)?
-        .iter()
-        .map(|entry| {
-            let path = entry["spec_path"]
-                .as_str()
-                .ok_or(Error::InvalidObservation)?;
-            let handler = entry["handler"].as_str().ok_or(Error::InvalidObservation)?;
-            Ok(json!({"spec_path":path,"handler":handler,"count":count(entry,"count")?}))
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    report["handler_counts"] = json!(counts);
+/// Record every registered handler path and its count, in registration order.
+pub(crate) fn set_handler_counts(report: &mut Value, counts: &[HandlerCount]) {
+    report["handler_counts"] = Value::Array(
+        counts
+            .iter()
+            .map(|entry| {
+                json!({"spec_path":entry.spec_path,"handler":entry.handler.name(),"count":entry.count})
+            })
+            .collect(),
+    );
     report["nodes"][0]["handler_counts"] = report["handler_counts"].clone();
-    Ok(())
-}
-pub(crate) fn set_diagnostics(report: &mut Value, diagnostics: Vec<Value>) {
-    report["diagnostics"] = json!(diagnostics);
-    report["nodes"][0]["diagnostics"] = report["diagnostics"].clone();
 }
 
 pub use yamaa_core::specification_output::ArtifactPort;
@@ -440,7 +382,7 @@ pub enum CompleteError<E> {
 pub struct BuildResult {
     prepared: yamaa_core::specification_output::PreparedOutput<StoredReport>,
     table: Option<(crate::public_table::PublicTable, Vec<u8>)>,
-    issues: Vec<crate::issue_rows::Issue>,
+    issues: Vec<Diagnostic>,
     report: crate::run_report::HeldReport,
 }
 impl BuildResult {
@@ -450,7 +392,7 @@ impl BuildResult {
     pub(crate) fn output_table(&self) -> Option<&crate::public_table::PublicTable> {
         self.table.as_ref().map(|(table, _)| table)
     }
-    pub fn issues(&self) -> &[crate::issue_rows::Issue] {
+    pub fn issues(&self) -> &[Diagnostic] {
         &self.issues
     }
     /// The run report's owned Arrow IPC view.
@@ -621,21 +563,14 @@ pub(crate) fn prepare_result(
             None
         }
     };
-    let issues = prepared.prepared_report()["diagnostics"]
-        .as_array()
-        .ok_or(Error::InvalidObservation)?
-        .iter()
-        .cloned()
-        .map(crate::issue_rows::Issue::from_diagnostic)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| Error::InvalidObservation)?;
+    let issues = prepared.prepared_report().diagnostics().to_vec();
     let condition = if table.is_some() && prepared.artifact().is_some() {
         None
     } else {
         Some(
             issues
                 .first()
-                .map(|issue| issue.condition.as_str())
+                .map(Diagnostic::condition)
                 .ok_or(Error::InvalidObservation)?,
         )
     };
@@ -656,7 +591,7 @@ pub(crate) fn prepare_result(
     Ok(BuildResult {
         prepared,
         table,
-        issues: crate::issue_rows::collect(issues),
+        issues: crate::file_application::collect(issues),
         report,
     })
 }
@@ -665,19 +600,12 @@ fn rejected_output(
     mut report: StoredReport,
     error: &Error,
 ) -> Result<yamaa_core::specification_output::PreparedOutput<StoredReport>, Error> {
-    let reason = match error {
-        Error::ResourceLimit(_) => "output_limit",
-        _ => "output_projection",
-    };
-    let diagnostic = specification_diagnostics::portable_diagnostic(match error {
-        Error::ResourceLimit(refusal) => refusal.diagnostic("output", reason),
-        _ => yamaa_core::application_issue::rejected("output", reason),
+    let mut diagnostics = report.diagnostics().to_vec();
+    diagnostics.push(match error {
+        Error::ResourceLimit(refusal) => refusal.diagnostic(Stage::Output, Fault::OutputLimit),
+        _ => yamaa_core::application_issue::rejected(Stage::Output, Fault::OutputProjection),
     });
-    let Value::Array(mut diagnostics) = std::mem::take(&mut report["diagnostics"]) else {
-        return Err(Error::InvalidObservation);
-    };
-    diagnostics.push(diagnostic);
-    set_diagnostics(&mut report, diagnostics);
+    report.set_diagnostics(diagnostics);
     report["outcome"] = json!("failure");
     report["nodes"][0]["outcome"] = json!("failure");
     report["artifacts"] = json!([]);
@@ -690,18 +618,12 @@ impl<E> From<Error> for CompleteError<E> {
         Self::Report(error)
     }
 }
-fn count(record: &Value, name: &str) -> Result<usize, Error> {
-    record[name]
-        .as_str()
-        .and_then(|s| s.parse::<usize>().ok())
-        .ok_or(Error::InvalidObservation)
-}
 pub(crate) fn check_observations(
     run: &dyn RunView,
     records: &[yamaa_core::dataset::CheckRecord],
     phase: yamaa_core::verification_diagnostics::Phase,
     id: &Identity<'_>,
-) -> Result<(Vec<Value>, Vec<Value>), Error> {
+) -> Result<(Vec<Value>, Vec<Diagnostic>), Error> {
     use yamaa_core::verification_diagnostics::Error as ProjectionError;
     let projection = yamaa_core::verification_diagnostics::project(
         run.compiled(),
@@ -722,16 +644,16 @@ pub(crate) fn check_observations(
         projection
             .diagnostics
             .into_iter()
-            .map(crate::project_diagnostic_projection::value)
+            .map(crate::project_diagnostic_projection::owned)
             .collect(),
     ))
 }
 pub(crate) fn output_diagnostics(
     findings: &[yamaa_core::specification::OutputFinding],
-) -> Vec<Value> {
+) -> Vec<Diagnostic> {
     findings
         .iter()
-        .map(|finding| crate::specification_diagnostics::portable_diagnostic(finding.diagnostic()))
+        .map(|finding| finding.diagnostic())
         .collect()
 }
 /// Render all retained observations and validate output boundaries before
@@ -820,8 +742,6 @@ fn observations<E>(
     else {
         return failure(run, attempt, id.borrow());
     };
-    let value: Value =
-        crate::json_wire::decode(&response.outcome).map_err(|_| Error::InvalidObservation)?;
     let mut report = envelope(run, attempt, id)?;
     let completed = &response
         .execution
@@ -837,7 +757,7 @@ fn observations<E>(
     if !unexpected.is_empty() {
         return Err(Error::InvalidObservation);
     }
-    set_handler_counts(&mut report, &value)?;
+    set_handler_counts(&mut report, &response.handler_counts);
     report["verifications"] = json!(checks);
     Ok(report)
 }
@@ -862,7 +782,7 @@ impl yamaa_core::specification_output::OutputReport for Report<'_, '_> {
         findings: &[yamaa_core::specification::OutputFinding],
     ) -> Result<StoredReport, Error> {
         let mut report = self.value.take().ok_or(Error::InvalidObservation)?;
-        set_diagnostics(&mut report, output_diagnostics(findings));
+        report.set_diagnostics(output_diagnostics(findings));
         Ok(report)
     }
     fn success(

@@ -10,7 +10,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
 struct Fixture(PathBuf);
@@ -84,8 +85,8 @@ impl Drop for Fixture {
     }
 }
 
-fn issue(issue: &Issue) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase,"condition":issue.condition,"requirement":issue.requirement,"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+fn issue(issue: &Diagnostic) -> Value {
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 /// One record per ID. Each column holds a high value on 1, a low value on 3

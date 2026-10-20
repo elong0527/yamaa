@@ -54,6 +54,18 @@ pub trait NativePort {
         entry: &Identity,
         written: &str,
     ) -> Result<String, Self::Error>;
+    /// The finding for a rebase the port refused because of where the layer
+    /// lies, such as a layer on a network share the entry is not on
+    /// (LAYER-10), or None when the refusal stays opaque.
+    fn rebase_failure(
+        &self,
+        _error: &Self::Error,
+        _layer: &Identity,
+        _entry: &Identity,
+        _written: &str,
+    ) -> Option<Diagnostic> {
+        None
+    }
     /// Verify the spelling against held bytes; this performs no preparation copy.
     fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), Self::Error>;
     fn select_entry_base(&mut self, identity: &str) -> Result<(), Self::Error>;
@@ -112,6 +124,8 @@ pub enum Error<E, X> {
 struct AliasCache<'a, P> {
     port: &'a mut P,
     paths: BTreeMap<String, Vec<(String, String)>>,
+    /// The finding the port classified for the last failed parent capture or
+    /// layer rebase; a failed preparation reports it beside its own error.
     parent_failure: Option<Diagnostic>,
 }
 impl<P: NativePort> AliasCache<'_, P> {
@@ -190,7 +204,11 @@ impl<P: NativePort> InheritanceCapturePort for AliasCache<'_, P> {
         entry: &Identity,
         written: &str,
     ) -> Result<String, Self::Error> {
-        self.port.rebase(layer, entry, written)
+        self.port
+            .rebase(layer, entry, written)
+            .inspect_err(|error| {
+                self.parent_failure = self.port.rebase_failure(error, layer, entry, written);
+            })
     }
 }
 pub type PreparationResult<P, D> = Result<
