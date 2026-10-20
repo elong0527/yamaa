@@ -1045,10 +1045,9 @@ submission_metadata_fields:
         required: false
         description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
-        type: str
+        type: column_role
         required: false
-        min_length: 1
-        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+        description: Role the column plays in its dataset (SUB-9).
     - data_type:
         type: define_data_type
         required: false
@@ -1198,6 +1197,12 @@ core_designation:
     type: str
     values: [Req, Exp, Perm, Cond]
     description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by family (SUB-10).
+
+column_role:
+    type: str
+    values: [Identifier, Topic, Timing, Grouping Qualifier, Result Qualifier,
+        Synonym Qualifier, Record Qualifier, Variable Qualifier, Rule]
+    description: One of the nine roles the SDTM model publishes (SUB-9).
 
 origin_type:
     type: str
@@ -1438,9 +1443,8 @@ codelist_source_class:
     description: Codelists this source declares (CT-1).
 terminology_standard_class:
 - name:
-    type: str
+    type: standard_name
     required: true
-    min_length: 1
     description: Name of the published terminology (CT-2).
 - publishing_set:
     type: str
@@ -2821,10 +2825,9 @@ submission_role_fields:
         required: false
         description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
-        type: str
+        type: column_role
         required: false
-        min_length: 1
-        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+        description: Role the column plays in its dataset (SUB-9).
 
 submission_metadata_fields:
     - fields_from: submission_role_fields
@@ -2987,6 +2990,12 @@ core_designation:
     values: [Req, Exp, Perm, Cond]
     description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by model (SUB-10).
 
+column_role:
+    type: str
+    values: [Identifier, Topic, Timing, Grouping Qualifier, Result Qualifier,
+        Synonym Qualifier, Record Qualifier, Variable Qualifier, Rule]
+    description: One of the nine roles the SDTM model publishes (SUB-9).
+
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
@@ -3143,12 +3152,6 @@ language_tag:
     type: str
     pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
     description: Language tag carried by every generated translated text.
-
-standard_name:
-    type: str
-    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
-        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
-    description: Standard name, in the exact case Define-XML 2.1 publishes.
 
 submission_section_class:
     - specs:
@@ -3643,9 +3646,8 @@ codelist_source_class:
 
 terminology_standard_class:
     - name:
-        type: str
+        type: standard_name
         required: true
-        min_length: 1
         description: Name of the published terminology (CT-2).
     - publishing_set:
         type: str
@@ -3736,6 +3738,12 @@ external_codelist_class:
         required: false
         min_length: 1
         description: Location the dictionary is published at.
+
+standard_name:
+    type: str
+    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
+        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
+    description: Standard name, in the exact case Define-XML 2.1 publishes.
 "#),
     ("schema_verification.yaml", r#"version: "1.0"
 

@@ -1,0 +1,20 @@
+schema_version: '1.0'
+codelists:
+  - standard:
+      # The defect: CDISC CT is how a dictionary reference names the
+      # controlled terminology, not one of the standard names Define-XML
+      # publishes; the published terminology's name is CDISC/NCI.
+      name: CDISC CT
+      publishing_set: SDTM
+      version: '2023-12-15'
+    codelists:
+      - id: SEX
+        name: Sex
+        alias: C66731
+        items:
+          - {value: F, decode: Female, alias: C16576}
+          - {value: M, decode: Male, alias: C20197}
+          - {value: U, decode: Unknown, alias: C17998}
+sdtm:
+  specs:
+  - spec.yaml

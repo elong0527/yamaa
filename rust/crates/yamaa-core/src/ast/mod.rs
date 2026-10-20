@@ -30,7 +30,7 @@ pub use project::{
     DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionSource,
     FunctionTest, GuideStatus, HostEnvironment, Implementation, ImplementationGuide,
     MetadataVersion, Parameter, Project, Section, Study, SubmissionDeclarations, SubmissionRefused,
-    SupportingDocument, TerminologyStandard, Transport,
+    SupportingDocument, TerminologyStandard, Transport, STANDARD_NAMES,
 };
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};

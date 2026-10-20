@@ -258,7 +258,17 @@ held <- saved(result, root, c("dm.json", "define.xml"))
 stopifnot(grepl(paste0('SourceSystemVersion="', version, '"'), rawToChar(held[["define.xml"]]), fixed = TRUE),
   grepl(paste0('"version": "', version, '"'), rawToChar(held[["dm.json"]]), fixed = TRUE))
 unlink(file.path(root, names(held)))
+# A terminology standard's name is closed where the project is read (CT-2),
+# before any document is composed.
 edit_lines(project, function(lines) gsub("name: CDISC/NCI", "name: InvalidStandard", lines, fixed = TRUE))
+result <- submission(root)
+stopifnot(identical(result$issues$condition, "value_not_permitted"), identical(result$issues$rule, "SCHEMA-12"),
+  identical(result$issues$spec_paths[[1L]], "codelists[0].standard.name"),
+  refused(result), !file.exists(file.path(root, "define.xml")))
+# A SAS format name longer than eight characters fails only against the
+# Define-XML schema's facet, as the document is generated.
+edit_lines(project, function(lines) gsub("format_name: $SEX", "format_name: $SEXCODELIST",
+  gsub("name: InvalidStandard", "name: CDISC/NCI", lines, fixed = TRUE), fixed = TRUE))
 result <- submission(root)
 stopifnot("DEFINE-25" %in% result$issues$rule, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)

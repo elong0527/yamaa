@@ -42,6 +42,7 @@ def load(path):
 
 
 TABLE = load(ROOT / "tools/migrate/renames.yaml")
+VOCABULARIES = load(ROOT / "yaml/vocabulary/cdisc.yaml")["vocabularies"]
 BUNDLE = Bundle(V1)
 OWNERS = BUNDLE.owners()
 FIELDS = {(owner, item.name): item for owner, items in OWNERS.items() for item in items}
@@ -109,6 +110,11 @@ def header(owner, file_type):
 
 def copied(name):
     return Like("copy_submission_class", name, f"spec.submission_column_class.{name}")
+
+
+def vocabulary(name):
+    """The values one vocabulary of the CDISC vocabulary file lists."""
+    return tuple(entry["value"] for entry in VOCABULARIES[name]["values"])
 
 
 # The reviewed 1.0 reading of every entry the converter transforms.
@@ -223,6 +229,14 @@ EXPECTED = {
     ],
     "new.project.standards.status=Provisional": [
         Values("implementation_guide_class", "status", ("Provisional",))
+    ],
+    # P-VOC-1: roles and a terminology standard's name close to the lists the
+    # CDISC vocabulary file holds.
+    "new.spec.submission.role=closed": [
+        Values("submission_role_fields", "role", vocabulary("role"))
+    ],
+    "new.codelists.standard.name=closed": [
+        Values("terminology_standard_class", "name", vocabulary("standard_name"))
     ],
     # P-VLM-1 and D66: NE and NOTIN beside the list of values.
     "new.spec.value_level.comparator": [

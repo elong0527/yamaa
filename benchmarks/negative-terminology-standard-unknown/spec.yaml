@@ -1,0 +1,29 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM_RAW.SEX
+    submission:
+      codelist: SEX
+      origin:
+        type: Collected

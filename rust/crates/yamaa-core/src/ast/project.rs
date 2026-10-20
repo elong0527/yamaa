@@ -288,6 +288,23 @@ pub struct Section {
     pub meta: Meta,
 }
 
+/// Every standard name Define-XML 2.1 publishes, in its order: the closed
+/// vocabulary of an implementation guide's and a terminology source's name,
+/// which `yaml/vocabulary/cdisc.yaml` holds (DEFINE-6, CT-2).
+pub const STANDARD_NAMES: &[&str] = &[
+    "ADaMIG",
+    "ADaMIG-MD",
+    "BIMO",
+    "CDISC/NCI",
+    "SDTMIG",
+    "SDTMIG-AP",
+    "SDTMIG-MD",
+    "SENDIG",
+    "SENDIG-AR",
+    "SENDIG-DART",
+    "SENDIG-GENETOX",
+];
+
 /// An implementation guide. Its name is a closed CDISC vocabulary, which
 /// stays text (P-VOC-1).
 #[derive(Clone, Debug, PartialEq)]

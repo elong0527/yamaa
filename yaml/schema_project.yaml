@@ -47,9 +47,8 @@ codelist_source_class:
     description: Codelists this source declares (CT-1).
 terminology_standard_class:
 - name:
-    type: str
+    type: standard_name
     required: true
-    min_length: 1
     description: Name of the published terminology (CT-2).
 - publishing_set:
     type: str

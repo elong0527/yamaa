@@ -33,7 +33,7 @@ pub fn spec(
         ("origin", m(vec![("type", t("Assigned"))])),
     ];
     if extra == Some("role") {
-        submission.push(("role", t("Result")));
+        submission.push(("role", t("Result Qualifier")));
     }
     let mut code = vec![
         ("name", t("CODE")),

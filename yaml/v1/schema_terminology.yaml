@@ -22,9 +22,8 @@ codelist_source_class:
 
 terminology_standard_class:
     - name:
-        type: str
+        type: standard_name
         required: true
-        min_length: 1
         description: Name of the published terminology (CT-2).
     - publishing_set:
         type: str
@@ -115,3 +114,9 @@ external_codelist_class:
         required: false
         min_length: 1
         description: Location the dictionary is published at.
+
+standard_name:
+    type: str
+    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
+        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
+    description: Standard name, in the exact case Define-XML 2.1 publishes.

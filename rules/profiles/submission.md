@@ -279,12 +279,33 @@ changes none, so [SUB-6](#sub-6)'s `data_type` still changes no value.
 `display_format` is presentation text carried for a reader: it never changes a
 computed value, a rendered artifact value or the `output.decimals` of
 [CSV-6](../reference/csv.md#csv-6). `role` states how the column is used within
-its dataset, in the vocabulary the dataset's standard publishes, which this
-language does not close. `role` must not be declared for a dataset whose family
-is `adam`; a role there fails validation, reporting the field.
+its dataset and is one of the nine roles the SDTM model publishes, which the
+table below lists; any other role fails validation. `role` must not be declared
+for a dataset whose family is `adam`; a role there fails validation, reporting
+the field.
 
 Fails: `value_not_permitted`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`.
+Evidence: `sdtm-dm-metadata`, `negative-role-unknown`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_role_outside_the_nine_fails_where_the_specification_is_read`.
+
+| Role | The column |
+|---|---|
+| `Identifier` | identifies the study, the subject, the domain or the record |
+| `Topic` | names the focus of the observation |
+| `Timing` | describes when the observation happened |
+| `Grouping Qualifier` | groups observations within the domain |
+| `Result Qualifier` | carries a result of the observation |
+| `Synonym Qualifier` | gives another name for a column of the observation |
+| `Record Qualifier` | describes the record as a whole |
+| `Variable Qualifier` | describes another column of the observation |
+| `Rule` | states a condition or algorithm of the trial design |
+
+A role is written exactly as the table spells it, at column or value level
+([SUB-12](#sub-12)). The vocabulary is checked when the specification is read
+([SUB-23](#sub-23)), so a role outside the table fails with
+`value_not_permitted` at its `role` before any data is read, whether or not a
+document composes the dataset. The `send` family uses the same nine roles.
+`yaml/vocabulary/cdisc.yaml` holds them with the other closed CDISC
+vocabularies.
 
 A numeric column's `display_format` is also its SAS format in a transport file
 ([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)). An
@@ -297,9 +318,8 @@ and this profile does not reconcile them: one is a display a document reports
 and the other is a display an artifact carries. A transport carries the
 artifact's values, so a specification that a section requesting one composes
 declares no `output.decimals` ([JSON-5](dataset-json.md#json-5)) and keeps its
-display in `display_format`. Each implementation guide
-publishes and versions its own role vocabulary. The `adam` family defines no
-role vocabulary, so a role in that family would name nothing.
+display in `display_format`. The `adam` family defines no role vocabulary, so
+a role in that family would name nothing.
 
 <a id="sub-10"></a>
 
