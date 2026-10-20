@@ -69,9 +69,10 @@ malformed-source language findings. Capture and ingest boundary replies expose
 `parquet_codec_unavailable` code.
 
 The Release compatibility workflow's Rust job adds two minimal facade builds:
-no optional formats and YAML + Parquet. Each runs the focused adapter capability
-tests, verifies the facade's Cargo graph, and inspects the linked test binary for ReadStat and Zstd
-symbols. The core's dependency isolation is checked once. Run both builds from
+no optional formats and YAML + Parquet. Each compiles the adapter's unit tests,
+runs the focused adapter capability tests, verifies the facade's Cargo graph, and
+inspects the linked test binary for ReadStat and Zstd symbols. The core's
+dependency isolation is checked once. Run both builds from
 the repository root with `python -m tools.ci.format_features`; CI uses the
 workspace's minimum Rust toolchain. Ordinary workspace tests cover all default
 formats, including the full specification and project fixture suites. Python/R
