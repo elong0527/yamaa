@@ -51,10 +51,15 @@ pub struct LockFinding {
 }
 #[derive(Clone, Copy, Debug)]
 pub struct LockOrigins<'a> {
-    /// The environment file that declares the lock.
+    /// The file that declares the lock: the environment file a 0.5 project
+    /// links, or a 1.0 project file itself (D8).
     pub source: &'a str,
-    /// The caller-supplied project file that links that environment file.
+    /// The caller-supplied project file.
     pub entry: &'a str,
+    /// The field of `source` that declares the lock, where a mismatch is
+    /// reported: `lock` in a 0.5 environment file, and
+    /// `environments.<host>.lock` in a 1.0 project file (FUNC-3).
+    pub field: &'a str,
     pub lock_source: &'a str,
     /// Authored spelling from the retained raw root, not a resolved executable path.
     pub written: &'a str,
@@ -85,7 +90,9 @@ pub fn lock_diagnostics(
     if findings.is_empty() {
         return Ok(Vec::new());
     }
-    let origins = origins.ok_or(InvalidContext)?;
+    let origins = origins
+        .filter(|origins| !origins.field.is_empty())
+        .ok_or(InvalidContext)?;
     for finding in findings {
         if finding.package.is_empty() || finding.package.contains('\0') || !shape(finding) {
             return Err(InvalidContext);
@@ -96,6 +103,7 @@ pub fn lock_diagnostics(
         .iter()
         .map(|finding| {
             application_issue::lock_mismatch(
+                origins.field,
                 [
                     ("source".into(), scalar(origins.source)),
                     ("entry".into(), scalar(origins.entry)),
