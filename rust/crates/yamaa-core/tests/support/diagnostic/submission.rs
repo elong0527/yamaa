@@ -1,5 +1,6 @@
 //! Independently authored arenas reach submission detectors and portable boundary policy.
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use crate::support::document::Tree;
 pub(crate) use crate::support::roots as rt;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
@@ -188,7 +189,7 @@ pub(crate) fn reached_finding(
     );
     assert!(!finding.path.is_empty());
     assert!(finding.context.contains_key("detail"));
-    reached.insert(code);
+    reached.insert(rendered(finding));
 }
 /// One value-level entry selecting the rows whose `where_column` holds one of
 /// `values`, with its own metadata fields.

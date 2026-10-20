@@ -2,10 +2,11 @@
 //!
 //! This is the edge where core's diagnostic record (cause, spec paths,
 //! structured context and optional geometry) becomes its public form: the
-//! registry names the phase, condition and rule, and the context
-//! becomes JSON text here and nowhere earlier. Severity is error for every
-//! issue today: only error-severity findings become issues, while
-//! warning-severity findings surface as rows of the run report. Context
+//! registry names the phase, condition, rule and severity, core renders the
+//! message from the registry's template, and the context becomes JSON text
+//! here and nowhere earlier. The registry gives every issue error severity:
+//! only error-severity findings become issues, while warning-severity
+//! findings surface as rows of the run report. Context
 //! numbers keep their exact identity: an integer token wider than both 64-bit
 //! machine types keeps its decimal spelling instead of passing through
 //! binary64. The canonical context text is retained privately so host
@@ -194,6 +195,10 @@ pub struct Diagnostic {
     pub code: String,
     pub rule: Option<String>,
     pub spec_path: Vec<String>,
+    /// The issue's message, rendered in Rust from the template the condition
+    /// registry holds for its condition. Messages are not frozen: match on
+    /// the condition and rule, never on the message.
+    pub message: String,
     pub context: DiagnosticContext,
     /// Byte span in the original expression, when the failure site recorded one.
     pub source_span: Option<SourceSpan>,
@@ -203,10 +208,11 @@ pub struct Diagnostic {
     pub operand_route: Option<Vec<String>>,
 }
 
-/// The severity of one issue. Every issue carries error severity today:
-/// warning-severity findings surface as rows of the run report instead.
-pub(crate) fn severity(_: &yamaa_core::diagnostic::Diagnostic) -> Severity {
-    Severity::Error
+/// The severity of one issue, as the registry gives its condition.
+pub(crate) fn severity(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Severity {
+    match diagnostic.severity() {
+        yamaa_core::diagnostic::Severity::Error => Severity::Error,
+    }
 }
 
 impl Diagnostic {
@@ -218,6 +224,7 @@ impl Diagnostic {
             code: definition.condition.to_owned(),
             rule: definition.rule.map(str::to_owned),
             spec_path: diagnostic.spec_paths.clone(),
+            message: diagnostic.message(),
             context: DiagnosticContext::from_core(&diagnostic.context),
             source_span: diagnostic.source_span.map(|span| SourceSpan {
                 start: span.start,
@@ -413,6 +420,26 @@ mod tests {
         assert!(diagnostic.context.get("absent").is_none());
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
+    }
+
+    /// The record's message renders its condition's registered template
+    /// with the record's values, and its severity is the registry's.
+    #[test]
+    fn messages_and_severity_come_from_the_registry() {
+        let text = |value: &str| yamaa_core::json::Value::String(value.into());
+        let mut forward = issue();
+        forward.code = yamaa_core::diagnostic::ConditionCode::ColumnForwardReference;
+        forward.context = [
+            ("column".into(), text("ASTDY")),
+            ("dependency".into(), text("TRTSDT")),
+        ]
+        .into();
+        let report = Report::from_issues(&[forward]);
+        assert_eq!(
+            report.diagnostics[0].message,
+            "column ASTDY reads TRTSDT, which is declared after it"
+        );
+        assert_eq!(report.diagnostics[0].severity, Severity::Error);
     }
 
     #[test]

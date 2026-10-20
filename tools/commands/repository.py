@@ -23,6 +23,7 @@ CHECKS = (
     "tools.packaging.generate_component_inventory",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
+    "tools.packaging.generate_message_templates",
     "tools.packaging.generate_json_schema",
     "tools.packaging.generate_facade_api",
     "tools.packaging.generate_bindings",

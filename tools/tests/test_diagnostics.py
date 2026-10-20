@@ -271,17 +271,43 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             ],
         )
 
-    def test_unrecognized_vocabulary_layout_and_duplicate_names_fail_closed(self):
+    def test_block_registrations_pass_and_malformed_or_repeated_names_fail_closed(
+        self,
+    ):
+        # The guard reads the registry as YAML, so a block registration with
+        # its message is the same registration as the flow form.
         self.write(
             "yaml/conditions.yaml",
-            "conditions:\n  invalid_value: {phases: [validation]}\n  new_value:\n    phases: [validation]\n",
+            'conditions:\n  invalid_value:\n    phases: [validation]\n    message: "a value is invalid"\n'
+            "  engine_rejected: {phases: [engine]}\n",
         )
-        self.assertTrue(any("unrecognized registration" in e for e in self.errors()))
+        self.assertEqual(self.errors(), [])
+        self.write(
+            "yaml/conditions.yaml",
+            'conditions:\n  invalid_value: {phases: [validation]}\n  new_value:\n    message: "no phases"\n',
+        )
+        self.assertTrue(
+            any("unrecognized registration: new_value" in e for e in self.errors())
+        )
         self.write(
             "yaml/conditions.yaml",
             "conditions:\n  invalid_value: {phases: [validation]}\n  invalid_value: {phases: [validation]}\n",
         )
-        self.assertTrue(any("duplicate registration" in e for e in self.errors()))
+        self.assertTrue(any("duplicate key" in e for e in self.errors()))
+        self.write("yaml/conditions.yaml", "conditions: []\n")
+        self.assertTrue(any("no condition registrations" in e for e in self.errors()))
+
+    def test_generated_message_table_is_exempt_from_ownership(self):
+        self.write(
+            str(guard.MESSAGE_TABLE),
+            'const TEMPLATES: &[(&str, &str)] = &[("invalid_value", "a value is invalid")];\n',
+        )
+        self.assertEqual(self.errors(), [])
+        self.write(
+            "rust/crates/yamaa-core/src/diagnostic/other.rs",
+            'const NAME: &str = "invalid_value";\n',
+        )
+        self.assertTrue(any("new diagnostic literal site" in e for e in self.errors()))
 
     def test_unparseable_or_missing_registry_and_vocabulary_fail_closed(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"

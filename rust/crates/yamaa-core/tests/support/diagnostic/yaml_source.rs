@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use super::rendered;
 pub(crate) use std::collections::BTreeSet;
 pub(crate) use yamaa_core::{
     diagnostic::ConditionCode,
@@ -52,7 +53,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         } else {
             assert!(!diagnostic.context.contains_key("path"));
         }
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached
 }

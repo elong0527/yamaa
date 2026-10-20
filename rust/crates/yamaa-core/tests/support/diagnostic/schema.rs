@@ -1,3 +1,4 @@
+use super::rendered;
 use crate::support::project_call_compiler::Tree as T;
 use std::collections::BTreeSet;
 use yamaa_core::{
@@ -74,7 +75,7 @@ fn check(
     );
     assert_eq!(found.path, path);
     assert!(!found.context.is_empty());
-    reached.insert(code);
+    reached.insert(rendered(found));
 }
 
 /// Real schema/model detectors independently pin the cause, path, condition and owning rule.
