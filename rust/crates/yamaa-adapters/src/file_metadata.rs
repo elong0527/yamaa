@@ -116,10 +116,12 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
         written: &str,
     ) -> Result<String, ResourceError> {
         rebase(&layer.identity, &entry.identity, written).map_err(|unwritten| match unwritten {
-            Unwritten::Identity => ResourceError::InvalidPath,
+            Unwritten::Unrooted => ResourceError::InvalidPath,
             Unwritten::Share { .. } => ResourceError::OutsideRoots,
         })
     }
+    /// The rebase is lexical, so its refusal is derived again, with both
+    /// roots, from the same identities.
     fn rebase_failure(
         &self,
         _error: &ResourceError,
@@ -168,7 +170,7 @@ fn is_absolute_spelling(path: &str) -> bool {
 #[derive(Debug, PartialEq, Eq)]
 enum Unwritten {
     /// An identity that names no rooted file.
-    Identity,
+    Unrooted,
     /// A location beside a layer on a network share the entry is not on: the
     /// layer's root, that share, and the entry's root (FILE-4).
     Share { layer: String, entry: String },
@@ -234,7 +236,7 @@ fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, Unwritten> 
 /// lexical, and only a Windows walk gives an identity a share root.
 fn rebase_directory(identity: &str) -> Result<Vec<String>, Unwritten> {
     let mut segments =
-        crate::file_resolver::split_rooted(identity, true).ok_or(Unwritten::Identity)?;
+        crate::file_resolver::split_rooted(identity, true).ok_or(Unwritten::Unrooted)?;
     if segments.len() > 1 {
         segments.pop();
     }
@@ -242,7 +244,7 @@ fn rebase_directory(identity: &str) -> Result<Vec<String>, Unwritten> {
         .iter()
         .any(|segment| segment.is_empty() || segment == "." || segment == "..")
     {
-        return Err(Unwritten::Identity);
+        return Err(Unwritten::Unrooted);
     }
     Ok(segments)
 }
@@ -553,14 +555,14 @@ mod spelling_tests {
         ] {
             assert_eq!(
                 rebase(layer, entry, "dm.csv"),
-                Err(Unwritten::Identity),
+                Err(Unwritten::Unrooted),
                 "{layer} {entry}"
             );
         }
     }
 
     #[test]
-    fn a_layer_on_another_share_is_refused_naming_it_its_path_and_both_roots() {
+    fn a_layer_on_another_share_is_refused_with_its_path_and_both_roots() {
         use yamaa_core::{diagnostic::ConditionCode, json::Value};
         let source = |identity: &str| Identity {
             identity: identity.into(),
