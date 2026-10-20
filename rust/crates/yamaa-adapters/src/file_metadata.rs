@@ -115,7 +115,21 @@ impl yamaa_core::file_preparation::NativePort for Reader<'_> {
         entry: &Identity,
         written: &str,
     ) -> Result<String, ResourceError> {
-        rebase(&layer.identity, &entry.identity, written)
+        rebase(&layer.identity, &entry.identity, written).map_err(|unwritten| match unwritten {
+            Unwritten::Unrooted => ResourceError::InvalidPath,
+            Unwritten::Share { .. } => ResourceError::OutsideRoots,
+        })
+    }
+    /// The rebase is lexical, so its refusal is derived again, with both
+    /// roots, from the same identities.
+    fn rebase_failure(
+        &self,
+        _error: &ResourceError,
+        layer: &Identity,
+        entry: &Identity,
+        written: &str,
+    ) -> Option<yamaa_core::diagnostic::Diagnostic> {
+        share_refusal(layer, entry, written)
     }
     fn accept_alias(&mut self, declaring: &str, written: &str) -> Result<(), ResourceError> {
         self.resources
@@ -152,6 +166,15 @@ fn is_absolute_spelling(path: &str) -> bool {
             && path.as_bytes()[1] == b':'
             && path.as_bytes()[2] == b'/')
 }
+/// Why [`rebase`] writes no path.
+#[derive(Debug, PartialEq, Eq)]
+enum Unwritten {
+    /// An identity that names no rooted file.
+    Unrooted,
+    /// A location beside a layer on a network share the entry is not on: the
+    /// layer's root, that share, and the entry's root (FILE-4).
+    Share { layer: String, entry: String },
+}
 /// Respell the path `written` that the layer `layer` declares so that it names
 /// the same location from the entry `entry` (LAYER-10). Lexical only:
 /// preparation never inspects or opens a study/output path.
@@ -163,10 +186,10 @@ fn is_absolute_spelling(path: &str) -> bool {
 /// the entry's root, so a location on another root is written whole, as
 /// LAYER-10 writes a location the entry cannot reach relatively: below `/` or
 /// a drive, its absolute path, which file resolution walks from that root.
-/// A location on another network share fails closed: no written path names a
-/// share (FILE-4), and a parent step through the entry's root would walk a
-/// local folder of the same name instead.
-fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceError> {
+/// A location on another network share fails closed with both roots: no
+/// written path names a share (FILE-4), and a parent step through the entry's
+/// root would walk a local folder of the same name instead.
+fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, Unwritten> {
     let layer = rebase_directory(layer)?;
     let entry = rebase_directory(entry)?;
     if is_absolute_spelling(written) || same_directory(&layer, &entry) {
@@ -186,7 +209,10 @@ fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceErr
     }
     if !same_root(&target[0], &entry[0]) {
         if target[0].starts_with("//") {
-            return Err(ResourceError::OutsideRoots);
+            return Err(Unwritten::Share {
+                layer: target[0].clone(),
+                entry: root_name(&entry[0]),
+            });
         }
         return Ok(format!("{}/{}", target[0], target[1..].join("/")));
     }
@@ -208,9 +234,9 @@ fn rebase(layer: &str, entry: &str, written: &str) -> Result<String, ResourceErr
 /// The root and segments of the directory that holds the file a declaring
 /// identity names. A network share is one root on every host: rebasing is
 /// lexical, and only a Windows walk gives an identity a share root.
-fn rebase_directory(identity: &str) -> Result<Vec<String>, ResourceError> {
+fn rebase_directory(identity: &str) -> Result<Vec<String>, Unwritten> {
     let mut segments =
-        crate::file_resolver::split_rooted(identity, true).ok_or(ResourceError::InvalidPath)?;
+        crate::file_resolver::split_rooted(identity, true).ok_or(Unwritten::Unrooted)?;
     if segments.len() > 1 {
         segments.pop();
     }
@@ -218,9 +244,43 @@ fn rebase_directory(identity: &str) -> Result<Vec<String>, ResourceError> {
         .iter()
         .any(|segment| segment.is_empty() || segment == "." || segment == "..")
     {
-        return Err(ResourceError::InvalidPath);
+        return Err(Unwritten::Unrooted);
     }
     Ok(segments)
+}
+/// A root as an identity spells it: `/` for the marker of `/`, otherwise the
+/// drive (`C:`) or the share (`//server/share`).
+fn root_name(root: &str) -> String {
+    if root.is_empty() {
+        "/".into()
+    } else {
+        root.into()
+    }
+}
+/// The finding for a layer whose relative path `written` names a location on
+/// a network share the entry is not on (LAYER-10): it names the layer, the
+/// path as the layer wrote it, and the roots of the layer and of the entry.
+/// Every other rebase, written or refused, has none.
+fn share_refusal(
+    layer: &Identity,
+    entry: &Identity,
+    written: &str,
+) -> Option<yamaa_core::diagnostic::Diagnostic> {
+    let Err(Unwritten::Share {
+        layer: parent_root,
+        entry: entry_root,
+    }) = rebase(&layer.identity, &entry.identity, written)
+    else {
+        return None;
+    };
+    yamaa_core::diagnostic::InheritanceFinding::ParentOnAnotherShare {
+        source: &layer.identity,
+        path: written,
+        parent_root: &parent_root,
+        entry_root: &entry_root,
+    }
+    .diagnostic()
+    .ok()
 }
 /// Whether two roots are one. Windows names drives and shares
 /// case-insensitively; a host without them still compares a lexical drive or
@@ -447,24 +507,41 @@ mod spelling_tests {
         }
         // A location on a share is never respelled through the entry's root,
         // where `../../server/share/...` would walk local folders of the same
-        // names, nor through another share: it fails closed, since no written
-        // path names a share (FILE-4).
-        for (layer, entry) in [
-            ("//server/share/std/spec.yaml", "C:/study/spec.yaml"),
-            ("//server/share/std/spec.yaml", "/study/spec.yaml"),
+        // names, nor through another share: it fails closed with both roots,
+        // since no written path names a share (FILE-4).
+        for (layer, entry, layer_root, entry_root) in [
+            (
+                "//server/share/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "//server/share",
+                "C:",
+            ),
+            (
+                "//server/share/std/spec.yaml",
+                "/study/spec.yaml",
+                "//server/share",
+                "/",
+            ),
             (
                 "//other/share/std/spec.yaml",
                 "//server/share/study/spec.yaml",
+                "//other/share",
+                "//server/share",
             ),
             (
                 "//server/other/std/spec.yaml",
                 "//server/share/study/spec.yaml",
+                "//server/other",
+                "//server/share",
             ),
         ] {
             for written in ["input/dm.csv", "../dm.csv", "./dm.csv"] {
                 assert_eq!(
                     rebase(layer, entry, written),
-                    Err(ResourceError::OutsideRoots),
+                    Err(Unwritten::Share {
+                        layer: layer_root.into(),
+                        entry: entry_root.into(),
+                    }),
                     "{layer} {entry} {written}"
                 );
             }
@@ -478,8 +555,80 @@ mod spelling_tests {
         ] {
             assert_eq!(
                 rebase(layer, entry, "dm.csv"),
-                Err(ResourceError::InvalidPath),
+                Err(Unwritten::Unrooted),
                 "{layer} {entry}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_layer_on_another_share_is_refused_with_its_path_and_both_roots() {
+        use yamaa_core::{diagnostic::ConditionCode, json::Value};
+        let source = |identity: &str| Identity {
+            identity: identity.into(),
+            display_path: identity.into(),
+        };
+        for (layer, entry, layer_root, entry_root) in [
+            (
+                "//server/share/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "//server/share",
+                "C:",
+            ),
+            (
+                "//server/share/std/spec.yaml",
+                "/study/spec.yaml",
+                "//server/share",
+                "/",
+            ),
+            (
+                "//server/share/std/spec.yaml",
+                "//other/share/study/spec.yaml",
+                "//server/share",
+                "//other/share",
+            ),
+        ] {
+            let finding = share_refusal(&source(layer), &source(entry), "input/dm.csv")
+                .expect("a layer on another share is refused with a finding");
+            assert_eq!(finding.code, ConditionCode::InheritanceParentOnAnotherShare);
+            assert_eq!(finding.spec_paths, ["parent"]);
+            assert_eq!(
+                finding.context,
+                [
+                    ("entry_root".into(), Value::String(entry_root.into())),
+                    ("parent_root".into(), Value::String(layer_root.into())),
+                    ("path".into(), Value::String("input/dm.csv".into())),
+                    ("source".into(), Value::String(layer.into())),
+                ]
+                .into(),
+                "{layer} {entry}"
+            );
+        }
+        // A location the entry writes, relatively or whole, and an identity
+        // that names no rooted file have no such finding.
+        for (layer, entry, written) in [
+            ("D:/std/spec.yaml", "C:/study/spec.yaml", "input/dm.csv"),
+            (
+                "C:/std/spec.yaml",
+                "//server/share/study/spec.yaml",
+                "input/dm.csv",
+            ),
+            (
+                "//server/share/std/spec.yaml",
+                "//SERVER/Share/study/spec.yaml",
+                "input/dm.csv",
+            ),
+            (
+                "//server/share/std/spec.yaml",
+                "C:/study/spec.yaml",
+                "D:/data/dm.csv",
+            ),
+            ("relative/spec.yaml", "C:/study/spec.yaml", "input/dm.csv"),
+        ] {
+            assert_eq!(
+                share_refusal(&source(layer), &source(entry), written),
+                None,
+                "{layer} {entry} {written}"
             );
         }
     }

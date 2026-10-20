@@ -261,6 +261,7 @@ conditions! {
     InheritanceInvalidParent => ("validation", "invalid_parent_path", Some("LAYER-2")),
     InheritanceUnknownDependency => ("validation", "unknown_reference", Some("COLUMN-5")),
     InheritanceParentUnavailable => ("validation", "parent_not_found", Some("LAYER-2")),
+    InheritanceParentOnAnotherShare => ("validation", "parent_on_another_share", Some("LAYER-10")),
     InheritanceCycle => ("validation", "inheritance_cycle", Some("LAYER-3")),
     InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("LAYER-4")),
     InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("SCHEMA-2")),

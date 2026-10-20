@@ -233,11 +233,17 @@ owning rule selects: the declaring layer by default, the entry file when
 provenance. A materialized resolved specification writes an inherited relative
 path relative to the entry file, preserving the location it names.
 
-Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`.
+Fails: `parent_on_another_share`.
+Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/src/file_metadata.rs::a_layer_on_another_share_is_refused_with_its_path_and_both_roots`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`.
 
 If the platform cannot express that location relative to the entry file, the
-canonical absolute local path is written. An absolute contributed path is
-materialized exactly as written. A `parent` path is not materialized.
+canonical absolute local path is written. A location beside a layer on a
+network share that the entry is not on has neither spelling
+([FILE-4](reference/files.md#file-4)). Composition then fails with
+`parent_on_another_share`, reported at `parent` and naming that layer, the
+path it wrote, and the roots of the layer and the entry. An absolute
+contributed path is materialized exactly as written. A `parent` path is not
+materialized.
 Rebasing states where a file is, not whether a run may read it:
 [File resolution](reference/files.md) accepts or rejects the rebased
 path at the location it names, and a missing file fails there without retrying
