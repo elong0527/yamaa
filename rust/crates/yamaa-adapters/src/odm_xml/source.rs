@@ -2,11 +2,16 @@
 //!
 //! A local file is a caller path, opened once through the local file
 //! resolver: detection and both archive passes stream that handle, so an
-//! archive is never held whole, and a plain XML file is captured under
-//! `max_expanded_bytes`. A caller's resolver serves a source as one capture,
-//! and every pass reads that snapshot. The first pass counts every member and
-//! selects the XML member; the second streams only that member into the
-//! parser.
+//! archive is never held whole, and a plain XML file is refused above
+//! `max_expanded_bytes` before it is read and captured under that bound.
+//!
+//! A caller's resolver serves a source as one capture, which every pass
+//! reads. The resolver protocol has no streaming read, so the source is held
+//! whole, under the per-file source bound of ten gigabytes and its own
+//! [`Limit::SourceBytes`], before anything detects it or checks
+//! `max_expanded_bytes`: a plain XML source above that option is refused only
+//! once it is held. The first pass counts every member and selects the XML
+//! member; the second streams only that member into the parser.
 use super::{
     archive::{self, Member, Source, Stream, Tar, BLOCK},
     items,
@@ -43,11 +48,12 @@ enum Format {
 pub(super) fn read(path: &Path, options: &Options) -> Result<PublicTable, Error> {
     let display = path.display().to_string();
     let written = path.to_str().ok_or_else(|| not_found(&display))?;
-    let (resources, name) = crate::file_configuration::resources(written)
-        .map_err(|crate::file_configuration::Error::Path(error)| refusal(&error, &display))?;
+    let (resources, name) = crate::file_configuration::resources(written).map_err(
+        |crate::file_configuration::Error::Path(error)| refusal(&error, &display, Limit::XmlBytes),
+    )?;
     let file = resources
         .open_named(&name)
-        .map_err(|error| refusal(&error, &display))?;
+        .map_err(|error| refusal(&error, &display, Limit::XmlBytes))?;
     options.validate()?;
     let io_error = |error: io::Error| -> Error { Fault::from_io(&error, &display).into() };
     let length = file.metadata().map_err(io_error)?.len();
@@ -62,15 +68,17 @@ pub(super) fn read(path: &Path, options: &Options) -> Result<PublicTable, Error>
             let maximum = usize::try_from(options.max_expanded_bytes).unwrap_or(usize::MAX);
             let bytes = resources
                 .capture_named(&name, maximum)
-                .map_err(|error| refusal(&error, &display))?;
+                .map_err(|error| refusal(&error, &display, Limit::XmlBytes))?;
             xml(&bytes, options, &display)
         }
         Format::Tar(compression) => tar(open, compression, length, options, &display),
     }
 }
 
-/// A source a caller's resolver serves under `source`, captured once under the
-/// per-file source boundary after the options are checked.
+/// A source a caller's resolver serves under `source`, captured once after the
+/// options are checked and held whole: under the per-file source bound, a
+/// larger one refused as [`Limit::SourceBytes`], before `max_expanded_bytes`
+/// applies to what it holds.
 pub(super) fn read_with_resolver(
     resolver: Arc<dyn crate::host_resources::Resolver>,
     source: &str,
@@ -79,7 +87,7 @@ pub(super) fn read_with_resolver(
     options.validate()?;
     let (bytes, _) = Resources::with_resolver(resolver, source)
         .capture(source)
-        .map_err(|error| refusal(&error, source))?;
+        .map_err(|error| refusal(&error, source, Limit::SourceBytes))?;
     let name = source.rsplit(['/', '\\']).next().unwrap_or(source);
     let length = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let open = || -> io::Result<Source<'_>> { Ok(Source::Bytes(&bytes)) };
@@ -100,9 +108,9 @@ fn not_found(display: &str) -> Error {
 }
 
 /// A resource the resolver does not serve as a regular file is not found, and
-/// one over the capture's bound is over the read's limit; any other failure is
-/// the read's own I/O failure.
-fn refusal(error: &crate::file_resources::Error, display: &str) -> Error {
+/// one over the capture's bound is over `limit`, the read's limit that bound
+/// enforces; any other failure is the read's own I/O failure.
+fn refusal(error: &crate::file_resources::Error, display: &str, limit: fn(u64) -> Limit) -> Error {
     use crate::file_resources::Error as E;
     match error {
         E::Missing
@@ -113,10 +121,9 @@ fn refusal(error: &crate::file_resources::Error, display: &str) -> Error {
         | E::OutsideRoots
         | E::InvalidRoot
         | E::InvalidBase => not_found(display),
-        E::Limit(bound) => odm_items::Error::Limit(Limit::XmlBytes(
-            u64::try_from(bound.limit).unwrap_or(u64::MAX),
-        ))
-        .into(),
+        E::Limit(bound) => {
+            odm_items::Error::Limit(limit(u64::try_from(bound.limit).unwrap_or(u64::MAX))).into()
+        }
         error => odm_items::Error::Io {
             path: display.into(),
             reason: error.message().into(),
