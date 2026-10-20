@@ -3,7 +3,8 @@ name: CI
 # Pull requests are the gate. Main is checked on a schedule rather than after
 # every merge; the scheduled runs also save the Rust caches that pull requests
 # restore. Release branches are checked on each push. This workflow owns the
-# four development checks; release-compatibility.yml owns compatibility builds.
+# development checks and equivalence gate; release-compatibility.yml owns
+# compatibility builds.
 on:
   pull_request:
   push:
@@ -59,7 +60,8 @@ jobs:
     # The engine gate: fresh builds of both hosts must reproduce every
     # benchmark's expected bytes and every negative benchmark's first issue.
     # It runs when a pull request's diff reaches the engine, the schemas,
-    # the hosts, the converter or the benchmarks; otherwise the job passes
+    # the hosts, the converter, the benchmarks or this gate's setup;
+    # otherwise the job passes
     # without running, so branch protection can require it on every pull
     # request. Scheduled runs leave it out: the gate rebuilds both hosts.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
@@ -83,8 +85,9 @@ jobs:
           fi
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           changed=$(git diff --name-only "$base" "$HEAD_SHA" -- \
-            rust yaml benchmarks python/src python/tests R/yamaa \
-            tools/migrate tools/conformance tools/commands/equivalence.py)
+            rust yaml benchmarks python R/yamaa \
+            tools/migrate tools/conformance tools/commands/equivalence.py \
+            Makefile .github/workflows/ci.yml .github/actions/setup)
           if [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else

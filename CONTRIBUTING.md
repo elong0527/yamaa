@@ -216,10 +216,11 @@ A change to the executor, such as rewrite 1 (#2785), must leave every result
 unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
 exact head, and says so in the PR. CI's `equivalence` job runs the gate on a
 pull request whose diff reaches `rust/`, `yaml/`, `benchmarks/`, the host
-packages or the converter, and passes without running it otherwise; the
-command stays the local route. The gate builds the Python and R packages
-from the checkout and installs both outside it. On each host it runs public
-benchmark conformance: every active benchmark must reproduce its expected
+packages (including Python build metadata and its lock), the converter or
+the gate's command, workflow and setup, and passes without running it
+otherwise; the command stays the local route. The gate builds the Python and
+R packages from the checkout and installs both outside it. On each host it
+runs public benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
 rule and specification paths. A repeat pass runs each entry's spec
 object a second time and requires it to reuse what the first run compiled,
@@ -249,6 +250,8 @@ Pin external actions to complete commit IDs with exact release comments.
 PRs and the main schedule run four development jobs: repository checks
 (including lint), the Rust workspace, and the Python and R hosts on Linux.
 These four checks are required to merge into main.
+The additional `equivalence` job runs the executor gate on the paths described
+above and on dispatch; on other pull requests it passes with a skip notice.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
