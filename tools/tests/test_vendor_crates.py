@@ -118,8 +118,9 @@ class BinaryTests(unittest.TestCase):
             mock.patch.dict(vendor_crates.PREBUILT, {"wasm": ("src/rt/runtime.o",)}),
         ):
             root = crate(Path(scratch), "wasm", "1.0.0", files)
-            removed = vendor_crates.leave_out_prebuilt(root, "wasm", root.name)
-            self.assertEqual(removed, ["src/rt/runtime.o"])
+            found = vendor_crates.prebuilt(root, "wasm", root.name)
+            self.assertEqual(found, ["src/rt/runtime.o"])
+            vendor_crates.leave_out(root, found, root.name)
             self.assertFalse((root / "src/rt/runtime.o").exists())
             self.assertTrue((root / "src/rt/runtime.c").is_file())
             record = json.loads((root / ".cargo-checksum.json").read_text())
@@ -132,14 +133,80 @@ class BinaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as scratch:
             root = crate(Path(scratch), "tool", "1.0.0", {"bin/tool": b"\x7fELF\x02"})
             with self.assertRaisesRegex(ValueError, "prebuilt binary bin/tool"):
-                vendor_crates.leave_out_prebuilt(root, "tool", root.name)
+                vendor_crates.prebuilt(root, "tool", root.name)
             self.assertTrue((root / "bin/tool").is_file())
             (root / "bin/tool").unlink()
             with (
                 mock.patch.dict(vendor_crates.PREBUILT, {"tool": ("bin/gone.o",)}),
                 self.assertRaisesRegex(ValueError, "no longer ships"),
             ):
-                vendor_crates.leave_out_prebuilt(root, "tool", root.name)
+                vendor_crates.prebuilt(root, "tool", root.name)
+
+
+class ToolchainFileTests(unittest.TestCase):
+    """No vendored crate keeps a file that makes rustup select a toolchain."""
+
+    def test_toolchain_files_anywhere_leave_the_crate_and_its_record(self):
+        files = {
+            "src/lib.rs": b"//\n",
+            "rust-toolchain.toml": b'[toolchain]\nchannel = "1.57.0"\n',
+            "tests/fixture/rust-toolchain": b"nightly\n",
+            "src/rust-toolchain.rs": b"//\n",
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "atoi", "2.0.0", files)
+            found = vendor_crates.toolchain_files(root)
+            self.assertEqual(
+                found, ["rust-toolchain.toml", "tests/fixture/rust-toolchain"]
+            )
+            vendor_crates.leave_out(root, found, root.name)
+            self.assertEqual(
+                sorted(
+                    path.relative_to(root).as_posix()
+                    for path in root.rglob("*")
+                    if path.is_file()
+                ),
+                [
+                    ".cargo-checksum.json",
+                    "Cargo.toml",
+                    "src/lib.rs",
+                    "src/rust-toolchain.rs",
+                ],
+            )
+            text = (root / ".cargo-checksum.json").read_text()
+            record = json.loads(text)
+            # The package checksum, which Cargo compares with Cargo.lock, stays.
+            self.assertEqual(
+                record,
+                {
+                    "$comment": "x",
+                    "files": {
+                        "src/lib.rs": "recorded",
+                        "src/rust-toolchain.rs": "recorded",
+                    },
+                    "package": "p",
+                },
+            )
+            self.assertEqual(
+                text, json.dumps(record, separators=(",", ":"), sort_keys=True)
+            )
+
+    def test_records_change_only_for_files_left_out(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = crate(Path(scratch), "plain", "1.0.0", {"src/lib.rs": b"//\n"})
+            before = (root / ".cargo-checksum.json").read_bytes()
+            self.assertEqual(vendor_crates.toolchain_files(root), [])
+            vendor_crates.leave_out(root, [], root.name)
+            self.assertEqual((root / ".cargo-checksum.json").read_bytes(), before)
+            # An unrecorded file stops the removal before any file goes.
+            (root / "rust-toolchain").write_text("stable\n")
+            with self.assertRaisesRegex(ValueError, "does not list rust-toolchain"):
+                vendor_crates.leave_out(
+                    root, ["src/lib.rs", "rust-toolchain"], root.name
+                )
+            self.assertTrue((root / "rust-toolchain").is_file())
+            self.assertTrue((root / "src/lib.rs").is_file())
+            self.assertEqual((root / ".cargo-checksum.json").read_bytes(), before)
 
 
 class VendorTests(unittest.TestCase):
@@ -163,14 +230,27 @@ class VendorTests(unittest.TestCase):
                 directory,
                 "wit-bindgen",
                 "0.1.0",
-                dict.fromkeys(vendor_crates.PREBUILT["wit-bindgen"], b"\x00asm\x01"),
+                {
+                    **dict.fromkeys(
+                        vendor_crates.PREBUILT["wit-bindgen"], b"\x00asm\x01"
+                    ),
+                    "rust-toolchain.toml": b"[toolchain]\n",
+                },
             )
+            crate(directory, "quote", "1.0.0", {"rust-toolchain.toml": b""})
 
         crates = self.vendor(populate)
         self.assertEqual(
             crates,
             [
-                ("wit-bindgen", "0.1.0", sorted(vendor_crates.PREBUILT["wit-bindgen"])),
+                ("quote", "1.0.0", ["rust-toolchain.toml"]),
+                (
+                    "wit-bindgen",
+                    "0.1.0",
+                    sorted(
+                        [*vendor_crates.PREBUILT["wit-bindgen"], "rust-toolchain.toml"]
+                    ),
+                ),
                 ("zeta", "1.0.0+extra", []),
             ],
         )
@@ -241,15 +321,27 @@ class AuthorsTests(unittest.TestCase):
         registry = staging.notices.CRATES_IO
         parser = staging.WORKSPACE / "vendor/saphyr-parser/Cargo.toml"
         return {
-            "workspace_members": ["yamaa-r 0.5.0"],
+            "workspace_members": ["yamaa-r 0.5.0", "yamaa-python 0.5.0"],
             "packages": [
                 package("yamaa-r", "0.5.0", None),
+                package("yamaa-python", "0.5.0", None),
                 package("zeta", "1.10.0", registry, authors=["Z <z@example.org>"]),
                 package("zeta", "1.9.0", registry, repository="https://example.org/z"),
                 package("alpha", "0.1.0", registry, authors=["A", "B"]),
                 package("parser", "0.2.1", None, manifest_path=str(parser)),
+                # The canonical graph's Python binding crates, outside the R lock.
+                package("pyo3", "0.27.2", registry),
             ],
         }
+
+    # The (name, version, source) packages of the R bundle's trimmed lock.
+    LOCKED = {
+        ("yamaa-r", "0.5.0", None),
+        ("zeta", "1.10.0", staging.notices.CRATES_IO),
+        ("zeta", "1.9.0", staging.notices.CRATES_IO),
+        ("alpha", "0.1.0", staging.notices.CRATES_IO),
+        ("parser", "0.2.1", None),
+    }
 
     def test_every_bundled_crate_is_named_with_its_declared_facts(self):
         crates = [
@@ -263,7 +355,7 @@ class AuthorsTests(unittest.TestCase):
             ("zeta", "1.10.0"),
             ("parser", "0.2.1"),
         }
-        text = staging.authors_text(self.metadata(), crates, listed)
+        text = staging.authors_text(self.metadata(), crates, listed, self.LOCKED)
         entries = text.split("\nCrate: ")[1:]
         self.assertEqual(
             [entry.splitlines()[0] for entry in entries],
@@ -276,6 +368,8 @@ class AuthorsTests(unittest.TestCase):
         self.assertIn("    Repository: https://example.org/z\n", entries[2])
         self.assertIn("    Repository: none declared\n", entries[3])
         self.assertNotIn("yamaa-r", text)
+        # A canonical package outside the bundle's lock is not bundled.
+        self.assertNotIn("pyo3", text)
         self.assertTrue(text.endswith("\n"))
 
     def test_unvendored_or_unlicensed_crates_stop_staging(self):
@@ -289,10 +383,21 @@ class AuthorsTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "zeta 1.10.0: the vendored crates differ"
         ):
-            staging.authors_text(self.metadata(), crates[:2], listed)
+            staging.authors_text(self.metadata(), crates[:2], listed, self.LOCKED)
         with self.assertRaisesRegex(ValueError, "parser 0.2.1: LICENSE-THIRD-PARTY"):
             staging.authors_text(
-                self.metadata(), crates, listed - {("parser", "0.2.1")}
+                self.metadata(),
+                crates,
+                listed - {("parser", "0.2.1")},
+                self.LOCKED,
+            )
+        # A vendored crate that the trimmed lock does not select stops it too.
+        with self.assertRaisesRegex(ValueError, "pyo3 0.27.2: the vendored"):
+            staging.authors_text(
+                self.metadata(),
+                [*crates, ("pyo3", "0.27.2", [])],
+                listed,
+                self.LOCKED,
             )
 
 

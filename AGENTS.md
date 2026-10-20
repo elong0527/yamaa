@@ -69,8 +69,9 @@ their prerequisites. Local targets and CI share the owned scripts under
   compares the bytes it already holds. Do not reintroduce SHA-256 (or
   any digest field) to give something an identity. The packaging-tool
   exceptions are `python/uv.lock`, `evaluations/harbor/uv.lock` and
-  `rust/Cargo.lock`, including unchanged copies staged into Python/R
-  source packages; their checksum fields belong to the packaging tools.
+  `rust/Cargo.lock`, including unchanged or trimmed copies staged into
+  Python/R source packages and the `.cargo-checksum.json` files of their
+  vendored crates; their checksum fields belong to the packaging tools.
 - **Site pages have one source.** Edit `README.md` for the site home
   page and `rules/README.md` for the rules index. MkDocs reads those
   files through `tools/docs/canonical_pages.py`; do not create
