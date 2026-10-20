@@ -48,6 +48,16 @@ stopifnot(identical(declared_types(spec, c("V","ID")), c(V="float", ID="int")),
   refused(declared_types(spec, c("ID","MISSING"))),
   refused(declared_types(list(resolve=function() list(entry="/other.yaml", entries=resolved$entries)), "ID")))
 stopifnot(identical(json(list(issues=list(),paths=list("a"),context=raw_json('{"k":1}'))),'{"issues":[],"paths":["a"],"context":{"k":1}}'))
+# relative_paths: a record keeps the paths a save returned relative to the
+# case's root; a path outside the case, or with a backslash, stays as
+# returned. Only Windows compares the root without letter case.
+stopifnot(identical(relative_paths(c("/w/case/report.csv", "/w/case/out/adsl.csv"), "/w/case"),
+    c("report.csv", "out/adsl.csv")),
+  identical(relative_paths(character(), "/w/case"), character()),
+  identical(relative_paths(c("/w/case2/x.csv", "/w/x.csv", "/w/case/out\\x.csv"), "/w/case"),
+    c("/w/case2/x.csv", "/w/x.csv", "/w/case/out\\x.csv")),
+  identical(relative_paths("/W/case/x.csv", "/w/case"),
+    if (.Platform$OS.type == "windows") "x.csv" else "/W/case/x.csv"))
 stopifnot(identical(json_text("a\n\"\\"),'"a\\n\\\"\\\\"'))
 stopifnot(identical(hex(charToRaw(enc2utf8("\u00e9"))),"c3a9"))
 # move_inputs: a rename that fails (as it does across filesystems) must fall
@@ -122,6 +132,7 @@ stopifnot(identical(observed_plan(observations("compiled")), "compiled"),
   identical(observed_plan(observations("refused")), "refused"),
   is.null(observed_plan('{"protocol":"held-observations/1","report":null,"measurements":{}}')))
 cat("lossless R public tables typed by declaration, exact int and temporal cells, float bits and issue JSON passed\n")
+cat("relative_paths records saved paths below the case's root passed\n")
 cat("move_inputs cross-filesystem copy-and-delete fallback passed\n")
 cat("read_plan keeps blank and filled plan columns as text passed\n")
 cat("observed_plan reads the measurements' plan after characters outside the BMP passed\n")
