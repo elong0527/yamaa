@@ -288,7 +288,7 @@ artifact like any other input, so the caller builds and saves the producer
 first. A link cannot name the consuming specification.
 
 Fails: `invalid_producer_contract`.
-Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
+Evidence: `adam-results-ae-incidence`, `sdtm-dm-race-ethnicity`, `adam-adae-exposure-adjusted-incidence`, `schema-linked-csv-types`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::callers_build_and_save_the_producer_before_its_consumer_reads_the_artifact`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::the_producing_specification_is_read_but_never_compiled_or_executed`, `rust/crates/yamaa-core/tests/support/diagnostic/producer.rs`.
 Replaces: REQ-0520, REQ-0521, REQ-0534.
 
 ```yaml

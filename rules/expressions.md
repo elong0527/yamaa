@@ -92,7 +92,7 @@ expression's type is one type. Key matching, intermediate fields and drivers,
 derive bindings, range bounds, inferred keys, operand checks, extremes and
 column conversion all read that type.
 
-Evidence: `rust/crates/yamaa-core/src/specification/static_types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
+Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
 
 | Expression | Class | Result type |
 | --- | --- | --- |
