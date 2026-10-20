@@ -61,10 +61,17 @@ pub fn prepare(
     .map_err(|rejected| Error::Compile(rejected.into_run()))
 }
 
-/// Capture the original project file, the environment file it links for the
-/// host and their declared metadata through the same approved reader. Static
-/// workflow preparation reuses this transfer without introducing a second
-/// capture or any activation or study-source port.
+/// Capture the original project file and the metadata it declares through the
+/// same approved reader: for a 0.5 project, the environment file it links for
+/// the host and that file's lock and functions; for a 1.0 project, the host's
+/// lock and every function file it lists (D8); and the codelist files of
+/// either. Static workflow preparation reuses this transfer without
+/// introducing a second capture or any activation or study-source port.
+///
+/// `schemas` decide whether a 1.0 project is read
+/// ([`project_source::ProjectSchemas::versioned`]): public calls pass the
+/// shipped schemas, which read none until the engine reads 1.0 files (#3030
+/// D76, P1-9).
 pub(crate) fn capture_environment(
     resources: &mut Resources,
     written: &str,

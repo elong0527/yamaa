@@ -200,7 +200,7 @@ declared paths do not select exempt directories. A path outside those parents
 retains the no-link check on every component below its filesystem root.
 
 Fails: `resource_path_symlink`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_symbolic_link_in_a_listed_path_fails_as_any_file_a_run_reads`.
 
 Each walk verifies the retained directory and file entries, and a name
 substitution cannot redirect a read or publication silently.
@@ -275,7 +275,7 @@ any data is read and reports under the `validation` phase, except
 `resource_path_content_changed`, which reports under `ingest`.
 
 Fails: `resource_path_uri_scheme`, `resource_path_not_normalized`, `resource_path_symlink`, `resource_path_missing`, `resource_path_not_regular_file`, `resource_path_content_changed`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::written_form_checks_keep_normative_order_and_allow_root_dot_and_parent_paths`, `rust/crates/yamaa-core/tests/diagnostics.rs::every_registered_cause_is_reached_with_its_normative_mapping`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_file_or_lock_that_cannot_be_read_fails_as_any_file_a_run_reads`.
 
 An absolute written path supplied by the specification may be repeated.
 Resolved paths retained as provenance are not substituted for the authored

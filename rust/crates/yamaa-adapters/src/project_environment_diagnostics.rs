@@ -1,15 +1,16 @@
 //! Project only retained static admission, restoring each captured source origin.
 //! Capture failures and opaque host payloads remain in the rejected environment.
 use crate::{
-    project_source::{CaptureFailure, Origin, RejectedEnvironment},
+    project_source::{CaptureFailure, Origin, RejectedEnvironment, SourceFailure},
     specification_source::{
-        CapturedDocument, CapturedFindings, CapturedSchema, Error as SourceError,
+        CapturedDocument, CapturedFindings, CapturedSchema, Error as SourceError, RefusedHeader,
     },
 };
 use yamaa_core::{
+    application_issue::Fault,
     ast::Surface,
     diagnostic::Diagnostic,
-    language::{self, FileType, LanguageVersion},
+    language::{self, FileType, HeaderFault, LanguageVersion, ReferenceFault},
     project_environment_diagnostics::{self as core, projection},
     schema::DocumentNode as N,
 };
@@ -17,6 +18,10 @@ use yamaa_core::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     ResourceLimit(crate::resource_diagnostics::Refusal),
+    /// A file a 1.0 project names failed to be read for a host reason no
+    /// condition classifies: the whole preparation is refused with the opaque
+    /// resource refusal of this code, as any file a run reads is (FILE-11).
+    Resource(Fault),
     Core(core::Error),
     InvalidOrigin,
     Projection,
@@ -333,15 +338,14 @@ pub(crate) fn root_limit(error: &SourceError) -> Option<Error> {
 
 /// Native metadata failures retain the authored dependency path and declaration.
 /// A fixed resource boundary refuses the whole projection beside its original owner.
+///
+/// In 0.5 a file that cannot be read fails as the project environment does.
+/// A file a 1.0 project names fails as any declared file a run reads (FUNC-2,
+/// FILE-11), and a listed file whose header the engine does not read is
+/// refused at the field that lists it (SCHEMA-2).
 pub(crate) fn capture_sources(
     rejected: &RejectedEnvironment<crate::file_resources::Error>,
 ) -> Result<Vec<Diagnostic>, Error> {
-    // A 1.0 project's listed files and lock are read as every file a run
-    // reads; projecting their read failures comes with #3277, before public
-    // calls read 1.0 files (P1-9).
-    if versioned(rejected) {
-        return Err(Error::Projection);
-    }
     let mut rows = Vec::new();
     for source in &rejected.sources {
         if matches!(
@@ -353,8 +357,16 @@ pub(crate) fn capture_sources(
         let entry = &rejected.root.source().identity;
         let declaration = metadata_path(&source.origin, rejected);
         match &source.error {
+            CaptureFailure::Port(error) | CaptureFailure::Interrupted(error)
+                if versioned(rejected) =>
+            {
+                rows.push(declared_read_issue(rejected, source, error, &declaration)?);
+            }
             CaptureFailure::Port(error) | CaptureFailure::Interrupted(error) => {
                 rows.push(read_issue(error, entry, &source.written, &declaration)?);
+            }
+            CaptureFailure::Structural(SourceError::Reference(refused)) => {
+                rows.push(reference_issue(rejected, &declaration, refused)?);
             }
             CaptureFailure::Structural(error) => {
                 rows.extend(decode_issues(error, entry, &source.written, &declaration)?)
@@ -365,6 +377,65 @@ pub(crate) fn capture_sources(
         }
     }
     Ok(rows)
+}
+
+/// A file a 1.0 project names, at `declaration`, that cannot be read: one of
+/// FILE-11's conditions at that field with the path as written, as a schema
+/// link or a changed held file reports it; a bound keeps its resource refusal,
+/// and any other host failure refuses the whole preparation with the opaque
+/// resource refusal (FUNC-2). A lock that is no packaging lock fails as the
+/// project's function files do (FUNC-3).
+fn declared_read_issue(
+    rejected: &RejectedEnvironment<crate::file_resources::Error>,
+    source: &SourceFailure<crate::file_resources::Error>,
+    error: &crate::file_resources::Error,
+    declaration: &str,
+) -> Result<Diagnostic, Error> {
+    use crate::file_resources::Error as E;
+    match error {
+        E::Limit(bound) => Err(resource_limit(*bound, declaration)),
+        E::InvalidLock if source.origin == Origin::Lock => Ok(core::invalid_packaging_lock(
+            rejected.host,
+            &rejected.root.source().identity,
+            &source.written,
+        )),
+        // Only a lock is classified as one.
+        E::InvalidLock => Err(Error::Projection),
+        error => match crate::file_resources::resource_failure(error) {
+            Some(failure) => Ok(failure.field_diagnostic(declaration, &source.written)),
+            None => Err(Error::Resource(crate::file_application::resource_fault(
+                error,
+            ))),
+        },
+    }
+}
+
+/// A file a 1.0 project lists at `declaration` whose header declares a
+/// version the engine does not read, or another type: refused at that field,
+/// naming the file as `source`, as the project's referencing field reports the
+/// file it names (SCHEMA-2).
+fn reference_issue<E>(
+    rejected: &RejectedEnvironment<E>,
+    declaration: &str,
+    refused: &RefusedHeader,
+) -> Result<Diagnostic, Error> {
+    if !versioned(rejected) {
+        return Err(Error::InvalidOrigin);
+    }
+    let reference = language::references(&rejected.root.raw().document, FileType::Project)
+        .into_iter()
+        .find(|reference| reference.field == declaration)
+        .ok_or(Error::InvalidOrigin)?;
+    if matches!(refused.fault(), HeaderFault::FileType { expected, .. } if *expected != reference.expected)
+    {
+        return Err(Error::InvalidOrigin);
+    }
+    match reference.refuse(&refused.source().identity, refused.fault()) {
+        ReferenceFault::Field(diagnostic) => Ok(diagnostic),
+        // A malformed header is a finding in the file, never a refusal held
+        // for its field.
+        ReferenceFault::Finding(_) => Err(Error::InvalidOrigin),
+    }
 }
 
 /// Return admission issues in their original order. This borrows the rejected

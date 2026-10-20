@@ -157,6 +157,11 @@ fn environment_projection_failure(error: crate::project_environment_diagnostics:
         crate::project_environment_diagnostics::Error::ResourceLimit(refusal) => {
             refusal.issues(Stage::Environment, Fault::ResourceLimit)
         }
+        // A file a 1.0 project names failed for a host reason no condition
+        // classifies: the opaque resource refusal, as for the project file.
+        crate::project_environment_diagnostics::Error::Resource(fault) => {
+            file_application::rejected(Stage::Environment, fault)
+        }
         _ => refused(Stage::Environment),
     }
 }
@@ -295,12 +300,13 @@ fn environment_issues<'a>(
     use crate::project_environment_diagnostics as D;
     use crate::project_source::Failure as F;
     use crate::specification_source::Error as S;
-    fn projection(error: D::Error) -> IssueError<'static> {
-        match error {
-            D::Error::ResourceLimit(refusal) => IssueError::ResourceLimit(refusal),
-            _ => invalid(),
-        }
-    }
+    let projection = |error: D::Error| match error {
+        D::Error::ResourceLimit(refusal) => IssueError::ResourceLimit(refusal),
+        // The opaque resource refusal stays with the original owner, whose
+        // failure reports it.
+        D::Error::Resource(_) => IssueError::Original(owner),
+        _ => invalid(),
+    };
     if let file_project::Error::Resource(resource) = cause {
         use yamaa_core::project_environment_diagnostics::ReadFailure;
         let crate::file_workflow::Error::Environment(environment) = owner else {

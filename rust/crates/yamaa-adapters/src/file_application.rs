@@ -82,8 +82,23 @@ fn with_source(mut diagnostic: Diagnostic, source: Option<&str>) -> Failure {
     vec![diagnostic]
 }
 fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Diagnostic {
+    if let crate::file_resources::Error::Limit(limit) = error {
+        return yamaa_core::application_issue::resource_rejected(
+            stage,
+            Fault::ResourceLimit,
+            limit.resource,
+            limit.limit,
+            limit.actual,
+            Vec::new(),
+        );
+    }
+    yamaa_core::application_issue::rejected(stage, resource_fault(error))
+}
+/// The closed code of the opaque refusal a resource failure reports. A bound
+/// reports its facts beside the code (`resource_limit`).
+pub(crate) fn resource_fault(error: &crate::file_resources::Error) -> Fault {
     use crate::file_resources::Error as E;
-    let code = match error {
+    match error {
         E::Host(_) => Fault::HostResourceFailure,
         E::Missing => Fault::ResourceMissing,
         E::Unreadable => Fault::ResourceUnreadable,
@@ -96,18 +111,8 @@ fn resource_diagnostic(stage: Stage, error: &crate::file_resources::Error) -> Di
         E::Symlink => Fault::ResourceLink,
         E::Changed => Fault::ResourceChanged,
         E::InvalidLock => Fault::InvalidPackagingLock,
-        E::Limit(limit) => {
-            return yamaa_core::application_issue::resource_rejected(
-                stage,
-                Fault::ResourceLimit,
-                limit.resource,
-                limit.limit,
-                limit.actual,
-                Vec::new(),
-            )
-        }
-    };
-    yamaa_core::application_issue::rejected(stage, code)
+        E::Limit(_) => Fault::ResourceLimit,
+    }
 }
 /// The closed code a refused publication reports, selected from its typed cause.
 pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault {

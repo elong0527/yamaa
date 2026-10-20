@@ -298,6 +298,8 @@ pub fn capture_failure(error: &crate::specification_source::Error) -> Rejection 
             Error::InheritanceRequired => Fault::InheritanceRequired,
             Error::VersionedRootRequired => Fault::VersionedRootRequired,
             Error::UnknownClass(_) => Fault::UnknownClass,
+            // Only the reader of the field that names the file can place it.
+            Error::Reference(_) => Fault::DiagnosticContext,
         },
     )
 }

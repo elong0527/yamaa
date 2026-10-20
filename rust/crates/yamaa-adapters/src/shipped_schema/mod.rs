@@ -31,6 +31,15 @@ pub fn capture_environment() -> Result<Arc<CapturedSchema>, Error> {
 
 /// Admit both separately versioned project roots: the project file with its
 /// codelist sources, and the environment file it links with its functions.
+///
+/// Every public call prepares its project with these schemas, so they decide
+/// whether a public call reads a 1.0 project file and the function files,
+/// codelist files and lock it names. They read no 1.x file until the engine
+/// reads 1.0 files (#3030 D76): the switch (P1-9) sets `versioned` to the
+/// shipped 1.0 closures, `crate::document::Closures::shipped()`, with
+/// `yamaa_core::language::LANGUAGE_VERSION`. The specifications a project
+/// lists are read by the specification route, which the switch changes
+/// separately.
 pub fn capture_project() -> Result<crate::project_source::ProjectSchemas, Error> {
     static ADMITTED: OnceLock<Arc<CapturedSchema>> = OnceLock::new();
     Ok(crate::project_source::ProjectSchemas {
@@ -38,6 +47,7 @@ pub fn capture_project() -> Result<crate::project_source::ProjectSchemas, Error>
             admit_root(data::PROJECT_MODULES, "project_class")
         })?,
         environment: capture_environment()?,
+        versioned: None,
     })
 }
 
