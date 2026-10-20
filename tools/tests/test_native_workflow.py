@@ -468,19 +468,23 @@ class NativeWorkflowContract(unittest.TestCase):
                     self.assertNotIn("setup-r-dependencies", step.get("uses", ""))
                     self.assertNotRegex(step.get("run", ""), r"install\.packages|pak::")
 
-    def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
-        # Linux aarch64 has no native-r lane yet; its lanes use Linux x86_64's.
+    def cohort_commands(self):
+        """List the comparisons that the cohort job runs, without running them."""
         commands = []
         with patch.object(
             native.subprocess,
             "run",
             side_effect=lambda command, **kwargs: commands.append(command),
         ):
-            native.compare_cohorts(self.coverage["qualify"], ROOT, "a" * 40)
-        self.assertEqual(len(commands), len(self.coverage["qualify"]["include"]))
-        for lane, command in zip(
-            self.coverage["qualify"]["include"], commands, strict=True
-        ):
+            native.compare_cohorts(self.coverage, ROOT, "a" * 40)
+        return commands
+
+    def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
+        # Linux aarch64 has no native-r lane yet; its lanes use Linux x86_64's.
+        lanes = self.coverage["qualify"]["include"]
+        commands = self.cohort_commands()
+        self.assertEqual(len(commands), len(lanes) + len(self.r_binary_lanes()))
+        for lane, command in zip(lanes, commands[: len(lanes)], strict=True):
             r_platform = native.R_EVIDENCE.get(lane["os"], lane["os"])
             with self.subTest(lane=lane):
                 self.assertIn(r_platform, native.R_PLATFORMS)
@@ -491,6 +495,203 @@ class NativeWorkflowContract(unittest.TestCase):
                     / f"native-r-qualification-{r_platform}"
                     / "r-source",
                 )
+
+    def r_binary_lanes(self):
+        """List each R binary lane's platform and R version."""
+        return list(
+            itertools.product(
+                self.coverage["r_binary"]["os"], self.coverage["r_binary"]["r"]
+            )
+        )
+
+    def setup_r(self, job):
+        """Return the one setup-r step of a native job."""
+        [step] = [
+            step
+            for step in self.jobs[job]["definitions"]
+            if step.get("uses", "").split("@")[0] == "r-lib/actions/setup-r"
+        ]
+        return step
+
+    def test_r_binaries_cover_r_release_and_r_oldrel_on_windows_and_macos(self):
+        # #3030 D48: R-release and R-oldrel on Windows x64 and macOS arm64,
+        # as CRAN builds them; D54: Linux builds from source.
+        self.assertEqual(
+            sorted(self.coverage["r_binary"]["os"]), ["macos-15", "windows-2025"]
+        )
+        self.assertEqual(
+            self.coverage["r_binary"]["r"], [native.R_RELEASE, native.R_OLDREL]
+        )
+
+        def version(text):
+            return tuple(map(int, text.split(".")))
+
+        self.assertLess(version(native.R_OLDREL), version(native.R_RELEASE))
+        self.assertNotEqual(
+            native.r_series(native.R_OLDREL), native.r_series(native.R_RELEASE)
+        )
+
+    def test_every_pinned_native_r_is_r_release(self):
+        # R-release is declared once, in tools/ci/native.py: each native job
+        # that pins its R, rather than taking it from its matrix, names that
+        # version, and so do the Linux lanes' rocker/r-ver images.
+        pinned, images = set(), set()
+        for job in self.jobs.values():
+            for step in job["definitions"]:
+                if step.get("uses", "").split("@")[0] == "r-lib/actions/setup-r":
+                    requested = step["with"]["r-version"]
+                    if "matrix." not in requested:
+                        pinned.add(requested)
+                images.update(re.findall(r"rocker/r-ver:(\S+)", step.get("run", "")))
+        self.assertEqual(pinned, {native.R_RELEASE})
+        self.assertEqual(images, {native.R_RELEASE})
+
+    def test_each_r_binary_builds_from_the_published_r_source_archive(self):
+        r_source = f"native-r-{native.SOURCE_PLATFORM}"
+        for platform, version in self.r_binary_lanes():
+            job = f"native-r-binary ({platform}, R {version})"
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            setup = self.setup_r(job)
+            with self.subTest(job=job):
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith("native-")
+                    ],
+                    [r_source],
+                )
+                self.assertEqual(
+                    expand(setup["with"]["r-version"], self.jobs[job]["context"]),
+                    version,
+                )
+                build = steps["Build the R binary package"]
+                self.assertIn("R CMD INSTALL --build", build["run"])
+                # The build reads the vendored crates behind the refusing proxy.
+                self.assertEqual(build["env"]["http_proxy"], "http://127.0.0.1:9")
+                self.assertEqual(
+                    self.jobs[job]["uploads"], [f"native-r-binary-{platform}-{version}"]
+                )
+
+    def test_each_r_binary_installs_without_rust_rtools_or_a_network(self):
+        # Installed as a user installs it, on a runner whose Rust is removed
+        # and that has no Rtools; the installation and every step after it
+        # run behind a proxy that refuses every connection, and the steps
+        # before it, which reach package mirrors, do not.
+        proxy = {
+            "http_proxy": "http://127.0.0.1:9",
+            "HTTPS_PROXY": "http://127.0.0.1:9",
+            "ALL_PROXY": "http://127.0.0.1:9",
+            "NO_PROXY": "",
+        }
+        names = {name.lower() for name in proxy}
+        for platform, version in self.r_binary_lanes():
+            job = f"native-r-binary-install ({platform}, R {version})"
+            steps = self.jobs[job]["definitions"]
+            titles = [step.get("name") for step in steps]
+            setup = self.setup_r(job)
+            removal = titles.index("Remove Rust and Rtools from the runner")
+            install = titles.index("Install the R binary package without a network")
+            with self.subTest(job=job):
+                # Its own platform and series' binary, and nothing to build.
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith("native-")
+                    ],
+                    [f"native-r-binary-{platform}-{version}"],
+                )
+                self.assertEqual(
+                    expand(setup["with"]["r-version"], self.jobs[job]["context"]),
+                    version,
+                )
+                self.assertEqual(setup["with"]["rtools-version"], "none")
+                self.assertIs(setup["with"]["windows-path-include-rtools"], False)
+                scripts = "\n".join(step.get("run", "") for step in steps)
+                self.assertNotIn("tools.ci.toolchain", scripts)
+                self.assertNotIn("rustup target", scripts)
+                self.assertIn("rustup self uninstall -y", steps[removal]["run"])
+                self.assertLess(removal, install)
+                self.assertIn(
+                    "install.packages(commandArgs(TRUE), repos = NULL",
+                    steps[install]["run"],
+                )
+                # R installs, loads and runs the package with a PATH that
+                # names no compiler, Rust tool or GNU runtime library.
+                self.assertIn("> toolchain-free-path", steps[removal]["run"])
+                self.assertIn("libgcc_s_seh-1.dll", steps[removal]["run"])
+                clean = 'export PATH="$(cat toolchain-free-path)"'
+                conformance = titles.index(
+                    "Report installed R public benchmark conformance"
+                )
+                for index in (install, conformance):
+                    self.assertIn(clean, steps[index]["run"])
+                self.assertIn("-e 'library(yamaa)'", steps[install]["run"])
+                inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
+                self.assertFalse(names & inherited)
+                for index, step in enumerate(steps):
+                    chosen = {
+                        name: value
+                        for name, value in step.get("env", {}).items()
+                        if name.lower() in names
+                    }
+                    offline = index >= install and "run" in step
+                    self.assertEqual(chosen, proxy if offline else {})
+
+    def test_each_r_binary_runs_the_corpus_and_the_suites_as_a_binary(self):
+        required = release.required_jobs(self.coverage)
+        for platform, version in self.r_binary_lanes():
+            job = f"native-r-binary-install ({platform}, R {version})"
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            conformance = steps["Report installed R public benchmark conformance"]
+            suites = steps["Run installed R supplemental suites outside checkout"]
+            with self.subTest(job=job):
+                self.assertIn(
+                    "Report installed R public benchmark conformance", required[job]
+                )
+                self.assertEqual(
+                    conformance["env"]["PUBLIC_CONFORMANCE_PACKAGE_FORM"], "binary"
+                )
+                self.assertIn("public_conformance compare", conformance["run"])
+                self.assertIn("--package-form binary", suites["run"])
+                self.assertIn(
+                    f"native-r-binary-qualification-{platform}-{version}",
+                    self.jobs[job]["uploads"],
+                )
+
+    def test_every_r_binary_install_joins_the_cohort_comparison(self):
+        # Each binary's reports are compared beside the wheel lane of its
+        # platform: on Windows the binary is built through Rtools' GNU
+        # toolchain and the wheel with MSVC.
+        lanes = self.coverage["qualify"]["include"]
+        commands = self.cohort_commands()[len(lanes) :]
+        for (platform, version), command in zip(
+            self.r_binary_lanes(), commands, strict=True
+        ):
+            with self.subTest(platform=platform, version=version):
+                self.assertIn(
+                    {"os": platform, "python": native.BUILD_PYTHON, "form": "wheel"},
+                    lanes,
+                )
+                self.assertEqual(
+                    Path(command[command.index("--python-evidence") + 1]),
+                    Path("cohort-input")
+                    / f"native-qualification-{platform}-{native.BUILD_PYTHON}-wheel"
+                    / "wheel",
+                )
+                self.assertEqual(
+                    Path(command[command.index("--r-evidence") + 1]),
+                    Path("cohort-input")
+                    / f"native-r-binary-qualification-{platform}-{version}"
+                    / "r-binary",
+                )
+        cohort = self.jobs["public-cohort-complete-runs"]["job"]
+        self.assertIn("r-binary-install", cohort["needs"])
+        self.assertIn(
+            "native-r-binary-qualification-*",
+            [step.get("with", {}).get("pattern") for step in cohort["steps"]],
+        )
 
     def test_the_expression_subset_follows_github_operand_results(self):
         context = {"matrix": {"form": "source", "os": "macos-15"}, "env": {}}
