@@ -29,6 +29,7 @@ CHECKS = (
     "tools.packaging.generate_bindings",
     "tools.validation.validate_repository",
     "tools.validation.check_execution_manifest",
+    "tools.validation.check_selftest_cases",
     "tools.validation.check_vocabulary_coverage",
     "tools.validation.check_cdisc_vocabulary",
     "tools.rules.check",
