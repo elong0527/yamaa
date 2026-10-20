@@ -37,7 +37,8 @@ use yamaa_adapters::shipped_schema;
 use yamaa_adapters::specification_source::{InheritancePort, Source};
 use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::ast::{
-    Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec, Step,
+    Comparator, Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec,
+    Step,
 };
 use yamaa_core::expression::Context;
 use yamaa_core::front_end::v0_5::lower;
@@ -106,19 +107,12 @@ impl Drop for Scratch {
     }
 }
 
-/// Convert every benchmark into `output/benchmarks` as
-/// `python -m tools.migrate` does.
-fn convert(output: &Path) {
+/// Convert `benchmarks`, the directory of every benchmark or of one, into
+/// `output/benchmarks` as `python -m tools.migrate` does.
+fn convert(benchmarks: &str, output: &Path) {
     let result = Command::new("uv")
         .args(["run", "--project", "python", "--no-sync", "python"])
-        .args([
-            "-m",
-            "tools.migrate",
-            "benchmarks",
-            "--base",
-            ".",
-            "--output",
-        ])
+        .args(["-m", "tools.migrate", benchmarks, "--base", ".", "--output"])
         .arg(output)
         .current_dir(repository())
         .output()
@@ -659,7 +653,7 @@ fn first_difference(left: &[String], right: &[String]) -> String {
 #[test]
 fn every_converted_benchmark_lowers_to_its_original_tree() {
     let scratch = Scratch::new();
-    convert(&scratch.0);
+    convert("benchmarks", &scratch.0);
     let benchmarks = repository().join("benchmarks");
     let mut cases = fs::read_dir(&benchmarks)
         .unwrap()
@@ -747,4 +741,80 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         settled.join("\n")
     );
     assert!(compared > 400, "only {compared} specifications compared");
+}
+
+/// A value-level comparator has no 0.5 form, so no benchmark converts to one.
+/// A converted case that writes one keeps it on the tree: `NE` as `NotIn`
+/// with its one value, as `EQ` is `In` with one, and `NOTIN` as `NotIn`,
+/// never read as a list it selects and never dropped (P-VLM-1). The switch
+/// refuses either until P1-14 builds them (P1-9, D66).
+#[test]
+fn a_converted_value_level_comparator_stays_on_the_tree() {
+    let scratch = Scratch::new();
+    convert("benchmarks/adam-adlb-metadata", &scratch.0);
+    let path = scratch.0.join("benchmarks/adam-adlb-metadata/spec.yaml");
+    let mut text = fs::read_to_string(&path).unwrap();
+    for (from, to) in [
+        (
+            "where: {PARAMCD: [GLUC]}",
+            "where: {PARAMCD: {comparator: NE, values: [GLUC]}}",
+        ),
+        (
+            "where: {PARAMCD: [CREAT]}",
+            "where: {PARAMCD: {comparator: NOTIN, values: [GLUC, HCG]}}",
+        ),
+    ] {
+        assert_eq!(text.matches(from).count(), 1, "{from}");
+        text = text.replace(from, to);
+    }
+    fs::write(&path, text).unwrap();
+    let spec = versioned(&path).unwrap_or_else(|error| panic!("lowered: {error}"));
+    let clauses = spec
+        .columns
+        .iter()
+        .filter_map(|column| column.submission.as_ref())
+        .flat_map(|submission| &submission.value_level)
+        .map(|entry| {
+            let clause = &entry.conditions[0];
+            (
+                entry.id.name.as_str(),
+                clause.comparator,
+                clause
+                    .values
+                    .iter()
+                    .map(|value| value.text.as_str())
+                    .collect::<Vec<_>>(),
+                spec.cite(clause.values[0].meta),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        clauses,
+        [
+            (
+                "GLUC",
+                Comparator::NotIn,
+                vec!["GLUC"],
+                "columns.AVAL.submission.value_level.GLUC.where.PARAMCD.values[0]".to_string()
+            ),
+            (
+                "CREAT",
+                Comparator::NotIn,
+                vec!["GLUC", "HCG"],
+                "columns.AVAL.submission.value_level.CREAT.where.PARAMCD.values[0]".to_string()
+            ),
+            (
+                "HCG",
+                Comparator::In,
+                vec!["HCG"],
+                "columns.AVALC.submission.value_level.HCG.where.PARAMCD[0]".to_string()
+            ),
+            (
+                "NUMERIC",
+                Comparator::In,
+                vec!["GLUC", "CREAT"],
+                "columns.AVALU.submission.value_level.NUMERIC.where.PARAMCD[0]".to_string()
+            ),
+        ]
+    );
 }
