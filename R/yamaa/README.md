@@ -40,10 +40,10 @@ specification item means.
 From the 1.0.0 release candidates on, each
 [GitHub release](https://github.com/elong0527/yamaa/releases) carries binary
 packages for Windows x64 and macOS arm64, built for R-release and R-oldrel,
-today R 4.6 and R 4.5. They install without Rust, Rtools or a network. A
-binary package works only with the R series that ends its file name, so
-download the one for your platform and R from the selected release, and
-install it with the line for that file:
+today R 4.6 and R 4.5. They install without Rust, Rtools or a network, and
+the macOS ones need macOS 11 or later. A binary package works only with the
+R series that ends its file name, so download the one for your platform and
+R from the selected release, and install it with the line for that file:
 
 ```r
 # Windows x64
