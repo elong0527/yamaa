@@ -33,8 +33,19 @@ unsafe_op_in_unsafe_fn = "deny"
 comparison_chain = "allow"
 format_collect = "allow"
 
+# Panics unwind, Cargo's default: the Parquet reader contains a panic of the
+# decoder that it calls (storage_api::contain_decode), which `panic = "abort"`
+# would turn into the end of the host process.
 [profile.release]
 lto = "thin"
+
+# The Python wheels build with this profile: release, without the symbol
+# table. The R package builds with release and keeps its symbols, as CRAN's
+# Repository Policy asks; tools/packaging/check_cargo_lock.py checks that the
+# R build strips nothing.
+[profile.dist]
+inherits = "release"
+strip = "symbols"
 
 # Release code generation for the test suite: optimized, with debug assertions
 # and overflow checks off exactly as in the shipped extension. Cross-crate

@@ -145,9 +145,11 @@ The supplemental catalog declares both readers, the shared JSON owner and the
 ODM reader documents. `tools.commands.installed` stages their exact bytes
 outside the checkout for both hosts, refuses overwrites, and the installed
 runner checks them before starting any suite. The standalone R source package carries the same files in
-`inst/host-fixtures`, so `R CMD check` and separately staged installed tests use
-the same owned truth. The readers select the staged files or installed package
-resources, with no checkout fallback.
+`tests/host-fixtures`, so `R CMD check` and separately staged installed tests use
+the same owned truth. The readers select the staged files beside the suites,
+with no checkout fallback. The R suites find them in their working directory:
+the copy of the package's tests directory that `R CMD check` runs them in, or
+the directory where native qualification stages them. R does not install them.
 
 The R codec uses jsonlite from the package's `Suggests`. The native
 workflow installs it before supplemental R tests; production R does not import

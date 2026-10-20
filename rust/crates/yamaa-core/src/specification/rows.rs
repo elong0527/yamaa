@@ -211,294 +211,6 @@ fn lower_shared(
     cache.insert(id, shared.clone());
     Ok(shared)
 }
-/// Inspect references in supported row-local defaults without reading source data.
-/// Literal text and qualified stored fields never promote an output declaration.
-/// The third element names why the default is not row-local (SPEC-6) when
-/// it is not: the derivation kind that breaks row locality.
-fn default_reads(
-    d: &Document,
-    declaration: usize,
-    output: &TableSchema,
-    project: Option<&functions::Prepared>,
-    string_templates: &str_template::Prepared,
-) -> Result<(bool, Vec<usize>, Option<&'static str>), PrepareError> {
-    let value = field(d, declaration, "value")?;
-    let &[(operation, payload)] = mapping(d, value)? else {
-        return Err(PrepareError::Internal);
-    };
-    let operation = text(d, operation)?;
-    fn contains_window(d: &Document, value: usize, depth: usize) -> Result<bool, PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                None,
-                None,
-            ));
-        }
-        if ["row_number", "rank", "row_value", "locf", "baseline_flag"]
-            .iter()
-            .any(|operation| d.field(value, operation).is_some())
-        {
-            return Ok(true);
-        }
-        if let Some(branches) = d.field(value, "case") {
-            for &branch in sequence(d, branches)? {
-                for name in ["then", "otherwise"] {
-                    if let Some(child) = d.field(branch, name) {
-                        if contains_window(d, child, depth + 1)? {
-                            return Ok(true);
-                        }
-                    }
-                }
-            }
-        }
-        Ok(false)
-    }
-    // A column window spans the complete constructed dataset, including when
-    // a nested branch or another output-key default depends on it.
-    let window_default = contains_window(d, value, 0)?;
-    let mut reads = Vec::new();
-    // Input-backed named reads can be row defaults (SPEC-6), while column
-    // SELF reads retain the complete constructed donor pool (LOOKUP-7).
-    let mut names = Vec::new();
-    derivations::references(d, value, project, &mut names, 0)?;
-    self_relations::template_references(d, value, string_templates, &mut names, 0)?;
-    let mut self_default = false;
-    for name in names {
-        self_default |= self_relations::is_self_reference(d, &name)?;
-        reads.extend(row_intermediates::default_dependencies(
-            d,
-            &name,
-            output,
-            string_templates,
-        )?);
-    }
-    let mut reference = |name: &str| {
-        if !name.contains('.') {
-            if let Some(column) = output.columns().iter().position(|c| c.name == name) {
-                reads.push(column);
-            }
-        }
-    };
-    match operation {
-        "literal" => {}
-        "greatest" | "least" | "case" | "first_available" | "mapping" | "cut" | "row_number"
-        | "rank" | "row_value" | "locf" | "baseline_flag" => {
-            let mut names = Vec::new();
-            derivations::references(d, value, project, &mut names, 0)?;
-            for name in names {
-                reference(&name);
-            }
-        }
-        "source" => {
-            let name = text(d, field(d, payload, "variable")?)?;
-            reference(name);
-        }
-        "str_template" => {
-            for name in string_templates.get(payload)?.identifiers() {
-                reference(name);
-            }
-        }
-        "round_half_away_from_zero" => reference(text(d, field(d, payload, "source")?)?),
-        "diff" | "study_day" | "to_epoch_day" | "shift" | "duration_value" | "dtc"
-        | "time_of_day" => {
-            for &name in temporal::fields(operation) {
-                if let Some(N::Text(source)) = d.field(payload, name).map(|id| &d.nodes()[id]) {
-                    reference(source);
-                }
-            }
-        }
-        "function" => {
-            if let Some(project) = project {
-                let call = project
-                    .calls
-                    .calls()
-                    .get(*project.nodes.get(&payload).ok_or(PrepareError::Internal)?)
-                    .ok_or(PrepareError::Internal)?;
-                for argument in &call.located.call.arguments {
-                    if let crate::project_call_document::Input::Reference(name) = &argument.input {
-                        reference(name);
-                    }
-                }
-            }
-        }
-        "flag" => {
-            let condition = field(d, payload, "condition")?;
-            match compile(text(d, condition)?, ExpressionContext::Predicate, "") {
-                Ok(compiled) => {
-                    for name in compiled.identifiers() {
-                        reference(name);
-                    }
-                }
-                Err(CompileError::Invalid { .. }) => (),
-                Err(error) => return Err(PrepareError::expression(error, None)),
-            }
-        }
-        "compute" => {
-            let expression = text(d, field(d, payload, "expr")?)?;
-            match compile(expression, ExpressionContext::Compute, "") {
-                Ok(compiled) => {
-                    for name in compiled.identifiers() {
-                        reference(name);
-                    }
-                }
-                Err(CompileError::Invalid { .. }) => {}
-                Err(error) => return Err(PrepareError::expression(error, None)),
-            }
-        }
-        "aggregate" => return Ok((false, reads, Some("aggregate"))),
-        _ => {
-            return Ok((
-                !self_default,
-                reads,
-                self_default.then_some("named_intermediate"),
-            ));
-        }
-    }
-    Ok((
-        !window_default && !self_default,
-        reads,
-        if window_default {
-            Some("window")
-        } else {
-            self_default.then_some("named_intermediate")
-        },
-    ))
-}
-
-fn select_defaults(
-    d: &Document,
-    columns: &[usize],
-    output: &TableSchema,
-    rows: &[usize],
-    filter_defaults: Vec<std::collections::BTreeSet<usize>>,
-    project: Option<&functions::Prepared>,
-    string_templates: &str_template::Prepared,
-) -> Result<Vec<Vec<usize>>, PrepareError> {
-    debug_assert_eq!(rows.len(), filter_defaults.len());
-    let defaults = columns
-        .iter()
-        .map(|&column| {
-            d.field(column, "derivation")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| default_reads(d, id, output, project, string_templates))
-                .transpose()
-                .map(|default| default.unwrap_or((true, Vec::new(), None)))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut local = defaults
-        .iter()
-        .map(|(local, _, _)| *local)
-        .collect::<Vec<_>>();
-    // A default that only reads a non-row-local column inherits that column's
-    // root cause, so the finding names the original kind (SPEC-6).
-    let mut not_row_local = defaults
-        .iter()
-        .map(|(_, _, reason)| *reason)
-        .collect::<Vec<_>>();
-    loop {
-        let mut changed = false;
-        for (column, (_, reads, _)) in defaults.iter().enumerate() {
-            if local[column] {
-                if let Some(&read) = reads.iter().find(|&&read| !local[read]) {
-                    local[column] = false;
-                    not_row_local[column] = not_row_local[read];
-                    changed = true;
-                }
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-    // ODM defaults own every template's item scope and row identity even
-    // when no row overrides or filter reference them; they are row-phase in
-    // all templates.
-    let mut odm_selected = std::vec![false; columns.len()];
-    for (column, &node) in columns.iter().enumerate() {
-        if let Some(derivation) = d
-            .field(node, "derivation")
-            .filter(|&node| !matches!(d.nodes()[node], N::Null))
-        {
-            if odm::contains(d, derivation, 0)? {
-                odm_selected[column] = local[column];
-            }
-        }
-    }
-    let mut overridden: BTreeMap<usize, Vec<&str>> = BTreeMap::new();
-    let mut per_template: Vec<Vec<bool>> = Vec::with_capacity(rows.len());
-    for (row, template_defaults) in rows.iter().zip(&filter_defaults) {
-        let mut selected = odm_selected.clone();
-        for &column in template_defaults {
-            selected[column] = local[column];
-        }
-        for &(name, declaration) in mapping(d, field(d, *row, "derivations")?)? {
-            let name = text(d, name)?;
-            let column = output
-                .columns()
-                .iter()
-                .position(|c| c.name == name)
-                .ok_or(PrepareError::Internal)?;
-            if local[column] {
-                selected[column] = true;
-            } else {
-                overridden
-                    .entry(column)
-                    .or_default()
-                    .push(text(d, field(d, *row, "id")?)?);
-            }
-            let (_, reads, _) = default_reads(d, declaration, output, project, string_templates)?;
-            for read in reads {
-                if local[read] {
-                    selected[read] = true;
-                }
-            }
-        }
-        loop {
-            let mut changed = false;
-            for (column, (_, reads, _)) in defaults.iter().enumerate() {
-                if selected[column] {
-                    for &read in reads {
-                        if local[read] && !selected[read] {
-                            selected[read] = true;
-                            changed = true;
-                        }
-                    }
-                }
-            }
-            if !changed {
-                break;
-            }
-        }
-        per_template.push(selected);
-    }
-    // Grouping preserves authored row order and emits columns in declaration order.
-    let findings = overridden
-        .into_iter()
-        .map(|(column, rows)| PreflightFinding::DuplicateRowDefault {
-            column: output.columns()[column].name.clone(),
-            rows: rows.into_iter().map(String::from).collect(),
-            // Every non-row-local column carries a root cause by
-            // construction; the fallback only guards future classifications.
-            not_row_local: not_row_local[column].unwrap_or("non_row_local").into(),
-        })
-        .collect::<Vec<_>>();
-    if !findings.is_empty() {
-        return Err(PrepareError::Invalid(findings));
-    }
-    Ok(per_template
-        .into_iter()
-        .map(|selected| {
-            selected
-                .into_iter()
-                .enumerate()
-                .filter_map(|(column, selected)| selected.then_some(column))
-                .collect()
-        })
-        .collect())
-}
-
 /// Validate every row-phase use before projecting its authored context.
 fn validate_row_phases(
     templates: &[Template],
@@ -1281,52 +993,87 @@ fn prepare_row_filters(
         .collect::<Result<Vec<_>, PrepareError>>()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn prepare_filter_defaults(
-    d: &Document,
-    output: &TableSchema,
-    project: Option<&functions::Prepared>,
-    intermediates: &intermediates::Declarations,
-    string_templates: &str_template::Prepared,
-    raw_rows: &[usize],
-    filters: &[RowFilterDeclaration],
-    columns: &[usize],
-) -> Result<Vec<std::collections::BTreeSet<usize>>, PrepareError> {
-    // Needs are tracked per template: a selector or secondary read in one
-    // template promotes defaults for that template only, so a suppressed
-    // candidate in another template never reads the promoted lookup.
-    let donor =
-        self_relations::donor_defaults(d, output, project, intermediates, string_templates)?;
-    let mut filter_defaults = vec![donor; raw_rows.len()];
-    for (index, (&row, filter)) in raw_rows.iter().zip(filters.iter()).enumerate() {
-        let Some((_, Ok(plan))) = filter else {
-            continue;
-        };
-        for name in plan.identifiers() {
-            if !present(d, row, "group_by") {
-                // A named lookup in an ungrouped filter also reads its
-                // match defaults from this candidate's derived values.
-                filter_defaults[index].extend(row_intermediates::default_dependencies(
-                    d,
-                    name,
-                    output,
-                    string_templates,
-                )?);
-            }
-            if name.contains('.') {
-                continue;
-            }
-            let Some(column) = output.columns().iter().position(|c| c.name == name) else {
-                continue;
-            };
-            if d.field(columns[column], "derivation")
-                .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
-            {
-                filter_defaults[index].insert(column);
+/// One row template as the checks read it: its id, driver, `group_by`, the
+/// document node of each derivation it evaluates in the row phase (with the
+/// column and whether it declares `unconvertible`), in construction order.
+pub(super) struct TemplatePhase<'a> {
+    pub id: &'a str,
+    pub driver: &'a str,
+    pub groups: Option<Vec<&'a str>>,
+    pub derivations: Vec<PhaseDerivation>,
+}
+
+/// A derivation one phase evaluates: its column, the document node of its
+/// operation and whether it declares `unconvertible`.
+#[derive(Clone, Copy)]
+pub(super) struct PhaseDerivation {
+    pub column: usize,
+    pub value: usize,
+    pub handled: bool,
+}
+
+impl Rows {
+    /// Each row template and its row-phase derivations, in construction order.
+    pub(super) fn phases(&self) -> Vec<TemplatePhase<'_>> {
+        self.templates
+            .iter()
+            .map(|template| TemplatePhase {
+                id: &template.id,
+                driver: &template.driver,
+                groups: template
+                    .groups
+                    .as_ref()
+                    .map(|groups| groups.iter().map(String::as_str).collect()),
+                derivations: template
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.phase())
+                    .collect(),
+            })
+            .collect()
+    }
+    /// The derivations the column phase completes, in declaration order.
+    pub(super) fn column_phase(&self) -> Vec<PhaseDerivation> {
+        self.columns
+            .iter()
+            .map(|declaration| declaration.phase())
+            .collect()
+    }
+    /// The driver of each binding [`Rows::bind`] makes of a column-phase
+    /// derivation of `column`: `primary` when it holds a qualified aggregate
+    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
+    /// that leave the column to this phase, in construction order.
+    pub(super) fn column_drivers_of<'a>(
+        &'a self,
+        column: usize,
+        aggregates: bool,
+        primary: &'a str,
+    ) -> Vec<&'a str> {
+        if aggregates {
+            return vec![primary];
+        }
+        let mut drivers = Vec::new();
+        for template in &self.templates {
+            let leaves = !template
+                .declarations
+                .iter()
+                .any(|derived| derived.column == column);
+            if leaves && !drivers.contains(&template.driver.as_str()) {
+                drivers.push(template.driver.as_str());
             }
         }
+        drivers
     }
-    Ok(filter_defaults)
+}
+
+impl RowDeclaration {
+    fn phase(&self) -> PhaseDerivation {
+        PhaseDerivation {
+            column: self.column,
+            value: self.value,
+            handled: self.handler.is_some(),
+        }
+    }
 }
 
 impl Rows {
@@ -1369,6 +1116,7 @@ impl Rows {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         d: &Document,
+        tree: &crate::front_end::v0_5::Lowered,
         output: &TableSchema,
         driver: &str,
         project: Option<&functions::Prepared>,
@@ -1384,237 +1132,8 @@ impl Rows {
         }
         let columns = sequence(d, field(d, root, "columns")?)?;
         let filters = prepare_row_filters(d, raw_rows)?;
-        let mut filter_defaults = prepare_filter_defaults(
-            d,
-            output,
-            project,
-            intermediates,
-            string_templates,
-            raw_rows,
-            &filters,
-            columns,
-        )?;
-        // Complete row-local identity defaults before a newly admitted selector can fail.
-        // A key column becomes a row default here only when the row phase
-        // actually needs its value before the filter: an implicit join
-        // matches on the output keys when a row-phase filter or derivation
-        // reads another input dataset, and a named intermediate read by a
-        // row-phase filter or derivation admits that intermediate as a
-        // selector for the template, whose matching is keyed on the row
-        // identity. The mere presence of intermediates is not a row-phase
-        // context (SPEC-6): promoting a key column whose derivation reads
-        // a named lookup would make candidates the filter suppresses read
-        // that lookup, and an intermediate without `no_match` must never
-        // fail `unmatched_key` for them (LOOKUP-12). Named reads by a filter,
-        // a row derivation, or another default already promote the match
-        // columns they need through `default_dependencies`.
-        // A reference owned by the template's own driver binds as a source
-        // read, never as an intermediate read, so it admits no selector.
-        // Needs are tracked per template: a selector or secondary read in
-        // one template promotes keys for that template only, so a suppressed
-        // candidate in another template never reads the promoted lookup.
-        let named_read = |read: &str, row_driver: &str| -> bool {
-            read.split_once('.')
-                .is_some_and(|(owner, _)| owner != row_driver && intermediates.contains(owner))
-        };
-        let mut secondary_reads = vec![false; raw_rows.len()];
-        let mut selector_reads = vec![false; raw_rows.len()];
-        for (row_index, &row) in raw_rows.iter().enumerate() {
-            let row_driver = d
-                .field(row, "dataset")
-                .map(|id| text(d, id))
-                .transpose()?
-                .unwrap_or(driver);
-            if let Some((_, Ok(plan))) = &filters[row_index] {
-                for read in plan.identifiers() {
-                    if !selector_reads[row_index] && named_read(read, row_driver) {
-                        selector_reads[row_index] = true;
-                    }
-                    if !secondary_reads[row_index]
-                        && read.split_once('.').is_some_and(|(source, _)| {
-                            source != row_driver
-                                && d.field(
-                                    field(d, root, "input").expect("admitted sources"),
-                                    source,
-                                )
-                                .is_some()
-                        })
-                    {
-                        secondary_reads[row_index] = true;
-                    }
-                }
-            }
-            for &(_, declaration) in mapping(d, field(d, row, "derivations")?)? {
-                let mut reads = Vec::new();
-                derivations::current_references(
-                    d,
-                    field(d, declaration, "value")?,
-                    project,
-                    &mut reads,
-                    0,
-                )?;
-                self_relations::template_references(
-                    d,
-                    field(d, declaration, "value")?,
-                    string_templates,
-                    &mut reads,
-                    0,
-                )?;
-                for read in &reads {
-                    if !selector_reads[row_index] && named_read(read, row_driver) {
-                        selector_reads[row_index] = true;
-                    }
-                    if !secondary_reads[row_index]
-                        && read.split_once('.').is_some_and(|(source, _)| {
-                            source != row_driver
-                                && d.field(
-                                    field(d, root, "input").expect("admitted sources"),
-                                    source,
-                                )
-                                .is_some()
-                        })
-                    {
-                        secondary_reads[row_index] = true;
-                    }
-                }
-            }
-        }
-        let needs_keys: Vec<bool> = secondary_reads
-            .iter()
-            .zip(&selector_reads)
-            .map(|(secondary, selector)| *secondary || *selector)
-            .collect();
-        let global_needs_keys = needs_keys.iter().any(|&needs| needs);
-        for &key in sequence(d, field(d, root, "keys")?)? {
-            let Some(column) = output
-                .columns()
-                .iter()
-                .position(|column| text(d, key).is_ok_and(|key| key == column.name))
-            else {
-                continue;
-            };
-            let Some(derivation) = d
-                .field(columns[column], "derivation")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            else {
-                continue;
-            };
-            let value = field(d, derivation, "value")?;
-            let &[(operation, _)] = mapping(d, value)? else {
-                return Err(PrepareError::Internal);
-            };
-            if matches!(
-                text(d, operation)?,
-                "row_number" | "rank" | "row_value" | "locf" | "baseline_flag"
-            ) {
-                // An output-key window default spans the complete constructed
-                // dataset. Selection identity cannot make it template-local.
-                continue;
-            }
-            // A key whose derivation reads a named lookup must stay
-            // template-local: promoting it globally would make suppressed
-            // candidates in templates that never read it read the lookup
-            // before their filter (LOOKUP-12). Safe keys (source, literal)
-            // stay row-phase everywhere once any template needs complete
-            // keys, so column-phase source reads never run under grouped
-            // contexts they cannot admit.
-            let mut reads = Vec::new();
-            derivations::current_references(d, value, project, &mut reads, 0)?;
-            self_relations::template_references(d, value, string_templates, &mut reads, 0)?;
-            let reads_lookup = reads.iter().any(|read| {
-                read.split_once('.')
-                    .is_some_and(|(owner, _)| intermediates.contains(owner))
-            });
-            if reads_lookup {
-                for (index, needs) in needs_keys.iter().enumerate() {
-                    if *needs {
-                        filter_defaults[index].insert(column);
-                    }
-                }
-            } else if global_needs_keys {
-                for template_defaults in filter_defaults.iter_mut() {
-                    template_defaults.insert(column);
-                }
-            }
-        }
-        // Source-reading defaults cannot complete column-phase under grouped
-        // contexts they cannot admit. When a template groups, keep safe
-        // (non-lookup, non-window) defaults that read the grouped driver
-        // row-phase everywhere. Lookup defaults stay per-template above, so
-        // suppressed candidates in templates that never read them never read
-        // the lookup (LOOKUP-12). Defaults that read only other datasets
-        // (for example a reference date from a different input) stay
-        // column-phase: promoting them into the grouped row context would
-        // misbind their source (sdtm-lb, sdtm-vs-planned-time-points).
-        {
-            use std::collections::BTreeSet;
-            let mut grouped_drivers: BTreeSet<String> = BTreeSet::new();
-            for &row in raw_rows.iter() {
-                if present(d, row, "group_by") {
-                    let row_driver = d
-                        .field(row, "dataset")
-                        .map(|id| text(d, id))
-                        .transpose()?
-                        .unwrap_or(driver);
-                    grouped_drivers.insert(row_driver.to_owned());
-                }
-            }
-            if !grouped_drivers.is_empty() {
-                for (column, &node) in columns.iter().enumerate() {
-                    let Some(derivation) = d
-                        .field(node, "derivation")
-                        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                    else {
-                        continue;
-                    };
-                    let value = field(d, derivation, "value")?;
-                    let &[(operation, _)] = mapping(d, value)? else {
-                        return Err(PrepareError::Internal);
-                    };
-                    if matches!(
-                        text(d, operation)?,
-                        "row_number"
-                            | "rank"
-                            | "row_value"
-                            | "locf"
-                            | "baseline_flag"
-                            | "aggregate"
-                            | "mapping"
-                    ) {
-                        continue;
-                    }
-                    let mut reads = Vec::new();
-                    derivations::current_references(d, value, project, &mut reads, 0)?;
-                    self_relations::template_references(d, value, string_templates, &mut reads, 0)?;
-                    if reads.iter().any(|read| {
-                        read.split_once('.')
-                            .is_some_and(|(owner, _)| intermediates.contains(owner))
-                    }) {
-                        continue;
-                    }
-                    let reads_grouped_driver = reads.iter().any(|read| {
-                        read.split_once('.')
-                            .is_some_and(|(owner, _)| grouped_drivers.contains(owner))
-                    });
-                    if !reads_grouped_driver {
-                        continue;
-                    }
-                    for template_defaults in filter_defaults.iter_mut() {
-                        template_defaults.insert(column);
-                    }
-                }
-            }
-        }
+        let selected = super::phases::row_phases(tree.spec(), driver)?;
         let mut templates = Vec::new();
-        let selected = select_defaults(
-            d,
-            columns,
-            output,
-            raw_rows,
-            filter_defaults,
-            project,
-            string_templates,
-        )?;
         // Admission lowers every selected default once and keeps it: the
         // per-template pass below inherits these shared declarations
         // instead of lowering the same authored default again per template.
@@ -1698,17 +1217,6 @@ impl Rows {
                         format!("columns.{}.derivation", metadata.name),
                     )
                 };
-                // Driver-specific admission still runs for every template;
-                // only the immutable lowering is shared through the cache.
-                row_drivers::admit_reads(
-                    d,
-                    id,
-                    Some(row_driver),
-                    &prefix,
-                    project,
-                    string_templates,
-                    intermediates,
-                )?;
                 declarations.push(lower_shared(
                     &mut lowered,
                     d,
@@ -1729,30 +1237,18 @@ impl Rows {
                 filter,
             });
         }
-        let mut self_admission =
-            self_relations::FirstTemplate::new(d, project, intermediates, string_templates);
-        for declaration in &templates[0].declarations {
-            // The expanded occurrence retains its authored row or default path.
-            let column = &output.columns()[declaration.column].name;
-            let raw = mapping(d, field(d, raw_rows[0], "derivations")?)?
-                .iter()
-                .find(|&&(name, _)| text(d, name).is_ok_and(|name| name == column))
-                .map(|&(_, id)| id)
-                .or_else(|| d.field(columns[declaration.column], "derivation"));
-            if let Some(raw) = raw {
-                let prefix = declaration
-                    .path
-                    .rsplit_once('.')
-                    .map_or(declaration.path.as_str(), |(prefix, _)| prefix);
-                self_admission.visit(field(d, raw, "value")?, prefix, 0)?;
-            }
-        }
-        // A grouped template's filter reads no qualified name at all
-        // (ROW-6), which binding reports for every template.
-        if let (None, Some((_, Ok(plan)))) = (&templates[0].groups, &templates[0].filter) {
-            self_admission.filter(plan, "rows[0].filter");
-        }
-        let self_findings = self_admission.finish();
+        // The first template's SELF reads, every alternative included.
+        let roots = templates[0]
+            .declarations
+            .iter()
+            .map(|declaration| tree.expression(declaration.value))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(PrepareError::Internal)?;
+        let filter = tree.spec().rows.templates[0]
+            .filter
+            .filter(|_| templates[0].groups.is_none());
+        let self_findings =
+            checks::lookups::first_template(d, tree, &roots, filter, project, intermediates)?;
         if !self_findings.is_empty() {
             return Err(PrepareError::Invalid(self_findings));
         }
@@ -1798,17 +1294,6 @@ impl Rows {
                     // row derivations before lowering any template.
                     return Err(PrepareError::Internal);
                 };
-                if templates.iter().any(|template| template.driver != driver) {
-                    row_drivers::admit_reads(
-                        d,
-                        derivation,
-                        None,
-                        &format!("{prefix}.derivation"),
-                        project,
-                        string_templates,
-                        intermediates,
-                    )?;
-                }
                 let declaration = lower_shared(
                     &mut lowered,
                     d,
@@ -1836,15 +1321,20 @@ impl Rows {
                         needing.push(&template.driver);
                     }
                 }
+                let root = tree.spec().columns[column]
+                    .derivation
+                    .as_ref()
+                    .map(|derivation| derivation.expr)
+                    .ok_or(PrepareError::Internal)?;
                 for driver in needing {
                     if intermediates.contains(driver)
-                        && row_drivers::unaddressable(
+                        && checks::lookups::unaddressable(
                             d,
-                            derivation,
+                            tree,
+                            root,
                             driver,
                             declaration.aggregates(),
                             project,
-                            string_templates,
                         )?
                     {
                         unaddressable.push(UnsupportedFeature {
@@ -2259,242 +1749,6 @@ impl Rows {
     }
 }
 
-impl Rows {
-    /// `primary` is the input behind the first row template, which binds a
-    /// column holding a qualified aggregate, as in [`Rows::bind`].
-    pub(super) fn check_findings(
-        &self,
-        output: &TableSchema,
-        primary: &str,
-        tree: &types::Tree,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        self.declaration_findings(primary, findings)?;
-        // Static types in binding order: each template's derivations, then the
-        // column-phase defaults, a shared default stating one derivation.
-        for declaration in self
-            .templates
-            .iter()
-            .flat_map(|template| &template.declarations)
-            .chain(&self.columns)
-        {
-            let start = findings.len();
-            if let RowOperation::Shared(branch) = &declaration.operation {
-                static_checks::derivation_types(&branch.operation, tree, declared, findings)?;
-            }
-            if declaration.handler.is_some() || findings.len() != start {
-                continue;
-            }
-            let column = &output.columns()[declaration.column];
-            let result = tree.result_type(declaration.value, ast::Scope::Row, declared)?;
-            if let Some(finding) =
-                types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
-            {
-                if !findings
-                    .iter()
-                    .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
-                {
-                    findings.push(BindFinding::Scalar(finding));
-                }
-            }
-        }
-        Ok(())
-    }
-    /// The contexts whose rows read lookup ranges, in binding's order
-    /// ([`lookup_range::check`]): the column phase, whose derivations and
-    /// dataset verifications (`verified`) evaluate for the rows of every
-    /// template, then each template, whose derivations and filter evaluate
-    /// for its rows only. A row's driver is the input behind its template,
-    /// named directly or through a named intermediate.
-    pub(super) fn range_contexts<'a>(
-        &'a self,
-        sources: &'a [SourceDeclaration],
-        named: &intermediates::Declarations,
-        verified: impl Iterator<Item = lookup_range::Evaluated<'a>>,
-    ) -> Vec<lookup_range::Declared<'a>> {
-        let Some(drivers) = self
-            .templates
-            .iter()
-            .map(|template| {
-                if sources.iter().any(|source| source.name == template.driver) {
-                    Some(template.driver.as_str())
-                } else {
-                    named
-                        .input(&template.driver)
-                        .and_then(|index| sources.get(index))
-                        .map(|source| source.name.as_str())
-                }
-            })
-            .collect::<Option<Vec<_>>>()
-        else {
-            return Vec::new();
-        };
-        let evaluated =
-            |declaration: &'a RowDeclaration, own: Option<&'a str>| match &declaration.operation {
-                RowOperation::Shared(branch) => {
-                    Some(lookup_range::Evaluated::Operation(&branch.operation, own))
-                }
-                RowOperation::Source(name) => Some(lookup_range::Evaluated::Name(name)),
-                RowOperation::ProjectFunction { call, .. } => {
-                    Some(lookup_range::Evaluated::Call(*call))
-                }
-                RowOperation::Output(_) => None,
-            };
-        // A column derivation evaluates only for the rows of the templates that
-        // leave the column to this phase (LOOKUP-9), and every driver binds
-        // it for its own rows. A column holding an aggregate binds once
-        // against the whole dataset, where every input joins unless every
-        // row template is driven by the input behind the first.
-        let column_phase = self
-            .columns
-            .iter()
-            .flat_map(|declaration| {
-                let leaving = self.templates.iter().zip(&drivers).filter(|(template, _)| {
-                    !template
-                        .declarations
-                        .iter()
-                        .any(|derived| derived.column == declaration.column)
-                });
-                let mut scopes: Vec<(Option<&str>, Vec<&str>)> = Vec::new();
-                if declaration.aggregates() {
-                    let own = drivers.first().copied().filter(|&primary| {
-                        self.templates
-                            .iter()
-                            .all(|template| template.driver == primary)
-                    });
-                    scopes.push((own, leaving.map(|(_, &driver)| driver).collect()));
-                } else {
-                    for (template, &driver) in leaving {
-                        let own = Some(template.driver.as_str());
-                        match scopes.iter_mut().find(|(known, _)| *known == own) {
-                            Some((_, inputs)) => inputs.push(driver),
-                            None => scopes.push((own, vec![driver])),
-                        }
-                    }
-                }
-                scopes.into_iter().filter_map(move |(own, inputs)| {
-                    evaluated(declaration.as_ref(), own).map(|evaluated| lookup_range::Declared {
-                        evaluated: vec![evaluated],
-                        drivers: inputs,
-                    })
-                })
-            })
-            .collect::<Vec<_>>();
-        let templates = self
-            .templates
-            .iter()
-            .zip(&drivers)
-            .map(|(template, &driver)| {
-                let mut evaluated = template
-                    .declarations
-                    .iter()
-                    .filter_map(|declaration| {
-                        evaluated(declaration.as_ref(), Some(&template.driver))
-                    })
-                    .collect::<Vec<_>>();
-                if let Some((_, Ok(filter))) = &template.filter {
-                    evaluated.extend(filter.identifiers().map(lookup_range::Evaluated::Name));
-                }
-                lookup_range::Declared {
-                    evaluated,
-                    drivers: vec![driver],
-                }
-            });
-        // A dataset verification evaluates for the rows of every template.
-        column_phase
-            .into_iter()
-            .chain(std::iter::once(lookup_range::Declared {
-                evaluated: verified.collect(),
-                drivers: drivers.clone(),
-            }))
-            .chain(templates)
-            .collect()
-    }
-    /// The driver of each binding [`Rows::bind`] makes of a column-phase
-    /// declaration: `primary` for a column holding a qualified aggregate
-    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
-    /// that leave the column to this phase, in construction order.
-    fn column_drivers<'a>(
-        &'a self,
-        declaration: &RowDeclaration,
-        primary: &'a str,
-    ) -> Vec<&'a str> {
-        if declaration.aggregates() {
-            return vec![primary];
-        }
-        let mut drivers = Vec::new();
-        for template in &self.templates {
-            let leaves = !template
-                .declarations
-                .iter()
-                .any(|derived| derived.column == declaration.column);
-            if leaves && !drivers.contains(&template.driver.as_str()) {
-                drivers.push(template.driver.as_str());
-            }
-        }
-        drivers
-    }
-    fn declaration_findings(
-        &self,
-        primary: &str,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let groups = self.column_groups();
-        let column_groups = groups
-            .iter()
-            .map(|(driver, group)| (*driver, group.as_slice()))
-            .collect::<Vec<_>>();
-        for declaration in &self.columns {
-            if let RowOperation::Shared(branch) = &declaration.operation {
-                let drivers = self.column_drivers(declaration, primary);
-                static_checks::scoped_branch(
-                    branch,
-                    Some(static_checks::Scope {
-                        drivers: &drivers,
-                        row: None,
-                        phase: Some(Phase::Column {
-                            groups: &column_groups,
-                        }),
-                    }),
-                    findings,
-                )?;
-            }
-        }
-        for (index, template) in self.templates.iter().enumerate() {
-            let groups = template
-                .groups
-                .as_ref()
-                .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>());
-            if let Some((expression, compiled)) = &template.filter {
-                static_checks::predicate(
-                    compiled,
-                    expression,
-                    &format!("rows[{index}].filter"),
-                    findings,
-                )?;
-            }
-            let driver = [template.driver.as_str()];
-            for declaration in &template.declarations {
-                if let RowOperation::Shared(branch) = &declaration.operation {
-                    static_checks::scoped_branch(
-                        branch,
-                        Some(static_checks::Scope {
-                            drivers: &driver,
-                            row: Some(&template.id),
-                            phase: Some(Phase::Row {
-                                group_by: groups.as_deref(),
-                            }),
-                        }),
-                        findings,
-                    )?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2672,13 +1926,17 @@ mod tests {
         .unwrap();
         let mut findings = Vec::new();
         let declared = types::DeclaredTypes::default();
-        let extraction = str_extract::Prepared::new(&document, &declared, &mut findings).unwrap();
+        let extraction =
+            str_extract::Prepared::new(&document, Vec::new(), &declared, &mut findings).unwrap();
         let string_templates =
-            str_template::Prepared::new(&document, &output, &declared, &mut findings).unwrap();
+            str_template::Prepared::new(&document, &[], Vec::new(), &declared, &mut findings)
+                .unwrap();
         assert!(findings.is_empty());
         let intermediates = intermediates::Declarations::default();
+        let tree = crate::front_end::v0_5::lower_document(&document, None);
         Rows::prepare(
             &document,
+            &tree,
             &output,
             "SRC",
             None,

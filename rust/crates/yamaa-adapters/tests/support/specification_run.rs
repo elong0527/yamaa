@@ -193,7 +193,7 @@ pub(crate) fn independent_failed_reports(
         let run = PreparedRun::prepare(prepare(&schema, source.as_bytes())).unwrap();
         let content = source_bytes.as_deref().unwrap_or(content);
         let mut port = Port(0, Arc::from(content));
-        let attempt = run.execute_with_port(&mut port, Scope::default());
+        let attempt = run.execute(&mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,
@@ -206,6 +206,7 @@ pub(crate) fn independent_failed_reports(
                 specification: "spec.yaml",
                 base_directory: ".",
             },
+            &[],
         )
         .unwrap();
         drop(run);
@@ -283,7 +284,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
         let run =
             PreparedRun::prepare(prepare(&schema, row["source"].as_str().unwrap().as_bytes()))
                 .unwrap();
-        let attempt = run.execute_with_port(&mut port, Scope::default());
+        let attempt = run.execute(&mut port, Scope::default());
         let example = format!("{prefix}-{}", row["case"].as_str().unwrap());
         let result = specification_report::build_result(
             &run,
@@ -296,6 +297,7 @@ pub(crate) fn independent_scalar_reports(fixture: &str, prefix: &str, expected_c
                 specification: "spec.yaml",
                 base_directory: ".",
             },
+            &[],
         )
         .unwrap();
         drop(run);
@@ -393,7 +395,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
             expected: fixture_bytes(&row["artifact"]),
             saves: 0,
         };
-        let attempt = run.execute_with_port(&mut port, Scope::default());
+        let attempt = run.execute(&mut port, Scope::default());
         let example = format!("{prefix}-{}", case);
         let result = specification_report::build_result(
             &run,
@@ -406,17 +408,19 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                 specification: "spec.yaml",
                 base_directory: ".",
             },
+            &[],
         )
         .unwrap_or_else(|error| {
             panic!(
                 "{}: {error:?}; execution: {:?}; outcome: {:?}",
                 case,
-                attempt.result.as_ref().err(),
+                attempt.dataset.result.as_ref().err(),
                 attempt
+                    .dataset
                     .result
                     .as_ref()
                     .ok()
-                    .map(|response| &response.outcome)
+                    .map(|execution| execution.result.as_ref().err())
             )
         });
         let expected: yamaa_core::json::Value = row["expected"].clone();

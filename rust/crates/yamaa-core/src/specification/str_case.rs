@@ -37,121 +37,26 @@ pub(super) fn prepare(
     .ok_or(PrepareError::Internal)
 }
 
-pub(super) fn declaration_findings(
+/// `str_case` reads text (TEXT-1). With `rows` a bare name's phase is
+/// binding's to decide, so its type is not checked here.
+pub(super) fn operand_findings(
     d: &Document,
-    columns: &[usize],
-    output: &TableSchema,
+    payload: usize,
+    path: &str,
     declared: &types::DeclaredTypes<'_>,
+    rows: bool,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    #[allow(clippy::too_many_arguments)]
-    fn visit(
-        d: &Document,
-        value: usize,
-        path: &str,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<PreflightFinding>,
-        depth: usize,
-        rows: bool,
-    ) -> Result<(), PrepareError> {
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                Some(depth),
-                Some(path),
-            ));
-        }
-
-        if let Some(payload) = d.field(value, "str_case") {
-            let operation = prepare(
-                d,
-                payload,
-                &format!("{path}.str_case"),
-                None,
-                None,
-                &mut Vec::new(),
-            )?;
-            // With row templates a bare name's phase is binding's to decide.
-            let source = operation.source();
-            let kind = (source.contains('.') || !rows)
-                .then(|| declared.operand(source).column_type())
-                .flatten();
-            if let Some(kind) = kind.filter(|kind| *kind != ColumnType::Str) {
-                let actual = match kind {
-                    ColumnType::Int => "int",
-                    ColumnType::Float => "float",
-                    ColumnType::Date => "date",
-                    ColumnType::DateTime => "datetime",
-                    ColumnType::Str => unreachable!(),
-                };
-                findings.push(PreflightFinding::TextCase(
-                    operation.input_diagnostic(actual),
-                ));
-            }
-        }
-        if let Some(case) = d.field(value, "case") {
-            for (index, &branch) in sequence(d, case)?.iter().enumerate() {
-                let (name, child) = d
-                    .field(branch, "then")
-                    .map(|id| ("then", id))
-                    .or_else(|| d.field(branch, "otherwise").map(|id| ("otherwise", id)))
-                    .ok_or(PrepareError::Internal)?;
-                visit(
-                    d,
-                    child,
-                    &format!("{path}.case[{index}].{name}"),
-                    declared,
-                    findings,
-                    depth + 1,
-                    rows,
-                )?;
-            }
-        }
-        Ok(())
+    let operation = prepare(d, payload, path, None, None, &mut Vec::new())?;
+    let source = operation.source();
+    let kind = (source.contains('.') || !rows)
+        .then(|| declared.name(source).column_type())
+        .flatten();
+    if let Some(kind) = kind.filter(|kind| *kind != ColumnType::Str) {
+        findings.push(PreflightFinding::TextCase(
+            operation.input_diagnostic(checks::type_name(kind)),
+        ));
     }
-    let has_rows = present(d, d.root(), "rows");
-    for (index, &column) in columns.iter().enumerate() {
-        if let Some(value) = d
-            .field(column, "derivation")
-            .and_then(|id| d.field(id, "value"))
-        {
-            visit(
-                d,
-                value,
-                &format!("columns.{}.derivation", output.columns()[index].name),
-                declared,
-                findings,
-                0,
-                has_rows,
-            )?;
-        }
-    }
-    if let Some(rows) = d
-        .field(d.root(), "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-            if let Some(derivations) = d.field(row, "derivations") {
-                for &(name, derivation) in mapping(d, derivations)? {
-                    if let Some(value) = d.field(derivation, "value") {
-                        visit(
-                            d,
-                            value,
-                            &format!("rows[{index}].derivations.{}", text(d, name)?),
-                            declared,
-                            findings,
-                            0,
-                            true,
-                        )?;
-                    }
-                }
-            }
-        }
-    }
-    match_values::visit_keys(d, &mut |value, path| {
-        visit(d, value, path, declared, findings, 0, has_rows)
-    })?;
     Ok(())
 }
 

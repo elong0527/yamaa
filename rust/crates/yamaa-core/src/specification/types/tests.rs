@@ -902,7 +902,10 @@ fn a_linked_csv_input_has_its_producers_types_before_capture() {
     assert_eq!(finding.context["actual"], crate::json::Value::from("date"));
 }
 
-/// Every input's type authority, before capture (INPUT-5, INPUT-10, EXPR-14).
+/// Every input's type authority, before capture (INPUT-5, INPUT-10, EXPR-14):
+/// a field a delimited file leaves undeclared is `str`, the type it has if it
+/// exists, in preflight and in `check()` alike; an undeclared field of a SAS
+/// or self-describing file waits for its captured schema.
 #[test]
 fn declared_types_follow_each_inputs_type_authority() {
     let producer = producer();
@@ -931,7 +934,7 @@ fn declared_types_follow_each_inputs_type_authority() {
         ("SRC.ID", ResultType::INT),
         ("SRC.ABSENT", ResultType::UNKNOWN),
         ("CSV.AGE", ResultType::INT),
-        ("CSV.OTHER", ResultType::UNKNOWN),
+        ("CSV.OTHER", ResultType::STR),
         ("XPT.SEQ", ResultType::INT),
         ("XPT.OTHER", ResultType::UNKNOWN),
         ("PQ.ANY", ResultType::UNKNOWN),
@@ -940,13 +943,5 @@ fn declared_types_follow_each_inputs_type_authority() {
         ("NOT_A_COLUMN", ResultType::UNKNOWN),
     ] {
         assert_eq!(declared.name(name), expected, "{name}");
-        // An operand check takes INPUT-5's text for an undeclared field of a
-        // delimited file, should it exist; every other answer is the same.
-        let operand = if name == "CSV.OTHER" {
-            ResultType::STR
-        } else {
-            expected
-        };
-        assert_eq!(declared.operand(name), operand, "{name}");
     }
 }

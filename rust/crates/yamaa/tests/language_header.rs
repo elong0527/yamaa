@@ -109,7 +109,7 @@ fn every_specification_call_refuses_a_1_x_specification() {
     let spec = study.path("spec.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    refused(&engine.spec_check(&spec, None, &token).unwrap());
+    refused(&engine.spec_check(&spec, None, &token).unwrap().issues());
     let run = engine.spec_run(&spec, None, &token).unwrap();
     assert!(run.output().is_none());
     refused(&run.issues());
@@ -134,7 +134,7 @@ fn every_project_call_refuses_a_1_x_project_file() {
     let project = study.path("project.yaml");
     let engine = engine();
     let token = CancellationToken::new();
-    refused(&engine.project_check(&project, &token).unwrap());
+    refused(&engine.project_check(&project, &token).unwrap().issues());
     refused(&engine.project_run(&project, None, &token).unwrap().issues());
     refused(
         &engine
@@ -159,7 +159,8 @@ fn a_0_5_project_refuses_a_1_x_specification_it_lists() {
     let rows = rows(
         &engine
             .project_check(&study.path("project.yaml"), &token)
-            .unwrap(),
+            .unwrap()
+            .issues(),
     );
     assert_eq!(rows.len(), 1, "{rows:?}");
     let (condition, rule, paths, context) = &rows[0];

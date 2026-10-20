@@ -2,7 +2,8 @@
 //! native capture scope. Preparation accepts no activation, data or publication port.
 use crate::{
     file_entry::RejectedEntry,
-    file_project::{self, FileProject, RejectedOrdinary},
+    file_preparation::{FileSpecification, Rejected},
+    file_project,
     file_resources::Resources,
     project_source::ProjectSchemas,
     specification_source::CapturedSchema,
@@ -174,16 +175,14 @@ pub fn capture_project(
     })
 }
 
-/// Explicit prepared capabilities from one original capture. Preparation takes
-/// no activation, study-source or publication port; each capability keeps the
-/// existing build/Save behavior.
-pub type Selected =
-    yamaa_core::build::Prepared<crate::file_preparation::FileSpecification, Box<FileProject>>;
+/// The one prepared capability from one original capture, with or without a
+/// project. Preparation takes no activation, study-source or publication
+/// port; the capability keeps the existing build/Save behavior.
+pub type Selected = FileSpecification;
 #[derive(Debug)]
 pub enum SelectionError {
     Preparation(Error),
-    Ordinary(Box<RejectedOrdinary>),
-    Plain(Box<crate::file_preparation::RejectedPlain>),
+    Compile(Box<Rejected>),
 }
 impl SelectionError {
     /// Bounded aliases of originally retained bytes; no file access or replay.
@@ -191,8 +190,7 @@ impl SelectionError {
         match self {
             Self::Preparation(Error::Environment(error)) => error.retained_sources(),
             Self::Preparation(Error::Entry(error)) => error.retained_sources(),
-            Self::Ordinary(error) => error.retained_sources(),
-            Self::Plain(error) => error.retained_sources(),
+            Self::Compile(error) => error.retained_sources(),
             Self::Preparation(Error::Configuration(_) | Error::Schema(_)) => Vec::new(),
         }
     }
@@ -212,15 +210,33 @@ pub fn select(
     )
 }
 
+/// Capture the request's project, when it names one, and its entry through
+/// the local file resolver, then compile.
 pub fn select_request(
     request: yamaa_core::build::Request<'_>,
     host: Language,
 ) -> Result<Selected, SelectionError> {
-    yamaa_core::build::prepare(request, &mut Metadata { host })
+    let request = configure(request.specification, request.environment)
+        .map_err(SelectionError::Preparation)?;
+    let (resources, environment) = capture_environment(
+        request.resources,
+        &request.entry,
+        request.environment.as_deref(),
+        host,
+        Arc::clone(&request.specification_schema),
+        request.project_schemas,
+    )
+    .map_err(SelectionError::Preparation)?;
+    compile(
+        resources,
+        &request.entry,
+        environment,
+        request.specification_schema,
+    )
 }
 
-/// Host authority replaces physical lookup while all metadata preparation and
-/// plain/project selection use the same engine ports.
+/// Host authority replaces physical lookup while all metadata preparation
+/// uses the same engine ports.
 pub fn select_with_resolver(
     request: yamaa_core::build::Request<'_>,
     host: Language,
@@ -240,46 +256,17 @@ pub fn select_with_resolver(
     )
 }
 
-struct Metadata {
-    host: Language,
-}
-impl yamaa_core::build::PreparationPort for Metadata {
-    type Entry = crate::file_entry::CapturedEntry;
-    type Plain = crate::file_preparation::FileSpecification;
-    type Project = Box<FileProject>;
-    type Failure = SelectionError;
-    fn capture(
-        &mut self,
-        request: yamaa_core::build::Request<'_>,
-    ) -> Result<Self::Entry, SelectionError> {
-        let request = configure(request.specification, request.environment)
-            .map_err(SelectionError::Preparation)?;
-        let (resources, environment) = capture_environment(
-            request.resources,
-            &request.entry,
-            request.environment.as_deref(),
-            self.host,
-            Arc::clone(&request.specification_schema),
-            request.project_schemas,
-        )
-        .map_err(SelectionError::Preparation)?;
-        crate::file_entry::capture(
-            resources,
-            &request.entry,
-            environment,
-            request.specification_schema,
-        )
-        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))
-    }
-    fn plain(&mut self, entry: Self::Entry) -> Result<Self::Plain, SelectionError> {
-        crate::file_preparation::FileSpecification::from_workflow(entry)
-            .map_err(SelectionError::Plain)
-    }
-    fn project(&mut self, entry: Self::Entry) -> Result<Self::Project, SelectionError> {
-        FileProject::from_workflow(entry)
-            .map(Box::new)
-            .map_err(SelectionError::Ordinary)
-    }
+/// Capture the entry and the producing specifications its links name under
+/// the captured environment, then compile.
+fn compile(
+    resources: Resources,
+    entry: &str,
+    environment: crate::project_source::OwnedEnvironment,
+    specification_schema: Arc<CapturedSchema>,
+) -> Result<Selected, SelectionError> {
+    let entry = crate::file_entry::capture(resources, entry, environment, specification_schema)
+        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
+    FileSpecification::from_workflow(entry).map_err(SelectionError::Compile)
 }
 
 pub fn select_with_resources(
@@ -308,7 +295,6 @@ pub fn select_with_optional_resources(
     specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<Selected, SelectionError> {
-    let has_environment = environment.is_some();
     let (resources, environment) = capture_environment(
         resources,
         entry,
@@ -318,9 +304,7 @@ pub fn select_with_optional_resources(
         project_schemas,
     )
     .map_err(SelectionError::Preparation)?;
-    let entry = crate::file_entry::capture(resources, entry, environment, specification_schema)
-        .map_err(|error| SelectionError::Preparation(Error::Entry(error)))?;
-    yamaa_core::build::select(entry, has_environment, &mut Metadata { host })
+    compile(resources, entry, environment, specification_schema)
 }
 
 fn capture_environment(

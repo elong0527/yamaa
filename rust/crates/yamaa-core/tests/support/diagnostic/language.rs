@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic, InheritanceFinding as F};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::language::{
-    read_header, refusal, FileType, LanguageVersion, Reference, ReferenceFault, LANGUAGE_VERSION,
+    read_header, refusal, FileType, LanguageVersion, PathBase, Reference, ReferenceFault,
+    LANGUAGE_VERSION,
 };
 use yamaa_core::schema::{
     DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaStructure,
@@ -117,6 +118,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         field: "functions[0]".into(),
         written: "functions/bmi.yaml".into(),
         expected: FileType::Function,
+        base: PathBase::Declaring,
     };
     let Err(ReferenceFault::Field(finding)) = reference.check(
         "study/bmi.yaml",

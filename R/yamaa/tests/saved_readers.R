@@ -8,8 +8,7 @@ if (!requireNamespace("arrow", quietly = TRUE) || utils::packageVersion("arrow")
   message("Skipped saved_readers.R: it needs the suggested packages arrow (>= 23.0.1) and jsonlite (>= 2.0.0)")
   quit(save = "no")
 }
-host_fixture_root <- if (file.exists("host-fixtures/saved-readers.json")) "host-fixtures" else
-  system.file("host-fixtures", package = "yamaa", mustWork = TRUE)
+host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 truth <- jsonlite::fromJSON(file.path(host_fixture_root, "saved-readers.json"), simplifyVector = FALSE)
 stopifnot(identical(truth$version, "1"))
 columns <- unlist(truth$columns, use.names = FALSE)

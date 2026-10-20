@@ -17,7 +17,7 @@ use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::engine::Build;
 use crate::error::Error;
-use crate::internal::{outcome_accepted, BuildOutcome, Compiled, EngineShared, ObserverBridge};
+use crate::internal::{outcome_accepted, Built, Compiled, EngineShared, ObserverBridge};
 use crate::observe::Progress;
 use crate::resolver::ResourceResolver;
 
@@ -183,7 +183,7 @@ impl Plan {
         verify: bool,
         measurements: &yamaa_adapters::application_measurements::Measurements,
         progress: Option<&dyn Progress>,
-    ) -> BuildOutcome {
+    ) -> Built {
         let bridge = ObserverBridge::new(measurements, progress);
         crate::internal::run(
             &self.shared,
@@ -232,7 +232,7 @@ impl Plan {
         held: Option<Arc<yamaa_adapters::file_resources::HeldArtifacts>>,
         measurements: &yamaa_adapters::application_measurements::Measurements,
         progress: Option<&dyn Progress>,
-    ) -> BuildOutcome {
+    ) -> Built {
         let bridge = ObserverBridge::new(measurements, progress);
         crate::internal::run(
             shared,

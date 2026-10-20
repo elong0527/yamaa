@@ -996,7 +996,20 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1020,6 +1033,52 @@
               ],
               "context": {
                 "identifier": "LOOK.V"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "original_lookup_wrong_qualifier_without_inputs",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":\"SRC.X\"},{\"name\":\"V\",\"type\":\"float\",\"derivation\":\"LOOK.V\"}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.V > 0\"}]}",
+          "inputs": {},
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "input.SRC.path"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "path": "input/source.csv"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "input.RIGHT.path"
+              ],
+              "context": {
+                "dataset": "RIGHT",
+                "path": "input/right.csv"
               }
             }
           ],
@@ -1088,7 +1147,20 @@
             "input/source.csv": "X\none\ntwo\n",
             "input/right.csv": "X,V\none,1.0\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1564,7 +1636,19 @@
           "inputs": {
             "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "NAME-3",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.YY"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1586,7 +1670,19 @@
           "inputs": {
             "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "NAME-3",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.YY"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1608,7 +1704,19 @@
           "inputs": {
             "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "NAME-3",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.*"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",
@@ -1630,7 +1738,19 @@
           "inputs": {
             "input/qs.csv": "STUDYID,USUBJID,QSTESTCD,QSCAT,QSORRES\nS1,001,PF01,SCALE,1\n"
           },
-          "check_issues": [],
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "unknown_field",
+              "rule": "NAME-3",
+              "spec_paths": [
+                "columns.AVAL.derivation.aggregate.expr"
+              ],
+              "context": {
+                "identifier": "XX.ZZ"
+              }
+            }
+          ],
           "issues": [
             {
               "phase": "validation",

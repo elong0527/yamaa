@@ -225,11 +225,12 @@ does not read a window result, evaluated before the window pass.
 ### COLUMN-10. A local handler answers its condition with a literal, and an omitted handler gives missing for a missing single input or absent record and leaves every other condition fatal
 
 Each local handler applies at the site the table below lists, only when its
-condition occurs, and substitutes a scalar literal or `{literal: null}`, never
-an expression. Omitted, or written as YAML null, a handler for the missing
-input of a single-input verb, a record a lookup does not find, an `UNKNOWN`
-flag condition or `first_available` sources all missing gives missing, counted
-as that handler. Every other condition fails without its handler, a missing
+condition occurs, and substitutes the constant it declares, written as a
+value field: text, a number or a Boolean, or YAML null for missing, never an
+expression. An omitted handler for the missing input of a single-input verb,
+a record a lookup does not find, an `UNKNOWN` flag condition or
+`first_available` sources all missing gives missing, counted as that
+handler. Every other condition fails without its handler, a missing
 `str_template` placeholder among them.
 
 Fails: `missing_input`, `unmapped_value`, `unmatched_pattern`.
@@ -240,14 +241,15 @@ handling; the ordered derivation lifecycle is [COLUMN-8](#column-8) and
 [COLUMN-9](#column-9). Each handler uses a literal unless its behavior says
 otherwise, and no handler adds a dependency.
 
-A handler's literal is a string, integer, float or Boolean, written bare. The
-missing value has one spelling, `{literal: null}`, the same as the literal
-expression: a YAML null leaves the field absent under
-[LAYER-9](inheritance.md#layer-9), so `unmapped: null` declares no handler.
-The same two forms are the values of a `flag`'s `true_value`, `false_value`
-and `missing`, of `first_available`'s `missing` and of an inline `mapping`
-dictionary entry, and a `function` argument passes the missing value as
-`{literal: null}`.
+A handler's value is a value field: a string, integer, float or Boolean,
+written bare, or YAML null, the missing value. YAML null never removes a
+handler: `unmapped: null` declares a handler that answers missing, where
+omitting it leaves the condition fatal, and a child layer clears an
+inherited handler only by listing its path in `clear`
+([LAYER-9](inheritance.md#layer-9)). The same values are those of a `flag`'s
+`true_value`, `false_value` and `missing`, of `first_available`'s `missing`
+and of an inline `mapping` dictionary entry, and a `function` argument passes
+the missing value as YAML null.
 
 The table states, for each handler, the stage that answers its condition, the
 condition, and what the condition gives when the handler is omitted.
@@ -272,7 +274,7 @@ condition, and what the condition gives when the handler is omitted.
 | convert | `unconvertible` | Failed output conversion | Fails |
 
 An omitted handler that gives missing is a default substitution: the value is
-the one `{literal: null}` gives, and it is counted under the handler's path as
+the missing value, and it is counted under the handler's path as
 a declared substitution is ([COLUMN-14](#column-14)). `impute` and `precision`
 declare no `missing`: a missing source gives missing, counted at their
 `missing` path, unless `impute` declares `fallback`

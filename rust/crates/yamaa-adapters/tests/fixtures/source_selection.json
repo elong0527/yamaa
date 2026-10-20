@@ -756,7 +756,20 @@
           }
         }
       ],
-      "check_issues": [],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "key_dependency",
+          "rule": "COLUMN-7",
+          "spec_paths": [
+            "columns.ID.derivation"
+          ],
+          "context": {
+            "column": "ID",
+            "dependency": "VALUE"
+          }
+        }
+      ],
       "handlers": [],
       "source_reads": [
         "input.csv"
@@ -780,7 +793,19 @@
           }
         }
       ],
-      "check_issues": [],
+      "check_issues": [
+        {
+          "phase": "validation",
+          "condition": "prohibited_construct",
+          "rule": "LOOKUP-8",
+          "spec_paths": [
+            "columns.VALUE.derivation.source.filter"
+          ],
+          "context": {
+            "identifier": "BASE"
+          }
+        }
+      ],
       "handlers": [],
       "source_reads": [
         "input.csv"

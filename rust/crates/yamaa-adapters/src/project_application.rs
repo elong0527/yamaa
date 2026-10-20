@@ -2,7 +2,8 @@
 //! Installed bindings supply host capabilities only after this shared admission.
 use crate::{
     file_application::{self, Failure},
-    file_project::{self, FileProject},
+    file_preparation::FileSpecification,
+    file_project,
     project_source::Failure as EnvironmentFailure,
     specification_diagnostics::{self as diagnostics, Rejection},
     specification_source::Error as SourceError,
@@ -21,13 +22,13 @@ pub fn prepare(
     specification: &str,
     environment: &str,
     host: Language,
-) -> Result<FileProject, Error> {
+) -> Result<FileSpecification, Error> {
     let (mut resources, entry) =
         crate::file_configuration::resources(specification).map_err(Error::Configuration)?;
     let environment = environment_path(environment)
         .map_err(|error| Error::Project(file_project::Error::Resource(error)))?;
     resources.select_caller_parent(&environment);
-    FileProject::prepare(
+    file_project::prepare(
         resources,
         &entry,
         &environment,
@@ -94,11 +95,12 @@ fn project_failure(error: &file_project::Error) -> Failure {
         file_project::Error::Environment(error) => environment_failure(error),
     }
 }
-/// The issues of a project compilation the compiler refused.
-fn compile_failure(run: &crate::project_run::RejectedRun) -> Failure {
+/// The issues of a compilation the compiler refused: its findings, its
+/// unsupported uses, or the preparation fault that stopped it.
+fn compile_failure(run: &crate::specification_run::RejectedRun) -> Failure {
     match &run.rejection.error {
         PrepareError::Invalid(_) => {
-            crate::project_check::rejected(run).unwrap_or_else(|_| refused(Stage::Check))
+            crate::specification_check::rejected(run).unwrap_or_else(|_| refused(Stage::Check))
         }
         PrepareError::Unsupported(features) => features
             .iter()
@@ -106,10 +108,7 @@ fn compile_failure(run: &crate::project_run::RejectedRun) -> Failure {
                 file_application::unsupported(&feature.operation, Some(&feature.path))
             })
             .collect(),
-        error @ (PrepareError::Limit(_) | PrepareError::Numeric { .. }) => {
-            diagnostics::preparation(error).into_issues()
-        }
-        _ => file_application::rejected(Stage::Check, Fault::CompilationBoundary),
+        error => diagnostics::preparation(error).into_issues(),
     }
 }
 fn environment_failure(error: &EnvironmentFailure<crate::file_resources::Error>) -> Failure {
@@ -164,12 +163,7 @@ fn environment_projection_failure(error: crate::project_environment_diagnostics:
 pub fn check(specification: &str, environment: &str, host: Language) -> Failure {
     file_application::collect(
         match crate::file_workflow::select(specification, environment, host) {
-            Ok(yamaa_core::build::Prepared::Ordinary(project)) => {
-                crate::project_check::prepared(project.run())
-            }
-            Ok(yamaa_core::build::Prepared::Plain(prepared)) => {
-                crate::specification_check::issues(prepared.run())
-            }
+            Ok(prepared) => crate::specification_check::issues(prepared.run()),
             Err(error) => selection_failure(&error),
         },
     )
@@ -193,24 +187,8 @@ fn workflow_issues(error: &crate::file_workflow::Error) -> Failure {
 /// projection is complete and bounded; no feature dispatch depends on failure.
 pub fn selection_failure(error: &crate::file_workflow::SelectionError) -> Failure {
     match error {
-        crate::file_workflow::SelectionError::Plain(error) => match error.error() {
-            crate::file_preparation::Error::Resource(error) => {
-                file_application::resource_failure(Stage::Prepare, error)
-            }
-            crate::file_preparation::Error::ResourceFinding { diagnostic, .. }
-            | crate::file_preparation::Error::PreparationFinding { diagnostic, .. } => {
-                file_application::classified_resource(diagnostic)
-            }
-            crate::file_preparation::Error::Preparation(error) => inherited(error),
-            crate::file_preparation::Error::Inventory(_) => {
-                file_application::rejected(Stage::Prepare, Fault::Inventory)
-            }
-            crate::file_preparation::Error::Compile(error) => {
-                diagnostics::failure(error, None).into_issues()
-            }
-        },
         crate::file_workflow::SelectionError::Preparation(error) => workflow_issues(error),
-        crate::file_workflow::SelectionError::Ordinary(error) => compile_failure(error.run()),
+        crate::file_workflow::SelectionError::Compile(error) => compile_failure(error.run()),
     }
 }
 fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {

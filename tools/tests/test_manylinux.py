@@ -69,7 +69,7 @@ class ManylinuxBuild(unittest.TestCase):
         for text in (
             "CARGO_TARGET_DIR=/tmp/target",
             'rustup toolchain install "${RUST_TOOLCHAIN}"',
-            '-m maturin build --release --locked --compatibility "${POLICY}"',
+            '-m maturin build --profile dist --locked --compatibility "${POLICY}"',
             "--out /out",
         ):
             with self.subTest(text=text):

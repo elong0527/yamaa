@@ -68,17 +68,16 @@ output: {{path: output.csv, columns: [I, S]}}
                     content: content.into(),
                     calls: 0,
                 };
-                let attempt = run.execute_with_port(&mut port, Scope::default());
+                let attempt = run.execute(&mut port, Scope::default());
                 assert_eq!(port.calls, 1);
                 drop(port);
                 drop(run);
-                let source = attempt.sources[0].table.as_ref().unwrap();
+                let source = attempt.dataset.sources[0].table.as_ref().unwrap();
                 assert_eq!(source.cell(0, 1).unwrap(), first);
                 assert_eq!(source.cell(1, 1).unwrap(), ValueRef::Str("X"));
-                assert!(attempt.sources[0].read.captured);
-                assert_eq!(attempt.sources[0].read.snapshots_created, Some(1));
-                let response = attempt.result.unwrap();
-                assert!(response.table.is_some());
+                assert!(attempt.dataset.sources[0].read.captured);
+                assert_eq!(attempt.dataset.sources[0].read.snapshots_created, Some(1));
+                assert!(attempt.dataset.result.unwrap().result.is_ok());
             }
         }
 
@@ -693,6 +692,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 Error, PortError, PreparedRun, SpecificationSourcePort,
             };
             use yamaa_core::specification::SourceDeclaration;
+            use yamaa_core::specification_run::RunError;
             struct Port {
                 content: Arc<[u8]>,
                 reads: usize,
@@ -743,18 +743,16 @@ output: {{path: output.csv, columns: [I, S]}}
                 fail: false,
             };
             for created in [1, 0] {
-                let attempt = run.execute_with_port(&mut port, Scope::default());
-                assert!(attempt.sources[0].read.captured);
-                assert_eq!(attempt.sources[0].read.snapshots_created, Some(created));
-                assert!(Arc::ptr_eq(
-                    attempt.sources[0].snapshot.as_ref().unwrap(),
-                    &content
-                ));
-                assert_eq!(attempt.sources[0].table.as_ref().unwrap().row_count(), 2);
-                let response = attempt.result.unwrap();
-                assert!(response.table.is_none());
+                let attempt = run.execute(&mut port, Scope::default());
+                let sources = &attempt.dataset.sources;
+                assert!(sources[0].read.captured);
+                assert_eq!(sources[0].read.snapshots_created, Some(created));
+                assert!(Arc::ptr_eq(sources[0].snapshot.as_ref().unwrap(), &content));
+                assert_eq!(sources[0].table.as_ref().unwrap().row_count(), 2);
+                let execution = attempt.dataset.result.as_ref().unwrap();
+                assert!(execution.result.is_err());
                 assert!(matches!(
-                    &response.outcome,
+                    yamaa_adapters::dataset_result::outcome(execution).unwrap(),
                     yamaa_adapters::dataset_result::Outcome::Condition(found)
                         if found.diagnostic.condition() == "division_by_zero"
                 ));
@@ -762,27 +760,29 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(port.requests, 2);
             let invalid = raw.replace("100 * (AVAL - BASE) / BASE", "AVAL +");
             let run = PreparedRun::prepare(prepare(&schema, invalid.as_bytes())).unwrap();
-            let attempt = run.execute_with_port(&mut port, Scope::default());
-            assert!(attempt.sources[0].table.is_some());
+            let attempt = run.execute(&mut port, Scope::default());
+            assert!(attempt.dataset.sources[0].table.is_some());
             assert!(matches!(
-                attempt.result,
-                Err(PortError::Run(Error::Bind(_)))
+                attempt.dataset.result,
+                Err(PortError::Run(RunError::Bind(_)))
             ));
             port.content = Arc::from(b"A\n\"bad".as_slice());
-            let attempt = run.execute_with_port(&mut port, Scope::default());
-            assert!(attempt.sources[0].snapshot.is_some());
-            assert!(attempt.sources[0].table.is_none());
+            let attempt = run.execute(&mut port, Scope::default());
+            assert!(attempt.dataset.sources[0].snapshot.is_some());
+            assert!(attempt.dataset.sources[0].table.is_none());
             assert!(matches!(
-                attempt.result,
-                Err(PortError::Run(Error::Source(_)))
+                &attempt.dataset.result,
+                Err(PortError::Run(RunError::Sources(errors)))
+                    if matches!(errors[..], [(0, Error::Source(_))])
             ));
             port.fail = true;
-            let attempt = run.execute_with_port(&mut port, Scope::default());
-            assert!(!attempt.sources[0].read.captured);
-            assert_eq!(attempt.sources[0].read.snapshots_created, Some(0));
-            assert!(attempt.sources[0].snapshot.is_none() && attempt.sources[0].table.is_none());
+            let attempt = run.execute(&mut port, Scope::default());
+            let sources = &attempt.dataset.sources;
+            assert!(!sources[0].read.captured);
+            assert_eq!(sources[0].read.snapshots_created, Some(0));
+            assert!(sources[0].snapshot.is_none() && sources[0].table.is_none());
             assert!(matches!(
-                attempt.result,
+                attempt.dataset.result,
                 Err(PortError::Capture("resource_path_missing"))
             ));
         }
@@ -852,7 +852,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     base: case,
                     reads: 0,
                 };
-                let attempt = run.execute_with_port(&mut port, Scope::default());
+                let attempt = run.execute(&mut port, Scope::default());
                 assert_eq!(port.reads, 1);
                 // Independently authored complete failure truth; benchmark source and
                 // diagnostic declarations also receive a separate reference comparison.
@@ -1195,7 +1195,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 "fixtures/specs/adam-adlb-ordered-sum.json"
             ))
             .unwrap();
-            let attempt = run.execute_with_port(&mut port, Scope::default());
+            let attempt = run.execute(&mut port, Scope::default());
             let report =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
             assert_eq!(report, expected);
@@ -1216,7 +1216,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 raw.replace("path: adlb.csv", "path: adlb.bad").as_bytes(),
             ))
             .unwrap();
-            let attempt = run.execute_with_port(&mut port, Scope::default());
+            let attempt = run.execute(&mut port, Scope::default());
             let report =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
             let mut expected = expected;
@@ -1236,7 +1236,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     .as_bytes(),
             ))
             .unwrap();
-            let attempt = run.execute_with_port(&mut port, Scope::default());
+            let attempt = run.execute(&mut port, Scope::default());
             let actual =
                 specification_report::complete(&run, &attempt, id(), &mut publisher).unwrap();
             let diagnostic = json!({"phase":"verification","condition":"row_count_failed","rule":"CHECK-13","spec_paths":["verifications[0].row_count"],"context":{"count":17,"failure_count":1,"keys":[{}]}});
@@ -1261,7 +1261,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
             let actual = specification_report::complete(
                 &run,
-                &run.execute_with_port(&mut port, Scope::default()),
+                &run.execute(&mut port, Scope::default()),
                 id(),
                 &mut publisher,
             )
@@ -1406,7 +1406,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         bytes: bytes.clone().into(),
                         reads: 0,
                     };
-                    let attempt = run.execute_with_port(&mut host, Scope::default());
+                    let attempt = run.execute(&mut host, Scope::default());
                     let actual =
                         specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
                     assert_eq!(host.reads, 1);
@@ -1440,7 +1440,7 @@ output: {{path: output.csv, columns: [I, S]}}
             };
             let actual = specification_report::complete(
                 &run,
-                &run.execute_with_port(&mut host, Scope::default()),
+                &run.execute(&mut host, Scope::default()),
                 id(),
                 &mut host,
             )
@@ -1460,7 +1460,7 @@ output: {{path: output.csv, columns: [I, S]}}
             .unwrap();
             let actual = specification_report::complete(
                 &run,
-                &run.execute_with_port(&mut host, Scope::default()),
+                &run.execute(&mut host, Scope::default()),
                 id(),
                 &mut host,
             )
@@ -1648,7 +1648,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     published: Vec::new(),
                 };
                 let run = PreparedRun::prepare(prepare(&schema, raw.as_bytes())).unwrap();
-                let attempt = run.execute_with_port(&mut host, Scope::default());
+                let attempt = run.execute(&mut host, Scope::default());
                 let actual =
                     specification_report::complete(&run, &attempt, id(), &mut host).unwrap();
                 if all_missing {
@@ -1756,7 +1756,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 published: Vec::new(),
             };
             let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
-            let attempt = run.execute_with_port(&mut host, Scope::default());
+            let attempt = run.execute(&mut host, Scope::default());
             let actual = specification_report::complete(
                 &run,
                 &attempt,
@@ -1997,8 +1997,8 @@ output: {{path: output.csv, columns: [I, S]}}
                 published: Vec::new(),
             };
             for created in [1, 0] {
-                let attempt = prepared.execute_with_port(&mut host, Scope::default());
-                assert_eq!(attempt.sources.len(), 3);
+                let attempt = prepared.execute(&mut host, Scope::default());
+                assert_eq!(attempt.dataset.sources.len(), 3);
                 let id = Identity {
                     runtime: "python",
                     runtime_version: "fixture-runtime",
@@ -2089,7 +2089,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     case: case.clone(),
                     requests: vec![],
                 };
-                let attempt = run.execute_with_port(&mut host, Scope::default());
+                let attempt = run.execute(&mut host, Scope::default());
                 let actual = specification_report::complete(
                     &run,
                     &attempt,
@@ -2306,7 +2306,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 published: vec![],
             };
             for created in [1, 0] {
-                let attempt = run.execute_with_port(&mut host, Scope::default());
+                let attempt = run.execute(&mut host, Scope::default());
                 let report = specification_report::complete(
                     &run,
                     &attempt,

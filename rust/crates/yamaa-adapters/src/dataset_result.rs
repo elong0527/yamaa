@@ -55,26 +55,13 @@ impl fmt::Display for DatasetError {
 impl std::error::Error for DatasetError {}
 type Error = DatasetError;
 
-/// A checked table is present only for success. Observations stay typed until
-/// the report renders them.
+/// The checked table of one execution from held bytes, present only for
+/// success, with its typed outcome and handler evidence.
 pub struct DatasetResponse {
     pub table: Option<Vec<u8>>,
     pub outcome: Outcome,
     /// Every handler path the attempt registered, in registration order.
     pub handler_counts: Vec<HandlerCount>,
-    // The application publishes from its accepted typed result, never by
-    // reconstructing execution success or decoding its own IPC output.
-    pub(crate) execution: Option<dataset::Execution>,
-    pub(crate) retained_verifications: Vec<dataset::CheckRecord>,
-    pub(crate) intermediate_diagnostics: Vec<Diagnostic>,
-    // Preserve the typed completed failure ledger for core report projection;
-    // all observations remain typed until report projection.
-    pub(crate) failed_verifications: Option<(
-        yamaa_core::verification_diagnostics::Phase,
-        Vec<CheckRecord>,
-    )>,
-    // Row templates the attempt completed, for the run report.
-    pub(crate) template_rows: Vec<dataset::TemplateRows>,
 }
 
 /// The typed outcome of one execution attempt.
@@ -110,28 +97,6 @@ pub struct Limit {
     pub required: Option<usize>,
     pub spec_paths: Vec<String>,
     pub source_index: Option<usize>,
-}
-
-/// Expose resource policy separately from semantic conversion/reduction/check failures.
-type FailedChecks = (
-    yamaa_core::verification_diagnostics::Phase,
-    Vec<CheckRecord>,
-);
-fn failure(error: ExecutionError<CallbackError>) -> Result<(Outcome, Option<FailedChecks>), Error> {
-    use yamaa_core::verification_diagnostics::Phase;
-    // Classify before moving the ledger; no host error is cloned or inspected.
-    let outcome = semantic_failure(&error)?;
-    let records = match error {
-        ExecutionError::KeyFailures(records) => Some((Phase::Output, records)),
-        ExecutionError::VerificationFailures(records)
-        | ExecutionError::VerificationDiagnostic { records, .. }
-        | ExecutionError::VerificationDeclaration { records, .. }
-        | ExecutionError::VerificationPredicate { records, .. } => {
-            Some((Phase::Verification, records))
-        }
-        _ => None,
-    };
-    Ok((outcome, records))
 }
 
 fn condition(diagnostic: Diagnostic, identity: Option<&RowIdentity>) -> Outcome {
@@ -293,42 +258,70 @@ fn semantic_failure<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
     })
 }
 
-/// Borrow a retained non-host failure for the complete project report formatter.
-pub(crate) fn semantic_condition<E>(error: &ExecutionError<E>) -> Result<Outcome, Error> {
-    semantic_failure(error)
+/// One execution attempt as its report reads it: the typed outcome and the
+/// evidence the attempt retained, borrowed from it.
+pub(crate) struct Response<'a> {
+    pub(crate) outcome: Outcome,
+    pub(crate) retained_verifications: &'a [CheckRecord],
+    pub(crate) intermediate_diagnostics: &'a [Diagnostic],
+    pub(crate) failed_verifications: Option<(
+        yamaa_core::verification_diagnostics::Phase,
+        &'a [CheckRecord],
+    )>,
 }
 
-/// Classify the admitted execution attempt, retaining typed results for publication.
+/// Classify one execution attempt without moving or encoding anything. A
+/// project-function failure keeps its own formatter with the original host
+/// payload; any other failure the language does not name is refused.
+pub(crate) fn response<E>(attempt: &dataset::ExecutionAttempt<E>) -> Result<Response<'_>, Error> {
+    use yamaa_core::verification_diagnostics::Phase;
+    let (outcome, intermediate_diagnostics, failed_verifications) = match &attempt.result {
+        Ok(_) => (Outcome::Success, &[][..], None),
+        Err(error) => {
+            let outcome = semantic_failure(error)?;
+            let intermediate: &[Diagnostic] = match error.as_ref() {
+                ExecutionError::IntermediateVerifications(diagnostics)
+                | ExecutionError::IntermediateFilterTypes(diagnostics) => diagnostics,
+                _ => &[],
+            };
+            let records = match error.as_ref() {
+                ExecutionError::KeyFailures(records) => Some((Phase::Output, records.as_slice())),
+                ExecutionError::VerificationFailures(records)
+                | ExecutionError::VerificationDiagnostic { records, .. }
+                | ExecutionError::VerificationDeclaration { records, .. }
+                | ExecutionError::VerificationPredicate { records, .. } => {
+                    Some((Phase::Verification, records.as_slice()))
+                }
+                _ => None,
+            };
+            (outcome, intermediate, records)
+        }
+    };
+    Ok(Response {
+        outcome,
+        retained_verifications: &attempt.retained_verifications,
+        intermediate_diagnostics,
+        failed_verifications,
+    })
+}
+
+/// The typed outcome of one execution attempt.
+pub fn outcome<E>(attempt: &dataset::ExecutionAttempt<E>) -> Result<Outcome, Error> {
+    response(attempt).map(|response| response.outcome)
+}
+
+/// Classify an execution from held bytes and encode its checked table.
 pub(crate) fn specification_response(
     attempt: dataset::ExecutionAttempt<CallbackError>,
 ) -> Result<DatasetResponse, Error> {
-    let intermediate_diagnostics = match &attempt.result {
-        Err(error) => match error.as_ref() {
-            ExecutionError::IntermediateVerifications(diagnostics)
-            | ExecutionError::IntermediateFilterTypes(diagnostics) => diagnostics.clone(),
-            _ => Vec::new(),
-        },
-        _ => Vec::new(),
-    };
-    let template_rows = attempt.template_rows;
-    let (table, outcome, execution, failed_verifications) = match attempt.result {
-        Ok(result) => {
-            let table = Some(encode_dataset(&result.dataset).map_err(Error::Table)?);
-            (table, Outcome::Success, Some(result), None)
-        }
-        Err(error) => {
-            let (outcome, records) = failure(*error)?;
-            (None, outcome, None, records)
-        }
+    let outcome = self::outcome(&attempt)?;
+    let table = match &attempt.result {
+        Ok(result) => Some(encode_dataset(&result.dataset).map_err(Error::Table)?),
+        Err(_) => None,
     };
     Ok(DatasetResponse {
         table,
         outcome,
         handler_counts: attempt.handler_counts,
-        execution,
-        retained_verifications: attempt.retained_verifications,
-        intermediate_diagnostics,
-        failed_verifications,
-        template_rows,
     })
 }

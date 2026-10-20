@@ -99,6 +99,11 @@ impl ExecutionEnvironment {
     pub fn language(&self) -> Option<Language> {
         self.language
     }
+    /// Whether a project file was supplied. A build without one has no
+    /// project metadata: no codelists, inventory or functions bind.
+    pub fn is_project(&self) -> bool {
+        self.project
+    }
     /// The host language when a supplied project links no environment for it.
     /// A specification that calls a project function cannot execute then.
     pub fn undeclared_language(&self) -> Option<Language> {

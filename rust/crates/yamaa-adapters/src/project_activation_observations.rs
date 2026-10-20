@@ -1,52 +1,10 @@
 //! Complete activation evidence from one owned build. This reads held metadata
 //! and actual engine observations; it never queries a host or invokes a case.
 use crate::json;
-use crate::{
-    project_run::PreparedRun,
-    project_source::{CapturedEnvironment, Origin},
-    report_scalar::ScalarValue,
-};
+use crate::{project_source::Origin, report_scalar::ScalarValue, specification_run::PreparedRun};
 use yamaa_core::json::Value as Json;
 use yamaa_core::project_activation::{BindingOutcome, LockObservation, Observations, TestOutcome};
-use yamaa_core::{
-    project_environment::ExecutionEnvironment, project_function::Function, value::Value,
-};
-
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for super::PreparedRun {}
-    impl<T: super::ActivationView + ?Sized> Sealed for std::sync::Arc<T> {}
-}
-
-/// One retained activation context: the project run's selected calls.
-/// External callers cannot mix unrelated provenance.
-pub trait ActivationView: sealed::Sealed {
-    fn called_functions(&self) -> &[usize];
-    fn environment(&self) -> &ExecutionEnvironment;
-    fn captured_environment(&self) -> &CapturedEnvironment;
-}
-impl<T: ActivationView + ?Sized> ActivationView for std::sync::Arc<T> {
-    fn called_functions(&self) -> &[usize] {
-        self.as_ref().called_functions()
-    }
-    fn environment(&self) -> &ExecutionEnvironment {
-        self.as_ref().environment()
-    }
-    fn captured_environment(&self) -> &CapturedEnvironment {
-        self.as_ref().captured_environment()
-    }
-}
-impl ActivationView for PreparedRun {
-    fn called_functions(&self) -> &[usize] {
-        self.compiled().called_functions()
-    }
-    fn environment(&self) -> &ExecutionEnvironment {
-        self.environment()
-    }
-    fn captured_environment(&self) -> &CapturedEnvironment {
-        self.captured_environment()
-    }
-}
+use yamaa_core::{project_function::Function, value::Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -56,8 +14,9 @@ pub enum Error {
 fn scalar(value: &Value) -> Result<Json, Error> {
     Ok(ScalarValue::from_core(value.clone()).to_json())
 }
-fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &str), Error> {
+fn function(run: &PreparedRun, selected: usize) -> Result<(&Function, &str), Error> {
     let index = *run
+        .compiled()
         .called_functions()
         .get(selected)
         .ok_or(Error::InvalidObservation)?;
@@ -86,8 +45,8 @@ fn function(run: &dyn ActivationView, selected: usize) -> Result<(&Function, &st
     Ok((function, source))
 }
 
-pub fn activation(run: &dyn ActivationView, observed: &Observations) -> Result<Json, Error> {
-    let selected = run.called_functions().len();
+pub fn activation(run: &PreparedRun, observed: &Observations) -> Result<Json, Error> {
+    let selected = run.compiled().called_functions().len();
     if selected == 0
         && (observed.lock != LockObservation::NotRequested
             || !observed.bindings.is_empty()

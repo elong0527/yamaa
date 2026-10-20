@@ -6,8 +6,9 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped public_contract.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
+projects <- normalizePath("project-base",winslash="/",mustWork=TRUE)
+define_fixtures <- normalizePath("define-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
@@ -272,7 +273,7 @@ qualify_callbacks <- function() {
   writeBin(charToRaw(host_truth[["specification_yaml"]]), path("spec.yaml"))
   writeBin(charToRaw(host_truth[["r_input_csv"]]), path("input.csv"))
   beyond <- "is beyond 2^53 and cannot be held exactly by an R double"
-  original <- system.file("project-base", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  original <- file.path(projects, "negative-function-contract")
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- path("negative-function-contract")
   entry <- file.path(case, "spec.yaml")
@@ -372,7 +373,7 @@ qualify_callbacks()
 qualify_project_run_members <- function() {
   root <- tempfile("yamaa-project-run-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
-  original <- system.file("project-base", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  original <- file.path(projects, "negative-function-contract")
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
@@ -429,7 +430,7 @@ qualify_every_save_rewrites <- function() {
   unlink(file.path(root, c("spec.yaml", "input.csv")))
   held <- restored(root, c("output.csv", "report.csv"), run$save)
   stopifnot(identical(held[["output.csv"]], charToRaw(host_truth[["r_input_csv"]])))
-  original <- system.file("project-base", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  original <- file.path(projects, "negative-function-contract")
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
@@ -439,7 +440,7 @@ qualify_every_save_rewrites <- function() {
   unlink(file.path(case, "input"), recursive = TRUE); unlink(entry)
   held <- restored(case, "test.csv", runs$save)
   stopifnot(identical(held[["test.csv"]], charToRaw("ID,RESULT\n01,1.5\n")))
-  fixture <- system.file("define-fixtures", "sdtm-dm-metadata", package = "yamaa", mustWork = TRUE)
+  fixture <- file.path(define_fixtures, "sdtm-dm-metadata")
   directory <- file.path(root, "submission"); dir.create(directory)
   stopifnot(file.copy(file.path(fixture, c("project.yaml", "spec.yaml")), directory),
     file.copy(file.path(fixture, "expected", "dm.csv"), directory))

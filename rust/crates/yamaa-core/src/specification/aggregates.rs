@@ -40,26 +40,6 @@ struct DeriveDeclaration {
     intermediate_names: Vec<String>,
 }
 impl Declaration {
-    /// The operation's path, `<derivation>.aggregate`.
-    pub(super) fn path(&self) -> &str {
-        &self.path
-    }
-    /// Each derive binding's path and its derivation.
-    pub(super) fn derive_entries(&self) -> impl Iterator<Item = (&str, &cases::Branch)> {
-        self.derive
-            .iter()
-            .flatten()
-            .map(|derive| (derive.path.as_str(), &derive.branch))
-    }
-    /// Whether the aggregate reduces the constructed output rows: neither its
-    /// expression nor a derive binding names a relation (LOOKUP-18).
-    pub(super) fn reduces_output(&self) -> bool {
-        self.derive.is_none()
-            && self.compiled.as_ref().is_ok_and(|compiled| {
-                !compiled.identifiers().any(|name| name.contains('.'))
-                    && compiled.record_relations().next().is_none()
-            })
-    }
     /// The result type of each derive binding's derivation over `names`, in
     /// declaration order, typed within the aggregate, where every binding
     /// names its declared type.
@@ -77,46 +57,12 @@ impl Declaration {
             .map(|binding| Ok(table.of(tree.expression(binding.branch.value)?)))
             .collect()
     }
-    /// VALUE-24 for each derive binding over the declared types, as binding
-    /// checks them.
-    pub(super) fn derive_conversion_findings(
-        &self,
-        tree: &types::Tree,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let results = self.derive_types(tree, declared)?;
-        for (binding, result) in self.derive.iter().flatten().zip(results) {
-            if binding.handler.is_none() {
-                findings.extend(
-                    types::conversion_finding(&binding.path, result, binding.kind)
-                        .map(BindFinding::Scalar),
-                );
-            }
-        }
-        Ok(())
-    }
-    /// The range whose value binding reads for the current row: a qualified
-    /// aggregate's range that states a bound. Binding reports every other
-    /// form of `between` before it reads the value (LOOKUP-9).
-    pub(super) fn current_range(&self) -> Option<&lookup_range::Declaration> {
-        let range = self.between.as_ref()?;
-        let qualified = self.compiled.as_ref().is_ok_and(|compiled| {
-            if self.derive.is_some() {
-                !self.derive_relations.is_empty()
-            } else {
-                compiled.identifiers().any(|name| name.contains('.'))
-                    || compiled.record_relations().next().is_some()
-            }
-        });
-        (qualified && range.donor_fields().next().is_some()).then_some(range)
-    }
-    /// The derivation of each derive binding, in declaration order.
-    pub(super) fn derive_operations(&self) -> impl Iterator<Item = &Operation> {
+    /// Each derive binding's path and its derivation.
+    pub(super) fn derive_entries(&self) -> impl Iterator<Item = (&str, &cases::Branch)> {
         self.derive
             .iter()
             .flatten()
-            .map(|binding| binding.branch.operation.as_ref())
+            .map(|derive| (derive.path.as_str(), &derive.branch))
     }
 }
 fn diagnostic(
@@ -1725,33 +1671,4 @@ fn bind_derivations(
         }
     }
     Ok((bound, Some(derived_schema)))
-}
-
-impl Declaration {
-    pub(super) fn check_findings(&self, findings: &mut Vec<BindFinding>) -> Result<(), BindError> {
-        match &self.compiled {
-            Ok(_) => (),
-            Err(CompileError::Invalid { failure, .. }) => {
-                findings.push(BindFinding::Aggregate {
-                    path: self.expression_path.clone(),
-                    expression: self.expression.clone(),
-                    error: failure.clone(),
-                });
-            }
-
-            Err(_) => return Err(BindError::Internal),
-        }
-        if let Some((expression, compiled)) = &self.filter {
-            static_checks::predicate(
-                compiled,
-                expression,
-                &format!("{}.filter", self.path),
-                findings,
-            )?;
-        }
-        for declaration in self.derive.iter().flatten() {
-            static_checks::branch(&declaration.branch, findings)?;
-        }
-        Ok(())
-    }
 }

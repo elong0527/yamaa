@@ -9,11 +9,7 @@ use yamaa_adapters::resolved_artifact::model::{
     specification_value, Location, OriginKind, RelativeTo, ResolvedArtifact, ResourceRole,
 };
 use yamaa_adapters::{canonical_path, file_workflow, resolved_artifact};
-use yamaa_core::{
-    build::{Prepared, Request},
-    json::Value,
-    project_function::Language,
-};
+use yamaa_core::{build::Request, json::Value, project_function::Language};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Study(PathBuf);
@@ -63,7 +59,7 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
             "schema_version: '1.0'\nparent: ../shared/producer.yaml\n",
         );
         let path = study.path(&format!("{wrapper}/spec.yaml"));
-        let selected = file_workflow::select_request(
+        let prepared = file_workflow::select_request(
             Request {
                 specification: &path,
                 environment: None,
@@ -71,9 +67,6 @@ fn two_studies_and_their_schema_links_match_the_actual_direct_preparation() {
             Language::Python,
         )
         .unwrap();
-        let Prepared::Plain(prepared) = selected else {
-            panic!("plain route")
-        };
         let artifact = study.resolve(&format!("{wrapper}/spec.yaml"));
         assert_eq!(artifact, prepared.resolved_specification().unwrap());
         // A linked producer is type metadata only: it is not an entry.
@@ -292,16 +285,14 @@ fn named_dictionaries_and_mapping_order_are_retained_without_changing_the_compil
         }
     );
     let path = study.path("spec.yaml");
-    let Prepared::Plain(direct) = file_workflow::select_request(
+    let direct = file_workflow::select_request(
         Request {
             specification: &path,
             environment: None,
         },
         Language::Python,
     )
-    .unwrap() else {
-        panic!("ordinary")
-    };
+    .unwrap();
     assert_eq!(artifact, direct.resolved_specification().unwrap());
     fs::remove_file(study.0.join("dict.yaml")).unwrap();
     assert!(resolved_artifact::resolve(&path, None, Language::Python, None).is_err());

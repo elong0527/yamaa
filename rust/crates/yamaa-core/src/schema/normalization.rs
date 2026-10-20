@@ -1,7 +1,9 @@
 //! Validated schema normalization with request-wide storage and traversal policies.
 
 use super::{
-    validation::{matches_member, shorthand_field, NullPolicy, MAPPING_MEMBERS, SOURCE_SHORTHAND},
+    validation::{
+        matches_member, shorthand_field, NullPolicy, Surface, MAPPING_MEMBERS, SOURCE_SHORTHAND,
+    },
     DefaultDiagnostics, Document, DocumentError, DocumentNode as N, SchemaAliasKind,
     SchemaDiagnostic, SchemaField, SchemaShape, SchemaStructure, TypeExpression, TypeNode,
     ValidationError,
@@ -135,6 +137,7 @@ struct Run<'a> {
     active: Vec<(usize, usize, usize)>,
     next_scope: usize,
     nulls: NullPolicy,
+    surface: Surface,
 }
 impl Run<'_> {
     fn step(&mut self, site: Site<'_>) -> Result<(), NormalizationError> {
@@ -408,7 +411,7 @@ impl Run<'_> {
         match kind {
             SchemaAliasKind::Descriptor(descriptor) => {
                 let members = schema.descriptors()[descriptor].descriptor.members();
-                if SOURCE_SHORTHAND.contains(&name) {
+                if self.surface == Surface::Legacy && SOURCE_SHORTHAND.contains(&name) {
                     let members: Vec<_> = members
                         .iter()
                         .map(Member::root)
@@ -491,14 +494,43 @@ impl SchemaStructure {
     ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalize_types_at(types, input, value, fragment, "<normalization>")
     }
-    /// Validate and normalize a complete 1.x document against the root class
-    /// of this view of its 1.0 closure; findings name paths from the root.
+    /// Validate and normalize a complete 1.x document, as its author wrote it,
+    /// against the root class of this view of its 1.0 closure; findings name
+    /// paths from the root.
     pub fn normalize_root(
         &self,
         input: &Document,
     ) -> Result<NormalizedDocument, NormalizationError> {
         let types = self.parse_query_types(&[self.root_class().name.clone()])?;
-        self.normalize_types_at(&types, input, input.root(), false, "")
+        self.normalize_types_on(
+            &types,
+            input,
+            input.root(),
+            false,
+            "",
+            true,
+            Surface::Versioned,
+        )
+    }
+    /// Validate and normalize a composed 1.x specification, whose layers were
+    /// normalized before they composed, against the root class of this view
+    /// of its 1.0 closure: the long forms composition holds restate no
+    /// shorthand an author wrote (SCHEMA-15), and every default the composed
+    /// document lacks is materialized once (LAYER-7).
+    pub fn normalize_resolved_root(
+        &self,
+        input: &Document,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        let types = self.parse_query_types(&[self.root_class().name.clone()])?;
+        self.normalize_types_on(
+            &types,
+            input,
+            input.root(),
+            false,
+            "",
+            false,
+            Surface::Versioned,
+        )
     }
     fn normalize_types_at(
         &self,
@@ -508,8 +540,22 @@ impl SchemaStructure {
         fragment: bool,
         path: &str,
     ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_types_on(types, input, value, fragment, path, true, Surface::Legacy)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn normalize_types_on(
+        &self,
+        types: &[TypeExpression],
+        input: &Document,
+        value: usize,
+        fragment: bool,
+        path: &str,
+        written: bool,
+        surface: Surface,
+    ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
-        let findings = self.validate_types(types, input, value, path, fragment)?;
+        let findings =
+            self.validate_types_on(types, input, value, path, fragment, written, surface)?;
         if !findings.is_empty() {
             return Err(NormalizationError::Invalid(findings));
         }
@@ -530,6 +576,7 @@ impl SchemaStructure {
             active: Vec::new(),
             next_scope: 0,
             nulls: NullPolicy::Value,
+            surface,
         };
         let root = run.members(&types.iter().map(Member::root).collect::<Vec<_>>(), site)?;
         run.finish(root)
@@ -600,6 +647,7 @@ impl SchemaStructure {
             active: Vec::new(),
             next_scope: 0,
             nulls,
+            surface: Surface::Legacy,
         };
         let root = run.class(&self.root_class().fields, site)?;
         run.finish(root)
@@ -623,7 +671,34 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_descriptor_mode(descriptor, input, value, fragment, nulls, true)
+        self.normalize_descriptor_mode(
+            descriptor,
+            input,
+            value,
+            fragment,
+            nulls,
+            true,
+            Surface::Legacy,
+        )
+    }
+    /// Normalize a value of a 1.x document as its author wrote it, in which
+    /// YAML null is an ordinary value; a fragment defers defaults.
+    pub(super) fn normalize_versioned_descriptor(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        fragment: bool,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        self.normalize_descriptor_mode(
+            descriptor,
+            input,
+            value,
+            fragment,
+            NullPolicy::Value,
+            true,
+            Surface::Versioned,
+        )
     }
     /// Normalize a descriptor value of a canonical document, such as a composed
     /// member, whose long forms restate shorthand an earlier pass expanded.
@@ -635,8 +710,17 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<NormalizedDocument, NormalizationError> {
-        self.normalize_descriptor_mode(descriptor, input, value, fragment, nulls, false)
+        self.normalize_descriptor_mode(
+            descriptor,
+            input,
+            value,
+            fragment,
+            nulls,
+            false,
+            Surface::Legacy,
+        )
     }
+    #[allow(clippy::too_many_arguments)]
     fn normalize_descriptor_mode(
         &self,
         descriptor: usize,
@@ -645,9 +729,18 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
         written: bool,
+        surface: Surface,
     ) -> Result<NormalizedDocument, NormalizationError> {
         self.normalization_defaults()?;
-        let findings = if written {
+        let findings = if surface == Surface::Versioned {
+            self.validate_versioned_descriptor(
+                descriptor,
+                input,
+                value,
+                "<normalization>",
+                fragment,
+            )?
+        } else if written {
             self.validate_descriptor_with(
                 descriptor,
                 input,
@@ -686,6 +779,7 @@ impl SchemaStructure {
             active: Vec::new(),
             next_scope: 0,
             nulls,
+            surface,
         };
         let root = run.descriptor(descriptor, site)?;
         run.finish(root)

@@ -983,8 +983,13 @@ mod table {
         fn whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once() {
             let run = prepared("2", "output.csv", "VALUE + VALUE");
             let mut study = Study(0);
-            let attempt = run.execute_with_port(&mut study, Scope::default());
-            let table = attempt.result.as_ref().unwrap().table.as_ref().unwrap();
+            let attempt = run.execute(&mut study, Scope::default());
+            // The checked table of the same execution keeps the unrounded
+            // derivation; only the saved bytes round.
+            let response = run
+                .execute_csv(b"ID,VALUE\n1,0.125\n2,1.234\n3,2.345\n")
+                .unwrap();
+            let table = response.table.as_ref().unwrap();
             let snapshot: yamaa_core::json::Value =
                 yamaa_adapters::json_wire::decode(&ipc_snapshot::table_snapshot(table)).unwrap();
             assert_eq!(
@@ -995,7 +1000,8 @@ mod table {
                 snapshot["rows"][1][2],
                 yamaa_adapters::json!({"float": "4003be76c8b43958"})
             );
-            let result = specification_report::build_result(&run, &attempt, identity()).unwrap();
+            let result =
+                specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
             assert_eq!(
                 result.observations()["artifacts"],
                 yamaa_adapters::json!([])
@@ -1048,9 +1054,9 @@ mod table {
                 ("19", "output.csv", "1 / 0", "division_by_zero"),
             ] {
                 let run = prepared(precision, path, expression);
-                let attempt = run.execute_with_port(&mut Study(0), Scope::default());
+                let attempt = run.execute(&mut Study(0), Scope::default());
                 let result =
-                    specification_report::build_result(&run, &attempt, identity()).unwrap();
+                    specification_report::build_result(&run, &attempt, identity(), &[]).unwrap();
                 let report = result.observations();
                 assert!(result.output().is_none());
                 assert_eq!(report["diagnostics"].as_array().unwrap().len(), 1);
@@ -3046,7 +3052,7 @@ mod table {
                     .unwrap();
                 let run = PreparedRun::prepare(prepared).unwrap();
                 let mut port = Port { captures: 0 };
-                let attempt = run.execute_with_port(&mut port, Scope::default());
+                let attempt = run.execute(&mut port, Scope::default());
                 let example = format!("predicate-context-{}", fields[0]);
                 let result = specification_report::build_result(
                     &run,
@@ -3059,6 +3065,7 @@ mod table {
                         specification: "spec.yaml",
                         base_directory: ".",
                     },
+                    &[],
                 )
                 .unwrap();
                 let expected: yamaa_core::json::Value =

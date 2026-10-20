@@ -411,7 +411,10 @@ pub struct VersionedChain {
 /// version the engine reads. Every layer declares `type: spec`; a layer that
 /// declares a version the engine does not read, or another type, fails before
 /// its parent is read, at the entry's header or at the `parent` naming it.
-/// Composition is not part of this traversal.
+/// A layer that declares `schema_version` is a 0.5 layer wherever it is read
+/// (D75), so it fails in that layer as the header reader routes it: a `yamaa`
+/// beside it as `unknown_field`, and a missing `yamaa` as
+/// `missing_required_field`. Composition is not part of this traversal.
 pub fn traverse_versioned<P: InheritanceSourcePort>(
     schema: &SchemaStructure,
     reads: LanguageVersion,
@@ -437,6 +440,8 @@ fn admit_versioned<E>(
     source: Source,
     input: Document,
 ) -> Result<(VersionedLayer, Option<String>), Error<E>> {
+    // The header reader routes a root that declares `schema_version` to the
+    // 0.5 language, as `language::declares_header` and the decoder do.
     let header = match language::read_header(&input, Some(reads), FileType::Spec) {
         Ok(header) => header,
         Err(fault) => return Err(header_error(fault, entry, source, input)),

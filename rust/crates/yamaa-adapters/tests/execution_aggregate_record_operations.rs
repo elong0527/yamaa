@@ -1326,31 +1326,14 @@ S1,002,2024-06
                     .is_none_or(|context| subset(context, &issue["context"]))
         }
 
-        /// Validation negatives whose finding `check` does not report, with what the
-        /// finding is decided from. `domain` reaches each of them once it reads or
-        /// binds the inputs. A case that `check` starts to report fails until it
-        /// leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 33] = [
-            (
-                "negative-adlb-computed-param",
-                "a cycle through an aggregate and a case",
-            ),
+        /// Validation negatives whose first issue `check` does not report, with
+        /// what decides it. `domain` reaches each of them once it reads or binds
+        /// the inputs. The list may only shrink: a case that `check` starts to
+        /// report fails until it leaves this list.
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 18] = [
             (
                 "negative-aggregate-key-other-template",
                 "the driver of each row template that evaluates an aggregate key",
-            ),
-            ("negative-cut-coded", "the stored type of an input field"),
-            (
-                "negative-dose-intensity",
-                "an aggregate field outside a reduction",
-            ),
-            (
-                "negative-first-available-self",
-                "a cycle through first_available",
-            ),
-            (
-                "negative-forward-key-reference",
-                "column order in a specification with row templates",
             ),
             (
                 "negative-grouped-lookup-ungrouped-key",
@@ -1361,28 +1344,12 @@ S1,002,2024-06
                 "the group keys of the row template that reads a lookup range",
             ),
             (
-                "negative-keys-missing",
-                "a key column that reads a cut of a non-key column",
-            ),
-            (
-                "negative-lookup-bad-range",
-                "the declared types of a lookup range",
-            ),
-            (
                 "negative-lookup-derivation-scope",
                 "the driver of each row template that reads a lookup derivation",
             ),
             (
-                "negative-lookup-key-column-phase",
-                "the phase of a column a row template's lookup matches on",
-            ),
-            (
                 "negative-lookup-key-other-template",
                 "the driver of each row template that reads a lookup key",
-            ),
-            (
-                "negative-lookup-match-column-phase",
-                "the phase of a column a row template's lookup range reads",
             ),
             (
                 "negative-lookup-mismatched",
@@ -1410,44 +1377,20 @@ S1,002,2024-06
                 "an unknown name in a flag condition",
             ),
             (
-                "negative-row-aggregate-keys",
-                "the scope of a grouped row aggregate",
-            ),
-            (
                 "negative-row-filter-lookup-scope",
                 "the driver of the row template whose filter reads a lookup",
-            ),
-            (
-                "negative-row-phase-flag",
-                "the phase of a column a row template reads",
             ),
             (
                 "negative-row-ungrouped-second-template",
                 "the group keys of a later grouped row template",
             ),
             (
-                "negative-row-value-self",
-                "a cycle through first_available and row_value",
-            ),
-            (
-                "negative-source-missing-field",
-                "a source filter name that is not an input field",
-            ),
-            (
                 "negative-source-ordinal-collision",
                 "the fields stored in the input",
             ),
             (
-                "negative-source-trivial-filter",
-                "a source filter on an output column",
-            ),
-            (
                 "negative-source-undeclared-field",
                 "the fields stored in the input",
-            ),
-            (
-                "negative-sum-non-numeric",
-                "the declared type of an aggregate operand",
             ),
             (
                 "negative-types-unknown-field",
@@ -1479,8 +1422,11 @@ S1,002,2024-06
             ),
         ];
 
-        /// Every committed validation-phase negative benchmark that conformance runs.
-        fn validation_benchmarks() -> Vec<String> {
+        /// Every committed negative benchmark that conformance runs, with the
+        /// phase of its first issue. A Define benchmark fails in its study's
+        /// composition, which `submission_transport` runs; its domain build
+        /// succeeds.
+        fn negative_benchmarks() -> Vec<(String, String)> {
             let root = benchmarks_root();
             let mut selected = Vec::new();
             for entry in fs::read_dir(&root).unwrap() {
@@ -1491,38 +1437,60 @@ S1,002,2024-06
                     continue;
                 }
                 let metadata = expected(&entry.path().join("benchmark.yaml"));
-                // A Define benchmark fails in its study's composition, which
-                // `submission_transport` runs; its domain build succeeds.
-                if expected(&oracle)["phase"] == "validation"
-                    && metadata["conformance"]["excluded"].is_null()
-                    && metadata["define"].is_null()
-                {
-                    selected.push(name);
+                if metadata["conformance"]["excluded"].is_null() && metadata["define"].is_null() {
+                    let phase = expected(&oracle)["phase"].as_str().unwrap().to_owned();
+                    selected.push((name, phase));
                 }
             }
             selected.sort();
             selected
         }
 
-        /// `check` reports every validation finding of a committed negative that
-        /// `domain` reaches without study data: the same first issue in both host
-        /// routes, matching `expected/error.yaml`. Benchmarks run in place, so
-        /// parents, links and relative paths keep their authored meaning.
+        /// `check` over every committed negative. One that fails after
+        /// validation needs the study's data, so `check` reports nothing for
+        /// it. Every validation negative has the same first issue in `check`
+        /// and `domain`, in both host routes, matching `expected/error.yaml`,
+        /// except the listed ones whose finding binding decides from the
+        /// inputs. Benchmarks run in place, so parents, links and relative
+        /// paths keep their authored meaning.
         #[test]
-        fn check_matches_domain_on_validation_benchmarks() {
-            let selected = validation_benchmarks();
+        fn check_matches_domain_on_negative_benchmarks() {
+            let selected = negative_benchmarks();
             for (name, _) in NOT_REPORTED_BY_CHECK.iter().chain(&NOT_BUILT_HERE) {
-                assert!(selected.iter().any(|s| s == name), "{name}: not selected");
+                assert!(
+                    selected
+                        .iter()
+                        .any(|(s, phase)| s == name && phase == "validation"),
+                    "{name}: not selected"
+                );
             }
             let root = benchmarks_root();
             let mut compared = Vec::new();
-            for name in &selected {
+            for (name, phase) in &selected {
                 if NOT_BUILT_HERE.iter().any(|(n, _)| n == name) {
                     continue;
                 }
                 let case = root.join(name);
                 let spec = case.join("spec.yaml").to_str().unwrap().to_owned();
                 let oracle = expected(&case.join("expected/error.yaml"));
+                if phase != "validation" {
+                    for runtime in ["python", "r"] {
+                        let checked = file_application::check(
+                            crate::host(runtime),
+                            Request {
+                                specification: &spec,
+                                environment: None,
+                            },
+                            identity(runtime, name, &spec),
+                        );
+                        assert!(
+                            checked.is_empty(),
+                            "{name} ({runtime}): a {phase} negative, check reports {:?}",
+                            checked.iter().map(issue).collect::<Vec<_>>()
+                        );
+                    }
+                    continue;
+                }
                 let missed = NOT_REPORTED_BY_CHECK.iter().find(|(n, _)| n == name);
                 for runtime in ["python", "r"] {
                     if let Some((_, reason)) = missed {
@@ -1556,10 +1524,30 @@ S1,002,2024-06
                     compared.push(name.as_str());
                 }
             }
+            // Column order over every kind of derivation, in either row
+            // construction, and what binding decides of an aggregate, a
+            // mapping or cut, a lookup range and a source filter from the
+            // declarations (#2844, owner decision 3); and the phase
+            // boundaries each row template's phase set decides (#2754).
             for name in [
+                "negative-adlb-computed-param",
+                "negative-cut-coded",
                 "negative-direct-dose-read",
+                "negative-dose-intensity",
+                "negative-first-available-self",
+                "negative-forward-key-reference",
                 "negative-forward-reference",
+                "negative-keys-missing",
+                "negative-lookup-bad-range",
+                "negative-lookup-key-column-phase",
+                "negative-lookup-match-column-phase",
+                "negative-row-aggregate-keys",
+                "negative-row-phase-flag",
+                "negative-row-value-self",
                 "negative-row-window-ungrouped",
+                "negative-source-missing-field",
+                "negative-source-trivial-filter",
+                "negative-sum-non-numeric",
             ] {
                 assert!(compared.contains(&name), "{name}: not compared");
             }
@@ -1641,6 +1629,144 @@ S1,002,2024-06
                     let built = built.iter().map(issue).collect::<Vec<_>>();
                     assert_eq!(checked, oracle, "{name} ({runtime}): check");
                     assert_eq!(built, oracle, "{name} ({runtime}): domain");
+                }
+            }
+        }
+
+        /// What the tree does not keep: a field written empty or `false`, read
+        /// from the document as binding reads it. A driver intermediate refuses
+        /// each prohibited field it writes, whatever its value (ROW-2); an
+        /// `order_by` with no term still needs a `keep` (LOOKUP-10); an ODM
+        /// input refuses a written `types` (NAME-8); and an empty `derivations`
+        /// keeps an intermediate from being rename-only (LOOKUP-4), so it builds.
+        /// `rows: []` builds no row template, as without `rows`, and an ODM read
+        /// under `unconvertible` is named at binding's path. `check` and `domain`
+        /// report the same issues in both host routes (#3225).
+        #[test]
+        fn written_empty_declarations_keep_their_outcomes_in_both_routes() {
+            let header = "schema_version: '1.0'\ndomain: OUT\n";
+            let driver = |field: &str| {
+                format!(
+                    "{header}keys: [ID]\ninput: {{SRC: input/src.csv}}\noutput: {{path: out.csv, columns: [ID]}}\nintermediates:\n  - {{id: DRV, dataset: SRC, filter: \"SRC.ID <> 'z'\", {field}}}\ncolumns:\n  - {{name: ID, type: str}}\nrows:\n  - {{id: all, dataset: DRV, derivations: {{ID: DRV.ID}}}}\n"
+                )
+            };
+            let lookup = |fields: &str| {
+                format!(
+                    "{header}keys: [X]\ninput: {{SRC: input/src.csv, RIGHT: input/right.csv}}\nbase: SRC\noutput: {{path: out.csv, columns: [X, W]}}\nintermediates:\n  - {{id: LOOK, dataset: RIGHT, {fields}}}\ncolumns:\n  - {{name: X, type: str, derivation: SRC.X}}\n  - {{name: W, type: str, derivation: LOOK.K}}\n"
+                )
+            };
+            let odm = |input: &str, age: &str| {
+                format!(
+                    "{header}keys: [STUDYID, USUBJID]\ninput: {{ODM: {input}}}\noutput: {{path: out.csv, columns: [STUDYID, USUBJID, AGE]}}\ncolumns:\n  - {{name: STUDYID, type: str, derivation: ODM.StudyOID}}\n  - {{name: USUBJID, type: str, derivation: ODM.SubjectKey}}\n  - {{name: AGE, type: int, derivation: {age}}}\n"
+                )
+            };
+            let rows = |columns: &str, intermediates: &str| {
+                format!(
+                    "{header}keys: [ID]\ninput: {{SRC: input/src.csv}}\nbase: SRC\noutput: {{path: out.csv, columns: [ID, A]}}\n{intermediates}columns:\n  - {{name: ID, type: str, derivation: SRC.ID}}\n  - {{name: X, type: str, derivation: SRC.X}}\n{columns}rows: []\n"
+                )
+            };
+            let invalid_driver = |field: &str| yamaa_adapters::json!({"phase":"validation","condition":"invalid_intermediate_driver","rule":"ROW-2","spec_paths":["rows[0].dataset"],"context":{"fields":[field],"intermediate":"DRV"}});
+            let cases: [(&str, String, Option<yamaa_core::json::Value>); 8] = [
+                (
+                    "driver-require-match-false",
+                    driver("require_match: false"),
+                    Some(invalid_driver("require_match")),
+                ),
+                (
+                    "driver-order-by-empty",
+                    driver("order_by: []"),
+                    Some(invalid_driver("order_by")),
+                ),
+                ("derivations-empty", lookup("derivations: {}"), None),
+                (
+                    "order-by-empty",
+                    lookup("key: [X], order_by: []"),
+                    Some(
+                        yamaa_adapters::json!({"phase":"validation","condition":"unpaired_fields","rule":"LOOKUP-10","spec_paths":["intermediates[0]"],"context":{"declared":["order_by"],"intermediate":"LOOK","missing":["keep"]}}),
+                    ),
+                ),
+                (
+                    "odm-types-empty",
+                    odm("{path: input/odm.csv, types: {}}", "{odm: ODM.IT.DM.AGE}"),
+                    Some(
+                        yamaa_adapters::json!({"phase":"validation","condition":"odm_schema_field_type","rule":"NAME-8","spec_paths":["input.ODM.types"],"context":{"dataset":"ODM","declared":"types"}}),
+                    ),
+                ),
+                (
+                    "odm-under-unconvertible",
+                    odm(
+                        "input/odm.csv",
+                        "{value: {odm: NOPE.IT.DM.AGE}, unconvertible: {literal: null}}",
+                    ),
+                    Some(
+                        yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.AGE.derivation.odm.item"],"context":{"identifier":"NOPE.IT.DM.AGE"}}),
+                    ),
+                ),
+                (
+                    "rows-empty-self",
+                    rows(
+                        "  - {name: A, type: str, derivation: PREV.ID}\n",
+                        "intermediates:\n  - {id: PREV, dataset: SELF, key: [ID]}\n",
+                    ),
+                    Some(
+                        yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","rule":"LOOKUP-7","spec_paths":["intermediates[0].dataset"],"context":{"identifier":"SELF","intermediate":"PREV"}}),
+                    ),
+                ),
+                (
+                    "rows-empty-rounding",
+                    rows(
+                        "  - {name: A, type: float, derivation: {round_half_away_from_zero: {source: X, digits: 1}}}\n",
+                        "",
+                    ),
+                    Some(
+                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-16","spec_paths":["columns.A.derivation.round_half_away_from_zero.source"],"context":{"actual":"str","expected":"numeric","source":"X"}}),
+                    ),
+                ),
+            ];
+            let odm_source = benchmarks_root().join("negative-odm-schema-type/input/odm.csv");
+            for (name, specification, oracle) in cases {
+                let fixture = Fixture::new(name);
+                fs::create_dir(fixture.0.join("input")).unwrap();
+                fs::write(
+                    fixture.0.join("input/src.csv"),
+                    "ID,X,V\na,one,1.0\nb,two,2.0\n",
+                )
+                .unwrap();
+                fs::write(fixture.0.join("input/right.csv"), "X,K\none,k1\ntwo,k2\n").unwrap();
+                fs::copy(&odm_source, fixture.0.join("input/odm.csv")).unwrap();
+                fs::write(fixture.0.join("spec.yaml"), specification).unwrap();
+                let spec = fixture.0.join("spec.yaml").to_str().unwrap().to_owned();
+                for runtime in ["python", "r"] {
+                    let Some(oracle) = &oracle else {
+                        let request = || Request {
+                            specification: &spec,
+                            environment: None,
+                        };
+                        let checked = file_application::check(
+                            crate::host(runtime),
+                            request(),
+                            identity(runtime, name, &spec),
+                        );
+                        assert!(checked.is_empty(), "{name} ({runtime}): check");
+                        let mut built = file_application::domain(
+                            crate::host(runtime),
+                            request(),
+                            identity(runtime, name, &spec),
+                        )
+                        .unwrap_or_else(|_| panic!("{name} ({runtime}): domain refused"));
+                        assert!(built.issues().is_empty(), "{name} ({runtime}): domain");
+                        assert!(built.save().unwrap(), "{name} ({runtime}): save");
+                        assert_eq!(
+                            fs::read_to_string(fixture.0.join("out.csv")).unwrap(),
+                            "X,W\none,k1\ntwo,k2\n",
+                            "{name} ({runtime}): saved"
+                        );
+                        fs::remove_file(fixture.0.join("out.csv")).unwrap();
+                        continue;
+                    };
+                    let (checked, built) = first_issues(&spec, name, runtime);
+                    assert_eq!(checked, *oracle, "{name} ({runtime}): check");
+                    assert_eq!(built, *oracle, "{name} ({runtime}): domain");
                 }
             }
         }
@@ -3156,18 +3282,17 @@ S1,002,2024-06
                 );
             }
             // An output-row reduction narrows by no range at all: binding refuses
-            // the range itself, and `check` does not misname its value.
-            let (checked, built) = run(&base(
-                "{aggregate: {group_by: [USUBJID], between: {value: REF.REFDAY, upper: RDAY}, expr: 'MAX(RDAY)'}}",
-            ));
-            assert_eq!(checked, Vec::<yamaa_core::json::Value>::new());
+            // the range itself, and `check` reports that refusal, not its value.
+            let refusal = vec![yamaa_adapters::json!({
+                "phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18",
+                "spec_paths": ["columns.N.derivation.aggregate.between"],
+                "context": {"expr": "MAX(RDAY)", "reason": "between narrows a qualified right side only"}
+            })];
             assert_eq!(
-                built,
-                Err(vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "invalid_aggregate_context", "rule": "LOOKUP-18",
-                    "spec_paths": ["columns.N.derivation.aggregate.between"],
-                    "context": {"expr": "MAX(RDAY)", "reason": "between narrows a qualified right side only"}
-                })])
+                run(&base(
+                    "{aggregate: {group_by: [USUBJID], between: {value: REF.REFDAY, upper: RDAY}, expr: 'MAX(RDAY)'}}",
+                )),
+                (refusal.clone(), Err(refusal))
             );
             // The base driver's own record supplies the value, and so does a
             // column built for the row, here REF's day joined on the subject.

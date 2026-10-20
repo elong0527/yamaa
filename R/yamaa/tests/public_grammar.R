@@ -4,11 +4,10 @@ library(yamaa)
 # suggested package: where it is not installed, these checks are skipped and
 # the CSV preservation checks below still run.
 if (requireNamespace("jsonlite", quietly = TRUE)) {
-  host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-    system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+  host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
   source(file.path(host_fixture_root,"reader.R"),local=TRUE)
   host_truth <- read_host_fixture(host_fixture_root,"public-grammar")
-  source <- system.file("grammar-original", package = "yamaa", mustWork = TRUE)
+  source <- normalizePath("grammar-original", winslash = "/", mustWork = TRUE)
   root <- tempfile("yamaa-public-grammar-")
   dir.create(root)
   stopifnot(file.copy(source, root, recursive = TRUE))

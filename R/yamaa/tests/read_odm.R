@@ -7,8 +7,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped read_odm.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 truth <- read_host_fixture(host_fixture_root, "read-odm")
 issue_columns <- fixture_strings(read_host_fixture(host_fixture_root, "public-contract")[["issue_columns"]])
