@@ -233,6 +233,15 @@ impl CodelistType {
             Self::Float => ColumnType::Float,
         }
     }
+    /// The type as `data_type` writes it, and as Define-XML writes a code
+    /// list's `DataType`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Integer => "integer",
+            Self::Float => "float",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

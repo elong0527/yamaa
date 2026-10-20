@@ -1403,7 +1403,7 @@ S1,002,2024-06
         ];
 
         /// Validation negatives this harness does not run, with the reason.
-        const NOT_BUILT_HERE: [(&str, &str); 6] = [
+        const NOT_BUILT_HERE: [(&str, &str); 7] = [
             (
                 "negative-allowed-values-beside-codelist",
                 "the bound codelist's items come from its host environment, which this harness does not pass",
@@ -1419,6 +1419,10 @@ S1,002,2024-06
             (
                 "negative-function-contract",
                 "domain activates its project functions only in a host",
+            ),
+            (
+                "negative-numeric-format-name-with-dollar",
+                "the codelist is declared by the project file, which this harness does not pass",
             ),
             (
                 "negative-terminology-standard-unknown",

@@ -1665,9 +1665,10 @@ mod project {
             );
         }
         #[test]
-        fn text_format_names_begin_with_a_dollar_sign() {
+        fn format_names_begin_with_a_dollar_sign_exactly_for_text_codelists() {
             // A text codelist names a character format, so `$` leads its
-            // format name; a numeric codelist's name is not checked for it.
+            // format name; a numeric codelist names a numeric format, whose
+            // name never begins with `$`.
             let named = |data_type, format: Option<&str>| {
                 let mut list = list();
                 list.data_type = data_type;
@@ -1677,21 +1678,24 @@ mod project {
                 list.format_name = format.map(String::from);
                 validate(&[source(list)])
             };
+            let refused = vec![Finding {
+                source: 0,
+                codelist: 0,
+                fault: Fault::FormatNamePrefix,
+            }];
             assert!(named(CodelistType::Text, None).is_empty());
             assert!(named(CodelistType::Text, Some("$SEX")).is_empty());
             for format in ["SEX", "S$EX", " $SEX"] {
-                assert_eq!(
-                    named(CodelistType::Text, Some(format)),
-                    vec![Finding {
-                        source: 0,
-                        codelist: 0,
-                        fault: Fault::FormatNamePrefix
-                    }]
-                );
+                assert_eq!(named(CodelistType::Text, Some(format)), refused);
             }
             for data_type in [CodelistType::Integer, CodelistType::Float] {
-                assert!(named(data_type, Some("NY")).is_empty());
                 assert!(named(data_type, None).is_empty());
+                for format in ["NY", "N$Y", " $NY"] {
+                    assert!(named(data_type, Some(format)).is_empty(), "{format}");
+                }
+                for format in ["$NY", "$"] {
+                    assert_eq!(named(data_type, Some(format)), refused, "{format}");
+                }
             }
         }
         #[test]
