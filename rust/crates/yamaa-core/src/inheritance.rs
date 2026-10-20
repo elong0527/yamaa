@@ -85,6 +85,7 @@ pub enum Error<E> {
     },
     InvalidIdentity,
 }
+
 /// What a layer's 1.x header declares that its traversal does not read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HeaderMismatch {
