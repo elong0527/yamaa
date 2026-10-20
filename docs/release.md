@@ -603,13 +603,15 @@ SPDX expression that a crate's manifest declares, with Cargo's legacy `/`
 written as `OR`, or the C code's upstream license; its source, `crates.io`
 or the component's directory in this repository, with the upstream
 repository and commit of vendored code, or the crate that bundles it; and its
-purpose, from `tools/packaging/crate_purposes.toml`. It records no digests.
-Packages that pip or R install beside yamaa, such as Polars, are not among
-its components. `tools.packaging.generate_component_inventory` writes both
-inventories, and the repository check fails while one differs from what its
-host's trimmed lock, the crates' manifests, the purposes and the vendored
-sources' provenance give. The package notice checks require each package to
-carry its own host's inventory unchanged.
+purpose, from `tools/packaging/crate_purposes.toml` for a crate or from
+`tools/packaging/generate_component_inventory.py` for the C code. It records
+no digests. Packages that pip or R install beside yamaa, such as Polars, are
+not among its components. `tools.packaging.generate_component_inventory`
+writes both inventories, and the repository check and native qualification
+fail while one differs from what its host's trimmed lock, the crates'
+manifests, the purposes and the vendored sources' provenance give. The
+package notice checks require each package to carry its own host's inventory
+unchanged.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
