@@ -113,6 +113,7 @@ class EquivalenceWorkflowTests(unittest.TestCase):
             "tools/paths.py",
             "pyproject.toml",
             "Makefile",
+            ".gitattributes",
             ".github/workflows/ci.yml",
             ".github/actions/setup/action.yml",
         ):

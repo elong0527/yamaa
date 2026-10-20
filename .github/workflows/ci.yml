@@ -91,7 +91,7 @@ jobs:
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           changed=$(git diff --name-only "$base" "$HEAD_SHA" -- \
             rust yaml benchmarks python R/yamaa tools pyproject.toml \
-            Makefile .github/workflows/ci.yml .github/actions/setup)
+            Makefile .gitattributes .github/workflows/ci.yml .github/actions/setup)
           if [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
