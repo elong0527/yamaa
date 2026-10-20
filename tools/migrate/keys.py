@@ -5,7 +5,9 @@ without `key`, match on the applicable keys: the output `keys`, in key
 order, that the lookup's relation carries (LOOKUP-1, LOOKUP-3, LOOKUP-5).
 1.0 declares them: `key` on every input that an implicit join or a keyless
 qualified aggregate reads (P-JOIN-1, P-KEY-1), and on every named
-intermediate except one that drives a row template (D23-R1).
+intermediate except one that drives a row template (D23-R1). An input that an
+intermediate only renames declares that intermediate's key too, so LOOKUP-4
+still refuses the alias (D71).
 
 For an entry specification composed with its parents (LAYER-5, LAYER-6),
 this module classifies each qualified read outside a lookup's own fields as
@@ -26,7 +28,10 @@ from tools.migrate.text import compose, value_of
 
 IDENTITY = {"intermediates": "id", "columns": "name", "rows": "id"}
 KEYED_MAPS = ("input", "windows")
-QUALIFIED = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+")
+# A qualified name, or a reduction's whole record, `DATASET.*` (FORMULA-18).
+QUALIFIED = re.compile(
+    r"[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)+|\.\*)"
+)
 NAME_TYPES = frozenset(
     {
         "variable",
@@ -638,4 +643,24 @@ def infer(spec, relations, bundle=None):
             )
             continue
         result.intermediate_keys[identifier] = found
+    # A 1.0 intermediate only renames its input when its key lists the
+    # input's declared key (LOOKUP-4, D71), so the input it renames declares
+    # the same key and the refusal stays.
+    for item in intermediates:
+        dataset = item.get("dataset")
+        found = result.intermediate_keys.get(item.get("id"))
+        if found and dataset in inputs and dataset not in result.input_keys:
+            if renames_only(item):
+                result.input_keys[dataset] = found
     return result
+
+
+def renames_only(item):
+    """True when a 0.5 intermediate declares nothing beyond `id`, `dataset`,
+    a missing `no_match` and `require_match: false`, which LOOKUP-4 refuses
+    as an alias of its input."""
+    if not set(item) <= {"id", "dataset", "no_match", "require_match"}:
+        return False
+    return item.get("require_match") in (None, False) and item.get(
+        "no_match", {"literal": None}
+    ) == {"literal": None}

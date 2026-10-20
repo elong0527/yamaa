@@ -16,6 +16,20 @@ pub enum JoinedFinding {
         dataset: String,
         keys: Vec<String>,
     },
+    /// A 1.0 input that declares no `key` (LOOKUP-1).
+    UndeclaredKey {
+        dataset: String,
+    },
+    /// A declared key column the input does not store, as `INPUT.COLUMN`
+    /// (LOOKUP-5).
+    DonorKey {
+        identifier: String,
+    },
+    /// A declared key column the specification declares no column of
+    /// (LOOKUP-5).
+    MatchValue {
+        identifier: String,
+    },
     KeyType {
         source: String,
         expected: ColumnType,
@@ -24,6 +38,42 @@ pub enum JoinedFinding {
     UnavailableKey {
         column: usize,
     },
+}
+impl JoinedFinding {
+    /// The diagnostic at the read `path` when the join's key does not
+    /// resolve: no key (LOOKUP-5; LOOKUP-1 for a 1.0 input), a declared
+    /// column (LOOKUP-5), or a pair whose types cannot compare (LOOKUP-9).
+    /// Every other cause is the reading site's own.
+    pub(crate) fn key_diagnostic(&self, path: &str) -> Option<crate::diagnostic::Diagnostic> {
+        use crate::diagnostic::lookup::{self, Owner};
+        Some(match self {
+            Self::NoApplicableKeys { dataset, keys } => {
+                let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
+                lookup::no_applicable_keys(path, dataset, &keys, false)
+            }
+            Self::UndeclaredKey { dataset } => lookup::undeclared_input_key(path, dataset, false),
+            Self::DonorKey { identifier } => {
+                lookup::donor_key_reference(path, Owner::Unnamed, identifier)
+            }
+            Self::MatchValue { identifier } => {
+                lookup::match_value_reference(path, Owner::Unnamed, identifier)
+            }
+            Self::KeyType {
+                source,
+                expected,
+                actual,
+            } => lookup::key_type(
+                path,
+                Owner::Unnamed,
+                source,
+                (*expected).into(),
+                (*actual).into(),
+            ),
+            Self::UnknownField | Self::CurrentKey { .. } | Self::UnavailableKey { .. } => {
+                return None
+            }
+        })
+    }
 }
 type JoinedReadValue = (Read, ColumnType, Vec<usize>);
 type JoinedResolution = Result<Option<Result<JoinedReadValue, JoinedFinding>>, Error>;
@@ -38,6 +88,18 @@ impl Catalog {
         let Some(&(column, kind)) = donor.fields.get(field) else {
             return Ok(Some(Err(JoinedFinding::UnknownField)));
         };
+        let no_keys = || {
+            if donor.declared {
+                JoinedFinding::UndeclaredKey {
+                    dataset: owner.into(),
+                }
+            } else {
+                JoinedFinding::NoApplicableKeys {
+                    dataset: owner.into(),
+                    keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
+                }
+            }
+        };
         let mut record_keys = None;
         let row_pairs;
         let inferred = if let Some(scope) = &self.row_joins {
@@ -48,10 +110,22 @@ impl Catalog {
                 .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
             let mut pairs = Vec::new();
             let mut records = Vec::new();
-            for (index, (name, _)) in donor.keys.iter().enumerate() {
+            for (index, (name, output_column)) in donor.keys.iter().enumerate() {
+                // 0.5 applies the output keys the relation stores; every
+                // column of a declared key applies (LOOKUP-1, LOOKUP-5).
                 let Some(&(_, actual)) = donor.fields.get(name) else {
+                    if donor.declared {
+                        return Ok(Some(Err(JoinedFinding::DonorKey {
+                            identifier: std::format!("{owner}.{name}"),
+                        })));
+                    }
                     continue;
                 };
+                if output_column.is_none() {
+                    return Ok(Some(Err(JoinedFinding::MatchValue {
+                        identifier: name.clone(),
+                    })));
+                }
                 let identifier = std::format!("{}.{}", scope.driver, name);
                 let findings = reference_scope::validate(
                     self,
@@ -89,10 +163,7 @@ impl Catalog {
                 records.push(field);
             }
             if pairs.is_empty() {
-                return Ok(Some(Err(JoinedFinding::NoApplicableKeys {
-                    dataset: owner.into(),
-                    keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
-                })));
+                return Ok(Some(Err(no_keys())));
             }
             record_keys = Some(records);
             row_pairs = pairs;
@@ -101,10 +172,7 @@ impl Catalog {
             match &donor.inference {
                 crate::key_relation::Inference::Keys { keys } => keys,
                 crate::key_relation::Inference::NoApplicableKeys => {
-                    return Ok(Some(Err(JoinedFinding::NoApplicableKeys {
-                        dataset: owner.into(),
-                        keys: donor.keys.iter().map(|(name, _)| name.clone()).collect(),
-                    })))
+                    return Ok(Some(Err(no_keys())))
                 }
                 crate::key_relation::Inference::Incompatible {
                     key,
@@ -117,6 +185,16 @@ impl Catalog {
                         actual: *actual,
                     })))
                 }
+                crate::key_relation::Inference::UnknownColumn { key } => {
+                    return Ok(Some(Err(JoinedFinding::DonorKey {
+                        identifier: std::format!("{owner}.{}", donor.keys[*key].0),
+                    })))
+                }
+                crate::key_relation::Inference::UnknownValue { key } => {
+                    return Ok(Some(Err(JoinedFinding::MatchValue {
+                        identifier: donor.keys[*key].0.clone(),
+                    })))
+                }
                 crate::key_relation::Inference::UndeclaredOutput { .. } => {
                     return Err(Error::InvalidAvailableOutput)
                 }
@@ -126,11 +204,12 @@ impl Catalog {
         let mut dependencies = Vec::new();
         for &index in inferred {
             let (name, output_column) = &donor.keys[index];
+            let output_column = output_column.ok_or(Error::InvalidAvailableOutput)?;
             if record_keys.is_none()
-                && available.is_some_and(|available| !available.contains(output_column))
+                && available.is_some_and(|available| !available.contains(&output_column))
             {
                 return Ok(Some(Err(JoinedFinding::UnavailableKey {
-                    column: *output_column,
+                    column: output_column,
                 })));
             }
             let source_column = donor
@@ -140,10 +219,10 @@ impl Catalog {
                 .0;
             keys.push(MatchKey {
                 source_column,
-                output_column: *output_column,
+                output_column,
             });
             if record_keys.is_none() {
-                dependencies.push(*output_column);
+                dependencies.push(output_column);
             }
         }
         let source = if donor.source == 0 {

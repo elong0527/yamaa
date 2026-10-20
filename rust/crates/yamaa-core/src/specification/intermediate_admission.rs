@@ -64,6 +64,9 @@ pub(super) fn inferred_keys(
             )));
             Ok(None)
         }
-        Inference::UndeclaredOutput { .. } => Err(BindError::Internal),
+        // Inference selects only output keys the donor stores.
+        Inference::UndeclaredOutput { .. }
+        | Inference::UnknownColumn { .. }
+        | Inference::UnknownValue { .. } => Err(BindError::Internal),
     }
 }

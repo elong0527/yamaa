@@ -153,6 +153,14 @@ impl Surface {
     pub fn absent_answers_unknown_variable(self) -> bool {
         matches!(self, Self::V0_5)
     }
+    /// Whether a lookup that declares no `key` infers the applicable output
+    /// keys at binding, as LOOKUP-1 and LOOKUP-5 at the `yamaa-v0.5.0` tag
+    /// say. In 1.0 an implicit join and a qualified aggregate without `key`
+    /// match on the input's declared `key`, and every named intermediate but
+    /// a row template's driver declares its own (D23, D63).
+    pub fn infers_join_keys(self) -> bool {
+        matches!(self, Self::V0_5)
+    }
 }
 
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.
@@ -213,6 +221,47 @@ impl Spec {
     /// A node's path as this spec's diagnostics cite it.
     pub fn cite(&self, meta: Meta) -> String {
         self.render(meta.path, self.notation())
+    }
+    /// Whether the intermediate `name` drives a row template (ROW-2).
+    pub fn drives_rows(&self, name: &str) -> bool {
+        self.rows.templates.iter().any(|template| {
+            template
+                .driver
+                .as_ref()
+                .is_some_and(|driver| driver.name == name)
+        })
+    }
+    /// Whether the intermediate `item` lacks the `key` it requires: on a 1.0
+    /// tree, it declares none and drives no row template (LOOKUP-3, ROW-2;
+    /// D23, D63). A 0.5 lookup without `key` infers it.
+    pub fn lacks_key(&self, item: &Intermediate) -> bool {
+        !self.header.surface.infers_join_keys()
+            && item.key.is_none()
+            && !self.drives_rows(&item.id.name)
+    }
+    /// The input `name`'s declared `key`, if it declares one (P-JOIN-1).
+    pub fn input_key(&self, name: &str) -> Option<&[Named]> {
+        self.inputs
+            .iter()
+            .rfind(|input| input.name.name == name)
+            .and_then(|input| match &input.key {
+                KeyDecl::Declared(columns) => Some(columns.as_slice()),
+                KeyDecl::Inferred | KeyDecl::Undeclared => None,
+            })
+    }
+    /// Whether the intermediate `item` matches its input on exactly the
+    /// input's declared `key`: its own `key` lists the same columns, in any
+    /// order, so it matches as the input's implicit join does (LOOKUP-4,
+    /// D71).
+    pub fn keys_as_input(&self, item: &Intermediate) -> bool {
+        fn names(columns: &[Named]) -> std::collections::BTreeSet<&str> {
+            columns.iter().map(|column| column.name.as_str()).collect()
+        }
+        let Some(JoinKey::Columns { columns, .. }) = &item.key else {
+            return false;
+        };
+        self.input_key(&item.dataset.name)
+            .is_some_and(|declared| names(declared) == names(columns))
     }
 }
 

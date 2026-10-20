@@ -7,6 +7,7 @@ use crate::{
         lookup::{self, Owner},
         ConditionCode as C, Diagnostic,
     },
+    key_relation::Implied,
     value::Value,
 };
 mod row_sources;
@@ -698,7 +699,7 @@ fn bind_implicit_source(
             if let Some(source_column) =
                 source.schema.columns().iter().position(|c| c.name == field)
             {
-                let key_names = implicit
+                let output_keys = implicit
                     .keys
                     .iter()
                     .map(|&column| cx.output.columns()[column].name.as_str())
@@ -712,27 +713,36 @@ fn bind_implicit_source(
                         column_type: field.kind,
                     })
                     .collect::<Vec<_>>();
-                match crate::key_relation::infer(catalog, &key_names, &donor_fields)
+                // The applicable output keys (0.5), or the input's declared
+                // key (1.0, LOOKUP-1).
+                let implied = row_drivers::implied(cx.spec(), dataset);
+                let key_names = implied.names(&output_keys).to_vec();
+                match implied
+                    .resolve(catalog, &output_keys, &donor_fields)
                     .map_err(BindError::Catalog)?
                 {
                     crate::key_relation::Inference::Keys { keys } => {
-                        let keys = keys
-                            .into_iter()
-                            .map(|key| {
-                                let output_column = implicit.keys[key];
-                                let source_column = source
-                                    .schema
-                                    .columns()
-                                    .iter()
-                                    .position(|field| field.name == key_names[key])
-                                    .expect("inferred applicable field");
-                                cx.edges.push(output_column);
-                                crate::dataset::MatchKey {
-                                    source_column,
-                                    output_column,
-                                }
-                            })
-                            .collect();
+                        let mut pairs = Vec::new();
+                        for key in keys {
+                            let output_column = cx
+                                .output
+                                .columns()
+                                .iter()
+                                .position(|column| column.name == key_names[key])
+                                .ok_or(BindError::Internal)?;
+                            let source_column = source
+                                .schema
+                                .columns()
+                                .iter()
+                                .position(|field| field.name == key_names[key])
+                                .ok_or(BindError::Internal)?;
+                            cx.edges.push(output_column);
+                            pairs.push(crate::dataset::MatchKey {
+                                source_column,
+                                output_column,
+                            });
+                        }
+                        let keys = pairs;
                         declaration
                             .bind_range(
                                 &source.schema,
@@ -757,29 +767,11 @@ fn bind_implicit_source(
                                 absence: Some(declaration.absence(path)),
                             })
                     }
-                    crate::key_relation::Inference::NoApplicableKeys => {
-                        cx.findings.push(BindFinding::Source(SourceFinding(
-                            lookup::no_applicable_keys(path, dataset, &key_names, false),
-                        )));
+                    refused => {
+                        cx.findings.push(join_key_finding(
+                            path, dataset, &implied, &key_names, refused,
+                        )?);
                         None
-                    }
-                    crate::key_relation::Inference::Incompatible {
-                        key,
-                        expected,
-                        actual,
-                    } => {
-                        cx.findings
-                            .push(BindFinding::Source(SourceFinding(lookup::key_type(
-                                path,
-                                Owner::Unnamed,
-                                key_names[key],
-                                expected.into(),
-                                actual.into(),
-                            ))));
-                        None
-                    }
-                    crate::key_relation::Inference::UndeclaredOutput { .. } => {
-                        return Err(BindError::Internal)
                     }
                 }
             } else if declaration.answers_unknown {
@@ -863,13 +855,15 @@ fn bind_implicit_source(
     Ok(expression.map(|expression| declaration.wrap(expression, column, path, variable_absent)))
 }
 
-/// Scalar expression operands use the same inferred output-key join as a bare
-/// stored-source derivation. Admission retains the donor and key types.
+/// Scalar expression operands use the same implicit join as a bare
+/// stored-source derivation: on the output keys the input stores (0.5), or on
+/// its declared key (1.0). Admission retains the donor and key types.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind_implicit(
     name: &str,
     path: &str,
     keys: &[usize],
+    implied: &Implied<'_>,
     catalog: &Catalog,
     secondary: &[crate::dataset::SecondarySource],
     edges: &mut Vec<usize>,
@@ -894,7 +888,7 @@ pub(super) fn bind_implicit(
         return Ok(None);
     };
     let outputs = catalog.output_names();
-    let key_names = keys
+    let output_keys = keys
         .iter()
         .map(|&key| outputs.get(key).copied().ok_or(BindError::Internal))
         .collect::<Result<Vec<_>, _>>()?;
@@ -907,11 +901,18 @@ pub(super) fn bind_implicit(
             column_type: column.kind,
         })
         .collect::<Vec<_>>();
-    match crate::key_relation::infer(catalog, &key_names, &donor).map_err(BindError::Catalog)? {
+    let key_names = implied.names(&output_keys).to_vec();
+    match implied
+        .resolve(catalog, &output_keys, &donor)
+        .map_err(BindError::Catalog)?
+    {
         crate::key_relation::Inference::Keys { keys: inferred } => {
             let mut bound = Vec::new();
             for key in inferred {
-                let output_column = keys[key];
+                let output_column = outputs
+                    .iter()
+                    .position(|name| *name == key_names[key])
+                    .ok_or(BindError::Internal)?;
                 let source_column = source
                     .schema
                     .columns()
@@ -938,28 +939,56 @@ pub(super) fn bind_implicit(
                 absence: Some(crate::dataset::JoinAbsence::operand(path)),
             }))
         }
-        crate::key_relation::Inference::NoApplicableKeys => {
-            findings.push(BindFinding::Source(SourceFinding(
-                lookup::no_applicable_keys(path, dataset, &key_names, false),
-            )));
+        refused => {
+            findings.push(join_key_finding(
+                path, dataset, implied, &key_names, refused,
+            )?);
             Ok(None)
         }
-        crate::key_relation::Inference::Incompatible {
+    }
+}
+
+/// The finding of an implicit join of `dataset` whose key does not resolve,
+/// at the read: no key (LOOKUP-5, and LOOKUP-1 on a 1.0 input), a declared
+/// column the input does not store or the current row has no column of
+/// (LOOKUP-5), or a pair whose types cannot compare (LOOKUP-9).
+pub(super) fn join_key_finding(
+    path: &str,
+    dataset: &str,
+    implied: &Implied<'_>,
+    key_names: &[&str],
+    refused: crate::key_relation::Inference,
+) -> Result<BindFinding, BindError> {
+    use crate::key_relation::Inference;
+    let diagnostic = match refused {
+        Inference::NoApplicableKeys => match implied {
+            Implied::Applicable => lookup::no_applicable_keys(path, dataset, key_names, false),
+            Implied::Declared(_) => lookup::undeclared_input_key(path, dataset, false),
+        },
+        Inference::Incompatible {
             key,
             expected,
             actual,
-        } => {
-            findings.push(BindFinding::Source(SourceFinding(lookup::key_type(
-                path,
-                Owner::Unnamed,
-                key_names[key],
-                expected.into(),
-                actual.into(),
-            ))));
-            Ok(None)
+        } => lookup::key_type(
+            path,
+            Owner::Unnamed,
+            key_names[key],
+            expected.into(),
+            actual.into(),
+        ),
+        Inference::UnknownColumn { key } => lookup::donor_key_reference(
+            path,
+            Owner::Unnamed,
+            &format!("{dataset}.{}", key_names[key]),
+        ),
+        Inference::UnknownValue { key } => {
+            lookup::match_value_reference(path, Owner::Unnamed, key_names[key])
         }
-        crate::key_relation::Inference::UndeclaredOutput { .. } => Err(BindError::Internal),
-    }
+        Inference::Keys { .. } | Inference::UndeclaredOutput { .. } => {
+            return Err(BindError::Internal)
+        }
+    };
+    Ok(BindFinding::Source(SourceFinding(diagnostic)))
 }
 
 /// Common scalar operand hook for every row driver and its declared donor ports.
@@ -984,6 +1013,10 @@ pub(super) fn bind_catalog_join(
         }
         Ok(_) => Err(BindError::Internal),
         Err(cause) => {
+            if let Some(diagnostic) = cause.key_diagnostic(path) {
+                findings.push(BindFinding::Source(SourceFinding(diagnostic)));
+                return Ok(None);
+            }
             let finding = match cause {
                 JoinedFinding::UnknownField => BindFinding::UnknownReference {
                     path: path.into(),
@@ -1016,23 +1049,11 @@ pub(super) fn bind_catalog_join(
                         ],
                     ))
                 }
-                JoinedFinding::KeyType {
-                    source,
-                    expected,
-                    actual,
-                } => BindFinding::Source(SourceFinding(lookup::key_type(
-                    path,
-                    Owner::Unnamed,
-                    &source,
-                    expected.into(),
-                    actual.into(),
-                ))),
-                JoinedFinding::NoApplicableKeys { dataset, keys } => {
-                    let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
-                    BindFinding::Source(SourceFinding(lookup::no_applicable_keys(
-                        path, &dataset, &keys, false,
-                    )))
-                }
+                JoinedFinding::NoApplicableKeys { .. }
+                | JoinedFinding::UndeclaredKey { .. }
+                | JoinedFinding::DonorKey { .. }
+                | JoinedFinding::MatchValue { .. }
+                | JoinedFinding::KeyType { .. } => return Err(BindError::Internal),
             };
             findings.push(finding);
             Ok(None)

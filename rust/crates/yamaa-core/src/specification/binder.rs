@@ -482,9 +482,10 @@ impl<'a> BindContext<'a, '_> {
     }
 
     /// The implicit template's named read: another input's field joins on
-    /// the output keys its fields name; a lookup read takes the selector's
-    /// own record; a driver field of a non-key column collects the distinct
-    /// readings of the row's records.
+    /// its implicit join's key, the output keys its fields name (0.5) or its
+    /// declared key (1.0); a lookup read takes the selector's own record; a
+    /// driver field of a non-key column collects the distinct readings of the
+    /// row's records.
     fn implicit_operand(
         &mut self,
         implicit: Implicit<'_>,
@@ -496,14 +497,15 @@ impl<'a> BindContext<'a, '_> {
             secondary,
             items,
         } = self.donors;
-        if name
+        if let Some((dataset, _)) = name
             .split_once('.')
-            .is_some_and(|(dataset, _)| secondary.iter().any(|source| source.name == dataset))
+            .filter(|(dataset, _)| secondary.iter().any(|source| source.name == *dataset))
         {
             return source_expressions::bind_implicit(
                 name,
                 path,
                 implicit.keys,
+                &row_drivers::implied(self.spec(), dataset),
                 self.catalog,
                 secondary,
                 self.edges,

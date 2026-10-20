@@ -193,6 +193,17 @@ pub(super) fn bind(
     }
     let donor = item.source_schema(secondary).ok_or(BindError::Internal)?;
     if item.keys.is_empty() {
+        // A 1.0 row driver declares no key, so it is read only as the
+        // driver of its rows, never as a keyed lookup (LOOKUP-3, ROW-2).
+        if let Some(key) = declarations.key_required(index) {
+            let finding = BindFinding::Lookup(LookupFinding::from_diagnostic(
+                crate::diagnostic::lookup::key_required(key),
+            ));
+            if !reported(findings, &finding) {
+                findings.push(finding);
+            }
+            return Ok(None);
+        }
         if let Some(root_keys) = declarations.driver_keys(index) {
             let keys = (0..root_keys.columns().len()).collect::<Vec<_>>();
             let fields = root_keys

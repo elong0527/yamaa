@@ -306,7 +306,7 @@ conditions:
     message: "{outer} contains the reduction {inner}, and reductions cannot nest"
   no_applicable_keys:
     phases: [validation]
-    message: "the lookup of {dataset} has no applicable key among {keys} ({hint})"
+    message: "the lookup of {dataset} has no applicable key ({hint})"
   non_ascii_source:
     phases: [validation]
     message: "the file holds a character outside ASCII"
