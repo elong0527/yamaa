@@ -19,6 +19,11 @@ open gates live in GitHub issues and pull requests, not here.
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
   checks with R-devel, R-release and R 4.4 and the minimum Rust. The floor
   follows an audit of the R C API that the binding calls.
+- R source builds with R 4.6.1 on Linux aarch64. There, with the network
+  disabled, native qualification builds and installs the R source package
+  that a release publishes and runs the conformance corpus with it: its
+  `native-offline-source` job. No `R CMD check --as-cran` runs on aarch64,
+  and no lane there uses R 4.4 or the minimum Rust.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49),
   free-threaded Python, musl and R binary packages are not supported. R is
   distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
