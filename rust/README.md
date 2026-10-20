@@ -341,12 +341,12 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   (above) is its implementation and wire format, not a public type.
 - `compile` and `run` are the reusable plan handle (#2821). `compile` is the
   preparation half of `build`: it captures and admits the metadata through
-  the engine's resolver and compiles the selected route, reading no study
-  data. `Plan::run` is the rest: activation, input capture, binding,
+  the engine's resolver and compiles the specification, with its project when
+  the request names one, reading no study data. `Plan::run` is the rest: activation, input capture, binding,
   execution and conversion through the same public tables. `build` is exactly
   one `compile` followed by one `run`, with the same events, so there is one
-  admission and evaluation route. The plan wraps the existing prepared values
-  of both routes, plain and project, rather than a second plan type.
+  admission and evaluation route. The plan wraps the one prepared
+  specification, alone or with its project, rather than a second plan type.
 - A refused compilation still returns a `Plan`: `report` holds its
   diagnostics, and each run returns that same failed `Build`, with its
   retained preparation sources, without resource access. Only cancellation
@@ -381,6 +381,15 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
   kept plan holds no project functions or observer. It runs through the
   calling engine's, so each host call keeps its own capabilities. `spec_run`
   and `project_run` run through an empty holder.
+- Every host operation produces one outcome: its members in run order and
+  the project-level issues that refused the whole operation. A specification
+  run is a producer graph of one member; a project run is a graph of every
+  specification in its scope, producer first, and a check or a submission has
+  one member per specification or section. `Check`, `Run`, `ProjectRun` and
+  `Submission` are views of it. Each computes its `Status` from its issues and
+  what it built, and never stores it (P-STATUS-1): `succeeded`, `failed`, and
+  `skipped` for a project-run member whose run-scope producer failed or was
+  skipped.
 
 ### Handles, ownership and thread safety
 
@@ -562,10 +571,10 @@ was removed. Any module not listed here is internal by default.
 | `arrow_bridge` | Facade -- `Table::stream` and stream import on `Table`; the FFI types themselves are not re-exported. |
 | `arrow_table` | Internal -- the engine's table representation; `Table` is the public form. |
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
-| `file_application` | Facade -- `Engine::check`, `Engine::build`, `Engine::compile` and `Plan::run`; `Application` and `ApplicationError` are internal. |
+| `file_application` | Facade -- the one route behind `Engine::check`, `Engine::build`, `Engine::compile`, `Plan::run` and every host operation: a specification alone and each member of a project run prepare, run and report there. |
 | `file_define` | Facade -- `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
-| `file_preparation` | Internal -- `FileSpecification` is a prepared internal form behind `Build` and `Plan`. |
-| `file_project` | Internal -- project state behind `Build` and `Plan`. |
+| `file_preparation` | Internal -- `FileSpecification`, the one prepared specification, alone or with its project, behind `Build` and `Plan`. |
+| `file_project` | Internal -- project environment capture for preparation. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |
 | `file_workflow` | Internal -- `SelectionError` converts into diagnostics/`Error`. |
 | `host_resources` | Facade -- the `ResourceResolver` trait, `MemoryResolver`, and the resolver request/reply/failure types. |
@@ -574,16 +583,16 @@ was removed. Any module not listed here is internal by default.
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
 | `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
-| `project_report` | Internal -- `build_result` runs behind `Build`; `Classified` stays an internal constructor. |
-| `project_run` | Facade -- `Plan` wraps the prepared project route, `PreparedRun` included (#2821); `Attempt` and `PreparedRun` stay internal. |
+| `project_report` | Internal -- the activation and project-function half of the one result builder; `Classified` stays an internal constructor. |
+| `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; `Plan` wraps it (#2821), and it stays internal with its `Attempt`. |
 | `public_table` | Facade -- `Table`. |
 | `resolved_artifact` | Facade -- `ResolvedSpecification` (#2725). |
 | `scalar_bytes` | Internal -- scalar decoding is a conversion detail; project functions exchange facade `Scalar` values. |
-| `specification_report` | Facade -- its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
+| `specification_report` | Facade -- the one result builder behind `Build`; its `Identity` folds into `EngineOptions` (`runtime_name`/`runtime_version`); the module is internal. |
 | `style_values` | Internal -- the value comparison that proves `lint`'s fixes; `style_same_value` exposes it for embedders. |
 | `yaml_decode` | Internal -- `DecodeFailure` converts into diagnostics/`Error::Unavailable`. |
 | `yamaa_core::application_observer` | Facade -- the `Progress` trait with facade `Phase`/`Outcome` enums; the `Scope` guard stays internal. |
-| `yamaa_core::domain_entry` | Internal -- entry dispatch behind `Engine`. |
+| `yamaa_core::domain_entry` | Internal -- the observed preparation and build phases behind `Engine`. |
 | `yamaa_core::function_batch` | Facade -- `ProjectFunctions` batch invocation with facade scalar arguments; `BatchFunctionPort` stays internal. |
 | `yamaa_core::function_invocation` | Facade -- `FunctionError` is its public form; `HostError` stays internal. |
 | `yamaa_core::function_signature` | Facade -- `FunctionIdentity` and `Signature`/`Parameter` are the public activation types, and `ColumnType` is the declared result type; `LogicalSignature` stays internal. |

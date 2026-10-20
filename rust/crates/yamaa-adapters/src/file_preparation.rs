@@ -2,10 +2,11 @@
 use crate::{
     file_metadata::Reader as Native,
     file_resources::{Error as ResourceError, Resources, RunScope},
-    specification_run::{CapturedAttempt, PreparedRun},
+    specification_run::{Attempt, PreparedRun, RejectedRun},
     specification_source::{InheritanceError, Source},
 };
 use std::sync::Arc;
+use yamaa_core::project_activation::ActivationPort;
 
 #[derive(Debug)]
 pub enum Error {
@@ -51,8 +52,9 @@ impl Error {
     }
 }
 
-/// The prepared model and its compile-time metadata authority. Study inputs,
-/// their snapshots and Save targets belong to each run's [`RunScope`].
+/// One prepared specification, alone or with its project, and its
+/// compile-time metadata authority. Study inputs, their snapshots and Save
+/// targets belong to each run's [`RunScope`].
 pub struct FileSpecification {
     run: PreparedRun,
     resources: Resources,
@@ -63,25 +65,29 @@ pub struct FileSpecification {
     entry: String,
     links: Vec<crate::specification_source::LinkedSpecification>,
 }
-/// A plain compilation refusal still owns the original native snapshots.
-pub struct RejectedPlain {
-    error: Error,
+/// A compilation refusal still owns the original native snapshots and the
+/// documents it compiled.
+pub struct Rejected {
+    run: Box<RejectedRun>,
     entry: String,
     resources: Resources,
 }
 
-impl std::fmt::Debug for RejectedPlain {
+impl std::fmt::Debug for Rejected {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RejectedPlain")
-            .field("error", &self.error)
+        f.debug_struct("Rejected")
             .field("entry", &self.entry)
+            .field("error", &self.run.rejection.error)
             .field("capture_reads", &self.capture_reads())
             .finish_non_exhaustive()
     }
 }
-impl RejectedPlain {
-    pub fn error(&self) -> &Error {
-        &self.error
+impl Rejected {
+    pub fn run(&self) -> &RejectedRun {
+        &self.run
+    }
+    pub(crate) fn into_run(self) -> Box<RejectedRun> {
+        self.run
     }
     pub fn entry(&self) -> &str {
         &self.entry
@@ -94,40 +100,39 @@ impl RejectedPlain {
     }
 }
 impl FileSpecification {
+    /// Prepare a specification alone from `resources`, without a project.
     pub fn prepare(mut resources: Resources, written: &str) -> Result<Self, Error> {
         let document = prepare_document(&mut resources, written, None)?;
         let links = capture_links(&mut resources, &document, None, &mut None)?;
-        let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
-        let run = PreparedRun::prepare_with_profile_inspection(
-            document,
-            &links,
-            |document, dataset, path| {
-                crate::source_profile_inspection::inspect(document, &resources, dataset, path)
-            },
-        )
-        .map_err(Error::Compile)?;
-        let findings = crate::run_report::location_findings(&resources, &run, &links);
-        if !findings.is_empty() {
-            return Err(Error::Compile(crate::specification_run::Error::Prepare(
-                yamaa_core::specification::PrepareError::Invalid(findings),
-            )));
-        }
-        Ok(Self {
-            run,
-            resources,
-            linked,
-            entry: written.into(),
-            links,
+        let environment = crate::project_source::OwnedEnvironment::without_environment(
+            yamaa_core::project_function::Language::Python,
+        );
+        Self::compile(resources, written.into(), document, links, environment).map_err(|rejected| {
+            Error::Compile(crate::specification_run::Error::Prepare(
+                rejected.run.rejection.error,
+            ))
         })
     }
     pub(crate) fn from_workflow(
         entry: crate::file_entry::CapturedEntry,
-    ) -> Result<Self, Box<RejectedPlain>> {
-        let (resources, entry, document, links, _) = entry.into_parts();
+    ) -> Result<Self, Box<Rejected>> {
+        let (resources, entry, document, links, environment) = entry.into_parts();
+        Self::compile(resources, entry, document, links, environment)
+    }
+    /// Compile a captured document against its environment, admitting its
+    /// output locations before any study read.
+    pub(crate) fn compile(
+        resources: Resources,
+        entry: String,
+        document: crate::specification_source::PreparedDocument,
+        links: Vec<crate::specification_source::LinkedSpecification>,
+        environment: crate::project_source::OwnedEnvironment,
+    ) -> Result<Self, Box<Rejected>> {
         let linked = crate::file_resources::linked_inputs(&resources, &document, &links);
         let result = PreparedRun::prepare_with_profile_inspection(
             document,
             &links,
+            environment,
             |document, dataset, path| {
                 crate::source_profile_inspection::inspect(document, &resources, dataset, path)
             },
@@ -137,9 +142,7 @@ impl FileSpecification {
             if findings.is_empty() {
                 Ok(run)
             } else {
-                Err(crate::specification_run::Error::Prepare(
-                    yamaa_core::specification::PrepareError::Invalid(findings),
-                ))
+                Err(run.reject(yamaa_core::specification::PrepareError::Invalid(findings)))
             }
         });
         match result {
@@ -150,8 +153,8 @@ impl FileSpecification {
                 entry,
                 links,
             }),
-            Err(error) => Err(Box::new(RejectedPlain {
-                error: Error::Compile(error),
+            Err(run) => Err(Box::new(Rejected {
+                run,
                 entry,
                 resources,
             })),
@@ -167,7 +170,14 @@ impl FileSpecification {
     pub fn resolved_specification(
         &self,
     ) -> Result<crate::resolved_artifact::ResolvedArtifact, crate::resolved_artifact::Error> {
-        crate::resolved_artifact::single(self.run.document(), &self.resources, None)
+        crate::resolved_artifact::single(
+            self.run.document(),
+            &self.resources,
+            self.run
+                .captured_environment()
+                .root_optional()
+                .map(|root| root.source().identity.clone()),
+        )
     }
 
     /// Open one run's study scope; see [`Resources::run_scope`].
@@ -177,33 +187,39 @@ impl FileSpecification {
     ) -> RunScope {
         self.resources.run_scope(resolver)
     }
-    /// Verify every held metadata snapshot at run start, before any study
-    /// read: the entry, its layers and dictionaries, and the producing
-    /// specifications its `schema` links name. A changed or missing file
-    /// refuses the run naming its declaration; see
-    /// [`crate::file_application::verify_held`].
+    /// Verify every held metadata snapshot at run start, before activation or
+    /// any study read: the entry, its layers, dictionaries and linked
+    /// producing specifications and, with a project, the project file, the
+    /// environment file it links, and the lock, function definitions and
+    /// codelists they declare. A changed or missing file refuses the run
+    /// naming its declaration; see [`crate::file_application::verify_held`].
     pub fn verify_metadata(&self) -> Result<(), crate::file_application::Failure> {
+        use crate::changed_metadata as changed;
         crate::file_application::verify_held(&self.resources, |identity, failure| {
             let document = self.run.document();
-            crate::changed_metadata::specification(
-                "specification",
-                &self.entry,
-                document,
-                identity,
-                failure,
-            )
-            .or_else(|| crate::changed_metadata::links(document, &self.links, identity, failure))
+            let captured = self.run.captured_environment();
+            changed::specification("specification", &self.entry, document, identity, failure)
+                .or_else(|| changed::links(document, &self.links, identity, failure))
+                .or_else(|| {
+                    let root = captured.root_optional()?;
+                    changed::inventory(root, captured.inventory_documents(), identity, failure)
+                        .or_else(|| {
+                            let environment = changed::Environment {
+                                written: captured.written()?,
+                                host: self.run.environment().host(),
+                                root,
+                                environment_file: captured.environment_file(),
+                                lock: captured.lock(),
+                                captures: captured.captures(),
+                            };
+                            changed::environment(&environment, identity, failure)
+                        })
+                })
         })
     }
     /// Bounded aliases of the held metadata bytes; no file access or replay.
     pub fn retained_sources(&self) -> crate::file_resources::RetainedSources {
         self.resources.retain_sources()
-    }
-    pub(crate) fn publication_target(
-        &self,
-        run: &RunScope,
-    ) -> Result<crate::resource_publication::AnchoredTarget, ResourceError> {
-        self.publication_field_target(run, "path")
     }
     pub(crate) fn publication_field_target(
         &self,
@@ -218,14 +234,17 @@ impl FileSpecification {
         run.resources()
             .publication_target_from(origin.base_source, origin.written)
     }
-    /// Capture, decode, bind and execute in `run`; this value is unchanged.
-    pub fn build(
+    /// Activate, capture, decode, bind and execute in `run`; this value is
+    /// unchanged. A specification that calls no project function never
+    /// enters `activation`.
+    pub fn build<A: ActivationPort>(
         &self,
         run: &mut RunScope,
+        activation: &mut A,
         scope: yamaa_core::application_observer::Scope<'_>,
-    ) -> CapturedAttempt<ResourceError> {
+    ) -> Attempt<ResourceError, A::Error> {
         let mut port = crate::file_resources::HeldPort::new(run, &self.linked);
-        self.run.execute_with_port(&mut port, scope)
+        self.run.execute_with_ports(activation, &mut port, scope)
     }
 }
 
@@ -368,7 +387,9 @@ pub(crate) fn capture_links(
 }
 
 /// Return only unclassified native failures; observed facts retain their source owner.
-pub fn opaque_resource_failure(attempt: &CapturedAttempt<ResourceError>) -> Option<&ResourceError> {
+pub fn opaque_resource_failure<E>(
+    attempt: &crate::specification_run::CapturedAttempt<ResourceError, E>,
+) -> Option<&ResourceError> {
     use crate::specification_run::PortError;
     match &attempt.result {
         Err(PortError::Capture(error))
@@ -440,15 +461,20 @@ mod profile_inspection_tests {
             let document = prepare_document(&mut resources, "root.yaml", None).unwrap();
             let reads = resources.capture_reads();
             assert_eq!(reads, 2);
-            let Err(crate::specification_run::Error::Prepare(
-                yamaa_core::specification::PrepareError::Invalid(findings),
-            )) = PreparedRun::prepare_with_profile_inspection(
+            let Err(rejected) = PreparedRun::prepare_with_profile_inspection(
                 document,
                 &[],
+                crate::project_source::OwnedEnvironment::without_environment(
+                    yamaa_core::project_function::Language::Python,
+                ),
                 |document, dataset, path| {
                     crate::source_profile_inspection::inspect(document, &resources, dataset, path)
                 },
-            )
+            ) else {
+                panic!("invalid source")
+            };
+            let yamaa_core::specification::PrepareError::Invalid(findings) =
+                &rejected.rejection.error
             else {
                 panic!("invalid source")
             };
@@ -849,28 +875,5 @@ mod dispatch_policy_tests {
         );
         assert_eq!(resources.capture_reads(), 2);
         assert_eq!(resources.resolve("root.yaml").unwrap(), original);
-    }
-}
-
-#[cfg(test)]
-mod inventory_rejection_tests {
-    use super::*;
-
-    #[test]
-    fn plain_selection_keeps_inventory_failure_in_the_preparation_stage() {
-        let error = || Error::Inventory(yamaa_core::submission_inventory::MetadataError::Shape);
-        let base = crate::file_resolver::caller_path(&std::env::current_dir().unwrap()).unwrap();
-        let rejected = crate::file_workflow::SelectionError::Plain(Box::new(RejectedPlain {
-            error: error(),
-            entry: "spec.yaml".into(),
-            resources: Resources::for_entry(&base).unwrap(),
-        }));
-        assert_eq!(
-            crate::project_application::selection_failure(&rejected),
-            crate::file_application::rejected(
-                yamaa_core::application_issue::Stage::Prepare,
-                yamaa_core::application_issue::Fault::Inventory,
-            )
-        );
     }
 }

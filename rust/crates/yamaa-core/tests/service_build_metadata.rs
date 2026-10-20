@@ -53,12 +53,13 @@ mod service {
         //! execution and held-output services and private native scripted ports.
         use crate::support::ports::*;
         use crate::support::project_call_compiler as support;
+        use std::cell::RefCell;
         use std::{convert::Infallible, rc::Rc, sync::Arc};
         use support::{call, specification, Tree};
         use yamaa_core::{
             application_observer::Scope,
-            build::{self, MetadataAdmissionPort, PreparationPort, Prepared},
-            domain_entry::{self, Ports, Request},
+            build::{self, MetadataAdmissionPort},
+            domain_entry::{self, Request},
             function_invocation::{Argument, HostError},
             project_activation::{self, ActivationPort},
             project_domain::{self, CheckedOwnedProject},
@@ -319,11 +320,7 @@ mod service {
                 Ok(())
             }
         }
-        impl PreparationPort for Application {
-            type Entry = Entry;
-            type Plain = CheckedOwnedProject;
-            type Project = CheckedOwnedProject;
-            type Failure = Failure;
+        impl Application {
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Failure> {
                 assert_eq!(request.environment, Some("project.yaml"));
                 let source = metadata::Source {
@@ -380,47 +377,27 @@ mod service {
                 build::verify_entry(self).unwrap_or_else(|_| panic!("fixture metadata admission"));
                 Ok(Entry { model, environment })
             }
-            fn plain(&mut self, _: Entry) -> Result<CheckedOwnedProject, Failure> {
-                panic!("explicit environment selects project")
-            }
-            fn project(&mut self, entry: Entry) -> Result<CheckedOwnedProject, Failure> {
+            fn compile(&mut self, entry: Entry) -> Result<CheckedOwnedProject, Failure> {
                 self.log.record(Event::Observation("compile"));
                 project_domain::check_owned(&entry.model, entry.environment)
                     .map_err(|rejection| Failure::Compile(rejection.error))
             }
-        }
-        impl Ports for Application {
-            type Plain = CheckedOwnedProject;
-            type Project = CheckedOwnedProject;
-            type CheckResult = ();
-            type BuildResult = PreparedOutput<()>;
-            type Failure = Failure;
-            fn prepare(
-                &mut self,
-                request: Request<'_>,
-            ) -> Result<Prepared<Self::Plain, Self::Project>, Failure> {
-                build::prepare(request, self)
+            fn prepare(&mut self, request: Request<'_>) -> Result<CheckedOwnedProject, Failure> {
+                let entry = self.capture(request)?;
+                self.compile(entry)
             }
-            fn check_plain(&mut self, _: Self::Plain) -> Result<(), Failure> {
-                unreachable!()
-            }
-            fn check_project(&mut self, _: Self::Project) -> Result<(), Failure> {
+            fn check(&mut self, _: CheckedOwnedProject) -> Result<(), Failure> {
                 self.log.record(Event::Observation("static check"));
                 Ok(())
             }
-            fn build_plain(
-                &mut self,
-                _: &Self::Plain,
-                _: Scope<'_>,
-            ) -> Result<PreparedOutput<()>, Failure> {
-                unreachable!()
-            }
-            fn build_project(
-                &mut self,
-                checked: &Self::Project,
-                _: Scope<'_>,
-            ) -> Result<PreparedOutput<()>, Failure> {
-                self.run(checked)
+            /// One build: compile, then run.
+            fn build(&mut self) -> Result<PreparedOutput<()>, Failure> {
+                let ports = RefCell::new(self);
+                domain_entry::domain(
+                    Scope::default(),
+                    || ports.borrow_mut().prepare(request()),
+                    |checked| ports.borrow_mut().run(checked),
+                )
             }
         }
         fn request() -> Request<'static> {
@@ -440,7 +417,7 @@ mod service {
                 Scenario::Report,
             ] {
                 let mut ports = Application::new(scenario);
-                let result = domain_entry::domain(request(), &mut ports, Scope::default());
+                let result = ports.build();
                 match (&scenario, &result) {
                     (Scenario::Environment, Err(Failure::Metadata(error))) => assert!(matches!(
                         error.as_ref(),
@@ -487,7 +464,8 @@ mod service {
         #[test]
         fn check_has_no_runtime_effects_and_successful_build_saves_only_the_held_bytes() {
             let mut ports = Application::new(Scenario::Success);
-            domain_entry::check(request(), &mut ports).unwrap();
+            let checked = ports.prepare(request()).unwrap();
+            ports.check(checked).unwrap();
             assert!(!ports.log.events().iter().any(|event| matches!(
                 event,
                 Event::Call { .. }
@@ -497,7 +475,7 @@ mod service {
                     | Event::Observation("lock" | "binding")
             )));
             ports.log.clear();
-            let result = domain_entry::domain(request(), &mut ports, Scope::default()).unwrap();
+            let result = ports.build().unwrap();
             assert!(!ports
                 .log
                 .events()
@@ -1228,8 +1206,8 @@ mod service {
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::{
             application_observer::Scope,
-            build::{self, MetadataAdmissionPort, PreparationPort, Prepared},
-            domain_entry::{self, Ports, Request},
+            build::{self, MetadataAdmissionPort},
+            domain_entry::{self, Request},
         };
 
         struct Original(Rc<()>);
@@ -1244,12 +1222,7 @@ mod service {
             fn enter(&mut self, event: &'static str) -> Result<(), Original> {
                 if let Some(phases) = &self.phases {
                     use yamaa_core::application_observer::Phase;
-                    let expected = if self
-                        .events
-                        .iter()
-                        .any(|event| matches!(*event, "plain build" | "project build"))
-                        || matches!(event, "plain build" | "project build")
-                    {
+                    let expected = if self.events.contains(&"build") || event == "build" {
                         Phase::Build
                     } else {
                         Phase::Preparation
@@ -1266,8 +1239,8 @@ mod service {
                 }
                 Ok(())
             }
-            fn execute(&mut self, route: &'static str) -> Result<(), Original> {
-                self.enter(route)?;
+            fn execute(&mut self) -> Result<(), Original> {
+                self.enter("build")?;
                 self.enter("lock")?;
                 self.enter("function tests")?;
                 self.enter("study capture")?;
@@ -1285,11 +1258,7 @@ mod service {
                     .map_err(|e| ("spec.yaml".into(), e))
             }
         }
-        impl PreparationPort for Fake {
-            type Entry = Entry;
-            type Plain = ();
-            type Project = ();
-            type Failure = Original;
+        impl Fake {
             fn capture(&mut self, request: Request<'_>) -> Result<Entry, Original> {
                 assert_eq!(request.specification, "spec.yaml");
                 self.enter("root admission")?;
@@ -1303,33 +1272,22 @@ mod service {
                 })?;
                 Ok(Entry)
             }
-            fn plain(&mut self, _: Entry) -> Result<(), Original> {
-                self.enter("plain compilation")
+            /// One route with or without an environment: capture, then compile.
+            fn prepare(&mut self, request: Request<'_>) -> Result<(), Original> {
+                self.capture(request)?;
+                self.enter("compilation")
             }
-            fn project(&mut self, _: Entry) -> Result<(), Original> {
-                self.enter("project compilation")
+            fn check(&mut self) -> Result<(), Original> {
+                self.enter("check")
             }
-        }
-        impl Ports for Fake {
-            type Plain = ();
-            type Project = ();
-            type CheckResult = ();
-            type BuildResult = ();
-            type Failure = Original;
-            fn prepare(&mut self, request: Request<'_>) -> Result<Prepared<(), ()>, Original> {
-                build::prepare(request, self)
-            }
-            fn check_plain(&mut self, _: ()) -> Result<(), Original> {
-                self.enter("plain check")
-            }
-            fn check_project(&mut self, _: ()) -> Result<(), Original> {
-                self.enter("project check")
-            }
-            fn build_plain(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
-                self.execute("plain build")
-            }
-            fn build_project(&mut self, _: &(), _: Scope<'_>) -> Result<(), Original> {
-                self.execute("project build")
+            /// One build: compile, then run, observed through `scope`.
+            fn domain(&mut self, request: Request<'_>, scope: Scope<'_>) -> Result<(), Original> {
+                let port = std::cell::RefCell::new(self);
+                domain_entry::domain(
+                    scope,
+                    || port.borrow_mut().prepare(request),
+                    |()| port.borrow_mut().execute(),
+                )
             }
         }
         fn request(environment: bool) -> Request<'static> {
@@ -1380,11 +1338,7 @@ mod service {
                         phases: Some(Rc::clone(&phases)),
                         ..Default::default()
                     };
-                    let result = domain_entry::domain(
-                        request(environment),
-                        &mut port,
-                        Scope::new(&observer),
-                    );
+                    let result = port.domain(request(environment), Scope::new(&observer));
                     match failure {
                         None => assert!(result.is_ok()),
                         Some(stage) => {
@@ -1432,31 +1386,22 @@ mod service {
             }
         }
         #[test]
-        fn both_entry_points_select_the_route_from_the_explicit_environment() {
-            for (environment, compilation, check, build) in [
-                (false, "plain compilation", "plain check", "plain build"),
-                (
-                    true,
-                    "project compilation",
-                    "project check",
-                    "project build",
-                ),
-            ] {
+        fn both_entry_points_take_one_route_with_or_without_an_environment() {
+            for environment in [false, true] {
                 let mut port = Fake::default();
-                assert!(domain_entry::check(request(environment), &mut port).is_ok());
+                assert!(port.prepare(request(environment)).is_ok());
+                assert!(port.check().is_ok());
                 let mut expected = vec!["root admission"];
                 if environment {
                     expected.push("environment");
                 }
-                expected.extend(["entry", "snapshot verification", compilation, check]);
+                expected.extend(["entry", "snapshot verification", "compilation", "check"]);
                 assert_eq!(port.events, expected);
                 port.events.clear();
-                assert!(
-                    domain_entry::domain(request(environment), &mut port, Scope::default()).is_ok()
-                );
+                assert!(port.domain(request(environment), Scope::default()).is_ok());
                 expected.pop();
                 expected.extend([
-                    build,
+                    "build",
                     "lock",
                     "function tests",
                     "study capture",
@@ -1475,7 +1420,7 @@ mod service {
                 "environment",
                 "entry",
                 "snapshot verification",
-                "project compilation",
+                "compilation",
                 "lock",
                 "function tests",
                 "study capture",
@@ -1489,8 +1434,7 @@ mod service {
                     failure: Some((stage, Original(Rc::clone(&marker)))),
                     ..Default::default()
                 };
-                let Err(error) = domain_entry::domain(request(true), &mut port, Scope::default())
-                else {
+                let Err(error) = port.domain(request(true), Scope::default()) else {
                     panic!("scripted failure")
                 };
                 assert!(Rc::ptr_eq(&marker, &error.0));
@@ -1501,7 +1445,7 @@ mod service {
                         | "environment"
                         | "entry"
                         | "snapshot verification"
-                        | "project compilation"
+                        | "compilation"
                         | "lock"
                         | "function tests"
                 ) {
