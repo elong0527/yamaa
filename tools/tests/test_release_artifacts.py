@@ -161,6 +161,31 @@ def example_name(asset, identity):
     )
 
 
+def r_binary_description(asset, version):
+    """The DESCRIPTION that R CMD INSTALL --build writes into a binary package.
+
+    The Built field names the R and the platform of the build: macOS adds the
+    Darwin version to the platform that the asset declares, and R for
+    Windows writes the file with CRLF line ends.
+    """
+    if asset.file.endswith(".zip"):
+        built, newline = f"{asset.built}; 2026-01-01 00:00:00 UTC; windows", "\r\n"
+    else:
+        built, newline = f"{asset.built}20; 2026-01-01 00:00:00 UTC; unix", "\n"
+    fields = ["Package: yamaa", f"Version: {version}", f"Built: {built}"]
+    return "".join(field + newline for field in fields).encode()
+
+
+def r_binary(path, members):
+    """Write an R binary package: a ZIP on Windows, a gzipped tar on macOS."""
+    if path.suffix == ".zip":
+        with zipfile.ZipFile(path, "w") as archive:
+            for name, payload in members.items():
+                archive.writestr(name, payload)
+    else:
+        tar(path, members)
+
+
 def downloads(root, identity=IDENTITY):
     """Write each release artifact as the native run uploads it."""
     licenses = {name: (ROOT / "python" / name).read_bytes() for name in NOTICES}
@@ -199,6 +224,22 @@ def downloads(root, identity=IDENTITY):
                     **{
                         f"yamaa-{python}/{name}": payload
                         for name, payload in sdist_licenses.items()
+                    },
+                },
+            )
+        elif asset.kind == "r-binary":
+            # R installs the notices of inst/ at the package root.
+            r_binary(
+                path,
+                {
+                    "yamaa/DESCRIPTION": r_binary_description(asset, r),
+                    "yamaa/LICENSE": (
+                        b"YEAR: 2026\nCOPYRIGHT HOLDER: yamaa contributors\n"
+                    ),
+                    "yamaa/libs/yamaa": b"independent native fixture\0"
+                    + asset.artifact.encode(),
+                    **{
+                        f"yamaa/{name}": payload for name, payload in r_licenses.items()
                     },
                 },
             )
@@ -593,6 +634,114 @@ class DownloadedPackages(unittest.TestCase):
             finally:
                 path.write_bytes(original)
         self.assertEqual(len(self.select()), len(ASSETS))
+
+    def test_r_binaries_carry_their_version_build_and_notices(self):
+        """Each R binary package names its release, its R and its platform."""
+        assets = [asset for asset in ASSETS if asset.kind == "r-binary"]
+        self.assertTrue(assets)
+
+        def r_of(asset):
+            return asset.built.split(";")[0]
+
+        for asset in assets:
+            path = self.directory / asset.artifact / example_name(asset, IDENTITY)
+            original = path.read_bytes()
+            members = self.read(path)
+            description = members["yamaa/DESCRIPTION"]
+            extension = path.suffix
+            other_r = next(
+                other
+                for other in assets
+                if other.file.endswith(extension) and r_of(other) != r_of(asset)
+            )
+            other_platform = next(
+                other
+                for other in assets
+                if not other.file.endswith(extension) and r_of(other) == r_of(asset)
+            )
+            moved = {
+                name.replace("yamaa/", "yamaa/inst/", 1)
+                if name.startswith("yamaa/LICENSE-")
+                else name: payload
+                for name, payload in members.items()
+            }
+            for defect, replaced, error in (
+                (
+                    "another version",
+                    dict(
+                        members,
+                        **{
+                            "yamaa/DESCRIPTION": description.replace(
+                                f"Version: {R_VERSION}".encode(),
+                                f"Version: {OTHER_VERSION}".encode(),
+                            )
+                        },
+                    ),
+                    "R DESCRIPTION",
+                ),
+                (
+                    "no build",
+                    dict(
+                        members,
+                        **{"yamaa/DESCRIPTION": description.split(b"Built:")[0]},
+                    ),
+                    "not built with",
+                ),
+                (
+                    "another R series",
+                    dict(
+                        members,
+                        **{
+                            "yamaa/DESCRIPTION": r_binary_description(
+                                other_r, R_VERSION
+                            )
+                        },
+                    ),
+                    "not built with",
+                ),
+                (
+                    "another platform",
+                    dict(
+                        members,
+                        **{
+                            "yamaa/DESCRIPTION": r_binary_description(
+                                other_platform, R_VERSION
+                            )
+                        },
+                    ),
+                    "not built with",
+                ),
+                ("notices left in inst", moved, "required notice"),
+            ):
+                r_binary(path, replaced)
+                try:
+                    with (
+                        self.subTest(asset=asset.title, defect=defect),
+                        self.assertRaisesRegex(ValueError, error),
+                    ):
+                        self.select()
+                finally:
+                    path.write_bytes(original)
+        self.assertEqual(len(self.select()), len(ASSETS))
+        # The source package is never a built one.
+        r_source = next(self.directory.rglob(f"yamaa_{R_VERSION}.tar.gz"))
+        members = self.read(r_source)
+        members["yamaa/DESCRIPTION"] += f"Built: {assets[0].built}; x; unix\n".encode()
+        tar(r_source, members)
+        with self.assertRaisesRegex(ValueError, "is a built package"):
+            self.select()
+
+    def read(self, path):
+        """Read every regular member of a package archive."""
+        if path.suffix == ".zip":
+            with zipfile.ZipFile(path) as archive:
+                return {name: archive.read(name) for name in archive.namelist()}
+        with tarfile.open(path) as archive:
+            return {
+                entry.name: archive.extractfile(entry).read()
+                for entry in archive
+                if entry.isfile()
+            }
 
     def test_symlinks_or_subdirectories_are_not_release_assets(self):
         extra = self.directory / self.selected[0]["name"] / "unexpected"
@@ -1626,8 +1775,27 @@ class ReleaseAssetDeclaration(unittest.TestCase):
             next(asset for asset in ASSETS if asset.kind == kind)
             for kind in ("wheel", "sdist", "r-source")
         )
+        r_binary = next(
+            asset
+            for asset in ASSETS
+            if asset.kind == "r-binary"
+            and asset.producer
+            == f"native-r-binary (windows-2025, R {MATRIX.R_RELEASE})"
+        )
+        series = MATRIX.r_series(MATRIX.R_RELEASE)
+        older = MATRIX.r_series(MATRIX.R_OLDREL)
         candidate = Identity("1.0.0", 1)
         for asset, accepted, refused in [
+            (
+                r_binary,
+                [f"yamaa_1.0.0-{series}.zip"],
+                [
+                    "yamaa_1.0.0.zip",
+                    f"yamaa_1.0.0rc1-{series}.zip",
+                    f"yamaa_1.0.0-{older}.zip",
+                    f"yamaa_1.0.0-{series}.tgz",
+                ],
+            ),
             (
                 sdist,
                 ["yamaa-1.0.0rc1.tar.gz"],
@@ -1657,13 +1825,66 @@ class ReleaseAssetDeclaration(unittest.TestCase):
                     self.assertFalse(pattern.fullmatch(name))
 
     def test_each_release_artifact_has_one_producer(self):
+        coverage = MATRIX.coverage()
+        binaries = len(coverage["r_binary"]["os"]) * len(coverage["r_binary"]["r"])
         self.assertEqual(
             len(release_assets.artifacts(ASSETS)),
-            len(MATRIX.coverage()["build"]["include"]) + 1,
+            len(coverage["build"]["include"]) + 1 + binaries,
         )
         clash = release_assets.Asset("wheel", "clash", "x", ASSETS[0].artifact, "other")
         with self.assertRaisesRegex(ValueError, "two producing jobs"):
             release_assets.artifacts([*ASSETS, clash])
+
+    def test_one_r_binary_per_platform_and_r_series(self):
+        # #3030 D48: R-release and R-oldrel on Windows x64 and macOS arm64.
+        coverage = MATRIX.coverage()
+        expected = {
+            (platform, version)
+            for platform in coverage["r_binary"]["os"]
+            for version in coverage["r_binary"]["r"]
+        }
+        binaries = [asset for asset in ASSETS if asset.kind == "r-binary"]
+        self.assertEqual(len(binaries), len(expected))
+        for asset in binaries:
+            platform, version = re.fullmatch(
+                r"native-r-binary \((\S+), R (\S+)\)", asset.producer
+            ).groups()
+            label, extension, r_platform = release_assets.R_BINARY_PLATFORMS[platform]
+            series = MATRIX.r_series(version)
+            with self.subTest(asset=asset.title):
+                self.assertIn((platform, version), expected)
+                self.assertEqual(
+                    asset.title, f"R binary package for {label}, R {series}"
+                )
+                self.assertEqual(asset.file, f"yamaa_<R version>-{series}.{extension}")
+                self.assertEqual(asset.built, f"R {version}; {r_platform}")
+                self.assertEqual(
+                    asset.artifact, f"native-r-binary-{platform}-{version}"
+                )
+        # Only R binary packages declare a build.
+        self.assertEqual(
+            {asset.kind for asset in ASSETS if asset.built is not None}, {"r-binary"}
+        )
+
+    def test_install_packages_reads_each_r_binary_name_as_the_package(self):
+        # install.packages(path, repos = NULL) takes the package name from the
+        # file name and reads that directory of the archive. R for Windows
+        # drops ".zip" and then a final "_" with digits, dots and hyphens; R
+        # for macOS drops ".tgz" and then everything from the first "_"
+        # (utils:::.install.winbinary and utils:::.install.macbinary). Given
+        # one file, install.packages() infers a Windows binary package from
+        # ".zip" and a macOS one from ".tgz".
+        rules = {
+            ".zip": lambda name: re.sub(r"_[0-9.-]+$", "", name[: -len(".zip")]),
+            ".tgz": lambda name: re.sub(r"_.*$", "", name[: -len(".tgz")]),
+        }
+        for identity in (IDENTITY, Identity("1.0.0", 1), Identity("1.0.0")):
+            for asset in ASSETS:
+                if asset.kind != "r-binary":
+                    continue
+                name = example_name(asset, identity)
+                with self.subTest(name=name):
+                    self.assertEqual(rules[Path(name).suffix](name), "yamaa")
 
     def test_matching_needs_one_file_per_asset_and_no_other_file(self):
         paths = [Path(example_name(asset, IDENTITY)) for asset in ASSETS]

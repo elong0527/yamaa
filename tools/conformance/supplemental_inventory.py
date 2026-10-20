@@ -725,7 +725,7 @@ def main(argv=None):
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--artifact-reference")
     parser.add_argument("--host-artifact-reference")
-    parser.add_argument("--package-form", choices=("wheel", "source"))
+    parser.add_argument("--package-form", choices=("wheel", "source", "binary"))
     parser.add_argument("--evidence", required=True)
     args = parser.parse_args(argv)
     root = args.root.resolve()

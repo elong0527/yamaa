@@ -37,25 +37,49 @@ specification item means.
 
 ## Installation
 
-The package is distributed as a source tarball attached to each
-[GitHub release](https://github.com/elong0527/yamaa/releases). Download
-`yamaa_0.4.0.tar.gz` from the selected release, then install it:
+From the 1.0.0 release candidates on, each
+[GitHub release](https://github.com/elong0527/yamaa/releases) carries binary
+packages for Windows x64 and macOS arm64, built for R-release and R-oldrel,
+today R 4.6 and R 4.5. They install without Rust, Rtools or a network. A
+binary package works only with the R series that ends its file name, so
+download the one for your platform and R from the selected release, and
+install it with the line for that file:
 
 ```r
-install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
+# Windows x64
+install.packages("yamaa_<version>-4.6.zip", repos = NULL)  # R 4.6
+install.packages("yamaa_<version>-4.5.zip", repos = NULL)  # R 4.5
+# macOS arm64
+install.packages("yamaa_<version>-4.6.tgz", repos = NULL)  # R 4.6
+install.packages("yamaa_<version>-4.5.tgz", repos = NULL)  # R 4.5
 ```
 
-Installation compiles the Rust engine, so it needs R 4.4.0 or later, a C
-compiler, and Cargo and rustc 1.82 or later, from [rustup](https://rustup.rs/)
-or from system packages that are that recent. The build uses your default
-Rust toolchain, found on the PATH or in `~/.cargo/bin`, and rustup installs
-none; installation stops first, with advice, when Cargo or rustc is missing
-or older. On Windows, also install Rtools45 and the `x86_64-pc-windows-gnu`
-target: `rustup target add x86_64-pc-windows-gnu`. The archive carries the
-locked Rust crates, so installation needs no network; it compiles with two
-jobs and writes nothing outside its build directory and the temporary
-directory. The [release guidance](../../docs/release.md#supported-platforms)
-lists the supported platforms.
+On Linux, with any other R series, such as R 4.4, and for 0.5.0 and
+earlier, install the source package `yamaa_<version>.tar.gz` from the same
+release:
+
+```r
+install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
+```
+
+Once CRAN accepts 1.0.0, `install.packages("yamaa")` installs it from there
+too.
+
+Installing the source package compiles the Rust engine, so it needs R 4.4.0
+or later, a C compiler, and Cargo and rustc 1.82 or later, from
+[rustup](https://rustup.rs/) or from system packages that are that recent.
+The build uses your default Rust toolchain, found on the PATH or in
+`~/.cargo/bin`, and rustup installs none; installation stops first, with
+advice, when Cargo or rustc is missing or older. On Windows, also install
+Rtools45 and the `x86_64-pc-windows-gnu` target:
+`rustup target add x86_64-pc-windows-gnu`. The archive carries the locked
+Rust crates, so installation needs no network; it compiles with two jobs and
+writes nothing outside its build directory and the temporary directory. A
+Linux machine without such a Rust can take the offline toolchain route:
+install Rust from its standalone installers, carried in, without rustup or a
+network ([#3107](https://github.com/elong0527/yamaa/issues/3107)). The
+[release guidance](../../docs/release.md#supported-platforms) lists the
+supported platforms.
 
 The `R/yamaa/` directory lacks the shared Rust sources, so it cannot be
 installed directly, for example with `remotes::install_github()`. From a
