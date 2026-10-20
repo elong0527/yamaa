@@ -1,6 +1,6 @@
 use crate::support::project_call_compiler as support;
 use std::collections::BTreeSet;
-use support::{call, function, specification, specification_with_rows, Tree};
+use support::{call, definition, function, specification, specification_with_rows, Tree};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
     diagnostic::ConditionCode,
@@ -84,6 +84,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let undeclared = Environment::admit(
         Language::R,
         Draft {
+            surface: yamaa_core::ast::Surface::V0_5,
             language: None,
             lock: None,
             functions: None,
@@ -127,6 +128,52 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     );
     assert_eq!(diagnostic.source_span, None);
     assert_eq!(diagnostic.operand_route, None);
+    reached.insert(diagnostic.code);
+    // A 1.0 function file that names no callable for the host language is
+    // admitted, and each call of it fails before any data is read (FUNC-1).
+    let unimplemented = Environment::admit(
+        Language::Python,
+        Draft {
+            surface: yamaa_core::ast::Surface::V1 { minor: 0 },
+            language: Some(Language::Python),
+            lock: None,
+            functions: Some(vec![definition("id").file(&[(Language::R, "project::id")])]),
+            codelists: vec![],
+        },
+    )
+    .unwrap()
+    .into_execution();
+    let Err(PrepareError::Invalid(findings)) =
+        PreparedSpecification::prepare_with_environment(&spec, &unimplemented)
+    else {
+        panic!("missing implementation cause")
+    };
+    assert_eq!(findings.len(), 1);
+    let diagnostic = findings[0].diagnostic();
+    assert_eq!(
+        (
+            diagnostic.definition().phase,
+            diagnostic.definition().condition,
+            diagnostic.definition().rule
+        ),
+        (
+            "validation",
+            "function_implementation_missing",
+            Some("FUNC-1")
+        )
+    );
+    assert_eq!(
+        diagnostic.spec_paths,
+        ["columns.VALUE.derivation.function.name"]
+    );
+    assert_eq!(
+        diagnostic.context,
+        [
+            ("function".into(), JsonValue::String("id".into())),
+            ("language".into(), JsonValue::String("python".into())),
+        ]
+        .into()
+    );
     reached.insert(diagnostic.code);
     let source = Tree::map(vec![(
         "source",

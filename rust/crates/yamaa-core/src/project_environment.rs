@@ -1,6 +1,6 @@
 //! Typed static environment admission without code, lock-version or study ports.
 use crate::{
-    ast,
+    ast::{self, Surface},
     project_function::{self, Language},
     project_terminology,
 };
@@ -29,8 +29,13 @@ pub enum Submission {
 /// only submission composition requires them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Draft {
-    /// The `environments` key the project links for the host. Absent when the
-    /// project names no environment file for the host language.
+    /// The surface the project file is written in. A 0.5 lock is declared by
+    /// the linked environment file, and a 1.0 lock by the project file (D8).
+    pub surface: Surface,
+    /// The `environments` key the project links for the host. Absent when a
+    /// 0.5 project names no environment file for the host language; a 1.0
+    /// project's is always the host's, since one host language runs a whole
+    /// build and its function files are language-neutral (D8).
     pub language: Option<Language>,
     pub lock: Option<LockReference>,
     pub functions: Option<Vec<ast::Function>>,
@@ -157,6 +162,7 @@ impl Environment {
     /// this conversion grants neither code execution nor study authority.
     pub fn into_execution(self) -> ExecutionEnvironment {
         let Draft {
+            surface: _,
             language,
             lock,
             functions,

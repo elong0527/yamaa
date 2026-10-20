@@ -52,6 +52,8 @@ conditions:
   forward_reference: {phases: [validation]}
   function_call_failed: {phases: [derivation, validation]}
   function_conformance_failed: {phases: [validation]}
+  function_file_invalid: {phases: [validation]}
+  function_implementation_missing: {phases: [validation]}
   incomparable_range_types: {phases: [validation]}
   incomparable_sources: {phases: [validation]}
   incompatible_input_type: {phases: [validation]}
