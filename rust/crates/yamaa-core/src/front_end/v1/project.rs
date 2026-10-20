@@ -566,6 +566,66 @@ mod tests {
     }
 
     #[test]
+    fn define_names_a_1_0_section_s_guide_by_its_place_in_standards() {
+        // The guide composition binds is the first of `standards` (D16); one
+        // outside the section's model is reported there (SUB-3).
+        let tree = with_header(
+            "project",
+            vec![
+                (
+                    "study",
+                    Tree::map(vec![
+                        ("id", Tree::text("STUDY01")),
+                        ("name", Tree::text("STUDY01")),
+                        ("description", Tree::text("Study")),
+                        ("protocol_name", Tree::text("STUDY-01")),
+                    ]),
+                ),
+                (
+                    "sdtm",
+                    Tree::map(vec![
+                        ("specs", Tree::list(vec![Tree::text("dm.yaml")])),
+                        (
+                            "standards",
+                            Tree::list(vec![Tree::map(vec![
+                                ("name", Tree::text("ADaMIG")),
+                                ("version", Tree::text("1.3")),
+                                ("status", Tree::text("Final")),
+                            ])]),
+                        ),
+                        ("define", Tree::text("out/define.xml")),
+                    ]),
+                ),
+            ],
+        );
+        let project = project(&tree.document(), None).unwrap();
+        let declarations = project.submission.as_ref().unwrap();
+        let required = crate::submission_composition::Required::admit(
+            declarations.study.as_ref(),
+            declarations.sections.first(),
+            crate::project_environment::Submission::Sdtm,
+            project.header.surface,
+        )
+        .unwrap();
+        let Err(findings) = crate::submission_composition::compose(
+            required,
+            &crate::project_terminology::Catalogue::from_admitted(Vec::new()),
+            &[],
+            &[],
+            "1.0",
+            "2026-10-20T00:00:00",
+        ) else {
+            panic!("a guide of another model")
+        };
+        assert!(
+            findings.iter().any(|finding| finding.code
+                == crate::diagnostic::ConditionCode::SubmissionStandardFamily
+                && finding.path == "sdtm.standards[0].name"),
+            "{findings:?}"
+        );
+    }
+
+    #[test]
     fn a_function_file_names_its_function_and_types_its_values_by_declaration() {
         let tree = function_file(
             Tree::text("2024-01-01"),

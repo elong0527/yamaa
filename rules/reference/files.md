@@ -253,8 +253,9 @@ Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_
 An implementation may validate once and run many times. Each such run, before
 it activates a project function or reads an input record, verifies every file
 the validation read: the specification, its layers, dictionaries and linked
-producing specifications, the project file, and the environment file with the
-lock, function definitions and codelists it declares. A file that changed
+producing specifications, and the project file with the function files, lock
+and codelists it declares (for a project file that declares `schema_version`,
+the environment file with its lock and function definitions). A file that changed
 fails that run with `resource_path_content_changed`, naming the field that
 declared it and the path as written. The run neither reads the replacement
 nor validates it in its place.

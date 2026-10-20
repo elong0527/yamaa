@@ -1673,6 +1673,9 @@ pub struct Required<'a> {
     pub section: &'a ast::Section,
     pub standard: &'a ast::ImplementationGuide,
     pub define: &'a ast::Text,
+    /// The surface the project is written in, which spells the guide's path:
+    /// `standard` in 0.5, `standards[0]` in 1.0.
+    pub surface: ast::Surface,
 }
 impl<'a> Required<'a> {
     /// A section admits for runs with only its `specs`. Composition requires the
@@ -1701,6 +1704,7 @@ impl<'a> Required<'a> {
                 section,
                 standard,
                 define,
+                surface,
             });
         }
         let mut findings = Vec::new();
@@ -1742,6 +1746,7 @@ pub fn compose(
         section,
         standard: guide_declaration,
         define,
+        surface,
     } = required;
     let mut findings = Vec::new();
     let specifications: Vec<&Document> = inputs
@@ -1772,11 +1777,13 @@ pub fn compose(
         Submission::Send => guide.starts_with("SENDIG"),
     };
     if !compatible {
-        fail(
-            ConditionCode::SubmissionStandardFamily,
-            "standard.name",
-            guide,
-        );
+        // The guide composition binds: 0.5's one `standard`, or the first of
+        // a 1.0 section's `standards` (D16).
+        let path = match surface {
+            ast::Surface::V0_5 => "standard.name",
+            ast::Surface::V1 { .. } => "standards[0].name",
+        };
+        fail(ConditionCode::SubmissionStandardFamily, path, guide);
     }
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
         fail(

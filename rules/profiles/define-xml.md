@@ -23,8 +23,8 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.r
 
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
-and a directory listing is not one. Composition requires the `study`,
-`standard` and `define` that a run of the same project does not
+and a directory listing is not one. Composition requires the `study`, the
+section's `standards` and `define` that a run of the same project does not
 ([DEFINE-28](#define-28)).
 
 <a id="define-2"></a>
@@ -90,7 +90,7 @@ requirements a regulator imposes. Under `Submission`:
   written, so [DEFINE-22](#define-22) must admit every name;
 - every dataset's `submission.label` and every column's `label` is at most 40
   characters of printable ASCII ([XPT-5](xpt.md#xpt-5));
-- when the section declares `datasets`, every published text value is
+- when the section declares `transport`, every published text value is
   printable ASCII of at most 200 bytes ([XPT-7](xpt.md#xpt-7)), for a
   Dataset-JSON file as for a SAS Transport file;
 - every dataset carries a `def:ArchiveLocationID`, unless it declares
