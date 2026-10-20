@@ -19,8 +19,8 @@
 //! with the same comments and a second pass changes nothing, and the table
 //! lists what remains. These named files are the only writes outside a
 //! specification's declared outputs. A file that cannot be read or admitted
-//! as YAML refuses the whole call with the issue that says why, before any
-//! file is written.
+//! as YAML, or a directory that cannot be listed, refuses the whole call with
+//! the issue that says why, before any file is written.
 
 use crate::api::Failure;
 use crate::diagnostic::Report;

@@ -25,8 +25,8 @@ field or an entry suppresses the named findings within it.
 A data frame with one row per finding that remains and the columns
 \code{file} (the absolute path, with forward slashes), \code{line},
 \code{column}, \code{finding}, \code{spec_path} and \code{message}. A file
-that cannot be read or parsed raises a condition of class
-\code{yamaa_error}, and nothing is written.
+that cannot be read or parsed, or a directory that cannot be listed, raises a
+condition of class \code{yamaa_error}, and nothing is written.
 }
 \examples{
 \dontrun{

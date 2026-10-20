@@ -42,10 +42,10 @@ for the root) and a message.
 
 A directory expands to the specification files beneath it, in sorted path
 order; rows follow the files, then line, column and finding. A file that
-cannot be read or parsed refuses the call with the issue that says why, and
-nothing is written. Repository validation reports every finding in a
-benchmark specification as a failure; elsewhere the check runs when a project
-runs it.
+cannot be read or parsed, or a directory that cannot be listed, refuses the
+call with the issue that says why, and nothing is written. Repository
+validation reports every finding in a benchmark specification as a failure;
+elsewhere the check runs when a project runs it.
 
 ## Field order
 
