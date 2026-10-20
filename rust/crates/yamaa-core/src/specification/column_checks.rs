@@ -5,6 +5,7 @@ use crate::{
     conversion::convert,
     dataset::Check,
     diagnostic::ConditionCode,
+    schema::DocumentNode as N,
     value::{compare_present, Value},
 };
 

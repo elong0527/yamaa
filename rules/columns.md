@@ -298,7 +298,7 @@ with several placeholders, it fires when any input is missing. `invalid`,
 `unmapped` and `str_extract`'s `no_match` fire only when every input is
 present.
 
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::absent_answers_an_unknown_variable_only_on_the_0_5_surface`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::absent_answers_an_unknown_variable_only_on_the_0_5_surface`, `rust/crates/yamaa-core/src/specification/source_expressions/mod.rs::absent_answers_a_missing_variable_only_on_the_0_5_surface`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
 
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition

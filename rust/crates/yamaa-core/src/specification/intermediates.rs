@@ -515,17 +515,9 @@ impl Declarations {
         self.0.iter().any(|declaration| declaration.path == path)
     }
 
-    /// Each intermediate's name and path with its derivations.
-    pub(super) fn audit_entries(
-        &self,
-    ) -> impl Iterator<Item = (&str, &str, &[intermediate_derivations::Derivation])> {
-        self.0.iter().map(|item| {
-            (
-                item.name.as_str(),
-                item.path.as_str(),
-                &item.derivations[..],
-            )
-        })
+    /// Each intermediate's name, in the order the intermediates are derived.
+    pub(super) fn names(&self) -> impl Iterator<Item = &str> {
+        self.0.iter().map(|item| item.name.as_str())
     }
     pub(super) fn for_reader(&self, reader: &str) -> Self {
         Self(std::sync::Arc::clone(&self.0), Some(reader.into()))
@@ -662,84 +654,93 @@ impl Declarations {
             .find(|(name, _)| name == field)
             .map(|(_, declaration)| declaration)
     }
-    fn prepare_unique_checks(
-        d: &Document,
-        id: usize,
-        path: &str,
+    /// The intermediates a derivation may classify as named: all of them,
+    /// or inside an intermediate's own derivations those derived before it.
+    fn earlier(&self) -> &[Declaration] {
+        match &self.1 {
+            Some(reader) => {
+                let end = self
+                    .0
+                    .iter()
+                    .position(|item| item.name == *reader)
+                    .unwrap_or(self.0.len());
+                &self.0[..end]
+            }
+            None => &self.0,
+        }
+    }
+    /// Whether `name` is an intermediate derived before the reading one.
+    pub(super) fn earlier_contains(&self, name: &str) -> bool {
+        self.earlier().iter().any(|item| item.name == name)
+    }
+    /// Whether `name` is a `keep`-declared intermediate derived before the
+    /// reading one.
+    pub(super) fn earlier_kept(&self, name: &str) -> bool {
+        self.earlier()
+            .iter()
+            .any(|item| item.name == name && item.keep.is_some())
+    }
+    fn unique_checks(
+        spec: &ast::Spec,
+        item: &ast::Intermediate,
     ) -> Result<UniqueDeclarations, PrepareError> {
         let mut unique = Vec::new();
-        if let Some(checks) = d
-            .field(id, "verifications")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            let mut identities = std::collections::BTreeSet::new();
-            for (check_index, &check) in sequence(d, checks)?.iter().enumerate() {
-                let payload = field(d, check, "unique")?;
-                let check_path = format!("{path}.verifications[{check_index}].unique");
-                let identity = d
-                    .field(payload, "id")
-                    .map(|id| text(d, id).map(String::from))
-                    .transpose()?;
-                if let Some(identity) = &identity {
-                    if !identities.insert(identity.clone()) {
-                        let mut finding = LookupFinding::new(
-                            &format!("{check_path}.id"),
-                            crate::diagnostic::ConditionCode::VerificationIdentifierRepeated,
-                        );
-                        finding.text("identifier", identity);
-                        return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
-                            finding.diagnostic(),
-                        )]));
-                    }
+        let mut identities = std::collections::BTreeSet::new();
+        for check in &item.checks {
+            if let Some(identity) = &check.id {
+                if !identities.insert(identity.text.clone()) {
+                    let mut finding = LookupFinding::new(
+                        &checks::render(spec, identity.meta),
+                        crate::diagnostic::ConditionCode::VerificationIdentifierRepeated,
+                    );
+                    finding.text("identifier", &identity.text);
+                    return Err(PrepareError::Invalid(vec![PreflightFinding::Scalar(
+                        finding.diagnostic(),
+                    )]));
                 }
-                let columns = sequence(d, field(d, payload, "columns")?)?
-                    .iter()
-                    .enumerate()
-                    .map(|(index, &id)| {
-                        text(d, id)
-                            .map(|name| (name.into(), format!("{check_path}.columns[{index}]")))
-                    })
-                    .collect::<Result<_, _>>()?;
-                unique.push((check_path, columns, identity));
             }
+            let columns = check
+                .columns
+                .iter()
+                .map(|column| (column.name.clone(), checks::render(spec, column.meta)))
+                .collect();
+            unique.push((
+                checks::render(spec, check.meta),
+                columns,
+                check.id.as_ref().map(|identity| identity.text.clone()),
+            ));
         }
         Ok(unique)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Each named intermediate, in the order its derivations need, admitted
+    /// before any source is read. A dataset or key outside what binding
+    /// supports is collected in `extra`.
     pub fn prepare(
-        d: &Document,
-        tree: &crate::ast::Spec,
+        spec: &ast::Spec,
         sources: &[SourceDeclaration],
-        driver: usize,
         output: &TableSchema,
         keys: &[usize],
         project: Option<&functions::Prepared>,
-        extraction: &str_extract::Prepared,
-        templates: &str_template::Prepared,
         extra: &mut Vec<UnsupportedFeature>,
     ) -> Result<Self, PrepareError> {
         let mut result = Self::default();
-        let Some(id) = d
-            .field(d.root(), "intermediates")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        else {
+        if spec.intermediates.is_empty() {
             return Ok(result);
-        };
-        let items = sequence(d, id)?;
-        if items.len() > crate::limits::Limits::COLUMNS {
+        }
+        if spec.intermediates.len() > crate::limits::Limits::COLUMNS {
             return Err(PrepareError::limit(
                 "intermediates",
                 crate::limits::Limits::COLUMNS,
-                Some(items.len()),
+                Some(spec.intermediates.len()),
                 None,
             ));
         }
-        let findings = checks::lookups::self_findings(tree);
+        let findings = checks::lookups::self_findings(spec);
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        let findings = checks::lookups::admission_findings(tree, d, items)?;
+        let findings = checks::lookups::admission_findings(spec);
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -751,170 +752,125 @@ impl Declarations {
             )
             .map_err(|_| PrepareError::Internal)?,
         );
-        let order = derivation_order(d, items, project, templates)?;
-        for index in order {
-            let id = items[index];
-            let path = format!("intermediates[{index}]");
-            let name = text(d, field(d, id, "id")?)?;
-            let row_driver = d
-                .field(d.root(), "rows")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|rows| sequence(d, rows))
-                .transpose()?
-                .is_some_and(|rows| {
-                    rows.iter().any(|&row| {
-                        d.field(row, "dataset")
-                            .is_some_and(|node| text(d, node).is_ok_and(|driver| driver == name))
-                    })
-                });
+        let calls = project.is_some();
+        for index in derivation_order(spec, calls)? {
+            let item = &spec.intermediates[index];
+            let path = checks::render(spec, item.meta);
+            let name = item.id.name.as_str();
+            let row_driver = spec.rows.templates.iter().any(|template| {
+                template
+                    .driver
+                    .as_ref()
+                    .is_some_and(|driver| driver.name == name)
+            });
             let driver_keys = row_driver.then(|| std::sync::Arc::clone(&driver_key_schema));
-            let range = intermediate_range::prepare(d, id, &path, name)?;
-            let columns = intermediate_range::prepare_columns(d, id)?;
-            let dataset = text(d, field(d, id, "dataset")?)?;
-            let source = if dataset == "SELF" && present(d, d.root(), "rows") {
+            let range = intermediate_range::prepare(spec, item)?;
+            let columns = intermediate_range::prepare_columns(item)?;
+            let dataset = item.dataset.name.as_str();
+            let source = if dataset == "SELF" && !spec.rows.templates.is_empty() {
                 self_relations::Relation::SelfRows
             } else if let Some(source) = sources.iter().position(|source| source.name == dataset) {
                 self_relations::Relation::Input(source)
             } else {
-                reject(extra, "intermediate_dataset", format!("{path}.dataset"));
+                reject(
+                    extra,
+                    "intermediate_dataset",
+                    checks::render(spec, item.dataset.meta),
+                );
                 continue;
             };
-            let keys = if let Some(key) = d
-                .field(id, "key")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                if !matches!(d.nodes()[key], N::Mapping(_) | N::Sequence(_)) {
-                    reject(extra, "intermediate_key", format!("{path}.key"));
-                    continue;
-                }
-                if matches!(d.nodes()[key], N::Sequence(_)) {
-                    let fields = sequence(d, key)?;
-                    if fields.len() > crate::limits::Limits::KEYS {
+            let keys = match &item.key {
+                Some(ast::JoinKey::Columns { columns, meta }) => {
+                    if columns.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
                             crate::limits::Limits::KEYS,
-                            Some(fields.len()),
-                            Some(&format!("{path}.key")),
+                            Some(columns.len()),
+                            Some(&checks::render(spec, *meta)),
                         ));
                     }
                     Some(
-                        fields
+                        columns
                             .iter()
-                            .map(|&id| {
-                                text(d, id).map(|name| {
-                                    (
-                                        name.into(),
-                                        match_values::Declaration::Variable(name.into()),
-                                    )
-                                })
+                            .map(|column| {
+                                (
+                                    column.name.clone(),
+                                    match_values::Declaration::Variable(column.name.clone()),
+                                )
                             })
-                            .collect::<Result<Vec<_>, _>>()?,
+                            .collect(),
                     )
-                } else {
-                    let fields = mapping(d, key)?;
-                    if fields.len() > crate::limits::Limits::KEYS {
+                }
+                Some(ast::JoinKey::Pairs { pairs, meta }) => {
+                    if pairs.len() > crate::limits::Limits::KEYS {
                         return Err(PrepareError::limit(
                             "intermediate_keys",
                             crate::limits::Limits::KEYS,
-                            Some(fields.len()),
-                            Some(&format!("{path}.key")),
+                            Some(pairs.len()),
+                            Some(&checks::render(spec, *meta)),
                         ));
                     }
-                    if fields.is_empty() {
-                        reject(extra, "intermediate_key", format!("{path}.key"));
+                    if pairs.is_empty() {
+                        reject(extra, "intermediate_key", checks::render(spec, *meta));
                     }
-                    Some(
-                        fields
-                            .iter()
-                            .map(|&(a, b)| {
-                                let name = text(d, a)?;
-                                Ok((
-                                    name.into(),
-                                    match_values::Declaration::prepare(
-                                        d,
-                                        b,
-                                        &format!("{path}.key.{name}"),
-                                        sources,
-                                        driver,
-                                        project,
-                                        extraction,
-                                        templates,
-                                        extra,
-                                    )?,
-                                ))
-                            })
-                            .collect::<Result<Vec<_>, PrepareError>>()?,
-                    )
-                }
-            } else {
-                None
-            };
-            let mut filter_text = None;
-            let filter = if let Some(filter) = d
-                .field(id, "filter")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let expression = text(d, filter)?;
-                filter_text = Some(expression.into());
-                let compiled = compile(
-                    expression,
-                    ExpressionContext::Predicate,
-                    &format!("{path}.filter"),
-                );
-                match &compiled {
-                    Err(CompileError::Invalid { .. }) | Ok(_) => {}
-                    Err(error) => {
-                        return Err(PrepareError::expression(
-                            error.clone(),
-                            Some(&format!("{path}.filter")),
-                        ))
+                    let mut declared = Vec::new();
+                    for (field, value) in pairs {
+                        match_values::admit(
+                            spec,
+                            field.meta,
+                            *value,
+                            &checks::render(spec, field.meta),
+                            project,
+                            extra,
+                        )?;
+                        declared.push((
+                            field.name.clone(),
+                            match_values::Declaration::from_tree(spec, field.meta, *value, calls)?,
+                        ));
                     }
+                    Some(declared)
                 }
-                Some(compiled)
-            } else {
-                None
+                _ => None,
             };
-            let keep = match d
-                .field(id, "keep")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| text(d, id))
-                .transpose()?
-            {
-                Some("first") => Some(Keep::First),
-                Some("last") => Some(Keep::Last),
-                None => None,
-                _ => return Err(PrepareError::Internal),
+            derivations::predicate_limits(spec, item.filter)?;
+            let (filter_text, filter) = match item.filter.map(|filter| &spec.expr(filter).kind) {
+                Some(ExprKind::Formula(formula)) => (
+                    Some(formula.text.text.clone()),
+                    Some(formula.compiled.clone()),
+                ),
+                Some(_) => return Err(PrepareError::Internal),
+                None => (None, None),
             };
-            let mut order = Vec::new();
-            if let Some(order_id) = d
-                .field(id, "order_by")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            {
-                let terms = sequence(d, order_id)?;
-                if terms.len() > crate::limits::Limits::COLUMNS {
-                    return Err(PrepareError::limit(
-                        "intermediate_order",
-                        crate::limits::Limits::COLUMNS,
-                        Some(terms.len()),
-                        None,
-                    ));
-                }
-                for &term in terms {
-                    order.push(order_term(d, term)?);
-                }
+            let keep = item.keep.map(|keep| match keep {
+                ast::Keep::First => Keep::First,
+                ast::Keep::Last => Keep::Last,
+            });
+            if item.order_by.len() > crate::limits::Limits::COLUMNS {
+                return Err(PrepareError::limit(
+                    "intermediate_order",
+                    crate::limits::Limits::COLUMNS,
+                    Some(item.order_by.len()),
+                    None,
+                ));
             }
-            let no_match = d
-                .field(id, "no_match")
-                .map(|value| literal(d, value, &format!("{path}.no_match")))
-                .transpose()?;
-            let require_match = requires_match(d, id);
-            let unique = Self::prepare_unique_checks(d, id, &path)?;
-            let driver_prohibited = checks::lookups::driver_prohibited(d, id)
+            let order = item
+                .order_by
+                .iter()
+                .map(|term| tree_order_term(spec, term))
+                .collect::<Result<Vec<_>, _>>()?;
+            let no_match = checks::handler(spec, item.absent.as_ref())?;
+            let unique = Self::unique_checks(spec, item)?;
+            let driver_prohibited = checks::lookups::driver_prohibited(spec, item)
                 .into_iter()
                 .map(String::from)
                 .collect();
             let derivations = intermediate_derivations::prepare(
-                d, id, &path, dataset, project, extraction, templates, &result,
+                spec,
+                item,
+                &derivations::Admission {
+                    project,
+                    intermediates: &result,
+                },
             )?;
             std::sync::Arc::get_mut(&mut result.0)
                 .ok_or(PrepareError::Internal)?
@@ -928,7 +884,7 @@ impl Declarations {
                     order,
                     keep,
                     no_match,
-                    require_match,
+                    require_match: item.require_match,
                     range,
                     columns,
                     unique,
@@ -987,42 +943,31 @@ impl Declarations {
 
 /// Donor derivations may read another declared selector in either source order.
 /// Analyze their shared extracted references before any selector is bound.
-fn derivation_order(
-    d: &Document,
-    items: &[usize],
-    project: Option<&functions::Prepared>,
-    templates: &str_template::Prepared,
-) -> Result<Vec<usize>, PrepareError> {
+fn derivation_order(spec: &ast::Spec, calls: bool) -> Result<Vec<usize>, PrepareError> {
     use crate::dependency_analysis;
-    let names = items
+    let names = spec
+        .intermediates
         .iter()
-        .map(|&item| text(d, field(d, item, "id")?))
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|item| item.id.name.as_str())
+        .collect::<Vec<_>>();
     let indices = names
         .iter()
         .enumerate()
         .map(|(index, &name)| (name, index))
         .collect::<BTreeMap<_, _>>();
-    let mut graph = vec![Vec::new(); items.len()];
-    let mut sites = vec![Vec::new(); items.len()];
-    for (index, &item) in items.iter().enumerate() {
-        let Some(derivations) = d
-            .field(item, "derivations")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        else {
-            continue;
-        };
-        for &(name, handled) in mapping(d, derivations)? {
-            let path = format!("intermediates[{index}].derivations.{}", text(d, name)?);
-            let (value, expression_path) = intermediate_derivations::value(d, handled, &path)?;
-            let &[(operation, _)] = mapping(d, value)? else {
-                return Err(PrepareError::Internal);
-            };
-            let path = format!("{expression_path}.{}", text(d, operation)?);
-            let mut references = Vec::new();
-            derivations::donor_references(d, value, project, &mut references, 0)?;
-            self_relations::template_references(d, value, templates, &mut references, 0)?;
-            for reference in references {
+    let mut graph = vec![Vec::new(); names.len()];
+    let mut sites = vec![Vec::new(); names.len()];
+    // A donor window cannot read a named selector (LOOKUP-16), so its fields
+    // remain window findings rather than dependency edges.
+    let scan = reads::Scan {
+        relation: true,
+        windows: false,
+    };
+    for (index, item) in spec.intermediates.iter().enumerate() {
+        for binding in &item.bindings {
+            let expr = binding.derivation.expr;
+            let path = checks::path(spec, expr);
+            for reference in reads::names(spec, expr, scan, calls)? {
                 let Some(dependency) = reference
                     .split_once('.')
                     .and_then(|(name, _)| indices.get(name))

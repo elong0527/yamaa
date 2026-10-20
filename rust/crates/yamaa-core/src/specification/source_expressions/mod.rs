@@ -21,6 +21,10 @@ pub(super) struct Declaration {
     order: Vec<(String, bool, bool)>,
     keep: Option<crate::dataset::Keep>,
     absent: Option<Value>,
+    /// Whether `absent` also answers a variable that does not exist where
+    /// it is read, as the 0.5 surface reads it; in 1.0 such a variable fails
+    /// under NAME-3 (COLUMN-11, D67).
+    answers_unknown: bool,
     require_match: bool,
     /// Declaration defects, reported before any field is bound.
     declaration_findings: Vec<Diagnostic>,
@@ -99,95 +103,55 @@ impl Declaration {
         }
     }
 
-    pub fn prepare(
-        d: &Document,
-        payload: usize,
-        path: &str,
-        extra: &mut Vec<UnsupportedFeature>,
-        intermediates: &intermediates::Declarations,
-    ) -> Result<Self, PrepareError> {
-        if let N::Text(variable) = &d.nodes()[payload] {
-            return Ok(Self {
-                variable: variable.clone(),
-                range: None,
-                filter: None,
-                order: Vec::new(),
-                keep: None,
-                absent: None,
-                require_match: false,
-                declaration_findings: Vec::new(),
-            });
-        }
-        for &(name, _) in mapping(d, payload)? {
-            let name = text(d, name)?;
-            if ![
-                "variable",
-                "between",
-                "filter",
-                "order_by",
-                "keep",
-                "absent",
-                "require_match",
-            ]
-            .contains(&name)
-            {
-                reject(extra, name, format!("{path}.{name}"));
+    /// The source binding at `e`: a name, or a variable with its record
+    /// selection. `absent` answers a variable that does not exist only where
+    /// the spec's surface says it does (D67).
+    pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Self, PrepareError> {
+        let path = checks::path(spec, e);
+        let read = match &spec.expr(e).kind {
+            ExprKind::Ref(name) => {
+                return Ok(Self {
+                    variable: name.0.clone(),
+                    range: None,
+                    filter: None,
+                    order: Vec::new(),
+                    keep: None,
+                    absent: None,
+                    answers_unknown: false,
+                    require_match: false,
+                    declaration_findings: Vec::new(),
+                })
             }
-        }
-        let variable: String = text(d, field(d, payload, "variable")?)?.into();
-        let range = lookup_range::Declaration::prepare(d, payload, path)?;
-        let filter = if let Some(id) = d
-            .field(payload, "filter")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            let expression = text(d, id)?;
-            let compiled = if variable
-                .split_once('.')
-                .is_some_and(|(name, _)| !intermediates.contains(name))
-            {
-                Some(compile(
-                    expression,
-                    ExpressionContext::Predicate,
-                    &format!("{path}.filter"),
-                ))
-            } else {
-                None
-            };
-            match compiled.as_ref() {
-                Some(Ok(_)) | Some(Err(CompileError::Invalid { .. })) | None => {}
-                Some(Err(error)) => {
-                    return Err(PrepareError::expression(
-                        error.clone(),
-                        Some(&format!("{path}.filter")),
-                    ))
-                }
-            }
-            Some(Filter {
-                expression: expression.into(),
-                compiled,
-            })
-        } else {
-            None
+            ExprKind::Source(read) => read,
+            _ => return Err(PrepareError::Internal),
         };
-        let keep = d
-            .field(payload, "keep")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| text(d, id))
-            .transpose()?
-            .map(|value| match value {
-                "first" => crate::dataset::Keep::First,
-                "last" => crate::dataset::Keep::Last,
-                _ => unreachable!("normalized keep policy"),
-            });
-        let mut order = Vec::new();
-        if let Some(id) = d
-            .field(payload, "order_by")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            for &term in sequence(d, id)? {
-                order.push(order_term(d, term)?);
-            }
-        }
+        let variable: String = checks::name(spec, read.variable)
+            .ok_or(PrepareError::Internal)?
+            .into();
+        let range = read
+            .between
+            .as_ref()
+            .map(|between| lookup_range::Declaration::from_tree(spec, between))
+            .transpose()?;
+        let filter = read
+            .filter
+            .map(|filter| match &spec.expr(filter).kind {
+                ExprKind::Formula(formula) => Ok(Filter {
+                    expression: formula.text.text.clone(),
+                    compiled: Some(formula.compiled.clone()),
+                }),
+                _ => Err(PrepareError::Internal),
+            })
+            .transpose()?;
+        let keep = read.keep.map(|keep| match keep {
+            ast::Keep::First => crate::dataset::Keep::First,
+            ast::Keep::Last => crate::dataset::Keep::Last,
+        });
+        let order = read
+            .order_by
+            .iter()
+            .map(|term| tree_order_term(spec, term))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut declaration_findings = Vec::new();
         declaration_findings.extend(
             range
@@ -200,15 +164,11 @@ impl Declaration {
             } else {
                 ("order_by", "keep")
             };
-            lookup::selection_unpaired(path, Owner::Source(&variable), declared, missing)
+            lookup::selection_unpaired(&path, Owner::Source(&variable), declared, missing)
         }));
-        let absent = d
-            .field(payload, "absent")
-            .map(|id| literal(d, id, &format!("{path}.absent")))
-            .transpose()?;
-        let require_match = requires_match(d, payload);
+        let absent = checks::handler(spec, read.absent.as_ref())?;
         // Asserting a match and answering its absence are two absence policies.
-        if require_match && absent.is_some() {
+        if read.require_match && absent.is_some() {
             declaration_findings.push(lookup::absence_conflict(
                 format!("{path}.absent"),
                 format!("{path}.require_match"),
@@ -221,8 +181,10 @@ impl Declaration {
             filter,
             order,
             keep,
+            answers_unknown: absent.is_some()
+                && spec.header.surface.absent_answers_unknown_variable(),
             absent,
-            require_match,
+            require_match: read.require_match,
             declaration_findings,
         })
     }
@@ -619,38 +581,20 @@ pub(super) struct FirstAvailable {
     pub missing: Value,
 }
 impl FirstAvailable {
-    pub fn prepare(
-        d: &Document,
-        payload: usize,
-        path: &str,
-        extra: &mut Vec<UnsupportedFeature>,
-        intermediates: &intermediates::Declarations,
+    /// `first_available` from the tree: each source a binding, and the
+    /// value when none is present.
+    pub(super) fn from_tree(
+        spec: &ast::Spec,
+        sources: &[ExprId],
+        missing: Option<&ast::Constant>,
     ) -> Result<Self, PrepareError> {
-        for &(name, _) in mapping(d, payload)? {
-            let name = text(d, name)?;
-            if !["sources", "missing"].contains(&name) {
-                reject(extra, name, format!("{path}.{name}"));
-            }
-        }
-        let mut sources = Vec::new();
-        for (index, &operand) in sequence(d, field(d, payload, "sources")?)?
-            .iter()
-            .enumerate()
-        {
-            sources.push(Declaration::prepare(
-                d,
-                operand,
-                &format!("{path}.sources[{index}]"),
-                extra,
-                intermediates,
-            )?);
-        }
-        let missing = d
-            .field(payload, "missing")
-            .map(|id| literal(d, id, &format!("{path}.missing")))
-            .transpose()?
-            .unwrap_or(Value::Missing);
-        Ok(Self { sources, missing })
+        Ok(Self {
+            sources: sources
+                .iter()
+                .map(|&source| Declaration::from_tree(spec, source))
+                .collect::<Result<_, _>>()?,
+            missing: checks::handler(spec, missing)?.unwrap_or(Value::Missing),
+        })
     }
 }
 
@@ -721,7 +665,7 @@ fn bind_implicit_source(
                 cx.edges
                     .extend(row_intermediates::dependencies(index, items)?);
                 Some(Expression::Intermediate { index, column })
-            } else if declaration.absent.is_some() && !item.source.is_self() {
+            } else if declaration.answers_unknown && !item.source.is_self() {
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {
@@ -838,7 +782,7 @@ fn bind_implicit_source(
                         return Err(BindError::Internal)
                     }
                 }
-            } else if declaration.absent.is_some() {
+            } else if declaration.answers_unknown {
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {
@@ -863,7 +807,7 @@ fn bind_implicit_source(
                         selection,
                     })
                 }
-            } else if declaration.absent.is_some() {
+            } else if declaration.answers_unknown {
                 variable_absent = true;
                 Some(Expression::Literal(Value::Missing))
             } else {
@@ -885,7 +829,7 @@ fn bind_implicit_source(
             .validate_output(name, None, None, &[0])
             .map_err(BindError::Catalog)?
         {
-            if declaration.absent.is_none() {
+            if !declaration.answers_unknown {
                 cx.findings.push(BindFinding::OutputReference {
                     path: path.into(),
                     name: name.clone(),
@@ -899,7 +843,7 @@ fn bind_implicit_source(
         if let Some(reference_binding::Binding::Output { column, .. }) = catalog.bind(name) {
             cx.edges.push(column);
             Some(Expression::Column(column))
-        } else if declaration.absent.is_some() {
+        } else if declaration.answers_unknown {
             variable_absent = true;
             Some(Expression::Literal(Value::Missing))
         } else {
@@ -1093,5 +1037,137 @@ pub(super) fn bind_catalog_join(
             findings.push(finding);
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::front_end::v0_5::tests::{admit, column, derivation, document, op};
+    use crate::schema::Document;
+    use crate::test_document::Tree;
+
+    /// `V` reads `SRC.UNKNOWN`, a field the input does not hold, with
+    /// `absent: 7`. The 0.5 surface answers the missing variable with the
+    /// literal, as COLUMN-11 at `yamaa-v0.5.0` says; a 1.0 tree refuses it
+    /// under NAME-3, so `absent` answers only a lookup without a record
+    /// (D67, D102).
+    #[test]
+    fn absent_answers_a_missing_variable_only_on_the_0_5_surface() {
+        let tree = document(
+            vec![column(
+                "V",
+                "int",
+                derivation(op(
+                    "source",
+                    Tree::map(vec![
+                        ("variable", Tree::text("SRC.UNKNOWN")),
+                        ("absent", Tree::integer(7)),
+                    ]),
+                )),
+            )],
+            vec![],
+        );
+        let source = TableSchema::new(vec![crate::table::Column {
+            name: "ID".into(),
+            kind: ColumnType::Int,
+        }])
+        .unwrap();
+        let prepared = PreparedSpecification::prepare(&admit(tree.clone())).unwrap();
+        assert!(prepared.bind(&source).is_ok());
+
+        let mut nodes = Vec::new();
+        let root = tree.append(&mut nodes);
+        let document = Document::new(nodes, root).unwrap();
+        let spec =
+            crate::front_end::v0_5::lower_surface(&document, None, ast::Surface::V1 { minor: 0 })
+                .into_spec();
+        let prepared =
+            PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
+        let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
+            panic!("a variable that does not exist fails in 1.0");
+        };
+        let [finding] = findings.as_slice() else {
+            panic!("one finding: {findings:?}");
+        };
+        let [diagnostic] = finding
+            .diagnostics(prepared.source())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        // NAME-3's unknown field.
+        assert_eq!(
+            diagnostic.code,
+            crate::diagnostic::ConditionCode::SourceUnknownReference
+        );
+        assert_eq!(diagnostic.spec_paths, ["columns.V.derivation.source"]);
+        assert_eq!(
+            diagnostic.context["identifier"],
+            crate::json::Value::String("SRC.UNKNOWN".into())
+        );
+    }
+
+    /// `V` reads `NOPE`, which no column declares, with a filter and
+    /// `absent: 7`. On the 0.5 surface `absent` answers the missing name, so
+    /// `check()` reports the filter of a single value that binding reports;
+    /// on a 1.0 tree the name fails as a reference first, and `check()` does
+    /// not report the filter (D67, D102).
+    #[test]
+    fn check_reports_a_filtered_unknown_name_only_where_absent_answers_it() {
+        let tree = document(
+            vec![column(
+                "V",
+                "int",
+                derivation(op(
+                    "source",
+                    Tree::map(vec![
+                        ("variable", Tree::text("NOPE")),
+                        ("filter", Tree::text("NOPE > 1")),
+                        ("absent", Tree::integer(7)),
+                    ]),
+                )),
+            )],
+            vec![],
+        );
+        let mut nodes = Vec::new();
+        let root = tree.append(&mut nodes);
+        let document = Document::new(nodes, root).unwrap();
+        let identity = |diagnostic: crate::diagnostic::Diagnostic| diagnostic.code;
+        let source = TableSchema::new(vec![crate::table::Column {
+            name: "ID".into(),
+            kind: ColumnType::Int,
+        }])
+        .unwrap();
+        // What `check()` reports, and the first finding of binding.
+        let outcome = |surface| {
+            let spec = crate::front_end::v0_5::lower_surface(&document, None, surface).into_spec();
+            let prepared =
+                PreparedSpecification::from_tree(spec, Vec::new(), None, None, None, None).unwrap();
+            let Err(BindError::Invalid(findings)) = prepared.bind(&source) else {
+                panic!("binding refuses the read");
+            };
+            let first = findings[0]
+                .diagnostics(prepared.source())
+                .unwrap()
+                .remove(0);
+            (
+                prepared
+                    .check_declaration_diagnostics()
+                    .into_iter()
+                    .map(identity)
+                    .collect::<Vec<_>>(),
+                identity(first),
+            )
+        };
+        // LOOKUP-8's filter of a single value, and NAME-3's unknown field.
+        let filter = crate::diagnostic::ConditionCode::SourceFilterSingleValue;
+        assert_eq!(outcome(ast::Surface::V0_5), (vec![filter], filter));
+        assert_eq!(
+            outcome(ast::Surface::V1 { minor: 0 }),
+            (
+                vec![],
+                crate::diagnostic::ConditionCode::OutputUnknownReference
+            )
+        );
     }
 }

@@ -9,7 +9,9 @@ use crate::{result_type::ResultType, value::Value};
 #[derive(Clone, Debug)]
 pub(super) struct Derivation {
     pub name: String,
-    pub branch: cases::Branch,
+    /// The derivation's expression and the path of its operation.
+    pub expr: ExprId,
+    operation_path: String,
     path: String,
     typed: Option<ColumnType>,
     handler: Option<crate::conversion::LiteralHandler>,
@@ -20,18 +22,14 @@ pub(super) fn reading_path<'a>(derivations: &'a [Derivation], identifier: &str) 
     derivations
         .iter()
         .find(|derivation| derivation.references.iter().any(|name| name == identifier))
-        .map(|derivation| derivation.branch.path.as_str())
+        .map(|derivation| derivation.operation_path.as_str())
 }
 impl Derivation {
-    /// The entry's path, `intermediates[i].derivations.<name>`.
-    pub(super) fn path(&self) -> &str {
-        &self.path
-    }
     fn assignment_path(&self) -> &str {
         if self.typed.is_some() {
             &self.path
         } else {
-            &self.branch.path
+            &self.operation_path
         }
     }
     /// The derived field's type: a typed entry's declared type, and otherwise
@@ -40,89 +38,59 @@ impl Derivation {
         self.typed.map_or(result, ResultType::column)
     }
 }
-/// Both admitted entry forms expose the same normalized expression boundary.
-pub(super) fn value(
-    d: &Document,
-    entry: usize,
-    path: &str,
-) -> Result<(usize, String), PrepareError> {
-    if let Some(derivation) = d.field(entry, "derivation") {
-        Ok((field(d, derivation, "value")?, format!("{path}.derivation")))
-    } else {
-        Ok((field(d, entry, "value")?, path.into()))
-    }
-}
-#[allow(clippy::too_many_arguments)]
+/// Each derivation of the intermediate `item`, admitted in written order:
+/// its expression as any derivation's, the named intermediates a project
+/// call's argument reads, the names it reads and its handler. `admission`
+/// holds the intermediates derived before this one.
 pub(super) fn prepare(
-    d: &Document,
-    id: usize,
-    path: &str,
-    dataset: &str,
-    project: Option<&functions::Prepared>,
-    extraction: &str_extract::Prepared,
-    templates: &str_template::Prepared,
-    named: &intermediates::Declarations,
+    spec: &ast::Spec,
+    item: &ast::Intermediate,
+    admission: &derivations::Admission<'_>,
 ) -> Result<Vec<Derivation>, PrepareError> {
-    let Some(items) = d
-        .field(id, "derivations")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    else {
+    if item.bindings.is_empty() {
         return Ok(Vec::new());
-    };
-    let items = mapping(d, items)?;
-    if items.len() > crate::limits::Limits::COLUMNS {
+    }
+    if item.bindings.len() > crate::limits::Limits::COLUMNS {
         return Err(PrepareError::limit(
             "intermediate_derivations",
             crate::limits::Limits::COLUMNS,
-            Some(items.len()),
-            Some(&format!("{path}.derivations")),
+            Some(item.bindings.len()),
+            Some(&format!("{}.derivations", checks::render(spec, item.meta))),
         ));
     }
     let mut result = Vec::new();
-    for &(name, handled) in items {
-        let name = text(d, name)?;
-        let path = format!("{path}.derivations.{name}");
-        let (value, expression_path) = value(d, handled, &path)?;
-        let typed = d
-            .field(handled, "type")
-            .map(|id| {
-                Ok(match text(d, id)? {
-                    "str" => ColumnType::Str,
-                    "int" => ColumnType::Int,
-                    "float" => ColumnType::Float,
-                    "date" => ColumnType::Date,
-                    "datetime" => ColumnType::DateTime,
-                    _ => return Err(PrepareError::Internal),
-                })
-            })
-            .transpose()?;
-        let branch = derivations::prepare_value_with_driver(
-            d,
-            value,
-            &expression_path,
-            project,
-            named,
-            true,
-            0,
-            extraction,
-            templates,
-            Some(dataset),
-        )?;
-        if let Some(project) = project {
-            let refused = functions::donor_keep_findings(project, value, named)?;
+    for binding in &item.bindings {
+        let expr = binding.derivation.expr;
+        admission.admit(spec, expr, 0)?;
+        if let Some(project) = admission.project {
+            let refused = functions::donor_keep_findings(project, expr, admission.intermediates)?;
             if !refused.is_empty() {
                 return Err(PrepareError::Invalid(refused));
             }
         }
-        let mut references = Vec::new();
-        derivations::references(d, value, project, &mut references, 0)?;
-        self_relations::template_references(d, value, templates, &mut references, 0)?;
-        let handler = literal_handler(d, handled, &path)?;
+        let scan = reads::Scan {
+            relation: true,
+            windows: true,
+        };
+        let references = reads::names(spec, expr, scan, admission.project.is_some())?;
+        let handler = binding
+            .derivation
+            .unconvertible
+            .as_ref()
+            .map(|handler| {
+                let spec_path = checks::render(spec, handler.meta);
+                Ok(crate::conversion::LiteralHandler {
+                    value: constant(&handler.value, &spec_path)?,
+                    spec_path,
+                })
+            })
+            .transpose()?;
         result.push(Derivation {
-            name: name.into(),
-            branch,
-            path,
-            typed,
+            name: binding.name.name.clone(),
+            expr,
+            operation_path: checks::path(spec, expr),
+            path: checks::render(spec, binding.meta),
+            typed: binding.declared,
             handler,
             references,
         });
@@ -195,7 +163,7 @@ fn resolve_field_kinds(
                 )
             }
         };
-        let operation_type = tree.result_type(declaration.branch.value, scope, &input)?;
+        let operation_type = tree.result_type(declaration.expr, scope, &input);
         let field_type = declaration.field_type(operation_type);
         if fields.iter().any(|field| field.name == declaration.name) {
             let mut finding = LookupFinding::new(
@@ -606,11 +574,7 @@ pub(super) fn bind(
             findings: &mut *findings,
             reported: false,
         }
-        .bind(
-            &declaration.branch.operation,
-            &declaration.branch.path,
-            column,
-        )?;
+        .bind(declaration.expr, column)?;
         donor_scope_findings(&mut findings[start..], reader, named, &unavailable);
         if let Some(finding) = declaration
             .typed

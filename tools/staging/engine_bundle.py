@@ -2,8 +2,9 @@
 
 A host's bundle is the Rust workspace that its source archive compiles (#3030
 D55): the engine crates and that host's binding crate, a workspace manifest
-whose members are only those crates, a lock trimmed from the canonical
-rust/Cargo.lock and
+whose members are only those crates and whose profiles are those that the
+host builds with (the R bundle's leaves out the wheels' dist profile), a lock
+trimmed from the canonical rust/Cargo.lock and
 verified crate by crate against it, the vendored YAML parser and ReadStat
 sources, and the crates.io crates of that lock as `cargo vendor` writes them,
 apart from the files that tools/staging/vendor_crates.py leaves out, with the
@@ -47,6 +48,12 @@ MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
 # command in the archive from reaching the network.
 CARGO_CONFIG = vendor_crates.CONFIG + "\n[net]\noffline = true\n"
 PYTHON_MANIFEST_PATH = "crates/yamaa-python/Cargo.toml"
+# The profile that only the Python wheels build with, which python/pyproject.toml
+# selects: release without the symbol table. The R bundle's manifest leaves it
+# out, so that the R source package names no stripping. Its Makevars build with
+# release, and CRAN's Repository Policy asks a package to keep the symbols of
+# its shared objects (tools/packaging/check_cargo_lock.py).
+WHEEL_PROFILE = "dist"
 
 
 def members(host):
@@ -157,13 +164,38 @@ def sources(host, workspace=WORKSPACE):
             yield relative.as_posix(), path
 
 
-def workspace_manifest(workspace=WORKSPACE):
-    """The canonical workspace manifest, with the members that a bundle carries.
+def without_table(lines, header):
+    """A manifest's lines without one table: its header line, the comment lines
+    directly above it, its lines up to the next blank line, and that blank line.
+
+    The header must appear once, alone on its line.
+    """
+    found = [index for index, line in enumerate(lines) if line.strip() == header]
+    if len(found) != 1:
+        raise ValueError(
+            f"rust/Cargo.toml: the R bundle leaves out the {header} table, which "
+            f"must appear once, as a line {header}"
+        )
+    start = end = found[0]
+    while start > 0 and lines[start - 1].startswith("#"):
+        start -= 1
+    end += 1
+    while end < len(lines) and lines[end].strip():
+        end += 1
+    return lines[:start] + lines[end + 1 :]
+
+
+def workspace_manifest(host, workspace=WORKSPACE):
+    """A host's workspace manifest: the canonical one, with the members that
+    the bundle carries, and in the R bundle without the wheels' profile.
 
     A bundle holds only its host's crates, so `crates/*` names exactly them.
     maturin 1.9.6 would rewrite an explicit list to name only the crate that it
     builds, leaving the engine crates to join as path dependencies; it keeps
-    this one unchanged.
+    this one unchanged. The R bundle leaves out the WHEEL_PROFILE table with the
+    comment above it (without_table), and the result must parse as the
+    canonical manifest without that profile, so that no line of the table can
+    stay behind in another one.
     """
     text = (workspace / MANIFEST).read_text(encoding="utf-8")
     lines = [
@@ -171,10 +203,16 @@ def workspace_manifest(workspace=WORKSPACE):
         for line in text.splitlines(keepends=True)
         if not line.startswith("default-members = ")
     ]
-    manifest = "".join(lines)
     expected = tomllib.loads(text)
     expected["workspace"]["members"] = ["crates/*"]
     expected["workspace"].pop("default-members", None)
+    if host == "r":
+        lines = without_table(lines, f"[profile.{WHEEL_PROFILE}]")
+        profiles = expected.get("profile", {})
+        profiles.pop(WHEEL_PROFILE, None)
+        if not profiles:
+            expected.pop("profile", None)
+    manifest = "".join(lines)
     try:
         rewritten = tomllib.loads(manifest)
     except tomllib.TOMLDecodeError:
@@ -182,7 +220,8 @@ def workspace_manifest(workspace=WORKSPACE):
     if rewritten != expected:
         raise ValueError(
             "rust/Cargo.toml: write the workspace members and default-members "
-            "on one line each"
+            f"on one line each, and the [profile.{WHEEL_PROFILE}] table as one "
+            "block that a blank line ends"
         )
     return manifest
 
@@ -303,7 +342,9 @@ def stage_workspace(host, destination: Path, workspace=WORKSPACE):
         raise FileNotFoundError("canonical Cargo.lock is missing")
     canonical = (workspace / LOCK).read_bytes().decode("utf-8")
     destination.mkdir(parents=True)
-    (destination / MANIFEST).write_bytes(workspace_manifest(workspace).encode("utf-8"))
+    (destination / MANIFEST).write_bytes(
+        workspace_manifest(host, workspace).encode("utf-8")
+    )
     for relative, path in sources(host, workspace):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)

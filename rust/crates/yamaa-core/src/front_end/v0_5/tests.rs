@@ -140,9 +140,15 @@ fn positions_give_spans_and_defaults_take_their_ancestor_s() {
     let lowered = lower(&spec, Some(&positions));
     let lowered_spec = lowered.spec();
     assert_eq!(lowered_spec.files, positions.files);
+    // The literal takes the line of its operation mapping, `{literal: A}`.
+    let operation = spec
+        .document()
+        .nodes()
+        .iter()
+        .position(|node| matches!(node, N::Mapping(entries) if entries.len() == 1 && entries[0].1 == literal))
+        .unwrap();
     let id = root(lowered_spec, 1);
-    let origin = lowered.origin(id);
-    assert_eq!(lowered_spec.expr(id).meta.span.line, origin as u32 + 1);
+    assert_eq!(lowered_spec.expr(id).meta.span.line, operation as u32 + 1);
     assert!(lowered_spec.meta.span.is_known());
     let unknown = lower(&spec, None);
     assert_eq!(unknown.spec().expr(id).meta.span, Span::UNKNOWN);

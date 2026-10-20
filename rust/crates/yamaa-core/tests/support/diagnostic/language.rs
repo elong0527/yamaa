@@ -140,6 +140,27 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("language_versions", texts(&["1.0"])),
         ],
     );
+    // A reader that decoded the named file before it knew the field, as a
+    // project's preparation decodes each file it lists, keeps the fault and
+    // reports it at the field as the check does.
+    let newer = header("1.2", "function").document();
+    let kept = read_header(&newer, Some(LANGUAGE_VERSION), FileType::Function).unwrap_err();
+    assert_eq!(
+        reference.refuse("study/bmi.yaml", &kept),
+        reference
+            .check("study/bmi.yaml", &newer, LANGUAGE_VERSION)
+            .unwrap_err()
+    );
+    // A malformed header stays a finding in the named file.
+    let headerless = T::map(vec![("name", T::text("bmi"))]).document();
+    let kept = read_header(&headerless, Some(LANGUAGE_VERSION), FileType::Function).unwrap_err();
+    let ReferenceFault::Finding(finding) = reference.refuse("study/bmi.yaml", &kept) else {
+        panic!("a finding in the named file");
+    };
+    assert_eq!(
+        (finding.path.as_str(), finding.code),
+        ("yamaa", ConditionCode::SchemaMissingRequiredField)
+    );
     let Err(ReferenceFault::Field(finding)) = reference.check(
         "study/bmi.yaml",
         &header("1.0", "spec").document(),

@@ -30,29 +30,24 @@ impl Declaration {
     }
 }
 
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    path: &str,
-    _driver: Option<&str>,
-    _intermediates: Option<&intermediates::Declarations>,
-    extra: &mut Vec<UnsupportedFeature>,
-) -> Result<Declaration, PrepareError> {
-    for &(key, _) in mapping(d, payload)? {
-        let name = text(d, key)?;
-        if !["source", "width"].contains(&name) {
-            reject(extra, name, format!("{path}.{name}"));
-        }
-    }
-    let source = text(d, field(d, payload, "source")?)?;
-    let N::Integer(width) = &d.nodes()[field(d, payload, "width")?] else {
+/// The executor's padding for the verb at `e`, or its width defect.
+pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Declaration, PrepareError> {
+    let ExprKind::Scalar {
+        op: ast::ScalarOp::StrPad { width },
+        operands,
+        ..
+    } = &spec.expr(e).kind
+    else {
         return Err(PrepareError::Internal);
     };
-    match StringPad::new(source, path, width) {
+    let source =
+        checks::operand_name(spec, operands, ast::Slot::Source).ok_or(PrepareError::Internal)?;
+    let path = checks::path(spec, e);
+    match StringPad::new(source, &path, width) {
         Ok(pad) => Ok(Declaration::Valid(pad)),
         Err(DeclarationError::Width) => Ok(Declaration::WidthError {
             source: source.into(),
-            path: path.into(),
+            path,
         }),
         Err(DeclarationError::Shape) => Err(PrepareError::Internal),
     }

@@ -1,58 +1,59 @@
 //! Whole-occurrence template admission followed by shared reference binding.
 use super::*;
 use crate::text_template::StringTemplate;
-#[derive(Debug)]
-pub(super) struct Prepared(BTreeMap<usize, StringTemplate>);
-impl Prepared {
-    pub(super) fn get(&self, payload: usize) -> Result<StringTemplate, PrepareError> {
-        self.0.get(&payload).cloned().ok_or(PrepareError::Internal)
-    }
-    /// Admit each `str_template` payload at its path, in order, with
-    /// whether a bare name it reads is left to binding (`rows`). `columns`
-    /// are the declared output columns.
-    pub(super) fn new(
-        d: &Document,
-        columns: &[&str],
-        nodes: Vec<(usize, String, bool)>,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<PreflightFinding>,
-    ) -> Result<Self, PrepareError> {
-        let mut operations = BTreeMap::new();
-        for (payload, path, rows) in nodes {
-            let path = path.as_str();
-            let operation = StringTemplate::new(
-                text(d, field(d, payload, "template")?)?.into(),
-                path.into(),
-                d.field(payload, "missing")
-                    .map(|id| literal(d, id, &format!("{path}.missing")))
-                    .transpose()?,
-            )
-            .map_err(|_| PrepareError::Internal)?;
-            if let Some(error) = operation.declaration_diagnostic() {
-                findings.push(PreflightFinding::TextTemplate(error.clone()));
-            } else if !rows {
-                for (index, source) in operation.identifiers().iter().enumerate() {
-                    if !source.contains('.') && !columns.contains(&source.as_str()) {
-                        findings.push(PreflightFinding::TextTemplate(
-                            operation.unknown_diagnostic(index).expect("admitted index"),
-                        ));
-                    } else if let Some(kind) = declared
-                        .name(source)
-                        .column_type()
-                        .filter(|kind| *kind != ColumnType::Str)
-                    {
-                        findings.push(PreflightFinding::TextTemplate(
-                            operation
-                                .input_diagnostic(index, kind_name(kind))
-                                .expect("admitted index"),
-                        ));
-                    }
+/// Admit each `str_template` at `sites`, in order, with whether a bare name
+/// it reads is left to binding (`rows`): its syntax, and without `rows` each
+/// placeholder a declared column or a stored field of type `str`. `columns`
+/// are the declared output columns.
+pub(super) fn findings(
+    spec: &ast::Spec,
+    columns: &[&str],
+    sites: Vec<(ExprId, bool)>,
+    declared: &types::DeclaredTypes<'_>,
+    findings: &mut Vec<PreflightFinding>,
+) -> Result<(), PrepareError> {
+    for (e, rows) in sites {
+        let operation = from_tree(spec, e)?;
+        if let Some(error) = operation.declaration_diagnostic() {
+            findings.push(PreflightFinding::TextTemplate(error.clone()));
+        } else if !rows {
+            for (index, source) in operation.identifiers().iter().enumerate() {
+                if !source.contains('.') && !columns.contains(&source.as_str()) {
+                    findings.push(PreflightFinding::TextTemplate(
+                        operation.unknown_diagnostic(index).expect("admitted index"),
+                    ));
+                } else if let Some(kind) = declared
+                    .name(source)
+                    .column_type()
+                    .filter(|kind| *kind != ColumnType::Str)
+                {
+                    findings.push(PreflightFinding::TextTemplate(
+                        operation
+                            .input_diagnostic(index, kind_name(kind))
+                            .expect("admitted index"),
+                    ));
                 }
             }
-            operations.insert(payload, operation);
         }
-        Ok(Self(operations))
     }
+    Ok(())
+}
+/// The executor's template for the verb at `e`.
+pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<StringTemplate, PrepareError> {
+    let ExprKind::Scalar {
+        op: ast::ScalarOp::StrTemplate { template },
+        handlers,
+        ..
+    } = &spec.expr(e).kind
+    else {
+        return Err(PrepareError::Internal);
+    };
+    StringTemplate::new(
+        template.clone(),
+        checks::path(spec, e),
+        checks::handler(spec, handlers.missing.as_ref())?,
+    )
+    .map_err(|_| PrepareError::Internal)
 }
 fn kind_name(kind: ColumnType) -> &'static str {
     match kind {

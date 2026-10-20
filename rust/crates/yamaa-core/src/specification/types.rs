@@ -5,53 +5,40 @@
 //! result type its declared column type can never take.
 use super::*;
 use crate::{
-    ast::{self, ExprId, ExprKind, Read, Scope, TypeEnv},
+    ast::{self, ExprId, Read, Scope, TypeEnv},
     dataset::{Intermediate, SecondarySource},
     diagnostic::{ConditionCode, Diagnostic},
-    front_end::v0_5::Lowered,
     producer_contract::Contract,
     result_type::ResultType,
     value::ValueType,
 };
 
-/// The admitted spec's tree, which result typing reads, and each project
-/// call's declared return type.
+/// The admitted spec's tree, which binding and result typing read, and
+/// each project call's declared return type and admitted call.
 #[derive(Debug)]
 pub(super) struct Tree {
-    lowered: Lowered,
+    spec: ast::Spec,
     calls: BTreeMap<ExprId, ColumnType>,
+    indices: BTreeMap<ExprId, usize>,
 }
 
 impl Tree {
-    pub(super) fn new(
-        lowered: Lowered,
-        d: &Document,
-        project: Option<&functions::Prepared>,
-    ) -> Self {
-        let mut calls = BTreeMap::new();
-        for (index, expr) in lowered.spec().exprs.iter().enumerate() {
-            let call = ExprId(u32::try_from(index).expect("a spec's expressions fit u32"));
-            if !matches!(expr.kind, ExprKind::Call { .. }) {
-                continue;
-            }
-            let returns = d
-                .field(lowered.origin(call), "function")
-                .and_then(|payload| project?.returns.get(&payload));
-            if let Some(&returns) = returns {
-                calls.insert(call, returns);
-            }
+    pub(super) fn new(spec: ast::Spec, project: Option<&functions::Prepared>) -> Self {
+        let (calls, indices) = project.map_or_else(Default::default, |project| {
+            (project.returns.clone(), project.indices.clone())
+        });
+        Self {
+            spec,
+            calls,
+            indices,
         }
-        Self { lowered, calls }
-    }
-    pub(super) fn lowered(&self) -> &Lowered {
-        &self.lowered
     }
     pub(super) fn spec(&self) -> &ast::Spec {
-        self.lowered.spec()
+        &self.spec
     }
-    /// The expression lowered from the derivation at document node `node`.
-    pub(super) fn expression(&self, node: usize) -> Result<ExprId, BindError> {
-        self.lowered.expression(node).ok_or(BindError::Internal)
+    /// The admitted project call of the call expression `call`.
+    pub(super) fn call(&self, call: ExprId) -> Result<usize, BindError> {
+        self.indices.get(&call).copied().ok_or(BindError::Internal)
     }
     /// `names`, with each call typed by its definition.
     pub(super) fn env<'a>(&'a self, names: &'a dyn TypeEnv) -> Env<'a> {
@@ -60,16 +47,15 @@ impl Tree {
             calls: &self.calls,
         }
     }
-    /// The result type of the derivation at document node `node`, read in
-    /// `scope`, over the names `names` types.
+    /// The result type of the derivation `root`, read in `scope`, over the
+    /// names `names` types.
     pub(super) fn result_type(
         &self,
-        node: usize,
+        root: ExprId,
         scope: Scope,
         names: &dyn TypeEnv,
-    ) -> Result<ResultType, BindError> {
-        let root = self.expression(node)?;
-        Ok(ast::result_type(self.spec(), root, scope, &self.env(names)))
+    ) -> ResultType {
+        ast::result_type(self.spec(), root, scope, &self.env(names))
     }
     /// The scope an intermediate's own derivations read in: its donor record.
     pub(super) fn donor(&self, intermediate: &str) -> Result<Scope, BindError> {

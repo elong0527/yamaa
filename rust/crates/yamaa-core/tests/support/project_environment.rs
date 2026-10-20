@@ -216,6 +216,36 @@ pub fn function_file_reached() -> BTreeSet<ConditionCode> {
     assert_eq!(scalar[0].context["reason"], "invalid_date");
     assert_eq!(scalar[0].context["value"], "2024-02-30");
     reached.insert(rendered(&scalar[0]));
+    // A lock that is no packaging lock fails at the field that holds it,
+    // naming the project file that holds that field (FUNC-3).
+    let lock = project_environment_diagnostics::invalid_packaging_lock(
+        Language::R,
+        "study/project.yaml",
+        "r/renv.lock",
+    );
+    assert_eq!(
+        (
+            lock.definition().phase,
+            lock.definition().condition,
+            lock.definition().rule
+        ),
+        ("validation", "function_file_invalid", Some("FUNC-2"))
+    );
+    assert_eq!(lock.spec_paths, ["environments.r.lock"]);
+    assert_eq!(
+        lock.context,
+        [
+            ("source", "study/project.yaml"),
+            ("entry", "study/project.yaml"),
+            ("path", "r/renv.lock"),
+            ("environment_path", "environments.r.lock"),
+            ("cause", "invalid_packaging_lock"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
+        .collect()
+    );
+    reached.insert(rendered(&lock));
     reached
 }
 /// A project that links a Python environment file with no functions and

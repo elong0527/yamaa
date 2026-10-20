@@ -448,14 +448,22 @@ impl Reference {
         document: &Document,
         reads: LanguageVersion,
     ) -> Result<Header, ReferenceFault> {
-        let fault = match read_header(document, Some(reads), self.expected) {
-            Ok(header) => return Ok(header),
-            Err(HeaderFault::Shape(finding)) => return Err(ReferenceFault::Finding(finding)),
-            Err(fault) => fault,
-        };
+        read_header(document, Some(reads), self.expected)
+            .map_err(|fault| self.refuse(source, &fault))
+    }
+
+    /// How this field reports the file it names, read from `source`, whose
+    /// header `fault` refuses (SCHEMA-2): a malformed header is a finding in
+    /// that file, at its own field; a version the engine does not read, or a
+    /// type the field does not expect, is a diagnostic at this field, naming
+    /// the file as `source`. A reader that decoded the file before it knew the
+    /// field, such as a project's preparation of the files it lists, reports
+    /// the fault it kept here.
+    pub fn refuse(&self, source: &str, fault: &HeaderFault) -> ReferenceFault {
         let mut context = Context::new();
         context.insert("source".into(), text(source));
-        let code = match &fault {
+        let code = match fault {
+            HeaderFault::Shape(finding) => return ReferenceFault::Finding(finding.clone()),
             HeaderFault::Version { version, reads, .. } => {
                 version_context(&mut context, version, reads);
                 ConditionCode::ReferenceLanguageVersion
@@ -468,15 +476,14 @@ impl Reference {
                 file_type_context(&mut context, file_type, *expected);
                 ConditionCode::ReferenceFileType
             }
-            HeaderFault::Shape(_) => unreachable!("returned above"),
         };
-        Err(ReferenceFault::Field(Diagnostic {
+        ReferenceFault::Field(Diagnostic {
             code,
             spec_paths: vec![self.field.clone()],
             context,
             source_span: None,
             operand_route: None,
-        }))
+        })
     }
 }
 

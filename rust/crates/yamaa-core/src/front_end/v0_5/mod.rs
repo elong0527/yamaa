@@ -36,10 +36,11 @@ use crate::ast::{
     InputSource, Intermediate, JoinKey, KeyDecl, Literal, Meta, Method, Model, ModelKind, Named,
     Notation, Origin, Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity,
     Span, Spec, SubmissionMetadata, Surface, Template, Text, UniqueCheck, ValueLevel, WhereClause,
+    Written,
 };
 use crate::schema::{Document, DocumentNode as N, SpecificationDocument};
 use crate::value::ColumnType;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// Where each node of the admitted document was written.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -51,14 +52,10 @@ pub struct Positions {
     pub nodes: Vec<Option<Span>>,
 }
 
-/// A lowered spec, with the document node each expression came from.
-/// Preparation still binds the document, so the two meet through these
-/// nodes until binding reads the AST.
+/// A lowered spec.
 #[derive(Clone, Debug)]
 pub struct Lowered {
     spec: Spec,
-    origins: Vec<usize>,
-    by_node: BTreeMap<usize, ExprId>,
 }
 
 impl Lowered {
@@ -67,15 +64,6 @@ impl Lowered {
     }
     pub fn into_spec(self) -> Spec {
         self.spec
-    }
-    /// The document node `expr` was lowered from: an operation mapping,
-    /// or the text of a name or a formula.
-    pub fn origin(&self, expr: ExprId) -> usize {
-        self.origins[expr.index()]
-    }
-    /// The first expression lowered from a document node.
-    pub fn expression(&self, node: usize) -> Option<ExprId> {
-        self.by_node.get(&node).copied()
     }
 }
 
@@ -106,7 +94,6 @@ pub(crate) fn lower_surface(
         surface,
         paths: Paths::new(),
         exprs: Vec::new(),
-        origins: Vec::new(),
     };
     let root = d.root();
     let meta = Meta {
@@ -117,15 +104,7 @@ pub(crate) fn lower_surface(
     spec.files = positions.map(|p| p.files.clone()).unwrap_or_default();
     spec.paths = std::mem::take(&mut lower.paths);
     spec.exprs = std::mem::take(&mut lower.exprs);
-    let mut by_node = BTreeMap::new();
-    for (index, &origin) in lower.origins.iter().enumerate() {
-        by_node.entry(origin).or_insert(ExprId(index as u32));
-    }
-    Lowered {
-        spec,
-        origins: lower.origins,
-        by_node,
-    }
+    Lowered { spec }
 }
 
 pub(super) struct Lower<'d> {
@@ -135,7 +114,6 @@ pub(super) struct Lower<'d> {
     surface: Surface,
     paths: Paths,
     exprs: Vec<Expr>,
-    origins: Vec<usize>,
 }
 
 /// The path segment of a written registry keyword, such as an operation.
@@ -150,6 +128,16 @@ fn odm_path(path: &str) -> bool {
         .next()
         .and_then(|name| name.rsplit_once('.'))
         .is_some_and(|(stem, extension)| !stem.is_empty() && extension.eq_ignore_ascii_case("xml"))
+}
+
+/// `{literal: null}`, the one spelling of the missing value a handler, flag,
+/// mapping entry or function argument substitutes (COLUMN-10).
+fn missing_literal(d: &Document, id: usize) -> bool {
+    matches!(&d.nodes()[id], N::Mapping(items) if matches!(
+        items.as_slice(),
+        &[(key, value)] if matches!(&d.nodes()[key], N::Text(key) if key == "literal")
+            && matches!(d.nodes()[value], N::Null)
+    ))
 }
 
 pub(super) fn column_type(text: &str) -> Option<ColumnType> {
@@ -194,6 +182,19 @@ impl<'d> Lower<'d> {
             _ => &[],
         }
     }
+    /// Which of `fields` `owner` writes with a value, in written order.
+    pub(super) fn written(&self, owner: usize, fields: &[&'static str]) -> Written {
+        Written(
+            self.entries(owner)
+                .iter()
+                .filter(|&&(_, value)| !matches!(self.node(value), N::Null))
+                .filter_map(|&(key, _)| {
+                    let key = self.text(key)?;
+                    fields.iter().copied().find(|&field| field == key)
+                })
+                .collect(),
+        )
+    }
     fn boolean(&self, id: usize, name: &str, default: bool) -> bool {
         match self.field(id, name).map(|id| self.node(id)) {
             Some(N::Boolean(value)) => *value,
@@ -237,15 +238,14 @@ impl<'d> Lower<'d> {
     pub(super) fn v1(&self) -> bool {
         matches!(self.surface, Surface::V1 { .. })
     }
-    pub(super) fn push(&mut self, kind: ExprKind, meta: Meta, origin: usize) -> ExprId {
+    pub(super) fn push(&mut self, kind: ExprKind, meta: Meta) -> ExprId {
         let id = ExprId(u32::try_from(self.exprs.len()).expect("a spec's expressions fit u32"));
         self.exprs.push(Expr { kind, meta });
-        self.origins.push(origin);
         id
     }
     /// Reserve a parent before its children, so that ids follow pre-order.
-    pub(super) fn reserve(&mut self, meta: Meta, origin: usize) -> ExprId {
-        self.push(ExprKind::Unsupported(String::new()), meta, origin)
+    pub(super) fn reserve(&mut self, meta: Meta) -> ExprId {
+        self.push(ExprKind::Unsupported(String::new()), meta)
     }
     pub(super) fn fill(&mut self, id: ExprId, kind: ExprKind) -> ExprId {
         self.exprs[id.index()].kind = kind;
@@ -313,9 +313,7 @@ impl<'d> Lower<'d> {
             N::Integer(text) => Literal::Int(text.clone()),
             N::Float(value) => Literal::Float(*value),
             N::Text(text) => Literal::Text(text.clone()),
-            N::Mapping(_) if crate::specification::missing_literal(self.d, node) => {
-                Literal::Missing
-            }
+            N::Mapping(_) if missing_literal(self.d, node) => Literal::Missing,
             _ => Literal::Unsupported,
         }
     }
@@ -415,6 +413,7 @@ impl<'d> Lower<'d> {
             exprs: Vec::new(),
             paths: Paths::new(),
             files: Vec::new(),
+            written: self.written(root, &["parent"]),
             meta,
         }
     }
@@ -460,6 +459,7 @@ impl<'d> Lower<'d> {
                     _ => EmptyString::Missing,
                 },
                 ordinal: self.named(meta, source, "ordinal"),
+                written: self.written(source, &["types"]),
                 path,
             };
             // A 1.0 input declares the key its implicit joins and keyless
@@ -541,7 +541,7 @@ impl<'d> Lower<'d> {
             // A 1.0 expression written bare, as a document admitted without
             // normalization holds it.
             None if self.v1() => self.expression(node, meta),
-            None => self.push(ExprKind::Unsupported("derivation".into()), meta, node),
+            None => self.push(ExprKind::Unsupported("derivation".into()), meta),
         };
         Derivation {
             expr,
@@ -712,6 +712,21 @@ impl<'d> Lower<'d> {
                 require_match: self.boolean(item, "require_match", false),
                 bindings,
                 checks,
+                written: self.written(
+                    item,
+                    &[
+                        "key",
+                        "between",
+                        "filter",
+                        "order_by",
+                        "keep",
+                        "columns",
+                        "derivations",
+                        "verifications",
+                        if self.v1() { "absent" } else { "no_match" },
+                        "require_match",
+                    ],
+                ),
                 meta,
             });
         }

@@ -1,26 +1,39 @@
 //! Resolve held lock origins and represent core-owned classified diagnostic facts.
 use crate::{project_lock::Finding, project_source::CapturedEnvironment};
+use yamaa_core::ast::Surface;
 use yamaa_core::diagnostic::{lock_diagnostics, Diagnostic, LockDiagnosticError, LockOrigins};
+use yamaa_core::project_function::Language;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidContext,
 }
+/// The lock findings of `host`, the language that verified the lock, each at
+/// the field that declares the lock: the linked environment file's `lock` in
+/// 0.5, and the project file's `environments.<host>.lock` in 1.0, where the
+/// lock's path resolves from (FUNC-3, D8).
 pub fn issues(
     environment: &CapturedEnvironment,
+    host: Language,
     findings: &[Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
-    // The linked environment file declares the lock, and its path resolves there.
+    let entry = environment
+        .root_optional()
+        .map(|root| &root.source().identity);
     let origins = environment.lock().and_then(|lock| {
-        let file = environment.environment_file()?;
-        let written = environment
-            .project()?
-            .environments
-            .iter()
-            .find_map(|environment| environment.lock.as_ref())?;
+        let project = environment.project()?;
+        let written = project.environment(host)?.lock.as_ref()?;
+        let (source, field) = match project.header.surface {
+            Surface::V0_5 => (&environment.environment_file()?.source().identity, "lock"),
+            Surface::V1 { .. } => (
+                entry?,
+                yamaa_core::project_environment_diagnostics::lock_field(host),
+            ),
+        };
         Some(LockOrigins {
-            source: &file.source().identity,
-            entry: &environment.root().source().identity,
+            source,
+            entry: entry?,
+            field,
             lock_source: &lock.source.identity,
             written: &written.text,
         })

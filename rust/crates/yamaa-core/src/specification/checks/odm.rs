@@ -193,6 +193,7 @@ pub(in crate::specification) fn context_findings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schema::Document;
     use crate::test_document::Tree;
 
     #[test]

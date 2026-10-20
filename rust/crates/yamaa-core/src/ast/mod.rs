@@ -19,10 +19,10 @@ pub mod traversal;
 mod types;
 
 pub use expr::{
-    Aggregate, Arm, Between, Binding, Closed, DayRule, Dictionary, Direction, Expr, ExprId,
-    ExprKind, FlagPart, Formula, Handlers, Keep, Literal, Name, Nulls, OdmRead, Operand, OrderTerm,
-    Precision, RankMethod, ScalarOp, Slot, SourceRead, TemporalType, TextCase, TimeRule, TimeUnit,
-    Window, WindowFunction,
+    Aggregate, Arm, Between, Binding, CallShape, Closed, DayRule, Dictionary, Direction, Expr,
+    ExprId, ExprKind, FlagPart, Formula, Handlers, Keep, Literal, Name, Nulls, OdmRead, Operand,
+    OrderTerm, Precision, RankMethod, ScalarOp, Slot, SourceRead, TemporalType, TextCase, TimeRule,
+    TimeUnit, Window, WindowFunction,
 };
 pub use path::{Notation, PathId, Paths, Segment};
 pub use project::{
@@ -74,6 +74,25 @@ pub struct FileId(pub u32);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileRef {
     pub identity: String,
+}
+
+/// The optional fields a declaration writes with a value, in written order,
+/// as its surface spells them. A field counts whatever the value: an empty
+/// list or map, or `false`. The typed fields keep none of those apart from
+/// an omitted field, and the checks that count a written field read this
+/// (LOOKUP-4, LOOKUP-22, NAME-8, ROW-2).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Written(pub Vec<&'static str>);
+
+impl Written {
+    /// Whether the declaration writes `field`.
+    pub fn contains(&self, field: &str) -> bool {
+        self.0.contains(&field)
+    }
+    /// The fields written, in written order.
+    pub fn fields(&self) -> &[&'static str] {
+        &self.0
+    }
 }
 
 /// A declared identifier.
@@ -169,6 +188,9 @@ pub struct Spec {
     pub exprs: Vec<Expr>,
     pub paths: Paths,
     pub files: Vec<FileRef>,
+    /// Of `parent`, which composition consumes: a spec that still writes
+    /// one was not composed.
+    pub written: Written,
     pub meta: Meta,
 }
 
@@ -214,6 +236,8 @@ pub struct InputSource {
     pub schema: Option<Text>,
     pub empty_string: EmptyString,
     pub ordinal: Option<Named>,
+    /// Of `types`, written even when it declares no field (NAME-8).
+    pub written: Written,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -285,6 +309,10 @@ pub struct Intermediate {
     pub require_match: bool,
     pub bindings: Vec<Binding>,
     pub checks: Vec<UniqueCheck>,
+    /// Of `key`, `between`, `filter`, `order_by`, `keep`, `columns`,
+    /// `derivations`, `verifications`, the absence answer and
+    /// `require_match`.
+    pub written: Written,
     pub meta: Meta,
 }
 

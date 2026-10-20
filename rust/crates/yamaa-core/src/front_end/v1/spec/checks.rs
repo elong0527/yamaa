@@ -61,7 +61,7 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                 context: vec![("field", C::Text("day".into()))],
             });
         }
-        let ExprKind::Call { function, args } = &expr.kind else {
+        let ExprKind::Call { function, args, .. } = &expr.kind else {
             continue;
         };
         // A call argument is one leaf of the grammar: a name, quoted text, a

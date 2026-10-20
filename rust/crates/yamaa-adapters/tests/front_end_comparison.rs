@@ -14,7 +14,9 @@
 //!   by the rename table's `paths` block (P-CLR-2, D18, P-HND-1, P-OP-1 to
 //!   P-OP-3, P-ORD-1, P-ORD-2, P-BIND-1, P-ORIGIN-1);
 //! - a handler that restates its default, which the converter deletes in a
-//!   single-layer specification (P-HND-3);
+//!   single-layer specification (P-HND-3), with the field it is written in;
+//! - the spelling of a written field: 0.5's `no_match` is 1.0's `absent`
+//!   and `derive` is `derivations` (P-HND-1, P-BIND-1);
 //! - `model` and the header, and the context that tells `compute` text from
 //!   expression-field text (FORMULA-27);
 //! - join keys, which P1-6 declares: an input's `key`, and the key a 0.5
@@ -38,7 +40,7 @@ use yamaa_adapters::specification_source::{InheritancePort, Source};
 use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::ast::{
     Comparator, Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec,
-    Step,
+    Step, Written,
 };
 use yamaa_core::expression::Context;
 use yamaa_core::front_end::v0_5::lower;
@@ -298,6 +300,20 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
             false
         }
     };
+    // A written field as 1.0 spells it, and without the absence answer once
+    // its restated default is left out.
+    let spelled = |written: &mut Written, answered: bool| {
+        written.0 = written
+            .0
+            .iter()
+            .map(|&field| match field {
+                "no_match" => "absent",
+                "derive" => "derivations",
+                field => field,
+            })
+            .filter(|&field| answered || field != "absent")
+            .collect();
+    };
     for input in &mut spec.inputs {
         if matches!(input.key, KeyDecl::Declared(_)) {
             left_out.insert(Normalized::InputKey);
@@ -310,14 +326,20 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
                 left_out.insert(Normalized::LookupKey);
             }
             item.key = Some(JoinKey::Applicable);
+            item.written.0.retain(|&field| field != "key");
         }
         if restated(&mut item.absent) {
             left_out.insert(Normalized::RestatedDefault);
         }
+        spelled(&mut item.written, item.absent.is_some());
     }
     for expr in &mut spec.exprs {
         let restated_default = match &mut expr.kind {
-            ExprKind::Source(source) => restated(&mut source.absent),
+            ExprKind::Source(source) => {
+                let restated = restated(&mut source.absent);
+                spelled(&mut source.written, source.absent.is_some());
+                restated
+            }
             ExprKind::FirstAvailable { missing, .. } => restated(missing),
             ExprKind::Flag {
                 false_value: None,
@@ -335,6 +357,7 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
             // A keyless qualified aggregate infers its key in 0.5 and matches
             // on its input's declared key in 1.0 (P-KEY-1).
             ExprKind::Aggregate(aggregate) => {
+                spelled(&mut aggregate.written, true);
                 if matches!(aggregate.key, Some(JoinKey::FromInput)) {
                     aggregate.key = Some(JoinKey::Applicable);
                     left_out.insert(Normalized::LookupKey);

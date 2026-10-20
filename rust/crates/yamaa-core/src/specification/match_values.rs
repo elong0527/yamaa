@@ -18,134 +18,163 @@ pub(super) struct Context<'a> {
     pub intermediates: &'a [Option<crate::dataset::Intermediate>],
 }
 /// A key's current-row value. A written value other than a name keeps its
-/// document node, which the tree types.
+/// node, which the tree types.
 #[derive(Clone, Debug)]
 pub(super) enum Declaration {
     Variable(String),
     Source(String),
-    Literal(crate::value::Value, usize),
-    StrPad(str_pad::Declaration, usize),
+    Literal(crate::value::Value, ExprId),
+    StrPad(str_pad::Declaration, ExprId),
     Expression {
-        branch: cases::Branch,
+        expr: ExprId,
         references: Vec<String>,
     },
 }
-impl Declaration {
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn prepare(
-        d: &Document,
-        value: usize,
-        path: &str,
-        _sources: &[SourceDeclaration],
-        _driver: usize,
-        project: Option<&functions::Prepared>,
-        extraction: &str_extract::Prepared,
-        templates: &str_template::Prepared,
-        extra: &mut Vec<UnsupportedFeature>,
-    ) -> Result<Self, PrepareError> {
-        if let N::Text(name) = &d.nodes()[value] {
-            return Ok(Self::Variable(name.clone()));
+
+/// Whether a written match value at `value` is the operation a key's pair
+/// at `pair` holds, rather than a name written there alone.
+fn operation(spec: &ast::Spec, pair: ast::Meta, value: ExprId) -> bool {
+    spec.expr(value).meta.path != pair.path
+}
+
+/// The operation a match value may not be: one whose records or branches
+/// need a demand-aware key owner. Its keyword names it.
+fn deferred_owner(kind: &ExprKind) -> Option<&str> {
+    Some(match kind {
+        ExprKind::Case(_) => "case",
+        ExprKind::Call { .. } => "function",
+        ExprKind::Aggregate(_) => "aggregate",
+        ExprKind::Odm(_) => "odm",
+        ExprKind::Flag { .. } => "flag",
+        ExprKind::FirstAvailable { .. } => "first_available",
+        ExprKind::Unsupported(operation) => operation,
+        _ => return None,
+    })
+}
+
+/// Admit a key's match value written at `value` in the pair at `pair`,
+/// whose path is `path`. A scalar or window verb is admitted as any
+/// derivation is; a structured source, a conditional imputation operand,
+/// an operation outside the verbs and a read through a named intermediate
+/// are unsupported keys, collected in `extra`.
+pub(super) fn admit(
+    spec: &ast::Spec,
+    pair: ast::Meta,
+    value: ExprId,
+    path: &str,
+    project: Option<&functions::Prepared>,
+    extra: &mut Vec<UnsupportedFeature>,
+) -> Result<(), PrepareError> {
+    let site = checks::path(spec, value);
+    let mut reference = None;
+    match &spec.expr(value).kind {
+        ExprKind::Ref(name) => {
+            if operation(spec, pair, value) {
+                reference = Some(name.as_str());
+            }
         }
-        let &[(operation, payload)] = mapping(d, value)? else {
-            return Err(PrepareError::Internal);
-        };
-        let op = text(d, operation)?;
-        let operation_path = format!("{path}.{op}");
-        let declaration = match op {
-            "literal" => Self::Literal(literal(d, payload, &operation_path)?, value),
-            "source" => {
-                let name = if let N::Text(name) = &d.nodes()[payload] {
-                    name.as_str()
-                } else {
-                    for &(key, value) in mapping(d, payload)? {
-                        let key = text(d, key)?;
-                        if key != "variable" && !matches!(d.nodes()[value], N::Null) {
-                            reject(
-                                extra,
-                                "intermediate_key_source",
-                                format!("{operation_path}.{key}"),
-                            );
-                        }
-                    }
-                    text(d, field(d, payload, "variable")?)?
-                };
-                Self::Source(name.into())
+        ExprKind::Source(read) => {
+            for field in read.written.fields() {
+                reject(extra, "intermediate_key_source", format!("{site}.{field}"));
             }
-            "str_pad" => Self::StrPad(
-                str_pad::prepare(d, payload, &operation_path, None, None, extra)?,
-                value,
-            ),
-            "str_case"
-            | "impute"
-            | "to_date"
-            | "precision"
-            | "imputation_flag"
-            | "round_half_away_from_zero"
-            | "diff"
-            | "study_day"
-            | "to_epoch_day"
-            | "mapping"
-            | "cut"
-            | "greatest"
-            | "least"
-            | "str_extract"
-            | "str_replace"
-            | "str_template"
-            | "compute"
-            | "row_number"
-            | "rank"
-            | "baseline_flag"
-            | "row_value"
-            | "locf"
-            | "shift"
-            | "duration_value"
-            | "dtc"
-            | "time_of_day" => {
-                let mut references = Vec::new();
-                derivations::references(d, value, project, &mut references, 0)?;
-                self_relations::template_references(d, value, templates, &mut references, 0)?;
-                let branch = derivations::prepare_value(
-                    d,
-                    value,
-                    path,
-                    project,
-                    &intermediates::Declarations::default(),
-                    false,
-                    0,
-                    extraction,
-                    templates,
-                )?;
-                reject_deferred_owners(&branch, extra);
-                Self::Expression { branch, references }
+            reference = checks::name(spec, read.variable);
+        }
+        ExprKind::Literal(literal) => {
+            constant(literal, &site)?;
+        }
+        ExprKind::Scalar {
+            op: ast::ScalarOp::StrPad { .. },
+            operands,
+            ..
+        } => {
+            str_pad::from_tree(spec, value)?;
+            reference = checks::operand_name(spec, operands, ast::Slot::Source);
+        }
+        ExprKind::Scalar { .. } | ExprKind::Formula(_) | ExprKind::Window(_) => {
+            let scan = reads::Scan {
+                relation: true,
+                windows: true,
+            };
+            reads::names(spec, value, scan, project.is_some())?;
+            let none = intermediates::Declarations::default();
+            derivations::Admission {
+                project,
+                intermediates: &none,
             }
-            _ => {
-                reject(extra, op, operation_path);
-                // A rejected operation never becomes an executable plan.
-                Self::Literal(crate::value::Value::Missing, value)
-            }
-        };
-        if let Some(name) = declaration.expression_reference() {
-            if let Some((relation, _)) = name.split_once('.') {
-                if d.field(d.root(), "intermediates").is_some_and(|items| {
-                    sequence(d, items).is_ok_and(|items| {
-                        items.iter().any(|&item| {
-                            d.field(item, "id")
-                                .is_some_and(|id| text(d, id).is_ok_and(|name| name == relation))
-                        })
-                    })
-                }) {
-                    reject(extra, "intermediate_key_expression", path.into());
+            .admit(spec, value, 0)?;
+            // Bounds and a fallback are read only when a source needs them,
+            // which a key's demand cannot know.
+            if let ExprKind::Scalar {
+                op:
+                    ast::ScalarOp::Impute { .. }
+                    | ast::ScalarOp::Precision { .. }
+                    | ast::ScalarOp::ImputationFlag { .. }
+                    | ast::ScalarOp::ToDate,
+                ..
+            } = &spec.expr(value).kind
+            {
+                let operation = imputation::from_tree(spec, value)?;
+                for (field, _) in operation.operands().skip(1) {
+                    reject(extra, field, format!("{site}.{field}"));
                 }
             }
         }
-        Ok(declaration)
-    }
-    fn expression_reference(&self) -> Option<&str> {
-        match self {
-            Self::Source(name) => Some(name),
-            Self::StrPad(pad, _) => Some(pad.source()),
-            _ => None,
+        kind => {
+            if let Some(owner) = deferred_owner(kind) {
+                reject(extra, owner, site);
+            }
         }
+    }
+    if let Some((relation, _)) = reference.and_then(|name| name.split_once('.')) {
+        if spec
+            .intermediates
+            .iter()
+            .any(|item| item.id.name == relation)
+        {
+            reject(extra, "intermediate_key_expression", path.into());
+        }
+    }
+    Ok(())
+}
+
+impl Declaration {
+    /// The match value written at `value` in the pair at `pair`. `calls`
+    /// says whether a project call's arguments are among the names an
+    /// expression reads.
+    pub(super) fn from_tree(
+        spec: &ast::Spec,
+        pair: ast::Meta,
+        value: ExprId,
+        calls: bool,
+    ) -> Result<Self, PrepareError> {
+        Ok(match &spec.expr(value).kind {
+            ExprKind::Ref(name) if operation(spec, pair, value) => Self::Source(name.0.clone()),
+            ExprKind::Ref(name) => Self::Variable(name.0.clone()),
+            ExprKind::Source(read) => Self::Source(
+                checks::name(spec, read.variable)
+                    .ok_or(PrepareError::Internal)?
+                    .into(),
+            ),
+            ExprKind::Literal(literal) => {
+                Self::Literal(constant(literal, &checks::path(spec, value))?, value)
+            }
+            ExprKind::Scalar {
+                op: ast::ScalarOp::StrPad { .. },
+                ..
+            } => Self::StrPad(str_pad::from_tree(spec, value)?, value),
+            ExprKind::Scalar { .. } | ExprKind::Formula(_) | ExprKind::Window(_) => {
+                let scan = reads::Scan {
+                    relation: true,
+                    windows: true,
+                };
+                Self::Expression {
+                    expr: value,
+                    references: reads::names(spec, value, scan, calls)?,
+                }
+            }
+            // A refused operation never becomes an executable plan.
+            _ => Self::Literal(crate::value::Value::Missing, value),
+        })
     }
     pub(super) fn reference(&self) -> Option<&str> {
         match self {
@@ -177,11 +206,8 @@ impl Declaration {
         let names = |name: &str| ResultType::declared(catalog.type_of(name));
         match self {
             Self::Variable(name) | Self::Source(name) => Ok(names(name)),
-            Self::Literal(_, value) | Self::StrPad(_, value) => {
-                tree.result_type(*value, ast::Scope::Row, &names)
-            }
-            Self::Expression { branch, .. } => {
-                tree.result_type(branch.value, ast::Scope::Row, &names)
+            Self::Literal(_, expr) | Self::StrPad(_, expr) | Self::Expression { expr, .. } => {
+                Ok(tree.result_type(*expr, ast::Scope::Row, &names))
             }
         }
     }
@@ -215,10 +241,7 @@ impl Declaration {
         defer_unknown: bool,
         context: Context<'_>,
     ) -> Result<Option<MatchValue>, BindError> {
-        if let Self::Expression {
-            branch, references, ..
-        } = self
-        {
+        if let Self::Expression { expr, references } = self {
             if defer_unknown {
                 for name in references {
                     if catalog.bind(name).is_none() {
@@ -316,18 +339,14 @@ impl Declaration {
                 findings: &mut *findings,
                 reported: false,
             }
-            .bind(
-                &branch.operation,
-                &branch.path,
-                context.output.columns().len(),
-            )?;
+            .bind(*expr, context.output.columns().len())?;
             return expression
                 .map(|expression| {
                     crate::dataset::MatchExpression::new(
                         Assignment {
                             column: context.output.columns().len(),
                             expression,
-                            path: branch.path.clone(),
+                            path: checks::path(context.tree.spec(), *expr),
                         },
                         reads,
                         TableSchema::new(fields).map_err(|_| BindError::Internal)?,
@@ -419,58 +438,26 @@ impl Declaration {
     }
 }
 
-/// Conditional and callback relation contexts need a demand-aware key owner.
-/// Keep them outside this bounded scalar/window expansion rather than
-/// pre-reading their unselected branches.
-fn reject_deferred_owners(branch: &cases::Branch, extra: &mut Vec<UnsupportedFeature>) {
-    let operation = match branch.operation.as_ref() {
-        Operation::Case(_) => Some("case"),
-        Operation::ProjectFunction { .. } => Some("function"),
-        Operation::Aggregate(_) => Some("aggregate"),
-        Operation::Odm(_) => Some("odm"),
-        Operation::Flag(_) => Some("flag"),
-        Operation::FirstAvailable(_) => Some("first_available"),
-        Operation::Imputation(operation) if operation.has_conditional_operands() => {
-            for (field, _) in operation.operands().skip(1) {
-                reject(extra, field, format!("{}.{field}", branch.path));
-            }
-            None
-        }
-        _ => None,
-    };
-    if let Some(operation) = operation {
-        reject(extra, operation, branch.path.clone());
-    }
-}
-
-/// Reject aggregate key counts before compiling their authored expressions.
-pub(super) fn declaration_admission(d: &Document) -> Result<(), PrepareError> {
-    let Some(items) = d
-        .field(d.root(), "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    else {
-        return Ok(());
-    };
-    let items = sequence(d, items)?;
-    if items.len() > crate::limits::Limits::COLUMNS {
+/// Reject intermediate and key counts before compiling their authored
+/// expressions.
+pub(super) fn declaration_admission(spec: &ast::Spec) -> Result<(), PrepareError> {
+    if spec.intermediates.len() > crate::limits::Limits::COLUMNS {
         return Err(PrepareError::limit(
             "intermediates",
             crate::limits::Limits::COLUMNS,
-            Some(items.len()),
+            Some(spec.intermediates.len()),
             None,
         ));
     }
-    for (index, &item) in items.iter().enumerate() {
-        if let Some(key) = d.field(item, "key") {
-            if let N::Mapping(fields) = &d.nodes()[key] {
-                if fields.len() > crate::limits::Limits::KEYS {
-                    return Err(PrepareError::limit(
-                        "intermediate_keys",
-                        crate::limits::Limits::KEYS,
-                        Some(fields.len()),
-                        Some(&format!("intermediates[{index}].key")),
-                    ));
-                }
+    for item in &spec.intermediates {
+        if let Some(ast::JoinKey::Pairs { pairs, meta }) = &item.key {
+            if pairs.len() > crate::limits::Limits::KEYS {
+                return Err(PrepareError::limit(
+                    "intermediate_keys",
+                    crate::limits::Limits::KEYS,
+                    Some(pairs.len()),
+                    Some(&checks::render(spec, *meta)),
+                ));
             }
         }
     }
