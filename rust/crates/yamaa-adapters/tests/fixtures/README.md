@@ -194,8 +194,8 @@ asserted or ones read from the documents by hand; no Rust output generated them.
 ## odm_deferred
 # Deferred ODM defaults
 
-Seven independently authored reports and CSV artifacts retain REQ-1265 through
-REQ-1278 semantics when a column default depends on a completed row-number window.
+Seven independently authored reports and CSV artifacts retain NAME-7 to
+NAME-13 semantics when a column default depends on a completed row-number window.
 They cover record occurrence scope, missing items, group hierarchy scope,
 selectors followed by source-only predicates, an unselected CASE branch, and
 complete ambiguity context with the authored row-template identity. Record
@@ -209,8 +209,8 @@ unchanged. The same fixture is staged for installed Python and standalone R.
 ## odm_reads
 # Independently authored ODM reads
 
-These fourteen literal reports and CSV artifacts follow REQ-1265 through
-REQ-1278.
+These fourteen literal reports and CSV artifacts follow NAME-7 to
+NAME-13.
 Eight separate complete preflight failures in `odm_preflight.json` also cover
 REQ-1295.
 They were authored independently of the new Rust evaluator; no native output
@@ -307,8 +307,7 @@ Ordinary-column wrappers compile handlers into the existing core `ConversionHand
 # Original mapping and cut truth
 
 These twenty authored specifications and complete reports were written from
-REQ-0304, REQ-0306, REQ-0334, REQ-0343 through REQ-0347, REQ-0360,
-REQ-0361, REQ-0364, REQ-0709, REQ-0710, REQ-0714, REQ-1110 and REQ-1118.
+COLUMN-10, COLUMN-11, COLUMN-14, EXPR-11, EXPR-12 and EXPR-13.
 No candidate or reference evaluator authored an expected value. The truth owns
 source bytes, typed observations, declared zero/reached handler counts, failure
 identity and geometry, and repeated exact CSV publication. It covers roots,
@@ -340,8 +339,8 @@ This extends existing conversion recovery without changing engine evaluation. Ru
 
 Sixteen independently authored original YAML documents, source records, complete
 reports, handler counts and exact CSV bytes cover scalar driver and secondary
-source bindings. The truth was written from REQ-0075, REQ-0127, REQ-0150-0152 and
-REQ-0345/0353-0356. No candidate or reference execution generated the expectations.
+source bindings. The truth was written from COLUMN-2, COLUMN-11, COLUMN-12, COLUMN-14,
+LOOKUP-1 and LOOKUP-10. No candidate or reference execution generated the expectations.
 
 Cases cover eligibility before ordered selection, stable first/last ties, explicit
 null placement with descending order, empty matches with zero handler counts,
@@ -353,7 +352,7 @@ invalid absence replacements with both handler and conversion context. Successfu
 with fresh attempt-local choices and handler counts. Negative results cannot save.
 
 The source.condition wording in issue #1980 has no grammar definition.
-`yaml/schema_expression_core.yaml` source_binding_class and REQ-0093-0095/0351-0355
+`yaml/schema_expression_core.yaml` source_binding_class, NAME-6 and COLUMN-12
 define variable, filter, order_by, keep and absent. Condition belongs to flag_class.
 Existing unknown-field schema diagnostics remain authoritative. Single-value
 ordered sources and key-phase source options remain explicitly unsupported in

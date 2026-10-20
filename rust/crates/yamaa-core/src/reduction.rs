@@ -1,4 +1,4 @@
-//! COUNT and ordered SUM/MEAN over collected arguments (REQ-0477/0479/0480/0492).
+//! COUNT and ordered SUM/MEAN over collected arguments (FORMULA-18, FORMULA-19 and FORMULA-24).
 
 use crate::{
     numeric::{binary, ArithmeticError, BinaryOperator, Number},

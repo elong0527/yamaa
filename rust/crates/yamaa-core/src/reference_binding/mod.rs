@@ -421,7 +421,7 @@ impl Catalog {
         self.datasets.get(name).map(|dataset| dataset.index)
     }
 
-    /// Resolve bare outputs or a dataset plus its exact stored suffix (REQ-0103/1265).
+    /// Resolve bare outputs or a dataset plus its exact stored suffix (NAME-3 and NAME-7).
     /// A dotted suffix is a field only when literally present; it is never an ODM path.
     pub fn bind(&self, name: &str) -> Option<Binding> {
         if let Some((qualifier, field)) = name.split_once('.') {

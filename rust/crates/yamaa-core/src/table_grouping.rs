@@ -77,7 +77,7 @@ pub enum GroupingError<E> {
     },
 }
 
-/// Partition all rows by bound columns (REQ-0037/0038/0065). Missing values
+/// Partition all rows by bound columns (ROW-4). Missing values
 /// compare equal; text is exact; temporal precision and float zero signs do not
 /// affect equality. Each member list is strictly increasing for ordered folds.
 /// Admission validates the complete column list and table geometry before any

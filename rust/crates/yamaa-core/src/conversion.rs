@@ -1,4 +1,4 @@
-//! Completed-result conversion under REQ-0009-0021 and REQ-0601.
+//! Completed-result conversion under VALUE-1, VALUE-3, VALUE-5 to VALUE-9 and VALUE-15.
 
 use crate::value::{ColumnType, FiniteFloat, Value, ValueType};
 

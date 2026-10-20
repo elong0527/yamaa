@@ -1,4 +1,4 @@
-//! REQ-0261/0262 type syntax. Unions are ordered descriptor lists, not strings.
+//! SCHEMA-9 type syntax. Unions are ordered descriptor lists, not strings.
 
 use std::ops::Range;
 

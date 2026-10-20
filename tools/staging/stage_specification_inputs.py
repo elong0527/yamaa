@@ -685,7 +685,7 @@ def stage_flag_truth(destination: Path):
         entries.append(text(name) + "=list(" + ",".join(values) + ")")
     (destination / "flag-truth.R").write_text(
         "# Independent original CSV/findings/handlers; no candidate execution.\n"
-        "# Held: generic case REQ-0103/0189 and recursive report context PR1933.\n"
+        "# Held: generic case (NAME-3, FORMULA-9) and recursive report context PR1933.\n"
         "flag_truth <- list(\n" + ",\n".join(entries) + "\n)\n",
         encoding="ascii",
     )

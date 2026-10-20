@@ -1,4 +1,4 @@
-//! Basic arithmetic over already evaluated, typed operands (REQ-0420-0434).
+//! Basic arithmetic over already evaluated, typed operands (FORMULA-12 to FORMULA-15, VALUE-5 and VALUE-10).
 //!
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.
@@ -261,7 +261,7 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
     Number::float(result)
 }
 
-/// Return the binary64 square root after numeric promotion (REQ-0422/0431).
+/// Return the binary64 square root after numeric promotion (FORMULA-15 and VALUE-10).
 /// Missing propagates; negative present input reports a domain condition. Negative
 /// zero is valid and retains its sign, matching the Python reference.
 pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
@@ -284,7 +284,7 @@ pub enum MathFunction {
     Ln,
 }
 
-/// Apply the explicitly selected portable math policy (REQ-0422/0427/0432).
+/// Apply the explicitly selected portable math policy (FORMULA-14, FORMULA-15 and VALUE-10).
 /// Promote before math, propagate missing, and normalize overflow to missing.
 pub fn math(
     function: MathFunction,

@@ -1,4 +1,4 @@
-//! Generated record positions retain physical source order (REQ-1291 to REQ-1294).
+//! Generated record positions retain physical source order (INPUT-3 and INPUT-4).
 use crate::{
     diagnostic::SourceFinding,
     table::{Column, TableSchema},

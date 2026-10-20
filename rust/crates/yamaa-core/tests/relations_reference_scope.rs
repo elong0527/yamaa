@@ -862,7 +862,7 @@ mod relations {
                 .iter()
                 .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
                 .collect::<Vec<_>>();
-            // REQ-0156/0157: this template's raw DONOR record must carry ID.
+            // LOOKUP-2: this template's raw DONOR record must carry ID.
             assert_eq!(diagnostics.len(), 2);
             for (diagnostic, path) in diagnostics.iter().zip([
                 "columns.ID.derivation.source",

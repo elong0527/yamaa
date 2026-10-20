@@ -1,5 +1,5 @@
 {
-  "authorship": "Independent REQ-0183/0185/0383/0384/0372 examples. Tables, findings and complete verification records are authored here; no candidate observation or retiring evaluator supplied expected truth.",
+  "authorship": "Independent CHECK-1, CHECK-12 and FORMULA-9 examples. Tables, findings and complete verification records are authored here; no candidate observation or retiring evaluator supplied expected truth.",
   "cases": {
     "lookup-when": {
       "specification": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC: src.csv\n  DONOR: {path: donor.csv, types: {SEQ: int, X: int}}\noutput: {path: result.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: P\n    dataset: DONOR\n    key: [ID]\n    order_by: [DONOR.SEQ]\n    keep: first\n    no_match: {literal: null}\ncolumns:\n  - {name: ID, type: str, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: {literal: 2}}\nverifications:\n  - assert: {id: selected, when: \"P.X = 2\", require: \"VALUE = 2\"}\n  - row_count: {min: 3, max: 3}\n",

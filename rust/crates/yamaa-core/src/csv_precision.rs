@@ -1,4 +1,4 @@
-//! CSV display rounding under REQ-0745/0747/0748, after execution gates.
+//! CSV display rounding under CSV-7 and CSV-9, after execution gates.
 use num_bigint::BigUint;
 
 use crate::{decimal_rounding::rounded_magnitude, value::FiniteFloat};

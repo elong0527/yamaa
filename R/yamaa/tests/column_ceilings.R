@@ -182,7 +182,7 @@ run_column_ceilings <- function() {
   # A fixed refusal does not certify that later semantic checks passed. Once
   # capacity is repaired, both operations and routes expose the remaining error.
   case_root <- path("incomplete-checks")
-  # Every specification is pruned after composition (REQ-0638-REQ-0641):
+  # Every specification is pruned after composition (LAYER-11 and LAYER-12):
   # keep all 1,025 columns live so the columns capacity is still exercised
   # instead of being pruned away.
   spec <- write_case(case_root, columns = 1025L)
