@@ -195,6 +195,26 @@ pub(super) fn diagnostic(
     }
 }
 
+/// Shared context for an undeclared field, including a retired parent list.
+pub(super) fn unknown_field_context(
+    field: &str,
+    class: &str,
+) -> Vec<(&'static str, SchemaContext)> {
+    let mut context = vec![
+        ("field", SchemaContext::Text(field.into())),
+        ("class", SchemaContext::Text(class.into())),
+    ];
+    if class == "root_class" && field == "parents" {
+        context.push((
+            "hint",
+            SchemaContext::Text(
+                "write one parent: next.yaml per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml".into(),
+            ),
+        ));
+    }
+    context
+}
+
 /// An undeclared class field (SCHEMA-13), or one this view of the closure
 /// leaves out as newer than the version the document declares (SCHEMA-2).
 pub(super) fn unknown_field(
@@ -203,10 +223,7 @@ pub(super) fn unknown_field(
     class: &str,
     later: Option<crate::language::LanguageVersion>,
 ) -> SchemaDiagnostic {
-    let mut context = vec![
-        ("field", SchemaContext::Text(field.into())),
-        ("class", SchemaContext::Text(class.into())),
-    ];
+    let mut context = unknown_field_context(field, class);
     let code = match later {
         Some(since) => {
             context.push(("since", SchemaContext::Text(since.to_string())));
@@ -482,6 +499,16 @@ impl Run<'_> {
             return self.invalid(site, name);
         };
         let mut diagnostics = Vec::new();
+        // A retired parent list may supply the absent root fields. Report its
+        // spelling before asking for those fields; written values, including
+        // missing fields inside them, still receive their own findings.
+        let retired_parent = site.root
+            && self.nulls.clears()
+            && name == "root_class"
+            && fields.iter().any(|field| field.name == "parent")
+            && !fields.iter().any(|field| field.name == "parents")
+            && self.input.field(site.value, "parents").is_some()
+            && self.input.field(site.value, "parent").is_none();
         for field in fields {
             let path = self.joined(site.path, &field.name, false)?;
             match self.field(site.value, &field.name)? {
@@ -508,6 +535,7 @@ impl Run<'_> {
                     diagnostics.extend(self.descriptor(field.descriptor, child)?)
                 }
                 None if !site.fragment
+                    && !retired_parent
                     && self.schema.descriptors()[field.descriptor]
                         .descriptor
                         .required() =>
@@ -834,13 +862,30 @@ impl Run<'_> {
                         None
                     };
                     let Some(entry) = entry else {
+                        let mut context = vec![
+                            ("registry", Self::text(&registry.name)),
+                            ("operation", Self::text(&operation)),
+                        ];
+                        if registry.name == "expressions" {
+                            let hint = match operation.as_str() {
+                                "date_diff" => Some("write diff with type: date"),
+                                "datetime_diff" => Some("write diff with type: datetime"),
+                                "date_shift" => Some("write shift with type: date"),
+                                "datetime_shift" => Some("write shift with type: datetime"),
+                                "date_impute" => Some("write impute with type: date"),
+                                "datetime_impute" => Some("write impute with type: datetime"),
+                                "date_precision" => Some("write precision with type: date"),
+                                "datetime_precision" => Some("write precision with type: datetime"),
+                                _ => None,
+                            };
+                            if let Some(hint) = hint {
+                                context.push(("hint", Self::text(hint)));
+                            }
+                        }
                         return Ok(vec![self.diagnostic(
                             site.child(site.value, &path),
                             ConditionCode::SchemaUnknownOperation,
-                            vec![
-                                ("registry", Self::text(&registry.name)),
-                                ("operation", Self::text(&operation)),
-                            ],
+                            context,
                         )]);
                     };
                     match &entry.shape {

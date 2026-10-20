@@ -63,6 +63,19 @@ impl Failure {
                 context.insert("function".into(), text(function));
                 if let Some(count) = argument_count {
                     context.insert("argument_count".into(), V::from(*count));
+                } else {
+                    let hint = match function.to_ascii_uppercase().as_str() {
+                        "COALESCE" => Some("use the first_available expression"),
+                        "GREATEST" => Some("use the greatest expression"),
+                        "LEAST" => Some("use the least expression"),
+                        "ROUND" | "ROUND_HALF_AWAY_FROM_ZERO" => {
+                            Some("use the round_half_away_from_zero operation")
+                        }
+                        _ => None,
+                    };
+                    if let Some(hint) = hint {
+                        context.insert("hint".into(), text(hint));
+                    }
                 }
             }
             Self::NestedReduction { outer, inner } => {

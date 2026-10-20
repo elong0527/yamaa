@@ -155,7 +155,7 @@ impl Run<'_> {
                 self.finding(
                     &logical,
                     ConditionCode::SchemaLayerUnknownField,
-                    vec![("field", C::Text(name)), ("class", C::Text(class.into()))],
+                    super::validation::unknown_field_context(&name, class),
                 )?;
             }
         }

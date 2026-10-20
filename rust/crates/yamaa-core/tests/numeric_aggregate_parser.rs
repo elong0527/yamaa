@@ -529,6 +529,79 @@ mod numeric {
             }
         }
 
+        /// Retired calls stay refused, with a replacement in the public finding.
+        #[test]
+        fn retired_formula_functions_name_their_replacement() {
+            use yamaa_core::json::Value as V;
+
+            for (call, function, hint) in [
+                (
+                    "cOaLeScE(A, B)",
+                    "cOaLeScE",
+                    "use the first_available expression",
+                ),
+                ("GREATEST(A, B)", "GREATEST", "use the greatest expression"),
+                ("least(A, B)", "least", "use the least expression"),
+                (
+                    "ROUND(A, 2)",
+                    "ROUND",
+                    "use the round_half_away_from_zero operation",
+                ),
+                (
+                    "round_half_away_from_zero(A, 2)",
+                    "round_half_away_from_zero",
+                    "use the round_half_away_from_zero operation",
+                ),
+            ] {
+                for field in [Context::Compute, Context::Aggregate, Context::Predicate] {
+                    let expression = if field == Context::Predicate {
+                        format!("{call} > 0")
+                    } else {
+                        format!("1 + {call}")
+                    };
+                    let Err(CompileError::Invalid {
+                        position, failure, ..
+                    }) = compile(&expression, field, "columns.V.derivation.compute")
+                    else {
+                        panic!("retired call must fail before resolving A or B: {expression}")
+                    };
+                    let finding = failure.diagnostic(
+                        field,
+                        "columns.V.derivation.compute",
+                        &expression,
+                        position.character,
+                    );
+                    assert_eq!(finding.definition().condition, "prohibited_function");
+                    assert_eq!(finding.definition().requirement, Some("REQ-0440"));
+                    assert_eq!(finding.spec_paths, ["columns.V.derivation.compute"]);
+                    assert_eq!(finding.context["function"], V::String(function.into()));
+                    assert_eq!(finding.context["hint"], V::String(hint.into()));
+                    assert_eq!(
+                        failure.syntax_diagnostic().context["hint"],
+                        V::String(hint.into())
+                    );
+                    assert_eq!(position.byte, expression.find(function).unwrap());
+                    assert!(!finding.context.contains_key("argument_count"));
+                }
+            }
+            for expression in ["mystery(A)", "ABS(A, B)", "SUM(A)"] {
+                let Err(CompileError::Invalid {
+                    position, failure, ..
+                }) = compile(expression, Context::Compute, "columns.V.derivation.compute")
+                else {
+                    panic!("invalid call must still fail: {expression}")
+                };
+                let finding = failure.diagnostic(
+                    Context::Compute,
+                    "columns.V.derivation.compute",
+                    expression,
+                    position.character,
+                );
+                assert_eq!(finding.definition().condition, "prohibited_function");
+                assert!(!finding.context.contains_key("hint"));
+            }
+        }
+
         /// Plan reuse resolves each original occurrence again.
         #[test]
         fn plan_reuse_resolves_every_occurrence_again() {
