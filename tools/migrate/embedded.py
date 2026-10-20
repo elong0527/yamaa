@@ -9,15 +9,16 @@ never in place. P2-9 and P2-10 of #3030 run it on the Rust tests and the host
 suites.
 
 It adds no transform of its own. A document is converted by the file
-converter (`tools.migrate.unit`) as a loose file of the name the source writes
-it to, `document.yaml` when no call names one, so it gives the same YAML values
-here as in a file. A fixture case (a JSON object naming its parent layers and
-inputs by file name) converts its documents together with those files, so keys
-and clears read them. A fragment is converted as a Markdown block is, only when it
-shows a 0.5 spelling; JSON converts through its block rendering
-(`tools.migrate.fixtures`). A spec-path string is rewritten through the rename
-table's `paths` block (P-CLR-2), against the specification beside it: one in
-the same function, test case or fixture row, or bound to a name used there.
+converter (`tools.migrate.convert`) as a loose file of the name the source
+writes it to, `document.yaml` when no call names one, so it gives the same
+YAML values here as in a file. A fixture case, a JSON object naming its parent
+layers and inputs by file name, converts its documents together with those
+files, so keys and clears read them. A fragment is converted as a Markdown
+block is, and only when it shows a 0.5 spelling. JSON converts through its
+block rendering and is written back in its layout (`tools.migrate.fixtures`).
+A spec-path string is rewritten through the rename table's `paths` block
+(P-CLR-2), against the specification beside it: one in the same function,
+test case or fixture row, or bound to a name used there.
 
 What it cannot convert it lists for manual work instead:
 
@@ -27,6 +28,7 @@ What it cannot convert it lists for manual work instead:
   whose YAML would change, since it would no longer match;
 - a 0.5 document that does not parse as written, such as a prefix code
   completes, or whose conversion would not parse;
+- JSON the conversion changes, in a layout `json.dumps` does not write;
 - a spec path naming an intermediate or row template by index where no
   specification beside it, or more than one, settles the member, and a
   changed spec path inside a longer string (a report row, a template that
