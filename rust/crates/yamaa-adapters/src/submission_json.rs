@@ -6,6 +6,7 @@
 //! and the output-byte boundary.
 use std::io::{self, Write};
 use yamaa_core::{
+    application_issue::{Fault, Stage},
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
     submission_composition::Finding,
@@ -65,19 +66,24 @@ impl Write for Writer<'_> {
     }
 }
 impl Writer<'_> {
-    fn failure(&self, cause: impl std::fmt::Display) -> Finding {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            self.path,
-            &cause.to_string(),
-        )
+    /// A write into the held buffer fails only at the output bound; any other
+    /// failure is a byte projection the writer could not complete.
+    fn failure(&self, error: io::Error) -> Finding {
+        match error
+            .get_ref()
+            .and_then(|cause| cause.downcast_ref::<LimitExceeded>())
+        {
+            Some(bound) => Finding::limit(self.path, Stage::Define, Fault::OutputLimit, *bound),
+            None => Finding::fault(self.path, Stage::Define, Fault::OutputProjection),
+        }
     }
     fn text(&mut self, text: &str) -> Result<(), Finding> {
         self.write_all(text.as_bytes())
             .map_err(|error| self.failure(error))
     }
     fn string(&mut self, text: &str) -> Result<(), Finding> {
-        serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error))
+        // serde_json hands an I/O failure back as the original error.
+        serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error.into()))
     }
     fn cell(&mut self, value: ValueRef<'_>) -> Result<(), Finding> {
         match value {
@@ -220,6 +226,54 @@ mod tests {
             writer.cell(ValueRef::from(&value)).unwrap();
             assert_eq!(writer.output, expected.as_bytes());
         }
+    }
+    /// The output bound reaches the finding with its resource facts, written
+    /// directly or through serde_json; any other failure is a projection fault.
+    #[test]
+    fn a_refused_write_names_the_output_bound_or_a_projection_fault() {
+        use yamaa_core::json::Value as V;
+        struct Refusing;
+        impl Write for Refusing {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(io::Error::other(LimitExceeded {
+                    resource: "output_bytes",
+                    limit: Limits::OUTPUT_BYTES,
+                    actual: Some(Limits::OUTPUT_BYTES + 1),
+                }))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let writer = Writer {
+            output: Vec::new(),
+            path: "datasets.DM.transport",
+        };
+        let text = |value: &str| V::String(value.into());
+        let bound: yamaa_core::diagnostic::Context = [
+            ("actual".into(), V::from(Limits::OUTPUT_BYTES + 1)),
+            ("code".into(), text("output_limit")),
+            ("limit".into(), V::from(Limits::OUTPUT_BYTES)),
+            ("resource".into(), text("output_bytes")),
+            ("stage".into(), text("define")),
+        ]
+        .into();
+        let direct = writer.failure(Refusing.write(b"x").unwrap_err());
+        let serialized = writer.failure(serde_json::to_writer(Refusing, "x").unwrap_err().into());
+        for finding in [direct, serialized] {
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.path, "datasets.DM.transport");
+            assert_eq!(finding.context, bound);
+        }
+        let other = writer.failure(io::Error::other("not a bound"));
+        assert_eq!(
+            other.context,
+            [
+                ("code".into(), text("output_projection")),
+                ("stage".into(), text("define")),
+            ]
+            .into()
+        );
     }
     #[test]
     fn float_cells_use_the_portable_float_text() {

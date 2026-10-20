@@ -1294,7 +1294,7 @@ mod files {
                     error.diagnostics(),
                     [yamaa_core::application_issue::rejected(
                         yamaa_core::application_issue::Stage::Prepare,
-                        yamaa_core::application_issue::Fault::ResourceUnreadable
+                        yamaa_core::application_issue::Fault::ResourceUnreadable,
                     )]
                 );
             }
@@ -1328,7 +1328,7 @@ mod files {
                 error.diagnostics(),
                 [yamaa_core::application_issue::rejected(
                     yamaa_core::application_issue::Stage::Prepare,
-                    yamaa_core::application_issue::Fault::ResourceUnreadable
+                    yamaa_core::application_issue::Fault::ResourceUnreadable,
                 )]
             );
         }

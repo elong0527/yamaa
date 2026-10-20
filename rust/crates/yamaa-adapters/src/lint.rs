@@ -122,7 +122,11 @@ impl Error {
                         Vec::new(),
                     )];
                 }
-                vec![rejected(Stage::Output, write_code(error))]
+                // A replaced file fails as any published output does.
+                vec![rejected(
+                    Stage::Output,
+                    crate::file_application::publication_fault(error),
+                )]
             }
         }
     }
@@ -228,22 +232,8 @@ fn source_diagnostics(file: &str, failure: &DecodeFailure) -> Vec<Diagnostic> {
             Vec::new(),
         )],
         DecodeFailure::Unavailable => vec![rejected(Stage::Prepare, Fault::YamlReaderUnavailable)],
+        // An admission defect, as specification capture reports it.
         DecodeFailure::Internal => vec![rejected(Stage::Prepare, Fault::YamlDecode)],
-    }
-}
-
-fn write_code(error: &crate::file_publication::Error) -> yamaa_core::application_issue::Fault {
-    use crate::file_publication::Error as E;
-    use yamaa_core::application_issue::Fault;
-    match error {
-        E::Host(_) => Fault::HostPublicationFailure,
-        E::InvalidTarget => Fault::InvalidTarget,
-        E::PathMismatch => Fault::PathMismatch,
-        E::Limit(_) => Fault::PublicationLimit,
-        E::StagingCollision => Fault::StagingCollision,
-        E::Changed => Fault::TargetChanged,
-        E::Io(_) => Fault::PublicationFailed,
-        E::Cleanup { .. } => Fault::CleanupIncomplete,
     }
 }
 

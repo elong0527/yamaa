@@ -1167,11 +1167,18 @@ mod file {
             assert!(run.save().is_err());
             assert!(run.failure().is_some());
             assert!(!temp.0.join("dm.json").exists());
+            // A directory at the target is refused as an invalid target.
+            let text = |i: &yamaa_core::diagnostic::Diagnostic, key: &str| {
+                i.context
+                    .get(key)
+                    .and_then(|value| value.as_str())
+                    .map(str::to_owned)
+            };
             assert!(run.issues().iter().any(|i| i.phase() == "engine"
                 && i.condition() == "engine_rejected"
                 && i.requirement().is_none()
-                && yamaa_adapters::json_wire::encode_object(&i.context)
-                    .contains("publication_target_admission")));
+                && text(i, "stage").as_deref() == Some("publication_target_admission")
+                && text(i, "code").as_deref() == Some("invalid_target")));
             assert!(matches!(
                 run.failure(),
                 Some(yamaa_adapters::file_define::Failure::TargetAdmission { index: 1, .. })

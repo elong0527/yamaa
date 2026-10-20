@@ -102,6 +102,124 @@ mod diagnostics {
             );
         }
 
+        /// The engine fault vocabulary is public context: every `stage` and
+        /// `code` spelling is frozen here, in declaration order, so renaming a
+        /// variant cannot move what a refusal reports.
+        #[test]
+        fn engine_fault_stages_and_codes_keep_their_spellings() {
+            use yamaa_core::application_issue::{Fault, Stage};
+            assert_eq!(
+                Stage::ALL
+                    .iter()
+                    .map(|stage| stage.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "bind",
+                    "build",
+                    "capture",
+                    "check",
+                    "define",
+                    "dictionary",
+                    "environment",
+                    "execute",
+                    "ingest",
+                    "inheritance",
+                    "output",
+                    "prepare",
+                    "project",
+                    "publication_target_admission",
+                    "report",
+                    "resolve",
+                ]
+            );
+            assert_eq!(
+                Fault::ALL
+                    .iter()
+                    .map(|fault| fault.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "activation_boundary",
+                    "artifact_representation",
+                    "cleanup_incomplete",
+                    "compilation_boundary",
+                    "compiler_limit",
+                    "csv_limit",
+                    "declaring_origin",
+                    "dependencies",
+                    "dependency_policy",
+                    "diagnostic_context",
+                    "document",
+                    "environment_boundary",
+                    "execution_boundary",
+                    "execution_limit",
+                    "host_publication_failure",
+                    "host_resource_failure",
+                    "inheritance_required",
+                    "internal",
+                    "invalid_packaging_lock",
+                    "invalid_target",
+                    "inventory",
+                    "issue_projection",
+                    "normalization",
+                    "numeric_policy",
+                    "odm_projection_boundary",
+                    "opaque_host",
+                    "output_limit",
+                    "output_projection",
+                    "output_schema",
+                    "parent_required",
+                    "parquet_boundary",
+                    "parquet_codec_unavailable",
+                    "parquet_limit",
+                    "parquet_reader_unavailable",
+                    "path_mismatch",
+                    "producer_contract",
+                    "producer_metadata",
+                    "project_sections",
+                    "publication_cancelled",
+                    "publication_failed",
+                    "publication_limit",
+                    "publication_report_limit",
+                    "publication_unwind",
+                    "reference_catalog",
+                    "report_refusal",
+                    "report_stack",
+                    "resource_base",
+                    "resource_changed",
+                    "resource_limit",
+                    "resource_link",
+                    "resource_missing",
+                    "resource_not_regular",
+                    "resource_outside_roots",
+                    "resource_path",
+                    "resource_root",
+                    "resource_unavailable",
+                    "resource_unreadable",
+                    "result_projection",
+                    "sas_boundary",
+                    "sas_limit",
+                    "sas_reader_unavailable",
+                    "schema_bundle",
+                    "shipped_schema",
+                    "source_boundary",
+                    "source_collection_boundary",
+                    "source_count",
+                    "source_limit",
+                    "source_ordinal_boundary",
+                    "staging_collision",
+                    "table_limit",
+                    "target_changed",
+                    "transport",
+                    "unknown_class",
+                    "unknown_section",
+                    "validation_policy",
+                    "versioned_root_required",
+                    "yaml_decode",
+                    "yaml_reader_unavailable",
+                ]
+            );
+        }
+
         /// Every registry entry must be reached by its evaluator, converter or resource cause. Expected
         /// vocabulary is independent literal truth, not copied from the registry at runtime.
         #[test]
