@@ -576,10 +576,19 @@ class RLinkStepTests(unittest.TestCase):
             ("$(SHLIB): X = 1\n\tPKG_LIBS += -s\n", "-s strips"),
             # make reads CRLF as LF, so the line continues.
             ("PKG_LIBS = $(RUST_LIB) -Xlinker \\\r\n\t-x\r\n", "-x strips"),
-            # The shell runs the line after a recipe comment's backslash.
+            # The shell runs the line after a recipe comment's backslash, and
+            # joins a recipe's other lines without a space.
             (
                 "rust_clean: $(SHLIB)\n\t# tidy \\\n\tstrip $(SHLIB)\n",
                 "a recipe runs strip;",
+            ),
+            (
+                "rust_clean: $(SHLIB)\n\t$(SHLIB_LINK) -Xlinker \\\n\t-x\n",
+                "a recipe runs -x;",
+            ),
+            (
+                "rust_clean: $(SHLIB)\n\t$(SHLIB_LINK) -Wl,\\\n\t-s\n",
+                "a recipe runs -Wl,-s;",
             ),
         ):
             with self.subTest(text=text):

@@ -197,11 +197,20 @@ def check_r_link(label, makevars):
             if depth:
                 refuse_strip(label, line, recipe=False)
         elif rule and line.startswith("\t"):
-            # The shell reads a recipe line by line, so a comment that ends in
-            # a backslash does not hide the line after it.
+            # make hands a recipe line to the shell with its backslash-newlines
+            # and drops the tab that leads each continuation line. The shell
+            # joins the lines there without a space, but a comment ends at its
+            # newline, so it does not hide the line after it.
+            commands, command = [], ""
             for part in physical:
-                if not part.lstrip().startswith("#"):
-                    refuse_strip(label, part.removesuffix("\\"), recipe=True)
+                if part.lstrip().startswith("#"):
+                    commands.append(command)
+                    command = ""
+                else:
+                    piece = part.removeprefix("\t") if command else part
+                    command += piece.removesuffix("\\")
+            for shell_command in [*commands, command]:
+                refuse_strip(label, shell_command, recipe=True)
         elif text and not text.startswith("#"):
             refuse_strip(label, line, recipe=False)
             if DEFINE.match(text):
