@@ -1,7 +1,8 @@
 # Dataset-JSON
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a project file sets `datasets: json`. Such a
+selected submission section of a project file sets `transport: dataset_json`
+(`datasets: json` in a project file that declares `schema_version`). Such a
 build writes one deterministic Dataset-JSON 1.1 file per
 composed specification, carrying the published dataset and the submission
 metadata the [Define-XML](define-xml.md) document is generated from. A domain
@@ -13,20 +14,21 @@ files [SAS Transport](xpt.md) writes.
 
 <a id="json-1"></a>
 
-### JSON-1. A section's `datasets` requests one transport file per composed dataset, named for the dataset beside the document
+### JSON-1. A section's `transport` requests one transport file per composed dataset, named for the dataset beside the document
 
-The selected project submission section's optional `datasets` requests one
-transport file for each specification in its ordered `specs`: `json` a
-Dataset-JSON file under this profile, and `xpt` a SAS Transport version 5 file
-under [SAS Transport](xpt.md). Each file is in the directory of the section's
+The selected project submission section's optional `transport` requests one
+transport file for each specification in its ordered `specs`: `dataset_json`
+a Dataset-JSON file under this profile, and `xpt` a SAS Transport version 5
+file under [SAS Transport](xpt.md). Each file is in the directory of the section's
 `define` target, named the lower-case dataset name with the extension `.json`
 or `.xpt`. Omission produces only the Define-XML document. The extension
 mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv` and
 `.parquet`.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
-One section requests one transport. The file's place depends on the document
+A project file that declares `schema_version` spells the field `datasets` and
+the Dataset-JSON value `json`. One section requests one transport. The file's place depends on the document
 and the dataset name alone, not on where the artifact is published: a `DM`
 dataset beside `out/define.xml` is written to `out/dm.json` or `out/dm.xpt`.
 A section that requests a transport names its document `define.xml`
@@ -320,7 +322,7 @@ artifact's empty field arrives as missing under
 
 ### JSON-12. When Dataset-JSON is requested, each dataset's leaf names its JSON file
 
-When the selected section sets `datasets: json`, each dataset's `def:leaf`
+When the selected section sets `transport: dataset_json`, each dataset's `def:leaf`
 names that dataset's JSON file beside the document: its `xlink:href` and
 `def:title` use the JSON file name rather than the published CSV or Parquet
 path. When no transport is requested, the leaf names the specification's

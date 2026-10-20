@@ -1,4 +1,4 @@
-//! Lower a 0.5 project's study and submission sections, the declarations
+//! Lower a project's study and submission sections, the declarations
 //! Define-XML composition reads.
 //!
 //! Every closed field is checked as it lowers: a declaration of the wrong
@@ -6,11 +6,18 @@
 //! vocabulary refuses the whole set, with every finding naming the exact
 //! document nodes. The schema admits only complete declarations, so only a
 //! document admitted without it is refused.
+//!
+//! The 1.0 front end ([`crate::front_end::v1::project`]) lowers its sections
+//! here too. A 1.0 section writes `standards`, a list whose first entry is the
+//! default (D16), where 0.5 writes one `standard`; `transport: dataset_json`
+//! or `xpt` where 0.5 writes `datasets: json` or `xpt` (P-PRJ-1); and a guide
+//! status may be `Provisional` (P-STD-1).
 
 use super::project::Metas;
 use crate::ast::{
     DefineContext, DocumentKind, GuideStatus, ImplementationGuide, Meta, MetadataVersion, Named,
-    Section, Study, SubmissionDeclarations, SupportingDocument, Text, Transport, STANDARD_NAMES,
+    Section, Study, SubmissionDeclarations, SupportingDocument, Surface, Text, Transport,
+    STANDARD_NAMES,
 };
 use crate::diagnostic::ScalarSubmissionRule;
 use crate::project_environment::Submission;
@@ -27,12 +34,14 @@ pub enum FieldName {
     Description,
     ProtocolName,
     Standard,
+    Standards,
     Version,
     Status,
     Specs,
     Define,
     Documents,
     Datasets,
+    Transport,
     Context,
     XmlLang,
     FileOid,
@@ -56,12 +65,14 @@ impl FieldName {
             Self::Description => "description",
             Self::ProtocolName => "protocol_name",
             Self::Standard => "standard",
+            Self::Standards => "standards",
             Self::Version => "version",
             Self::Status => "status",
             Self::Specs => "specs",
             Self::Define => "define",
             Self::Documents => "documents",
             Self::Datasets => "datasets",
+            Self::Transport => "transport",
             Self::Context => "context",
             Self::XmlLang => "xml_lang",
             Self::FileOid => "file_oid",
@@ -151,10 +162,9 @@ impl Finding {
             Kind::InvalidLanguage => Some(ScalarSubmissionRule::Language),
             Kind::InvalidChoice
                 if self.origin.map(|v| v.field) == Some(FieldName::Name)
-                    && self
-                        .path
-                        .steps()
-                        .any(|v| v == Step::Field(FieldName::Standard)) =>
+                    && self.path.steps().any(|v| {
+                        matches!(v, Step::Field(FieldName::Standard | FieldName::Standards))
+                    }) =>
             {
                 Some(ScalarSubmissionRule::StandardName)
             }
@@ -208,6 +218,21 @@ const SECTION: &[FieldName] = &[
     FieldName::Stylesheet,
     FieldName::SourceSystemVersion,
 ];
+/// A 1.0 section's fields: `standards` and `transport` (D16, P-PRJ-1).
+const SECTION_V1: &[FieldName] = &[
+    FieldName::Specs,
+    FieldName::Standards,
+    FieldName::Define,
+    FieldName::Documents,
+    FieldName::Transport,
+    FieldName::Context,
+    FieldName::XmlLang,
+    FieldName::FileOid,
+    FieldName::MetadataVersion,
+    FieldName::Originator,
+    FieldName::Stylesheet,
+    FieldName::SourceSystemVersion,
+];
 fn family(field: &str) -> Option<(Submission, FieldName)> {
     match field {
         "sdtm" => Some((Submission::Sdtm, FieldName::Sdtm)),
@@ -217,13 +242,14 @@ fn family(field: &str) -> Option<(Submission, FieldName)> {
     }
 }
 
-/// Lower the study and sections of the project whose root is `root`, with
-/// every meta in the project's arena under `meta`.
-pub(super) fn lower<'d>(
+/// Lower the study and sections of the project whose root is `root`, written
+/// in `surface`, with every meta in the project's arena under `meta`.
+pub(in crate::front_end) fn lower<'d>(
     input: &'d Document,
     root: usize,
     metas: &mut Metas<'_>,
     meta: Meta,
+    surface: Surface,
 ) -> Result<SubmissionDeclarations, Error<'d>> {
     let refuse = |cause| Error { input, cause };
     let Some(N::Mapping(_)) = input.nodes().get(root) else {
@@ -232,6 +258,7 @@ pub(super) fn lower<'d>(
     let mut parser = Parser {
         input,
         metas,
+        surface,
         findings: Vec::new(),
     };
     let declarations = parser.run(root, meta);
@@ -242,18 +269,19 @@ pub(super) fn lower<'d>(
     }
 }
 
-/// Lower the study and sections of a whole project document, as
+/// Lower the study and sections of a whole 0.5 project document, as
 /// [`super::project`] does, into an arena of their own.
 pub fn sections(input: &Document) -> Result<SubmissionDeclarations, Error<'_>> {
     let mut paths = crate::ast::Paths::new();
     let mut metas = Metas::new(None, &mut paths);
     let meta = metas.root(input.root());
-    lower(input, input.root(), &mut metas, meta)
+    lower(input, input.root(), &mut metas, meta, Surface::V0_5)
 }
 
 struct Parser<'d, 'm, 'p> {
     input: &'d Document,
     metas: &'m mut Metas<'p>,
+    surface: Surface,
     findings: Vec<Finding>,
 }
 #[derive(Clone, Copy)]
@@ -505,12 +533,13 @@ impl<'d> Parser<'d, '_, '_> {
             meta,
         })
     }
-    fn guide(&mut self, origin: Origin, path: Path, parent: Meta) -> Option<ImplementationGuide> {
+    /// An implementation guide at `meta`: 0.5's one `standard`, or a
+    /// `standards` entry.
+    fn guide(&mut self, origin: Origin, path: Path, meta: Meta) -> Option<ImplementationGuide> {
         if !self.mapping(origin, path, GUIDE) {
             return None;
         }
         let node = origin.node.unwrap();
-        let meta = self.meta(parent, origin);
         let name_origin = self.get(node, FieldName::Name);
         let names: Vec<_> = STANDARD_NAMES.iter().map(|name| (*name, *name)).collect();
         let name = self
@@ -521,10 +550,18 @@ impl<'d> Parser<'d, '_, '_> {
             });
         let version =
             self.required_text((node, meta), FieldName::Version, path, TextRule::NonEmpty);
+        let statuses: &[(&str, GuideStatus)] = match self.surface {
+            Surface::V0_5 => &[("Draft", GuideStatus::Draft), ("Final", GuideStatus::Final)],
+            Surface::V1 { .. } => &[
+                ("Draft", GuideStatus::Draft),
+                ("Final", GuideStatus::Final),
+                ("Provisional", GuideStatus::Provisional),
+            ],
+        };
         let status = self.choice(
             self.get(node, FieldName::Status),
             path.field(FieldName::Status),
-            &[("Draft", GuideStatus::Draft), ("Final", GuideStatus::Final)],
+            statuses,
             None,
         );
         Some(ImplementationGuide {
@@ -572,6 +609,28 @@ impl<'d> Parser<'d, '_, '_> {
             meta,
         })
     }
+    /// A 1.0 section's `standards`, each entry at `standards[i]`. An omitted
+    /// list declares none.
+    fn standards(&mut self, node: usize, path: Path, meta: Meta) -> Vec<ImplementationGuide> {
+        let origin = self.get(node, FieldName::Standards);
+        let list_path = path.field(FieldName::Standards);
+        let items = self.sequence(origin, list_path, true).unwrap_or(&[]);
+        let listed = self.meta(meta, origin);
+        let mut guides = Vec::with_capacity(items.len());
+        for (index, &item) in items.iter().enumerate() {
+            let entry = Origin {
+                container: origin.node.expect("standards list occurrence"),
+                key: None,
+                node: Some(item),
+                field: FieldName::Standards,
+            };
+            let at = self.metas.index(listed, index, item);
+            if let Some(guide) = self.guide(entry, list_path.child(Step::Index(index)), at) {
+                guides.push(guide);
+            }
+        }
+        guides
+    }
     fn section(
         &mut self,
         family: Submission,
@@ -579,19 +638,27 @@ impl<'d> Parser<'d, '_, '_> {
         path: Path,
         parent: Meta,
     ) -> Option<Section> {
-        if !self.mapping(origin, path, SECTION) {
+        let v1 = matches!(self.surface, Surface::V1 { .. });
+        if !self.mapping(origin, path, if v1 { SECTION_V1 } else { SECTION }) {
             return None;
         }
         let node = origin.node.unwrap();
         let meta = self.meta(parent, origin);
         let at = (node, meta);
-        // Only Define-XML composition requires the guide and target; a
+        // Only Define-XML composition requires the guides and target; a
         // section that lists its specifications already admits for runs.
-        let standard_origin = self.get(node, FieldName::Standard);
-        let standard = if standard_origin.node.is_some() {
-            self.guide(standard_origin, path.field(FieldName::Standard), meta)
+        let standards = if v1 {
+            self.standards(node, path, meta)
         } else {
-            None
+            let standard_origin = self.get(node, FieldName::Standard);
+            if standard_origin.node.is_some() {
+                let guide = self.meta(meta, standard_origin);
+                self.guide(standard_origin, path.field(FieldName::Standard), guide)
+                    .into_iter()
+                    .collect()
+            } else {
+                Vec::new()
+            }
         };
         let specs_origin = self.get(node, FieldName::Specs);
         let specs_path = path.field(FieldName::Specs);
@@ -641,14 +708,23 @@ impl<'d> Parser<'d, '_, '_> {
                 documents.push(value);
             }
         }
-        let datasets_origin = self.get(node, FieldName::Datasets);
-        let transport = if datasets_origin.node.is_some() {
-            self.choice(
-                datasets_origin,
-                path.field(FieldName::Datasets),
-                &[("json", Transport::DatasetJson), ("xpt", Transport::Xpt)],
-                None,
+        let (field, transports): (_, &[(&str, Transport)]) = if v1 {
+            (
+                FieldName::Transport,
+                &[
+                    ("dataset_json", Transport::DatasetJson),
+                    ("xpt", Transport::Xpt),
+                ],
             )
+        } else {
+            (
+                FieldName::Datasets,
+                &[("json", Transport::DatasetJson), ("xpt", Transport::Xpt)],
+            )
+        };
+        let transport_origin = self.get(node, field);
+        let transport = if transport_origin.node.is_some() {
+            self.choice(transport_origin, path.field(field), transports, None)
         } else {
             None
         };
@@ -686,7 +762,7 @@ impl<'d> Parser<'d, '_, '_> {
         Some(Section {
             family,
             specs,
-            standards: standard.into_iter().collect(),
+            standards,
             define,
             documents,
             transport,

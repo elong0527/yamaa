@@ -11,13 +11,12 @@ may reach, and the one snapshot a run reads of each file.
 ### FILE-1. A document's relative paths resolve from the file that declares them, never from a discovered root
 
 The caller explicitly supplies the entry file and any project file
-([PROJECT-1](../profiles/project.md#project-1)), which links the implementation
-environment file of each host language; these caller arguments follow ordinary
-host path resolution. By default, every relative path a document declares
-resolves from the file that writes it, including an inherited layer, a
-producing specification, a project file and an environment file. No project
-configuration is discovered, and a project file does not select a
-specification's resource locations.
+([PROJECT-1](../profiles/project.md#project-1)), which lists the study's
+function files; these caller arguments follow ordinary host path resolution.
+By default, every relative path a document declares resolves from the file
+that writes it, including an inherited layer, a producing specification and a
+project file. No project configuration is discovered, and a project file does
+not select a specification's resource locations.
 
 Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`.
 
@@ -31,7 +30,9 @@ names the file beside that shared layer. If that file is absent, a study's own
 explicitly names each study entry's own `input/dm.csv`. A project file,
 `yamaa-project.yaml` and old project or data-root settings affect neither
 selection. Missing-file
-diagnostics retain the original declaring field and written path.
+diagnostics retain the original declaring field and written path. An
+environment file that a project file declaring `schema_version` links also
+resolves its own relative paths from itself.
 
 <a id="file-2"></a>
 
@@ -252,8 +253,9 @@ Evidence: `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::changed_
 An implementation may validate once and run many times. Each such run, before
 it activates a project function or reads an input record, verifies every file
 the validation read: the specification, its layers, dictionaries and linked
-producing specifications, the project file, and the environment file with the
-lock, function definitions and codelists it declares. A file that changed
+producing specifications, and the project file with the function files, lock
+and codelists it declares (for a project file that declares `schema_version`,
+the environment file with its lock and function definitions). A file that changed
 fails that run with `resource_path_content_changed`, naming the field that
 declared it and the path as written. The run neither reads the replacement
 nor validates it in its place.

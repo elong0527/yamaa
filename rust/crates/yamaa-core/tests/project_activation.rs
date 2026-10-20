@@ -2165,6 +2165,7 @@ mod project {
                 assert!(Function::admit(Language::Python, function.clone()).is_ok());
             }
             let draft = Draft {
+                surface: yamaa_core::ast::Surface::V0_5,
                 language: Some(Language::Python),
                 lock: Some(LockReference {
                     written: "uv.lock".into(),
