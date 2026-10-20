@@ -19,10 +19,12 @@ An object with three methods:
   \item{\code{$run()}}{A run: \code{$output} is the dataset (\code{NULL} when
     the run failed), \code{$issues} what is wrong, \code{$report} what the run
     read, counted and checked, and \code{$save()} writes the declared report
-    file and the output dataset.}
+    file, then the output dataset, and returns their absolute paths
+    invisibly, in that order. A failed run writes only its report file.}
 }
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
-data frame says why.
+data frame says why; for a refused \code{$save()}, its \code{paths} lists
+the files written before the refusal.
 }
 \examples{
 \dontrun{

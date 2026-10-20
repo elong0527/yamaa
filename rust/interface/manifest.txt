@@ -105,6 +105,7 @@ public.types.optional_text: python str | None; r character(1) or NULL
 public.types.count: python int; r numeric(1), a whole number
 public.types.flag: python bool; r logical(1)
 public.types.names: python list[str]; r character()
+public.types.paths_written: python list[str], absolute with forward slashes, in publication order; r character(), the same paths; save() returns them invisibly
 public.types.tree: python dict; r named list
 public.types.table: python polars.DataFrame; r data.frame
 public.types.optional_table: python polars.DataFrame | None; r data.frame or NULL
@@ -128,7 +129,7 @@ public.classes.Run: python yamaa.Run; r yamaa_run
 public.classes.Run.output: property; returns optional_table
 public.classes.Run.issues: property; returns table; table issues
 public.classes.Run.report: property; returns optional_table; table report
-public.classes.Run.save: method; returns nothing; raises refusal
+public.classes.Run.save: method; returns paths_written; raises refusal
 public.classes.MemberRun: python yamaa.MemberRun; r yamaa_member_run
 public.classes.MemberRun.output: property; returns optional_table; raises refusal
 public.classes.MemberRun.issues: property; returns table; table issues; raises refusal
@@ -141,10 +142,10 @@ public.classes.ProjectRun.contains: protocol; python __contains__
 public.classes.ProjectRun.iterate: protocol; python __iter__
 public.classes.ProjectRun.issues: property; returns table; table issues
 public.classes.ProjectRun.report: property; returns table; table report
-public.classes.ProjectRun.save: method; returns nothing; raises refusal
+public.classes.ProjectRun.save: method; returns paths_written; raises refusal
 public.classes.Submission: python yamaa.Submission; r yamaa_submission
 public.classes.Submission.issues: property; returns table; table issues
-public.classes.Submission.save: method; returns nothing; raises refusal
+public.classes.Submission.save: method; returns paths_written; raises refusal
 public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
 public.classes.Spec.resolve: method; returns tree; raises refusal
@@ -158,7 +159,7 @@ public.classes.Project.run.args[0]: section: optional_text = None
 public.classes.Project.submission: method; returns Submission; raises refusal
 public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
-public.errors.refusal: python yamaa.Error(Exception) with issues: table; r yamaa_error, error, condition with message: text, call: NULL, issues: table
+public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
 public.python.exports.Error
 public.python.exports.__version__
 public.python.exports.lint

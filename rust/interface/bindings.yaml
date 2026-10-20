@@ -220,6 +220,9 @@ public:
     count: {python: int, r: "numeric(1), a whole number"}
     flag: {python: bool, r: "logical(1)"}
     names: {python: "list[str]", r: "character()"}
+    paths_written:
+      python: "list[str], absolute with forward slashes, in publication order"
+      r: "character(), the same paths; save() returns them invisibly"
     tree: {python: dict, r: named list}
     table: {python: polars.DataFrame, r: data.frame}
     optional_table: {python: "polars.DataFrame | None", r: data.frame or NULL}
@@ -299,10 +302,10 @@ public:
           doc: What the run read, counted and checked.
         - name: save
           kind: method
-          returns: nothing
+          returns: paths_written
           raises: refusal
           calls: run_save
-          doc: Write the declared report file and the output dataset.
+          doc: Write the declared report file, then the output dataset; return the paths written.
         # Installed-run evidence for qualification suites: R's
         # `.run_observations(run)`; Python reads `run._native.observations()`.
         - name: observations
@@ -354,7 +357,12 @@ public:
         - {name: iterate, kind: protocol, python: __iter__, doc: "The names, as `names` lists them."}
         - {name: issues, kind: property, returns: table, table: issues, calls: project_run_issues}
         - {name: report, kind: property, returns: table, table: report, calls: project_run_report}
-        - {name: save, kind: method, returns: nothing, raises: refusal, calls: project_run_save}
+        - name: save
+          kind: method
+          returns: paths_written
+          raises: refusal
+          calls: project_run_save
+          doc: Write each report file, then each output unless a run failed; return the paths written.
     Submission:
       python: yamaa.Submission
       r: yamaa_submission
@@ -362,7 +370,12 @@ public:
       doc: define.xml and each selected section's Dataset-JSON or SAS Transport files.
       members:
         - {name: issues, kind: property, returns: table, table: issues, calls: submission_issues}
-        - {name: save, kind: method, returns: nothing, raises: refusal, calls: submission_save}
+        - name: save
+          kind: method
+          returns: paths_written
+          raises: refusal
+          calls: submission_save
+          doc: Write each section's transport files, then its define.xml; return the paths written.
     Spec:
       python: yamaa.Spec
       r: yamaa_spec
@@ -413,10 +426,17 @@ public:
 
   errors:
     refusal:
-      python: {class: yamaa.Error, base: Exception, attributes: {issues: table}}
-      r: {class: [yamaa_error, error, condition], fields: {message: text, call: "NULL", issues: table}}
+      python:
+        class: yamaa.Error
+        base: Exception
+        attributes: {issues: table, paths: paths_written}
+      r:
+        class: [yamaa_error, error, condition]
+        fields: {message: text, call: "NULL", issues: table, paths: paths_written}
       table: issues
-      doc: A yamaa operation could not complete; `issues` says why.
+      doc: >-
+        A yamaa operation could not complete; `issues` says why, and `paths`
+        lists the files a refused save wrote first.
 
 # The command line (D12), which #3060 adds. README.md gives its grammar.
 cli: {}
@@ -457,7 +477,7 @@ python:
         - {name: output, args: {}, returns: "optional<_ArrowTable>"}
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: report, args: {}, returns: "optional<_ArrowTable>"}
-        - {name: save, args: {}, returns: unit}
+        - {name: save, args: {}, returns: "list<text>"}
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
     - kind: class
       name: _ProjectRun
@@ -470,14 +490,14 @@ python:
         - {name: member_report, args: {name: text}, returns: "optional<_ArrowTable>"}
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: report, args: {}, returns: _ArrowTable}
-        - {name: save, args: {}, returns: unit}
+        - {name: save, args: {}, returns: "list<text>"}
     - kind: class
       name: _Submission
       rust: api_entry::Submission
       constructible: false
       methods:
         - {name: issues, args: {}, returns: _ArrowTable}
-        - {name: save, args: {}, returns: unit}
+        - {name: save, args: {}, returns: "list<text>"}
     - kind: class
       name: _Plans
       rust: api_entry::Plans

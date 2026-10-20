@@ -125,7 +125,8 @@ Generated code only delegates, and the delegation is declared, never written:
 - A member that returns a class makes it from the call's result and the values
   it holds; a handle passed to a class must be the native type its members
   call. `raises: refusal` maps the native exception to `yamaa.Error`, which R's
-  reply conversion signals as `yamaa_error`.
+  reply conversion signals as `yamaa_error`. In R, a member that returns
+  `nothing` or `paths_written`, as `save()` does, returns it invisibly.
 
 Member kinds are `property` (a read-only view, an active binding in R),
 `method`, `field` (a value the object holds when made), `index` (Python's

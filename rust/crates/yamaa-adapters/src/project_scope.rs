@@ -1,12 +1,11 @@
 //! Project operations over the specifications a project file lists: their
-//! names, the run scope and producer-first order of a project run, the
-//! project findings, and the preflight of every file a project run saves.
-//! Specifications still check and build through the ordinary entry one at a
-//! time; this module reads only the project file and specification metadata.
+//! names, the run scope and producer-first order of a project run, and the
+//! project findings. Specifications still check and build through the
+//! ordinary entry one at a time; this module reads only the project file and
+//! specification metadata.
 use crate::{
     file_resources::{same_location, Error as ResourceError, Resources},
     public_table::PublicTable,
-    resource_publication::Publisher,
 };
 use std::sync::Arc;
 use yamaa_core::application_issue::{Fault, Stage};
@@ -571,53 +570,6 @@ impl Plan {
     }
     pub fn refusal(&self) -> &[Diagnostic] {
         &self.refusal
-    }
-}
-
-/// Every file a project run's save will write, opened before the first write
-/// so that a target that cannot be written, or two that name one file, stop
-/// the save before it touches any of them.
-#[derive(Default)]
-pub struct Preflight {
-    publishers: Vec<Publisher>,
-}
-impl Preflight {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    /// Admit the files an ordinary run would write; only its report file
-    /// with `report_only`.
-    pub fn admit_domain(
-        &mut self,
-        domain: &crate::file_application::Domain,
-        report_only: bool,
-    ) -> Result<(), Vec<Diagnostic>> {
-        self.admit(domain.publishers(report_only)?)
-    }
-    /// Admit the files a submission section would write, so no two sections
-    /// write one file.
-    pub fn admit_define(
-        &mut self,
-        define: &crate::file_define::Define,
-    ) -> Result<(), Vec<Diagnostic>> {
-        self.admit(define.publishers())
-    }
-    fn admit(&mut self, publishers: Vec<Publisher>) -> Result<(), Vec<Diagnostic>> {
-        for publisher in publishers {
-            for prior in &self.publishers {
-                match publisher.same_target(prior) {
-                    Ok(false) => {}
-                    Ok(true) => {
-                        return Err(crate::file_application::publication_failure(
-                            &crate::file_publication::Error::InvalidTarget,
-                        ))
-                    }
-                    Err(error) => return Err(crate::file_application::publication_failure(&error)),
-                }
-            }
-            self.publishers.push(publisher);
-        }
-        Ok(())
     }
 }
 

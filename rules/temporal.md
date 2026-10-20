@@ -19,7 +19,7 @@ declare a `type`, `date` or `datetime`, that fixes their input types and so
 their results; it is never inferred from data. A field the declared type
 requires must be present, and one it does not take must be absent. An input of
 another type fails rather than converting, and a temporal value never enters
-`compute` arithmetic.
+arithmetic.
 
 Fails: `incompatible_input_type`, `missing_required_field`, `unknown_field`.
 Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::temporal_reached`.
@@ -28,7 +28,7 @@ Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negati
 |---|---|
 | `diff`, `type: date` | `start` and `end` are `date`; a calendar `unit` |
 | `diff`, `type: datetime` | `start` and `end` are `datetime`; an elapsed `unit` |
-| `study_day` | `date` and `reference` are `date` |
+| `study_day` | `source` and `reference` are `date` |
 | `impute`, `type: date` | `source` is collected date text or a `date`; `not_before`, `not_after` and `fallback` are `date` |
 | `impute`, `type: datetime` | `source` is collected date text or a `datetime`; `not_before`, `not_after` and `fallback` are `datetime` |
 | `precision` | `source` is collected date text or a value of the declared type |
@@ -49,8 +49,8 @@ nor `unit`, and with `type: datetime` takes `amount` and `unit` and not
 specification is read, a field the type requires and the operation omits fails
 with `missing_required_field`, and a field the type does not take fails with
 `unknown_field`, naming the field and the declared type. A temporal value used
-as an operand in a `compute` expression fails under
-[Formulas](formulas.md), which admits only numeric identifiers.
+as an operand of arithmetic in expression-field text fails under
+[Formulas](formulas.md), which admits only numeric operands there.
 
 <a id="time-2"></a>
 
@@ -188,7 +188,7 @@ answers it and no artifact is accepted.
 
 ### TIME-6. study_day counts from the reference date as day 1, with no day zero
 
-`study_day` returns the CDISC study day of `date` against `reference`, the
+`study_day` returns the CDISC study day of `source` against `reference`, the
 reference start date. The reference date is day 1 and there is no day zero: a
 date on or after the reference counts forward from 1, and an earlier date
 counts back from -1. A missing date or reference yields a missing result.

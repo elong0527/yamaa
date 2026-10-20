@@ -6,11 +6,13 @@
 //! A rejected build that still owns diagnostics, evidence or retained sources
 //! returns an owned [`Build`] carrying them, exactly as the host
 //! failure-handles do. [`Error::Rejected`] is reserved for operations without
-//! a handle: unsupported routes, failed saves and failed specification
-//! resolution.
+//! a handle: unsupported routes and failed specification resolution. A
+//! result saves through [`crate::Run::save`], [`crate::ProjectRun::save`] or
+//! [`crate::Submission::save`], one save over its outcome.
 
 use std::sync::Arc;
 
+use crate::api::Failure;
 use crate::cancel::CancellationToken;
 use crate::diagnostic::Report;
 use crate::error::{Error, FunctionError};
@@ -361,7 +363,8 @@ impl Engine {
         // The compilation above has just verified the metadata it captured.
         let outcome = plan.run_observed(None, false, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared).named(plan.name()))
+        let subject = plan.name().unwrap_or(request.specification);
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
     }
 
     /// Build `request` through `plans`, as a host's lazy object runs (#2821).
@@ -418,15 +421,21 @@ impl Engine {
             }
         };
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared).named(name.as_deref()))
+        let subject = name.as_deref().unwrap_or(request.specification);
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
     }
 
     /// A project-run specification that did not build, with the findings
-    /// that explain why.
-    pub(crate) fn refused_build(&self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) -> Build {
+    /// that explain why, named by `subject` in what it prints.
+    pub(crate) fn refused_build(
+        &self,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
+        subject: &str,
+    ) -> Build {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         measurements.complete(false);
         Build::from_outcome(Built::refused(issues), measurements, &self.shared)
+            .with_subject(subject)
     }
 
     pub(crate) fn shared(&self) -> &EngineShared {
@@ -440,7 +449,7 @@ impl Engine {
     /// # Example
     ///
     /// A missing environment reports typed diagnostics in every lane instead
-    /// of composing, and its failed save rejects with the same report.
+    /// of composing.
     ///
     /// ```
     /// use yamaa::{CancellationToken, DefineRequest, Engine, EngineOptions, HostLanguage};
@@ -458,8 +467,6 @@ impl Engine {
     ///     .unwrap();
     /// assert!(!define.report().is_empty());
     /// assert!(define.artifacts().is_empty());
-    /// let mut define = define;
-    /// assert!(define.save().is_err());
     /// ```
     pub fn define(
         &self,
@@ -477,7 +484,8 @@ impl Engine {
             self.shared.language,
             crate::internal::resolver_bridge(&self.shared),
         );
-        Ok(DefineBuild::from_define(inner))
+        let subject = format!("{}, section {}", request.environment, request.standard);
+        Ok(DefineBuild::from_define(inner, subject))
     }
 
     /// Resolve one specification entry into its owned inspection artifact,
@@ -549,7 +557,7 @@ impl Engine {
 pub type SourceBytes = Vec<(String, Arc<[u8]>)>;
 
 /// An owned build: one attempt with its output, run report and observations.
-/// `save` is the only mutating operation and publishes through the resolver.
+/// Only the save of the result that holds it writes, through the resolver.
 pub struct Build {
     state: Built,
     measurements: Arc<yamaa_adapters::application_measurements::Measurements>,
@@ -561,8 +569,10 @@ pub struct Build {
     run_report: Option<Table>,
     project_failures: Option<Vec<AttemptFailure>>,
     interrupt: Option<FunctionError>,
-    /// The specification's dataset name, once its document was read.
-    name: Option<String>,
+    /// What the build's printed text and refusals name (P-PRINT-1): a
+    /// project run member's name, or the dataset name once read, or else the
+    /// path as given.
+    subject: String,
 }
 
 impl Build {
@@ -583,23 +593,22 @@ impl Build {
             run_report: None,
             project_failures: None,
             interrupt: None,
-            name: None,
+            subject: String::new(),
         };
         build.refresh();
         build.capture_evidence(shared);
         build
     }
 
-    /// The same build, naming the dataset its specification declares.
-    pub(crate) fn named(mut self, name: Option<&str>) -> Self {
-        self.name = name.map(str::to_owned);
+    /// The same build, named by `subject` in what it prints.
+    pub(crate) fn with_subject(mut self, subject: &str) -> Self {
+        subject.clone_into(&mut self.subject);
         self
     }
 
-    /// The specification's dataset name, its `domain`, once its document was
-    /// read.
-    pub(crate) fn name(&self) -> Option<&str> {
-        self.name.as_deref()
+    /// What the build's printed text and refusals name.
+    pub(crate) fn subject(&self) -> &str {
+        &self.subject
     }
 
     fn refresh(&mut self) {
@@ -691,110 +700,70 @@ impl Build {
         self.state.domain()?.artifact()
     }
 
-    /// Open, without writing, every file `save` would write, or only the
-    /// report file with `report_only`, against the files already admitted.
-    pub(crate) fn preflight(
+    /// The files a save of this build writes, in publication order, with
+    /// what the save admitted for them: the declared report file, then the
+    /// primary artifact unless `report_only` or the build failed (OUTPUT-10).
+    /// A build that never ran, or a failed one without a report file, writes
+    /// nothing.
+    pub(crate) fn plan(
         &self,
-        preflight: &mut yamaa_adapters::project_scope::Preflight,
         report_only: bool,
-    ) -> Result<(), Vec<yamaa_core::diagnostic::Diagnostic>> {
+    ) -> Result<
+        Option<(
+            Vec<yamaa_adapters::publication::File<'_>>,
+            yamaa_adapters::file_application::Admitted,
+        )>,
+        Vec<yamaa_core::diagnostic::Diagnostic>,
+    > {
         match self.state.domain() {
-            Some(domain) => preflight.admit_domain(domain, report_only),
-            None => Ok(()),
+            Some(domain) => domain.plan(report_only),
+            None => Ok(None),
         }
     }
 
-    /// Publish only the declared report file, as a failed build saves.
-    /// `Ok(true)` published it, `Ok(false)` refused the publication with
-    /// issues, and `Err` means the build holds no report file to write.
-    pub(crate) fn save_report(&mut self) -> Result<bool, ()> {
-        let saved = match self.state.domain_mut() {
-            Some(domain) => domain.save_report().map_err(drop),
-            None => Err(()),
-        };
-        if saved.is_ok() {
-            self.measurements.save_entered();
-            self.measurements.save_completed(match saved {
-                Ok(true) => "succeeded",
-                _ => "refused",
-            });
+    /// Record what a save did with this build's files; a stop joins the
+    /// build's issues, never its status.
+    pub(crate) fn record(
+        &mut self,
+        admitted: yamaa_adapters::file_application::Admitted,
+        committed: usize,
+        stopped: Option<(usize, yamaa_adapters::publication::Cause)>,
+    ) {
+        if let Some(domain) = self.state.domain_mut() {
+            domain.record(admitted, committed, stopped);
         }
         self.refresh();
-        saved
     }
 
-    /// Publish the held report file and output. A failed build publishes only
-    /// its declared report file and still reports a failed save.
-    ///
-    /// # Example
-    ///
-    /// Saving the in-memory build from [`Engine::build`] publishes through
-    /// the memory resolver; lanes without the `yaml` feature reject instead.
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    ///
-    /// use arrow_array::RecordBatchIterator;
-    /// use arrow_schema::Schema;
-    /// use yamaa::{
-    ///     CancellationToken, DataType, Engine, EngineOptions, FFI_ArrowArrayStream, Field,
-    ///     Float64Array, HostLanguage, InputFrame, Int64Array, MemoryResolver, RecordBatch,
-    ///     Request, SaveOutcome,
-    /// };
-    ///
-    /// let resolver = Arc::new(MemoryResolver::new());
-    /// resolver.insert("/", "spec.yaml", "spec:1", Arc::from(
-    ///     &b"schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {SRC: {path: input.csv, types: {VALUE: float}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: float, derivation: SRC.VALUE}\n"[..],
-    /// ));
-    /// let schema = Arc::new(Schema::new(vec![
-    ///     Field::new("ID", DataType::Int64, true),
-    ///     Field::new("VALUE", DataType::Float64, true),
-    /// ]));
-    /// let batch = RecordBatch::try_new(
-    ///     Arc::clone(&schema),
-    ///     vec![
-    ///         Arc::new(Int64Array::from(vec![1, 2])),
-    ///         Arc::new(Float64Array::from(vec![2.5, 3.5])),
-    ///     ],
-    /// )
-    /// .unwrap();
-    /// let frame = InputFrame::import(FFI_ArrowArrayStream::new(Box::new(
-    ///     RecordBatchIterator::new(vec![Ok(batch)], schema),
-    /// )))
-    /// .unwrap();
-    /// resolver.insert_frame("/spec.yaml", "input.csv", "data:1", &frame);
-    /// let engine = Engine::new(
-    ///     EngineOptions::new(HostLanguage::Python, "doctest".into(), "0".into())
-    ///         .with_resolver(resolver.clone()),
-    /// );
-    /// let token = CancellationToken::new();
-    /// let mut build = engine.build(&Request::new("spec.yaml"), &token).unwrap();
-    /// if cfg!(feature = "yaml") {
-    ///     assert_eq!(build.save().unwrap(), SaveOutcome::Saved);
-    ///     assert!(resolver.published("memory:/out.csv").is_some());
-    /// } else {
-    ///     assert!(build.save().is_err());
-    /// }
-    /// ```
-    pub fn save(&mut self) -> Result<SaveOutcome, Error> {
-        use yamaa_adapters::file_application::FailedBuild;
+    /// Record a save refused for `issues` before any file was staged.
+    pub(crate) fn refuse(&mut self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) {
+        if let Some(domain) = self.state.domain_mut() {
+            domain.refuse(issues);
+        }
+        self.refresh();
+    }
+
+    /// Count one save of this build in its measurements, ending as `outcome`.
+    pub(crate) fn measure_save(&self, outcome: &'static str) {
         self.measurements.save_entered();
-        let saved = match self.state.domain_mut() {
-            Some(domain) => domain.save(),
-            None => Err(FailedBuild),
-        };
-        let outcome = match saved {
-            Ok(true) => "succeeded",
-            Ok(false) => "refused",
-            Err(_) => "failed",
-        };
         self.measurements.save_completed(outcome);
-        self.refresh();
-        match saved {
-            Ok(true) => Ok(SaveOutcome::Saved),
-            Ok(false) => Ok(SaveOutcome::NothingToSave),
-            Err(_) => Err(Error::Rejected(self.report.clone())),
-        }
+    }
+
+    /// Save this build as a run of one specification saves it, through the
+    /// one save every result shares: the declared report file, then the
+    /// output, returning the paths written (D38). A failed build writes only
+    /// its report file and fails with its issues. See [`crate::Run::save`].
+    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+        let subject = self.subject.clone();
+        crate::outcome::save(
+            &[],
+            vec![crate::outcome::Part::Built {
+                identity: None,
+                build: self,
+            }],
+            crate::outcome::Operation::Run,
+            &subject,
+        )
     }
 
     /// Render observations, optionally enveloped with timing measurements.
@@ -839,14 +808,6 @@ fn tables_of(state: &Built) -> (Option<Table>, Option<Table>) {
     }
 }
 
-/// Whether saving published anything.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SaveOutcome {
-    Saved,
-    NothingToSave,
-}
-
 /// One retained define artifact: path, bytes and publication state.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -856,10 +817,12 @@ pub struct DefineArtifact {
     pub state: String,
 }
 
-/// An owned define composition with its rendered artifacts.
-/// `save` is the only mutating operation and publishes through the resolver.
+/// An owned define composition with its rendered artifacts. Only the save of
+/// the submission that holds it writes, through the resolver.
 pub struct DefineBuild {
     inner: yamaa_adapters::file_define::Define,
+    /// What a refusal of its own save names: its project and section.
+    subject: String,
     /// The issues of the composition as it was made: a later save's refusal
     /// joins `issues` and the report, never these.
     composed: Vec<yamaa_core::diagnostic::Diagnostic>,
@@ -868,11 +831,12 @@ pub struct DefineBuild {
 }
 
 impl DefineBuild {
-    pub(crate) fn from_define(inner: yamaa_adapters::file_define::Define) -> Self {
+    pub(crate) fn from_define(inner: yamaa_adapters::file_define::Define, subject: String) -> Self {
         let issues = inner.issues().to_vec();
         let report = Report::from_issues(&issues);
         Self {
             inner,
+            subject,
             composed: issues.clone(),
             issues,
             report,
@@ -926,36 +890,49 @@ impl DefineBuild {
         self.inner.artifacts().len().saturating_sub(1)
     }
 
-    /// Open, without writing, every file `save` would write, against the
-    /// files already admitted.
-    pub(crate) fn preflight(
-        &self,
-        preflight: &mut yamaa_adapters::project_scope::Preflight,
-    ) -> Result<(), Vec<yamaa_core::diagnostic::Diagnostic>> {
-        preflight.admit_define(&self.inner)
+    /// The files a save of this composition writes, in publication order:
+    /// each transport file, then define.xml (JSON-14). `None` when the
+    /// composition, or an earlier save of it, failed.
+    pub(crate) fn plan(&self) -> Option<Vec<yamaa_adapters::publication::File<'_>>> {
+        self.inner.plan()
     }
 
-    /// Publish all preflighted outputs. A failed composition cannot save.
-    pub fn save(&mut self) -> Result<SaveOutcome, Error> {
-        match self.inner.save() {
-            Ok(true) => Ok(SaveOutcome::Saved),
-            Ok(false) => Ok(SaveOutcome::NothingToSave),
-            Err(_) => {
-                self.issues = self.inner.issues().to_vec();
-                self.report = Report::from_issues(&self.issues);
-                Err(Error::Rejected(self.report.clone()))
-            }
-        }
+    /// Record what a save did with this composition's files; a stop fails the
+    /// composition, and its issues then say why.
+    pub(crate) fn record(
+        &mut self,
+        committed: usize,
+        stopped: Option<(usize, yamaa_adapters::publication::Cause)>,
+    ) {
+        self.inner.record(committed, stopped);
+        self.refresh();
     }
 
-    /// Borrow the publication failure message after a failed save, if any.
-    pub fn save_error_message(&self) -> Option<String> {
-        match self.inner.failure() {
-            Some(yamaa_adapters::file_define::Failure::Publication { error, .. }) => {
-                Some(error.message())
-            }
-            _ => None,
-        }
+    /// Record a save stopped at this composition for `issues`, before any of
+    /// its files was written.
+    pub(crate) fn refuse(&mut self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) {
+        self.inner.refuse_save(issues);
+        self.refresh();
+    }
+
+    fn refresh(&mut self) {
+        self.issues = self.inner.issues().to_vec();
+        self.report = Report::from_issues(&self.issues);
+    }
+
+    /// Save this composition as a submission of one section saves it,
+    /// through the one save every result shares: its transport files, then
+    /// define.xml (JSON-14), returning the paths written (D38). A failed
+    /// composition writes nothing and fails with its issues. See
+    /// [`crate::Submission::save`].
+    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+        let subject = self.subject.clone();
+        crate::outcome::save(
+            &[],
+            vec![crate::outcome::Part::Composed { define: self }],
+            crate::outcome::Operation::Submission,
+            &subject,
+        )
     }
 }
 
@@ -1090,14 +1067,17 @@ mod tests {
     }
 
     #[test]
-    fn failed_saves_reject_with_their_report() {
+    fn a_failed_run_saves_nothing_and_refuses_with_its_issues() {
         let engine = Engine::new(options());
         let token = CancellationToken::new();
         let missing = missing_spec();
-        let request = Request::new(missing.to_str().unwrap());
-        let mut build = engine.build(&request, &token).unwrap();
-        let error = build.save().unwrap_err();
-        assert!(matches!(error, Error::Rejected(_)));
+        let mut run = engine
+            .spec_run(missing.to_str().unwrap(), None, &token)
+            .unwrap();
+        let failure = run.save().unwrap_err();
+        assert_eq!(failure.message, "cannot save a failed run; see issues");
+        assert!(failure.issues.rows() > 0);
+        assert!(failure.paths.is_empty());
     }
 
     #[test]
@@ -1166,7 +1146,7 @@ mod plain_build_tests {
         let request = Request::new(entry.to_str().unwrap());
         let report = engine.check(&request, &token).unwrap();
         assert!(report.is_empty());
-        let mut build = engine.build(&request, &token).unwrap();
+        let build = engine.build(&request, &token).unwrap();
         assert!(build.report().is_empty());
         let output = build.output().unwrap();
         assert_eq!(output.rows(), 2);
@@ -1177,7 +1157,13 @@ mod plain_build_tests {
         assert!(build.run_report_bytes().is_some());
         assert!(build.observations(false).is_some());
         assert!(build.observations(true).is_some());
-        assert_eq!(build.save().unwrap(), SaveOutcome::Saved);
+        // The specification's run saves its one file and returns its path.
+        let mut run = engine
+            .spec_run(entry.to_str().unwrap(), None, &token)
+            .unwrap();
+        let root = yamaa_adapters::canonical_path::canonicalize(&study.0).unwrap();
+        let path = root.join("out.csv").to_str().unwrap().replace('\\', "/");
+        assert_eq!(run.save().unwrap(), [path]);
         let written = std::fs::read(study.0.join("out.csv")).unwrap();
         assert!(written.starts_with(b"ID,VALUE\n1,"));
     }

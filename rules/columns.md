@@ -256,10 +256,9 @@ condition, and what the condition gives when the handler is omitted.
 
 | Stage | Handler | Condition | Omitted |
 |---|---|---|---|
-| bind | `source.absent` | Absent source variable or ODM item | Fails |
 | join | `source.absent` | A read through the implicit join finds no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | join | `source.order_by` and `source.keep` | Several `source.filter` results | Fails |
-| join | `intermediates[].no_match` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
+| join | `intermediates[].absent` | The intermediate selects no record ([LOOKUP-24](lookup.md#lookup-24)) | Missing |
 | mapping | `mapping.missing` | Missing input | Missing |
 | mapping | `mapping.unmapped` | Non-missing value with no mapping | Fails |
 | cut | `cut.missing` | Missing numeric input | Missing |
@@ -288,29 +287,34 @@ context fails, reporting both the handler and the original context.
 
 <a id="column-11"></a>
 
-### COLUMN-11. `absent` answers a variable or record that does not exist, and `missing` answers a missing input value
+### COLUMN-11. `absent` answers a lookup that finds no record, and `missing` answers a missing input value
 
-`absent` on a `source` binding applies when the variable or ODM item does not
-exist in context, and when its implicit join finds no record; never when a
-variable or record exists and holds a missing value. `missing` applies when
-the named input value is missing, on every expression that declares it; where
-an operation has several inputs, such as a `str_template` with several
-placeholders, it fires when any input is missing. `invalid`, `unmapped` and
-`str_extract`'s `no_match` fire only when every input is present.
+`absent` on a `source` binding or a named intermediate applies when its lookup
+finds no record, never when a record exists and holds a missing value; a
+variable that does not exist fails under [NAME-3](names.md#name-3). `missing`
+applies when the named input value is missing, on every expression that
+declares it; where an operation has several inputs, such as a `str_template`
+with several placeholders, it fires when any input is missing. `invalid`,
+`unmapped` and `str_extract`'s `no_match` fire only when every input is
+present.
 
-Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::absent_answers_an_unknown_variable_only_on_the_0_5_surface`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
 
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
-([EXPR-11](expressions.md#expr-11)). An intermediate's `no_match` also
+([EXPR-11](expressions.md#expr-11)). An intermediate's `absent` also
 answers a missing match value ([LOOKUP-24](lookup.md#lookup-24)), as a source
 binding's `absent` answers one on its implicit join
 ([LOOKUP-24](lookup.md#lookup-24)). Omitted, each of these handlers gives the
-default of [COLUMN-10](#column-10).
+default of [COLUMN-10](#column-10). An `odm` read declares no `absent`, and
+one that identifies no record gives missing ([NAME-13](names.md#name-13)). A
+file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where `absent` also answers a variable or ODM item that
+does not exist in context.
 
 The owning rule states which values an operation cannot use;
-[Dates and times](temporal.md) states them for the temporal operations on the
-`impute` stage. One stage name can serve several operations with the same
+[Dates and times](temporal.md) states them for the temporal operations in the
+`impute` phase. One phase can serve several operations with the same
 conditions. `impute` and `precision` read the same source domain, answer the
 same invalid condition, and both use `impute` in structured errors; a missing
 source to either gives missing without a handler
@@ -327,7 +331,7 @@ group whose records all hold missing values is neither condition;
 ### COLUMN-12. A structured source carries its own handlers, and order_by with keep selects one of several records
 
 Under the `source` expression, only structured source binding declares
-handlers; the concise `source: DATASET.VARIABLE` form declares none and takes
+handlers; a bare reference such as `DATASET.VARIABLE` declares none and takes
 their defaults. A source's
 `order_by` and `keep` relax right-side uniqueness wherever one source reaches
 several records: its optional `filter` narrows the right-side records it
@@ -341,7 +345,7 @@ Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_s
 ```yaml
 source:
   variable: RAW.AGE
-  absent: {literal: null}
+  absent: null
 ```
 
 Other expressions type `source` as a variable or a variable with a `filter`,

@@ -64,8 +64,6 @@ impl Define {
             environment: None,
             environment_written: String::new(),
             specifications: Vec::new(),
-            #[cfg(test)]
-            after_publish: None,
         };
         let attempt = service::Application::prepare(
             &mut ports,
@@ -100,34 +98,101 @@ impl Define {
     pub fn artifacts(&self) -> impl ExactSizeIterator<Item = (&str, &[u8], PublicationState)> {
         self.application.artifacts()
     }
-    /// A publisher for each artifact target that admits one, writing
-    /// nothing. A target that admits none is this composition's own failure,
-    /// which its save reports and records.
-    pub(crate) fn publishers(&self) -> Vec<crate::resource_publication::Publisher> {
-        self.application
-            .targets()
-            .filter_map(|(target, written)| target.publisher(written).ok())
-            .collect()
-    }
     pub fn capture_reads(&self) -> usize {
         self.ports
             .resources
             .as_ref()
             .map_or(0, Resources::capture_reads)
     }
-    pub fn save(&mut self) -> Result<bool, SaveError> {
-        let result = self.application.save(&mut self.ports);
-        self.save_result(result)
+    /// The files a save of this composition writes, in publication order:
+    /// each transport file, then define.xml (JSON-14). `None` when the
+    /// composition, or an earlier save of it, failed: it writes nothing, and
+    /// the save stops at it (PROJECT-13).
+    pub fn plan(&self) -> Option<Vec<crate::publication::File<'_>>> {
+        if self.application.failed() {
+            return None;
+        }
+        Some(
+            self.application
+                .files()
+                .map(|(target, written, bytes)| crate::publication::File {
+                    target,
+                    written,
+                    bytes,
+                })
+                .collect(),
+        )
     }
-    fn save_result(
+    /// What the latest save did with this composition's files: `committed`
+    /// replaced their targets, and, when the save stopped at one of them,
+    /// which and why. A stop fails the composition, whose issues then say why;
+    /// an earlier file that names the same target is this composition's own.
+    pub fn record(
         &mut self,
-        result: Result<bool, service::SaveFailure<Failure, file_publication::Error>>,
+        committed: usize,
+        stopped: Option<(usize, crate::publication::Cause)>,
+    ) {
+        use crate::publication::Cause;
+        let failure = stopped.map(|(index, cause)| match cause {
+            Cause::Target(error) => service::Failure::TargetAdmission { index, error },
+            Cause::Collision { earlier } => {
+                let written = |position: usize| {
+                    self.application
+                        .artifacts()
+                        .nth(position)
+                        .map_or("", |(written, _, _)| written)
+                };
+                service::Failure::Metadata(vec![service::shared_target(
+                    written(earlier),
+                    written(index),
+                )])
+            }
+            Cause::Stage(error) | Cause::Commit(error) => {
+                service::Failure::Publication { index, error }
+            }
+            Cause::Unwind(_) => {
+                service::Failure::Diagnostic(vec![service::publication_diagnostic(
+                    index,
+                    service::PublicationFailure::Publication,
+                    "publication unwound".into(),
+                )])
+            }
+        });
+        self.application.record(committed, failure.as_ref());
+        if let Some(failure) = failure {
+            self.refuse(native_failure(failure));
+        }
+    }
+    /// A save that stopped at this composition for `issues` of its own,
+    /// before any of its files was written.
+    pub fn refuse_save(&mut self, issues: Vec<Diagnostic>) {
+        let failure = service::Failure::Diagnostic(issues);
+        self.application.record(0, Some(&failure));
+        self.refuse(native_failure(failure));
+    }
+    /// Save this composition alone, as an outcome of one member saves it.
+    pub fn save(&mut self) -> Result<bool, SaveError> {
+        self.save_with(|_| Ok(()))
+    }
+    /// [`Self::save`], calling `before` with each file's position before it
+    /// is committed.
+    pub(crate) fn save_with(
+        &mut self,
+        before: impl FnMut(usize) -> Result<(), file_publication::Error>,
     ) -> Result<bool, SaveError> {
-        match result {
-            Ok(saved) => Ok(saved),
-            Err(service::SaveFailure::Refused) => Err(SaveError),
-            Err(service::SaveFailure::Failure(failure)) => {
-                self.refuse(native_failure(failure));
+        let saved = match self.plan() {
+            Some(files) => {
+                crate::publication::stage(&files).and_then(|staged| staged.commit_with(before))
+            }
+            None => return Err(SaveError),
+        };
+        match saved {
+            Ok(paths) => {
+                self.record(paths.len(), None);
+                Ok(true)
+            }
+            Err(stop) => {
+                self.record(stop.committed, Some((stop.file, stop.cause)));
                 Err(SaveError)
             }
         }
@@ -144,9 +209,6 @@ fn native_failure(failure: service::Failure<Failure, file_publication::Error>) -
         service::Failure::Publication { index, error } => Failure::Publication { index, error },
     }
 }
-#[cfg(test)]
-type AfterPublish = Box<dyn FnMut(&str)>;
-
 struct NativePorts {
     resources: Option<Resources>,
     /// The caller's resolver, which serves the project file under the name
@@ -156,8 +218,6 @@ struct NativePorts {
     environment: Option<std::sync::Arc<OwnedEnvironment>>,
     environment_written: String,
     specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,
-    #[cfg(test)]
-    after_publish: Option<AfterPublish>,
 }
 impl NativePorts {
     fn resources(&self) -> &Resources {
@@ -203,8 +263,8 @@ impl Ports for NativePorts {
     type Bytes = std::sync::Arc<[u8]>;
     type Parquet = crate::arrow_table::ArrowTable;
     type ParquetError = crate::parquet_source::Error;
-    type Target = crate::resource_publication::AnchoredTarget;
-    type Publisher = crate::resource_publication::Publisher;
+    type Target = crate::publication::AnchoredTarget;
+    type Publisher = crate::publication::Publisher;
     fn utc_seconds(&mut self) -> Option<u64> {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -387,19 +447,6 @@ impl Ports for NativePorts {
         right: &Self::Publisher,
     ) -> Result<bool, Self::PublicationError> {
         left.same_target(right)
-    }
-    fn publish(
-        &mut self,
-        publisher: &mut Self::Publisher,
-        written: &str,
-        bytes: &[u8],
-    ) -> Result<(), Self::PublicationError> {
-        publisher.publish(written, bytes)?;
-        #[cfg(test)]
-        if let Some(after_publish) = self.after_publish.as_mut() {
-            after_publish(written);
-        }
-        Ok(())
     }
 }
 fn same_location(left: &Path, right: &Path) -> bool {

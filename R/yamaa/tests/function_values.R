@@ -4,6 +4,11 @@
 # never changed, and a result converts by its declared type. Inputs and truth
 # are authored here, independently of the engine.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # jsonlite is a suggested package: where it is not installed, a refusal's
 # reason, which its JSON context holds, is not compared, and the rest is.
 has_jsonlite <- requireNamespace("jsonlite", quietly = TRUE)
@@ -151,7 +156,7 @@ for (attempt in 1:2) {
   stopifnot(identical(Encoding(text), "UTF-8"),
     identical(attributes(Filter(function(arguments) inherits(arguments$x, "POSIXct"), seen)[[1L]]$x),
       list(class = c("POSIXct", "POSIXt"), tzone = "UTC")))
-  stopifnot(is.null(built$save()), identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
+  stopifnot(returns_paths(built$save()), identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0(
     "ID,I,F,S,D,T,M,P\n",
     "1,7,2.5,\u00e9t\u00e9,2024-02-29,2024-02-29T12:30:45,5,2.5\n",
     "2,9007199254740992,-0.5,x,0001-01-01,9999-12-31T23:59:59,,-0.5\n",
@@ -191,7 +196,7 @@ stopifnot(received(list(test = TRUE, yes = 1, no = 0)),
 # Text beyond one MiB crosses both ways whole and saves exact bytes.
 large <- paste0(strrep("\u00e9", 524289L), "complete")
 long <- column("str", "text_value", list(large))
-stopifnot(nrow(long$issues) == 0L, identical(long$output$X, large), is.null(long$save()),
+stopifnot(nrow(long$issues) == 0L, identical(long$output$X, large), returns_paths(long$save()),
   identical(rawfile("output.csv"), charToRaw(enc2utf8(paste0("ID,X\n1,", large, "\n")))))
 unlink("output.csv")
 

@@ -3,6 +3,11 @@
 # SAS Transport files where the section sets `datasets: json` or
 # `datasets: xpt`) when called; only $save() writes files.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -48,7 +53,7 @@ refused <- function(result) tryCatch({ result$save(); FALSE }, yamaa_error = fun
 # Save, require exactly `names` to appear, and return their bytes.
 saved <- function(result, root, names) {
   before <- list.files(root, all.files = TRUE, no.. = TRUE)
-  stopifnot(is.null(result$save()),
+  stopifnot(returns_paths(result$save()),
     identical(sort(setdiff(list.files(root, all.files = TRUE, no.. = TRUE), before)), sort(names)))
   setNames(lapply(file.path(root, names), rawfile), names)
 }

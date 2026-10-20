@@ -217,10 +217,12 @@ Temporary names or their private namespaces do not collide with the target or
 another run's candidate. The final replacement remains atomic.
 
 Publishers coordinate writes through an exclusive lock on the selected parent
-directory, and a lock refusal leaves the target untouched. An explicit save
-intentionally replaces the current target; it is not a conditional update
-against the target that existed when the publisher was created. The last
-successful replacement supplies the visible artifact.
+directory, and a lock refusal leaves the target untouched. A save holds the
+lock of each directory it publishes into from the first file it stages there
+until the save ends. An explicit save intentionally replaces the current
+target; it is not a conditional update against the target that existed when
+the publisher was created. The last successful replacement supplies the
+visible artifact.
 
 If external interference or a filesystem failure prevents temporary cleanup,
 the failure preserves the original operation error and reports the cleanup

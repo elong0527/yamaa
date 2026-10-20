@@ -98,7 +98,7 @@ read, when no non-missing result of its expression's result type
 ([EXPR-14](expressions.md#expr-14)) can convert to its declared type: every
 type the result can take meets a `fail` cell of [VALUE-3](#value-3)'s table.
 Column and row derivations, typed intermediate derivations and aggregate
-derive bindings are checked. A derivation declaring `unconvertible` is not
+derivations are checked. A derivation declaring `unconvertible` is not
 refused, as its literal answers each failure, and a result that is always
 missing converts to every type.
 
@@ -106,9 +106,9 @@ Fails: `conversion_failed`.
 Evidence: `negative-study-day-date-column`, `rust/crates/yamaa-core/tests/support/diagnostic/result_types.rs`, `rust/crates/yamaa-adapters/tests/fixtures/column_literals.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::row_boolean_is_refused_at_validation_and_refuses_every_save`.
 
 The failure names the column whose lifecycle cannot complete, as a
-conversion failure does, or the typed intermediate derivation or derive
-binding, and reports `from`, the result type, and `to`, the declared type. A
-`str` result can always parse, and an `int` or `float` result can convert to
+conversion failure does, or the typed intermediate derivation or aggregate
+derivation, and reports `from`, the result type, and `to`, the declared type.
+A `str` result can always parse, and an `int` or `float` result can convert to
 either number, so neither is refused here; a value that fails still fails at
 conversion under [VALUE-3](#value-3). A study day declared `date`, a date
 difference declared `datetime` and a Boolean literal in any column are
@@ -117,6 +117,46 @@ establish it; a result type taken from an undeclared stored field is known
 only once binding captures the field.
 
 ## Missing values
+
+<a id="value-25"></a>
+
+### VALUE-25. Missing is one value distinct from every other, and each operation states what it does with it
+
+Missing is the absence of a value. It is distinct from every string, number
+and the empty string, every column type admits it, and no text spells it. A
+specification writes it as YAML null in a value position, and a source
+supplies it as a null or an empty field. Every operation states what it does
+with a missing input, and the table below names the rule that fixes each
+treatment: comparison, arithmetic, reduction, handlers, verification, keys,
+functions and the artifact profiles.
+
+Evidence: `schema-missing-input-default`, `schema-lookup-absent-default`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`.
+
+| Operation | Treatment | Rule |
+| --- | --- | --- |
+| Comparison | `UNKNOWN`; `IS NULL` tests for missing | [FORMULA-4](formulas.md#formula-4) |
+| Arithmetic and numeric functions | missing, except NULLIF's second argument | [FORMULA-14](formulas.md#formula-14) |
+| Reductions | skipped; an empty group is missing; `COUNT(x)` of only missing values is 0 | [FORMULA-24](formulas.md#formula-24), [FORMULA-20](formulas.md#formula-20) |
+| `case`, `first_available`, `greatest`, `least` | no branch gives missing; the first present source; the extreme of the present sources | [EXPR-7](expressions.md#expr-7), [EXPR-9](expressions.md#expr-9), [EXPR-10](expressions.md#expr-10) |
+| Local handlers | an omitted handler gives missing for a missing single input or an absent record | [COLUMN-10](columns.md#column-10), [COLUMN-11](columns.md#column-11) |
+| Lookups | absence gives missing unless it must match | [LOOKUP-24](lookup.md#lookup-24) |
+| Windows | an excluded row gets missing; `locf` carries present values | [WINDOW-4](windows.md#window-4), [WINDOW-8](windows.md#window-8) |
+| Dates and times | partial text and a missing source give missing, unless a fallback is declared | [TIME-2](temporal.md#time-2), [TIME-13](temporal.md#time-13), [TIME-19](temporal.md#time-19) |
+| Conversion | a missing input is not converted | [VALUE-3](#value-3) |
+| Non-finite floats | become missing | [VALUE-4](#value-4) |
+| Order | missing sorts lowest unless `nulls` places it | [VALUE-22](#value-22) |
+| Verification | every check but `not_missing` passes missing; `all_or_none`; `unique` counts missing | [CHECK-5](verification.md#check-5), [CHECK-10](verification.md#check-10), [CHECK-11](verification.md#check-11) |
+| Keys and mandatory columns | never missing | [OUTPUT-3](output.md#output-3), [SUB-11](profiles/submission.md#sub-11) |
+| Project functions | a missing argument short-circuits unless its parameter accepts missing | [FUNC-7](profiles/functions.md#func-7), [FUNC-9](profiles/functions.md#func-9) |
+| ODM reads | no identified record gives missing | [NAME-13](names.md#name-13) |
+| Inputs | a null or an empty field; no sentinel text | [INPUT-8](inputs.md#input-8), [INPUT-9](inputs.md#input-9), [CSV-14](reference/csv.md#csv-14) |
+| Artifacts | an empty CSV field, a Dataset-JSON `null`, SAS Transport blanks or a period | [CSV-4](reference/csv.md#csv-4), [JSON-11](profiles/dataset-json.md#json-11), [XPT-7](profiles/xpt.md#xpt-7), [XPT-8](profiles/xpt.md#xpt-8) |
+
+In an expression field, YAML null and the grammar's `NULL` are the missing
+literal ([EXPR-5](expressions.md#expr-5)), and in a value field YAML null is
+the missing constant ([COLUMN-10](columns.md#column-10)). YAML null never
+removes a value; a layer clears an inherited one only through `clear`
+([LAYER-9](inheritance.md#layer-9)).
 
 <a id="value-4"></a>
 
@@ -532,13 +572,12 @@ the artifact records like any other.
 
 <a id="value-18"></a>
 
-### VALUE-18. A date and a datetime never convert into each other or enter compute arithmetic
+### VALUE-18. A date and a datetime never convert into each other or enter arithmetic
 
 A `date` and a `datetime` do not convert in either direction; such a
 conversion fails and chooses neither value. A temporal value never enters
-`compute` arithmetic, whose grammar under
-[Formulas](formulas.md) is numeric. Differences and
-shifts are the named operations of [Dates and times](temporal.md), with
+arithmetic, whose grammar under [Formulas](formulas.md) is numeric. Differences
+and shifts are the named operations of [Dates and times](temporal.md), with
 explicit units and input contracts.
 
 Fails: `conversion_failed`.

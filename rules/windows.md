@@ -156,17 +156,24 @@ Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/execution
 
 <a id="window-5"></a>
 
-### WINDOW-5. Positional window operations require window.order_by, and baseline_flag forbids it
+### WINDOW-5. Positional window operations require window.order_by, and baseline_flag defaults it to its date
 
 `row_number`, `rank`, `row_value` and `locf` require `window.order_by`:
 without a declared order the window has no positions to number or to move
-along, and omitting it is a validation error.
-`baseline_flag` orders its eligible rows by `date` and then by its own
-`tie_break` terms, and does not take `window.order_by`; declaring one is a
-validation error rather than silently ignored.
+along, and omitting it is a validation error. `baseline_flag` also takes
+`window.order_by`, which defaults to its `date` alone; a declared order starts
+with that `date` ascending, and its later terms break ties
+([WINDOW-9](#window-9)).
 
-Fails: `window_order_by_required`, `window_order_by_forbidden`.
-Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden`.
+Fails: `window_order_by_required`, `value_not_permitted`, `window_order_by_forbidden`.
+Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_declared_baseline_order_starts_with_the_date_ascending`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden`.
+
+A `baseline_flag` order whose first term is not its `date` ascending fails
+validation as `value_not_permitted` at that term, its context naming the
+term's variable, its direction and the `date`. A file that declares
+`schema_version` is read under the rules at the `yamaa-v0.5.0` tag, where
+`baseline_flag` orders by `date` and its own `tie_break` terms, and a declared
+`window.order_by` fails as `window_order_by_forbidden`.
 
 ## Window operations
 
@@ -257,41 +264,41 @@ derivation:
 
 <a id="window-9"></a>
 
-### WINDOW-9. baseline_flag marks the last eligible row ordered by date and then by its tie_break terms
+### WINDOW-9. baseline_flag flags the last eligible row of each partition in date order, and a tie for last fails
 
 `baseline_flag` returns `Y` for at most one row of each partition and missing
-elsewhere. A row is eligible when its `value` is not missing and its `date` is
-not missing and falls at or before its `reference_date`, or strictly before it
-with `inclusive: false`. The baseline is the last eligible row when eligible
-rows are ordered by `date` and then by the `tie_break` terms, each term with
-its own direction and missing placement. Eligible rows tied for last on `date`
-and every term fail.
+elsewhere. A row is eligible when its `source` is not missing and its `date` is
+not missing and falls at or before its `reference`, or strictly before it with
+`inclusive: false`. The baseline is the last eligible row when eligible rows
+are ordered by `window.order_by`, each term with its own direction and missing
+placement. Eligible rows tied for last on every term fail.
 
 Fails: `ambiguous_baseline`, `incompatible_input_type`.
 Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
 
-`date` and `reference_date` are both `date` columns or both `datetime`
-columns; any other pairing fails validation as `incompatible_input_type` at
-the operand. With `datetime` columns the bound and the order use the time of
-day as well. `value` may hold any type and only its being missing matters: it
+`date` and `reference` are both `date` columns or both `datetime` columns;
+any other pairing fails validation as `incompatible_input_type` at the
+operand. With `datetime` columns the bound and the order use the time of day
+as well. `source` may hold any type and only its being missing matters: it
 names the analysis value the baseline is for, so the baseline is the last
 non-missing value. `inclusive` defaults to `true`. Each row is compared with
-its own `reference_date`, and a row whose reference is missing is not
-eligible. A partition with no eligible row has no baseline.
+its own `reference`, and a row whose reference is missing is not eligible. A
+partition with no eligible row has no baseline.
 
-`tie_break` is an optional list of order terms under
-[VALUE-22](values.md#value-22), compared only between eligible rows that share
-the latest date. The last row in that order is chosen, so `direction: desc` on
-a term prefers the term's smallest value. A missing tie-break value takes the
+`window.order_by` holds order terms under [VALUE-22](values.md#value-22) and
+defaults to the `date` alone ([WINDOW-5](#window-5)); the terms after the
+`date` are compared only between eligible rows that share the latest date.
+The last row in that order is chosen, so `direction: desc` on a term prefers
+the term's smallest value. A missing tie-break value takes the
 term's placement: with `nulls` omitted under `asc` it sorts first, so a row
 with a collection time is chosen over a same-day row without one.
 
 `window.group_by` partitions the rows and `window.filter` removes rows before
 eligibility is judged ([WINDOW-4](#window-4)); it remains the place for a
-compound condition. When two or more eligible rows tie for last on `date` and
-every `tie_break` term, the run fails with `ambiguous_baseline`, reporting the
-shared date, the number of tied rows and the partition; ties among earlier
-rows do not matter.
+compound condition. When two or more eligible rows tie for last on every
+term of `window.order_by`, the run fails with `ambiguous_baseline`, reporting
+the shared date, the number of tied rows and the partition; ties among
+earlier rows do not matter.
 
 ```yaml
 - name: ABLFL
@@ -299,11 +306,11 @@ rows do not matter.
   derivation:
     baseline_flag:
       date: ADT
-      reference_date: TRTSDT
-      value: AVAL
-      tie_break: [ATM, LBSEQ]
+      reference: TRTSDT
+      source: AVAL
       window:
         group_by: [STUDYID, USUBJID, PARAMCD]
+        order_by: [ADT, ATM, LBSEQ]
 ```
 
 <a id="window-10"></a>

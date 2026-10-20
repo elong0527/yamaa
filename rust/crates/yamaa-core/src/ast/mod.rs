@@ -125,6 +125,17 @@ pub enum Surface {
     V1 { minor: u32 },
 }
 
+impl Surface {
+    /// Whether a source binding's or a lookup's `absent` also answers a
+    /// variable that does not exist where it is read, as COLUMN-11 at the
+    /// `yamaa-v0.5.0` tag says. In 1.0 `absent` answers only a lookup that
+    /// finds no record, and a variable that does not exist fails under
+    /// NAME-3 (D67).
+    pub fn absent_answers_unknown_variable(self) -> bool {
+        matches!(self, Self::V0_5)
+    }
+}
+
 /// `model: SDTM | SEND | ADaM` (P-MODEL-1); no 0.5 form.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Model {
@@ -267,7 +278,9 @@ pub struct Intermediate {
     pub order_by: Vec<OrderTerm>,
     pub keep: Option<Keep>,
     pub columns: Option<Vec<Named>>,
-    /// Today's `no_match` (P-HND-1).
+    /// The answer when the lookup selects no record: `no_match` in 0.5,
+    /// `absent` in 1.0 (P-HND-1). Which absence it answers is the surface's
+    /// ([`Surface::absent_answers_unknown_variable`], D67).
     pub absent: Option<Constant>,
     pub require_match: bool,
     pub bindings: Vec<Binding>,

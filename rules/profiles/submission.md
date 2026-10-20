@@ -667,12 +667,12 @@ algorithm attached is not traceable.
 
 A declared origin that the [Column derivation](../columns.md) graph
 contradicts is rejected, and an origin is never inferred. A bare read refutes
-no type: a `source`, an `odm` read or an `aggregate` whose `expr` is exactly
-`ONLY` of one variable, read directly or through a plain lookup. A bare
-`literal` refutes `Derived` and `Predecessor`, a recode of collected values
-`Protocol` and `Predecessor`, and any other derivation `Collected`, `Protocol`
-and `Predecessor`. A row-derived column keeps only the types all its `rows`
-entries admit, and no shared type fails.
+no type: a reference or a structured `source`, an `odm` read or an `aggregate`
+whose `expr` is exactly `ONLY` of one variable, read directly or through a
+plain lookup. A literal refutes `Derived` and `Predecessor`, a recode of
+collected values `Protocol` and `Predecessor`, and any other derivation
+`Collected`, `Protocol` and `Predecessor`. A row-derived column keeps only the
+types all its `rows` entries admit, and no shared type fails.
 
 Fails: `origin_contradicts_derivation`.
 Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.

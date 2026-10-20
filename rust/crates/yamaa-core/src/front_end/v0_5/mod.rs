@@ -10,6 +10,12 @@
 //! `minimum_source_precision`, a written `window.order_by` on
 //! `baseline_flag`, and the 0.5 path notation ([`Notation::V0_5`]).
 //!
+//! The 1.0 front end ([`crate::front_end::v1::spec`]) shares this construct
+//! lowering: where the two spellings of one construct differ, the lowering
+//! reads the spelling of the surface it was started for ([`Surface`]), so
+//! both reach the same node by one code path. P2-13 moves the shared lowering
+//! into `v1` when the 0.5 surface goes.
+//!
 //! Lowering is total over every document the model admits. The model does
 //! not check operation payloads, so an operation outside the language
 //! lowers to [`ExprKind::Unsupported`], which preparation refuses as before.
@@ -27,9 +33,9 @@ use crate::ast::{
     Binding, Column, ColumnCheck, ColumnCheckKind, ColumnOrigin, ColumnSubmission, Comment,
     Comparator, Constant, DatasetCheck, DatasetCheckKind, DatasetSubmission, Derivation,
     DocumentRef, EmptyString, Expr, ExprId, ExprKind, FileRef, FormalExpression, Header, Input,
-    InputSource, Intermediate, JoinKey, KeyDecl, Literal, Meta, Method, Named, Notation, Origin,
-    Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity, Span, Spec,
-    SubmissionMetadata, Surface, Template, Text, UniqueCheck, ValueLevel, WhereClause,
+    InputSource, Intermediate, JoinKey, KeyDecl, Literal, Meta, Method, Model, ModelKind, Named,
+    Notation, Origin, Output, PageRef, PathBase, Paths, Profile, RowCount, Rows, Segment, Severity,
+    Span, Spec, SubmissionMetadata, Surface, Template, Text, UniqueCheck, ValueLevel, WhereClause,
 };
 use crate::schema::{Document, DocumentNode as N, SpecificationDocument};
 use crate::value::ColumnType;
@@ -84,9 +90,20 @@ pub fn lower(spec: &SpecificationDocument, positions: Option<&Positions>) -> Low
 /// stays total: a missing required field lowers to an unsupported node, and
 /// final validation still reports it.
 pub fn lower_document(d: &Document, positions: Option<&Positions>) -> Lowered {
+    lower_surface(d, positions, Surface::V0_5)
+}
+
+/// Lower a document written in `surface`'s spelling. The 1.0 front end
+/// enters here ([`crate::front_end::v1::spec::lower`]).
+pub(crate) fn lower_surface(
+    d: &Document,
+    positions: Option<&Positions>,
+    surface: Surface,
+) -> Lowered {
     let mut lower = Lower {
         d,
         positions,
+        surface,
         paths: Paths::new(),
         exprs: Vec::new(),
         origins: Vec::new(),
@@ -114,6 +131,8 @@ pub fn lower_document(d: &Document, positions: Option<&Positions>) -> Lowered {
 pub(super) struct Lower<'d> {
     d: &'d Document,
     positions: Option<&'d Positions>,
+    /// The spelling the document is written in.
+    surface: Surface,
     paths: Paths,
     exprs: Vec<Expr>,
     origins: Vec<usize>,
@@ -122,6 +141,15 @@ pub(super) struct Lower<'d> {
 /// The path segment of a written registry keyword, such as an operation.
 fn keyword(name: &str) -> Segment {
     Segment::Key(name.into())
+}
+
+/// Whether a 1.0 input's path names an ODM XML file, which selects the ODM
+/// profile (P-ODMIN-1); the extension is matched as `SourceProfile` matches.
+fn odm_path(path: &str) -> bool {
+    path.rsplit('/')
+        .next()
+        .and_then(|name| name.rsplit_once('.'))
+        .is_some_and(|(stem, extension)| !stem.is_empty() && extension.eq_ignore_ascii_case("xml"))
 }
 
 pub(super) fn column_type(text: &str) -> Option<ColumnType> {
@@ -186,8 +214,28 @@ impl<'d> Lower<'d> {
     fn field_meta(&mut self, parent: Meta, name: &'static str, node: usize) -> Meta {
         self.meta(parent, Segment::Field(name), Some(node))
     }
+    /// `meta`'s path at the position of `node`, the deepest node written
+    /// there: a 1.0 expression field's text or scalar, which a composed
+    /// wrapper above it may hold from another layer (P-ISSUE-1).
+    pub(super) fn written_at(&self, meta: Meta, node: usize) -> Meta {
+        Meta {
+            path: meta.path,
+            span: self.span(Some(node), meta.span),
+        }
+    }
+    /// A node's path as its surface's diagnostics cite it.
     pub(super) fn render(&self, meta: Meta) -> String {
-        self.paths.render(meta.path, Notation::V0_5)
+        self.paths.render(meta.path, self.notation())
+    }
+    fn notation(&self) -> Notation {
+        match self.surface {
+            Surface::V0_5 => Notation::V0_5,
+            Surface::V1 { .. } => Notation::V1,
+        }
+    }
+    /// Whether the document is written in the 1.0 spelling.
+    pub(super) fn v1(&self) -> bool {
+        matches!(self.surface, Surface::V1 { .. })
     }
     pub(super) fn push(&mut self, kind: ExprKind, meta: Meta, origin: usize) -> ExprId {
         let id = ExprId(u32::try_from(self.exprs.len()).expect("a spec's expressions fit u32"));
@@ -309,12 +357,28 @@ impl<'d> Lower<'d> {
     }
 
     fn spec(&mut self, root: usize, meta: Meta) -> Spec {
-        let version = self.required_text(meta, root, "schema_version");
+        // A 1.0 resolved specification records the chain's version in
+        // `yamaa` (P-VER-1).
+        let header_field = if self.v1() { "yamaa" } else { "schema_version" };
+        let version = self.required_text(meta, root, header_field);
         let header = Header {
-            surface: Surface::V0_5,
+            surface: self.surface,
             meta: version.meta,
             version,
         };
+        // `model` is stored unchecked; P1-10 checks it (P-MODEL-1).
+        let model = self.field(root, "model").and_then(|node| {
+            let kind = match self.text(node)? {
+                "SDTM" => ModelKind::Sdtm,
+                "SEND" => ModelKind::Send,
+                "ADaM" => ModelKind::Adam,
+                _ => return None,
+            };
+            Some(Model {
+                kind,
+                meta: self.field_meta(meta, "model", node),
+            })
+        });
         let domain = self.named(meta, root, "domain").unwrap_or(Named {
             name: String::new(),
             meta,
@@ -337,7 +401,7 @@ impl<'d> Lower<'d> {
         let metadata = self.metadata(root, meta);
         Spec {
             header,
-            model: None,
+            model,
             domain,
             keys,
             inputs,
@@ -365,15 +429,14 @@ impl<'d> Lower<'d> {
             let Some(name) = self.text(key) else { continue };
             let meta = self.meta(list, Segment::Key(name.into()), Some(source));
             let path = self.required_text(meta, source, "path");
-            let profile =
-                crate::specification::SourceProfile::from_path(&path.text).map(|profile| {
-                    match profile {
-                        crate::specification::SourceProfile::Csv => Profile::Csv,
-                        crate::specification::SourceProfile::Parquet => Profile::Parquet,
-                        crate::specification::SourceProfile::Xport => Profile::Xport,
-                        crate::specification::SourceProfile::Sas7bdat => Profile::Sas7bdat,
-                    }
-                });
+            let profile = crate::specification::SourceProfile::from_path(&path.text)
+                .map(|profile| match profile {
+                    crate::specification::SourceProfile::Csv => Profile::Csv,
+                    crate::specification::SourceProfile::Parquet => Profile::Parquet,
+                    crate::specification::SourceProfile::Xport => Profile::Xport,
+                    crate::specification::SourceProfile::Sas7bdat => Profile::Sas7bdat,
+                })
+                .or_else(|| (self.v1() && odm_path(&path.text)).then_some(Profile::OdmXml));
             let mut types = Vec::new();
             if let Some(declared) = self.field(source, "types") {
                 let types_meta = self.field_meta(meta, "types", declared);
@@ -399,10 +462,19 @@ impl<'d> Lower<'d> {
                 ordinal: self.named(meta, source, "ordinal"),
                 path,
             };
+            // A 1.0 input declares the key its implicit joins and keyless
+            // qualified aggregates match on (P-JOIN-1); P1-6 binds it.
+            let key = if !self.v1() {
+                KeyDecl::Inferred
+            } else if self.field(source, "key").is_some() {
+                KeyDecl::Declared(self.names(meta, source, "key"))
+            } else {
+                KeyDecl::Undeclared
+            };
             inputs.push(Input {
                 name: self.named_at(name, meta),
                 source: source_node,
-                key: KeyDecl::Inferred,
+                key,
                 require_match: self.boolean(source, "require_match", false),
                 meta,
             });
@@ -430,7 +502,13 @@ impl<'d> Lower<'d> {
                 name: name.into(),
                 meta,
             });
-            let derivation = self.field(column, "derivation").map(|node| {
+            // In 1.0 a written `derivation: null` derives missing (LAYER-9).
+            let written = if self.v1() {
+                self.d.field(column, "derivation")
+            } else {
+                self.field(column, "derivation")
+            };
+            let derivation = written.map(|node| {
                 let meta = self.field_meta(meta, "derivation", node);
                 self.derivation(node, meta)
             });
@@ -460,6 +538,9 @@ impl<'d> Lower<'d> {
     pub(super) fn derivation(&mut self, node: usize, meta: Meta) -> Derivation {
         let expr = match self.d.field(node, "value") {
             Some(value) => self.expression(value, meta),
+            // A 1.0 expression written bare, as a document admitted without
+            // normalization holds it.
+            None if self.v1() => self.expression(node, meta),
             None => self.push(ExprKind::Unsupported("derivation".into()), meta, node),
         };
         Derivation {
@@ -561,14 +642,16 @@ impl<'d> Lower<'d> {
                 name: String::new(),
                 meta,
             });
-            // A lookup without `key` infers the applicable keys at binding;
-            // a driver of row templates has no key (ROW-2, D23-R1).
+            // A 0.5 lookup without `key` infers the applicable keys at
+            // binding; a driver of row templates has no key (ROW-2, D23-R1).
+            // A 1.0 intermediate states its own key (D23), and one that does
+            // not keeps none here: P1-6 refuses it unless it drives rows.
             let key = match self.field(item, "key") {
                 Some(node) => {
                     let meta = self.field_meta(meta, "key", node);
                     Some(self.join_key(node, meta))
                 }
-                None => (!drivers.contains(id)).then_some(JoinKey::Applicable),
+                None => (!self.v1() && !drivers.contains(id)).then_some(JoinKey::Applicable),
             };
             let between = self.field(item, "between").map(|node| {
                 let meta = self.field_meta(meta, "between", node);
@@ -583,7 +666,13 @@ impl<'d> Lower<'d> {
             let columns = self
                 .field(item, "columns")
                 .map(|_| self.names(meta, item, "columns"));
-            let absent = self.constant(meta, item, "no_match");
+            // The absence answer is `no_match` in 0.5 and `absent` in 1.0
+            // (P-HND-1).
+            let absent = if self.v1() {
+                self.constant(meta, item, "absent")
+            } else {
+                self.constant(meta, item, "no_match")
+            };
             let mut bindings = Vec::new();
             if let Some(node) = self.field(item, "derivations") {
                 let entries_meta = self.field_meta(meta, "derivations", node);
@@ -629,7 +718,9 @@ impl<'d> Lower<'d> {
         intermediates
     }
 
-    /// An intermediate derivation: `{value: E}` or `{type, derivation, unconvertible}`.
+    /// An intermediate derivation: `{type, derivation, unconvertible}`, or an
+    /// untyped expression, which 0.5 writes `{value: E}` and 1.0 bare
+    /// (P-BIND-2).
     fn intermediate_binding(&mut self, name: &str, entry: usize, list: Meta) -> Binding {
         let meta = self.meta(list, Segment::Key(name.into()), Some(entry));
         let (declared, derivation) = match self.d.field(entry, "derivation") {
@@ -666,8 +757,12 @@ impl<'d> Lower<'d> {
         let mut checks = Vec::new();
         for (index, &check) in self.items(node).iter().enumerate() {
             let entry = self.meta(list, Segment::Index(index as u32), Some(check));
-            let (operation, payload) = match self.entries(check) {
-                &[(key, payload)] => (self.text(key).unwrap_or_default(), payload),
+            let (operation, payload) = match (self.entries(check), self.text(check)) {
+                (&[(key, payload)], _) => (self.text(key).unwrap_or_default(), payload),
+                // 1.0 writes a check that declares no field as its bare
+                // keyword, `- not_missing` (P-HND-4); it keeps the keyword's
+                // path.
+                (_, Some(keyword)) if self.v1() => (keyword, check),
                 _ => ("", check),
             };
             let meta = self.meta(entry, keyword(operation), Some(payload));
@@ -889,8 +984,13 @@ impl<'d> Lower<'d> {
                         };
                         let meta =
                             self.meta(clause_meta, Segment::Key(column.into()), Some(values));
+                        // 1.0 normalizes the list into its comparison class
+                        // (P-VLM-1); a class holding only `values` is the
+                        // list written bare (SCHEMA-15), whose values keep
+                        // their written paths.
+                        let list = self.field(values, "values").unwrap_or(values);
                         let mut listed = Vec::new();
-                        for (position, &value) in self.items(values).iter().enumerate() {
+                        for (position, &value) in self.items(list).iter().enumerate() {
                             if let Some(text) = self.text(value) {
                                 let meta =
                                     self.meta(meta, Segment::Index(position as u32), Some(value));

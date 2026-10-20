@@ -9,12 +9,14 @@ use crate::arrow_bridge::ArrowTable;
 
 pyo3::create_exception!(yamaa, _Error, PyException);
 
-/// Raise `_Error` carrying the issues that explain it as an `issues` table.
+/// Raise `_Error` carrying the issues that explain it as an `issues` table,
+/// and the files a refused save wrote before it stopped as `paths`.
 fn raise(py: Python<'_>, failure: Failure) -> PyErr {
     let error = _Error::new_err(failure.message);
-    match error
-        .value(py)
+    let value = error.value(py);
+    match value
         .setattr("issues", ArrowTable::from(&failure.issues))
+        .and_then(|()| value.setattr("paths", failure.paths))
     {
         Ok(()) => error,
         Err(setattr) => setattr,
@@ -82,7 +84,7 @@ impl Run {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
         Ok(guard.report().map(ArrowTable::from))
     }
-    fn save(&self, py: Python<'_>) -> PyResult<()> {
+    fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self.inner.try_lock().map_err(|_| poisoned())?.save();
         saved.map_err(|failure| raise(py, failure))
     }
@@ -231,7 +233,7 @@ impl ProjectRun {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         Ok(ArrowTable::from(&guard.report()))
     }
-    fn save(&self, py: Python<'_>) -> PyResult<()> {
+    fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
             .inner
             .try_lock()
@@ -252,7 +254,7 @@ impl Submission {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         Ok(ArrowTable::from(&guard.issues()))
     }
-    fn save(&self, py: Python<'_>) -> PyResult<()> {
+    fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
             .inner
             .try_lock()

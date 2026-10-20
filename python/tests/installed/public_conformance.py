@@ -200,18 +200,20 @@ def main(argv=None):
 
     def observe(run):
         tables = {"output": table(run.output), "report": table(run.report)}
-        saved = False
+        # A save returns the paths it wrote, in publication order; a refused
+        # save raises with the paths it wrote first.
+        saved, paths = False, None
         if not run.issues.height:
             try:
-                run.save()
-            except yamaa.Error:
-                pass
+                paths = run.save()
+            except yamaa.Error as error:
+                paths = error.paths
             else:
                 saved = True
         issues = run.issues.to_dicts()
         for issue in issues:
             issue["context"] = json.loads(issue["context"])
-        return {"issues": issues, "tables": tables, "saved": saved}
+        return {"issues": issues, "tables": tables, "saved": saved, "paths": paths}
 
     def files(case):
         return {

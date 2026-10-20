@@ -3,8 +3,9 @@
 //! functions; behavior, validation and messages stay in Rust.
 //!
 //! Every function replies `list(value, error)`. `error` is `NULL` on success,
-//! otherwise `list(message, issues)`, where `issues` is the issues data frame
-//! (empty when the refusal carries none).
+//! otherwise `list(message, issues, paths)`, where `issues` is the issues data
+//! frame (empty when the refusal carries none) and `paths` the files a refused
+//! save wrote before it stopped.
 use crate::handle::address;
 use extendr_api::prelude::*;
 use std::{
@@ -37,19 +38,25 @@ impl From<&str> for Refusal {
 }
 
 fn refused(error: Refusal) -> List {
-    // A refusal of this boundary itself carries an empty issues table.
-    let (message, issues) = match error {
-        Refusal::Failure(failure) => (failure.message, failure.issues),
-        Refusal::Message(message) => (message, Report::default().table()),
+    // A refusal of this boundary itself carries an empty issues table and
+    // wrote nothing.
+    let (message, issues, paths) = match error {
+        Refusal::Failure(failure) => (failure.message, failure.issues, failure.paths),
+        Refusal::Message(message) => (message, Report::default().table(), Vec::new()),
     };
+    let paths = Strings::from_values(&paths);
     match crate::public_table::frame(&issues) {
         Ok(issues) => list!(
             value = NULL,
-            error = list!(message = message, issues = issues)
+            error = list!(message = message, issues = issues, paths = paths)
         ),
         Err(conversion) => list!(
             value = NULL,
-            error = list!(message = format!("{message}; {conversion}"), issues = NULL)
+            error = list!(
+                message = format!("{message}; {conversion}"),
+                issues = NULL,
+                paths = paths
+            )
         ),
     }
 }
@@ -372,8 +379,8 @@ fn run_save(handle: Robj) -> List {
     reply(|| {
         let run = run(&handle)?;
         let mut run = run.try_borrow_mut().map_err(|_| "run handle in use")?;
-        run.save().map_err(Refusal::Failure)?;
-        Ok(NULL.into_robj())
+        let paths = run.save().map_err(Refusal::Failure)?;
+        Ok(Strings::from_values(paths).into_robj())
     })
 }
 
@@ -509,8 +516,8 @@ fn project_run_save(handle: Robj) -> List {
         let mut runs = runs
             .try_borrow_mut()
             .map_err(|_| "project run handle in use")?;
-        runs.save().map_err(Refusal::Failure)?;
-        Ok(NULL.into_robj())
+        let paths = runs.save().map_err(Refusal::Failure)?;
+        Ok(Strings::from_values(paths).into_robj())
     })
 }
 
@@ -572,8 +579,8 @@ fn submission_save(handle: Robj) -> List {
         let mut submission = submission
             .try_borrow_mut()
             .map_err(|_| "submission handle in use")?;
-        submission.save().map_err(Refusal::Failure)?;
-        Ok(NULL.into_robj())
+        let paths = submission.save().map_err(Refusal::Failure)?;
+        Ok(Strings::from_values(paths).into_robj())
     })
 }
 

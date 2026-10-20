@@ -4,6 +4,11 @@
 # same process still work. On Windows this runs the GNU build, whose unwinding
 # no Rust test reaches. Python reads the same truth.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -50,7 +55,7 @@ for (attempt in 1:2) {
   stopifnot(issues_equal(result$issues, truth[["issues"]]), is.null(result$output),
     inherits(failure, "yamaa_error"))
   result <- yamaa_spec(readable)$run()
-  stopifnot(nrow(result$issues) == 0L, is.null(result$save()), identical(saved_csv(), readable_csv))
+  stopifnot(nrow(result$issues) == 0L, returns_paths(result$save()), identical(saved_csv(), readable_csv))
 }
 cat("a decoder panic is source_parquet_invalid, and later reads in the process still work\n")
 

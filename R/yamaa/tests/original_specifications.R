@@ -14,6 +14,11 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 source(file.path(host_fixture_root,"context.R"),local=TRUE)
@@ -73,9 +78,10 @@ check_spec <- function(path) yamaa_spec(path)$check()
 # Private installed-run evidence: the run's complete observations as JSON text,
 # or NULL for a specification refused before its run began.
 domain_observations <- function(result) yamaa:::.run_observations(result)
-# save() returns invisible NULL. A refused save signals yamaa_error with the
-# run's own issues: a failed run's, or a successful run's refused publication.
-saved <- function(result) is.null(result$save())
+# save() returns the paths it wrote, invisibly. A refused save signals
+# yamaa_error with the run's own issues: a failed run's, or a successful run's
+# refused publication.
+saved <- function(result) returns_paths(result$save())
 save_refused <- function(result,message) {
   failure <- tryCatch({result$save();NULL},error=identity)
   inherits(failure,"yamaa_error") && identical(conditionMessage(failure),message) &&

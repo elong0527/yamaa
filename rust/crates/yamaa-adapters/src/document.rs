@@ -19,8 +19,11 @@ use crate::shipped_schema;
 use crate::specification_source::{
     CapturedFindings, CapturedSchema, Error, InheritancePort, Source, SourceFailure,
 };
-use crate::yaml_decode::{decode_yaml, DecodedYaml};
+use crate::yaml_decode::{decode_yaml, DecodedYaml, SourcePosition};
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use yamaa_core::ast::{FileId, FileRef, Span};
+use yamaa_core::front_end::v1::spec::{self as front_end, Lowered, Positions};
 use yamaa_core::inheritance::{self as graph, VersionedChain};
 use yamaa_core::inheritance_preparation::{self as lifecycle, ResolvedVersioned, VersionedError};
 use yamaa_core::language::{
@@ -28,7 +31,7 @@ use yamaa_core::language::{
 };
 use yamaa_core::schema::{
     Document, LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument,
-    SchemaDiagnostic,
+    SchemaDiagnostic, SchemaSource,
 };
 
 /// The 1.0 closure of each file type.
@@ -176,12 +179,13 @@ impl AdmittedDocument {
 /// version the chain needs, and the resolved specification they compose into
 /// (LAYER-1), with the provenance of every value. Pruning and dependency
 /// order read the lowered specification and are not part of this
-/// preparation.
+/// preparation yet.
 #[derive(Debug)]
 pub struct PreparedSpecification {
     schema: Arc<CapturedSchema>,
     chain: VersionedChain,
     resolved: ResolvedVersioned,
+    lowered: Lowered,
 }
 
 impl PreparedSpecification {
@@ -198,9 +202,19 @@ impl PreparedSpecification {
     }
     /// The resolved specification: the layers composed, each layer's `clear`
     /// applied before it, and normalized at the chain's version, which `yamaa`
-    /// records (LAYER-9, LAYER-14).
+    /// records, with every named window expanded (LAYER-9, LAYER-14).
     pub fn resolved(&self) -> &Document {
         &self.resolved.document
+    }
+    /// The resolved specification lowered into the AST by the 1.0 front end
+    /// (P1-5). Every node carries the position of the deepest node its layer
+    /// wrote, in the layer whose value took effect (P-ISSUE-1).
+    pub fn lowered(&self) -> &Lowered {
+        &self.lowered
+    }
+    /// The lowered specification, owned.
+    pub fn into_lowered(self) -> Lowered {
+        self.lowered
     }
     /// Parallel to [`PreparedSpecification::resolved`]'s nodes: the layer and
     /// occurrence each node was written at, or the schema default it came
@@ -328,7 +342,10 @@ impl VersionedDocument {
             display_path,
         };
         let schema = self.schema.structure();
-        let mut parents = Parents { port };
+        let mut parents = Parents {
+            port,
+            locations: BTreeMap::new(),
+        };
         let chain = graph::traverse_versioned(
             schema,
             self.reads,
@@ -367,18 +384,78 @@ impl VersionedDocument {
                 )))
             }
         };
+        // Lower once, each node located where its layer wrote it, and check
+        // what the 1.0 schema cannot state before any input is read.
+        let locations = |layer: &graph::VersionedLayer| {
+            if layer.source.identity == self.source.identity {
+                Some(&self.raw.locations)
+            } else {
+                parents.locations.get(&layer.source.identity)
+            }
+        };
+        let positions = positions(&chain, &resolved, locations);
+        let lowered = front_end::lower(&resolved.document, Some(&positions));
+        let found = front_end::checks::findings(lowered.spec());
+        if !found.is_empty() {
+            return Err(SpecificationError::Entry(findings(
+                &self.schema,
+                self.source,
+                resolved.document,
+                found,
+            )));
+        }
         Ok(PreparedSpecification {
             schema: self.schema,
             chain,
             resolved,
+            lowered,
         })
     }
 }
 
+/// Where each resolved node was written: the decoded position of the node
+/// its layer wrote, or none for a schema default or a node composition made.
+/// `locations` gives each layer's decoded positions.
+fn positions<'a>(
+    chain: &'a VersionedChain,
+    resolved: &ResolvedVersioned,
+    locations: impl Fn(&'a graph::VersionedLayer) -> Option<&'a Vec<SourcePosition>>,
+) -> Positions {
+    let decoded = chain.layers.iter().map(locations).collect::<Vec<_>>();
+    let span = |layer: usize, at: &SourcePosition| Span {
+        file: FileId(u32::try_from(layer).expect("a chain's layers fit u32")),
+        line: u32::try_from(at.line).unwrap_or(u32::MAX),
+        column: u32::try_from(at.column).unwrap_or(u32::MAX),
+    };
+    Positions {
+        files: chain
+            .layers
+            .iter()
+            .map(|layer| FileRef {
+                identity: layer.source.identity.clone(),
+            })
+            .collect(),
+        nodes: resolved
+            .origins
+            .iter()
+            .map(|origin| {
+                let layer = origin.layer?;
+                if !matches!(origin.origin.source, SchemaSource::Input) {
+                    return None;
+                }
+                let at = decoded.get(layer)?.as_ref()?.get(origin.origin.node)?;
+                Some(span(layer, at))
+            })
+            .collect(),
+    }
+}
+
 /// Parent capture through the caller's port, decoded with the shared YAML
-/// reader. Opaque host failures keep their payload.
+/// reader, keeping where each parent's nodes were decoded. Opaque host
+/// failures keep their payload.
 struct Parents<'a, P> {
     port: &'a mut P,
+    locations: BTreeMap<String, Vec<SourcePosition>>,
 }
 
 fn host<E>(error: graph::SourceError<E>) -> graph::SourceError<SourceFailure<E>> {
@@ -416,7 +493,11 @@ impl<P: InheritancePort> graph::InheritanceSourcePort for Parents<'_, P> {
     ) -> Result<Document, graph::SourceError<Self::Error>> {
         let bytes = self.port.capture(source).map_err(host)?;
         decode_yaml(&bytes)
-            .map(|decoded| decoded.document)
+            .map(|decoded| {
+                self.locations
+                    .insert(source.identity.clone(), decoded.locations);
+                decoded.document
+            })
             .map_err(|error| {
                 graph::SourceError::Raised(SourceFailure::Admission(Error::Decode {
                     identity: source.identity.clone(),

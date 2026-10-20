@@ -48,6 +48,7 @@ _PY_ANNOTATION = {
     "count": "int",
     "flag": "bool",
     "names": "list[str]",
+    "paths_written": "list[str]",
     "tree": "dict",
     "table": "_pl.DataFrame",
     "optional_table": "_pl.DataFrame | None",
@@ -918,7 +919,8 @@ class Public:
             return self._r_construct(
                 returns, call, class_name, entry.get("args", {}), what, handle
             )
-        if returns == "nothing":
+        # A method that writes returns its result invisibly, as `save()` does.
+        if returns in {"nothing", "paths_written"}:
             return _Call("invisible", [call])
         return call
 

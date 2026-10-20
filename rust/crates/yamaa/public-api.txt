@@ -103,7 +103,6 @@ yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
 yamaa::RunRequest: pub use yamaa::plan::RunRequest
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
-yamaa::SaveOutcome: pub use yamaa::engine::SaveOutcome
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
 yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
@@ -148,6 +147,7 @@ yamaa::api::Failure::from_error: pub fn from_error(action: Action<'_>, error: &E
 yamaa::api::Failure::issues: pub issues: Table
 yamaa::api::Failure::message: pub message: String
 yamaa::api::Failure::new: pub fn new(action: Action<'_>, report: &Report) -> Self
+yamaa::api::Failure::paths: pub paths: Vec<String>
 yamaa::api::Plans: impl Plans
 yamaa::api::Plans: pub struct Plans [derive(Default)]
 yamaa::api::Plans::new: pub fn new() -> Self
@@ -159,7 +159,7 @@ yamaa::api::ProjectRun::issues: pub fn issues(&self) -> Table
 yamaa::api::ProjectRun::member: pub fn member(&self, name: &str) -> Result<&Run, Failure>
 yamaa::api::ProjectRun::names: pub fn names(&self) -> Vec<String>
 yamaa::api::ProjectRun::report: pub fn report(&self) -> Table
-yamaa::api::ProjectRun::save: pub fn save(&mut self) -> Result<(), Failure>
+yamaa::api::ProjectRun::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
 yamaa::api::ProjectRun::status: pub fn status(&self) -> Status
 yamaa::api::ProjectRun::summary: pub fn summary(&self) -> Summary
 yamaa::api::Run: impl Run
@@ -169,7 +169,7 @@ yamaa::api::Run::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic
 yamaa::api::Run::issues: pub fn issues(&self) -> Table
 yamaa::api::Run::output: pub fn output(&self) -> Option<&Table>
 yamaa::api::Run::report: pub fn report(&self) -> Option<&Table>
-yamaa::api::Run::save: pub fn save(&mut self) -> Result<(), Failure>
+yamaa::api::Run::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
 yamaa::api::Run::status: pub fn status(&self) -> Status
 yamaa::api::Run::summary: pub fn summary(&self) -> Summary
 yamaa::api::Status: impl Status
@@ -182,7 +182,7 @@ yamaa::api::Submission: impl Submission
 yamaa::api::Submission: pub struct Submission
 yamaa::api::Submission::diagnostics: pub fn diagnostics(&self) -> Vec<yamaa::diagnostic::Diagnostic>
 yamaa::api::Submission::issues: pub fn issues(&self) -> Table
-yamaa::api::Submission::save: pub fn save(&mut self) -> Result<(), Failure>
+yamaa::api::Submission::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
 yamaa::api::Submission::status: pub fn status(&self) -> Status
 yamaa::api::Submission::summary: pub fn summary(&self) -> Summary
 yamaa::cancel::CancellationToken: impl CancellationToken
@@ -264,7 +264,7 @@ yamaa::engine::Build::project_failures: pub fn project_failures(&self) -> Option
 yamaa::engine::Build::report: pub fn report(&self) -> &Report
 yamaa::engine::Build::run_report: pub fn run_report(&self) -> Option<&Table>
 yamaa::engine::Build::run_report_bytes: pub fn run_report_bytes(&self) -> Option<&[u8]>
-yamaa::engine::Build::save: pub fn save(&mut self) -> Result<SaveOutcome, Error>
+yamaa::engine::Build::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
 yamaa::engine::DefineArtifact: pub struct DefineArtifact [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::DefineArtifact::bytes: pub bytes: Vec<u8>
 yamaa::engine::DefineArtifact::path: pub path: String
@@ -274,8 +274,7 @@ yamaa::engine::DefineBuild: pub struct DefineBuild
 yamaa::engine::DefineBuild::artifacts: pub fn artifacts(&self) -> Vec<DefineArtifact>
 yamaa::engine::DefineBuild::capture_reads: pub fn capture_reads(&self) -> usize
 yamaa::engine::DefineBuild::report: pub fn report(&self) -> &Report
-yamaa::engine::DefineBuild::save: pub fn save(&mut self) -> Result<SaveOutcome, Error>
-yamaa::engine::DefineBuild::save_error_message: pub fn save_error_message(&self) -> Option<String>
+yamaa::engine::DefineBuild::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
 yamaa::engine::DefineRequest: impl<'a> DefineRequest<'a>
 yamaa::engine::DefineRequest: pub struct DefineRequest<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::engine::DefineRequest::created: pub created: Option<&'a str>
@@ -316,9 +315,6 @@ yamaa::engine::ResolvedSpecification::entry: pub fn entry(&self) -> &str
 yamaa::engine::ResolvedSpecification::from_json: pub fn from_json(text: &str) -> Result<Self, Error>
 yamaa::engine::ResolvedSpecification::project: pub fn project(&self) -> Option<&str>
 yamaa::engine::ResolvedSpecification::to_json: pub fn to_json(&self) -> Result<String, Error>
-yamaa::engine::SaveOutcome: pub enum SaveOutcome [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::engine::SaveOutcome::NothingToSave: NothingToSave
-yamaa::engine::SaveOutcome::Saved: Saved
 yamaa::engine::SourceBytes: pub type SourceBytes = Vec<(String, Arc<[u8]>)>
 yamaa::error::Error: impl std::error::Error for Error
 yamaa::error::Error: impl std::fmt::Display for Error

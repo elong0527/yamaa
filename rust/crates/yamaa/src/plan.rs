@@ -167,7 +167,8 @@ impl Plan {
         });
         let outcome = self.run_observed(resolver, true, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared).named(self.name()))
+        let subject = self.name().unwrap_or(&self.compiled.specification);
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
     }
 
     /// Borrow the compilation report: a refused compilation's diagnostics,
