@@ -555,6 +555,74 @@ mod project {
                 assert!(!study.0.join("input.csv").exists());
             }
         }
+        /// SUB-12: a where value that the where column's codelists do not
+        /// admit fails validation at that where column, before any data is
+        /// read. They are its own codelist and those its entries bind,
+        /// extended items included; an external dictionary on any of its
+        /// rows, or no codelist of its own, admits every value, and a build
+        /// without a project reads no codelist.
+        #[test]
+        fn where_values_outside_the_where_columns_codelists_fail_before_data() {
+            const SPEC: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, LBCAT, LBTESTCD, RESULT]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: LBCAT, type: str, derivation: SRC.CAT}\n  - {name: LBTESTCD, type: str, derivation: SRC.CODE, submission: {origin: {type: Assigned}<binding>}}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC, <code>]}, length: 4}]}}\n";
+            const PROJECT: &str = "schema_version: '1.0'\ncodelists:\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\n    codelists:\n      - {id: TESTCD, name: Test codes, extensible: true, items: [{value: GLUC}, {value: CREAT}, {value: SPONSOR, extended: true}]}\n  - codelists:\n      - {id: URINE, name: Urine test codes, items: [{value: UGLUC}]}\n      - {id: DICT, name: Dictionary, external: {dictionary: LOINC, version: '2.77'}}\n";
+            const OWN: &str = ", codelist: TESTCD";
+            const URINE: &str =
+                ", value_level: [{id: URINE, where: {LBCAT: [URINALYSIS]}, codelist: URINE}]";
+            const DICTIONARY: &str =
+                ", value_level: [{id: URINE, where: {LBCAT: [URINALYSIS]}, codelist: DICT}]";
+            let host = yamaa_core::project_function::Language::Python;
+            for (binding, code, refused) in [
+                (OWN.to_owned(), "GLUCOSE", true),
+                // A sponsor addition is one of the extensible list's items.
+                (OWN.to_owned(), "SPONSOR", false),
+                // An entry of the where column adds its own list's items.
+                (format!("{OWN}{URINE}"), "UGLUC", false),
+                (format!("{OWN}{URINE}"), "GLUCOSE", true),
+                // An external dictionary on any of its rows admits every value,
+                (format!("{OWN}{DICTIONARY}"), "GLUCOSE", false),
+                (", codelist: DICT".to_owned(), "GLUCOSE", false),
+                // as a where column without a codelist of its own does.
+                (String::new(), "GLUCOSE", false),
+                (URINE.to_owned(), "GLUCOSE", false),
+            ] {
+                let study = Study::new();
+                let spec = SPEC.replace("<binding>", &binding).replace("<code>", code);
+                fs::write(study.0.join("spec.yaml"), spec).unwrap();
+                fs::write(study.0.join("project.yaml"), PROJECT).unwrap();
+                let path = study.0.join("spec.yaml");
+                let project = study.0.join("project.yaml");
+                let selected = yamaa_adapters::file_workflow::select(
+                    path.to_str().unwrap(),
+                    project.to_str().unwrap(),
+                    host,
+                );
+                match (selected, refused) {
+                    (Ok(_), false) => {}
+                    (Ok(_), true) => panic!("{binding} {code}: admitted"),
+                    (Err(error), refused) => {
+                        let issues = yamaa_adapters::project_application::selection_failure(&error);
+                        assert!(refused, "{binding} {code}: {issues:?}");
+                        assert_eq!(issues.len(), 1, "{issues:?}");
+                        assert_eq!(
+                            (issues[0].phase(), issues[0].condition(), issues[0].rule()),
+                            ("validation", "value_level_where_invalid", Some("SUB-12"))
+                        );
+                        assert_eq!(
+                            issues[0].spec_paths,
+                            ["columns.RESULT.submission.value_level.GLUC.where.LBTESTCD"]
+                        );
+                        assert_eq!(
+                            yamaa_core::json::Value::Object(issues[0].context.clone()),
+                            yamaa_adapters::json!({"column": "RESULT", "entry": "GLUC", "reason": "not_in_codelist", "where_column": "LBTESTCD"})
+                        );
+                    }
+                }
+                assert!(!study.0.join("input.csv").exists());
+            }
+            let study = Study::new();
+            let issues = study.check(&SPEC.replace("<binding>", OWN).replace("<code>", "GLUCOSE"));
+            assert!(issues.is_empty(), "{issues:?}");
+        }
         /// A float codelist's items compare with the column's values exactly
         /// (VALUE-19): 9007199254740992.0 equals no item, although it is the
         /// float nearest the item 9007199254740993, while 0 equals the item
