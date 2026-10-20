@@ -297,6 +297,46 @@ class BenchmarkMetadata(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "domain"):
             benchmark.specification_name(self.case / "lone.yaml")
 
+    def test_a_model_standard_is_the_model_the_last_entries_declare(self):
+        """benchmark.yaml keeps `standard` (#3030 plan, question 9); where it
+        names a model, the 1.0 entry specification declares that model."""
+        header = 'yamaa: "1.0"\ntype: spec\n'
+        self.metadata["standard"] = "ADaM"
+        self.write()
+        for spec, agrees in (
+            (header + "model: ADaM\ndomain: TEST\n", True),
+            (header + "domain: TEST\n", True),
+            ("schema_version: '1.0'\ndomain: TEST\n", True),
+            (header + "model: SDTM\ndomain: TEST\n", False),
+        ):
+            (self.case / "spec.yaml").write_text(spec)
+            with self.subTest(spec=spec):
+                if agrees:
+                    benchmark.check_standard_model(self.case)
+                else:
+                    with self.assertRaisesRegex(ValueError, "standard ADaM"):
+                        benchmark.check_standard_model(self.case)
+        # A parent layer may declare the model; the nearest layer wins.
+        (self.case / "base.yaml").write_text(header + "model: SDTM\ndomain: TEST\n")
+        (self.case / "spec.yaml").write_text(header + "parent: base.yaml\n")
+        with self.assertRaisesRegex(ValueError, "model SDTM"):
+            benchmark.check_standard_model(self.case)
+        (self.case / "spec.yaml").write_text(
+            header + "parent: base.yaml\nmodel: ADaM\n"
+        )
+        benchmark.check_standard_model(self.case)
+        # A CDISC or TEST benchmark may build any model, and layers that
+        # cannot compose leave a negative's fault to the engine.
+        (self.case / "spec.yaml").write_text(header + "model: SEND\ndomain: TEST\n")
+        for standard in ("CDISC", "TEST"):
+            self.metadata["standard"] = standard
+            self.write()
+            benchmark.check_standard_model(self.case)
+        self.metadata["standard"] = "SDTM"
+        self.write()
+        (self.case / "spec.yaml").write_text(header + "parent: missing.yaml\n")
+        benchmark.check_standard_model(self.case)
+
     def test_a_project_that_fails_admission_reports_its_issues(self):
         from tools.paths import ROOT
 
