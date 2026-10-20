@@ -70,22 +70,23 @@ see the [contributor guide](../../CONTRIBUTING.md).
 | Location | Contents | Installed for users? |
 | --- | --- | --- |
 | `R/`, `man/`, `NAMESPACE`, `DESCRIPTION` | R facade, help, native registration and package metadata | Yes; R converts code and help to its installed formats |
-| `src/` | C entry point, build rules, the shared Rust workspace, Cargo lock and toolchain declaration, the locked crates.io crates in `rust/vendor.tar.xz` with their source replacement, native test inputs, vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
+| `src/` | C entry point, build rules, and in `rust/` the engine and R binding crates with their workspace manifest and trimmed Cargo lock, the locked crates.io crates in `rust/vendor.tar.xz` with their source replacement, the vendored YAML parser and ReadStat C sources | Compiled into `libs/yamaa.so` or `libs/yamaa.dll`; sources are not ordinarily installed |
 | `inst/` | License notices, `AUTHORS`, and the specification, grammar, project, Define-XML and host test fixtures | Yes; copied to the package root |
 | `tests/` | Installed-host regression scripts | Used by `R CMD check`; not ordinarily installed |
 | `configure`, `configure.win`, `cleanup`, `cleanup.win` | Run `tools/configure.R` to find and check Cargo and rustc and write `src/Makevars` from `src/Makevars.in` (or the Windows pair); remove what it writes | No |
 | `tools/` | `configure.R`, and `vendor_crates.py`, the script that wrote `src/rust/vendor.tar.xz` | No |
 
-All five Rust workspace members are retained to preserve the canonical Cargo
-manifest and lock, including the Python binding's source. Building `yamaa-r`
-does not compile that Python binding and does not require Python. The package
-bundles no prebuilt native libraries, and it carries the source of every
-locked crate, so installation needs no network: the crates.io crates in
+`src/rust` holds the engine crates and the R binding crate, without their
+tests, and a Cargo lock trimmed from the repository's to the crates that they
+build, so the package carries neither the Python binding nor its
+dependencies. The package bundles no prebuilt native libraries and no Rust
+toolchain file, and it carries the source of every locked crate, so
+installation needs no network: the crates.io crates in
 `src/rust/vendor.tar.xz`, written by `cargo vendor` when the package is
 staged, and the vendored parser and ReadStat sources beside the workspace. The
 archive leaves out the prebuilt WebAssembly objects of `wit-bindgen`, a crate
-that only WebAssembly targets build. `inst/AUTHORS` names every bundled
-crate's authors and license.
+that only WebAssembly targets build, and the toolchain files that some crates
+publish. `inst/AUTHORS` names every bundled crate's authors and license.
 
 The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
 suggested packages: the regression scripts read their JSON truth with

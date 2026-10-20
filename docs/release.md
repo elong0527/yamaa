@@ -132,15 +132,14 @@ toolchain that `rust/rust-toolchain.toml` pins; a CI job checks and lints it
 with Rust 1.82.0, and another builds and checks the R source package with it.
 Rust 1.82.0 was released on 2024-10-17, so it is at least the two-year-old
 Cargo that CRAN's guidance for packages using Rust asks to test with, on any
-submission date (#3111). The R source package runs Cargo from outside its
-bundled workspace, so it builds with the caller's toolchain, whose Cargo and
-rustc must each be 1.82 or later: Windows R builds need the GNU target on that
-toolchain, `rustup target add x86_64-pc-windows-gnu`. `make check-repository`
+submission date (#3111). The source packages carry no toolchain file, so they
+build with the caller's toolchain, whose Cargo and rustc must each be 1.82 or
+later: Windows R builds need the GNU target on that toolchain,
+`rustup target add x86_64-pc-windows-gnu`. `make check-repository`
 refuses a locked package that a supported target compiles and that needs a
-newer Rust. Canonical release builds use `rust/Cargo.lock`: the R source
-package carries it unchanged, and the Python source archive carries the part
-of it that its bundle builds (#3030 D55). Arrow and Parquet are supported at
-exactly 55.2.0, the newest
+newer Rust. Canonical release builds use `rust/Cargo.lock`: each source
+package carries the part of it that its bundle builds (#3030 D55). Arrow and
+Parquet are supported at exactly 55.2.0, the newest
 release that builds with Rust 1.82, with flatbuffers 25.12.19, so an embedder
 whose graph holds Arrow 55.2.0 builds the engine unchanged. Other Arrow and
 Parquet releases are unsupported: the adapter's version-specific APIs, confined
@@ -299,8 +298,9 @@ run that does not qualify fails before anything is downloaded.
 
 The workflow downloads the qualified artifacts and publishes their unchanged
 bytes. `tools/ci/release_assets.py` declares the release assets once; the
-selector, the publisher and the release rehearsal read that declaration, and a
-test keeps this table equal to it:
+selector, the publisher, the release rehearsal and the
+[PyPI check](#pypi-upload) read that declaration, and a test keeps this table
+equal to it:
 
 | Asset | File | Native artifact |
 | --- | --- | --- |
@@ -336,20 +336,8 @@ commit. A body longer than GitHub's limit of 125,000 characters fails before
 the downloads.
 
 The GitHub release uses the workflow's GitHub token, and the workflow
-publishes nothing else. The owner uploads a release's Python packages to PyPI
-with the owner's own credentials (#3030 D57): the wheels and the source
-archive, downloaded unchanged from the GitHub release with
-`gh release download <tag> --repo elong0527/yamaa --pattern 'yamaa-*'`, so
-the bytes on PyPI are the ones the release holds and nothing is rebuilt. The R
-source package stays a GitHub release asset. yamaa 0.5.0 is published as a
-GitHub release only, with no PyPI upload (#2848).
-
-A final release is installed with `pip install yamaa`. A candidate's version,
-X.Y.ZrcN, is a PyPI pre-release, which a bare `pip install yamaa` does not
-install reliably, so its release body gives
-`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 and 0.5.0 were distributed
-as GitHub release assets only. The GitHub release assets remain the standalone
-download route for every package.
+publishes nothing else: the owner then uploads the release's Python packages
+to PyPI from its assets, as [PyPI upload](#pypi-upload) describes.
 
 The `Release rehearsal` workflow runs the same selection and downloads, on
 dispatch, against the latest successful native run on main, with its own
@@ -366,6 +354,59 @@ python -m tools.ci.select_release_artifacts --repository elong0527/yamaa \
   --run-id <run id> --destination <new directory>
 ```
 
+### PyPI upload
+
+From the 1.0.0 candidates on, PyPI receives each release's Python packages:
+the wheels and the Python source archive of the asset table above. No other
+asset goes to PyPI: the R source package stays a GitHub release asset, and
+goes to CRAN too for a final release, as [CRAN submission](#cran-submission)
+describes. No workflow holds a PyPI credential: once `release.yml` has created
+the GitHub release, the owner uploads its Python packages with the owner's own
+PyPI credentials (#3030 D57). Nothing is rebuilt, so PyPI serves the bytes
+that native qualification tested.
+
+Download the wheels and the source archive by asset name from the GitHub
+release that the tag created, into a new directory:
+
+```sh
+gh release download <tag> --repo elong0527/yamaa --dir <new directory> \
+  --pattern 'yamaa-<Python version>-*.whl' \
+  --pattern 'yamaa-<Python version>.tar.gz'
+```
+
+Upload those files unchanged with twine, which asks for the owner's PyPI API
+token or reads it from `TWINE_PASSWORD`:
+
+```sh
+uvx twine upload <new directory>/*
+```
+
+A candidate needs no option: its version, X.Y.ZrcN, makes it a pre-release on
+PyPI. PyPI refuses a file name that it already holds, so if an upload stops
+partway, run it again with `--skip-existing`.
+
+Then check what PyPI serves, from a checkout of the tag with an authenticated
+GitHub CLI:
+
+```sh
+python -m tools.ci.check_pypi_release --repository elong0527/yamaa --tag <tag>
+```
+
+The check downloads each file that PyPI's JSON API lists for the release's
+Python version, and the asset of the same name from the GitHub release, and
+compares their bytes. It fails when a file differs, when PyPI lacks one of the
+release's Python packages or serves any other file, and when the release does
+not hold exactly the assets that the tag's `tools/ci/release_assets.py`
+declares. It compares the bytes themselves and ignores the digests that PyPI
+and GitHub list.
+
+A final release is then installed with `pip install yamaa`. A candidate's
+version is a PyPI pre-release, which a bare `pip install yamaa` does not
+install reliably, so its release body gives
+`pip install --pre yamaa==X.Y.ZrcN`. yamaa 0.4.0 and 0.5.0 were distributed as
+GitHub release assets only, with no PyPI upload (#2848). The GitHub release
+assets remain the standalone download route for every package.
+
 ## CRAN submission
 
 CRAN receives 1.0.0, never a candidate (#3030 D1). Before submitting, the
@@ -379,7 +420,7 @@ note. A release reaches its channels in this order:
 2. The GitHub release that `release.yml` creates from the tag's qualified
    native run.
 3. The Python packages on PyPI, which the owner uploads from that GitHub
-   release's assets (#3030 D57).
+   release's assets, as [PyPI upload](#pypi-upload) describes (#3030 D57).
 4. The R source tarball on CRAN: the `yamaa_X.Y.Z.tar.gz` asset of that final
    GitHub release, unchanged, submitted through CRAN's web form by the
    maintainer that `DESCRIPTION` names. A candidate's R tarball carries the
@@ -403,24 +444,38 @@ own their source inventories, patches and licenses. Both parser authors' MIT
 notices remain in the distributed `LICENSE-YAML.txt`.
 
 `tools/staging/engine_bundle.py` stages each host's engine source bundle,
-from which its source package builds (#3030 D55): the Python source archive
-builds from it, and the R source package moves onto it next. The bundle holds
-the engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with that host's
+from which both source packages build (#3030 D55). The bundle holds the
+engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with that host's
 binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates; a lock trimmed from
 the canonical `rust/Cargo.lock`; the vendored YAML parser, without its tests,
 and the ReadStat sources; and the crates.io crates of that lock, as
-`cargo vendor --locked --versioned-dirs` writes them. It holds no tests,
-examples, benchmark fixtures, `public-api.txt` or `rust-toolchain.toml`.
-Cargo writes the trimmed lock from a copy of the canonical one, and the tool
-then verifies it crate by crate: every package that it keeps is the canonical
-entry, with the same version, source and checksum, depends only on packages
-that its canonical entry depends on, and is reached from the bundle's
-members. `make check-repository` verifies both hosts' trimmed locks, and
-`python -m tools.packaging.check_cargo_lock <archive>` checks a built Python
-source archive against the checkout: the bundle's files byte for byte, its
-lock, and each vendored crate with exactly the files that its
-`.cargo-checksum.json` lists.
+`cargo vendor --locked --versioned-dirs` writes them, apart from the files
+that `tools/staging/vendor_crates.py` leaves out, described below. It holds
+no tests, examples, benchmark fixtures or `public-api.txt`, and no
+`rust-toolchain.toml` or `rust-toolchain` file anywhere, the vendored crates
+included. Cargo writes the trimmed lock from a copy of the canonical one, and
+the tool then verifies it crate by crate: every package that it keeps is the
+canonical entry, with the same version, source and checksum, depends only on
+packages that its canonical entry depends on, and is reached from the
+bundle's members. `make check-repository` verifies both hosts' trimmed locks,
+and `python -m tools.packaging.check_cargo_lock <archive>` checks a built
+source archive of either host against the checkout: the bundle's files byte
+for byte, its lock, each vendored crate with exactly the files that its
+`.cargo-checksum.json` lists, and no toolchain file anywhere in the archive,
+including the R package's compressed crates. Native qualification runs it on
+every source archive that it builds, and `make test-r` on the R source
+package that it checks.
+
+Without a toolchain file, each package builds with the caller's default
+toolchain, which must be Rust 1.82 or later. rustup reads a toolchain file in
+the directory that a command runs in and in its parents, and Cargo runs a
+crate's build script in that crate's directory, so a file that a vendored
+crate publishes could make rustup select another toolchain there: a download
+during installation, or a failure offline. The vendoring script therefore
+removes every such file from the crates. The R build also sets
+`RUSTUP_AUTO_INSTALL=0`, so rustup installs no toolchain even where a
+`rust-toolchain.toml` in a parent directory names one.
 
 The Python source archive is maturin's output over the bundle, staged beside
 the Python package files; `python/pyproject.toml` names plain maturin as its
@@ -428,29 +483,16 @@ build backend. The archive keeps the vendored crates in `vendor/` and, at its
 root, where pip runs the build, a `.cargo/config.toml` that replaces crates.io
 with them and sets Cargo's `net.offline`. maturin runs Cargo with `--locked`,
 so the build uses the trimmed lock unchanged and reads nothing from the
-network. The archive carries no toolchain file, so it builds with the
-caller's default toolchain, which must be Rust 1.82 or later. Four vendored
-crates carry the `rust-toolchain.toml` that they publish, which no build step
-reads: rustup names the caller's toolchain to every process that Cargo
-starts. Like the R package's, the vendored crates leave out the prebuilt
-binaries that `wit-bindgen` ships, as described below.
+network.
 
-Until the R source package moves onto the bundle (#3105), it carries the
-canonical workspace, lock and `rust/rust-toolchain.toml` unchanged, and its
-installation does not read the toolchain file: the R
-package runs Cargo from `src/`, outside that declaration, so it builds with
-the caller's default toolchain. The R build also sets `RUSTUP_AUTO_INSTALL=0`,
-so rustup installs no toolchain even where a `rust-toolchain.toml` in a
-parent directory names one. The file names Rust 1.99.1 in rustup's minimal
-profile and no other component, for builds inside the bundled workspace.
-
-The R source package builds offline, as CRAN's Repository Policy and its
-guidance for packages that use Rust ask. `tools/staging/stage_r_package.py`
-runs `tools/staging/vendor_crates.py`, which writes the crates.io crates that
-the unchanged `Cargo.lock` selects, as `cargo vendor` writes them, to
-`src/rust/vendor.tar.xz`, a reproducible xz-compressed tar. The archive is
-written when the package is staged and never committed, and the package
-carries the script as `tools/vendor_crates.py`.
+The R source package builds offline from the R bundle, as CRAN's Repository
+Policy and its guidance for packages that use Rust ask.
+`tools/staging/stage_r_package.py` stages the bundle's workspace as
+`src/rust`, its crates.io crates as `src/rust/vendor.tar.xz`, a reproducible
+xz-compressed tar that `tools/staging/vendor_crates.py` writes, and its Cargo
+configuration as `src/rust/vendor-config.toml`. The archive is written when
+the package is staged and never committed, and the package carries the script
+as `tools/vendor_crates.py`.
 
 The package's `configure` and `configure.win` run `tools/configure.R`, as
 CRAN's guidance asks. It looks for `cargo` and `rustc` on the PATH and then in
@@ -469,17 +511,18 @@ allows. The installation therefore reads nothing from the network, runs at
 most two jobs and writes nothing outside the build tree and the temporary
 directory.
 
-CRAN's policy admits no binary executable code in a source package. The
-script leaves out the prebuilt WebAssembly objects that `wit-bindgen` ships,
-a crate that only wasm32 targets build, and stops on any other prebuilt binary
-until it is reviewed. Cargo's `.cargo-checksum.json` files stay as Cargo
-wrote them, apart from the entries of the files left out: like the checksums
-in `Cargo.lock`, they belong to the packaging tool, and the script computes no
-digest of its own. `inst/AUTHORS`, written at staging from `cargo metadata`,
-gives every bundled crate's declared authors, license and repository, and
-names the files left out; `DESCRIPTION` credits those authors, and the
-authors of the bundled ReadStat C sources, as contributors and copyright
-holders.
+CRAN's policy admits no binary executable code in a source package, and
+neither package carries any: the vendoring script leaves out the prebuilt
+WebAssembly objects that `wit-bindgen` ships, a crate that only wasm32 targets
+build, and stops on any other prebuilt binary until it is reviewed. Cargo's
+`.cargo-checksum.json` files stay as Cargo wrote them, apart from the entries
+of the files left out, binaries and toolchain files; the package checksum
+stays too. Like the checksums in `Cargo.lock`, they belong to the packaging
+tool, and the script computes no digest of its own. `inst/AUTHORS`, written
+at staging from `cargo metadata`, gives every crate that the R package
+bundles its declared authors, license and repository, and names the files
+left out; `DESCRIPTION` credits those authors, and the authors of the bundled
+ReadStat C sources, as contributors and copyright holders.
 
 The installed R package carries only the test inputs that its installed suites
 read, and each third-party SAS fixture keeps its license beside it.
@@ -569,10 +612,9 @@ owns decoding behavior.
   [portable_math.tsv](../rust/crates/yamaa-core/tests/fixtures/portable_math.tsv).
 - Build each source package from a per-host workspace whose lock is trimmed
   from the canonical `rust/Cargo.lock` and verified crate by crate against
-  it, with vendored crates and no toolchain file, tests or fixtures (#3030
-  D55). The Python source archive is built this way; the R source package
-  carries the canonical workspace and lock unchanged until it moves onto the
-  bundle (#3105). Runtime, contract, cache and resource identities use
+  it, with vendored crates, no tests or fixtures, and no toolchain file
+  anywhere, the vendored crates included (#3030 D55). Both source packages
+  are built this way. Runtime, contract, cache and resource identities use
   references, canonical forms or bytes; only packaging-tool lockfiles and
   Cargo's records of vendored crates carry their own checksum fields.
 - Prune every specification after composition, including an entry file that

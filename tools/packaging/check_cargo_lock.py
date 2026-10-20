@@ -1,13 +1,15 @@
-"""Verify locked Cargo resolution and the locks that source packages carry.
+"""Verify locked Cargo resolution and the engine bundles that source packages carry.
 
 Without archives, it checks that the canonical rust/Cargo.lock is current and
 that each host's bundle trims it to a lock that verifies crate by crate against
-it, as `make check-repository` runs it. With archives, it checks the Python
-source archive's engine bundle (#3030 D55) and the R source package's unchanged
-copy of the canonical workspace, lock and toolchain file.
+it, as `make check-repository` runs it. With archives, it checks the engine
+bundle (#3030 D55) of each Python source archive and R source package against
+the checkout, and that the archive holds no Rust toolchain file anywhere.
 """
 
 import argparse
+import dataclasses
+import io
 import json
 import subprocess
 import tarfile
@@ -15,7 +17,29 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 from tools.paths import WORKSPACE
-from tools.staging import engine_bundle
+from tools.staging import engine_bundle, vendor_crates
+
+
+@dataclasses.dataclass(frozen=True)
+class Layout:
+    """Where a host's source archive keeps its bundle, below the archive root."""
+
+    workspace: str
+    config: str
+    # The xz tar of the vendored crates, or None when they sit in vendor/.
+    packed: str | None = None
+
+    def owned(self):
+        """The directories that hold only the bundle's files."""
+        return (self.workspace, self.config.rpartition("/")[0] + "/")
+
+
+LAYOUTS = {
+    "python": Layout("rust/", ".cargo/config.toml"),
+    # The Makevars unpack the crates and copy the configuration into the
+    # build's Cargo home (tools/staging/stage_r_package.py).
+    "r": Layout("src/rust/", "src/rust/vendor-config.toml", "src/rust/vendor.tar.xz"),
+}
 
 
 def locked_metadata(workspace: Path) -> str:
@@ -28,128 +52,119 @@ def locked_metadata(workspace: Path) -> str:
     )
 
 
-def check_archive(
-    path: Path,
-    lock: bytes,
-    manifest: bytes,
-    toolchain: bytes | None = None,
-    vendored=(),
-) -> None:
-    with tarfile.open(path, "r:gz") as archive:
-        members = [
-            m
-            for m in archive.getmembers()
-            if PurePosixPath(m.name).name == "Cargo.lock"
-        ]
-        if len(members) != 1:
-            raise ValueError(f"{path.name}: expected exactly one canonical Cargo.lock")
-        member = members[0]
-        location = PurePosixPath(member.name)
-        parts = member.name.split("/")
-        if (
-            location.is_absolute()
-            or "\\" in member.name
-            or ":" in parts[0]
-            or any(part in {"", ".", ".."} for part in parts)
-            or tuple(parts[1:])
-            not in {
-                ("rust", "Cargo.lock"),
-                ("src", "rust", "Cargo.lock"),
-            }
-        ):
-            raise ValueError(f"{path.name}: unexpected Cargo.lock location")
-        if not member.isfile():
-            raise ValueError(f"{path.name}: Cargo.lock must be a regular file")
-        if member.size != len(lock) or archive.extractfile(member).read() != lock:
-            raise ValueError(
-                f"{path.name}: Cargo.lock differs from the canonical bytes"
-            )
-        manifest_name = str(PurePosixPath(member.name).with_name("Cargo.toml"))
-        manifests = [m for m in archive.getmembers() if m.name == manifest_name]
-        if len(manifests) != 1 or not manifests[0].isfile():
-            raise ValueError(f"{path.name}: expected one regular workspace manifest")
-        if archive.extractfile(manifests[0]).read() != manifest:
-            raise ValueError(
-                f"{path.name}: workspace manifest differs from the canonical bytes"
-            )
-        if toolchain is not None:
-            toolchain_name = str(location.with_name("rust-toolchain.toml"))
-            declarations = [m for m in archive.getmembers() if m.name == toolchain_name]
-            if len(declarations) != 1 or not declarations[0].isfile():
-                raise ValueError(
-                    f"{path.name}: expected one regular Rust toolchain declaration"
-                )
-            if archive.extractfile(declarations[0]).read() != toolchain:
-                raise ValueError(
-                    f"{path.name}: Rust toolchain differs from the canonical bytes"
-                )
-        vendored_names = {str(location.parent / relative) for relative, _ in vendored}
-        if vendored and any(
-            member.name.startswith(str(location.parent / "vendor") + "/")
-            and not (member.isfile() or member.isdir())
-            for member in archive.getmembers()
-        ):
-            raise ValueError(f"{path.name}: vendored crates must not contain links")
-        if vendored and any(
-            member.isfile()
-            and member.name.startswith(str(location.parent / "vendor") + "/")
-            and member.name not in vendored_names
-            for member in archive.getmembers()
-        ):
-            raise ValueError(f"{path.name}: unexpected vendored crate file")
-        for relative, payload in vendored:
-            name = str(location.parent / relative)
-            copies = [m for m in archive.getmembers() if m.name == name]
-            if len(copies) != 1 or not copies[0].isfile():
-                raise ValueError(
-                    f"{path.name}: expected one regular vendored crate source"
-                )
-            if archive.extractfile(copies[0]).read() != payload:
-                raise ValueError(
-                    f"{path.name}: vendored crate source differs from canonical bytes"
-                )
-
-
-def bundle_files(workspace=WORKSPACE):
-    """The bytes of each file of the Python bundle that comes from the checkout."""
+def bundle_files(host, workspace=WORKSPACE):
+    """The bytes of each file of a host's bundle that comes from the checkout,
+    by its path in the source archive."""
+    layout = LAYOUTS[host]
     files = {
-        f"rust/{relative}": source.read_bytes()
-        for relative, source in engine_bundle.sources("python", workspace)
+        layout.workspace + relative: source.read_bytes()
+        for relative, source in engine_bundle.sources(host, workspace)
     }
-    files["rust/Cargo.toml"] = engine_bundle.workspace_manifest(workspace).encode()
-    files[".cargo/config.toml"] = engine_bundle.CARGO_CONFIG.encode()
+    files[layout.workspace + "Cargo.toml"] = engine_bundle.workspace_manifest(
+        workspace
+    ).encode()
+    files[layout.config] = engine_bundle.CARGO_CONFIG.encode()
     return files
 
 
-def check_bundle_archive(path: Path, workspace=WORKSPACE):
-    """Check a Python source archive's engine bundle against the checkout.
+def refuse_unsafe(label, entries):
+    """Refuse duplicate, linked, absolute or ambiguous archive members."""
+    if len({entry.name for entry in entries}) != len(entries):
+        raise ValueError(f"{label}: duplicate archive member")
+    if any(not (entry.isfile() or entry.isdir()) for entry in entries):
+        raise ValueError(f"{label}: archive must not contain links")
+    if any(
+        "\\" in entry.name
+        or any(part in {"", ".", ".."} for part in entry.name.rstrip("/").split("/"))
+        for entry in entries
+    ):
+        raise ValueError(f"{label}: archive has an invalid member name")
 
-    The archive must carry exactly the bundle's Rust sources, manifest and
+
+def toolchain_files(names):
+    """The archive member names that are Rust toolchain files."""
+    return sorted(
+        name
+        for name in names
+        if PurePosixPath(name).name in vendor_crates.TOOLCHAIN_FILES
+    )
+
+
+def packed_crates(label, data):
+    """Read an xz tar of vendored crates in one pass.
+
+    Refuses unsafe members, members outside vendor/ and Rust toolchain files.
+    Returns the names of its files below vendor/ and the parsed
+    `.cargo-checksum.json` of each crate, by crate directory.
+    """
+    entries, records = [], {}
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r|xz") as packed:
+        for entry in packed:
+            entries.append(entry)
+            parts = entry.name.split("/")
+            if entry.isfile() and parts[2:] == [vendor_crates.CHECKSUMS]:
+                records[parts[1]] = json.loads(packed.extractfile(entry).read())
+    refuse_unsafe(label, entries)
+    top = vendor_crates.DIRECTORY
+    if any(entry.name.split("/")[0] != top for entry in entries):
+        raise ValueError(f"{label}: archive members must sit below {top}/")
+    for name in toolchain_files(entry.name for entry in entries):
+        raise ValueError(f"{label} carries {name}")
+    files = [entry.name.removeprefix(f"{top}/") for entry in entries if entry.isfile()]
+    return files, records
+
+
+def check_vendored(label, files, records, kept):
+    """Check vendored crates against the lock that selects them.
+
+    `files` are the vendored file names below vendor/. Every crates.io package
+    of the lock must have one crate, holding exactly the files that its
+    `.cargo-checksum.json` lists.
+    """
+    crates = {}
+    for name in files:
+        crate, _, relative = name.partition("/")
+        crates.setdefault(crate, set()).add(relative)
+    registry = {f"{name}-{version}" for name, version, source in kept if source}
+    for crate in sorted(set(crates) ^ registry):
+        raise ValueError(
+            f"{label}: vendored crate {crate} differs from the lock's crates"
+        )
+    for crate, names in sorted(crates.items()):
+        if crate not in records:
+            raise ValueError(
+                f"{label}: vendored crate {crate} has no {vendor_crates.CHECKSUMS}"
+            )
+        if names - {vendor_crates.CHECKSUMS} != set(records[crate]["files"]):
+            raise ValueError(
+                f"{label}: vendored crate {crate} differs from the files "
+                "its .cargo-checksum.json lists"
+            )
+
+
+def check_bundle_archive(path: Path, workspace=WORKSPACE):
+    """Check a source archive's engine bundle against the checkout.
+
+    The archive must hold no Rust toolchain file anywhere, the vendored crates
+    included. It must carry exactly the bundle's Rust sources, manifest and
     Cargo configuration, a lock that verifies against the canonical lock, and
-    each crates.io crate of that lock in vendor/, with every file that its
-    `.cargo-checksum.json` lists and no other. No toolchain file may sit
-    outside the vendored crates. Returns the lock's packages.
+    each crates.io crate of that lock, with every file that its
+    `.cargo-checksum.json` lists and no other: in vendor/ in a Python source
+    archive, and in src/rust/vendor.tar.xz in an R source package. Returns the
+    host and the lock's packages.
     """
     canonical = (workspace / "Cargo.lock").read_bytes().decode()
-    expected = bundle_files(workspace)
     with tarfile.open(path, "r:gz") as archive:
         entries = archive.getmembers()
-        if len({entry.name for entry in entries}) != len(entries):
-            raise ValueError(f"{path.name}: duplicate source archive member")
-        if any(not (entry.isfile() or entry.isdir()) for entry in entries):
-            raise ValueError(f"{path.name}: source archive must not contain links")
-        if any(
-            "\\" in entry.name
-            or any(
-                part in {"", ".", ".."} for part in entry.name.rstrip("/").split("/")
-            )
-            for entry in entries
-        ):
-            raise ValueError(f"{path.name}: source archive has an invalid member name")
+        refuse_unsafe(path.name, entries)
         roots = {entry.name.split("/")[0] for entry in entries}
         if len(roots) != 1:
             raise ValueError(f"{path.name}: source archive must have one root")
         root = roots.pop()
+        for name in toolchain_files(
+            entry.name.removeprefix(f"{root}/") for entry in entries
+        ):
+            raise ValueError(f"{path.name}: source archive carries {name}")
         files = {
             entry.name.removeprefix(f"{root}/"): entry
             for entry in entries
@@ -161,8 +176,16 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
                 raise ValueError(f"{path.name}: the bundle is missing {name}")
             return archive.extractfile(files[name]).read()
 
-        carried = {name for name in files if name.startswith(("rust/", ".cargo/"))}
-        for name in sorted(carried ^ (set(expected) | {"rust/Cargo.lock"})):
+        host = "r" if LAYOUTS["r"].workspace + "Cargo.lock" in files else "python"
+        layout = LAYOUTS[host]
+        expected = bundle_files(host, workspace)
+        lock = layout.workspace + "Cargo.lock"
+        carried = {
+            name
+            for name in files
+            if name.startswith(layout.owned()) and name != layout.packed
+        }
+        for name in sorted(carried ^ (set(expected) | {lock})):
             raise ValueError(
                 f"{path.name}: the bundle differs from the checkout at {name}"
             )
@@ -170,43 +193,23 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
             if read(name) != payload:
                 raise ValueError(f"{path.name}: {name} differs from the checkout")
         kept = engine_bundle.verify_lock(
-            read("rust/Cargo.lock").decode(),
-            canonical,
-            engine_bundle.members("python"),
+            read(lock).decode(), canonical, engine_bundle.members(host)
         )
-        vendored = {}
-        for name in files:
-            if name.startswith("vendor/"):
-                crate, _, relative = name.removeprefix("vendor/").partition("/")
-                vendored.setdefault(crate, set()).add(relative)
-        registry = {f"{name}-{version}" for name, version, source in kept if source}
-        for crate in sorted(set(vendored) ^ registry):
-            raise ValueError(
-                f"{path.name}: vendored crate {crate} differs from the lock's crates"
-            )
-        for crate, names in sorted(vendored.items()):
-            record = json.loads(read(f"vendor/{crate}/.cargo-checksum.json"))
-            if names - {".cargo-checksum.json"} != set(record["files"]):
-                raise ValueError(
-                    f"{path.name}: vendored crate {crate} differs from the files "
-                    "its .cargo-checksum.json lists"
-                )
-        for name in sorted(files):
-            if not name.startswith("vendor/") and PurePosixPath(name).name in {
-                "rust-toolchain",
-                "rust-toolchain.toml",
-            }:
-                raise ValueError(f"{path.name}: source archive carries {name}")
-    return kept
-
-
-def is_r_source(path: Path):
-    """Whether an archive is an R source package, which holds src/rust/."""
-    with tarfile.open(path, "r:gz") as archive:
-        return any(
-            name.split("/")[1:] == ["src", "rust", "Cargo.lock"]
-            for name in archive.getnames()
-        )
+        if layout.packed is None:
+            label, top = path.name, vendor_crates.DIRECTORY + "/"
+            vendored = [
+                name.removeprefix(top) for name in files if name.startswith(top)
+            ]
+            records = {
+                name.partition("/")[0]: json.loads(read(top + name))
+                for name in vendored
+                if name.partition("/")[2] == vendor_crates.CHECKSUMS
+            }
+        else:
+            label = f"{path.name}: {layout.packed}"
+            vendored, records = packed_crates(label, read(layout.packed))
+    check_vendored(label, vendored, records, kept)
+    return host, kept
 
 
 def main():
@@ -214,27 +217,13 @@ def main():
     parser.add_argument("archives", nargs="*", type=Path)
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
-    lock = (WORKSPACE / "Cargo.lock").read_bytes()
-    manifest = (WORKSPACE / "Cargo.toml").read_bytes()
-    toolchain = (WORKSPACE / "rust-toolchain.toml").read_bytes()
     metadata = locked_metadata(WORKSPACE)
-    vendored = [
-        (source.relative_to(WORKSPACE).as_posix(), source.read_bytes())
-        for source in engine_bundle.vendored_sources(WORKSPACE)
-    ]
     for archive in args.archives:
-        if is_r_source(archive):
-            check_archive(archive, lock, manifest, toolchain, vendored)
-            print(
-                f"{archive.name}: canonical lock, workspace manifest and toolchain "
-                "bytes retained"
-            )
-        else:
-            kept = check_bundle_archive(archive)
-            print(
-                f"{archive.name}: engine bundle with {len(kept)} canonical lock "
-                "packages and their vendored crates"
-            )
+        host, kept = check_bundle_archive(archive)
+        print(
+            f"{archive.name}: {host} engine bundle with {len(kept)} canonical lock "
+            "packages and their vendored crates, and no Rust toolchain file"
+        )
     if not args.archives:
         with tempfile.TemporaryDirectory(prefix="yamaa-bundle-lock-") as scratch:
             for host in sorted(engine_bundle.BINDINGS):

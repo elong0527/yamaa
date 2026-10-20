@@ -44,13 +44,13 @@ arm64 and Windows x64. The Linux wheels are `manylinux_2_28` and need glibc
 2.28 or later, for example RHEL 8, Ubuntu 20.04 or Debian 10; elsewhere, pip
 builds the source archive, as described below.
 
-Every release is also published as GitHub release assets, and yamaa 0.4.0 only
-there: download the wheel for your platform from the
-[GitHub release](https://github.com/elong0527/yamaa/releases/tag/yamaa-v0.4.0),
-then install it:
+Every release is also published as assets of its
+[GitHub release](https://github.com/elong0527/yamaa/releases), the same files
+that PyPI serves, and yamaa 0.4.0 and 0.5.0 only there. Download the wheel for
+your platform, then install it:
 
 ```bash
-python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
+python -m pip install ./yamaa-<version>-<wheel-tags>.whl
 ```
 
 The 0.4.0 Linux wheel is `manylinux_2_34` and needs glibc 2.34 or later.
@@ -60,7 +60,7 @@ uses your default Rust toolchain, which must be Rust 1.90 or later for 0.4.0,
 and Rust 1.82 or later from 0.5.0 on, with Cargo, a C compiler and GNU make:
 
 ```bash
-python -m pip install ./yamaa-0.4.0.tar.gz
+python -m pip install ./yamaa-<version>.tar.gz
 ```
 
 From 1.0.0 on, the source archive carries the locked Rust crates, so the build

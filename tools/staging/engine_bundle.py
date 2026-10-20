@@ -6,8 +6,10 @@ whose members are only those crates, a lock trimmed from the canonical
 rust/Cargo.lock and
 verified crate by crate against it, the vendored YAML parser and ReadStat
 sources, and the crates.io crates of that lock as `cargo vendor` writes them,
-with the Cargo configuration that reads them instead of the network. It holds
-no tests, examples, benchmark fixtures, public-api.txt or rust-toolchain.toml.
+apart from the files that tools/staging/vendor_crates.py leaves out, with the
+Cargo configuration that reads them instead of the network. It holds no tests,
+examples, benchmark fixtures or public-api.txt, and no Rust toolchain file
+anywhere, the vendored crates included.
 
     python -m tools.staging.engine_bundle sdist <directory>
 
@@ -19,9 +21,9 @@ must be the release that python/pyproject.toml requires.
     python -m tools.staging.engine_bundle bundle {python,r} <new directory>
 
 writes a host's bundle alone: the workspace in rust/, the vendored crates in
-vendor/ and the configuration in .cargo/config.toml. The R source package moves
-onto it next; until then tools/staging/stage_r_package.py copies the whole
-workspace.
+vendor/ and the configuration in .cargo/config.toml.
+tools/staging/stage_r_package.py stages the R bundle into the R source
+package, with the vendored crates compressed.
 """
 
 import argparse
