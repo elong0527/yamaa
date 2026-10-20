@@ -32,6 +32,23 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             vec![("path", "../missing.yaml"), ("source", "child")],
         ),
         (
+            F::ParentOnAnotherShare {
+                source: "//server/share/std/base.yaml",
+                path: "input/dm.csv",
+                parent_root: "//server/share",
+                entry_root: "C:",
+            },
+            "parent_on_another_share",
+            "LAYER-10",
+            "parent",
+            vec![
+                ("source", "//server/share/std/base.yaml"),
+                ("path", "input/dm.csv"),
+                ("parent_root", "//server/share"),
+                ("entry_root", "C:"),
+            ],
+        ),
+        (
             F::Cycle {
                 path: &cycle,
                 returns_to_entry: true,
