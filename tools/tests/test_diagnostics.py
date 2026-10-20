@@ -636,6 +636,219 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             with self.subTest(owner=owner):
                 self.assertEqual(guard.json_decodes(source), expected)
 
+    def test_local_serde_json_names_do_not_acquire_external_crate_identity(self):
+        for declarations, owner in (
+            ("use custom::serde_json;", "serde_json"),
+            ("use custom::serde_json as json; use json as saved;", "saved"),
+            ("use crate::serde_json;", "serde_json"),
+            ("mod serde_json {}", "serde_json"),
+            ("mod serde_json;", "serde_json"),
+            ("mod r#serde_json; use r#serde_json as json;", "json"),
+            (
+                "mod custom { pub mod serde_json; } use custom::serde_json;",
+                "serde_json",
+            ),
+        ):
+            for expression in (
+                f"{owner}::from_str(text)",
+                f"{owner}::Deserializer::from_slice(bytes)",
+                f"text.parse::<{owner}::Value>()",
+                f"<{owner}::Value as serde::Deserialize<'_>>::deserialize(reader)",
+            ):
+                with self.subTest(declarations=declarations, expression=expression):
+                    self.assertEqual(
+                        guard.json_decodes(
+                            f"{declarations}\nfn read() {{ {expression}; }}"
+                        ),
+                        [],
+                    )
+        self.assertEqual(
+            guard.json_decodes(
+                "use custom::serde_json; struct Record {\n"
+                '    #[serde(deserialize_with = "serde_json::Value::deserialize")] value: Value\n'
+                "}"
+            ),
+            [],
+        )
+
+    def test_local_value_globs_do_not_imply_external_json_values(self):
+        for declarations in (
+            "use custom::serde_json::value::*;",
+            "use custom::serde_json as json; use json::value::*;",
+            "use crate::serde_json::value::*;",
+            "mod serde_json; use serde_json::value::*;",
+            "mod serde_json { pub mod value; } use serde_json::value::*;",
+        ):
+            with self.subTest(declarations=declarations):
+                self.assertEqual(
+                    guard.json_decodes(
+                        declarations + "\nfn read() { Value::deserialize(reader); "
+                        "text.parse::<Value>(); <Value as serde::Deserialize<'_>>::deserialize(reader); }"
+                    ),
+                    [],
+                )
+
+    def test_external_json_identity_survives_local_names_and_explicit_reexports(self):
+        for source in (
+            "mod serde_json;\nfn read() { ::serde_json::from_str(text); }",
+            "mod serde_json { pub use ::serde_json::Value; }\n"
+            "fn read() { serde_json::Value::deserialize(reader); }",
+            "mod custom { pub use ::serde_json as serde_json; }\n"
+            "fn read() { custom::serde_json::from_str(text); }",
+            "mod custom { pub extern crate serde_json; }\n"
+            "fn read() { custom::serde_json::from_str(text); }",
+            "extern crate serde_json;\n"
+            "fn read() { crate::serde_json::from_str(text); }",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(guard.json_decodes(source), [2])
+
+    def test_simple_type_aliases_preserve_explicit_json_reader_targets(self):
+        for declaration in (
+            "type Tree = serde_json::Value;",
+            "type Tree = ::serde_json::value::Value;",
+            "type r#Tree = r#serde_json :: r#Value;",
+            "use serde_json::Value as Value; type Tree = Value;",
+            "use serde_json::value::*; type Tree = Value;",
+            "type Tree = Saved; type Saved = serde_json::Value;",
+            "mod model { pub type Value = serde_json::Value; } type Tree = model::Value;",
+        ):
+            for expression in (
+                "Tree::from_str(text)",
+                "Tree::deserialize(reader)",
+                "text.parse::<Tree>()",
+                "text.r#parse::<r#Tree>()",
+                "str::parse::<Tree>(text)",
+                "<Tree as std::str::FromStr>::from_str(text)",
+                "<Tree as serde::Deserialize<'_>>::deserialize(reader)",
+            ):
+                with self.subTest(declaration=declaration, expression=expression):
+                    self.assertEqual(
+                        guard.json_decodes(
+                            f"{declaration}\nfn read() {{ {expression}; }}"
+                        ),
+                        [2],
+                    )
+        self.assertEqual(
+            guard.json_decodes(
+                "type Tree = serde_json::Value; struct Record {\n"
+                '    #[serde(deserialize_with = "Tree::deserialize")] value: Tree\n'
+                "}"
+            ),
+            [2],
+        )
+
+    def test_type_aliases_use_declaration_scope_and_whole_block_visibility(self):
+        for owner, shadow, expected in (
+            ("serde_json", "custom", [4]),
+            ("custom", "serde_json", []),
+        ):
+            source = (
+                f"use {owner} as json;\n"
+                "type Tree = json::Value; type Saved = Tree;\n"
+                f"fn read() {{ use {shadow} as json; type Tree = other::Value;\n"
+                "    text.parse::<Saved>();\n"
+                "}\n"
+            )
+            with self.subTest(owner=owner):
+                self.assertEqual(guard.json_decodes(source), expected)
+        source = (
+            "type Tree = serde_json::Value;\n"
+            "fn run() {\n"
+            "    { type Tree = other::Value; Tree::from_str(text); }\n"
+            "    text.parse::<Tree>();\n"
+            "}\n"
+            "fn before() { text.parse::<Tree>(); type Tree = other::Value; }\n"
+            "fn outer() {\n"
+            "    fn inner() { text.parse::<Saved>(); }\n"
+            "    type Saved = Tree;\n"
+            "}\n"
+            "mod child { fn read() { text.parse::<Tree>(); } }\n"
+            "mod sibling { type Tree = other::Value; fn read() { Tree::from_str(text); } }\n"
+            "mod imported { use super::*; fn read() { text.parse::<Tree>(); } }\n"
+        )
+        self.assertEqual(guard.json_decodes(source), [4, 8, 13])
+
+    def test_type_aliases_allow_custom_types_projection_and_cycles(self):
+        for declaration in (
+            "type Tree = custom::Value;",
+            "type Tree = custom::serde_json::Value;",
+            "mod serde_json; type Tree = serde_json::Value;",
+            "mod serde_json {} type Tree = crate::serde_json::Value;",
+            "type Tree = Saved; type Saved = Tree;",
+        ):
+            with self.subTest(declaration=declaration):
+                self.assertEqual(
+                    guard.json_decodes(
+                        declaration + "\nfn read() { Tree::from_str(text); "
+                        "text.parse::<Tree>(); Tree::deserialize(reader); }"
+                    ),
+                    [],
+                )
+        self.assertEqual(
+            guard.json_decodes(
+                "type Tree = serde_json::Value;\n"
+                "fn build() { serde_json::from_value::<Record>(Tree::Null); "
+                "serde_json::to_value(Tree::Null); }\n"
+                "#[cfg(test)] fn fixture() { text.parse::<Tree>(); }"
+            ),
+            [],
+        )
+        for declaration in (
+            "type Tree<T> = T;",
+            "type Tree = custom::Wrapper<serde_json::Value>;",
+            "type Tree = &'static serde_json::Value;",
+        ):
+            with self.subTest(declaration=declaration):
+                self.assertEqual(
+                    guard.json_decodes(
+                        "type Tree = serde_json::Value;\n"
+                        f"fn read() {{ {declaration} text.parse::<Tree>(); }}"
+                    ),
+                    [],
+                )
+
+    def test_associated_types_are_not_lexical_aliases_but_method_local_types_are(self):
+        for header in (
+            "impl Custom for Record",
+            "pub trait Custom",
+            "#[allow(dead_code)] unsafe impl Custom for Record",
+        ):
+            with self.subTest(header=header):
+                self.assertEqual(
+                    guard.json_decodes(
+                        f"{header} {{ type Tree = serde_json::Value;\n"
+                        "fn read() { text.parse::<Tree>(); }\n"
+                        "fn local() { type Tree = serde_json::Value; text.parse::<Tree>(); } }"
+                    ),
+                    [3],
+                )
+        for header in ("impl Custom for Record", "trait Custom"):
+            with self.subTest(header=header):
+                self.assertEqual(
+                    guard.json_decodes(
+                        "type Tree = serde_json::Value;\n"
+                        f"{header} {{ type Tree = other::Value;\n"
+                        "fn read() { text.parse::<Tree>(); } }"
+                    ),
+                    [3],
+                )
+
+    def test_return_position_impl_trait_does_not_hide_function_local_type_aliases(self):
+        for header in (
+            "fn read() -> impl Display",
+            "pub fn read() -> impl Display",
+            "fn read() -> Result<impl Display, Error>",
+        ):
+            with self.subTest(header=header):
+                self.assertEqual(
+                    guard.json_decodes(
+                        f"{header} {{ type Tree = serde_json::Value;\n"
+                        "text.parse::<Tree>(); result }"
+                    ),
+                    [2],
+                )
+
     def test_module_qualified_aliases_and_parent_globs_keep_their_owners(self):
         sources = [
             "use serde_json as json;\nmod child { fn read() { super::json::from_str(text); } }",

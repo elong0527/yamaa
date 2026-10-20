@@ -449,6 +449,15 @@ def condition_literals(source: str) -> list[tuple[int, str]]:
     return found
 
 
+def external_serde_json(path: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Members of the external crate, never a local module with its name."""
+    if path[:1] == ("serde_json",):
+        return path[1:]
+    if path[:2] == ("", "serde_json"):
+        return path[2:]
+    return None
+
+
 def json_decodes(source: str, *, crate_root: bool = True) -> list[int]:
     """JSON reading capabilities outside test items, including Rust imports.
 
@@ -473,25 +482,22 @@ def json_decodes(source: str, *, crate_root: bool = True) -> list[int]:
         )
 
     def reader_path(path):
-        for owner in ("json_wire", "serde_json"):
-            if owner not in path:
-                continue
-            tail = path[path.index(owner) + 1 :]
-            if owner == "json_wire":
-                return bool(tail) and (
-                    tail[0] == "*"
-                    or tail[0].startswith("decode")
-                    or tail[0] in {"deserialize", "deserialize_value", "WireValueOwned"}
-                )
+        if "json_wire" in path:
+            tail = path[path.index("json_wire") + 1 :]
             return bool(tail) and (
-                tail in {("*",), ("de", "*")}
-                or any(
-                    part in {"from_str", "from_slice", "from_reader", "Deserializer"}
-                    for part in tail
-                )
-                or (tail[-1] == "deserialize" and "Value" in tail)
+                tail[0] == "*"
+                or tail[0].startswith("decode")
+                or tail[0] in {"deserialize", "deserialize_value", "WireValueOwned"}
             )
-        return False
+        tail = external_serde_json(path)
+        return bool(tail) and (
+            tail in {("*",), ("de", "*")}
+            or any(
+                part in {"from_str", "from_slice", "from_reader", "Deserializer"}
+                for part in tail
+            )
+            or (tail[-1] == "deserialize" and "Value" in tail)
+        )
 
     sites = {
         offset
@@ -626,7 +632,7 @@ def rust_imports(
 
 
 class RustImports:
-    """Resolve use and extern-crate items in Rust block and module scopes.
+    """Resolve imports and simple path type aliases in Rust lexical scopes.
 
     Items apply throughout their block. Blocks inherit imports; child modules
     do not, and `super` skips enclosing function blocks. Each alias resolves
@@ -634,6 +640,9 @@ class RustImports:
     declarations in one scope are kept for conditional compilation alternatives.
     Root extern-crate aliases also enter the extern prelude. Their targets are
     canonical crate identities, independent of local aliases with that name.
+    A type alias follows only an explicit path RHS. Other type alias declarations
+    still shadow an outer name, but their type is not inferred; associated
+    type items in traits and impls never introduce lexical aliases.
     This resolves source ownership, not Rust's privacy or type checking.
     """
 
@@ -649,6 +658,15 @@ class RustImports:
             match.end() - 1: match[1].removeprefix("r#")
             for match in re.finditer(
                 rf"\bmod\s+({RUST_NAME})\s*\{{", self.code_without_uses
+            )
+        }
+        associated_bodies = {
+            match.end() - 1
+            for match in re.finditer(
+                r"(?:^|(?<=[;{}]))\s*(?:#\s*\[[^\]]*\]\s*)*"
+                r"(?:pub(?:\s*\([^)]*\))?\s+)?(?:(?:unsafe|auto|default)\s+)*"
+                r"(?:impl|trait)\b[^{;]*\{",
+                self.code_without_uses,
             )
         }
         self.starts = [0]
@@ -684,7 +702,7 @@ class RustImports:
                 )
             stack.append(scope)
         self.leaves = []
-        self.extern_targets = {}
+        self.canonical_targets = {}
         self.extern_prelude = {}
         for match in re.finditer(
             rf"\bextern\s+crate\s+({RUST_NAME})(?:\s+as\s+({RUST_NAME}))?\s*;",
@@ -700,10 +718,33 @@ class RustImports:
             else:
                 target = ("", crate)
             offset = match.start(1)
-            self.extern_targets[scope, offset] = target
+            self.canonical_targets[scope, offset] = target
             self.bindings[scope].setdefault(alias, []).append((target, scope, offset))
             if scope == 0 and crate_root:
                 self.extern_prelude.setdefault(alias, set()).add(target)
+        for match in re.finditer(rf"\bmod\s+({RUST_NAME})\s*;", self.code_without_uses):
+            scope = self.scope_at(match.start())
+            name = match[1].removeprefix("r#")
+            target = self.module_paths[self.module[scope]] + (name,)
+            offset = match.start(1)
+            self.canonical_targets[scope, offset] = target
+            self.bindings[scope].setdefault(name, []).append((target, scope, offset))
+        for match in re.finditer(rf"\btype\s+({RUST_NAME})\b", self.code_without_uses):
+            scope = self.scope_at(match.start())
+            if self.starts[scope] in associated_bodies:
+                continue
+            name = match[1].removeprefix("r#")
+            offset = match.start(1)
+            rhs = re.match(
+                rf"\s*=\s*({RUST_PATH.pattern})\s*;",
+                self.code_without_uses[match.end() :],
+            )
+            if rhs is not None:
+                target = tuple(re.split(r"\s*::\s*", rhs[1]))
+            else:
+                target = self.module_paths[self.module[scope]] + (name,)
+                self.canonical_targets[scope, offset] = target
+            self.bindings[scope].setdefault(name, []).append((target, scope, offset))
         for match in uses:
             scope = self.scope_at(match.start())
             for path, alias, offset in rust_imports(match[1], match.start(1)):
@@ -768,8 +809,8 @@ class RustImports:
                     key = (declaration, offset)
                     if key in seen:
                         continue
-                    if key in self.extern_targets:
-                        targets.add(self.extern_targets[key])
+                    if key in self.canonical_targets:
+                        targets.add(self.canonical_targets[key])
                     elif isinstance(path, int):
                         targets.add(path)
                     else:
@@ -785,7 +826,7 @@ class RustImports:
                         targets.update(
                             self.lookup(name, owner, seen | {key}, lexical=False)
                         )
-                    elif owner[-2:] == ("serde_json", "value") and name in {
+                    elif external_serde_json(owner) == ("value",) and name in {
                         "Value",
                         "Map",
                         "Number",
