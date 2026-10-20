@@ -262,6 +262,9 @@ uniform derivations, redundant intermediates, and output-column labels.
 Write literals as `{literal: X}` and source reads using the documented
 bare-string spelling. The R package 0.5.0 has no exported style checker;
 record this authoring-tool gap and perform the style review explicitly.
+Use `{literal: null}` when a handler must return a missing value; a bare
+`null` handler is absent, which can leave the default error behavior in place.
+Do not assume older operation names or compute functions remain supported.
 Review the resolved specifications and traceability map with the second
 programmer.
 
@@ -334,6 +337,11 @@ tryCatch({
 Use `readRDS()` to inspect the saved R issue tables, engine report, and failure
 details; RDS preserves list columns and diagnostic locations without another
 package. Retain the condition message even when an R error has no issue rows.
+Static checking does not establish successful runtime phase planning; a clean
+`check()` must still be followed by the complete `run()` and saved-output
+comparison. In particular, grouped row filters read completed, unqualified
+row-derived columns; use supported row derivations rather than putting
+qualified lookup references directly in a grouped filter.
 Retain each attempt's logs, issue tables, and reports before retrying, using
 attempt identifiers in the log filenames. Archive previous candidates in a
 controlled snapshot that retains the same study layout; clear only the
@@ -365,11 +373,21 @@ tagged missing values, and `jsonlite` for JSON metrics, when those formats
 require them. Record their versions separately from yamaa's runtime needs.
 Compare the saved outputs from the current successful attempt to the frozen
 reference; never generate expected results from the candidate specifications.
+Require a successful attempt record with zero issues and verify that each
+candidate belongs to it. Reject stale outputs and inputs or specifications
+changed after that attempt began. Test the comparator with an independently
+matching control and deliberate cell, key, missing-output, stale-output and
+failed-attempt cases in disposable fixtures.
 
 1. Check the complete dataset inventory and all columns, their order, logical
    types, and required metadata, including labels. Report missing/extra
    datasets and columns. Verify required metadata against original artifacts
    if a staging format cannot retain it.
+   Check declared YAML labels and serialized Parquet labels independently.
+   The released R 0.5.0 save path can omit `yamaa:label` field metadata even
+   when every declaration matches. Reproduce this on invented data, retain
+   the strict failure, and report any explicit publication workaround
+   separately; never copy reference labels into candidates to conceal it.
 2. Align records by the reviewed complete key, checking key uniqueness and
    missing/extra records first. Use independently defined occurrence identity
    for legitimate duplicates; do not sort on all compared values, pair by row
@@ -385,6 +403,10 @@ reference; never generate expected results from the candidate specifications.
    to finite floating-point values; integers, dates, flags, and text require
    exact equality. Report maximum absolute difference and counts outside
    tolerance. A tolerance-only match is not an exact cell match.
+   Preserve the source's arithmetic association: `(value - base) / base *
+   100` and `100 * (value - base) / base` can differ in floating point.
+   Review an association correction as a source discrepancy; do not round
+   or make value-specific changes to force matching.
 5. Retain restricted mismatch details: dataset, record key, variable,
    reference/generated values, difference, rule ID, classification, owner,
    and resolution status. Trace each discrepancy back to the source-evidence
