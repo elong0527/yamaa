@@ -1085,15 +1085,17 @@ mod diagnostics {
             /// DEFINE-9 and DEFINE-10: a terminology standard's identifier is
             /// `CT_` and its publishing set. Sources that cite one standard
             /// share its definition, a source the document binds nothing from
-            /// cites none (CT-10), and another release under that publishing
-            /// set is refused at its own source instead of being numbered.
+            /// cites none (CT-10), and another release or another standard
+            /// name under that publishing set is refused at its own source
+            /// instead of being numbered.
             #[test]
             fn sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused(
             ) {
-                let source = |version: &str, list: &str| {
+                const NCI: &str = "CDISC/NCI";
+                let source = |name: &str, version: &str, list: &str| {
                     rt::Source {
                         standard: Some(rt::Standard {
-                            name: "CDISC/NCI".into(),
+                            name: name.into(),
                             publishing_set: "SDTM".into(),
                             version: version.into(),
                         }),
@@ -1139,9 +1141,9 @@ mod diagnostics {
                 };
                 let (cited, later) = ("2026-03-27", "2026-06-26");
                 let study = compose(vec![
-                    source(cited, "FIRST"),
-                    source(later, "UNBOUND"),
-                    source(cited, "SECOND"),
+                    source(NCI, cited, "FIRST"),
+                    source(NCI, later, "UNBOUND"),
+                    source(NCI, cited, "SECOND"),
                 ])
                 .unwrap();
                 let xml = String::from_utf8(submission_xml::render(&study).unwrap()).unwrap();
@@ -1156,27 +1158,31 @@ mod diagnostics {
                     "{xml}"
                 );
                 assert!(!xml.contains(later), "{xml}");
-                let findings = compose(vec![
-                    source(cited, "FIRST"),
-                    source(later, "UNBOUND"),
-                    source(later, "SECOND"),
-                ])
-                .unwrap_err();
-                assert_eq!(findings.len(), 1, "{findings:?}");
-                let definition = findings[0].definition();
-                assert_eq!(
-                    (definition.phase, definition.condition, definition.rule),
-                    (
-                        "validation",
-                        "duplicate_define_identifier",
-                        Some("DEFINE-10")
-                    )
-                );
-                assert_eq!(findings[0].path, "codelists[2].standard.publishing_set");
-                assert_eq!(
-                    findings[0].context,
-                    [("detail".into(), JsonValue::String("STD.CT_SDTM".into()))].into()
-                );
+                // A later release, or another of the standard names Define-XML
+                // publishes, under the publishing set already cited.
+                for (name, version) in [(NCI, later), ("BIMO", cited)] {
+                    let findings = compose(vec![
+                        source(NCI, cited, "FIRST"),
+                        source(NCI, later, "UNBOUND"),
+                        source(name, version, "SECOND"),
+                    ])
+                    .unwrap_err();
+                    assert_eq!(findings.len(), 1, "{name} {version}: {findings:?}");
+                    let definition = findings[0].definition();
+                    assert_eq!(
+                        (definition.phase, definition.condition, definition.rule),
+                        (
+                            "validation",
+                            "duplicate_define_identifier",
+                            Some("DEFINE-10")
+                        )
+                    );
+                    assert_eq!(findings[0].path, "codelists[2].standard.publishing_set");
+                    assert_eq!(
+                        findings[0].context,
+                        [("detail".into(), JsonValue::String("STD.CT_SDTM".into()))].into()
+                    );
+                }
             }
             #[test]
 
