@@ -82,7 +82,8 @@ class StagingTests(unittest.TestCase):
                 [],
             )
             # The installed R package carries the Python package notices, with
-            # the component inventory of its own bundle.
+            # the third-party notices and the component inventory of its own
+            # bundle.
             notices = tomllib.loads(
                 (staging.REPOSITORY / "python/pyproject.toml").read_text(
                     encoding="utf-8"
@@ -92,7 +93,9 @@ class StagingTests(unittest.TestCase):
             self.assertIn("LICENSE-THIRD-PARTY.txt", notices)
             self.assertIn("COMPONENTS.tsv", notices)
             for name in notices:
-                host = "R/yamaa/inst" if name == "COMPONENTS.tsv" else "python"
+                host = (
+                    "R/yamaa/inst" if name in staging.notices.HOST_NOTICES else "python"
+                )
                 self.assertEqual(
                     (destination / "inst" / name).read_bytes(),
                     (staging.REPOSITORY / host / name).read_bytes(),
@@ -102,6 +105,13 @@ class StagingTests(unittest.TestCase):
             )
             self.assertIn("\nyamaa-r\t", inventory)
             self.assertNotIn("\nyamaa-python\t", inventory)
+            listed = staging.notices.committed_entries(
+                (destination / "inst/LICENSE-THIRD-PARTY.txt").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("extendr-api", {name for name, _ in listed})
+            self.assertNotIn("pyo3", {name for name, _ in listed})
             self.assertEqual(
                 (destination / "inst/LICENSE.txt").read_bytes(),
                 (staging.REPOSITORY / "LICENSE").read_bytes(),
@@ -201,6 +211,8 @@ class StagingTests(unittest.TestCase):
                 },
                 registry | {("yamaa-saphyr-parser", "0.2.1")},
             )
+            # The notices cover exactly the crates that the package bundles.
+            self.assertEqual(listed, registry | {("yamaa-saphyr-parser", "0.2.1")})
             original = tests / "specification-original"
             for module in (original / "schema").glob("*.yaml"):
                 self.assertEqual(

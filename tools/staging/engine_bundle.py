@@ -330,7 +330,15 @@ def stage(host, destination: Path, workspace=WORKSPACE):
 
 
 def python_project(destination: Path, project=ROOT / "python"):
-    """Copy the Python package files beside a bundle, pointing maturin at it."""
+    """Copy the Python package files beside a bundle, pointing maturin at it.
+
+    The archive's component inventory is the wheels' without the Rust standard
+    library, which a build from the archive links from whatever toolchain
+    builds it.
+    """
+    # Imported here because the inventory's generator imports this module.
+    from tools.packaging import generate_component_inventory as inventory
+
     pyproject = (project / "pyproject.toml").read_bytes().decode("utf-8")
     old = f'manifest-path = "../rust/{PYTHON_MANIFEST_PATH}"'
     if pyproject.count(old) != 1:
@@ -341,7 +349,12 @@ def python_project(destination: Path, project=ROOT / "python"):
     )
     declared = tomllib.loads(pyproject)["project"]
     for name in (declared["readme"], *declared["license-files"]):
-        shutil.copyfile(project / name, destination / name)
+        if name == inventory.NAME:
+            wheels = (project / name).read_bytes().decode("utf-8")
+            text = inventory.source_inventory(wheels)
+            (destination / name).write_bytes(text.encode("utf-8"))
+        else:
+            shutil.copyfile(project / name, destination / name)
     shutil.copytree(project / "src", destination / "src")
 
 
