@@ -23,7 +23,7 @@ GRAMMAR_CONTRACTS = {
 # The fields a contract is written in. Each case names one, and a contract
 # without contexts is read the same way everywhere.
 GRAMMAR_CONTEXTS = {
-    "expression": ["predicate", "compute", "aggregate"],
+    "expression": ["predicate", "compute", "aggregate", "derivation"],
 }
 GRAMMAR_MARKER = re.compile(
     r"<!-- grammar: ([a-z-]+) -->\n+```text\n(.*?)\n```", re.DOTALL
