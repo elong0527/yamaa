@@ -13,8 +13,9 @@ mod declaration {
         use std::path::{Path, PathBuf};
         use yamaa_adapters::document::{self, check_references, Closures, Decoded};
         use yamaa_adapters::shipped_schema;
-        use yamaa_adapters::specification_source::{InheritancePort, Source};
+        use yamaa_adapters::specification_source::{Error, InheritancePort, Source};
         use yamaa_adapters::yaml_decode::decode_yaml;
+        use yamaa_core::diagnostic::ConditionCode;
         use yamaa_core::inheritance::{Source as GraphSource, SourceError};
         use yamaa_core::language::{FileType, LANGUAGE_VERSION};
         use yamaa_core::schema::{Document, DocumentNode as N, SchemaAliasKind};
@@ -157,10 +158,11 @@ mod declaration {
                 };
                 assert_eq!(document.header().version, LANGUAGE_VERSION);
                 // Every file an example's referencing fields name declares the
-                // type its field reads.
+                // type its field reads. No example selects `relative_to: entry`.
                 check_references(
                     &document.raw().document,
                     file_type,
+                    &identity,
                     &identity,
                     LANGUAGE_VERSION,
                     &mut Files,
@@ -203,8 +205,36 @@ mod declaration {
             let path =
                 repository().join("docs/design/interface-1.0/examples/adam-adsl-bmi/spec.yaml");
             let original = std::fs::read_to_string(&path).unwrap();
+            let edit = |old: &str, new: &str| {
+                assert!(original.contains(old), "{old}");
+                Source {
+                    identity: "spec.yaml".into(),
+                    bytes: original.replacen(old, new, 1).into_bytes(),
+                }
+            };
+            // `schema_version` beside `yamaa` routes the file to the 0.5 path,
+            // which reports `yamaa` as an unknown field.
+            let both = edit("type: spec\n", "type: spec\nschema_version: '1.0'\n");
+            let decoded =
+                document::decode(both, FileType::Spec, Some(LANGUAGE_VERSION), &closures).unwrap();
+            let Decoded::Legacy { source, .. } = decoded else {
+                panic!("schema_version keeps the 0.5 path: {decoded:?}");
+            };
+            let error = shipped_schema::capture()
+                .unwrap()
+                .prepare_standalone(source)
+                .unwrap_err();
+            let Error::Findings(captured) = &error else {
+                panic!("0.5 findings: {error:?}");
+            };
+            let unknown = captured
+                .findings()
+                .iter()
+                .find(|finding| finding.code == ConditionCode::SchemaUnknownField)
+                .unwrap_or_else(|| panic!("an unknown field: {error:?}"));
+            assert_eq!(unknown.path, "yamaa");
+            // A 0.5 spelling under the 1.x header fails 1.0 admission.
             for (old, new) in [
-                ("type: spec\n", "type: spec\nschema_version: '1.0'\n"),
                 ("derivation: SOURCE.STUDYID", "derivation: {literal: X}"),
                 (
                     "derivation: SOURCE.USUBJID",
@@ -212,25 +242,22 @@ mod declaration {
                 ),
                 ("cm_per_m: 100", "cm_per_m: {date: 2024-01-01}"),
             ] {
-                assert!(original.contains(old), "{old}");
-                let edited = original.replacen(old, new, 1);
-                let source = Source {
-                    identity: "spec.yaml".into(),
-                    bytes: edited.into_bytes(),
+                let decoded = document::decode(
+                    edit(old, new),
+                    FileType::Spec,
+                    Some(LANGUAGE_VERSION),
+                    &closures,
+                )
+                .unwrap();
+                let Decoded::Versioned(document) = decoded else {
+                    panic!("{new}: the 1.x header selects the 1.0 path: {decoded:?}");
                 };
-                // `schema_version` beside `yamaa` keeps the 0.5 path, where the
-                // 1.0 fields are unknown; the others fail 1.0 admission.
-                match document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures)
-                    .unwrap()
-                {
-                    Decoded::Legacy { .. } => assert!(new.contains("schema_version")),
-                    Decoded::Versioned(document) => assert!(
-                        document
-                            .prepare_specification("spec.yaml".into(), &mut Files)
-                            .is_err(),
-                        "{new} should fail"
-                    ),
-                }
+                assert!(
+                    document
+                        .prepare_specification("spec.yaml".into(), &mut Files)
+                        .is_err(),
+                    "{new} should fail"
+                );
             }
         }
     }

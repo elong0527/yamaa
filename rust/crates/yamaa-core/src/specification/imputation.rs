@@ -8,7 +8,6 @@ use crate::{
     },
     temporal::Precision,
 };
-const OPERATIONS: &[&str] = &["impute", "precision", "imputation_flag", "to_date"];
 fn integer(d: &Document, id: usize) -> Result<&str, PrepareError> {
     match &d.nodes()[id] {
         N::Integer(value) => Ok(value),
@@ -170,152 +169,48 @@ pub(super) fn prepare(
     )
     .ok_or(PrepareError::Internal)
 }
-/// Original known output kinds and completion policy fail before source authority.
-pub(super) fn declaration_findings(
+/// One imputation verb's declaration findings at `path`: its completion
+/// policy, then each operand whose declared type it does not accept. With
+/// `rows` a bare name's phase is binding's to decide, so its type is not
+/// checked here.
+pub(super) fn operand_findings(
     d: &Document,
-    columns: &[usize],
-    output: &TableSchema,
+    payload: usize,
+    op: &str,
+    path: &str,
     declared: &types::DeclaredTypes<'_>,
+    rows: bool,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    #[allow(clippy::too_many_arguments)]
-    fn visit(
-        d: &Document,
-        value: usize,
-        path: &str,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<PreflightFinding>,
-        depth: usize,
-        rows: bool,
-    ) -> Result<(), PrepareError> {
-        // With row templates a bare name's phase is binding's to decide.
-        let kind = |name: &str| {
-            (name.contains('.') || !rows)
-                .then(|| declared.operand(name).column_type())
-                .flatten()
-        };
-        if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-            return Err(PrepareError::limit(
-                "semantic_depth",
-                crate::limits::Limits::SEMANTIC_DEPTH,
-                Some(depth),
-                Some(path),
-            ));
-        }
-
-        for &op in OPERATIONS {
-            if let Some(payload) = d.field(value, op) {
-                let path = format!("{path}.{op}");
-                match prepare(d, payload, op, &path, None, None, &mut Vec::new()) {
-                    Ok(operation) => {
-                        if let Some(kind) = kind(operation.source()) {
-                            if !operation.accepts(kind) {
-                                let actual = match kind {
-                                    ColumnType::Str => "str",
-                                    ColumnType::Int => "int",
-                                    ColumnType::Float => "float",
-                                    ColumnType::Date => "date",
-                                    ColumnType::DateTime => "datetime",
-                                };
-                                findings.push(PreflightFinding::Imputation(
-                                    operation.input_diagnostic(actual),
-                                ));
-                            }
-                        }
-                        for (field, name) in operation.operands().skip(1) {
-                            if let Some(kind) =
-                                kind(name).filter(|&kind| !operation.accepts_operand(kind))
-                            {
-                                let actual = match kind {
-                                    ColumnType::Str => "str",
-                                    ColumnType::Int => "int",
-                                    ColumnType::Float => "float",
-                                    ColumnType::Date => "date",
-                                    ColumnType::DateTime => "datetime",
-                                };
-                                findings.push(PreflightFinding::Imputation(
-                                    operation.operand_input_diagnostic(field, name, actual),
-                                ));
-                            }
-                        }
-                    }
-                    Err(PrepareError::Invalid(errors)) => findings.extend(errors),
-                    Err(error) => return Err(error),
+    let kind = |name: &str| {
+        (name.contains('.') || !rows)
+            .then(|| declared.name(name).column_type())
+            .flatten()
+    };
+    match prepare(d, payload, op, path, None, None, &mut Vec::new()) {
+        Ok(operation) => {
+            if let Some(kind) = kind(operation.source()) {
+                if !operation.accepts(kind) {
+                    findings.push(PreflightFinding::Imputation(
+                        operation.input_diagnostic(checks::type_name(kind)),
+                    ));
                 }
             }
-        }
-        if let Some(case) = d.field(value, "case") {
-            for (index, &branch) in sequence(d, case)?.iter().enumerate() {
-                let (name, child) = d
-                    .field(branch, "then")
-                    .map(|id| ("then", id))
-                    .or_else(|| d.field(branch, "otherwise").map(|id| ("otherwise", id)))
-                    .ok_or(PrepareError::Internal)?;
-                visit(
-                    d,
-                    child,
-                    &format!("{path}.case[{index}].{name}"),
-                    declared,
-                    findings,
-                    depth + 1,
-                    rows,
-                )?;
-            }
-        }
-        Ok(())
-    }
-    let rows = present(d, d.root(), "rows");
-
-    for (index, &column) in columns.iter().enumerate() {
-        if let Some(value) = d
-            .field(column, "derivation")
-            .and_then(|id| d.field(id, "value"))
-        {
-            visit(
-                d,
-                value,
-                &format!("columns.{}.derivation", output.columns()[index].name),
-                declared,
-                findings,
-                0,
-                rows,
-            )?;
-        }
-    }
-    if let Some(rows) = d
-        .field(d.root(), "rows")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        for (index, &row) in sequence(d, rows)?.iter().enumerate() {
-            if let Some(derivations) = d.field(row, "derivations") {
-                for &(name, derivation) in mapping(d, derivations)? {
-                    if let Some(value) = d.field(derivation, "value") {
-                        visit(
-                            d,
-                            value,
-                            &format!("rows[{index}].derivations.{}", text(d, name)?),
-                            declared,
-                            findings,
-                            0,
-                            true,
-                        )?;
-                    }
+            for (field, name) in operation.operands().skip(1) {
+                if let Some(kind) = kind(name).filter(|&kind| !operation.accepts_operand(kind)) {
+                    findings.push(PreflightFinding::Imputation(
+                        operation.operand_input_diagnostic(field, name, checks::type_name(kind)),
+                    ));
                 }
             }
+            Ok(())
         }
+        Err(PrepareError::Invalid(errors)) => {
+            findings.extend(errors);
+            Ok(())
+        }
+        Err(error) => Err(error),
     }
-    match_values::visit_keys(d, &mut |value, path| {
-        visit(
-            d,
-            value,
-            path,
-            declared,
-            findings,
-            0,
-            present(d, d.root(), "rows"),
-        )
-    })?;
-    Ok(())
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn bind(

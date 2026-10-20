@@ -358,6 +358,15 @@ class StagingTests(unittest.TestCase):
             self.assertIn(
                 {"path": "vendor/**/*", "format": "sdist"}, maturin["include"]
             )
+            # pip builds the wheel with the native wheels' profile, which the
+            # bundle's manifest carries: release without the symbol table.
+            # Panics still unwind, as the Parquet reader's containment needs.
+            profiles = tomllib.loads(bundle.workspace_manifest())["profile"]
+            wheel = profiles[maturin["profile"]]
+            self.assertEqual(wheel["inherits"], "release")
+            self.assertEqual(wheel["strip"], "symbols")
+            for profile in (wheel, profiles["release"]):
+                self.assertNotIn("panic", profile)
             for name in ("README.md", *pyproject["project"]["license-files"]):
                 self.assertEqual(
                     (destination / name).read_bytes(),

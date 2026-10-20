@@ -134,7 +134,8 @@ pub struct Reply {
     /// The physical file the name reaches, when the resolver knows it, as
     /// the local file resolver does. A hint, not a key: snapshots stay keyed
     /// by reference, and a capture that names a held file under another
-    /// reference, such as a hard link to it, binds that file's snapshot.
+    /// reference, such as a hard link to it, binds that file's snapshot and
+    /// never reads other bytes from it.
     pub physical: Option<PhysicalFile>,
 }
 impl Reply {
@@ -242,8 +243,9 @@ struct Snapshot {
     reference: String,
     /// The identity the capture's reply gave the resource, if any.
     location: Option<String>,
-    /// The physical file the capture's reply reported, while no later
-    /// capture has found it reused by another file.
+    /// The physical file the capture's reply reported, or the one a later
+    /// check found the held name reaching with the same bytes. None once a
+    /// capture found no held name reaching it and took a fresh snapshot.
     physical: Option<PhysicalFile>,
     bytes: Arc<[u8]>,
     frame: Option<Arc<crate::arrow_table::ArrowTable>>,
@@ -358,8 +360,9 @@ impl Resources {
     /// again and requires it unchanged (FILE-9, FILE-10), so a substituted
     /// name cannot redirect a read silently. A capture that reaches, under
     /// another reference, the physical file a held snapshot holds, such as
-    /// a hard link to it, binds that snapshot and must read its bytes
-    /// (FILE-9): two names of one file never observe different bytes.
+    /// a hard link to it, must read that snapshot's bytes (FILE-9): two names
+    /// of one file never observe different bytes. It binds the snapshot
+    /// while a held name still reaches the file; see [`Self::same_file`].
     pub fn capture(
         &self,
         declaring: &str,
@@ -409,7 +412,7 @@ impl Resources {
             .cloned();
         let known = match known {
             Some(known) => Some(known),
-            None => self.same_file(reply.physical)?,
+            None => self.same_file(reply.physical, &bytes, &reply.frame)?,
         };
         if let Some(known) = &known {
             if known.bytes != bytes || !same_frame(&known.frame, &reply.frame) {
@@ -447,13 +450,26 @@ impl Resources {
         });
         Ok((bytes, created))
     }
-    /// A held snapshot of the physical file `physical` under another
-    /// reference: the file a new capture reached under a name such as a hard
-    /// link to it. A held name confirms it only while an inspection finds it
-    /// still reaching that file. A held name that reaches another file, or
-    /// none, reported an identity the file system has since given a new file,
-    /// and forgets it.
-    fn same_file(&self, physical: Option<PhysicalFile>) -> Result<Option<Snapshot>, Failure> {
+    /// The held snapshot a new capture binds when it reached, under another
+    /// reference, the physical file `physical` that snapshot was taken from,
+    /// such as through a hard link to it. A held name confirms the snapshot
+    /// while an inspection finds it still reaching that file.
+    ///
+    /// When no held name reaches the file, the names were renamed or removed,
+    /// and the identity is either that file reached by another of its names
+    /// or a new file to which the file system gave a removed file's identity.
+    /// A snapshot holds no file open that would tell the two apart, so the
+    /// capture fails closed: other `bytes` are a change (FILE-9), and the same
+    /// bytes are a fresh snapshot, which the identity names from then on. A
+    /// check moves a snapshot whose name reaches a new file with the same
+    /// bytes to that file's identity ([`Self::check`]), so an identity the
+    /// snapshot gave up is not refused as its file.
+    fn same_file(
+        &self,
+        physical: Option<PhysicalFile>,
+        bytes: &[u8],
+        frame: &Option<Arc<crate::arrow_table::ArrowTable>>,
+    ) -> Result<Option<Snapshot>, Failure> {
         let Some(physical) = physical else {
             return Ok(None);
         };
@@ -479,6 +495,12 @@ impl Resources {
                 _ => {}
             }
         }
+        if held
+            .iter()
+            .any(|s| *s.bytes != *bytes || !same_frame(&s.frame, frame))
+        {
+            return Err(Failure::Changed);
+        }
         if !held.is_empty() {
             self.snapshots
                 .lock()
@@ -503,7 +525,10 @@ impl Resources {
     }
     /// Capture one held request again: the resolver must give it the same
     /// reference and the same content, and may refuse a resource longer than
-    /// the held bytes before reading it.
+    /// the held bytes before reading it. A name that now reaches another
+    /// physical file with the same bytes, such as one an editor wrote in its
+    /// place, gives the snapshot that file's identity: the identity it had
+    /// may go to a new file, which must not then be refused as this one.
     fn check(&self, snapshot: &Snapshot) -> Result<(), Failure> {
         let reply = match self.call(
             Operation::Capture,
@@ -527,6 +552,18 @@ impl Resources {
             || !same_frame(&snapshot.frame, &reply.frame)
         {
             return Err(Failure::Changed);
+        }
+        if reply.physical != snapshot.physical {
+            self.snapshots
+                .lock()
+                .map_err(|_| Failure::Rejected)?
+                .iter_mut()
+                .filter(|s| {
+                    s.declaring == snapshot.declaring
+                        && s.written == snapshot.written
+                        && s.kind == snapshot.kind
+                })
+                .for_each(|s| s.physical = reply.physical);
         }
         Ok(())
     }
@@ -860,8 +897,60 @@ mod tests {
         assert_eq!(resources.verify(2), Err(("/a".into(), Failure::Changed)));
     }
 
+    /// FILE-9 after the captured name moves: a file rewritten once no held
+    /// name reaches it is still the file a snapshot was taken from when
+    /// another of its names reaches it, and its other bytes are a change.
     #[test]
-    fn an_identity_a_held_name_no_longer_reaches_binds_nothing() {
+    fn a_file_no_held_name_reaches_never_reads_other_bytes() {
+        for moved in ["renamed", "removed", "replaced"] {
+            let files = Arc::new(Files::default());
+            files.write(1, b"one");
+            files.link("a", 1);
+            files.link("b", 1);
+            let resources = Resources::at(files.clone(), "/spec.yaml".into());
+            let (a, _) = capture(&resources, "a").unwrap();
+            match moved {
+                "renamed" => {
+                    files.unlink("a");
+                    files.link("a.old", 1);
+                }
+                "removed" => files.unlink("a"),
+                _ => {
+                    files.write(2, b"other");
+                    files.link("a", 2);
+                }
+            }
+            files.write(1, b"two");
+            assert_eq!(capture(&resources, "b"), Err(Failure::Changed), "{moved}");
+            if moved == "renamed" {
+                assert_eq!(capture(&resources, "a.old"), Err(Failure::Changed));
+            }
+            // The refusal holds on a second try, and the held bytes stay.
+            assert_eq!(capture(&resources, "b"), Err(Failure::Changed), "{moved}");
+            assert_eq!(a.as_ref(), b"one");
+            assert_eq!(resources.len(), 1, "{moved}");
+            // Unchanged, the other name reads the held bytes as a snapshot of
+            // its own, and the identity names that snapshot from then on.
+            files.write(1, b"one");
+            let (b, created) = capture(&resources, "b").unwrap();
+            assert!(created, "{moved}");
+            assert_eq!(b.as_ref(), b"one");
+            files.link("c", 1);
+            assert!(!capture(&resources, "c").unwrap().1, "{moved}");
+            files.write(1, b"three");
+            files.link("d", 1);
+            assert_eq!(capture(&resources, "d"), Err(Failure::Changed), "{moved}");
+        }
+    }
+
+    /// The file system may give a removed file's identity to a new file.
+    /// Nothing tells that file apart from the held one reached by another
+    /// name, so its other bytes fail closed and its same bytes are a fresh
+    /// snapshot. A name a check finds reaching another file with the same
+    /// bytes, as an editor's save leaves it, gives its snapshot that file's
+    /// identity, so the identity it gave up binds nothing.
+    #[test]
+    fn a_reused_identity_fails_closed_until_a_check_moves_the_snapshot() {
         let files = Arc::new(Files::default());
         files.write(1, b"one");
         files.link("a", 1);
@@ -871,27 +960,34 @@ mod tests {
         files.unlink("a");
         files.write(1, b"new");
         files.link("c", 1);
+        assert_eq!(capture(&resources, "c"), Err(Failure::Changed));
+        assert_eq!(capture(&resources, "a"), Err(Failure::Missing));
+        files.write(1, b"one");
         let (c, created) = capture(&resources, "c").unwrap();
         assert!(created);
-        assert_eq!(c.as_ref(), b"new");
-        assert_eq!(capture(&resources, "a"), Err(Failure::Missing));
-        // `c` holds the identity now: a hard link to it binds its snapshot.
-        files.link("d", 1);
-        let (d, created) = capture(&resources, "d").unwrap();
-        assert!(!created);
-        assert!(Arc::ptr_eq(&c, &d));
-        // `c` now names another file, and the file it held is rewritten:
-        // while `d` still reaches that file, a new name of it is a change.
-        files.link("c", 2);
-        files.write(2, b"other");
-        files.write(1, b"rewritten");
-        files.link("e", 1);
-        assert_eq!(capture(&resources, "e"), Err(Failure::Changed));
-        // Once no held name reaches it, a new name is its own snapshot.
-        files.unlink("d");
+        assert_eq!(c.as_ref(), b"one");
+        // An editor saves `b` as a new file with the same bytes, and another
+        // new file takes the identity `b` gave up.
+        files.write(3, b"held");
+        files.link("b", 3);
+        let resources = Resources::at(files.clone(), "/spec.yaml".into());
+        capture(&resources, "b").unwrap();
+        files.write(4, b"held");
+        files.link("b", 4);
+        files.write(3, b"another file");
+        files.link("e", 3);
+        // Before a check, its other bytes fail closed.
+        let unchecked = resources.scope();
+        assert_eq!(capture(&unchecked, "e"), Err(Failure::Changed));
+        // A check finds `b` unchanged at its new file, and the identity it
+        // gave up binds nothing.
+        resources.verify(1).unwrap();
         let (e, created) = capture(&resources, "e").unwrap();
         assert!(created);
-        assert_eq!(e.as_ref(), b"rewritten");
+        assert_eq!(e.as_ref(), b"another file");
+        // The new file `b` reaches binds its snapshot.
+        files.link("f", 4);
+        assert!(!capture(&resources, "f").unwrap().1);
     }
 
     #[test]

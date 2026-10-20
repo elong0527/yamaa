@@ -27,10 +27,6 @@ fn value_text(value: &str) -> V {
     V::String(value.into())
 }
 impl Declaration {
-    /// The admitted condition, if its text parses.
-    pub(super) fn condition(&self) -> Option<&CompiledExpression> {
-        self.condition.as_ref().ok()
-    }
     pub(super) fn has_findings(&self) -> bool {
         self.condition.is_err() || self.false_value.is_some() && self.missing.is_none()
     }

@@ -36,7 +36,7 @@ chmod +x /tmp/rustup-init
 rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal --no-self-update
 "${PYTHON}" -m pip install --root-user-action=ignore "${MATURIN}"
 cd /io/python
-"${PYTHON}" -m maturin build --release --locked --compatibility "${POLICY}" \\
+"${PYTHON}" -m maturin build --profile dist --locked --compatibility "${POLICY}" \\
   --interpreter "${PYTHON}" --out /out
 """
 

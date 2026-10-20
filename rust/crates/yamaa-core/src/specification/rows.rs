@@ -367,8 +367,10 @@ fn default_reads(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn select_defaults(
     d: &Document,
+    tree: &crate::ast::Spec,
     columns: &[usize],
     output: &TableSchema,
     rows: &[usize],
@@ -416,14 +418,13 @@ fn select_defaults(
     // when no row overrides or filter reference them; they are row-phase in
     // all templates.
     let mut odm_selected = std::vec![false; columns.len()];
-    for (column, &node) in columns.iter().enumerate() {
-        if let Some(derivation) = d
-            .field(node, "derivation")
-            .filter(|&node| !matches!(d.nodes()[node], N::Null))
+    for (column, declared) in tree.columns.iter().enumerate() {
+        if declared
+            .derivation
+            .as_ref()
+            .is_some_and(|derivation| checks::odm::reads_odm(tree, derivation.expr))
         {
-            if odm::contains(d, derivation, 0)? {
-                odm_selected[column] = local[column];
-            }
+            odm_selected[column] = local[column];
         }
     }
     let mut overridden: BTreeMap<usize, Vec<&str>> = BTreeMap::new();
@@ -1329,6 +1330,89 @@ fn prepare_filter_defaults(
     Ok(filter_defaults)
 }
 
+/// One row template as the checks read it: its id, driver, `group_by`, the
+/// document node of each derivation it evaluates in the row phase (with the
+/// column and whether it declares `unconvertible`), in construction order.
+pub(super) struct TemplatePhase<'a> {
+    pub id: &'a str,
+    pub driver: &'a str,
+    pub groups: Option<Vec<&'a str>>,
+    pub derivations: Vec<PhaseDerivation>,
+}
+
+/// A derivation one phase evaluates: its column, the document node of its
+/// operation and whether it declares `unconvertible`.
+#[derive(Clone, Copy)]
+pub(super) struct PhaseDerivation {
+    pub column: usize,
+    pub value: usize,
+    pub handled: bool,
+}
+
+impl Rows {
+    /// Each row template and its row-phase derivations, in construction order.
+    pub(super) fn phases(&self) -> Vec<TemplatePhase<'_>> {
+        self.templates
+            .iter()
+            .map(|template| TemplatePhase {
+                id: &template.id,
+                driver: &template.driver,
+                groups: template
+                    .groups
+                    .as_ref()
+                    .map(|groups| groups.iter().map(String::as_str).collect()),
+                derivations: template
+                    .declarations
+                    .iter()
+                    .map(|declaration| declaration.phase())
+                    .collect(),
+            })
+            .collect()
+    }
+    /// The derivations the column phase completes, in declaration order.
+    pub(super) fn column_phase(&self) -> Vec<PhaseDerivation> {
+        self.columns
+            .iter()
+            .map(|declaration| declaration.phase())
+            .collect()
+    }
+    /// The driver of each binding [`Rows::bind`] makes of a column-phase
+    /// derivation of `column`: `primary` when it holds a qualified aggregate
+    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
+    /// that leave the column to this phase, in construction order.
+    pub(super) fn column_drivers_of<'a>(
+        &'a self,
+        column: usize,
+        aggregates: bool,
+        primary: &'a str,
+    ) -> Vec<&'a str> {
+        if aggregates {
+            return vec![primary];
+        }
+        let mut drivers = Vec::new();
+        for template in &self.templates {
+            let leaves = !template
+                .declarations
+                .iter()
+                .any(|derived| derived.column == column);
+            if leaves && !drivers.contains(&template.driver.as_str()) {
+                drivers.push(template.driver.as_str());
+            }
+        }
+        drivers
+    }
+}
+
+impl RowDeclaration {
+    fn phase(&self) -> PhaseDerivation {
+        PhaseDerivation {
+            column: self.column,
+            value: self.value,
+            handled: self.handler.is_some(),
+        }
+    }
+}
+
 impl Rows {
     /// Each row template's driver name, in construction order.
     pub(super) fn drivers(&self) -> impl Iterator<Item = &str> {
@@ -1369,6 +1453,7 @@ impl Rows {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         d: &Document,
+        tree: &crate::front_end::v0_5::Lowered,
         output: &TableSchema,
         driver: &str,
         project: Option<&functions::Prepared>,
@@ -1608,6 +1693,7 @@ impl Rows {
         let mut templates = Vec::new();
         let selected = select_defaults(
             d,
+            tree.spec(),
             columns,
             output,
             raw_rows,
@@ -1698,17 +1784,6 @@ impl Rows {
                         format!("columns.{}.derivation", metadata.name),
                     )
                 };
-                // Driver-specific admission still runs for every template;
-                // only the immutable lowering is shared through the cache.
-                row_drivers::admit_reads(
-                    d,
-                    id,
-                    Some(row_driver),
-                    &prefix,
-                    project,
-                    string_templates,
-                    intermediates,
-                )?;
                 declarations.push(lower_shared(
                     &mut lowered,
                     d,
@@ -1729,30 +1804,18 @@ impl Rows {
                 filter,
             });
         }
-        let mut self_admission =
-            self_relations::FirstTemplate::new(d, project, intermediates, string_templates);
-        for declaration in &templates[0].declarations {
-            // The expanded occurrence retains its authored row or default path.
-            let column = &output.columns()[declaration.column].name;
-            let raw = mapping(d, field(d, raw_rows[0], "derivations")?)?
-                .iter()
-                .find(|&&(name, _)| text(d, name).is_ok_and(|name| name == column))
-                .map(|&(_, id)| id)
-                .or_else(|| d.field(columns[declaration.column], "derivation"));
-            if let Some(raw) = raw {
-                let prefix = declaration
-                    .path
-                    .rsplit_once('.')
-                    .map_or(declaration.path.as_str(), |(prefix, _)| prefix);
-                self_admission.visit(field(d, raw, "value")?, prefix, 0)?;
-            }
-        }
-        // A grouped template's filter reads no qualified name at all
-        // (ROW-6), which binding reports for every template.
-        if let (None, Some((_, Ok(plan)))) = (&templates[0].groups, &templates[0].filter) {
-            self_admission.filter(plan, "rows[0].filter");
-        }
-        let self_findings = self_admission.finish();
+        // The first template's SELF reads, every alternative included.
+        let roots = templates[0]
+            .declarations
+            .iter()
+            .map(|declaration| tree.expression(declaration.value))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(PrepareError::Internal)?;
+        let filter = tree.spec().rows.templates[0]
+            .filter
+            .filter(|_| templates[0].groups.is_none());
+        let self_findings =
+            checks::lookups::first_template(d, tree, &roots, filter, project, intermediates)?;
         if !self_findings.is_empty() {
             return Err(PrepareError::Invalid(self_findings));
         }
@@ -1798,17 +1861,6 @@ impl Rows {
                     // row derivations before lowering any template.
                     return Err(PrepareError::Internal);
                 };
-                if templates.iter().any(|template| template.driver != driver) {
-                    row_drivers::admit_reads(
-                        d,
-                        derivation,
-                        None,
-                        &format!("{prefix}.derivation"),
-                        project,
-                        string_templates,
-                        intermediates,
-                    )?;
-                }
                 let declaration = lower_shared(
                     &mut lowered,
                     d,
@@ -1836,15 +1888,20 @@ impl Rows {
                         needing.push(&template.driver);
                     }
                 }
+                let root = tree.spec().columns[column]
+                    .derivation
+                    .as_ref()
+                    .map(|derivation| derivation.expr)
+                    .ok_or(PrepareError::Internal)?;
                 for driver in needing {
                     if intermediates.contains(driver)
-                        && row_drivers::unaddressable(
+                        && checks::lookups::unaddressable(
                             d,
-                            derivation,
+                            tree,
+                            root,
                             driver,
                             declaration.aggregates(),
                             project,
-                            string_templates,
                         )?
                     {
                         unaddressable.push(UnsupportedFeature {
@@ -2259,242 +2316,6 @@ impl Rows {
     }
 }
 
-impl Rows {
-    /// `primary` is the input behind the first row template, which binds a
-    /// column holding a qualified aggregate, as in [`Rows::bind`].
-    pub(super) fn check_findings(
-        &self,
-        output: &TableSchema,
-        primary: &str,
-        tree: &types::Tree,
-        declared: &types::DeclaredTypes<'_>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        self.declaration_findings(primary, findings)?;
-        // Static types in binding order: each template's derivations, then the
-        // column-phase defaults, a shared default stating one derivation.
-        for declaration in self
-            .templates
-            .iter()
-            .flat_map(|template| &template.declarations)
-            .chain(&self.columns)
-        {
-            let start = findings.len();
-            if let RowOperation::Shared(branch) = &declaration.operation {
-                static_checks::derivation_types(&branch.operation, tree, declared, findings)?;
-            }
-            if declaration.handler.is_some() || findings.len() != start {
-                continue;
-            }
-            let column = &output.columns()[declaration.column];
-            let result = tree.result_type(declaration.value, ast::Scope::Row, declared)?;
-            if let Some(finding) =
-                types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
-            {
-                if !findings
-                    .iter()
-                    .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
-                {
-                    findings.push(BindFinding::Scalar(finding));
-                }
-            }
-        }
-        Ok(())
-    }
-    /// The contexts whose rows read lookup ranges, in binding's order
-    /// ([`lookup_range::check`]): the column phase, whose derivations and
-    /// dataset verifications (`verified`) evaluate for the rows of every
-    /// template, then each template, whose derivations and filter evaluate
-    /// for its rows only. A row's driver is the input behind its template,
-    /// named directly or through a named intermediate.
-    pub(super) fn range_contexts<'a>(
-        &'a self,
-        sources: &'a [SourceDeclaration],
-        named: &intermediates::Declarations,
-        verified: impl Iterator<Item = lookup_range::Evaluated<'a>>,
-    ) -> Vec<lookup_range::Declared<'a>> {
-        let Some(drivers) = self
-            .templates
-            .iter()
-            .map(|template| {
-                if sources.iter().any(|source| source.name == template.driver) {
-                    Some(template.driver.as_str())
-                } else {
-                    named
-                        .input(&template.driver)
-                        .and_then(|index| sources.get(index))
-                        .map(|source| source.name.as_str())
-                }
-            })
-            .collect::<Option<Vec<_>>>()
-        else {
-            return Vec::new();
-        };
-        let evaluated =
-            |declaration: &'a RowDeclaration, own: Option<&'a str>| match &declaration.operation {
-                RowOperation::Shared(branch) => {
-                    Some(lookup_range::Evaluated::Operation(&branch.operation, own))
-                }
-                RowOperation::Source(name) => Some(lookup_range::Evaluated::Name(name)),
-                RowOperation::ProjectFunction { call, .. } => {
-                    Some(lookup_range::Evaluated::Call(*call))
-                }
-                RowOperation::Output(_) => None,
-            };
-        // A column derivation evaluates only for the rows of the templates that
-        // leave the column to this phase (LOOKUP-9), and every driver binds
-        // it for its own rows. A column holding an aggregate binds once
-        // against the whole dataset, where every input joins unless every
-        // row template is driven by the input behind the first.
-        let column_phase = self
-            .columns
-            .iter()
-            .flat_map(|declaration| {
-                let leaving = self.templates.iter().zip(&drivers).filter(|(template, _)| {
-                    !template
-                        .declarations
-                        .iter()
-                        .any(|derived| derived.column == declaration.column)
-                });
-                let mut scopes: Vec<(Option<&str>, Vec<&str>)> = Vec::new();
-                if declaration.aggregates() {
-                    let own = drivers.first().copied().filter(|&primary| {
-                        self.templates
-                            .iter()
-                            .all(|template| template.driver == primary)
-                    });
-                    scopes.push((own, leaving.map(|(_, &driver)| driver).collect()));
-                } else {
-                    for (template, &driver) in leaving {
-                        let own = Some(template.driver.as_str());
-                        match scopes.iter_mut().find(|(known, _)| *known == own) {
-                            Some((_, inputs)) => inputs.push(driver),
-                            None => scopes.push((own, vec![driver])),
-                        }
-                    }
-                }
-                scopes.into_iter().filter_map(move |(own, inputs)| {
-                    evaluated(declaration.as_ref(), own).map(|evaluated| lookup_range::Declared {
-                        evaluated: vec![evaluated],
-                        drivers: inputs,
-                    })
-                })
-            })
-            .collect::<Vec<_>>();
-        let templates = self
-            .templates
-            .iter()
-            .zip(&drivers)
-            .map(|(template, &driver)| {
-                let mut evaluated = template
-                    .declarations
-                    .iter()
-                    .filter_map(|declaration| {
-                        evaluated(declaration.as_ref(), Some(&template.driver))
-                    })
-                    .collect::<Vec<_>>();
-                if let Some((_, Ok(filter))) = &template.filter {
-                    evaluated.extend(filter.identifiers().map(lookup_range::Evaluated::Name));
-                }
-                lookup_range::Declared {
-                    evaluated,
-                    drivers: vec![driver],
-                }
-            });
-        // A dataset verification evaluates for the rows of every template.
-        column_phase
-            .into_iter()
-            .chain(std::iter::once(lookup_range::Declared {
-                evaluated: verified.collect(),
-                drivers: drivers.clone(),
-            }))
-            .chain(templates)
-            .collect()
-    }
-    /// The driver of each binding [`Rows::bind`] makes of a column-phase
-    /// declaration: `primary` for a column holding a qualified aggregate
-    /// (LOOKUP-18), and otherwise each distinct driver of the row templates
-    /// that leave the column to this phase, in construction order.
-    fn column_drivers<'a>(
-        &'a self,
-        declaration: &RowDeclaration,
-        primary: &'a str,
-    ) -> Vec<&'a str> {
-        if declaration.aggregates() {
-            return vec![primary];
-        }
-        let mut drivers = Vec::new();
-        for template in &self.templates {
-            let leaves = !template
-                .declarations
-                .iter()
-                .any(|derived| derived.column == declaration.column);
-            if leaves && !drivers.contains(&template.driver.as_str()) {
-                drivers.push(template.driver.as_str());
-            }
-        }
-        drivers
-    }
-    fn declaration_findings(
-        &self,
-        primary: &str,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<(), BindError> {
-        let groups = self.column_groups();
-        let column_groups = groups
-            .iter()
-            .map(|(driver, group)| (*driver, group.as_slice()))
-            .collect::<Vec<_>>();
-        for declaration in &self.columns {
-            if let RowOperation::Shared(branch) = &declaration.operation {
-                let drivers = self.column_drivers(declaration, primary);
-                static_checks::scoped_branch(
-                    branch,
-                    Some(static_checks::Scope {
-                        drivers: &drivers,
-                        row: None,
-                        phase: Some(Phase::Column {
-                            groups: &column_groups,
-                        }),
-                    }),
-                    findings,
-                )?;
-            }
-        }
-        for (index, template) in self.templates.iter().enumerate() {
-            let groups = template
-                .groups
-                .as_ref()
-                .map(|group| group.iter().map(String::as_str).collect::<Vec<_>>());
-            if let Some((expression, compiled)) = &template.filter {
-                static_checks::predicate(
-                    compiled,
-                    expression,
-                    &format!("rows[{index}].filter"),
-                    findings,
-                )?;
-            }
-            let driver = [template.driver.as_str()];
-            for declaration in &template.declarations {
-                if let RowOperation::Shared(branch) = &declaration.operation {
-                    static_checks::scoped_branch(
-                        branch,
-                        Some(static_checks::Scope {
-                            drivers: &driver,
-                            row: Some(&template.id),
-                            phase: Some(Phase::Row {
-                                group_by: groups.as_deref(),
-                            }),
-                        }),
-                        findings,
-                    )?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2672,13 +2493,17 @@ mod tests {
         .unwrap();
         let mut findings = Vec::new();
         let declared = types::DeclaredTypes::default();
-        let extraction = str_extract::Prepared::new(&document, &declared, &mut findings).unwrap();
+        let extraction =
+            str_extract::Prepared::new(&document, Vec::new(), &declared, &mut findings).unwrap();
         let string_templates =
-            str_template::Prepared::new(&document, &output, &declared, &mut findings).unwrap();
+            str_template::Prepared::new(&document, &[], Vec::new(), &declared, &mut findings)
+                .unwrap();
         assert!(findings.is_empty());
         let intermediates = intermediates::Declarations::default();
+        let tree = crate::front_end::v0_5::lower_document(&document, None);
         Rows::prepare(
             &document,
+            &tree,
             &output,
             "SRC",
             None,

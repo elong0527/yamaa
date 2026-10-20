@@ -431,3 +431,176 @@ fn a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root() {
         refused(&[*diagnostic], "prepare");
     }
 }
+
+/// Records the written path of every request, then serves it from `files`.
+#[cfg(feature = "yaml")]
+struct Asked<R> {
+    files: R,
+    written: std::sync::Mutex<Vec<String>>,
+}
+#[cfg(feature = "yaml")]
+impl<R: Resolver> Resolver for Asked<R> {
+    fn request(&self, request: Request<'_>) -> Result<Reply, Failure> {
+        self.written.lock().unwrap().push(request.written.into());
+        self.files.request(request)
+    }
+}
+
+/// FILE-5 and LAYER-2: a `parent` spelled with an empty segment, a trailing
+/// separator, a network share's root or a backslash fails validation with
+/// the written-form condition at `parent`, naming the path as written, never
+/// with the engine's own refusal. The spelling is judged before any resolver
+/// is asked for the parent: the local file resolver or a caller's, which here
+/// would serve the name.
+#[cfg(feature = "yaml")]
+#[test]
+fn a_malformed_parent_spelling_is_refused_as_written_on_every_route() {
+    use yamaa_adapters::file_preparation::{Error as Prepared, FileSpecification};
+    use yamaa_core::project_function::Language;
+    const PARENT: &[u8] = b"schema_version: '1.0'\ndomain: BASE\nkeys: [ID]\ninput: {SRC: {path: src.csv, types: {ID: int}}}\noutput: {path: out.csv, columns: [ID]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n";
+    let identity = || yamaa_adapters::specification_report::Identity {
+        runtime: "rust",
+        runtime_version: "test",
+        engine_version: yamaa_core::VERSION,
+        example: "domain",
+        specification: "child.yaml",
+        base_directory: ".",
+    };
+    let directory =
+        std::env::temp_dir().join(format!("yamaa-malformed-parent-{}", std::process::id()));
+    std::fs::create_dir_all(directory.join("std")).unwrap();
+    std::fs::write(directory.join("std/base.yaml"), PARENT).unwrap();
+    let directory = yamaa_adapters::canonical_path::canonicalize(&directory).unwrap();
+    let child = directory.join("child.yaml");
+    let child = child.to_str().unwrap();
+    for parent in [
+        "std//base.yaml",
+        "std/base.yaml/",
+        "//server/share/std/base.yaml",
+        "std\\base.yaml",
+    ] {
+        let entry = format!("schema_version: '1.0'\nparent: '{parent}'\ndomain: CHILD\n");
+        let refused = |issues: &[yamaa_core::diagnostic::Diagnostic], route: &str| {
+            assert_eq!(issues.len(), 1, "{parent} {route}: {issues:?}");
+            let issue = &issues[0];
+            assert_eq!(
+                (issue.phase(), issue.condition()),
+                ("validation", "resource_path_not_normalized"),
+                "{parent} {route}"
+            );
+            assert_eq!(issue.spec_paths, ["parent"], "{parent} {route}");
+            assert_eq!(
+                yamaa_core::json::Value::Object(issue.context.clone()),
+                yamaa_adapters::json!({"path": parent}),
+                "{parent} {route}"
+            );
+        };
+        // Through the local file resolver.
+        std::fs::write(child, &entry).unwrap();
+        let request = || yamaa_core::build::Request {
+            specification: child,
+            environment: None,
+        };
+        let Err(error) = yamaa_adapters::file_workflow::select_request(request(), Language::Python)
+        else {
+            panic!("{parent}: a malformed parent was selected");
+        };
+        refused(
+            &yamaa_adapters::project_application::selection_failure(&error),
+            "select",
+        );
+        refused(
+            &yamaa_adapters::file_application::check(Language::Python, request(), identity()),
+            "check",
+        );
+        let Err(issues) =
+            yamaa_adapters::resolved_artifact::resolve(child, None, Language::Python, None)
+        else {
+            panic!("{parent}: resolved a malformed parent");
+        };
+        refused(&issues, "resolve");
+        let resources = Resources::for_entry(directory.to_str().unwrap()).unwrap();
+        let Err(Prepared::PreparationFinding { diagnostic, .. }) =
+            FileSpecification::prepare(resources, "child.yaml")
+        else {
+            panic!("{parent}: the refusal lost its finding");
+        };
+        refused(&[*diagnostic], "prepare");
+        // Through a caller's resolver that serves the parent under that name.
+        let served = || {
+            let files = MemoryResolver::default();
+            files.insert(
+                "/",
+                "child.yaml",
+                "memory:/child.yaml",
+                Arc::from(entry.as_bytes()),
+            );
+            files.insert(
+                "/child.yaml",
+                parent,
+                "memory:/base.yaml",
+                Arc::from(PARENT),
+            );
+            Arc::new(Asked {
+                files,
+                written: std::sync::Mutex::new(Vec::new()),
+            })
+        };
+        let resolver = served();
+        let Err(error) = yamaa_adapters::file_workflow::select_with_resolver(
+            request_named("child.yaml"),
+            Language::Python,
+            resolver.clone(),
+        ) else {
+            panic!("{parent}: a caller's resolver selected a malformed parent");
+        };
+        refused(
+            &yamaa_adapters::project_application::selection_failure(&error),
+            "select through a resolver",
+        );
+        assert!(
+            resolver
+                .written
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|written| written == "child.yaml"),
+            "{parent}: {:?}",
+            resolver.written.lock().unwrap()
+        );
+        refused(
+            &yamaa_adapters::file_application::check_with_resolver(
+                Language::Python,
+                request_named("child.yaml"),
+                identity(),
+                Some(served()),
+            ),
+            "check through a resolver",
+        );
+        let Err(issues) = yamaa_adapters::resolved_artifact::resolve(
+            "child.yaml",
+            None,
+            Language::Python,
+            Some(served()),
+        ) else {
+            panic!("{parent}: resolved a malformed parent through a resolver");
+        };
+        refused(&issues, "resolve through a resolver");
+        let Err(Prepared::PreparationFinding { diagnostic, .. }) = FileSpecification::prepare(
+            Resources::with_resolver(served(), "child.yaml"),
+            "child.yaml",
+        ) else {
+            panic!("{parent}: the refusal through a resolver lost its finding");
+        };
+        refused(&[*diagnostic], "prepare through a resolver");
+    }
+    std::fs::remove_dir_all(&directory).unwrap();
+}
+
+#[cfg(feature = "yaml")]
+fn request_named(specification: &str) -> yamaa_core::build::Request<'_> {
+    yamaa_core::build::Request {
+        specification,
+        environment: None,
+    }
+}

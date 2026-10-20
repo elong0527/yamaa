@@ -1518,14 +1518,17 @@ mod file {
             assert_eq!(resources.capture("c"), Err(Error::Changed));
             assert_eq!(first.as_ref(), b"original");
             assert_eq!(resources.capture_reads(), 1);
-            // Once no held name reaches the file, another name of it captures
-            // its current bytes as a snapshot of its own.
+            // Removing the captured name does not make the rewrite readable:
+            // `c` still reaches the file the snapshot was taken from.
             fs::remove_file(study.path("project/spec/a")).unwrap();
-            let (next, created) = resources.capture("c").unwrap();
-            assert!(created);
-            assert_eq!(next.as_ref(), b"changed!");
+            assert_eq!(resources.capture("c"), Err(Error::Changed));
             assert_eq!(resources.capture("a"), Err(Error::Missing));
-            assert!(!resources.capture("c").unwrap().1);
+            assert_eq!(resources.capture("c"), Err(Error::Changed));
+            assert_eq!(first.as_ref(), b"original");
+            assert_eq!(resources.capture_reads(), 1);
+            // A scope that starts after the change reads the current bytes.
+            let mut later = study.resources();
+            assert_eq!(later.capture("c").unwrap().0.as_ref(), b"changed!");
         }
 
         #[test]
