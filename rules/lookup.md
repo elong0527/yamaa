@@ -26,11 +26,11 @@ Evidence: `schema-lookup-source-range`, `schema-lookup-filters`, `schema-aggrega
 
 | Step | Implicit join | Named intermediate | Qualified aggregate |
 | --- | --- | --- | --- |
-| Match keys | The applicable output keys ([LOOKUP-1](#lookup-1)) | `key`, or the applicable keys ([LOOKUP-5](#lookup-5)) | `key`, or the applicable keys |
+| Match keys | The input's `key` ([LOOKUP-1](#lookup-1)) | `key` ([LOOKUP-3](#lookup-3)) | `key`, or the input's `key` ([LOOKUP-5](#lookup-5)) |
 | Match range | `between` on a structured `source:` | `between` | `between` |
 | Narrow | `filter` on a structured `source:`, over the donor record | `filter`, which may also read the current row's driver | `filter`, over the donor record |
 | Select | `order_by` and `keep` | `order_by` and `keep` | The reduction of `expr` over every candidate ([LOOKUP-18](#lookup-18)) |
-| Answer absence | `absent`, missing by default, or `require_match` | `no_match`, missing by default, or `require_match` | Missing, uncounted ([FORMULA-24](formulas.md#formula-24)) |
+| Answer absence | `absent`, missing by default, or `require_match` | `absent`, missing by default, or `require_match` | Missing, uncounted ([FORMULA-24](formulas.md#formula-24)) |
 
 A step a lookup does not declare keeps every record: without `between` every
 record whose keys match is in range, and without `filter` every matched record
@@ -48,15 +48,19 @@ The current row's match values and range value are evaluated before any
 record is read, so a failure there is reported before any record is matched
 or narrowed. A missing one seeks no record, and absence is answered.
 
-Each kind adds only what it needs. An implicit join infers its keys and
-declares no `key` ([LOOKUP-1](#lookup-1)). A named intermediate is read
-through its id, and every column reading it for a row shares one selection
+Each kind adds only what it needs. An implicit join declares no `key` of its
+own and matches on its input's ([LOOKUP-1](#lookup-1)). A named intermediate is
+read through its id, and every column reading it for a row shares one selection
 ([LOOKUP-12](#lookup-12)). An aggregate reduces every candidate instead of
-selecting one, so it declares no `order_by` or `keep`. An unqualified
-aggregate and a grouped-row aggregate are not lookups: they reduce the
-constructed output rows of a partition or the current input group, which
-their `filter` narrows ([LOOKUP-8](#lookup-8)), and declare no `between`
-([LOOKUP-19](#lookup-19)).
+selecting one, so it declares no `order_by` or `keep`. An unqualified aggregate
+and a grouped-row aggregate are not lookups: they reduce the constructed output
+rows of a partition or the current input group, which their `filter` narrows
+([LOOKUP-8](#lookup-8)), and declare no `between` ([LOOKUP-19](#lookup-19)).
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where an implicit join, and a named intermediate or a
+qualified aggregate without `key`, match on the applicable output keys
+([LOOKUP-5](#lookup-5)), and an intermediate answers absence with `no_match`.
 
 <a id="lookup-9"></a>
 
@@ -348,8 +352,8 @@ it matched them with, and `keys` names the output row a failure belongs to.
 An unmatched key and an unhandled multiple match report the match the same
 way, and `unmatched_key` carries the sought source values. Validation reports
 the source/key pairs of every lookup and implicit join: the match performed,
-the type each side declares, whether the pairs were inferred or declared, and
-the absence policy that answers a miss.
+the type each side declares, whether the lookup or its input declares the
+pairs, and the absence policy that answers a miss.
 
 Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`.
 
@@ -367,18 +371,18 @@ match does.
 
 <a id="lookup-5"></a>
 
-### LOOKUP-5. A key pairs each column of the lookup's relation with a current-row match value, and an omitted key is the applicable output keys
+### LOOKUP-5. A key pairs each column of the lookup's relation with a current-row match value
 
 `key` states the match as pairs, each a column of the lookup's relation and
 the current-row match value it must equal. A list of column names pairs each
 with the same-named current-row value; a mapping pairs each column, written as
-its key, with a variable or expression. An implicit join, and a named
-intermediate or qualified aggregate without `key`, pair the applicable output
-keys ([LOOKUP-1](#lookup-1)). A lookup names at least one pair, every column
-must exist, and every match value must read a known current-row value.
+its key, with a variable or expression. A named intermediate states its own
+`key`; an implicit join, and a qualified aggregate without `key`, use the
+input's declared `key`. A lookup names at least one pair, every column must
+exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
-Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-aggregate-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`.
+Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-aggregate-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs`, `rust/crates/yamaa-core/src/key_relation.rs::a_declared_key_pairs_every_column_it_names`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`.
 
 ```yaml
 intermediates:
@@ -393,29 +397,31 @@ list `[TESTCD, SEX]` would have matched `TESTCD` against a current-row
 may pair a column with the same-named value, and a match value may be an
 expression ([LOOKUP-6](#lookup-6)). Pair order does not change the result.
 
-The applicable keys are the output `keys`, in output-key order, that the
-lookup's relation also carries, each paired with the current row's same-named
-value. An implicit join always matches them. A named intermediate or a
-qualified aggregate matches them when it omits `key`, and states `key` only
-when the intended match differs. With no applicable key the intended match is
-unclear, and the lookup fails as `no_applicable_keys`, reporting the dataset
-and the output keys with a hint: declare the `key` explicitly, or, for an
-implicit join, read the dataset through a named intermediate that declares
-it.
+An input's `key` is a list: each column it names is paired with the current
+row's same-named value, the row's column in column derivation and the row
+template's driver field in row construction ([LOOKUP-2](#lookup-2)). An
+implicit join to the input, and a qualified aggregate over it that declares no
+`key` of its own, match on every column it names. A read of an input that
+declares no `key` names no pair and fails as `no_applicable_keys` at the
+read, naming the input and the `key` to declare. A named intermediate never
+falls back to its input's key ([LOOKUP-3](#lookup-3)).
 
 A written `key` names at least one pair. An empty list or mapping names no
-match and fails as `invalid_field_type`, on a named intermediate and an
-aggregate alike. A named intermediate's list names each column once; a column
-listed again fails as `invalid_field_type` at that entry, reporting the
-column.
+match and fails as `invalid_field_type`, on a named intermediate, an
+aggregate and an input alike. A named intermediate's or an input's list names
+each column once; a column listed again fails as `invalid_field_type` at that
+entry, reporting the column.
 
 A `key` column the lookup's relation does not have fails as `unknown_field`.
 Every match value must read a known current-row value: a variable must name
 one, and every identifier an expression reads must be one, or the match fails
-as `unknown_field`. `SELF` names donor rows and is never a current-row scope,
-so a match value written `SELF.field` names no current-row value and fails the
-same way; when the current row carries `field`, the diagnostic suggests that
-bare name.
+as `unknown_field`. An input's key is checked where an implicit join or a
+keyless qualified aggregate reads it, at that read: a column the input does not
+store fails naming `INPUT.COLUMN`, and one the specification declares no column
+of fails naming the column. A `key` that no read uses is admitted. `SELF` names
+donor rows and is never a current-row scope, so a match value written
+`SELF.field` names no current-row value and fails the same way; when the
+current row carries `field`, the diagnostic suggests that bare name.
 
 A match value read from an input's record names the driver of every row that
 reads the lookup, wherever the lookup is read: in a row template's derivations
@@ -437,6 +443,14 @@ repair, not a wider comparison.
 A grouped-row aggregate reads its own input group and declares no key pairs:
 the group is the match, and a `key` there fails as `invalid_aggregate_context`
 ([LOOKUP-19](#lookup-19)).
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where an input declares no `key`, and an implicit join,
+and a named intermediate or qualified aggregate without `key`, pair the
+applicable keys: the output `keys`, in output-key order, that the lookup's
+relation also carries, each paired with the current row's same-named value.
+With no applicable key the lookup fails as `no_applicable_keys`, reporting the
+dataset and the output keys with a hint.
 
 <a id="lookup-6"></a>
 
@@ -466,22 +480,23 @@ holds for a named intermediate's and an aggregate's `key` alike.
 
 <a id="lookup-1"></a>
 
-### LOOKUP-1. A dataset-qualified source reads through the implicit join on the applicable output keys
+### LOOKUP-1. A dataset-qualified source reads through the implicit join on the input's declared key
 
-A scalar source qualified by a dataset reads it through the implicit join, a
-lookup whose key pairs are the applicable keys: the output `keys`, in
-output-key order, that the dataset also carries, each matched against the
-current row's same-named value. A structured `source:` binding adds its
-`between`, `filter`, `order_by`, `keep`, `absent` and `require_match` to the
-join ([LOOKUP-25](#lookup-25)). The join gives one value per current row and
-preserves the row. The qualifier of the row template's driver is not a join.
+A scalar source qualified by an input reads it through the implicit join, a
+lookup whose key pairs are that input's declared `key` columns, each matched
+against the current row's column of the same name. A structured `source:`
+binding adds its `between`, `filter`, `order_by`, `keep`, `absent` and
+`require_match` to the join ([LOOKUP-25](#lookup-25)). The join gives one
+value per current row and preserves the row. A qualified read of an input
+that declares no `key` fails validation, and the qualifier of the row
+template's driver is not a join.
 
-Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
+Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `sdtm-sv-subject-visits`, `negative-input-require-match`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_implicit_join_matches_on_the_input_s_declared_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_read_of_an_input_without_key_has_no_applicable_keys`.
 
 ```yaml
 input:
-  ADSL: {path: adsl.csv, require_match: true}
-  PERIODS: periods.csv
+  ADSL: {path: adsl.csv, key: [STUDYID, USUBJID], require_match: true}
+  PERIODS: {path: periods.csv, key: [STUDYID, USUBJID]}
 columns:
   - name: TRTSDTM
     derivation: ADSL.TRTSDTM
@@ -494,15 +509,16 @@ columns:
 
 The driver's qualifier reads the input or intermediate record that built the
 row. A `between` value is not a scalar source and never joins: it reads the
-current row alone ([LOOKUP-9](#lookup-9)). An applicable key compares its two
-sides as the match step does, and [VALUE-2](values.md#value-2) performs no
-implicit conversion: a key whose left and right types are not mutually
+current row alone ([LOOKUP-9](#lookup-9)). Each declared key column compares
+its two sides as the match step does, and [VALUE-2](values.md#value-2) performs
+no implicit conversion: a key whose left and right types are not mutually
 comparable fails as `incompatible_input_type`, reporting both types
-([LOOKUP-9](#lookup-9)). With no applicable key the
-intended match is unclear, and the read fails as `no_applicable_keys`
-([LOOKUP-5](#lookup-5)). The author then states the match with a named
-intermediate declaring its `key`, the same explicit form that serves whenever
-the intended keys differ from the applicable keys.
+([LOOKUP-9](#lookup-9)). A qualified read of an input that declares no `key`
+fails as `no_applicable_keys` at the read, naming the input
+([LOOKUP-5](#lookup-5)). An input that drives some row templates and is read on
+the rows others build needs its `key` too ([NAME-4](names.md#name-4)). A named
+intermediate declaring its own `key` states a match that differs from the
+input's.
 
 A structured `source:` binding, or a filtered source that carries a variable
 with its range, filter, selection or absent value, keeps them on the implicit
@@ -520,20 +536,26 @@ and gives missing for a row with no match, counted at its path except in a
 predicate ([LOOKUP-24](#lookup-24)). `require_match: true` on the input covers
 every one of these reads.
 
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where the implicit join matches on the applicable keys:
+the output `keys`, in output-key order, that the input also stores, each
+matched against the current row's same-named value; with none, the read
+fails as `no_applicable_keys` ([LOOKUP-5](#lookup-5)).
+
 <a id="lookup-2"></a>
 
 ### LOOKUP-2. Row construction reads another dataset through the same join, using only row-phase values
 
 During ungrouped row construction, a scalar source qualified with another
-input dataset joins that dataset on the applicable keys, each matching the
-same-named field of the row template's input record. During grouped row
-construction each applicable key instead matches the candidate's group-key
-value, and every applicable key must be a group key of the row template. A
-match value must be available in the row phase; one available only in a later
-phase fails.
+input dataset joins that dataset on the input's declared key, each column
+matching the same-named field of the row template's input record. During
+grouped row construction each key column instead matches the candidate's
+group-key value, and every key column must be a group key of the row
+template. A match value must be available in the row phase; one available
+only in a later phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
-Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
+Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_template_s_join_matches_the_driver_on_the_declared_key`.
 
 In ungrouped row construction each retained input record builds one candidate
 row ([ROW-3](rows.md#row-3)). The input record's fields are
@@ -545,12 +567,14 @@ value per row, and later derivations in the same row template read that value
 through the bound column. A row-phase `compute` still names no qualified
 cross-dataset identifier ([FORMULA-9](formulas.md#formula-9)).
 
-In grouped row construction every applicable key must be a group key of the
-row template ([ROW-4](rows.md#row-4)). A key the group does not
+In grouped row construction every declared key column must be a group key of
+the row template ([ROW-4](rows.md#row-4)). A key the group does not
 carry varies within the group and names no single match value, and fails as
 `ungrouped_driver_field` ([ROW-5](rows.md#row-5)). A key no
 input record carries fails as `unknown_field`
-([NAME-3](names.md#name-3)), in either mode.
+([NAME-3](names.md#name-3)), in either mode. A file that declares
+`schema_version` is read under the rules at the `yamaa-v0.5.0` tag, where the
+join matches on the applicable keys instead ([LOOKUP-1](#lookup-1)).
 
 A `between` value has the same availability as a match value
 ([LOOKUP-9](#lookup-9)): during ungrouped row construction it reads a field of
@@ -586,16 +610,17 @@ derivation, and a later-phase one fails as that derivation's read does
 
 <a id="lookup-3"></a>
 
-### LOOKUP-3. A named intermediate declares an id and a dataset, and an omitted key is the applicable keys
+### LOOKUP-3. A named intermediate declares an id, a dataset and a key
 
-An entry of `intermediates` declares `id` and `dataset`, the relation it
-reads; `key` is optional. Its `id` shares one naming list with dataset
-identifiers, other lookup ids and the output `domain`, and a collision fails.
-An omitted `key` is the applicable keys ([LOOKUP-5](#lookup-5)), and a `key`
-is stated only when the intended match differs from that inferred match.
+An entry of `intermediates` declares `id`, `dataset`, the relation it reads,
+and `key`, its match ([LOOKUP-5](#lookup-5)), unless it drives a row
+template, which declares none ([ROW-2](rows.md#row-2)). Its `id` shares one
+naming list with dataset identifiers, other lookup ids and the output
+`domain`, and a collision fails. An intermediate read as a lookup without
+`key` fails as `missing_required_field`.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
-Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`.
+Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_read_as_a_lookup_requires_its_key`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::a_row_driver_read_as_a_lookup_is_refused_at_its_key`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::an_intermediate_without_key_is_refused_unless_it_drives_rows`.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -606,20 +631,11 @@ survive `filter` ([LOOKUP-25](#lookup-25)).
 
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
-rule cited. An omitted `key` with no applicable key fails as
-`no_applicable_keys` ([LOOKUP-5](#lookup-5)).
-
-```yaml
-intermediates:
-  - id: DEATHEV
-    dataset: AE
-    filter: "AE.AEOUT = 'FATAL'"
-    order_by: [AE.ASTDT]
-    keep: last
-```
-
-The lookup above matches on the applicable output keys. The form below states
-the same match explicitly:
+rule cited. An intermediate that drives no row template and declares no `key`
+fails as `missing_required_field` at its `key` before any input is read, its
+context naming the field and its class as the schema's does; a row template's
+driver read as a lookup by the rows another template builds fails the same
+way. An intermediate never falls back to its input's `key`.
 
 ```yaml
 intermediates:
@@ -631,32 +647,44 @@ intermediates:
     keep: last
 ```
 
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where `key` is optional: an omitted `key` is the
+applicable keys ([LOOKUP-5](#lookup-5)), and with no applicable key the
+intermediate fails as `no_applicable_keys`.
+
 <a id="lookup-4"></a>
 
 ### LOOKUP-4. A named intermediate must narrow, derive or reshape its dataset
 
 A named intermediate must narrow, derive or reshape its dataset, or declare
-`require_match: true`. An intermediate that declares nothing beyond `id` and
-`dataset`, with or without `no_match: {literal: null}`, reads exactly what the
-implicit join reads ([LOOKUP-1](#lookup-1)) and fails: read the input dataset
-directly instead of aliasing it. Composition preserves this refusal even when
-no output reads the declaration.
+`require_match: true`. An intermediate that declares nothing beyond `id`,
+`dataset` and a `key` listing its input's declared `key`, with or without
+`absent: null`, reads exactly what the implicit join reads
+([LOOKUP-1](#lookup-1)) and fails: read the input dataset directly instead of
+aliasing it. Composition preserves this refusal even when no output reads the
+declaration.
 
 Fails: `rename_only_intermediate`.
-Evidence: `negative-lookup-rename-intermediate`, `sdtm-cm-whodrug-coding`.
+Evidence: `negative-lookup-rename-intermediate`, `sdtm-cm-whodrug-coding`, `rust/crates/yamaa-core/src/specification/declared_keys.rs::an_intermediate_keyed_as_its_input_only_renames_it`.
 
 ```yaml
 # rejected: CODED adds nothing to CODING
+input:
+  CODING: {path: coding.csv, key: [STUDYID, USUBJID, CMSEQ]}
 intermediates:
   - id: CODED
     dataset: CODING
-    no_match: {literal: null}
+    key: [STUDYID, USUBJID, CMSEQ]
+    absent: null
 ```
 
-Without `no_match` the intermediate answers a row without a record with
+Without `absent` the intermediate answers a row without a record with
 missing as well ([LOOKUP-24](#lookup-24)), so omitting the line changes
-nothing. Asserting a match is a change the implicit join cannot state:
-`require_match: true` makes the same declaration valid.
+nothing. The key's columns compare in any order, as pairs do
+([LOOKUP-5](#lookup-5)); a key that names other columns, or is written as a
+mapping, states a match of its own. Asserting a match is a change the
+implicit join cannot state: `require_match: true` makes the same declaration
+valid.
 
 Instead, qualify the dataset where it is read:
 
@@ -667,12 +695,17 @@ intermediates:
     key:
       DRUG_RECORD_NO: CODING.DRUG_RECORD_NO
       ATC_CODE: CODING.ATC_CODE
-    no_match: {literal: null}
+    absent: null
 ```
 
-An implicit join to `CODING` also needs matching output-key types. When the
+An implicit join to `CODING` also needs matching key types. When the
 output's `CMSEQ` is numeric but `CODING.CMSEQ` is stored as text, declare
 `CODING.CMSEQ` as `int` on input before reading `CODING.DRUG_RECORD_NO`.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where an intermediate that declares nothing beyond `id`
+and `dataset`, with or without `no_match: {literal: null}`, only renames its
+input.
 
 <a id="lookup-7"></a>
 
@@ -1190,7 +1223,7 @@ The context decides what `group_by` ([LOOKUP-19](#lookup-19)), `key`
 
 A qualified aggregate's `group_by` declares qualified right-side columns, and
 each must also be an output key; the reduction stays coarser than or equal to
-the applicable keys it joins on. An unqualified aggregate's `group_by`
+the key it joins on. An unqualified aggregate's `group_by`
 declares constructed output columns and must declare at least one; a reduction
 over the whole output is not registered. A grouped-row aggregate declares no
 local `group_by`: the enclosing `row.group_by` already fixes its current

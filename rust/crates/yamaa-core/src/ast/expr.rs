@@ -444,7 +444,8 @@ pub enum RankMethod {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Aggregate {
     /// `None` for a reduction of the output rows or of a grouped row's
-    /// records; [`JoinKey::Applicable`] for a keyless qualified aggregate.
+    /// records; for a keyless qualified aggregate, [`JoinKey::FromInput`] in
+    /// 1.0 and [`JoinKey::Applicable`] in 0.5.
     pub key: Option<JoinKey>,
     pub between: Option<Between>,
     pub filter: Option<ExprId>,

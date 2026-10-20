@@ -234,8 +234,14 @@ impl Implicit {
     ) -> Result<DatasetPlan, BindError> {
         let base = prepared.source().name.as_str();
         let keys = &prepared.keys;
-        let catalog =
-            row_drivers::joined_catalog(&prepared.output, source, base, keys, &secondary)?;
+        let catalog = row_drivers::joined_catalog(
+            prepared.tree.spec(),
+            &prepared.output,
+            source,
+            base,
+            keys,
+            &secondary,
+        )?;
         let mut assignments = BTreeMap::new();
         let mut dependencies = Vec::new();
         for (column, declaration) in self.declarations.iter().enumerate() {
@@ -878,8 +884,15 @@ fn bind_template(
         &template.driver,
         named_driver.and_then(|index| intermediates[index].as_ref()),
     )?;
-    let row_catalog =
-        row_drivers::extend_catalog(row_catalog, source, name, keys, secondary, &template.driver)?;
+    let row_catalog = row_drivers::extend_catalog(
+        tree.spec(),
+        row_catalog,
+        source,
+        name,
+        keys,
+        secondary,
+        &template.driver,
+    )?;
     let row_catalog = row_catalog.with_row_joins(&template.driver, template.groups.as_deref());
     let mode = match &template.groups {
         None => RowMode::Records,
@@ -1436,15 +1449,18 @@ impl Templates {
     ) -> Result<DatasetPlan, BindError> {
         // The whole-dataset catalog binds a column holding a qualified
         // aggregate; every other column binds against each driver's own.
-        let mut catalog = row_drivers::joined_catalog(output, source, name, keys, &secondary)?;
+        let spec = prepared.tree.spec();
+        let mut catalog =
+            row_drivers::joined_catalog(spec, output, source, name, keys, &secondary)?;
         if self
             .templates
             .iter()
             .any(|template| template.driver != name)
         {
             // The rows have no record owner shared by every template. Every
-            // stored source uses its captured port and output keys.
-            catalog = row_drivers::extend_catalog(catalog, source, name, keys, &secondary, "")?;
+            // stored source uses its captured port and its implicit join's key.
+            catalog =
+                row_drivers::extend_catalog(spec, catalog, source, name, keys, &secondary, "")?;
         }
         // Each template's scope and the column phase's grouping come from the
         // declarations alone, as `check()` reads them: the column phase checks
@@ -1532,7 +1548,7 @@ impl Templates {
                         // Resolve the driver as its row template does: an
                         // input's stored schema or the intermediate's visible
                         // fields, without the row joins, so another input
-                        // still joins on the output keys.
+                        // still joins on its implicit join's key.
                         let (port, driver_source, named_driver) = row_drivers::select(
                             source,
                             name,
@@ -1542,6 +1558,7 @@ impl Templates {
                             &intermediates,
                         )?;
                         column_catalog = row_drivers::extend_catalog(
+                            spec,
                             row_drivers::catalog_visible(
                                 output,
                                 driver_source,

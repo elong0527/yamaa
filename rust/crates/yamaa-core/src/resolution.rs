@@ -12,8 +12,8 @@
 //! is read, no function activated and nothing published.
 
 use crate::ast::{
-    DatasetCheckKind, Derivation, ExprId, ExprKind, Intermediate, JoinKey, KeyDecl, Literal, Named,
-    Role, Scope, Segment, Spec, Step,
+    DatasetCheckKind, Derivation, ExprId, ExprKind, Intermediate, JoinKey, Literal, Named, Role,
+    Scope, Segment, Spec, Step,
 };
 use crate::dependency_analysis;
 use crate::expression::{CompileError, Context};
@@ -118,6 +118,10 @@ impl Reading {
 /// The live declarations, by name, as reads find them.
 struct Live<'a> {
     spec: &'a Spec,
+    /// The one dataset whose records build every row, if every row template
+    /// shares it: a qualified read of it reads the row's own record, never a
+    /// join.
+    driver: Option<&'a str>,
     columns: BTreeSet<String>,
     inputs: BTreeSet<String>,
     intermediates: BTreeSet<String>,
@@ -125,23 +129,61 @@ struct Live<'a> {
 
 impl<'a> Live<'a> {
     fn new(spec: &'a Spec) -> Self {
+        let base = spec.rows.base.as_ref().map(|base| base.name.as_str()).or(
+            match spec.inputs.as_slice() {
+                [only] => Some(only.name.name.as_str()),
+                _ => None,
+            },
+        );
+        let mut drivers = spec.rows.templates.iter().map(|template| {
+            template
+                .driver
+                .as_ref()
+                .map(|driver| driver.name.as_str())
+                .or(base)
+        });
+        let driver = match drivers.next() {
+            None => base,
+            Some(first) => first.filter(|&first| drivers.all(|other| other == Some(first))),
+        };
         Self {
             spec,
+            driver,
             columns: BTreeSet::new(),
             inputs: BTreeSet::new(),
             intermediates: BTreeSet::new(),
         }
     }
 
+    /// The columns of the input `owner`'s declared `key`, which an implicit
+    /// join to it, or a qualified aggregate over it without `key`, matches
+    /// the current row on (LOOKUP-1, LOOKUP-5): read, and ordered before the
+    /// reader, but never an unknown dependency, since binding reports a
+    /// column the specification does not declare at the read.
+    fn key_reads(&self, owner: &str, out: &mut Vec<Reading>) {
+        out.extend(
+            self.spec
+                .input_key(owner)
+                .unwrap_or_default()
+                .iter()
+                .map(|column| Reading {
+                    name: column.name.clone(),
+                    kind: Kind::Predicate,
+                }),
+        );
+    }
+
     /// The names `root` reads in `scope` ([`Spec::reads`]), except an
     /// aggregate's own bindings and a range bound, which names a donor field;
-    /// and the key columns of an aggregate, each paired with the current
-    /// row's same-named value.
+    /// the key columns of an aggregate, each paired with the current row's
+    /// same-named value; and the declared key of each input an implicit join
+    /// or a keyless qualified aggregate reads ([`Live::key_reads`]).
     fn read(&self, root: ExprId, scope: Scope, out: &mut Vec<Reading>) -> Result<(), Error> {
         let spec = self.spec;
         let mut bounds = BTreeSet::new();
         let mut predicates = BTreeSet::new();
         let mut items = BTreeSet::new();
+        let mut keyless = BTreeSet::new();
         let mut failure = None;
         spec.walk(root, scope, |at, _| {
             match &spec.expr(at).kind {
@@ -157,11 +199,15 @@ impl<'a> Live<'a> {
                         predicates.extend(formula.names.iter().map(|&(_, name)| name));
                     }
                 }
-                ExprKind::Aggregate(aggregate) => {
-                    if let Some(JoinKey::Columns { columns, .. }) = &aggregate.key {
+                ExprKind::Aggregate(aggregate) => match &aggregate.key {
+                    Some(JoinKey::Columns { columns, .. }) => {
                         out.extend(columns.iter().map(Reading::variable));
                     }
-                }
+                    Some(JoinKey::FromInput) => {
+                        keyless.insert(at);
+                    }
+                    _ => {}
+                },
                 ExprKind::Odm(odm) => {
                     items.insert(odm.item);
                 }
@@ -177,6 +223,7 @@ impl<'a> Live<'a> {
         if let Some(failure) = failure {
             return Err(failure);
         }
+        let mut joined = BTreeSet::new();
         for read in spec.reads(root, scope) {
             if matches!(read.scope, Scope::Local(_)) || bounds.contains(&read.at) {
                 continue;
@@ -188,10 +235,25 @@ impl<'a> Live<'a> {
             } else {
                 Kind::Variable
             };
+            // A qualified read of the current row is an implicit join unless
+            // it reads the row's own driver record; a keyless qualified
+            // aggregate matches its relation's records on the relation's key,
+            // even when that relation drives the rows (LOOKUP-18).
+            let joins = |owner: &str| match read.scope {
+                Scope::Row => kind != Kind::Item && Some(owner) != self.driver,
+                Scope::Relation(aggregate) => keyless.contains(&aggregate),
+                Scope::Donor(_) | Scope::Local(_) => false,
+            };
+            if let Some(owner) = read.name.owner().filter(|&owner| joins(owner)) {
+                joined.insert(owner.to_string());
+            }
             out.push(Reading {
                 name: read.name.0,
                 kind,
             });
+        }
+        for owner in &joined {
+            self.key_reads(owner, out);
         }
         Ok(())
     }
@@ -530,20 +592,11 @@ impl<'a> Live<'a> {
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing reads what the implicit join reads (LOOKUP-4):
 /// in 0.5 one that writes no `key`, in 1.0 one whose `key` lists the columns
-/// of its input's declared key (D23, D71).
+/// of its input's declared key (D23, D71). A 1.0 one that writes no `key`
+/// stays a root too, for its `missing_required_field` (LOOKUP-3).
 fn rename_only(spec: &Spec, item: &Intermediate) -> bool {
-    fn names(columns: &[Named]) -> BTreeSet<&str> {
-        columns.iter().map(|column| column.name.as_str()).collect()
-    }
     let joins_as_input = match &item.key {
-        Some(JoinKey::Columns { columns, .. }) => spec
-            .inputs
-            .iter()
-            .rfind(|input| input.name.name == item.dataset.name)
-            .is_some_and(|input| match &input.key {
-                KeyDecl::Declared(declared) => names(declared) == names(columns),
-                KeyDecl::Inferred | KeyDecl::Undeclared => false,
-            }),
+        Some(JoinKey::Columns { .. }) => spec.keys_as_input(item),
         Some(JoinKey::Pairs { .. }) => false,
         Some(JoinKey::FromInput | JoinKey::Applicable) | None => true,
     };

@@ -463,7 +463,7 @@ impl<'d> Lower<'d> {
                 path,
             };
             // A 1.0 input declares the key its implicit joins and keyless
-            // qualified aggregates match on (P-JOIN-1); P1-6 binds it.
+            // qualified aggregates match on (P-JOIN-1).
             let key = if !self.v1() {
                 KeyDecl::Inferred
             } else if self.field(source, "key").is_some() {
@@ -645,7 +645,8 @@ impl<'d> Lower<'d> {
             // A 0.5 lookup without `key` infers the applicable keys at
             // binding; a driver of row templates has no key (ROW-2, D23-R1).
             // A 1.0 intermediate states its own key (D23), and one that does
-            // not keeps none here: P1-6 refuses it unless it drives rows.
+            // not keeps none here: the 1.0 front end refuses it unless it
+            // drives rows (LOOKUP-3).
             let key = match self.field(item, "key") {
                 Some(node) => {
                     let meta = self.field_meta(meta, "key", node);

@@ -24,6 +24,9 @@ pub(super) struct Declaration {
     keys: Option<Vec<(String, match_values::Declaration)>>,
     /// A written `key` that names no pair (LOOKUP-5).
     empty_key: bool,
+    /// A 1.0 aggregate without `key` of its own, which matches on its
+    /// input's declared `key` (LOOKUP-5, D63).
+    from_input: bool,
     output_keys: Vec<String>,
     filter: Option<(String, Result<CompiledExpression, CompileError>)>,
     derive: Option<Vec<DeriveDeclaration>>,
@@ -119,6 +122,7 @@ impl Declaration {
                 .collect::<Result<_, _>>()?,
             empty_key: keys.as_ref().is_some_and(Vec::is_empty),
             keys,
+            from_input: matches!(aggregate.key, Some(ast::JoinKey::FromInput)),
             output_keys: spec.keys.iter().map(|key| key.name.clone()).collect(),
             filter,
             derive,
@@ -617,6 +621,7 @@ type GroupOperands = (Vec<usize>, Vec<AggregateBinding>);
 fn bind_groups_and_operands(
     compiled: &CompiledExpression,
     declaration: &Declaration,
+    declared: Option<&[String]>,
     relation: Option<&str>,
     donor: AggregateSource,
     catalog: &Catalog,
@@ -669,14 +674,16 @@ fn bind_groups_and_operands(
     }
     // LOOKUP-19: a qualified aggregate's group_by columns must also be
     // output keys: the keys the reduction joins on, either its explicit
-    // `key` pairs or the defaults inferred from the output keys. The
+    // `key` pairs or the defaults: the output keys inferred applicable
+    // (0.5), or its input's declared `key` (1.0). The
     // Matched executor matches donor records on those keys only, so a
     // group_by column outside them would silently merge distinct groups.
     if matches!(phase, Phase::Column { .. }) && findings.len() == group_columns_before {
         if let Some(relation_name) = relation {
-            let applicable: Vec<&str> = match &declaration.keys {
-                Some(pairs) => pairs.iter().map(|(field, _)| field.as_str()).collect(),
-                None => declaration
+            let applicable: Vec<&str> = match (&declaration.keys, declared) {
+                (Some(pairs), _) => pairs.iter().map(|(field, _)| field.as_str()).collect(),
+                (None, Some(declared)) => declared.iter().map(String::as_str).collect(),
+                (None, None) => declaration
                     .output_keys
                     .iter()
                     .map(String::as_str)
@@ -889,6 +896,7 @@ fn bound_relation(
     donor: AggregateSource,
     group_columns: Vec<usize>,
     declaration: &Declaration,
+    declared: Option<&[String]>,
     compiled: &CompiledExpression,
     catalog: &Catalog,
     secondary: &[SecondarySource],
@@ -932,32 +940,56 @@ fn bound_relation(
                         plan.spec_path()
                     })
             };
-            let defaults = declaration
-                .output_keys
-                .iter()
-                .filter(|name| {
-                    let written = format!("{relation}.{name}");
-                    match donor {
-                        AggregateSource::Primary => catalog.bind(&written).is_some(),
-                        AggregateSource::Secondary(index) => secondary[index]
-                            .schema
-                            .columns()
-                            .iter()
-                            .any(|column| column.name == **name),
-                    }
-                })
-                .map(|name| {
-                    (
-                        name.clone(),
-                        match_values::Declaration::Variable(name.clone()),
-                    )
-                })
-                .collect::<Vec<_>>();
+            // Without `key`: the applicable output keys (0.5), or the input's
+            // declared key, each column paired with the current row's
+            // same-named value (1.0).
+            let defaults = match declared {
+                Some(declared) => declared
+                    .iter()
+                    .map(|name| {
+                        (
+                            name.clone(),
+                            match_values::Declaration::Variable(name.clone()),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                None => declaration
+                    .output_keys
+                    .iter()
+                    .filter(|name| {
+                        let written = format!("{relation}.{name}");
+                        match donor {
+                            AggregateSource::Primary => catalog.bind(&written).is_some(),
+                            AggregateSource::Secondary(index) => secondary[index]
+                                .schema
+                                .columns()
+                                .iter()
+                                .any(|column| column.name == **name),
+                        }
+                    })
+                    .map(|name| {
+                        (
+                            name.clone(),
+                            match_values::Declaration::Variable(name.clone()),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            };
             let pairs = declaration.keys.as_ref().unwrap_or(&defaults);
             if pairs.is_empty() {
                 if declaration.empty_key {
                     finding(
                         Finding::MissingKeys {
+                            path: &declaration.path,
+                            dataset: relation,
+                        },
+                        findings,
+                    )?;
+                    return Ok(None);
+                }
+                if declared.is_some() {
+                    finding(
+                        Finding::UndeclaredInputKey {
                             path: &declaration.path,
                             dataset: relation,
                         },
@@ -1197,9 +1229,20 @@ pub(super) fn bind(
         } => groups.to_vec(),
         _ => declaration.groups.iter().map(String::as_str).collect(),
     };
+    // A 1.0 aggregate without `key` of its own matches on its input's
+    // declared `key`, none when the input declares none (LOOKUP-5, D63).
+    let declared = declaration.from_input.then(|| {
+        relation
+            .and_then(|relation| tree.spec().input_key(relation))
+            .unwrap_or_default()
+            .iter()
+            .map(|column| column.name.clone())
+            .collect::<Vec<_>>()
+    });
     let Some((group_columns, bindings)) = bind_groups_and_operands(
         compiled,
         declaration,
+        declared.as_deref(),
         relation,
         donor,
         catalog,
@@ -1221,6 +1264,7 @@ pub(super) fn bind(
         donor,
         group_columns,
         declaration,
+        declared.as_deref(),
         compiled,
         catalog,
         secondary,

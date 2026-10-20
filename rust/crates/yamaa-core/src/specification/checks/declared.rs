@@ -848,9 +848,9 @@ impl Checks<'_> {
             }
         }
         // A qualified reduction matches donor records on its keys alone, so
-        // each group is a key: a declared key's field, or else an output key,
-        // which a group the relation stores is then applicable on
-        // (LOOKUP-19).
+        // each group is a key: a declared key's field, the field of its 1.0
+        // input's declared key, or else an output key, which a group the
+        // relation stores is then applicable on (LOOKUP-19).
         if let Some(relation) = relation {
             let applicable = match &aggregate.key {
                 Some(JoinKey::Columns { columns, .. }) => {
@@ -859,6 +859,12 @@ impl Checks<'_> {
                 Some(JoinKey::Pairs { pairs, .. }) => pairs
                     .iter()
                     .map(|(column, _)| column.name.as_str())
+                    .collect(),
+                Some(JoinKey::FromInput) => spec
+                    .input_key(relation)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|column| column.name.as_str())
                     .collect(),
                 _ => spec
                     .keys
@@ -1333,8 +1339,10 @@ impl Checks<'_> {
     /// output rows an unqualified aggregate reduces, and the columns each
     /// named intermediate it reads matches on, unless the intermediate drives
     /// the rows. A window reads output columns alone. A field another input
-    /// supplies through an implicit join also depends on the output keys that
-    /// input stores, which only its captured schema decides.
+    /// supplies through an implicit join also depends on the columns that
+    /// join matches on: in 1.0 the input's declared key (LOOKUP-1); in 0.5
+    /// the output keys that input stores, which only its captured schema
+    /// decides.
     fn edges(&self, root: ExprId, driver: &str) -> Vec<usize> {
         let spec = self.spec;
         let output = |name: &str| {
@@ -1364,7 +1372,20 @@ impl Checks<'_> {
                     _ => {}
                 },
                 ast::Scope::Row if lookup => edges.extend(self.matched(name)),
-                ast::Scope::Row => edges.extend(output(name)),
+                ast::Scope::Row => {
+                    edges.extend(output(name));
+                    let joined = read.name.owner().filter(|&owner| {
+                        owner != driver && !spec.header.surface.infers_join_keys()
+                    });
+                    if let Some(input) = joined {
+                        edges.extend(
+                            spec.input_key(input)
+                                .unwrap_or_default()
+                                .iter()
+                                .filter_map(|column| output(&column.name)),
+                        );
+                    }
+                }
                 _ => {}
             }
         }
