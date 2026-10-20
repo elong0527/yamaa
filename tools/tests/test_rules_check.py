@@ -415,7 +415,7 @@ class RuleCheckTests(unittest.TestCase):
         self.write("README.md", "# Home\n")
         self.write(
             "docs/articles/page.md",
-            "# Page\n\n[Rules](rules.md#rule-files) [Index](../reference/requirements.md#x)"
+            "# Page\n\n[Rules](rules.md#rule-files) [Index](../reference/rule-index.md#x)"
             " [Dashboards](../benchmark/index.md) [Home](../index.md)"
             " [Web](https://example.org/x.md#y)\n",
         )

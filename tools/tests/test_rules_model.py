@@ -242,7 +242,7 @@ class RuleFileTests(unittest.TestCase):
             "rust/target/doc/x.md",
             "docs/benchmark/index.md",
             "yamaa.egg-info/x.md",
-            "rules/reference/requirements.md",
+            "rules/reference/rule-index.md",
             "docs/page.md",
         ):
             write(self.root, relative, "# Page\n")
@@ -259,7 +259,7 @@ class RuleFileTests(unittest.TestCase):
             "rust/target/doc/x.md",
             "docs/benchmark/index.md",
             "yamaa.egg-info/x.md",
-            "rules/reference/requirements.md",
+            "rules/reference/rule-index.md",
         ):
             self.assertNotIn(skipped, found)
 

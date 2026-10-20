@@ -38,7 +38,7 @@ replay the same parser vectors.
 | [rules/](../rules/README.md) | Normative contracts |
 | [Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) | Generated shapes, defaults, and semantic links |
 | [Schema fields (1.0)](https://elong0527.github.io/yamaa/reference/schema-fields-v1/) | The same view of `v1/`, with each field's kind |
-| [Requirement index](https://elong0527.github.io/yamaa/reference/requirements/) | Generated canonical IDs and owners |
+| [Rule index](https://elong0527.github.io/yamaa/reference/rule-index/) | Generated canonical IDs and owners |
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |

@@ -120,7 +120,7 @@ profiles in `rules/profiles/`.
 | [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
 | [Project file](profiles/project.md) | PROJECT | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
 
-The [requirement index](https://elong0527.github.io/yamaa/reference/requirements/),
+The [rule index](https://elong0527.github.io/yamaa/reference/rule-index/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)
 and [schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/)
 are generated from these files and `yaml/` on every docs build. The

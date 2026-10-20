@@ -1,4 +1,4 @@
-"""Generate the schema field, requirement index and rules summary pages.
+"""Generate the schema field, rule index and rules summary pages.
 
 The pages are views of ``rules/`` and ``yaml/`` rendered on every docs build;
 they add no semantics. Their relative links resolve from
@@ -13,7 +13,7 @@ from pathlib import Path
 
 from tools.paths import ROOT
 from tools.rules.model import (
-    REQUIREMENT_INDEX,
+    RULE_INDEX,
     RULES_SUMMARY,
     SCHEMA_FIELDS,
     SCHEMA_FIELDS_V1,
@@ -30,7 +30,7 @@ from tools.validation.repository_schema import (
 )
 from tools.validation.schema_bundle import Bundle
 
-PAGE_DIRECTORY = posixpath.dirname(REQUIREMENT_INDEX)
+PAGE_DIRECTORY = posixpath.dirname(RULE_INDEX)
 GENERATED_MARK = "<!-- generated: generate_rule_reference.py -->"
 # A link between two generated pages names the site page: a relative link on
 # a generated page becomes a repository link, and generated pages are not
@@ -250,9 +250,9 @@ def schema_fields_v1(root, rules):
     return "\n".join(lines)
 
 
-def requirement_index(rules):
+def rule_index(rules):
     lines = [
-        "# Requirement index",
+        "# Rule index",
         "",
         GENERATED_MARK,
         "",
@@ -315,7 +315,7 @@ def generated(root):
     pages = {
         SCHEMA_FIELDS: schema_fields(root, rules),
         SCHEMA_FIELDS_V1: schema_fields_v1(root, rules),
-        REQUIREMENT_INDEX: requirement_index(rules),
+        RULE_INDEX: rule_index(rules),
         RULES_SUMMARY: rules_summary(rules),
     }
     return {root / "rules" / page: text for page, text in pages.items()}

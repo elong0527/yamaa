@@ -58,8 +58,8 @@ class RuleReferenceTests(unittest.TestCase):
             check=False,
         )
 
-    def test_requirement_index_lists_every_card(self):
-        index = self.page("requirements.md")
+    def test_rule_index_lists_every_card(self):
+        index = self.page("rule-index.md")
         self.assertIn(
             "| Rule | Title | File |\n| --- | --- | --- |\n"
             "| [LAYER-1](../inheritance.md#layer-1) | Layers compose depth first "
@@ -202,16 +202,14 @@ class RuleReferenceTests(unittest.TestCase):
                 path.read_text().replace("values/types.md", "values/kinds.md")
             )
         self.assertEqual(check(self.root).errors, [])
-        self.assertIn(
-            "[TYPE-1](../values/kinds.md#type-1)", self.page("requirements.md")
-        )
+        self.assertIn("[TYPE-1](../values/kinds.md#type-1)", self.page("rule-index.md"))
 
     def test_repository_pages_render(self):
         pages = generated(ROOT)
         self.assertEqual(
             sorted(path.name for path in pages),
             [
-                "requirements.md",
+                "rule-index.md",
                 "rules-summary.md",
                 "schema-fields-v1.md",
                 "schema-fields.md",

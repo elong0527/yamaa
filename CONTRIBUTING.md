@@ -440,7 +440,7 @@ to this contributor guide. A site page links a repository file outside `docs/`
 by relative path, such as `../rules/reference/csv.md`: the site points it at the
 file on main, and a copy read at a release tag names that tag's file.
 
-The requirement index, rules summary and schema-field references are generated
+The rule index, rules summary and schema-field references are generated
 from `rules/` and `yaml/` on every build. Edit the owning rule or schema, not a
 generated page.
 Benchmark dashboards likewise render authored fixtures without executing the
