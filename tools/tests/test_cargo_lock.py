@@ -508,6 +508,9 @@ class RLinkStepTests(unittest.TestCase):
             ("LINK = -Wl,--discard-all\nPKG_LIBS = $(LINK)\n", "-Wl,--discard-all"),
             ("PKG_LIBS = $(RUST_LIB) \\\n\t-s\n", "-s strips"),
             ("override LDFLAGS += -Wl,-s\n", "-Wl,-s strips"),
+            # make's $(strip ...) is admitted, but not an option inside it.
+            ("PKG_LIBS = $(strip -s)\n", "-s strips"),
+            ("PKG_LIBS = $(strip -Wl,-s)\n", "-Wl,-s strips"),
         ):
             with self.subTest(text=text):
                 with self.assertRaisesRegex(

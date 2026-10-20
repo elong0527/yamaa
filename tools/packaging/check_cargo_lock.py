@@ -113,23 +113,27 @@ def check_r_link(label, makevars):
     or $(STRIP_SHARED_LIB) in a recipe, or an option such as -Wl,--strip-all.
     Nor may a line outside the recipes, such as PKG_LIBS or a variable that it
     reads, pass the compiler driver's -s or a linker option in LINKER_STRIP.
-    make's $(strip ...) function is admitted.
+    make's $(strip ...) function is admitted, but not an option inside it.
     """
     for line in makevars.replace("\\\n", " ").splitlines():
         if line.lstrip().startswith("#"):
             continue
         recipe = line.startswith("\t")
         words = [word.strip("\"'") for word in MAKE_STRIP.sub(" ", line).split()]
-        for previous, word in zip(["", *words], words):
-            if "strip" in word.lower() or (
-                not recipe and strips_at_link(previous, word)
-            ):
+        # make's delimiters, such as the ) that $(strip -s) leaves, hide no option.
+        bare = [word.strip("(){}") for word in words]
+        for previous, word, option in zip(["", *bare], words, bare):
+            if "strip" in word.lower():
                 problem = (
                     f"a recipe runs {word}"
                     if recipe
                     else f"{word} strips the shared object at R's link step"
                 )
-                raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
+            elif not recipe and strips_at_link(previous, option):
+                problem = f"{option} strips the shared object at R's link step"
+            else:
+                continue
+            raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
 
 
 def check_r_symbols(label, manifest, config, makevars):
