@@ -8,6 +8,7 @@ use crate::{
     ast::{self, Comparator},
     dataset::{Check, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
+    project_terminology::Catalogue,
     submission_values::{self as values, Declared, Finding},
 };
 use std::collections::BTreeSet;
@@ -100,6 +101,25 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
     })
 }
 
+/// The values a where column's codelists admit: its own binding's and those
+/// of its entries, read where a project supplies the codelists.
+fn codelist<'c>(catalogue: &'c Catalogue, column: &ast::Column) -> Option<BTreeSet<&'c str>> {
+    let submission = column.submission.as_ref()?;
+    values::admitted(
+        catalogue,
+        submission
+            .metadata
+            .codelist
+            .as_ref()
+            .map(|list| list.name.as_str()),
+        submission
+            .value_level
+            .iter()
+            .filter_map(|entry| entry.metadata.codelist.as_ref())
+            .map(|list| list.name.as_str()),
+    )
+}
+
 /// Admit every column's entries without data and give each column with
 /// entries its build checks: one that fails a row two entries select, and one
 /// `warning` per entry that matches no row. The checks follow the column's
@@ -107,6 +127,7 @@ fn diagnostic(column: &str, finding: &Finding<'_>) -> PreflightFinding {
 pub(super) fn admit(
     spec: &ast::Spec,
     output: &TableSchema,
+    catalogue: Option<&Catalogue>,
     groups: &mut [verifications::Verifications],
     result: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
@@ -132,13 +153,14 @@ pub(super) fn admit(
             .zip(&clauses)
             .map(|(entry, clause)| (entry.id.name.as_str(), clause));
         let findings = values::admit(written, name, |where_column| {
-            let declared = output
+            let index = output
                 .columns()
                 .iter()
-                .find(|column| column.name == where_column)?;
+                .position(|column| column.name == where_column)?;
             Some(Declared {
                 output: carried.contains(where_column),
-                text: declared.kind == ColumnType::Str,
+                text: output.columns()[index].kind == ColumnType::Str,
+                codelist: catalogue.and_then(|catalogue| codelist(catalogue, &spec.columns[index])),
             })
         });
         if !findings.is_empty() {

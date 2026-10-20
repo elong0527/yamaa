@@ -1,0 +1,17 @@
+schema_version: '1.0'
+codelists:
+  - standard:
+      name: CDISC/NCI
+      publishing_set: SDTM
+      version: '2023-12-15'
+    codelists:
+      - id: VSTESTCD
+        name: Vital Signs Test Code
+        extensible: true
+        items:
+          - {value: SYSBP, decode: Systolic Blood Pressure}
+          - {value: DIABP, decode: Diastolic Blood Pressure}
+          - {value: PULSE, decode: Pulse Rate}
+sdtm:
+  specs:
+  - spec.yaml
