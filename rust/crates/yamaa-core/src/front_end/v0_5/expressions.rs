@@ -1070,7 +1070,7 @@ impl Lower<'_> {
                 _ => true,
             };
         // A keyless qualified aggregate infers its keys in 0.5 and matches on
-        // the input's declared `key` in 1.0 (P-KEY-1), which P1-6 binds.
+        // the input's declared `key` in 1.0 (P-KEY-1).
         let keyless = if self.v1() {
             JoinKey::FromInput
         } else {

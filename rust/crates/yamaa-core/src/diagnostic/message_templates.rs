@@ -98,7 +98,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("multiple_matches", "lookup {intermediate} finds {match_count} matching records in {dataset} and has no rule to choose one"),
     ("multiple_values_per_key", "{identifier} gives {value_count} different values for one row"),
     ("nested_reduction", "{outer} contains the reduction {inner}, and reductions cannot nest"),
-    ("no_applicable_keys", "the lookup of {dataset} has no applicable key among {keys} ({hint})"),
+    ("no_applicable_keys", "the lookup of {dataset} has no applicable key ({hint})"),
     ("non_ascii_source", "the file holds a character outside ASCII"),
     ("not_missing_failed", "column {column} is missing in {failure_count} of the rows"),
     ("nothing_to_save", "there is nothing to save"),
