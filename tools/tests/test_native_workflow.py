@@ -591,6 +591,38 @@ class NativeWorkflowContract(unittest.TestCase):
                     self.jobs[job]["uploads"], [f"native-r-binary-{platform}-{version}"]
                 )
 
+    def test_each_macos_r_binary_needs_no_macos_newer_than_the_arm64_floor(self):
+        # R compiles entrypoint.c and links yamaa.so with clang, which takes
+        # its minimum macOS from MACOSX_DEPLOYMENT_TARGET and otherwise from
+        # the runner. The job sets the floor that configure.R gives Cargo when
+        # the caller sets none, and the check reads the minimum that the
+        # binary's yamaa.so declares and refuses one above that floor.
+        configure = (ROOT / "R/yamaa/tools/configure.R").read_text(encoding="utf-8")
+        [floor] = re.findall(
+            r'Sys\.getenv\("MACOSX_DEPLOYMENT_TARGET", "([0-9.]+)"\)', configure
+        )
+        for platform, version in self.r_binary_lanes():
+            job = f"native-r-binary ({platform}, R {version})"
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            check = steps["Check the R binary package"]["run"]
+            macos = check.partition('if [ "${RUNNER_OS}" = macOS ]; then')[2]
+            with self.subTest(job=job):
+                self.assertEqual(
+                    self.jobs[job]["context"]["env"]["MACOSX_DEPLOYMENT_TARGET"], floor
+                )
+                for step in steps.values():
+                    self.assertNotIn("MACOSX_DEPLOYMENT_TARGET", step.get("env", {}))
+                self.assertIn("-C r-binary-check yamaa/libs/yamaa.so", macos)
+                self.assertIn("otool -l r-binary-check/yamaa/libs/yamaa.so", macos)
+                self.assertIn("""awk '$1 == "minos" { print $2 }'""", macos)
+                self.assertIn(
+                    """-e 'target <- Sys.getenv("MACOSX_DEPLOYMENT_TARGET")'""", macos
+                )
+                self.assertIn(
+                    "stopifnot(package_version(minos) <= package_version(target))",
+                    macos,
+                )
+
     def test_each_r_binary_installs_without_rust_rtools_or_a_network(self):
         # Installed as a user installs it, on a runner whose Rust is removed
         # and that has no Rtools; the installation and every step after it
@@ -664,6 +696,31 @@ class NativeWorkflowContract(unittest.TestCase):
                     }
                     offline = index >= install and "run" in step
                     self.assertEqual(chosen, proxy if offline else {})
+
+    def test_each_r_binary_install_finds_no_rust_on_the_runner_path(self):
+        # A Rust tool that the removal left on the runner's own PATH, which
+        # the steps that do not replace it inherit, fails the lane. So the
+        # shell looks for one once both removal branches have closed, and
+        # before the step reads that PATH to write the one that R gets, from
+        # which a directory holding a Rust tool would be dropped unseen.
+        for platform, version in self.r_binary_lanes():
+            job = f"native-r-binary-install ({platform}, R {version})"
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            script = steps["Remove Rust and Rtools from the runner"]["run"]
+            with self.subTest(job=job):
+                self.assertEqual(script.count('command -v "${tool}"'), 1)
+                check = script.index('command -v "${tool}"')
+                # The fi that closes the macOS and the other branch.
+                uninstall = script.index("rustup self uninstall -y")
+                removed = script.index("\nfi\n", uninstall)
+                filtered = script.index('<<< "${PATH}"')
+                self.assertLess(removed, check)
+                self.assertLess(check, filtered)
+                self.assertNotIn("PATH=", script[:check])
+                self.assertIn("exit 1", script[check:filtered])
+                # The shell would still report the rustup that it ran.
+                self.assertLess(removed, script.index("hash -r"))
+                self.assertLess(script.index("hash -r"), check)
 
     def test_each_r_binary_runs_the_corpus_and_the_suites_as_a_binary(self):
         required = release.required_jobs(self.coverage)
