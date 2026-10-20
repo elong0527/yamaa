@@ -520,10 +520,14 @@ that the host builds with, so that the R bundle's leaves out
 the canonical `rust/Cargo.lock`; the vendored YAML parser, without its tests,
 and the ReadStat sources; and the crates.io crates of that lock, as
 `cargo vendor --locked --versioned-dirs` writes them, apart from the files
-that `tools/staging/vendor_crates.py` leaves out, described below. It holds
-no tests, examples, benchmark fixtures or `public-api.txt`, and no
-`rust-toolchain.toml` or `rust-toolchain` file anywhere, the vendored crates
-included. Cargo writes the trimmed lock from a copy of the canonical one, and
+that `tools/staging/vendor_crates.py` leaves out, described below. The
+facade crate carries the selftest cases in its `selftest/` directory: the
+files of the benchmarks that `benchmarks/selftest.yaml` names, which the
+facade's build embeds (#3030 D108), so a build from the bundle reads nothing
+outside it. It holds no tests, examples, other benchmark fixtures or
+`public-api.txt`, and no `rust-toolchain.toml` or `rust-toolchain` file
+anywhere, the vendored crates included. Cargo writes the trimmed lock from a
+copy of the canonical one, and
 the tool then verifies it crate by crate: every package that it keeps is the
 canonical entry, with the same version, source and checksum, depends only on
 packages that its canonical entry depends on, and is reached from the

@@ -14,6 +14,7 @@ yamaa: pub mod odm
 yamaa: pub mod plan
 yamaa: pub mod resolver
 yamaa: pub mod scalar
+yamaa: pub mod selftest
 yamaa: pub mod table
 yamaa: pub mod text
 yamaa::Action: pub use yamaa::text::Action
@@ -102,11 +103,14 @@ yamaa::ResourceKind: pub use yamaa::resolver::ResourceKind
 yamaa::ResourceResolver: pub use yamaa::resolver::ResourceResolver
 yamaa::Run: pub use yamaa::api::Run
 yamaa::RunRequest: pub use yamaa::plan::RunRequest
+yamaa::SELFTEST_COLUMNS: pub use yamaa::selftest::SELFTEST_COLUMNS
 yamaa::SEVERITIES: pub use yamaa::diagnostic::SEVERITIES
 yamaa::Scalar: pub use yamaa::scalar::Scalar
 yamaa::ScalarDecodeError: pub use yamaa::scalar::ScalarDecodeError
 yamaa::ScalarRef: pub use yamaa::scalar::ScalarRef
 yamaa::SchemaRef: pub use yamaa::table::SchemaRef
+yamaa::SelfTest: pub use yamaa::selftest::SelfTest
+yamaa::SelfTestCase: pub use yamaa::selftest::SelfTestCase
 yamaa::Severity: pub use yamaa::diagnostic::Severity
 yamaa::Signature: pub use yamaa::functions::Signature
 yamaa::SourceBytes: pub use yamaa::engine::SourceBytes
@@ -639,6 +643,21 @@ yamaa::scalar::ScalarRef::Int: Int(i64)
 yamaa::scalar::ScalarRef::Missing: Missing
 yamaa::scalar::ScalarRef::Str: Str(&'a str)
 yamaa::scalar::ScalarRef::from_owned: pub fn from_owned(value: &'a Scalar) -> Self
+yamaa::selftest: pub use yamaa::selftest::selftest
+yamaa::selftest::SELFTEST_COLUMNS: pub const SELFTEST_COLUMNS: [&str; 3]
+yamaa::selftest::SelfTest: impl SelfTest
+yamaa::selftest::SelfTest: pub struct SelfTest [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::selftest::SelfTest::cases: pub fn cases(&self) -> &[SelfTestCase]
+yamaa::selftest::SelfTest::info: pub fn info(&self) -> &Info
+yamaa::selftest::SelfTest::not_covered: pub fn not_covered(&self) -> &[&'static str]
+yamaa::selftest::SelfTest::status: pub fn status(&self) -> Status
+yamaa::selftest::SelfTest::summary: pub fn summary(&self) -> Summary
+yamaa::selftest::SelfTest::table: pub fn table(&self) -> Table
+yamaa::selftest::SelfTestCase: pub struct SelfTestCase [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
+yamaa::selftest::SelfTestCase::case: pub case: &'static str
+yamaa::selftest::SelfTestCase::message: pub message: Option<String>
+yamaa::selftest::SelfTestCase::status: pub status: Status
+yamaa::selftest::selftest: pub fn selftest(host: Host, host_version: Option<&str>) -> SelfTest
 yamaa::style_same_value: pub fn style_same_value(before: &[u8], after: &[u8]) -> bool
 yamaa::table::Array: pub use arrow_array::Array
 yamaa::table::DataType: pub use arrow_schema::DataType

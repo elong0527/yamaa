@@ -8,9 +8,12 @@ trimmed from the canonical rust/Cargo.lock and
 verified crate by crate against it, the vendored YAML parser and ReadStat
 sources, and the crates.io crates of that lock as `cargo vendor` writes them,
 apart from the files that tools/staging/vendor_crates.py leaves out, with the
-Cargo configuration that reads them instead of the network. It holds no tests,
-examples, benchmark fixtures or public-api.txt, and no Rust toolchain file
-anywhere, the vendored crates included.
+Cargo configuration that reads them instead of the network. The facade crate
+carries the selftest cases in its `selftest` directory, the files of the
+benchmarks that benchmarks/selftest.yaml names, which its build embeds (#3030
+D108), so a build from the bundle reads nothing outside it. It holds no tests,
+examples, other benchmark fixtures or public-api.txt, and no Rust toolchain
+file anywhere, the vendored crates included.
 
     python -m tools.staging.engine_bundle sdist <directory>
 
@@ -36,10 +39,13 @@ import tempfile
 import tomllib
 from pathlib import Path
 
+from tools.packaging import generate_selftest_cases as selftest_cases
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import vendor_crates
 
 ENGINE = ("yamaa-core", "yamaa-adapters", "yamaa")
+# The facade crate, which embeds the selftest cases.
+FACADE = "yamaa"
 BINDINGS = {"python": "yamaa-python", "r": "yamaa-r"}
 MANIFEST, LOCK = "Cargo.toml", "Cargo.lock"
 # Cargo reads its configuration from the directory it runs in and its parents.
@@ -152,12 +158,17 @@ def vendored_sources(workspace: Path):
 def sources(host, workspace=WORKSPACE):
     """Yield (path in the bundle workspace, checkout file) for each copied source.
 
+    The facade crate's `selftest` directory holds each file that the facade
+    embeds from the selftest cases of the checkout that holds `workspace`.
     The YAML parser keeps its provenance, patch and licenses but not its tests.
     """
     for member in members(host):
         root = workspace / "crates" / member
         for path in member_sources(root):
             yield f"crates/{member}/{path.relative_to(root).as_posix()}", path
+    staged = f"crates/{FACADE}/{selftest_cases.STAGED}"
+    for relative, path in selftest_cases.case_files(workspace.parent):
+        yield f"{staged}/{relative}", path
     for path in vendored_sources(workspace):
         relative = path.relative_to(workspace)
         if relative.parts[2] != "tests":
