@@ -291,6 +291,21 @@ def required_jobs(coverage):
             )
     for platform in coverage["cran_container"]["platform"]:
         jobs[f"native-cran ({platform})"] = ("Check the R source package as CRAN does",)
+    # Each source archive that a release publishes, built and installed with
+    # the network disabled on every platform, then run on the conformance corpus.
+    offline_steps = {
+        "python": (
+            "Install the Python source archive without a network",
+            "Report installed Python public benchmark conformance",
+        ),
+        "r": (
+            "Install the R source package without a network",
+            "Report installed R public benchmark conformance",
+        ),
+    }
+    for platform in coverage["offline_source"]["os"]:
+        for host in coverage["offline_source"]["host"]:
+            jobs[f"native-offline-source ({platform}, {host})"] = offline_steps[host]
     return jobs
 
 
