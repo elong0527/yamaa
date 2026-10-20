@@ -1,3 +1,4 @@
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as C;
 use yamaa_core::{csv_source::parse, diagnostic::ConditionCode};
@@ -91,7 +92,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.context.len(), 4);
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
-        reached.insert(finding.code);
+        reached.insert(rendered(&finding));
     }
     let header = (0..=yamaa_core::limits::Limits::COLUMNS)
         .map(|index| format!("C{index}"))
@@ -152,7 +153,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         assert_eq!(diagnostic.context, expected);
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached
 }

@@ -294,6 +294,56 @@ class TestConditionRegistry(unittest.TestCase):
             ],
         )
 
+    def test_every_condition_has_a_well_formed_message(self):
+        for condition, registration in self.registry["conditions"].items():
+            self.assertEqual(
+                OWNER_REPOSITORY_MANIFESTS.message_errors(registration.get("message")),
+                [],
+                condition,
+            )
+
+    def test_malformed_and_missing_messages_are_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        conditions = changed["conditions"]
+        del conditions["unknown_window"]["message"]
+        conditions["window_order_by_required"]["message"] = "Needs an order_by."
+        conditions["window_order_by_forbidden"]["message"] = "{operation} takes {{no}"
+        conditions["zero_offset"]["message"] = "an offset of {Offset}  is zero\n"
+        conditions["xpt_last_row_blank"]["severity"] = "error"
+
+        errors = OWNER_REPOSITORY_MANIFESTS.validate_condition_registry(
+            self.root, changed
+        )
+
+        label = "ERROR: yaml/conditions.yaml.conditions"
+        self.assertEqual(
+            errors,
+            [
+                f"{label}.unknown_window.message: expected non-empty text",
+                f"{label}.window_order_by_forbidden.message: expected "
+                "`{key}` placeholders and doubled literal braces",
+                f"{label}.window_order_by_required.message: expected a "
+                "lower-case start or a placeholder",
+                f"{label}.window_order_by_required.message: expected no final period",
+                f"{label}.xpt_last_row_blank.severity: unknown field",
+                f"{label}.zero_offset.message: expected printable ASCII on one line",
+                f"{label}.zero_offset.message: expected single spaces and no "
+                "surrounding space",
+                f"{label}.zero_offset.message: expected `{{key}}` placeholders and "
+                "doubled literal braces",
+            ],
+        )
+
+    def test_message_placeholders_name_keys_and_double_literal_braces(self):
+        placeholders = OWNER_REPOSITORY_MANIFESTS.message_placeholders
+        self.assertEqual(
+            placeholders("column {column} reads {dependency}"), ["column", "dependency"]
+        )
+        self.assertEqual(placeholders("{{literal}} and {spec_path}"), ["spec_path"])
+        self.assertEqual(placeholders("{{{key}}}"), ["key"])
+        for stray in ("{", "}", "{key}}", "{Key}", "{1key}", "{key"):
+            self.assertIsNone(placeholders(stray), stray)
+
     def test_wrong_phase_condition_is_rejected(self):
         changed = copy.deepcopy(self.registry)
         changed["conditions"]["aggregate_multiple_records"]["phases"] = ["derivation"]

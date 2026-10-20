@@ -1,4 +1,5 @@
 //! Exercise the original-document compiler, not constructed failure enum values.
+use super::rendered;
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as V;
 use yamaa_core::{
@@ -115,7 +116,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             );
             assert_eq!(diagnostic.source_span, None);
             assert_eq!(diagnostic.operand_route, None);
-            diagnostic.code
+            rendered(&diagnostic)
         })
         .collect();
     for (precision, path, condition, rule, context) in [
@@ -181,7 +182,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
                 .map(|(key, value)| (key.into(), value))
                 .collect()
         );
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     for (names, condition, position, name) in [
         (vec!["ID", "ID"], "duplicate_order_term", 1, "ID"),
@@ -242,7 +243,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             diagnostic.context,
             [("column".into(), text(name))].into_iter().collect()
         );
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     let mut fields = base(
         "TEST",
@@ -292,7 +293,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
         ]
         .into()
     );
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     let collision = yamaa_core::source_ordinal::Ordinal::admit(&source, 0, "ID")
         .err()
         .unwrap();
@@ -314,7 +315,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
         ]
         .into()
     );
-    reached.insert(diagnostic.code);
+    reached.insert(rendered(&diagnostic));
     reached
 }
 
@@ -345,7 +346,7 @@ fn check(fields: Vec<(&str, Tree)>, expected: Vec<Expected<'_>>) -> BTreeSet<Con
         );
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached
 }
@@ -986,7 +987,7 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
                 .map(|(key, value)| (key.into(), value))
                 .collect()
         );
-        reached.insert(diagnostic.code);
+        reached.insert(rendered(&diagnostic));
     }
     reached
 }

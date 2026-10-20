@@ -4,7 +4,7 @@ Part of the [1.0 interface RFC](../interface-1.0.md): #3030 sections 2.7
 and 2.8, decisions D11, D12 and D28 to D46, and Phase 0 item 3. The bindings
 draft is [`rust/interface/bindings-1.0.yaml`](../../../rust/interface/bindings-1.0.yaml).
 The printed text, error text and JSON below are designs, not captured output;
-their messages illustrate templates that do not exist yet.
+their messages illustrate the templates of `yaml/conditions.yaml` (P-MSG-1).
 
 ## Today's surface, measured
 

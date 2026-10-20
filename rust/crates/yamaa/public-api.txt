@@ -186,6 +186,7 @@ yamaa::diagnostic::Diagnostic: impl Diagnostic
 yamaa::diagnostic::Diagnostic: pub struct Diagnostic [derive(Clone, Debug, PartialEq)] [non_exhaustive]
 yamaa::diagnostic::Diagnostic::code: pub code: String
 yamaa::diagnostic::Diagnostic::context: pub context: DiagnosticContext
+yamaa::diagnostic::Diagnostic::message: pub message: String
 yamaa::diagnostic::Diagnostic::operand_route: pub operand_route: Option<Vec<String>>
 yamaa::diagnostic::Diagnostic::phase: pub phase: String
 yamaa::diagnostic::Diagnostic::rule: pub rule: Option<String>

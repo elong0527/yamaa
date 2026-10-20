@@ -8,8 +8,8 @@ separate disposition record; the vocabulary and the core registry are the only
 sources. These are static ownership checks, not a claim that every registered
 condition has executable release coverage.
 Condition and rule literals outside the canonical registry, the generated
-shipped schema and private unit tests are refused. A rule is a card ID, read
-from the shared rules model.
+shipped schema, the generated message table and private unit tests are
+refused. A rule is a card ID, read from the shared rules model.
 A condition written as a literal must also name a registered condition: the
 value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
@@ -25,19 +25,20 @@ import json
 import re
 from pathlib import Path
 
+import yaml
 from tools.paths import ROOT
 from tools.rules.model import load, prose_lines
+from tools.validation._repository_yaml import UniqueKeyLoader
 
 JSON_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
 RAW_START = re.compile(r'(?:br|cr|r)(#*)"')
 CHARACTER = re.compile(r"'(?:[^'\\\r\n]|\\(?:u\{[0-9a-fA-F_]+\}|[^\r\n]))'")
-REGISTRATION = re.compile(
-    r"^  ([a-z][a-z0-9_]*): \{phases: \[([a-z_, ]+)\]\}$", re.MULTILINE
-)
 HOST_CRATES = {"yamaa-adapters", "yamaa-python", "yamaa-r"}
 CORE_CRATES = {"yamaa-core"}
 REGISTRY = Path("rust/crates/yamaa-core/src/diagnostic/mod.rs")
 SHIPPED_SCHEMA = Path("rust/crates/yamaa-adapters/src/shipped_schema/data.rs")
+# Generated from yaml/conditions.yaml beside the core registry (P-MSG-1).
+MESSAGE_TABLE = Path("rust/crates/yamaa-core/src/diagnostic/message_templates.rs")
 PRIVATE_TEST_MODULE = Path(
     "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
 )
@@ -1019,32 +1020,37 @@ def private_unit_test_source(root: Path, relative: Path) -> bool:
 
 
 def vocabulary(root: Path) -> tuple[dict[str, set[str]], list[str]]:
-    """Read the canonical inline registrations; the repository validator owns YAML."""
+    """Read each registered condition's phases; the repository validator owns
+    the rest of the registry's form, its messages included."""
     path = root / "yaml/conditions.yaml"
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         return {}, [f"yaml/conditions.yaml: unavailable vocabulary: {error}"]
+    try:
+        document = yaml.load(text, Loader=UniqueKeyLoader)
+    except yaml.YAMLError as error:
+        # A repeated condition is a duplicate key, refused while reading.
+        return {}, [f"yaml/conditions.yaml: unreadable vocabulary: {error}"]
+    conditions = document.get("conditions") if isinstance(document, dict) else None
+    if not isinstance(conditions, dict) or not conditions:
+        return {}, ["yaml/conditions.yaml: no condition registrations found"]
     registered = {}
     errors = []
-    lines = text.splitlines()
-    if "conditions:" not in lines:
-        return {}, ["yaml/conditions.yaml: no condition registrations found"]
-    for line in lines[lines.index("conditions:") + 1 :]:
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        registration = REGISTRATION.fullmatch(line)
-        if registration is None:
+    for condition, registration in conditions.items():
+        phases = registration.get("phases") if isinstance(registration, dict) else None
+        if not (
+            isinstance(condition, str)
+            and CONDITION_NAME.fullmatch(condition)
+            and isinstance(phases, list)
+            and phases
+            and all(isinstance(phase, str) for phase in phases)
+        ):
             errors.append(
-                f"yaml/conditions.yaml: unrecognized registration: {line.strip()}"
+                f"yaml/conditions.yaml: unrecognized registration: {condition}"
             )
             continue
-        condition, phases = registration.groups()
-        if condition in registered:
-            errors.append(f"yaml/conditions.yaml: duplicate registration: {condition}")
-        registered[condition] = {phase.strip() for phase in phases.split(",")}
-    if not registered:
-        errors.append("yaml/conditions.yaml: no condition registrations found")
+        registered[condition] = set(phases)
     return registered, errors
 
 
@@ -1191,7 +1197,7 @@ def violations(root: Path) -> list[str]:
                 if rule.fullmatch(identifier) and identifier not in defined:
                     errors.append(f"{relative}:{number}: undefined rule {identifier}")
             if (
-                Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
+                Path(relative) in (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE)
                 or test_only
                 or not literals
             ):
@@ -1213,7 +1219,7 @@ def violations(root: Path) -> list[str]:
             for number in json_decodes(source, crate_root=crate_root):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
         if (
-            Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
+            Path(relative) in (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE)
             or test_only
             or path in json_tests
         ):

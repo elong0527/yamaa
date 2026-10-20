@@ -1,5 +1,6 @@
 //! The 1.x header causes (SCHEMA-2, LAYER-4, P-VER-1), each raised by its
 //! real detector and pinned to its phase, condition, rule, path and context.
+use super::rendered;
 use crate::support::document::Tree as T;
 use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic, InheritanceFinding as F};
@@ -34,7 +35,7 @@ fn schema_finding(
 ) {
     assert_eq!(defined(finding.code), mapping(condition, rule));
     assert_eq!(finding.path, path);
-    reached.insert(finding.code);
+    reached.insert(rendered(&finding));
 }
 
 fn field_diagnostic(
@@ -54,7 +55,7 @@ fn field_diagnostic(
     assert_eq!(finding.context, expected);
     assert!(finding.source_span.is_none());
     assert!(finding.operand_route.is_none());
-    reached.insert(finding.code);
+    reached.insert(rendered(&finding));
 }
 
 fn text(value: &str) -> JsonValue {
