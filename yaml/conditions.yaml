@@ -64,7 +64,7 @@ conditions:
   invalid_clear: {phases: [validation]}
   invalid_date_text: {phases: [impute, validation]}
   invalid_declaration: {phases: [validation]}
-  # LOOKUP-22, LOOKUP-22 and LOOKUP-22
+  # LOOKUP-22
   invalid_derive_step: {phases: [validation]}
   invalid_duration_text: {phases: [impute]}
   invalid_expression: {phases: [validation]}

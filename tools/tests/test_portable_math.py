@@ -75,7 +75,7 @@ class PublicPortableMath(unittest.TestCase):
                     self.assertEqual(result.issues["phase"].to_list(), ["derivation"])
                     self.assertEqual(
                         result.issues["requirement"].to_list(),
-                        ["FORMULA-15" if function == "LN" else "FORMULA-15"],
+                        ["FORMULA-15"],
                     )
                     self.assertEqual(
                         result.issues["spec_paths"].to_list(),

@@ -146,8 +146,8 @@ class ArtifactObservation(_FrozenModel):
     # so that a newline inside a quoted field cannot make this split the
     # deciding view. A parquet artifact carries one JSON document per
     # record instead: PARQUET-4 denies parquet a byte guarantee, so its
-    # comparison runs over what the bytes read back as (PARQUET-4), and JSON
-    # keeps a missing value null rather than the empty string.
+    # comparison runs over what the bytes read back as, and JSON keeps a
+    # missing value null rather than the empty string.
     records: tuple[str, ...]
     byte_length: int = Field(ge=0)
     # The rendered text of a CSV artifact, which is what a comparison
@@ -283,8 +283,8 @@ def _records(payload: bytes) -> tuple[str, ...]:
 def _parquet_records(frame: pl.DataFrame) -> tuple[str, ...]:
     """Render one parquet artifact's logical content as canonical records.
 
-    PARQUET-4 denies parquet a byte guarantee, so the comparison PARQUET-4
-    requires runs over what the bytes read back as: the same field names in
+    PARQUET-4 denies parquet a byte guarantee and requires the comparison to
+    run over what the bytes read back as: the same field names in
     the same order, the same logical types, the same rows in the same order,
     the same nulls, and the same values. One JSON document per record keeps
     every value distinct from its text rendering: a missing value is null
@@ -379,8 +379,8 @@ def _artifact_findings(
 
     A CSV artifact compares byte for byte under the csv profile's byte
     guarantee; when the records agree but the bytes do not, the bytes decide.
-    A parquet artifact has no byte guarantee (PARQUET-4), so its comparison is
-    the logical one PARQUET-4 requires: the committed bytes are read back
+    A parquet artifact has no byte guarantee, so its comparison is the
+    logical one PARQUET-4 requires: the committed bytes are read back
     through the closed parquet profile and compared on field names in order,
     logical types, row order, nulls, and values, never as bytes.
     """
