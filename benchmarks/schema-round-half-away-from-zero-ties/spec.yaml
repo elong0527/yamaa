@@ -29,7 +29,7 @@ columns:
     label: Source Value for Whole-Number Rounding
     derivation: SOURCE.VAL0
 
-  # REQ-0418: exact ties and near ties below them move away from zero.
+  # FORMULA-16: exact ties and near ties below them move away from zero.
   - name: RND1
     type: float
     label: Value Rounded to One Decimal Place

@@ -54,7 +54,7 @@ pub fn requested(document: &Document) -> bool {
     })
 }
 /// Select only authored section specifications. Full Define/family admission is
-/// deliberately left with its existing composition use case (REQ-0908).
+/// deliberately left with its existing composition use case (SUB-23).
 pub fn references(document: &Document) -> Result<Vec<&str>, MetadataError> {
     let locations = crate::submission_document::locate(document, document.root())
         .map_err(|_| MetadataError::Shape)?;

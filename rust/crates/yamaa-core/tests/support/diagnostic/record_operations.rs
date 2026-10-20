@@ -187,7 +187,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .find(|d| d.definition().condition == "invalid_intermediate_driver")
             .unwrap();
         assert_eq!(d.definition().phase, "validation");
-        assert_eq!(d.definition().requirement, Some("REQ-1262"));
+        assert_eq!(d.definition().requirement, Some("ROW-2"));
         assert_eq!(d.spec_paths, ["rows[0].dataset"]);
         assert_eq!(d.context["intermediate"], JsonValue::String("CAP".into()));
         assert_eq!(
@@ -200,14 +200,14 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             T::List(vec![]),
             "invalid_derive_step",
-            "REQ-1189",
+            "LOOKUP-22",
             vec![("reason", "a derive step is a non-empty binding list")],
             false,
         ),
         (
             T::List(vec![binding("V", T::map(vec![("literal", T::integer(1))]))]),
             "invalid_derive_step",
-            "REQ-1191",
+            "LOOKUP-22",
             vec![("reason", "a derive step names exactly one relation")],
             false,
         ),
@@ -217,7 +217,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 T::map(vec![("compute", T::map(vec![("expr", T::text("W + 1"))]))]),
             )]),
             "unknown_derive_variable",
-            "REQ-1189",
+            "LOOKUP-22",
             vec![("variable", "W"), ("binding", "V")],
             false,
         ),
@@ -227,7 +227,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 binding("C", source("CAP.V")),
             ]),
             "invalid_derive_step",
-            "REQ-1242",
+            "LOOKUP-22",
             vec![
                 (
                     "reason",
@@ -259,7 +259,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(d.code);
     }
-    for (grouped, requirement) in [(false, "REQ-0410"), (true, "REQ-0411")] {
+    for (grouped, requirement) in [(false, "FORMULA-9"), (true, "FORMULA-9")] {
         let ds = findings(document(
             T::map(vec![(
                 "compute",

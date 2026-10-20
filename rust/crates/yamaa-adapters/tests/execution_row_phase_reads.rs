@@ -1,6 +1,6 @@
 #![cfg(feature = "yaml")]
 //! A row derivation reads only values that its own row template completes
-//! (REQ-0069). Each operand form that reads a column the template leaves to
+//! (COLUMN-4). Each operand form that reads a column the template leaves to
 //! the column phase reports the same phase boundary at its own operand,
 //! naming the column and the row template, before any data is read.
 use std::{
@@ -86,7 +86,7 @@ fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
 
 #[test]
 fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
-    // SEQ is a window, so it is never row-local (REQ-1260): every row
+    // SEQ is a window, so it is never row-local (SPEC-6): every row
     // template leaves it to the column phase.
     let specification = |operand: &str| {
         format!(
@@ -128,7 +128,7 @@ fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
             vec![yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "phase_boundary",
-                "requirement": "REQ-0069",
+                "requirement": "COLUMN-4",
                 "spec_paths": [path],
                 "context": {
                     "identifier": "SEQ",

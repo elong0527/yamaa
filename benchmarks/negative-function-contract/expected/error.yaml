@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_function_argument
 spec_paths:
   - columns.RESULT.derivation.function.args
-requirement: REQ-0700
+requirement: FUNC-5
 context:
   function: project_value
   argument: x

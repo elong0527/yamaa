@@ -199,13 +199,13 @@ unlink("output.csv")
 for (value in c("9007199254740993", "-9007199254740993", "9223372036854775807")) {
   seen <- list()
   refused(column("int", "int_value", list("7", value), wrapped(record)),
-    "function_call_failed", "REQ-0701", paste0("argument x: integer ", value,
+    "function_call_failed", "FUNC-8", paste0("argument x: integer ", value,
       " is beyond 2^53 and cannot be held exactly by an R double"))
   stopifnot(received(list(x = 7)), !any(vapply(seen, function(arguments)
     abs(arguments$x) > 2^53, logical(1))))
 }
 refused(column("str", "text_value", list(as.raw(c(0x61, 0x00, 0x62)))),
-  "function_call_failed", "REQ-0701",
+  "function_call_failed", "FUNC-8",
   "argument x: text containing NUL cannot be held by an R character vector")
 cat("integers beyond 2^53 and text holding NUL are refused before the call\n")
 
@@ -241,10 +241,10 @@ trigger <- function(type, cell) switch(type,
 for (case in invalid) {
   result <- column(case[[1L]], case[[2L]], list(case[[3L]]),
     wrapped(when = trigger(case[[1L]], case[[3L]]), value = case[[4L]]))
-  refused(result, "invalid_function_result", "REQ-0702", case[[5L]])
+  refused(result, "invalid_function_result", "FUNC-9", case[[5L]])
 }
 refused(column("int", "int_value", list("42"), wrapped(when = trigger("int"), value = NULL)),
-  "invalid_function_result", "REQ-0702", "an invoked binding returned an undeclared missing")
+  "invalid_function_result", "FUNC-9", "an invoked binding returned an undeclared missing")
 
 # Integer storage, names, Date storage and every NA spelling are plain values.
 accepted <- list(

@@ -19,7 +19,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         let def = diagnostic.definition();
         assert_eq!(
             (def.phase, def.condition, def.requirement),
-            ("validation", "invalid_string_template", Some("REQ-0461"))
+            ("validation", "invalid_string_template", Some("TEXT-3"))
         );
         assert_eq!(
             diagnostic.spec_paths,
@@ -46,7 +46,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let def = diagnostic.definition();
     assert_eq!(
         (def.phase, def.condition, def.requirement),
-        ("mapping", "missing_input", Some("REQ-0334"))
+        ("mapping", "missing_input", Some("COLUMN-10"))
     );
     assert_eq!(
         diagnostic.spec_paths,

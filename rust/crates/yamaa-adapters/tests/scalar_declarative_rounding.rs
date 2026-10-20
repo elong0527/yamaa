@@ -106,7 +106,7 @@ mod scalar {
             let finding = &findings[0];
             assert_eq!(finding.phase(), "validation");
             assert_eq!(finding.condition(), "incompatible_input_type");
-            assert_eq!(finding.requirement(), Some("REQ-0418"));
+            assert_eq!(finding.requirement(), Some("FORMULA-16"));
             assert_eq!(
                 finding.spec_paths,
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.source"]
@@ -148,7 +148,7 @@ mod scalar {
             assert_eq!(findings.len(), 1, "{findings:?}");
             assert_eq!(findings[0].phase(), "validation");
             assert_eq!(findings[0].condition(), "invalid_field_type");
-            assert_eq!(findings[0].requirement(), Some("REQ-0287"));
+            assert_eq!(findings[0].requirement(), Some("SCHEMA-12"));
             assert_eq!(
                 findings[0].spec_paths,
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.digits"]
@@ -297,7 +297,7 @@ mod scalar {
                 identity(&path),
             );
             assert_eq!(findings.len(), 1, "{findings:?}");
-            assert_eq!(findings[0].requirement(), Some("REQ-0418"));
+            assert_eq!(findings[0].requirement(), Some("FORMULA-16"));
             assert_eq!(
                 findings[0].spec_paths,
                 ["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"]
@@ -523,7 +523,7 @@ mod scalar {
         "spec_paths": [
           "input.SRC.path"
         ],
-        "requirement": "REQ-0785",
+        "requirement": "FILE-7",
         "context": {
           "dataset": "SRC",
           "path": "src.csv"
@@ -544,7 +544,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.to_epoch_day.source"
         ],
-        "requirement": "REQ-0606",
+        "requirement": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -573,7 +573,7 @@ mod scalar {
         "spec_paths": [
           "input.SRC.path"
         ],
-        "requirement": "REQ-0785",
+        "requirement": "FILE-7",
         "context": {
           "dataset": "SRC",
           "path": "src.csv"
@@ -594,7 +594,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.study_day.date"
         ],
-        "requirement": "REQ-0606",
+        "requirement": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -607,7 +607,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.study_day.reference"
         ],
-        "requirement": "REQ-0606",
+        "requirement": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -636,7 +636,7 @@ mod scalar {
         "spec_paths": [
           "input.SRC.path"
         ],
-        "requirement": "REQ-0785",
+        "requirement": "FILE-7",
         "context": {
           "dataset": "SRC",
           "path": "src.csv"
@@ -657,7 +657,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.diff.start"
         ],
-        "requirement": "REQ-0606",
+        "requirement": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -670,7 +670,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.diff.end"
         ],
-        "requirement": "REQ-0606",
+        "requirement": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -1177,7 +1177,7 @@ columns:
                 yamaa_adapters::json!([{
                     "phase": "validation",
                     "condition": "incompatible_input_type",
-                    "requirement": "REQ-0606",
+                    "requirement": "TIME-1",
                     "spec_paths": ["columns.END.derivation.impute.not_after"],
                     "context": {"source": "SRC.HIGH", "expected": "date", "actual": "int"},
                 }])
@@ -1704,7 +1704,7 @@ columns:
                 assert_eq!(
                     issues.iter().map(issue_json).collect::<Vec<_>>(),
                     [
-                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"REQ-0308","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
+                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"TEXT-1","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
                     ]
                 );
                 assert!(!fixture.0.join("output.csv").exists());
@@ -1993,7 +1993,7 @@ columns:
             };
             assert_eq!(findings.len(), 60);
             let expected = (0..60).map(|index| yamaa_adapters::json!({
-        "phase":"validation", "condition":"invalid_regex", "requirement":"REQ-0827",
+        "phase":"validation", "condition":"invalid_regex", "requirement":"TEXT-6",
         "spec_paths":[format!("columns.V{index}.derivation.str_extract.pattern")],
         "context":{"pattern":format!("[{}", "a".repeat(600)), "reason":"a character class is never closed"}
     })).collect::<Vec<_>>();
@@ -2621,7 +2621,7 @@ columns:
                 };
                 assert_eq!(findings.len(), paths.len());
                 let expected = paths.iter().map(|path| yamaa_adapters::json!({
-            "phase":"validation", "condition":"invalid_string_template", "requirement":"REQ-0461",
+            "phase":"validation", "condition":"invalid_string_template", "requirement":"TEXT-3",
             "spec_paths":[path], "context":{"reason":"unmatched_brace"}
         })).collect::<Vec<_>>();
                 let fixture = bespoke(&yamaa_adapters::json_wire::encode(&spec), b"ID,A,B,N\n");
@@ -2645,7 +2645,7 @@ columns:
                 columns.push(yamaa_adapters::json!({"name":format!("V{index}"),"type":"str","derivation":{"str_template":format!("{{{}","a".repeat(1600))}}));
                 paths.push(format!("columns.V{index}.derivation.str_template"));
             }
-            // The added columns must be live under pruning (REQ-0638) for
+            // The added columns must be live under pruning (LAYER-11) for
             // their template findings to be reported at all.
             let mut projected = spec["output"]["columns"].as_array().unwrap().clone();
             projected.extend((0..55).map(|index| yamaa_adapters::json!(format!("V{index}"))));

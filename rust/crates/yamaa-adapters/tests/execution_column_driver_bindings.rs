@@ -2,11 +2,11 @@
 //! A column-level derivation completes the rows of every row template that
 //! leaves the column to the column phase, each row from the record that built
 //! it (#2829). The column binds once for each driver those templates read,
-//! against that driver's own record (REQ-0111): its qualifier reads the
+//! against that driver's own record (LOOKUP-1): its qualifier reads the
 //! record that built the row, and another input joins on the output keys it
 //! carries. The bindings run one driver after another, in the order of the
 //! first template each completes. A column holding a qualified aggregate
-//! keeps the whole-dataset scope (REQ-0467).
+//! keeps the whole-dataset scope (LOOKUP-18).
 use std::{
     fs,
     path::PathBuf,

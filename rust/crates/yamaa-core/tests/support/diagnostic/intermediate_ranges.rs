@@ -194,7 +194,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         findings.remove(0),
         "unknown_field",
-        "REQ-0122",
+        "LOOKUP-11",
         "intermediates[0].columns",
         &[("intermediate", "P"), ("identifier", "D.ABSENT")],
     ));

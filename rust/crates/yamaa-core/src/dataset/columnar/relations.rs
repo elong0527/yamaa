@@ -7,7 +7,7 @@
 //! (#2842) when every key pair can be answered exactly, and otherwise from a
 //! scan that compares every pair on every record; the range, the filter and
 //! the selection then run on those records in stored order. An index over a
-//! SELF relation is dropped at each template barrier (REQ-0136).
+//! SELF relation is dropped at each template barrier (LOOKUP-12).
 use super::buffer::Values;
 use super::donor::{self, Built, Donor};
 use super::eval::owned;

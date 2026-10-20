@@ -88,23 +88,23 @@ mod numeric {
         #[test]
         fn diagnostics_have_expression_requirements_and_exact_priority() {
             for (text, byte, condition, requirement) in [
-                ("SUM(A", 5, "invalid_expression", "REQ-0188"),
-                ("SUM(A,B)", 5, "invalid_expression", "REQ-0188"),
-                ("SUM(D.*)", 4, "invalid_expression", "REQ-0188"),
-                ("COUNT(*)", 6, "invalid_expression", "REQ-0188"),
-                ("COUNT((D.*))", 7, "invalid_expression", "REQ-0188"),
-                ("COUNT(D.*,A)", 9, "invalid_expression", "REQ-0188"),
-                ("D.*", 0, "invalid_expression", "REQ-0188"),
-                ("SUM(MIN(A))", 0, "nested_reduction", "REQ-0502"),
-                ("SUM(MIN(A)", 10, "invalid_expression", "REQ-0188"),
-                ("SUM(MIN(A)) > X", 12, "prohibited_construct", "REQ-0441"),
-                ("SUM(ABS())", 4, "prohibited_function", "REQ-0440"),
+                ("SUM(A", 5, "invalid_expression", "FORMULA-1"),
+                ("SUM(A,B)", 5, "invalid_expression", "FORMULA-1"),
+                ("SUM(D.*)", 4, "invalid_expression", "FORMULA-1"),
+                ("COUNT(*)", 6, "invalid_expression", "FORMULA-1"),
+                ("COUNT((D.*))", 7, "invalid_expression", "FORMULA-1"),
+                ("COUNT(D.*,A)", 9, "invalid_expression", "FORMULA-1"),
+                ("D.*", 0, "invalid_expression", "FORMULA-1"),
+                ("SUM(MIN(A))", 0, "nested_reduction", "FORMULA-21"),
+                ("SUM(MIN(A)", 10, "invalid_expression", "FORMULA-1"),
+                ("SUM(MIN(A)) > X", 12, "prohibited_construct", "FORMULA-27"),
+                ("SUM(ABS())", 4, "prohibited_function", "FORMULA-13"),
                 // The doubled sign is outside the grammar, so syntax is reported
                 // before the context refuses the later AND.
-                ("--A AND B", 1, "invalid_expression", "REQ-0188"),
-                ("AVG(A)", 0, "prohibited_function", "REQ-0440"),
-                ("AVG(A", 5, "invalid_expression", "REQ-0188"),
-                ("COUNT(D .*)", 8, "invalid_expression", "REQ-0188"),
+                ("--A AND B", 1, "invalid_expression", "FORMULA-1"),
+                ("AVG(A)", 0, "prohibited_function", "FORMULA-13"),
+                ("AVG(A", 5, "invalid_expression", "FORMULA-1"),
+                ("COUNT(D .*)", 8, "invalid_expression", "FORMULA-1"),
             ] {
                 let (actual, _, failure) = failure(text);
                 assert_eq!(
@@ -671,7 +671,7 @@ mod numeric {
                 }
             );
             assert_eq!(kind.condition(), "invalid_expression");
-            assert_eq!(kind.requirement(), "REQ-0188");
+            assert_eq!(kind.requirement(), "FORMULA-1");
             // A reserved word is never a name, so a bare one is outside the grammar.
             let (position, kind) = failure("\u{2003}aNd");
             assert_eq!(
@@ -697,11 +697,11 @@ mod numeric {
                     construct: Construct::Boolean
                 }
             );
-            assert_eq!(kind.requirement(), "REQ-0441");
+            assert_eq!(kind.requirement(), "FORMULA-27");
             for (text, count) in [("abS(1, 2)", Some(2)), ("\u{2003}foo(1)", None)] {
                 let (position, kind) = failure(text);
                 assert_eq!(kind.condition(), "prohibited_function");
-                assert_eq!(kind.requirement(), "REQ-0440");
+                assert_eq!(kind.requirement(), "FORMULA-13");
                 let Failure::ProhibitedFunction {
                     function,
                     argument_count,
@@ -1079,7 +1079,7 @@ mod numeric {
                     power(Number::float(base), Number::float(exponent), "POWER(A, B)").unwrap_err();
                 assert_eq!(error.phase(), "derivation");
                 assert_eq!(error.condition(), "invalid_power");
-                assert_eq!(error.requirement(), "REQ-0433");
+                assert_eq!(error.requirement(), "FORMULA-15");
                 assert_eq!(
                     error.kind,
                     ArithmeticErrorKind::InvalidPower {
@@ -1721,7 +1721,7 @@ mod numeric {
                     failure.diagnostic(Context::Predicate, "site", text, position.character);
                 assert_eq!(finding.definition().condition, "integer_overflow");
                 assert_eq!(finding.definition().phase, "validation");
-                assert_eq!(finding.definition().requirement, Some("REQ-0014"));
+                assert_eq!(finding.definition().requirement, Some("VALUE-5"));
             }
         }
     }
@@ -1781,7 +1781,7 @@ mod numeric {
                 );
                 assert_eq!(finding.definition().phase, "validation");
                 assert_eq!(finding.definition().condition, "integer_overflow");
-                assert_eq!(finding.definition().requirement, Some("REQ-0014"));
+                assert_eq!(finding.definition().requirement, Some("VALUE-5"));
                 assert_eq!(finding.spec_paths, ["filter"]);
                 assert_eq!(
                     finding.context["predicate"],
@@ -2001,7 +2001,7 @@ mod numeric {
                     ..
                 }) = predicate(&expression)
                 else {
-                    panic!("REQ-0826 syntax must be a registered finding: {pattern}")
+                    panic!("TEXT-6 syntax must be a registered finding: {pattern}")
                 };
             }
             let text = "str_contains('\u{1f600}', '(')";
@@ -2014,7 +2014,7 @@ mod numeric {
             assert_eq!(position.byte, 21);
             assert_eq!(position.character, 18);
             assert!(matches!(failure, Failure::InvalidRegex { byte: 1, .. }));
-            assert_eq!(failure.requirement(), "REQ-1244");
+            assert_eq!(failure.requirement(), "FORMULA-8");
             // The whole text is lexed and parsed before a pattern is compiled.
             for text in ["str_contains('\u{1f600}', '('", "str_contains(A, '(') @"] {
                 assert!(
@@ -2053,7 +2053,7 @@ mod numeric {
                     panic!("{text}")
                 };
                 assert_eq!(failure, Failure::InvalidEscape);
-                assert_eq!(failure.requirement(), "REQ-0191");
+                assert_eq!(failure.requirement(), "FORMULA-7");
             }
             for text in [
                 "A LIKE 'a!!' ESCAPE '!'",
@@ -2454,7 +2454,7 @@ mod numeric {
             );
         }
 
-        /// REQ-0825 expands braced escapes to REQ-0022 scalars, excluding surrogates.
+        /// TEXT-8 expands braced escapes to VALUE-11 scalars, excluding surrogates.
         #[test]
         fn braced_code_point_expansion_requires_a_scalar() {
             for value in 0xd800..=0xdfff {

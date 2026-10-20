@@ -2,7 +2,7 @@ phase: derivation
 condition: odm_not_unique
 spec_paths:
   - columns.SEX.derivation.odm
-requirement: REQ-1278
+requirement: NAME-13
 context:
   item: ODM.IT.DM.SEX
   records: 2

@@ -992,7 +992,7 @@ mod table {
                 [yamaa_adapters::json!({
                     "phase": "ingest",
                     "condition": "source_sas_invalid",
-                    "requirement": "REQ-1317",
+                    "requirement": "SAS-7",
                     "spec_paths": ["input.SRC.path"],
                     "context": {
                         "dataset": "SRC",
@@ -1841,35 +1841,35 @@ mod table {
         fn independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value() {
             let declaration = source("SRC", "held.parquet");
             for (fixture, condition, requirement, extra) in [
-                ("", "source_parquet_invalid", "REQ-1038", json!({})),
+                ("", "source_parquet_invalid", "PARQUET-5", json!({})),
                 (
                     "mixed-empty",
                     "source_field_name_empty",
-                    "REQ-1039",
+                    "PARQUET-6",
                     json!({"field":1}),
                 ),
                 (
                     "mixed-duplicate",
                     "source_field_name_duplicate",
-                    "REQ-1039",
+                    "PARQUET-6",
                     json!({"field":"I"}),
                 ),
                 (
                     "mixed-struct",
                     "source_field_type_unsupported",
-                    "REQ-1040",
+                    "PARQUET-7",
                     json!({"field":"S","stored_type":"struct<left: int64, right: string>"}),
                 ),
                 (
                     "utf8-time",
                     "source_field_value_invalid",
-                    "REQ-1041",
+                    "PARQUET-9",
                     json!({"field":"OTHER","row":1,"value":1}),
                 ),
                 (
                     "bad-date",
                     "source_field_value_invalid",
-                    "REQ-1041",
+                    "PARQUET-9",
                     json!({"field":"D","row":1,"value":-719163}),
                 ),
             ] {

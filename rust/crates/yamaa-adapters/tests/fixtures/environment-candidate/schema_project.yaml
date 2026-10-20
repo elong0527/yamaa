@@ -54,47 +54,47 @@ study_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1062.
+    description: See DEFINE-1.
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: See DEFINE-1.
 - description:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: See DEFINE-1.
 - protocol_name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1062.
+    description: See DEFINE-1.
 metadata_version_class:
 - id:
     type: define_id
     required: true
-    description: See REQ-1063.
+    description: See DEFINE-1.
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1063.
+    description: See DEFINE-1.
 - description:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1063.
+    description: See DEFINE-1.
 codelist_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1077.
+    description: See CT-1.
 - name:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1077.
+    description: See CT-1.
 - data_type:
     type: str
     default: text
@@ -102,80 +102,80 @@ codelist_class:
     - text
     - integer
     - float
-    description: See REQ-1077.
+    description: See CT-1.
 - extensible:
     type: bool
     default: false
-    description: See REQ-1077.
+    description: See CT-1.
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: See CT-1.
 - format_name:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1077.
+    description: See CT-1.
 - items:
     type: list[codelist_item_class]
     required: false
-    description: See REQ-1077.
+    description: See CT-1.
 - external:
     type: external_codelist_class
     required: false
-    description: See REQ-1077.
+    description: See CT-1.
 codelist_item_class:
 - value:
     type: literal_value
     required: true
-    description: See REQ-1078.
+    description: See CT-5.
 - decode:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: See CT-5.
 - rank:
     type: int
     required: false
-    description: See REQ-1078.
+    description: See CT-5.
 - alias:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1078.
+    description: See CT-5.
 - extended:
     type: bool
     default: false
-    description: See REQ-1078.
+    description: See CT-5.
 external_codelist_class:
 - dictionary:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: See CT-3.
 - version:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1079.
+    description: See CT-3.
 - href:
     type: str
     required: false
     min_length: 1
-    description: See REQ-1079.
+    description: See CT-3.
 define_id:
   type: str
   pattern: ^[A-Za-z_][A-Za-z0-9_.-]*$
-  description: See REQ-1068.
+  description: See DEFINE-9.
 relative_href:
   type: str
   pattern: ^(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)(?:/(?:[^./\\][^/\\]*|\.(?:[^./\\][^/\\]*|\.[^/\\]+)?)?)*$
-  description: See REQ-1070.
+  description: See DEFINE-13.
 language_tag:
   type: str
   pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$
-  description: See REQ-1073.
+  description: See DEFINE-21.
 standard_name:
   type: str
   values:
@@ -190,7 +190,7 @@ standard_name:
   - SENDIG-AR
   - SENDIG-DART
   - SENDIG-GENETOX
-  description: See REQ-1074.
+  description: See DEFINE-6.
 submission_section_class:
 - specs:
     type: list[path]
@@ -241,7 +241,7 @@ document_class:
 - id:
     type: identifier
     required: true
-    description: See REQ-1065.
+    description: See DEFINE-13.
 - kind:
     type: str
     required: true
@@ -249,13 +249,13 @@ document_class:
     - annotated_crf
     - supplemental
     - other
-    description: See REQ-1065.
+    description: See DEFINE-13.
 - link:
     type: relative_href
     required: true
-    description: See REQ-1065.
+    description: See DEFINE-13.
 - title:
     type: str
     required: true
     min_length: 1
-    description: See REQ-1065.
+    description: See DEFINE-13.

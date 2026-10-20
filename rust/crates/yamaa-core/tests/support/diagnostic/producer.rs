@@ -36,7 +36,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             links(&[link(&source)]),
         )),
         "redundant_field_type",
-        "REQ-0523",
+        "INPUT-6",
         &["input.SRC.types"],
     ));
     let invalid = document(
@@ -55,7 +55,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             links(&[link(&invalid)]),
         )),
         "invalid_producer_contract",
-        "REQ-0534",
+        "INPUT-10",
         &["input.SRC.schema.columns.ID.label"],
     ));
     let contract = producer_contract::prepare(&source).unwrap();
@@ -65,7 +65,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             .unwrap()
             .unwrap(),
         "producer_contract_mismatch",
-        "REQ-0535",
+        "INPUT-11",
         &["input.SRC.schema", "input.SRC.path"],
     ));
     reached

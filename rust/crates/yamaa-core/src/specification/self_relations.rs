@@ -328,7 +328,7 @@ pub(super) fn bind_operand(
     }
 }
 
-/// A column default reading SELF retains its completed-donor phase (REQ-0120).
+/// A column default reading SELF retains its completed-donor phase (LOOKUP-7).
 pub(super) fn is_self_reference(d: &Document, name: &str) -> Result<bool, PrepareError> {
     let Some((relation, _)) = name.split_once('.') else {
         return Ok(false);

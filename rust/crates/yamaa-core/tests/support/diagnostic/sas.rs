@@ -37,7 +37,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 definition.condition,
                 definition.requirement
             ),
-            ("ingest", "source_sas_invalid", Some("REQ-1317"))
+            ("ingest", "source_sas_invalid", Some("SAS-7"))
         );
         assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
         let mut context = std::collections::BTreeMap::from([

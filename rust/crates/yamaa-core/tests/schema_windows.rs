@@ -177,7 +177,7 @@ mod schema {
             };
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0].definition().condition, "unknown_window");
-            assert_eq!(findings[0].definition().requirement, Some("REQ-1253"));
+            assert_eq!(findings[0].definition().requirement, Some("WINDOW-1"));
             assert_eq!(
                 findings[0].path,
                 "columns.DEAD.derivation.row_number.window"
@@ -431,7 +431,7 @@ mod schema {
                         assert_eq!(diagnostic.code, ConditionCode::AggregateDeriveDeclaration);
                         assert_eq!(diagnostic.definition().phase, "validation");
                         assert_eq!(diagnostic.definition().condition, "invalid_derive_step");
-                        assert_eq!(diagnostic.definition().requirement, Some("REQ-1189"));
+                        assert_eq!(diagnostic.definition().requirement, Some("LOOKUP-22"));
                         assert_eq!(
                             diagnostic.spec_paths,
                             [format!(
@@ -1127,7 +1127,7 @@ mod schema {
                 );
                 assert_eq!(diagnostic.spec_paths, ["rows[0].filter"]);
                 assert_eq!(diagnostic.definition().phase, "validation");
-                assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
+                assert_eq!(diagnostic.definition().requirement, Some("VALUE-5"));
                 assert_eq!(diagnostic.context.len(), 2);
                 assert_eq!(
                     diagnostic.context["predicate"],
@@ -1282,7 +1282,7 @@ mod schema {
                 yamaa_core::diagnostic::ConditionCode::LiteralIntegerOverflow
             );
             assert_eq!(diagnostic.definition().phase, "validation");
-            assert_eq!(diagnostic.definition().requirement, Some("REQ-0014"));
+            assert_eq!(diagnostic.definition().requirement, Some("VALUE-5"));
             assert_eq!(
                 diagnostic.spec_paths,
                 ["columns.VALUE.derivation.source.filter"]
@@ -1826,8 +1826,8 @@ mod schema {
             let diagnostics = findings[0].diagnostics(prepared.source()).unwrap();
             let diagnostic = diagnostics
                 .iter()
-                .find(|d| d.definition().requirement == Some("REQ-0470"))
-                .unwrap_or_else(|| panic!("expected a REQ-0470 diagnostic, got {diagnostics:?}"));
+                .find(|d| d.definition().requirement == Some("LOOKUP-19"))
+                .unwrap_or_else(|| panic!("expected a LOOKUP-19 diagnostic, got {diagnostics:?}"));
             assert_eq!(diagnostic.code, ConditionCode::AggregateGroupNotOutputKey);
             assert_eq!(diagnostic.definition().phase, "validation");
             assert_eq!(

@@ -213,7 +213,7 @@ fn lower_shared(
 }
 /// Inspect references in supported row-local defaults without reading source data.
 /// Literal text and qualified stored fields never promote an output declaration.
-/// The third element names why the default is not row-local (REQ-1260) when
+/// The third element names why the default is not row-local (SPEC-6) when
 /// it is not: the derivation kind that breaks row locality.
 fn default_reads(
     d: &Document,
@@ -259,8 +259,8 @@ fn default_reads(
     // a nested branch or another output-key default depends on it.
     let window_default = contains_window(d, value, 0)?;
     let mut reads = Vec::new();
-    // Input-backed named reads can be row defaults (REQ-1260), while column
-    // SELF reads retain the complete constructed donor pool (REQ-0120).
+    // Input-backed named reads can be row defaults (SPEC-6), while column
+    // SELF reads retain the complete constructed donor pool (LOOKUP-7).
     let mut names = Vec::new();
     derivations::references(d, value, project, &mut names, 0)?;
     self_relations::template_references(d, value, string_templates, &mut names, 0)?;
@@ -392,7 +392,7 @@ fn select_defaults(
         .map(|(local, _, _)| *local)
         .collect::<Vec<_>>();
     // A default that only reads a non-row-local column inherits that column's
-    // root cause, so the finding names the original kind (REQ-1260).
+    // root cause, so the finding names the original kind (SPEC-6).
     let mut not_row_local = defaults
         .iter()
         .map(|(_, _, reason)| *reason)
@@ -1402,10 +1402,10 @@ impl Rows {
         // row-phase filter or derivation admits that intermediate as a
         // selector for the template, whose matching is keyed on the row
         // identity. The mere presence of intermediates is not a row-phase
-        // context (REQ-1260): promoting a key column whose derivation reads
+        // context (SPEC-6): promoting a key column whose derivation reads
         // a named lookup would make candidates the filter suppresses read
         // that lookup, and an intermediate without `no_match` must never
-        // fail `unmatched_key` for them (REQ-1264). Named reads by a filter,
+        // fail `unmatched_key` for them (LOOKUP-12). Named reads by a filter,
         // a row derivation, or another default already promote the match
         // columns they need through `default_dependencies`.
         // A reference owned by the template's own driver binds as a source
@@ -1514,7 +1514,7 @@ impl Rows {
             // A key whose derivation reads a named lookup must stay
             // template-local: promoting it globally would make suppressed
             // candidates in templates that never read it read the lookup
-            // before their filter (REQ-1264). Safe keys (source, literal)
+            // before their filter (LOOKUP-12). Safe keys (source, literal)
             // stay row-phase everywhere once any template needs complete
             // keys, so column-phase source reads never run under grouped
             // contexts they cannot admit.
@@ -1542,7 +1542,7 @@ impl Rows {
         // (non-lookup, non-window) defaults that read the grouped driver
         // row-phase everywhere. Lookup defaults stay per-template above, so
         // suppressed candidates in templates that never read them never read
-        // the lookup (REQ-1264). Defaults that read only other datasets
+        // the lookup (LOOKUP-12). Defaults that read only other datasets
         // (for example a reference date from a different input) stay
         // column-phase: promoting them into the grouped row context would
         // misbind their source (sdtm-lb, sdtm-vs-planned-time-points).

@@ -24,7 +24,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "derivation",
             "multiple_values_per_key",
-            "REQ-0075",
+            "COLUMN-2",
             vec![("identifier", text("SRC.A")), ("value_count", V::from(3))],
         ),
         (
@@ -61,7 +61,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "join",
             "multiple_matches",
-            "REQ-0127",
+            "LOOKUP-10",
             vec![
                 ("dataset", text("DM")),
                 ("intermediate", text("I")),
@@ -95,7 +95,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "validation",
             "incompatible_input_type",
-            "REQ-0510",
+            "FORMULA-23",
             vec![
                 ("expr", text("MEAN(SRC.A)")),
                 ("reducer", text("MEAN")),

@@ -70,7 +70,7 @@ remains pending the public frontend.
 
 
 The unchanged `negative-paired-dates` report is authored from its two committed
-DM records, declared date types and REQ-0382 expected failure. It retains the
+DM records, declared date types and CHECK-11 expected failure. It retains the
 complete failed all_or_none record, its identity and offending subject, source
 observations and failed save gate. Every field was compared with actual reference
 Python execution before native qualification.

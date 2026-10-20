@@ -945,7 +945,7 @@ mod service {
                     "study"
                 )]
             );
-            assert_eq!(findings[0].definition().requirement, Some("REQ-1337"));
+            assert_eq!(findings[0].definition().requirement, Some("DEFINE-28"));
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]
@@ -980,7 +980,7 @@ mod service {
             );
             assert!(findings
                 .iter()
-                .all(|finding| finding.definition().requirement == Some("REQ-1337")));
+                .all(|finding| finding.definition().requirement == Some("DEFINE-28")));
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]
@@ -1045,19 +1045,19 @@ mod service {
                     "datasets.DM.artifact",
                     R::Missing,
                     ConditionCode::ProducerContractMismatch,
-                    "REQ-0535",
+                    "INPUT-11",
                 ),
                 (
                     "sdtm.define",
                     R::Missing,
                     ConditionCode::ResourceMissing,
-                    "REQ-0785",
+                    "FILE-7",
                 ),
                 (
                     "datasets.DM.artifact",
                     R::NotRegularFile,
                     ConditionCode::ResourceNotRegularFile,
-                    "REQ-0785",
+                    "FILE-7",
                 ),
             ] {
                 let finding = define::resource_diagnostic(path, "declared.csv", observation);
@@ -1113,7 +1113,7 @@ mod service {
                 finding.definition().condition,
                 "resource_path_content_changed"
             );
-            assert_eq!(finding.definition().requirement, Some("REQ-0788"));
+            assert_eq!(finding.definition().requirement, Some("FILE-10"));
             assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
             assert_eq!(
                 finding.context,
@@ -1136,7 +1136,7 @@ mod service {
                     P::Publication,
                     ConditionCode::OutputPublicationFailed,
                     "output",
-                    Some("REQ-0764"),
+                    Some("OUTPUT-8"),
                 ),
             ] {
                 let finding = define::publication_diagnostic(

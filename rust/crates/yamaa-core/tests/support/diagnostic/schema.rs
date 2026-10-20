@@ -93,7 +93,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaInvalidFieldType,
         "needed",
         "invalid_field_type",
-        "REQ-0287",
+        "SCHEMA-12",
     );
     check(
         &mut reached,
@@ -101,7 +101,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaUnknownField,
         "extra",
         "unknown_field",
-        "REQ-0285",
+        "SCHEMA-13",
     );
     let findings = basic.validate_document(&document(T::map(vec![]))).unwrap();
     check(
@@ -110,7 +110,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaMissingRequiredField,
         "needed",
         "missing_required_field",
-        "REQ-0285",
+        "SCHEMA-13",
     );
     let findings = basic
         .validate_document(&document(T::map(vec![("schema_version", T::text("old"))])))
@@ -121,7 +121,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaVersionMismatch,
         "schema_version",
         "schema_version_mismatch",
-        "REQ-0281",
+        "SCHEMA-2",
     );
     assert_eq!(findings.len(), 1); // Version rejection precedes missing-field detection.
     let resolved = schema(vec![field("output", "str", true)], vec![]);
@@ -134,13 +134,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaResolvedOutputRequired,
         "output",
         "missing_required_field",
-        "REQ-0657",
+        "LAYER-12",
     );
     let ordinary = resolved
         .validate_document(&document(T::map(vec![])))
         .unwrap();
     assert_eq!(ordinary[0].code, SchemaMissingRequiredField);
-    assert_eq!(ordinary[0].definition().requirement, Some("REQ-0285"));
+    assert_eq!(ordinary[0].definition().requirement, Some("SCHEMA-13"));
 
     // A written long form holding only its shorthand's field restates it; the
     // resolved, canonical document holds that long form and is not refused.
@@ -205,21 +205,21 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             SchemaInvalidOperationCount,
             "derive",
             "invalid_operation_count",
-            "REQ-0286",
+            "SCHEMA-7",
         ),
         (
             T::map(vec![("absent", integer("1"))]),
             SchemaUnknownOperation,
             "derive.absent",
             "unknown_operation",
-            "REQ-0286",
+            "SCHEMA-7",
         ),
         (
             integer("2"),
             SchemaBareDerivationScalar,
             "derive",
             "bare_derivation_scalar",
-            "REQ-0320",
+            "EXPR-5",
         ),
     ] {
         let findings = operations
@@ -271,7 +271,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaCaseItems,
         "derive.case",
         "invalid_field_type",
-        "REQ-0339",
+        "EXPR-7",
     );
     // A column type or day rule outside its closed values keeps the rule that
     // closes them (VALUE-1, TIME-10); every other constraint is SCHEMA-12's.
@@ -279,16 +279,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             "custom",
             [
-                (SchemaDescriptorValueNotPermitted, "REQ-0287"),
-                (SchemaDescriptorPatternMismatch, "REQ-0287"),
-                (SchemaDescriptorMinimumLength, "REQ-0287"),
-                (SchemaDescriptorInvalidSize, "REQ-0287"),
+                (SchemaDescriptorValueNotPermitted, "SCHEMA-12"),
+                (SchemaDescriptorPatternMismatch, "SCHEMA-12"),
+                (SchemaDescriptorMinimumLength, "SCHEMA-12"),
+                (SchemaDescriptorInvalidSize, "SCHEMA-12"),
             ],
         ),
         (
             "column_type",
             [
-                (SchemaColumnTypeValueNotPermitted, "REQ-0012"),
+                (SchemaColumnTypeValueNotPermitted, "VALUE-1"),
                 (SchemaColumnTypePatternMismatch, "SCHEMA-12"),
                 (SchemaColumnTypeMinimumLength, "SCHEMA-12"),
                 (SchemaColumnTypeInvalidSize, "SCHEMA-12"),
@@ -297,7 +297,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             "day_rule",
             [
-                (SchemaDayRuleValueNotPermitted, "REQ-0609"),
+                (SchemaDayRuleValueNotPermitted, "TIME-10"),
                 (SchemaDayRulePatternMismatch, "SCHEMA-12"),
                 (SchemaDayRuleMinimumLength, "SCHEMA-12"),
                 (SchemaDayRuleInvalidSize, "SCHEMA-12"),
@@ -402,7 +402,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             SchemaLayerInvalidClear,
             "output",
             "invalid_clear",
-            "REQ-0660",
+            "LAYER-9",
         ),
         (
             vec![
@@ -418,14 +418,14 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             SchemaLayerIdentifierRepeated,
             "columns.X.name",
             "duplicate_identifier",
-            "REQ-0659",
+            "LAYER-4",
         ),
         (
             vec![("extra", T::text("x"))],
             SchemaLayerVersionMismatch,
             "schema_version",
             "schema_version_mismatch",
-            "REQ-0656",
+            "LAYER-4",
         ),
     ] {
         let input = if code == SchemaLayerVersionMismatch {
@@ -468,32 +468,32 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SchemaUnknownWindow,
         "w",
         "unknown_window",
-        "REQ-1253",
+        "WINDOW-1",
     );
     for (extra, code, path, req) in [
         (
             vec![("domain", integer("7"))],
             SchemaModelInvalidValue,
             "domain",
-            "REQ-0287",
+            "SCHEMA-12",
         ),
         (
             vec![("output", T::map(vec![]))],
             SchemaModelMissingField,
             "output.path",
-            "REQ-0285",
+            "SCHEMA-13",
         ),
         (
             vec![("extra", T::text("x"))],
             SchemaModelUnknownField,
             "extra",
-            "REQ-0285",
+            "SCHEMA-13",
         ),
         (
             vec![("verifications", T::List(vec![T::map(vec![])]))],
             SchemaModelInvalidOperationCount,
             "verifications.0",
-            "REQ-0286",
+            "SCHEMA-7",
         ),
     ] {
         let mut fields = vec![

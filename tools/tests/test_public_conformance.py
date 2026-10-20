@@ -282,13 +282,13 @@ class PublicConformance(unittest.TestCase):
         (self.case / "expected/error.yaml").write_text(
             "phase: validation\ncondition: dependency_cycle\n"
             "spec_paths: [columns.A.derivation, columns.B.derivation]\n"
-            "requirement: REQ-0072\ncontext: {cycle: [A, B, A]}\n"
+            "requirement: COLUMN-6\ncontext: {cycle: [A, B, A]}\n"
         )
         cycle = {
             "phase": "validation",
             "condition": "dependency_cycle",
             "spec_paths": ["columns.A.derivation", "columns.B.derivation"],
-            "requirement": "REQ-0072",
+            "requirement": "COLUMN-6",
             "context": {"cycle": ["A", "B", "A"]},
         }
         # Original c7b88a4f reports this independent forward reference beside
@@ -298,7 +298,7 @@ class PublicConformance(unittest.TestCase):
             "phase": "validation",
             "condition": "forward_reference",
             "spec_paths": ["columns.C.derivation"],
-            "requirement": "REQ-0071",
+            "requirement": "COLUMN-5",
             "context": {"column": "C", "dependency": "B"},
         }
         self.build.update(
@@ -825,7 +825,7 @@ class PublicConformance(unittest.TestCase):
                 {
                     "phase": "validation",
                     "condition": "invalid_clear",
-                    "requirement": "REQ-0660",
+                    "requirement": "LAYER-9",
                     "spec_paths": ["intermediates.X.no_match"],
                     "context": {},
                 }
@@ -927,7 +927,7 @@ class PublicConformance(unittest.TestCase):
             example, "python", record, fixtures, observed, {}
         )
         self.assertEqual(verdict["verdict"], "pass")
-        # Check rows follow column declaration order (REQ-1175): permuting
+        # Check rows follow column declaration order (CHECK-23): permuting
         # the key columns moves their rows, which compare as a multiset.
         report = {
             "columns": [["SPEC_PATH", "str"], ["COUNT", "int"]],
@@ -1021,7 +1021,7 @@ class PublicConformance(unittest.TestCase):
         expectations = judge.load_metamorphic_expectations(ROOT / "benchmarks")
         names = {e["name"] for e in corpus["examples"]}
         # #2190 fixes the 40 missing-handler empty children. The reviewed
-        # forward-reference ordering exceptions remain permanent: REQ-0643
+        # forward-reference ordering exceptions remain permanent: LAYER-13
         # composes the empty child's columns in dependency order.
         forward = {
             ("negative-forward-key-reference", "empty_child"),

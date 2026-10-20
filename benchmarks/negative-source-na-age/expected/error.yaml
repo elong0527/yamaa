@@ -2,7 +2,7 @@ phase: ingest
 condition: field_parse_failed
 spec_paths:
   - input.DM.types.AGE
-requirement: REQ-0536
+requirement: INPUT-7
 context:
   dataset: DM
   field: AGE

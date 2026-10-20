@@ -79,7 +79,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 diagnostic.definition().condition,
                 diagnostic.definition().requirement
             ),
-            ("validation", "runtime_artifact_mismatch", Some("REQ-0697"))
+            ("validation", "runtime_artifact_mismatch", Some("FUNC-3"))
         );
         assert_eq!(diagnostic.spec_paths, ["lock"]);
         assert_eq!(diagnostic.source_span, None);

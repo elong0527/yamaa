@@ -51,7 +51,7 @@ impl Contract {
     pub fn fields(&self) -> &[Field] {
         &self.fields
     }
-    /// REQ-0535 compares actual stored headers in their original order. It never
+    /// INPUT-11 compares actual stored headers in their original order. It never
     /// sorts, infers a type, or reads a value to establish this contract.
     pub fn matches_header(&self, actual: &[&str]) -> bool {
         actual.len() == self.fields.len()

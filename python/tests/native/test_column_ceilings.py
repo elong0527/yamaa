@@ -280,7 +280,7 @@ def test_wide_yaml_integer_reaches_its_complete_language_finding(tmp_path, proje
         for issue in refusals(spec, project):
             assert issue["phase"] == "validation"
             assert issue["condition"] == "schema_version_mismatch"
-            assert issue["requirement"] == "REQ-0281"
+            assert issue["requirement"] == "SCHEMA-2"
             assert issue["spec_paths"] == ["schema_version"]
             assert issue["context"] == {"expected": "1.0", "actual": actual}
     assert not (tmp_path / "out.csv").exists()

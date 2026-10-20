@@ -21,7 +21,7 @@ reducers, reserved words and comparison operators into independent acceptance
 boundaries in every context. Installed
 Python and R public suites put the same texts into real specification fields;
 later binding failures remain separate from grammar decisions. Empty expression
-fields fail public schema admission under REQ-0287 before reaching the parser.
+fields fail public schema admission under SCHEMA-12 before reaching the parser.
 
 Changing a grammar therefore starts here. A change that is not carried into
 every consumer fails validation rather than producing two runtimes that

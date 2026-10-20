@@ -582,7 +582,7 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
         .unwrap();
         if !self_backed {
             // Both direct input reads and input-backed named selections are
-            // row defaults under REQ-1260. LATE and ALIAS are therefore derived
+            // row defaults under SPEC-6. LATE and ALIAS are therefore derived
             // in every template and available to its completed SELF donors.
             let plan = spec.bind(&schema).unwrap();
             let dataset = RegionId::DATASET;
@@ -632,7 +632,7 @@ fn input_backed_defaults_join_self_donors_while_self_backed_columns_stay_late() 
             }
         } else {
             // SELF-backed LATE remains a column derivation over all completed
-            // templates (REQ-0120), so neither it nor ALIAS is a donor field.
+            // templates (LOOKUP-7), so neither it nor ALIAS is a donor field.
             let findings = phase_findings(&spec, &schema);
             let excluded = findings
                 .iter()

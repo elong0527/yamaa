@@ -201,7 +201,7 @@ fn a_reached_part_is_read_and_refused_as_before() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "multiple_matches");
-    assert_eq!(failure["requirement"], "REQ-0127");
+    assert_eq!(failure["requirement"], "LOOKUP-10");
     assert_eq!(
         failure["context"]["keys"],
         yamaa_adapters::json!([{"ID": 2}])

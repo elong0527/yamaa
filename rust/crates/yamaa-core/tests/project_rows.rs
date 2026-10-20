@@ -368,7 +368,7 @@ mod project {
                     (
                         "validation",
                         "project_environment_missing",
-                        Some("REQ-0694")
+                        Some("FUNC-1")
                     )
                 );
                 assert_eq!(diagnostic.spec_paths, ["environment"]);
@@ -580,7 +580,7 @@ mod project {
                 let d = &result[0];
                 assert_eq!(
                     (d.definition().condition, d.definition().requirement),
-                    ("project_environment_invalid", Some("REQ-0695"))
+                    ("project_environment_invalid", Some("FUNC-2"))
                 );
                 assert_eq!(d.spec_paths, [path]);
                 assert_eq!(d.context["reason"], JsonValue::String(reason.into()));
@@ -1251,7 +1251,7 @@ mod project {
                         (
                             "validation",
                             "project_environment_invalid",
-                            Some("REQ-0695")
+                            Some("FUNC-2")
                         )
                     );
                 }

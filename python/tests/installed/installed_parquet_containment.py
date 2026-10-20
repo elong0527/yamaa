@@ -1,7 +1,7 @@
 """Installed Parquet containment: a decoder panic is one finding, and silent.
 
 parquet 55.2.0's metadata decoder panics on an INT96 statistic longer than 12
-bytes. The engine contains that panic as `source_parquet_invalid` (REQ-1038),
+bytes. The engine contains that panic as `source_parquet_invalid` (PARQUET-5),
 prints nothing, and later reads in the same process still work. R reads the
 same truth.
 """

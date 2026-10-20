@@ -13,7 +13,7 @@ base: ODM
 # starts on the earliest form date across its VS, LB and EX forms and ends on
 # the latest; a visit whose forms land on different days spans them. DM is a
 # subject-level table; its columns join implicitly on the keys DM shares with
-# the output (REQ-0150: STUDYID, USUBJID).
+# the output (LOOKUP-1: STUDYID, USUBJID).
 
 output:
   path: sv.csv

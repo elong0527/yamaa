@@ -687,7 +687,7 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
             failure["condition"].as_str(),
             failure["requirement"].as_str()
         ),
-        (Some("validation"), Some("phase_boundary"), Some("REQ-0069")),
+        (Some("validation"), Some("phase_boundary"), Some("COLUMN-4")),
         "{failure:?}"
     );
     assert_eq!(

@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_aggregate_context
 spec_paths:
   - rows[0].derivations.RACECOUNT.aggregate.key
-requirement: REQ-0142
+requirement: LOOKUP-5
 context:
   expr: "COUNT(ODM.*)"
   reason: a grouped row aggregate reads its own group and declares no key pairs

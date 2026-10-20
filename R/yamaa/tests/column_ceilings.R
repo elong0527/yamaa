@@ -211,7 +211,7 @@ run_column_ceilings <- function() {
     for (operation in operations(project)) {
       issue <- route_issues(operation(spec)$issues, spec, project)
       stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
-        identical(issue$requirement, "REQ-0308"),
+        identical(issue$requirement, "TEXT-1"),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
     }
     stopifnot(!file.exists(file.path(case_root, "out.csv")))
@@ -280,7 +280,7 @@ run_column_ceilings <- function() {
       issue$context <- sub(identified, ',"expected":"1.0"}', issue$context)
       stopifnot(nrow(issue) == 1L, identical(issue$phase, "validation"),
         identical(issue$condition, "schema_version_mismatch"),
-        identical(issue$requirement, "REQ-0281"),
+        identical(issue$requirement, "SCHEMA-2"),
         identical(issue$spec_paths, list("schema_version")), identical(issue$context, expected))
     }
   }

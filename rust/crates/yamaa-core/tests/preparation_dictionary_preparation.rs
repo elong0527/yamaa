@@ -701,7 +701,7 @@ mod preparation {
                     ("schema_version_mismatch", None) => {
                         yamaa_core::diagnostic::ConditionCode::SchemaVersionMismatch
                     }
-                    ("invalid_field_type", Some("REQ-0287")) => {
+                    ("invalid_field_type", Some("SCHEMA-12")) => {
                         yamaa_core::diagnostic::ConditionCode::SchemaInvalidFieldType
                     }
                     _ => panic!("unexpected test cause"),
@@ -1101,7 +1101,7 @@ mod preparation {
                 NormalizationError::Invalid(vec![finding(
                     "$",
                     "invalid_field_type",
-                    Some("REQ-0287"),
+                    Some("SCHEMA-12"),
                     vec![
                         ("expected", C::Text("root_class".into())),
                         (
@@ -1862,7 +1862,7 @@ mod preparation {
             check(
                 &error,
                 "invalid_parent_path",
-                "REQ-0653",
+                "LAYER-2",
                 "parent",
                 &[
                     ("source", "entry"),
@@ -1880,7 +1880,7 @@ mod preparation {
             check(
                 &error,
                 "parent_not_found",
-                "REQ-0654",
+                "LAYER-2",
                 "parent",
                 &[("source", "entry"), ("path", "missing")],
             );
@@ -1895,7 +1895,7 @@ mod preparation {
                 check(
                     &error,
                     "inheritance_cycle",
-                    "REQ-0655",
+                    "LAYER-3",
                     "parent",
                     &[
                         ("source", "b"),
@@ -1940,7 +1940,7 @@ mod preparation {
             check(
                 &error,
                 "schema_version_mismatch",
-                "REQ-0245",
+                "SCHEMA-2",
                 "schema_version",
                 &[
                     ("source", "entry"),
@@ -1956,7 +1956,7 @@ mod preparation {
             check(
                 &error,
                 "schema_version_mismatch",
-                "REQ-0656",
+                "LAYER-4",
                 "parent",
                 &[
                     ("source", "a"),

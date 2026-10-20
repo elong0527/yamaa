@@ -31,7 +31,7 @@ pub enum HostError<E> {
 
 /// Stable activated callable slots; no Send/Sync/Clone requirement or retry.
 /// Adapters normalize nonfinite returns, encode temporal arguments at the
-/// REQ-0570 boundary, and contain host exceptions before returning here. The
+/// VALUE-17 boundary, and contain host exceptions before returning here. The
 /// owned result cannot borrow the input or callback's temporary host buffers.
 pub trait FunctionPort {
     type Error;

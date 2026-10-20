@@ -777,10 +777,10 @@ mod tests {
             assert!(checks.starts_with(REPORT_HEADER));
             assert!(checks.contains("\nout.csv,run,output,,,,,,succeeded,,26000,,,{}\n"));
             assert!(checks.contains(
-                "check,columns.VALUE.verifications[0].not_missing,not_missing,,VALUE,REQ-0375,error,held,,0,26000,,{}\n"
+                "check,columns.VALUE.verifications[0].not_missing,not_missing,,VALUE,CHECK-5,error,held,,0,26000,,{}\n"
             ));
             assert!(checks.contains(
-                "check,columns.VALUE.verifications[1].range,range,,VALUE,REQ-0377,warning,violated,range_failed,26000,26000,\"[{\"\"ID\"\":1},"
+                "check,columns.VALUE.verifications[1].range,range,,VALUE,CHECK-7,warning,violated,range_failed,26000,26000,\"[{\"\"ID\"\":1},"
             ));
             assert_eq!(
                 result.observations()["artifacts"].as_array().unwrap().len(),

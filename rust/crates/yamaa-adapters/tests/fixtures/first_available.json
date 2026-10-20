@@ -1502,7 +1502,7 @@
             "identifier": "SRC.ABSENT"
           },
           "phase": "validation",
-          "requirement": "REQ-0103",
+          "requirement": "NAME-3",
           "spec_paths": [
             "columns.V.derivation.first_available.sources[1]"
           ]
@@ -1521,7 +1521,7 @@
                 "identifier": "SRC.ABSENT"
               },
               "phase": "validation",
-              "requirement": "REQ-0103",
+              "requirement": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.first_available.sources[1]"
               ]
@@ -1695,7 +1695,7 @@
             "identifier": "ID"
           },
           "phase": "validation",
-          "requirement": "REQ-0148",
+          "requirement": "LOOKUP-8",
           "spec_paths": [
             "columns.V.derivation.first_available.sources[0].filter"
           ]
@@ -1714,7 +1714,7 @@
                 "identifier": "ID"
               },
               "phase": "validation",
-              "requirement": "REQ-0148",
+              "requirement": "LOOKUP-8",
               "spec_paths": [
                 "columns.V.derivation.first_available.sources[0].filter"
               ]
@@ -1894,7 +1894,7 @@
             "value_count": 2
           },
           "phase": "derivation",
-          "requirement": "REQ-0075",
+          "requirement": "COLUMN-2",
           "spec_paths": [
             "columns.V.derivation.first_available"
           ]
@@ -1925,7 +1925,7 @@
                 "value_count": 2
               },
               "phase": "derivation",
-              "requirement": "REQ-0075",
+              "requirement": "COLUMN-2",
               "spec_paths": [
                 "columns.V.derivation.first_available"
               ]
@@ -2112,7 +2112,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "REQ-0013",
+          "requirement": "VALUE-3",
           "spec_paths": [
             "columns.V"
           ]
@@ -2144,7 +2144,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "REQ-0013",
+              "requirement": "VALUE-3",
               "spec_paths": [
                 "columns.V"
               ]
@@ -2331,7 +2331,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "REQ-0013",
+          "requirement": "VALUE-3",
           "spec_paths": [
             "columns.V"
           ]
@@ -2363,7 +2363,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "REQ-0013",
+              "requirement": "VALUE-3",
               "spec_paths": [
                 "columns.V"
               ]

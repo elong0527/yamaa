@@ -2,7 +2,7 @@ phase: validation
 condition: ambiguous_dictionary
 spec_paths:
   - columns.SMOKEFL.derivation.mapping.dict
-requirement: REQ-0714
+requirement: EXPR-12
 context:
   folded_key: "Y"
   entries: ["Y", "y"]

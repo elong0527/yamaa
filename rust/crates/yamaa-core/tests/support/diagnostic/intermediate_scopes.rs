@@ -220,7 +220,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             } else {
                 "unknown_field"
             },
-            "REQ-1263",
+            "LOOKUP-16",
             "intermediates[1].derivations.NEXT.source",
             context,
         ));
@@ -255,7 +255,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![("derivations", Tree::map(vec![("NEXT", source("P.ID"))]))],
             false,
             "dependency_cycle",
-            "REQ-1263",
+            "LOOKUP-16",
             "intermediates[0].derivations.NEXT.source",
             vec![("cycle", V::Array(vec![text("P"), text("P")]))],
         ),
@@ -263,7 +263,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![("derivations", Tree::map(vec![("NEXT", source("D.ABSENT"))]))],
             false,
             "unknown_field",
-            "REQ-1185",
+            "LOOKUP-15",
             "intermediates[0].derivations.NEXT.source",
             vec![
                 ("intermediate", text("P")),
@@ -274,7 +274,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![("derivations", Tree::map(vec![("ID", source("D.X"))]))],
             false,
             "duplicate_derivation",
-            "REQ-1185",
+            "LOOKUP-15",
             "intermediates[0].derivations.ID",
             vec![
                 ("intermediate", text("P")),
@@ -304,7 +304,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             )],
             false,
             "unknown_field",
-            "REQ-1263",
+            "LOOKUP-16",
             "intermediates[0].derivations.NEXT.row_number.window.group_by[0]",
             vec![("intermediate", text("P")), ("identifier", text("P.ID"))],
         ),
@@ -318,7 +318,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             )],
             false,
             "unknown_field",
-            "REQ-1245",
+            "LOOKUP-17",
             "intermediates[0].verifications[0].unique.columns[0]",
             vec![
                 ("intermediate", text("P")),
@@ -329,7 +329,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![unique(), ("filter", Tree::text("D.X > SRC.ID"))],
             false,
             "correlated_filter_with_unique_verification",
-            "REQ-1245",
+            "LOOKUP-17",
             "intermediates[0].verifications[0].unique",
             vec![("intermediate", text("P"))],
         ),
@@ -337,7 +337,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![unique(), derive()],
             false,
             "correlated_derivation_with_unique_verification",
-            "REQ-1245",
+            "LOOKUP-17",
             "intermediates[0].verifications[0].unique",
             vec![("intermediate", text("P"))],
         ),
@@ -345,7 +345,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![("key", Tree::List(vec![Tree::text("ID")]))],
             true,
             "invalid_intermediate_driver",
-            "REQ-1262",
+            "ROW-2",
             "rows[0].dataset",
             vec![
                 ("intermediate", text("P")),
@@ -385,7 +385,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ],
             true,
             "unknown_intermediate_driver_type",
-            "REQ-1262",
+            "ROW-2",
             "rows[0].dataset",
             vec![
                 ("intermediate", text("P")),
@@ -484,7 +484,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         item.unique[0].diagnostic(item, &donor, "D", 1),
         "verification",
         "duplicate_intermediate_records",
-        "REQ-1245",
+        "LOOKUP-17",
         "intermediates[0].verifications[0].unique",
         vec![
             ("intermediate", text("P")),

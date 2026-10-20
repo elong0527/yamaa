@@ -664,13 +664,13 @@ mod schema {
                     .map(|v| v.requirement())
                     .collect::<Vec<_>>(),
                 [
-                    Some("REQ-1046"),
-                    Some("REQ-1141"),
-                    Some("REQ-1145"),
-                    Some("REQ-1046"),
-                    Some("REQ-1142"),
-                    Some("REQ-1143"),
-                    Some("REQ-1144")
+                    Some("SPEC-2"),
+                    Some("SUB-10"),
+                    Some("SUB-6"),
+                    Some("SPEC-2"),
+                    Some("SUB-14"),
+                    Some("SUB-14"),
+                    Some("SUB-21")
                 ]
             );
             let mut a = Arena::default();
@@ -682,7 +682,7 @@ mod schema {
                     .iter()
                     .map(|v| v.requirement())
                     .collect::<Vec<_>>(),
-                [Some("REQ-1146"), Some("REQ-1147")]
+                [Some("SUB-4"), Some("SUB-4")]
             );
         }
         #[test]
@@ -848,7 +848,7 @@ mod schema {
             let input = a.finish(root);
             let values = findings(&input);
             assert_eq!(values.len(), 3);
-            assert_eq!(values[0].requirement(), Some("REQ-1046"));
+            assert_eq!(values[0].requirement(), Some("SPEC-2"));
             assert_eq!(values[1].requirement(), None);
             assert_eq!(values[2].requirement(), None);
             assert_eq!(
@@ -1637,7 +1637,7 @@ mod schema {
                     .iter()
                     .filter_map(|f| f.requirement())
                     .collect::<Vec<_>>(),
-                ["REQ-1068", "REQ-1074", "REQ-1046", "REQ-1070", "REQ-1073", "REQ-1070"]
+                ["DEFINE-9", "DEFINE-6", "SPEC-2", "DEFINE-13", "DEFINE-21", "DEFINE-13"]
             );
             assert_eq!(findings[7].requirement(), None); // null is an original shape, not a fabricated normative message.
             assert!(matches!(error.input.nodes()[findings[7].node], N::Null));
@@ -2660,7 +2660,7 @@ mod schema {
                 (
                     "invalid source",
                     "origin_source_not_admitted",
-                    "REQ-0919",
+                    "SUB-15",
                     format!("{entry}.CREAT.origin"),
                     None,
                 ),

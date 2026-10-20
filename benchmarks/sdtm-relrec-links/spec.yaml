@@ -48,7 +48,7 @@ columns:
 
   # Internal working column: the sequence number as a number, so the
   # output order puts sequence 10 after 2 instead of before it. Not in
-  # output.columns, so it never reaches the artifact (REQ-0205).
+  # output.columns, so it never reaches the artifact (SPEC-7).
   - name: SEQNUM
     type: int
     label: Numeric Sequence Number

@@ -2,7 +2,7 @@ phase: validation
 condition: rename_only_intermediate
 spec_paths:
   - intermediates[0]
-requirement: REQ-1248
+requirement: LOOKUP-4
 context:
   intermediate: CODED
   dataset: CODING

@@ -97,7 +97,7 @@ pub(super) fn scoped_branch(
     filters(&branch.operation, &branch.path, scope, None, findings)
 }
 
-/// REQ-0442: a qualified formula name must name a declared record lookup.
+/// FORMULA-9: a qualified formula name must name a declared record lookup.
 /// The test reads declarations alone, so binding and check share it.
 pub(super) fn qualified_numeric_findings(
     compiled: &CompiledExpression,
@@ -338,8 +338,8 @@ impl PreparedSpecification {
             .collect()
     }
 
-    /// Column-order findings over formula reads alone (REQ-0071, REQ-0072,
-    /// REQ-0074), projected with binding's names and paths. Build analyzes
+    /// Column-order findings over formula reads alone (COLUMN-5, COLUMN-6,
+    /// COLUMN-7), projected with binding's names and paths. Build analyzes
     /// every derivation kind, so it can also report what passes here.
     fn formula_dependencies(
         &self,

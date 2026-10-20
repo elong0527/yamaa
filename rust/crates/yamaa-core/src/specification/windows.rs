@@ -97,7 +97,7 @@ impl WindowFinding {
     }
 }
 impl Declaration {
-    /// A partition names each variable once (REQ-0293); report every repeat.
+    /// A partition names each variable once (WINDOW-3); report every repeat.
     fn repeated_groups(&self, findings: &mut Vec<BindFinding>) {
         for (index, name) in self.groups.iter().enumerate() {
             if self.groups[..index].contains(name) {
@@ -352,7 +352,7 @@ impl Declaration {
     }
     /// A driver field the window reads is a scalar source of each row it
     /// partitions or orders. Under grouped construction it must be a group key
-    /// (REQ-0067 for a row template, REQ-0107 at column level). A column-level
+    /// (ROW-5 for a row template, NAME-4 at column level). A column-level
     /// window spans every constructed row, and preparation has already refused
     /// its read of a driver that some row template does not share
     /// (`column_driver_findings`, WINDOW-11). So every grouped template a
@@ -769,7 +769,7 @@ impl Declaration {
 
     /// [`Self::group_findings`] from the declarations alone: under grouped
     /// construction, each operand that names a field of the driver of the
-    /// rows must be a group key (REQ-0067 for a row template, REQ-0107 at
+    /// rows must be a group key (ROW-5 for a row template, NAME-4 at
     /// column level). Binding decides it only for a field the driver stores,
     /// and reports any other as unknown; without source schemas every such
     /// field is taken as stored.
@@ -802,7 +802,7 @@ impl Declaration {
     /// A window reads a qualified field only at the record that built each
     /// row. Binding's catalog holds one dataset, the driver of those rows, so
     /// it refuses a field of any other dataset whether or not that dataset
-    /// stores it (REQ-0103, `resolve` in [`Self::bind_available`]). The
+    /// stores it (NAME-3, `resolve` in [`Self::bind_available`]). The
     /// declarations decide that refusal: each operand naming a dataset that
     /// is none of `drivers`, in binding's order. That is the operation's own
     /// operands, each `window.group_by` and `window.order_by` entry, then

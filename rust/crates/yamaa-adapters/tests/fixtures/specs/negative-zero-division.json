@@ -16,7 +16,7 @@
         ]
       },
       "phase": "derivation",
-      "requirement": "REQ-0430",
+      "requirement": "FORMULA-15",
       "spec_paths": [
         "columns.PCHG.derivation.compute"
       ],
@@ -47,7 +47,7 @@
             ]
           },
           "phase": "derivation",
-          "requirement": "REQ-0430",
+          "requirement": "FORMULA-15",
           "spec_paths": [
             "columns.PCHG.derivation.compute"
           ],

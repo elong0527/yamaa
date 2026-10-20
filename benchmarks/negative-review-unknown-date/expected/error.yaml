@@ -2,6 +2,6 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - columns.REVIEWFL.derivation.flag.condition
-requirement: REQ-0189
+requirement: FORMULA-9
 context:
   identifier: UNKNOWNDT

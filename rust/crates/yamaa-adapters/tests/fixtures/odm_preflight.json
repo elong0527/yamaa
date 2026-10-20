@@ -12,7 +12,7 @@
               "location": "column"
             },
             "phase": "validation",
-            "requirement": "REQ-1277",
+            "requirement": "NAME-11",
             "spec_paths": [
               "columns.VAL.derivation.odm"
             ]
@@ -36,7 +36,7 @@
               "location": "row"
             },
             "phase": "validation",
-            "requirement": "REQ-1277",
+            "requirement": "NAME-11",
             "spec_paths": [
               "rows[0].derivations.VAL.odm"
             ]
@@ -60,7 +60,7 @@
               "location": "intermediate"
             },
             "phase": "validation",
-            "requirement": "REQ-1277",
+            "requirement": "NAME-11",
             "spec_paths": [
               "intermediates[0].derivations.V.odm"
             ]
@@ -84,7 +84,7 @@
               "location": "derive"
             },
             "phase": "validation",
-            "requirement": "REQ-1277",
+            "requirement": "NAME-11",
             "spec_paths": [
               "columns.VAL.derivation.aggregate.derive[0].derivation.odm"
             ]
@@ -107,7 +107,7 @@
               "identifier": "ABSENT.IT.TEST.OID"
             },
             "phase": "validation",
-            "requirement": "REQ-0103",
+            "requirement": "NAME-3",
             "spec_paths": [
               "columns.VAL.derivation.odm.item"
             ]
@@ -131,7 +131,7 @@
               "identifier": "SRC.VENDOR"
             },
             "phase": "validation",
-            "requirement": "REQ-0103",
+            "requirement": "NAME-3",
             "spec_paths": [
               "columns.VAL.derivation.odm.filter"
             ]
@@ -155,7 +155,7 @@
               "declared": "types"
             },
             "phase": "validation",
-            "requirement": "REQ-1275",
+            "requirement": "NAME-8",
             "spec_paths": [
               "input.SRC.types"
             ]
@@ -179,7 +179,7 @@
               "declared": "ordinal"
             },
             "phase": "validation",
-            "requirement": "REQ-1295",
+            "requirement": "INPUT-4",
             "spec_paths": [
               "input.SRC.ordinal"
             ]

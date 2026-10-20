@@ -17,7 +17,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             N::Integer("7".into()),
             vec![],
             "unknown_project_function",
-            "REQ-0698",
+            "FUNC-4",
             "columns.VALUE.derivation.function.name",
         ),
         (
@@ -25,7 +25,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             N::Float(7.0),
             vec![function("id")],
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
             "columns.VALUE.derivation.function.args.x",
         ),
     ] {
@@ -113,7 +113,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             "validation",
             "project_environment_missing",
-            Some("REQ-0694")
+            Some("FUNC-1")
         )
     );
     assert_eq!(
@@ -179,7 +179,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             diagnostic.definition().condition,
             diagnostic.definition().requirement
         ),
-        ("validation", "phase_boundary", Some("REQ-0069"))
+        ("validation", "phase_boundary", Some("COLUMN-4"))
     );
     assert_eq!(
         diagnostic.spec_paths,

@@ -71,7 +71,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
     let expected = [
         (
             "unknown_artifact_profile",
-            "REQ-0760",
+            "OUTPUT-5",
             "output.path",
             vec![
                 ("path", text("result.bad")),
@@ -80,19 +80,19 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
         ),
         (
             "undeclared_column",
-            "REQ-0234",
+            "OUTPUT-1",
             "output.columns[0]",
             vec![("column", text("ABSENT"))],
         ),
         (
             "duplicate_identifier",
-            "REQ-0234",
+            "OUTPUT-1",
             "output.columns[1]",
             vec![("column", text("ABSENT"))],
         ),
         (
             "internal_column_in_keys",
-            "REQ-0220",
+            "OUTPUT-2",
             "keys[0]",
             vec![("column", text("ID"))],
         ),
@@ -127,7 +127,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             "-9223372036854775809",
             "result.csv",
             "invalid_field_type",
-            "REQ-0744",
+            "CSV-6",
             vec![
                 ("expected", text("an integer from 0 through 18")),
                 (
@@ -140,7 +140,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             "2",
             "result.parquet",
             "decimals_not_applicable",
-            "REQ-0762",
+            "CSV-6",
             vec![
                 ("path", text("result.parquet")),
                 ("profile", text("parquet")),
@@ -240,7 +240,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
                 diagnostic.definition().condition,
                 diagnostic.definition().requirement
             ),
-            ("validation", condition, Some("REQ-0224"))
+            ("validation", condition, Some("OUTPUT-12"))
         );
         assert_eq!(
             diagnostic.spec_paths,
@@ -288,7 +288,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             diagnostic.definition().condition,
             diagnostic.definition().requirement
         ),
-        ("validation", "phase_boundary", Some("REQ-1170"))
+        ("validation", "phase_boundary", Some("ROW-9"))
     );
     assert_eq!(diagnostic.spec_paths, ["filter"]);
     assert_eq!(
@@ -311,7 +311,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             diagnostic.definition().condition,
             diagnostic.definition().requirement
         ),
-        ("validation", "ordinal_field_collision", Some("REQ-1294"))
+        ("validation", "ordinal_field_collision", Some("INPUT-4"))
     );
     assert_eq!(diagnostic.spec_paths, ["input.SRC.ordinal"]);
     assert_eq!(
@@ -392,7 +392,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![Tree::text("ID")],
             (
                 "integer_overflow",
-                Some("REQ-0014"),
+                Some("VALUE-5"),
                 vec!["columns.ID.derivation.literal"],
                 vec![
                     (
@@ -409,7 +409,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![],
             (
                 "invalid_field_type",
-                Some("REQ-0220"),
+                Some("OUTPUT-2"),
                 vec!["keys"],
                 vec![
                     ("expected", text("at least one key column")),
@@ -422,7 +422,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![Tree::text("ID"), Tree::text("ID")],
             (
                 "duplicate_identifier",
-                Some("REQ-0220"),
+                Some("OUTPUT-2"),
                 vec!["keys[1]"],
                 vec![("identifier", text("ID"))],
             ),
@@ -432,7 +432,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![Tree::text("ID")],
             (
                 "duplicate_identifier",
-                Some("REQ-0238"),
+                Some("SPEC-2"),
                 vec!["columns[1].name"],
                 vec![("identifier", text("ID"))],
             ),
@@ -475,7 +475,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
         vec![(
             "odm_schema_field_type",
-            Some("REQ-1295"),
+            Some("INPUT-4"),
             vec!["input.SRC.ordinal"],
             vec![("dataset", text("SRC")), ("declared", text("ordinal"))],
         )],
@@ -485,7 +485,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             "input.txt",
             "missing",
             "source_profile_unknown",
-            "REQ-0852",
+            "INPUT-1",
             "input.SRC.path",
             vec![("dataset", text("SRC")), ("path", text("input.txt"))],
         ),
@@ -493,7 +493,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             "input.CSV",
             "present",
             "empty_string_present_unsupported",
-            "REQ-1161",
+            "INPUT-9",
             "input.SRC.empty_string",
             vec![("dataset", text("SRC"))],
         ),
@@ -533,7 +533,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ),
             vec![(
                 "source_encoding_required",
-                Some("REQ-1311"),
+                Some("SAS-2"),
                 vec!["input.SRC.encoding"],
                 vec![("dataset", text("SRC"))],
             )],
@@ -543,14 +543,14 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             "result.csv",
             "artifact_path_collision",
-            "REQ-0756",
+            "OUTPUT-9",
             vec!["output.path", "output.report"],
             vec![("path", text("result.csv"))],
         ),
         (
             "report.arrow",
             "unknown_artifact_profile",
-            "REQ-0760",
+            "OUTPUT-5",
             vec!["output.report"],
             vec![
                 ("path", text("report.arrow")),
@@ -605,7 +605,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         fields,
         vec![(
             "missing_report",
-            Some("REQ-0391"),
+            Some("CHECK-22"),
             vec!["output.report"],
             vec![("warnings", texts(&["verifications[0].row_count"]))],
         )],
@@ -622,25 +622,25 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         vec![
             (
                 "missing_derivation",
-                Some("REQ-0198"),
+                Some("SPEC-4"),
                 vec!["columns.ID.derivation"],
                 vec![("column", text("ID"))],
             ),
             (
                 "duplicate_identifier",
-                Some("REQ-0080"),
+                Some("NAME-2"),
                 vec!["input.SRC", "domain"],
                 vec![("identifier", text("SRC"))],
             ),
             (
                 "undeclared_column",
-                Some("REQ-0220"),
+                Some("OUTPUT-2"),
                 vec!["keys[0]"],
                 vec![("column", text("MISSING"))],
             ),
             (
                 "driver_unavailable",
-                Some("REQ-0064"),
+                Some("ROW-8"),
                 vec!["base"],
                 vec![("dataset", text("ABSENT"))],
             ),
@@ -656,7 +656,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
         vec![(
             "driver_unavailable",
-            Some("REQ-0064"),
+            Some("ROW-8"),
             vec!["base"],
             vec![("row", V::Null)],
         )],
@@ -710,19 +710,19 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         vec![
             (
                 "undeclared_column",
-                Some("REQ-0202"),
+                Some("SPEC-5"),
                 vec!["rows[0].derivations.BOGUS"],
                 vec![("column", text("BOGUS"))],
             ),
             (
                 "missing_derivation",
-                Some("REQ-0200"),
+                Some("SPEC-5"),
                 vec!["columns.ID.derivation"],
                 vec![("column", text("ID")), ("rows", texts(&["first"]))],
             ),
             (
                 "duplicate_derivation",
-                Some("REQ-1260"),
+                Some("SPEC-6"),
                 vec!["columns.X.derivation"],
                 vec![
                     ("column", text("X")),
@@ -732,25 +732,25 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "conflicting_row_construction",
-                Some("REQ-1171"),
+                Some("ROW-9"),
                 vec!["filter", "rows"],
                 vec![],
             ),
             (
                 "driver_unavailable",
-                Some("REQ-0034"),
+                Some("ROW-1"),
                 vec!["rows[0].dataset"],
                 vec![("row", text("first")), ("dataset", text("ABSENT"))],
             ),
             (
                 "invalid_field_type",
-                Some("REQ-0065"),
+                Some("ROW-4"),
                 vec!["rows[0].group_by"],
                 vec![("row", text("first")), ("group_by", texts(&[]))],
             ),
             (
                 "unknown_field",
-                Some("REQ-0066"),
+                Some("ROW-4"),
                 vec!["rows[1].group_by"],
                 vec![
                     ("row", text("second")),
@@ -760,7 +760,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ),
             (
                 "driver_unavailable",
-                Some("REQ-0034"),
+                Some("ROW-1"),
                 vec!["rows[2].dataset"],
                 vec![("row", text("third")), ("dataset", V::Null)],
             ),
@@ -789,7 +789,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         fields,
         vec![(
             "invalid_field_type",
-            Some("REQ-0065"),
+            Some("ROW-4"),
             vec!["rows[0].group_by"],
             vec![
                 ("row", text("duplicates")),
@@ -814,7 +814,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ),
             vec![(
                 "redundant_field_type",
-                Some("REQ-0533"),
+                Some("INPUT-6"),
                 vec!["input.SRC.types.ID"],
                 vec![
                     ("dataset", text("SRC")),
@@ -916,7 +916,7 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
         .collect::<Vec<_>>();
     let expected: Vec<TemporalFinding<'_>> = vec![
         (
-            "REQ-0613",
+            "TIME-5",
             "value_not_permitted",
             "columns.DIFF.derivation.diff.bounds",
             vec![
@@ -925,7 +925,7 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
-            "REQ-0606",
+            "TIME-1",
             "incompatible_input_type",
             "columns.DIFF.derivation.diff.start",
             vec![
@@ -935,7 +935,7 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         (
-            "REQ-0606",
+            "TIME-1",
             "incompatible_input_type",
             "columns.DIFF.derivation.diff.end",
             vec![
@@ -1058,14 +1058,14 @@ pub(crate) fn self_reached() -> BTreeSet<ConditionCode> {
         let expected = if collision {
             vec![(
                 "duplicate_identifier",
-                Some("REQ-0113"),
+                Some("LOOKUP-3"),
                 vec!["intermediates[0].dataset", "input.SELF"],
                 vec![("identifier", text("SELF"))],
             )]
         } else {
             vec![(
                 "phase_boundary",
-                Some("REQ-0120"),
+                Some("LOOKUP-7"),
                 vec!["rows[0].derivations.ID.source"],
                 vec![
                     ("identifier", text("P.ID")),
@@ -1193,7 +1193,7 @@ pub(crate) fn intermediate_reached() -> BTreeSet<ConditionCode> {
         let expected = if variant == 0 || variant == 3 {
             vec![(
                 "rename_only_intermediate",
-                Some("REQ-1248"),
+                Some("LOOKUP-4"),
                 vec!["intermediates[0]"],
                 vec![("intermediate", text("P")), ("dataset", text("SECOND"))],
             )]
@@ -1256,7 +1256,7 @@ pub(crate) fn namespace_reached() -> BTreeSet<ConditionCode> {
             ));
             vec![(
                 "duplicate_identifier",
-                Some("REQ-1056"),
+                Some("ROW-1"),
                 vec!["rows[1].id", "rows[0].id"],
                 vec![("identifier", text("repeated"))],
             )]
@@ -1271,7 +1271,7 @@ pub(crate) fn namespace_reached() -> BTreeSet<ConditionCode> {
             ));
             vec![(
                 "unknown_field",
-                Some("REQ-0079"),
+                Some("NAME-1"),
                 vec!["intermediates[0].dataset"],
                 vec![
                     ("identifier", text("ABSENT")),

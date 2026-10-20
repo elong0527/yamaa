@@ -2,7 +2,7 @@ phase: validation
 condition: qualified_identifier
 spec_paths:
   - columns.DOSEDBL.derivation.compute.expr
-requirement: REQ-0442
+requirement: FORMULA-9
 context:
   expr: "EX.EXDOSE * 2"
   identifier: EX.EXDOSE

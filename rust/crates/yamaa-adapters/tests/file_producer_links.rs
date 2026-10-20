@@ -227,7 +227,7 @@ mod file {
                 let issues = result.issues();
                 assert_eq!(issues.len(), 1, "{issues:?}");
                 assert_eq!(issues[0].condition(), "producer_contract_mismatch");
-                assert_eq!(issues[0].requirement(), Some("REQ-0535"));
+                assert_eq!(issues[0].requirement(), Some("INPUT-11"));
                 assert_eq!(
                     issues[0].spec_paths,
                     ["input.FIRST.schema", "input.FIRST.path"]
@@ -298,7 +298,7 @@ mod file {
                     issues[0].condition(),
                     issues[0].requirement()
                 ),
-                ("validation", "ordinal_field_collision", Some("REQ-1294"))
+                ("validation", "ordinal_field_collision", Some("INPUT-4"))
             );
             assert_eq!(issues[0].spec_paths, ["input.FIRST.ordinal"]);
         }

@@ -225,7 +225,7 @@ pub fn null_if(left: Number, right: Number) -> Number {
     }
 }
 
-/// Integral-valued functions that always return float (REQ-0423).
+/// Integral-valued functions that always return float (VALUE-10).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntegralFunction {
     Ceil,
@@ -325,7 +325,7 @@ pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, Ar
     Ok(Number::float(libm::pow(base, exponent)))
 }
 
-/// Round to decimal places under REQ-0418, returning float or normalized missing.
+/// Round to decimal places under FORMULA-16, returning float or normalized missing.
 /// The integer digits declaration is admitted before any value is read.
 pub(crate) fn round_integer_places(value: Number, digits: i64) -> Number {
     value.as_float().map_or(Number::Missing, |value| {

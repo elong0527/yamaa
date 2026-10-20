@@ -67,7 +67,7 @@ class CompletedAssertionStage(unittest.TestCase):
             "condition": "finding",
             "context": {"left_type": "int", "right_type": "str"},
             "phase": "validation",
-            "requirement": "REQ-0190",
+            "requirement": "FORMULA-5",
             "spec_paths": ["verifications[1].assert.when"],
         }
         geometry = {"source_span": {"start": 0, "end": 4}, "operand_route": []}

@@ -3,6 +3,6 @@ condition: duplicate_identifier
 spec_paths:
   - intermediates[0].id
   - input.EX
-requirement: REQ-0113
+requirement: LOOKUP-3
 context:
   identifier: EX

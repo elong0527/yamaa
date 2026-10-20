@@ -875,7 +875,7 @@ impl Run<'_> {
         self.active.pop();
         result
     }
-    /// REQ-0339 orders the items of a `case`, which its list type cannot state.
+    /// EXPR-7 orders the items of a `case`, which its list type cannot state.
     /// Like a descriptor constraint, it runs only after every item matched its
     /// class, so each item is either a `when`/`then` branch or an `otherwise`.
     fn case_items(&mut self, site: Site<'_>) -> Result<Vec<SchemaDiagnostic>, ValidationError> {

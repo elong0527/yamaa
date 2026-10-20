@@ -1,10 +1,10 @@
 #![cfg(feature = "yaml")]
 //! A column-level derivation completed only for rows a named intermediate
-//! drives (REQ-1262). The column binds against that driver the way its row
+//! drives (ROW-2). The column binds against that driver the way its row
 //! template does: the driver qualifier reads the record that built the row,
-//! another input is an implicit join on the output keys (REQ-0111), and a
+//! another input is an implicit join on the output keys (LOOKUP-1), and a
 //! named lookup selects through its key, while a qualified aggregate still
-//! reduces its declared input (REQ-0467). The column phase reads each row
+//! reduces its declared input (LOOKUP-18). The column phase reads each row
 //! through its own template's driver port (#2829), so an intermediate over
 //! any input is addressable; a field it derives, or a driver read beside an
 //! aggregate, is refused before any data is read, by `check` and `domain`
@@ -244,7 +244,7 @@ fn grouped(derivation: &str) -> String {
 #[test]
 fn grouped_intermediate_driver_reads_its_group_key() {
     // S1's two serious events are one group; its key is a single value
-    // (REQ-0086), never a lookup that could match both events.
+    // (NAME-4), never a lookup that could match both events.
     Fixture::new(&grouped("{literal: X}")).saved("USUBJID,R\nS1,X\nS2,X\n");
     Fixture::new(&grouped("SER.USUBJID")).saved("USUBJID,R\nS1,S1\nS2,S2\n");
 }
@@ -260,7 +260,7 @@ fn grouped_driver_field_outside_the_groups_fails_validation() {
         ),
         (
             "ungrouped_driver_field",
-            Some("REQ-0107"),
+            Some("NAME-4"),
             ["columns.R.derivation.source".to_owned()].as_slice()
         )
     );
@@ -360,7 +360,7 @@ fn grouped_intermediate_rows_read_only_its_group_keys() {
         ),
         (
             "ungrouped_driver_field",
-            Some("REQ-0107"),
+            Some("NAME-4"),
             ["columns.R.derivation.source".to_owned()].as_slice()
         )
     );

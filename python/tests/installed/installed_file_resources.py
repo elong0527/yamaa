@@ -345,7 +345,7 @@ class FileResources(unittest.TestCase):
                     {
                         "phase": "validation",
                         "condition": "resource_path_symlink",
-                        "requirement": "REQ-0783",
+                        "requirement": "FILE-8",
                         "spec_paths": ["input.SRC.path"],
                         "context": TRUTH["alias_context_json"],
                         "source_span": None,

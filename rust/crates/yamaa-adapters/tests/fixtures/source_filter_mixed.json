@@ -1,10 +1,10 @@
 {
-  "authorship": "Independent mixed grouped and record-template controls. REQ-0086 admits a shared group key when every grouped template includes it; ungrouped templates already provide a scalar physical-record field. The row schema permits both templates on one driver.",
+  "authorship": "Independent mixed grouped and record-template controls. NAME-4 admits a shared group key when every grouped template includes it; ungrouped templates already provide a scalar physical-record field. The row schema permits both templates on one driver.",
   "requirements": [
-    "REQ-0086",
-    "REQ-0107",
-    "REQ-0132",
-    "REQ-0148"
+    "NAME-4",
+    "NAME-4",
+    "LOOKUP-8",
+    "LOOKUP-8"
   ],
   "cases": {
     "mixed-shared-group-key-filter": {
@@ -20,7 +20,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "REQ-0148",
+          "requirement": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
@@ -33,7 +33,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "REQ-0148",
+          "requirement": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
@@ -127,7 +127,7 @@
         {
           "phase": "validation",
           "condition": "ungrouped_driver_field",
-          "requirement": "REQ-0067",
+          "requirement": "ROW-5",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source"
           ],

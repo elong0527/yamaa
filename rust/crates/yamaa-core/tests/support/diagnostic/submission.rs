@@ -254,113 +254,113 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             SubmissionMetadataMissing,
             "submission_metadata_missing",
-            "REQ-1015",
+            "DEFINE-7",
             0,
         ),
-        (SubmissionOriginMissing, "origin_missing", "REQ-0918", 1),
-        (SubmissionSasName, "sas_name_too_long", "REQ-1023", 2),
+        (SubmissionOriginMissing, "origin_missing", "SUB-14", 1),
+        (SubmissionSasName, "sas_name_too_long", "DEFINE-22", 2),
         (
             SubmissionCoreMandatory,
             "core_mandatory_conflict",
-            "REQ-0915",
+            "SUB-10",
             3,
         ),
         (
             VerificationNotMissingRedundant,
             "redundant_declaration",
-            "REQ-0375",
+            "CHECK-5",
             4,
         ),
-        (SubmissionAdamField, "value_not_permitted", "REQ-0917", 5),
+        (SubmissionAdamField, "value_not_permitted", "SUB-5", 5),
         (
             SubmissionOriginSource,
             "origin_source_not_admitted",
-            "REQ-0919",
+            "SUB-15",
             6,
         ),
         (
             SubmissionOriginDescription,
             "origin_description_missing",
-            "REQ-0920",
+            "SUB-16",
             7,
         ),
-        (SubmissionMethodMissing, "method_missing", "REQ-0923", 8),
+        (SubmissionMethodMissing, "method_missing", "SUB-18", 8),
         (
             SubmissionOriginRefuted,
             "origin_contradicts_derivation",
-            "REQ-0922",
+            "SUB-19",
             9,
         ),
         (
             SubmissionAnnotatedCrfMissing,
             "origin_document_missing",
-            "REQ-0984",
+            "DEFINE-14",
             10,
         ),
         (
             SubmissionOriginDocument,
             "origin_document_missing",
-            "REQ-0893",
+            "SUB-17",
             11,
         ),
         (
             SubmissionDataType,
             "submission_data_type_not_admitted",
-            "REQ-0914",
+            "SUB-6",
             12,
         ),
         (
             SubmissionLengthMissing,
             "submission_length_missing",
-            "REQ-0912",
+            "SUB-7",
             13,
         ),
         (
             SubmissionLengthNotApplicable,
             "submission_length_not_applicable",
-            "REQ-0912",
+            "SUB-7",
             14,
         ),
         (
             SubmissionLengthInvalid,
             "submission_length_invalid",
-            "REQ-0911",
+            "SUB-7",
             15,
         ),
         (
             SubmissionLengthConflict,
             "declared_length_conflict",
-            "REQ-0913",
+            "SUB-8",
             16,
         ),
         (
             SubmissionKeyMandatory,
             "value_not_permitted",
-            "REQ-0881",
+            "SUB-10",
             17,
         ),
         (
             SubmissionUnknownDocument,
             "unknown_document",
-            "REQ-1016",
+            "DEFINE-8",
             18,
         ),
         (
             SubmissionReservedMetadata,
             "reserved_metadata_key",
-            "REQ-0910",
+            "SUB-2",
             19,
         ),
         (
             SubmissionReferenceRepeating,
             "reference_data_repeating_conflict",
-            "REQ-0925",
+            "SUB-4",
             20,
         ),
         (
             SubmissionNoDataComment,
             "submission_metadata_missing",
-            "REQ-1022",
+            "DEFINE-17",
             21,
         ),
         (
@@ -372,32 +372,32 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             SubmissionKeyNotOutput,
             "value_not_permitted",
-            "REQ-1015",
+            "DEFINE-7",
             23,
         ),
         (
             SubmissionColumnNotOutput,
             "submission_not_output_column",
-            "REQ-0909",
+            "SUB-1",
             24,
         ),
-        (SubmissionClassFamily, "value_not_permitted", "REQ-0882", 25),
+        (SubmissionClassFamily, "value_not_permitted", "SUB-10", 25),
         (
             VerificationUniqueRedundant,
             "redundant_declaration",
-            "REQ-0381",
+            "CHECK-10",
             26,
         ),
         (
             CodelistAllowedValuesRedundant,
             "redundant_declaration",
-            "REQ-0955",
+            "CT-9",
             27,
         ),
         (
             SubmissionMandatoryRedundant,
             "redundant_declaration",
-            "REQ-0916",
+            "SUB-11",
             28,
         ),
         (
@@ -844,43 +844,43 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             SubmissionStandardFamily,
             "unknown_standard_family",
-            "REQ-0924",
+            "SUB-3",
             0,
         ),
         (
             SubmissionDefineExtension,
             "value_not_permitted",
-            "REQ-1014",
+            "DEFINE-2",
             1,
         ),
         (
             SubmissionSourceVersion,
             "source_system_incomplete",
-            "REQ-0979",
+            "DEFINE-12",
             2,
         ),
         (
             SubmissionDuplicateIdentifier,
             "duplicate_define_identifier",
-            "REQ-1017",
+            "DEFINE-10",
             3,
         ),
         (
             SubmissionAnnotatedCrfMultiplicity,
             "value_not_permitted",
-            "REQ-1019",
+            "DEFINE-14",
             4,
         ),
         (
             SubmissionDuplicateDataset,
             "duplicate_dataset_entry",
-            "REQ-1018",
+            "DEFINE-5",
             5,
         ),
         (
             SubmissionCdiscAliasMissing,
             "missing_required_field",
-            "REQ-1004",
+            "DEFINE-4",
             6,
         ),
         (SubmissionDefineName, "value_not_permitted", "DEFINE-2", 7),
@@ -951,7 +951,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionXmlWhitespace,
         "validation",
         "untransportable_text",
-        "REQ-1025",
+        "DEFINE-24",
     );
     let study = compose(
         project(),
@@ -968,7 +968,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionXmlInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-1026",
+        "DEFINE-25",
     );
     let study = one(project(), specification(), &empty).unwrap();
     let table = Held {
@@ -986,7 +986,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionJsonInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-1231",
+        "JSON-4",
     );
     let mut spec = specification();
     spec.set(
@@ -1009,7 +1009,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionInventoryFailed,
         "verification",
         "allowed_values_failed",
-        "REQ-1156",
+        "CT-11",
     );
     assert_eq!(
         finding.path,
@@ -1043,7 +1043,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineStandardName,
         "validation",
         "value_not_permitted",
-        "REQ-1074",
+        "DEFINE-6",
     );
     // A section that lists only its specifications admits for runs. Define
     // composition reports the study and the section's guide and target it
@@ -1067,7 +1067,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineRequiredDeclaration,
         "validation",
         "missing_required_field",
-        "REQ-1337",
+        "DEFINE-28",
     );
     // A project without the selected family's section names that section.
     assert_eq!(
@@ -1085,7 +1085,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineCreatedInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-0962",
+        "DEFINE-3",
     );
     assert!(define_diagnostics::admit_relation(
         TargetRelation::Independent,
@@ -1098,19 +1098,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             TargetRelation::ArtifactOutsidePackage,
             DefineArtifactOutsidePackage,
             "artifact_outside_document",
-            "REQ-1021",
+            "DEFINE-16",
         ),
         (
             TargetRelation::ArtifactCollision,
             DefineArtifactCollision,
             "artifact_path_collision",
-            "REQ-1195",
+            "JSON-2",
         ),
         (
             TargetRelation::TransportCollision,
             DefineTransportCollision,
             "transport_path_collision",
-            "REQ-1226",
+            "JSON-2",
         ),
     ] {
         let finding = define_diagnostics::admit_relation(

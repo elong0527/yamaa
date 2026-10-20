@@ -528,7 +528,7 @@
             ]
           },
           "phase": "validation",
-          "requirement": "REQ-0504",
+          "requirement": "LOOKUP-18",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -551,7 +551,7 @@
                 ]
               },
               "phase": "validation",
-              "requirement": "REQ-0504",
+              "requirement": "LOOKUP-18",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -645,7 +645,7 @@
             "identifier": "SRC.V"
           },
           "phase": "validation",
-          "requirement": "REQ-0503",
+          "requirement": "FORMULA-22",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -666,7 +666,7 @@
                 "identifier": "SRC.V"
               },
               "phase": "validation",
-              "requirement": "REQ-0503",
+              "requirement": "FORMULA-22",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -759,7 +759,7 @@
             "reason": "an output-row reduction declares group_by"
           },
           "phase": "validation",
-          "requirement": "REQ-0507",
+          "requirement": "LOOKUP-19",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -779,7 +779,7 @@
                 "reason": "an output-row reduction declares group_by"
               },
               "phase": "validation",
-              "requirement": "REQ-0507",
+              "requirement": "LOOKUP-19",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -872,7 +872,7 @@
             "reason": "a qualified reduction groups on columns of 'SRC'"
           },
           "phase": "validation",
-          "requirement": "REQ-0329",
+          "requirement": "LOOKUP-18",
           "spec_paths": [
             "columns.V.derivation.aggregate.group_by"
           ]
@@ -892,7 +892,7 @@
                 "reason": "a qualified reduction groups on columns of 'SRC'"
               },
               "phase": "validation",
-              "requirement": "REQ-0329",
+              "requirement": "LOOKUP-18",
               "spec_paths": [
                 "columns.V.derivation.aggregate.group_by"
               ]
@@ -1834,7 +1834,7 @@
             "row": "total"
           },
           "phase": "row_construction",
-          "requirement": "REQ-0501",
+          "requirement": "FORMULA-20",
           "spec_paths": [
             "rows[0].derivations.R.aggregate"
           ]
@@ -1860,7 +1860,7 @@
                 "row": "total"
               },
               "phase": "row_construction",
-              "requirement": "REQ-0501",
+              "requirement": "FORMULA-20",
               "spec_paths": [
                 "rows[0].derivations.R.aggregate"
               ]
@@ -1964,7 +1964,7 @@
             "row": "total"
           },
           "phase": "derivation",
-          "requirement": "REQ-0501",
+          "requirement": "FORMULA-20",
           "spec_paths": [
             "columns.Q.derivation.aggregate"
           ]
@@ -1995,7 +1995,7 @@
                 "row": "total"
               },
               "phase": "derivation",
-              "requirement": "REQ-0501",
+              "requirement": "FORMULA-20",
               "spec_paths": [
                 "columns.Q.derivation.aggregate"
               ]

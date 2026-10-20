@@ -72,10 +72,10 @@ impl PreparedStandalone {
 
 /// A non-null parent precedes normalization, and no study data is read.
 /// A specification without a `parent` is a composition of one layer
-/// (REQ-0614): after normalization it is resolved on the same terms as a
+/// (LAYER-1): after normalization it is resolved on the same terms as a
 /// composed specification, so a dead declaration's unresolved reference is
 /// discarded with it. Declaration order remains the resolved order
-/// (REQ-0060), and every final occurrence keeps its raw origin.
+/// (COLUMN-5), and every final occurrence keeps its raw origin.
 pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStandalone, Error> {
     if crate::inheritance::declares_parent(&raw) {
         return Err(Error::InheritanceRequired);
@@ -84,7 +84,7 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
         Ok(normalized) => normalized,
         Err(error) => return Err(normalization_failure(error, raw)),
     };
-    // The same repeated-identifier findings as any other layer (REQ-0659),
+    // The same repeated-identifier findings as any other layer (LAYER-4),
     // before pruning can discard a duplicated declaration.
     let repeated = repeated_identifier_findings(schema, &normalized.document);
     if !repeated.is_empty() {
@@ -115,7 +115,7 @@ pub fn prepare(schema: &SchemaStructure, raw: Document) -> Result<PreparedStanda
 
 /// Repeated identifiers inside one keyed collection (columns by name, rows
 /// and intermediates by id), in schema field order, mirroring the layer
-/// admission check (REQ-0659) a composed specification passes through.
+/// admission check (LAYER-4) a composed specification passes through.
 fn repeated_identifier_findings(
     schema: &SchemaStructure,
     document: &Document,

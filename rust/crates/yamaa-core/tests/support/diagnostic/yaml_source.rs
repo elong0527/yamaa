@@ -16,7 +16,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             Failure::NonAscii { line: 1, column: 4 },
             "non_ascii_source",
-            "REQ-0705",
+            "SPEC-8",
             "$",
         ),
         (
@@ -26,13 +26,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 reason: "unterminated sequence",
             },
             "invalid_yaml",
-            "REQ-0280",
+            "SCHEMA-3",
             "$",
         ),
         (
             Failure::InvalidText(&issues),
             "invalid_text",
-            "REQ-0029",
+            "VALUE-11",
             "$.x",
         ),
     ] {

@@ -148,9 +148,9 @@ mod project {
             let (condition, requirement) = match &f.kind {
                 FailureKind::UnknownArguments(_)
                 | FailureKind::MissingRequired { .. }
-                | FailureKind::ArgumentType { .. } => ("invalid_function_argument", "REQ-0700"),
-                FailureKind::CallFailed(_) => ("function_call_failed", "REQ-0701"),
-                _ => ("invalid_function_result", "REQ-0702"),
+                | FailureKind::ArgumentType { .. } => ("invalid_function_argument", "FUNC-5"),
+                FailureKind::CallFailed(_) => ("function_call_failed", "FUNC-8"),
+                _ => ("invalid_function_result", "FUNC-9"),
             };
             assert_eq!((f.condition(), f.requirement()), (condition, requirement));
             match f.kind {
@@ -521,7 +521,7 @@ mod project {
                         findings[0].definition().condition,
                         findings[0].definition().requirement
                     ),
-                    ("redundant_field_type", Some("REQ-0523"))
+                    ("redundant_field_type", Some("INPUT-6"))
                 );
                 assert_eq!(findings[0].context["dataset"], text("SRC"));
                 assert!(findings[0].spec_paths[0].starts_with("input.SRC.types"));
@@ -577,7 +577,7 @@ mod project {
                     definition.condition,
                     definition.requirement
                 ),
-                ("validation", "invalid_producer_contract", Some("REQ-0534")),
+                ("validation", "invalid_producer_contract", Some("INPUT-10")),
             );
             assert_eq!(findings[0].context.len(), 2);
             assert_eq!(findings[0].context["dataset"], text("SRC"));
@@ -612,7 +612,7 @@ mod project {
             );
             assert!(findings
                 .iter()
-                .all(|f| f.definition().requirement == Some("REQ-0534")));
+                .all(|f| f.definition().requirement == Some("INPUT-10")));
             assert_eq!(
                 findings[2].context["declarations"],
                 V::Number(("0").parse().expect("canonical integer"))
@@ -657,7 +657,7 @@ mod project {
                         finding.definition().condition,
                         finding.definition().requirement
                     ),
-                    ("producer_contract_mismatch", Some("REQ-0535"))
+                    ("producer_contract_mismatch", Some("INPUT-11"))
                 );
                 assert_eq!(finding.spec_paths, ["input.SRC.schema", "input.SRC.path"]);
             }

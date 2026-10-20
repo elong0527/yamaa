@@ -1,7 +1,7 @@
 {
   "phase": "validation",
   "condition": "invalid_field_type",
-  "requirement": "REQ-0744",
+  "requirement": "CSV-6",
   "spec_paths": ["output.decimals"],
   "context": {
     "expected": "an integer from 0 through 18"

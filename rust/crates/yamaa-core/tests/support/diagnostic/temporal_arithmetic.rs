@@ -14,7 +14,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DateShiftInput,
             "validation",
             "incompatible_input_type",
-            "REQ-1298",
+            "TIME-14",
         ),
         (
             K::DateShift,
@@ -22,7 +22,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DateShiftRange,
             "convert",
             "conversion_failed",
-            "REQ-1298",
+            "TIME-14",
         ),
         (
             K::DateTimeDifference { unit: U::Hour },
@@ -30,7 +30,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DatetimeDifferenceInput,
             "validation",
             "incompatible_input_type",
-            "REQ-1299",
+            "TIME-4",
         ),
         (
             K::DateTimeShift { unit: U::Second },
@@ -38,7 +38,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DatetimeShiftInput,
             "validation",
             "incompatible_input_type",
-            "REQ-1300",
+            "TIME-14",
         ),
         (
             K::DateTimeShift { unit: U::Second },
@@ -49,7 +49,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DatetimeShiftRange,
             "convert",
             "conversion_failed",
-            "REQ-1300",
+            "TIME-14",
         ),
         (
             K::DurationValue { unit: U::Second },
@@ -57,7 +57,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DurationValueInput,
             "validation",
             "incompatible_input_type",
-            "REQ-1301",
+            "TIME-17",
         ),
         (
             K::DurationValue { unit: U::Hour },
@@ -65,7 +65,7 @@ pub(crate) fn reached() -> BTreeSet<C> {
             C::DurationInvalid,
             "impute",
             "invalid_duration_text",
-            "REQ-1301",
+            "TIME-17",
         ),
         (
             K::DateText { depth: 2 },

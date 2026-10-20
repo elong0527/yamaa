@@ -2,6 +2,6 @@ phase: validation
 condition: missing_value_required
 spec_paths:
   - columns.ELDFL.derivation.flag.missing
-requirement: REQ-1258
+requirement: EXPR-8
 context:
   false_value: "N"

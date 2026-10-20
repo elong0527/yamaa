@@ -165,7 +165,7 @@ mod runs {
         let first = &failed.report().diagnostics[0];
         assert_eq!(first.phase, "validation");
         assert_eq!(first.code, "resource_path_missing");
-        assert_eq!(first.requirement.as_deref(), Some("REQ-0785"));
+        assert_eq!(first.requirement.as_deref(), Some("FILE-7"));
         assert_eq!(first.spec_path, ["input.SRC.path"]);
         assert_eq!(
             first.context.to_json(),

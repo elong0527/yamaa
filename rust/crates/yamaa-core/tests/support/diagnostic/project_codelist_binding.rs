@@ -54,9 +54,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     for (finding, condition, requirement) in findings
         .iter()
         .zip([
-            ("unknown_codelist", "REQ-0953"),
-            ("codelist_type_mismatch", "REQ-0954"),
-            ("redundant_declaration", "REQ-0955"),
+            ("unknown_codelist", "CT-1"),
+            ("codelist_type_mismatch", "CT-8"),
+            ("redundant_declaration", "CT-9"),
         ])
         .map(|(f, (c, r))| (f, c, r))
     {

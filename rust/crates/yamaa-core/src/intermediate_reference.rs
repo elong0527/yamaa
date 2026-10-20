@@ -50,13 +50,13 @@ fn visible(catalog: &Catalog, field: &str, target: Intermediate<'_>) -> Option<b
     })
 }
 
-/// REQ-0125: visible stored/derived fields intersect an optional declared columns list.
+/// LOOKUP-11: visible stored/derived fields intersect an optional declared columns list.
 /// A missing input relation already has its own diagnostic and adds no field finding.
 pub fn validate_field(catalog: &Catalog, field: &str, target: Intermediate<'_>) -> Option<Finding> {
     (visible(catalog, field, target) == Some(false)).then_some(Finding::UnknownField)
 }
 
-/// REQ-1263: another intermediate must read input-backed records using this donor's fields.
+/// LOOKUP-16: another intermediate must read input-backed records using this donor's fields.
 /// Self-reads defer to shared cycle analysis; phase failures suppress field/dependency findings.
 pub fn validate_read(catalog: &Catalog, read: Read<'_>) -> Vec<Finding> {
     let mut findings = Vec::new();

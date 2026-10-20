@@ -826,7 +826,7 @@ mod relations {
                         diagnostic.definition().condition,
                         diagnostic.definition().requirement
                     ),
-                    ("validation", "driver_unavailable", Some("REQ-0034"))
+                    ("validation", "driver_unavailable", Some("ROW-1"))
                 );
                 assert_eq!(diagnostic.spec_paths, ["rows[1].dataset"]);
                 assert_eq!(diagnostic.context.len(), 2);
@@ -874,7 +874,7 @@ mod relations {
                         diagnostic.definition().condition,
                         diagnostic.definition().requirement
                     ),
-                    ("validation", "unknown_field", Some("REQ-0103"))
+                    ("validation", "unknown_field", Some("NAME-3"))
                 );
                 assert_eq!(diagnostic.spec_paths, [path]);
                 assert_eq!(
@@ -927,7 +927,7 @@ mod relations {
                         d.definition().condition,
                         d.definition().requirement
                     ),
-                    ("validation", "unknown_field", Some("REQ-0125"))
+                    ("validation", "unknown_field", Some("LOOKUP-11"))
                 );
                 assert_eq!(
                     d.spec_paths,
@@ -1064,7 +1064,7 @@ mod relations {
                 name: "not_missing".into(),
                 id: None,
                 target: Some("AGE".into()),
-                rule: "REQ-0375".into(),
+                rule: "CHECK-5".into(),
                 severity: VerificationSeverity::Error,
                 evaluated: 8,
                 failure: None,
@@ -1076,7 +1076,7 @@ mod relations {
                 name: "range".into(),
                 id: Some("é🙂".into()),
                 target: Some("AGE".into()),
-                rule: "REQ-0377".into(),
+                rule: "CHECK-7".into(),
                 severity: VerificationSeverity::Warning,
                 evaluated: 8,
                 failure: Some(Failure {
@@ -1234,7 +1234,7 @@ mod relations {
             assert_eq!(rows[3][10], PreparedCell::Count(8));
             assert_eq!(rows[3][11], PreparedCell::Count(9));
             assert_eq!(rows[4][5], PreparedCell::Text("AGE".into()));
-            assert_eq!(rows[4][6], PreparedCell::Text("REQ-0103".into()));
+            assert_eq!(rows[4][6], PreparedCell::Text("NAME-3".into()));
             assert_eq!(rows[4][10], PreparedCell::Count(0));
             assert_eq!(
                 rows[5][13],
@@ -1355,7 +1355,7 @@ mod relations {
                     "rows[0].derivations.V.mapping.unmapped",
                     "unmapped",
                     Some("V"),
-                    Some("REQ-0334"),
+                    Some("COLUMN-10"),
                 ),
                 (
                     "columns.A.derivation.source.no_match",
@@ -1367,13 +1367,13 @@ mod relations {
                     "columns.A.derivation.str_extract.no_match",
                     "no_match",
                     Some("A"),
-                    Some("REQ-0334"),
+                    Some("COLUMN-10"),
                 ),
                 (
                     "columns.A.derivation.case[0].then.source.multiple_matches",
                     "multiple_matches",
                     Some("A"),
-                    Some("REQ-0127"),
+                    Some("LOOKUP-10"),
                 ),
                 (
                     "columns.A.derivation.cut.missing",
@@ -1385,13 +1385,13 @@ mod relations {
                     "columns.S.derivation.str_template.missing",
                     "missing",
                     Some("S"),
-                    Some("REQ-0334"),
+                    Some("COLUMN-10"),
                 ),
                 (
                     "columns.A.derivation.source.absent",
                     "absent",
                     Some("A"),
-                    Some("REQ-0103"),
+                    Some("NAME-3"),
                 ),
                 (
                     "columns.D.derivation.impute.missing",
@@ -1403,7 +1403,7 @@ mod relations {
                     "columns.D.derivation.impute.invalid",
                     "invalid",
                     Some("D"),
-                    Some("REQ-0588"),
+                    Some("TIME-13"),
                 ),
                 (
                     "columns.P.derivation.precision.missing",
@@ -1421,19 +1421,19 @@ mod relations {
                     "columns.T.derivation.to_date.invalid",
                     "invalid",
                     Some("T"),
-                    Some("REQ-0588"),
+                    Some("TIME-13"),
                 ),
                 (
                     "columns.Q.derivation.precision.invalid",
                     "invalid",
                     Some("Q"),
-                    Some("REQ-0588"),
+                    Some("TIME-13"),
                 ),
                 (
                     "columns.E.derivation.duration_value.invalid",
                     "invalid",
                     Some("E"),
-                    Some("REQ-1301"),
+                    Some("TIME-17"),
                 ),
                 (
                     "columns.S.derivation.dtc.invalid",
@@ -1445,13 +1445,13 @@ mod relations {
                     "columns.N.derivation.unconvertible",
                     "unconvertible",
                     Some("N"),
-                    Some("REQ-0013"),
+                    Some("VALUE-3"),
                 ),
                 (
                     "intermediates[0].derivations.PICK.unconvertible",
                     "unconvertible",
                     None,
-                    Some("REQ-0013"),
+                    Some("VALUE-3"),
                 ),
                 (
                     "columns.N.derivation.round.invalid",

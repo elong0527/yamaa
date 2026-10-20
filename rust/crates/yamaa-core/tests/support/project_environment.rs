@@ -166,82 +166,82 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let expected = [
         (
             "codelist_shape_invalid",
-            "REQ-0947",
+            "CT-3",
             "codelists[0].codelists[0]",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[0].items[0].value",
         ),
         (
             "codelist_extension_not_admitted",
-            "REQ-0952",
+            "CT-6",
             "codelists[0].codelists[0].items[0].extended",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[0].items[1].value",
         ),
         (
             "codelist_duplicate_value",
-            "REQ-0949",
+            "CT-4",
             "codelists[0].codelists[0].items[1].value",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[0]",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[0]",
         ),
         (
             "duplicate_define_identifier",
-            "REQ-0948",
+            "CT-1",
             "codelists[0].codelists[1].id",
         ),
         (
             "duplicate_define_identifier",
-            "REQ-0948",
+            "CT-1",
             "codelists[0].codelists[1].name",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0947",
+            "CT-3",
             "codelists[0].codelists[1]",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[1].items[0].value",
         ),
         (
             "codelist_extension_not_admitted",
-            "REQ-0952",
+            "CT-6",
             "codelists[0].codelists[1].items[0].extended",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[1].items[1].value",
         ),
         (
             "codelist_duplicate_value",
-            "REQ-0949",
+            "CT-4",
             "codelists[0].codelists[1].items[1].value",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[1]",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[1]",
         ),
     ];
@@ -283,7 +283,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             "validation",
             "project_environment_invalid",
-            Some("REQ-0695")
+            Some("FUNC-2")
         ),
     );
     assert_eq!(finding.spec_paths, ["lock"]);
@@ -314,7 +314,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 "validation",
                 "project_environment_missing",
-                Some("REQ-0694"),
+                Some("FUNC-1"),
             ),
         );
         assert_eq!(finding.spec_paths, ["environment"]);

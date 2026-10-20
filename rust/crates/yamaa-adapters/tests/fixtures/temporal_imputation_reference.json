@@ -6,7 +6,7 @@
       "spec_paths": [
         "columns.ASTDT.derivation.impute"
       ],
-      "requirement": "REQ-0588",
+      "requirement": "TIME-13",
       "context": {
         "operation": "impute",
         "source": "AE.AESTDTC",
@@ -28,7 +28,7 @@
       "spec_paths": [
         "columns.ASTDTF.derivation.precision"
       ],
-      "requirement": "REQ-0588",
+      "requirement": "TIME-13",
       "context": {
         "operation": "precision",
         "source": "AE.AESTDTC",
@@ -50,7 +50,7 @@
       "spec_paths": [
         "columns.TRTSDTM.derivation.impute"
       ],
-      "requirement": "REQ-0588",
+      "requirement": "TIME-13",
       "context": {
         "operation": "impute",
         "source": "EX.EXSTDTC",
@@ -72,7 +72,7 @@
       "spec_paths": [
         "columns.TRTSTPR.derivation.precision"
       ],
-      "requirement": "REQ-0588",
+      "requirement": "TIME-13",
       "context": {
         "operation": "precision",
         "source": "EX.EXSTDTC",

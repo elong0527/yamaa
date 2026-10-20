@@ -81,7 +81,7 @@ result <- submission(root, section = NULL); check_issues(result)
 held <- saved(result, root, c("dm.json", "define.xml"))
 for (name in names(held)) stopifnot(identical(held[[name]], rawfile(file.path(fixtures, "sdtm-dm-metadata/expected", name))))
 absent <- submission(root, section = "adam")
-stopifnot(identical(absent$issues$condition, "missing_required_field"), identical(absent$issues$requirement, "REQ-1337"),
+stopifnot(identical(absent$issues$condition, "missing_required_field"), identical(absent$issues$requirement, "DEFINE-28"),
   identical(absent$issues$spec_paths, list("adam")), refused(absent))
 unlink(root, recursive = TRUE)
 
@@ -169,7 +169,7 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
   }
   result <- submission(root)
   if (mode == "original source") {
-    stopifnot(any(result$issues$requirement == "REQ-0919" & result$issues$condition == "origin_source_not_admitted"), refused(result))
+    stopifnot(any(result$issues$requirement == "SUB-15" & result$issues$condition == "origin_source_not_admitted"), refused(result))
   } else if (mode == "value codelist") {
     row <- which(result$issues$condition == "allowed_values_failed")
     stopifnot(length(row) == 1L, grepl('"codelist":"CL_GLUCOSE"', result$issues$context[row], fixed = TRUE),
@@ -229,7 +229,7 @@ for (case in list(
 
 root <- fixture("sdtm-dm-metadata")
 result <- submission(root)
-stopifnot("producer_contract_mismatch" %in% result$issues$condition, "REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "dm.json")), !file.exists(file.path(root, "define.xml")))
+stopifnot("producer_contract_mismatch" %in% result$issues$condition, "INPUT-11" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "dm.json")), !file.exists(file.path(root, "define.xml")))
 metadata_only(root)
 result <- submission(root); check_issues(result)
 project <- file.path(root, "project.yaml")
@@ -261,7 +261,7 @@ stopifnot(grepl(paste0('SourceSystemVersion="', version, '"'), rawToChar(held[["
 unlink(file.path(root, names(held)))
 edit_lines(project, function(lines) gsub("name: CDISC/NCI", "name: InvalidStandard", lines, fixed = TRUE))
 result <- submission(root)
-stopifnot("REQ-1026" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot("DEFINE-25" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
 root <- fixture("sdtm-dm-metadata", TRUE)
@@ -285,7 +285,7 @@ result <- submission(root)
 stopifnot("origin_document_missing" %in% result$issues$condition, refused(result), !file.exists(file.path(root, "dm.json")))
 writeLines(lines[lines != "    alias: C66734"], project)
 result <- submission(root)
-stopifnot("REQ-1004" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot("DEFINE-4" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
 root <- fixture("sdtm-dm-metadata")
@@ -308,7 +308,7 @@ sex <- which(spec == "    derivation: DM_RAW.SEX"); stopifnot(length(sex) == 1L)
 writeLines(append(spec, c("    verifications:", "      - allowed_values:", "          values: [F, M, U]"), after = sex),
   file.path(root, "parents/base.yaml"))
 result <- submission(root)
-stopifnot("redundant_declaration" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
+stopifnot("redundant_declaration" %in% result$issues$condition, "CT-9" %in% result$issues$requirement,
   refused(result), identical(rawfile(file.path(root, "artifacts/define.xml")), held[["define.xml"]]))
 unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata")
@@ -326,13 +326,13 @@ writeLines(spec, spec_path)
 csv <- readLines(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"))
 writeLines(gsub("STUDYID,USUBJID", "USUBJID,STUDYID", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
-stopifnot("REQ-0535" %in% result$issues$requirement, refused(result))
+stopifnot("INPUT-11" %in% result$issues$requirement, refused(result))
 writeLines(gsub("STUDYID", "WRONG", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
-stopifnot("REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot("INPUT-11" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
 writeLines(gsub(",F,USA", ",Z,USA", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
-rows <- result$issues[result$issues$requirement %in% "REQ-0957", , drop = FALSE]
+rows <- result$issues[result$issues$requirement %in% "CT-7", , drop = FALSE]
 stopifnot(nrow(rows) == 1L, rows$phase == "verification", grepl('"value":"Z"', rows$context, fixed = TRUE),
   grepl("CATH-UCSD-0001", rows$context, fixed = TRUE), refused(result), !file.exists(file.path(root, "dm.json")))
 unlink(root, recursive = TRUE)
@@ -365,7 +365,7 @@ define_sentinel <- file.path(root, "define.xml")
 writeBin(charToRaw("original Define sentinel"), define_sentinel)
 previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
 result <- submission(root)
-stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "transport_path_collision"), identical(result$issues$requirement, "REQ-1226"),
+stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "transport_path_collision"), identical(result$issues$requirement, "JSON-2"),
   identical(result$issues$spec_paths[[1L]], "sdtm.specs[1]"), grepl("dm.json", result$issues$context, fixed = TRUE), refused(result),
   identical(rawfile(sentinel), charToRaw("original publication sentinel")),
   identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),

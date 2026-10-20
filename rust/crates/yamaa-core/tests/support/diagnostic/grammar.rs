@@ -44,21 +44,21 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Field::Compute,
             "1 +",
             "invalid_expression",
-            "REQ-0188",
+            "FORMULA-1",
             vec![],
         ),
         (
             Field::Compute,
             "1 < 2",
             "prohibited_construct",
-            "REQ-0441",
+            "FORMULA-27",
             vec![("construct", text("comparison"))],
         ),
         (
             Field::Compute,
             "abs(1, 2)",
             "prohibited_function",
-            "REQ-0440",
+            "FORMULA-13",
             vec![
                 ("function", text("abs")),
                 (
@@ -71,28 +71,28 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Field::Aggregate,
             "SUM(SRC.ID) +",
             "invalid_expression",
-            "REQ-0188",
+            "FORMULA-1",
             vec![],
         ),
         (
             Field::Aggregate,
             "SUM(SRC.ID) < 2",
             "prohibited_construct",
-            "REQ-0441",
+            "FORMULA-27",
             vec![("construct", text("comparison"))],
         ),
         (
             Field::Aggregate,
             "sumx(SRC.ID)",
             "prohibited_function",
-            "REQ-0440",
+            "FORMULA-13",
             vec![("function", text("sumx"))],
         ),
         (
             Field::Aggregate,
             "SUM(SUM(SRC.ID))",
             "nested_reduction",
-            "REQ-0502",
+            "FORMULA-21",
             vec![("outer", text("SUM")), ("inner", text("SUM"))],
         ),
     ] {
@@ -118,18 +118,18 @@ pub(crate) fn predicate_reached(
     pub(crate) use yamaa_core::diagnostic::ConditionCode as C;
     let mut reached = std::collections::BTreeSet::new();
     for (text, code, requirement) in [
-        ("A >", C::ExpressionInvalid, "REQ-0188"),
+        ("A >", C::ExpressionInvalid, "FORMULA-1"),
         (
             "A LIKE 'a' ESCAPE 'ab'",
             C::ExpressionInvalidEscape,
-            "REQ-0191",
+            "FORMULA-7",
         ),
         (
             "STR_CONTAINS(A, '(')",
             C::ExpressionInvalidRegex,
-            "REQ-1244",
+            "FORMULA-8",
         ),
-        ("A = DATE '2026-02-30'", C::ExpressionInvalid, "REQ-0188"),
+        ("A = DATE '2026-02-30'", C::ExpressionInvalid, "FORMULA-1"),
     ] {
         let Err(CompileError::Invalid {
             position, failure, ..
@@ -167,7 +167,7 @@ pub(crate) fn predicate_reached(
     assert_eq!(d.code, C::LiteralIntegerOverflow);
     assert_eq!(d.definition().phase, "validation");
     assert_eq!(d.definition().condition, "integer_overflow");
-    assert_eq!(d.definition().requirement, Some("REQ-0014"));
+    assert_eq!(d.definition().requirement, Some("VALUE-5"));
     assert_eq!(d.spec_paths, ["filter"]);
     assert_eq!(
         d.context,

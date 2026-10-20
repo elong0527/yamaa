@@ -270,10 +270,10 @@ mod file {
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
             for (written, requirement) in [
-                ("input\\x.csv", "REQ-0776"),
-                ("C:\\input.csv", "REQ-0776"),
-                ("input//x.csv", "REQ-0777"),
-                ("input/x.csv/", "REQ-0777"),
+                ("input\\x.csv", "FILE-5"),
+                ("C:\\input.csv", "FILE-5"),
+                ("input//x.csv", "FILE-5"),
+                ("input/x.csv/", "FILE-5"),
             ] {
                 for expanded in [false, true] {
                     let source = if expanded {
@@ -349,9 +349,9 @@ mod file {
                 (
                     "https://example.invalid/source.csv",
                     "resource_path_uri_scheme",
-                    "REQ-0775",
+                    "FILE-5",
                 ),
-                ("link.csv", "resource_path_symlink", "REQ-0783"),
+                ("link.csv", "resource_path_symlink", "FILE-8"),
             ] {
                 let spec = format!("schema_version: '1.0'\ndomain: TEST\nkeys: [ID]\ninput: {{SRC: '{written}'}}\ncolumns: [{{name: ID, type: int, derivation: SRC.ID}}]\noutput: {{path: output.csv, columns: [ID]}}\n");
                 fs::write(study.0.join("entry/spec.yaml"), spec).unwrap();
@@ -810,7 +810,7 @@ mod file {
             assert!(
                 run.issues()
                     .iter()
-                    .any(|i| i.requirement() == Some("REQ-0919")
+                    .any(|i| i.requirement() == Some("SUB-15")
                         && i.condition() == "origin_source_not_admitted"),
                 "{:?}",
                 run.issues()
@@ -868,7 +868,7 @@ mod file {
         fn define_reports_every_missing_study_section_guide_and_target_before_reading_specifications(
         ) {
             // A run needs only a section's specs; Define requires the study, the
-            // selected section and that section's standard and define (REQ-1337).
+            // selected section and that section's standard and define (DEFINE-28).
             for (removed, expected) in [
                 (
                     &["study:", "  standard:", "  define: define.xml"][..],
@@ -910,7 +910,7 @@ mod file {
                     .map(|(field, detail)| {
                         yamaa_adapters::json!({
                             "phase": "validation", "condition": "missing_required_field",
-                            "requirement": "REQ-1337", "spec_paths": [field],
+                            "requirement": "DEFINE-28", "spec_paths": [field],
                             "context": {"detail": detail}
                         })
                     })
@@ -1224,7 +1224,7 @@ mod file {
             let issue = &result.issues()[0];
             assert_eq!(issue.phase(), "validation");
             assert_eq!(issue.condition(), "transport_path_collision");
-            assert_eq!(issue.requirement(), Some("REQ-1226"));
+            assert_eq!(issue.requirement(), Some("JSON-2"));
             assert_eq!(issue.spec_paths, ["sdtm.specs[1]"]);
             assert!(yamaa_adapters::json_wire::encode_object(&issue.context).contains("dm.json"));
             let reads = result.capture_reads();
@@ -1335,7 +1335,7 @@ mod file {
                 .issues()
                 .iter()
                 .any(|i| i.condition() == "artifact_outside_document"
-                    && i.requirement() == Some("REQ-1021")));
+                    && i.requirement() == Some("DEFINE-16")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("package").exists());
             // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
@@ -1351,7 +1351,7 @@ mod file {
                 .issues()
                 .iter()
                 .any(|i| i.condition() == "producer_contract_mismatch"
-                    && i.requirement() == Some("REQ-0535")));
+                    && i.requirement() == Some("INPUT-11")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // A missing declared field is the same contract cause, before typed CSV
@@ -1361,7 +1361,7 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|issue| issue.requirement() == Some("REQ-0535")));
+                .any(|issue| issue.requirement() == Some("INPUT-11")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // REQ0957 preserves the verification phase, offending value and row key.
@@ -1370,7 +1370,7 @@ mod file {
             let issue = run
                 .issues()
                 .iter()
-                .find(|i| i.requirement() == Some("REQ-0957"))
+                .find(|i| i.requirement() == Some("CT-7"))
                 .unwrap();
             assert_eq!(issue.phase(), "verification");
             let context = yamaa_core::json::Value::Object(issue.context.clone());
@@ -1427,20 +1427,20 @@ mod file {
                     "derivation: DM_RAW.SEX\n",
                     "derivation: DM_RAW.SEX\n    verifications:\n      - allowed_values:\n          values: [F, M, U]\n",
                     "redundant_declaration",
-                    "REQ-0955",
+                    "CT-9",
                 ),
                 // USUBJID assembles collected identifiers, which refutes Protocol.
                 (
                     "type: Derived",
                     "type: Protocol",
                     "origin_contradicts_derivation",
-                    "REQ-0922",
+                    "SUB-19",
                 ),
                 (
                     "domain: DM",
                     "domain: DM\nmetadata: {label: duplicate}",
                     "reserved_metadata_key",
-                    "REQ-0910",
+                    "SUB-2",
                 ),
             ] {
                 let temp = Temp::fixture("sdtm-dm-metadata", false);
@@ -1543,7 +1543,7 @@ mod file {
                     let issue = &run.issues()[0];
                     assert_eq!(
                         (issue.phase(), issue.condition(), issue.requirement()),
-                        ("validation", "origin_document_missing", Some("REQ-0893"))
+                        ("validation", "origin_document_missing", Some("SUB-17"))
                     );
                     assert_eq!(issue.spec_paths, [format!("sdtm.specs[0].columns.{path}")]);
                     assert!(run.save().is_err());
@@ -1721,7 +1721,7 @@ mod file {
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             assert_eq!(
                 (run.issues()[0].condition(), run.issues()[0].requirement()),
-                ("allowed_values_failed", Some("REQ-1156"))
+                ("allowed_values_failed", Some("CT-11"))
             );
             assert_eq!(run.issues()[0].context["value"], "XX");
             // Without the sdtm section, LB names no dataset of the study and

@@ -61,7 +61,7 @@ fn failed(value: &Value, target: ColumnType, reason: ConversionReason) -> Conver
     }
 }
 
-/// Recognize only REQ-0015's non-finite spellings, including sign restrictions.
+/// Recognize only VALUE-6's non-finite spellings, including sign restrictions.
 fn nonfinite_text(text: &str) -> bool {
     matches!(text, ".nan" | ".NaN" | ".NAN")
         || matches!(
@@ -177,7 +177,7 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
     }
 }
 
-/// Render the shortest round-trip digits in positional notation (REQ-0018).
+/// Render the shortest round-trip digits in positional notation (VALUE-8).
 /// Ryu's tie-to-even digits match Python repr; Rust Display differs on exact ties.
 /// Scientific notation is expanded without performing any floating-point math.
 pub fn float_text(value: FiniteFloat) -> String {

@@ -2,7 +2,7 @@ phase: impute
 condition: invalid_date_text
 spec_paths:
   - columns.TRTSTPR.derivation.precision
-requirement: REQ-0588
+requirement: TIME-13
 context:
   source: EX.EXSTDTC
   value: "2025-01-15T09:30:00Z"

@@ -559,7 +559,7 @@ mod schema {
             assert_eq!(diagnostics[1].spec_paths, ["columns.X.derivation"]);
             for (diagnostic, expected) in diagnostics.iter().zip(["A", "Z"]) {
                 assert_eq!(diagnostic.definition().condition, "unknown_reference");
-                assert_eq!(diagnostic.definition().requirement, Some("REQ-0070"));
+                assert_eq!(diagnostic.definition().requirement, Some("COLUMN-5"));
                 assert_eq!(
                     diagnostic.context["dependency"],
                     yamaa_core::json::Value::String(expected.into())
@@ -656,7 +656,7 @@ mod schema {
                     dependency: "MISSING".into()
                 }]))
             );
-            // A predicate's own validation reports its unknown names (REQ-0627).
+            // A predicate's own validation reports its unknown names (LAYER-5).
             let flag = op("flag", V::map(vec![("condition", text("MISSING = 'Y'"))]));
             let input = spec(&["X"], vec![("columns", V::List(vec![column("X", flag)]))]);
             assert_eq!(columns(&prune(&input, Order::Dependencies).unwrap()), ["X"]);
@@ -974,16 +974,16 @@ mod schema {
             SchemaDiagnostic {
                 path: path.into(),
                 code: match (condition, requirement) {
-                    ("schema_version_mismatch", "REQ-0656") => {
+                    ("schema_version_mismatch", "LAYER-4") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerVersionMismatch
                     }
-                    ("duplicate_identifier", "REQ-0659") => {
+                    ("duplicate_identifier", "LAYER-4") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerIdentifierRepeated
                     }
                     ("invalid_field_type", "SCHEMA-12") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidFieldType
                     }
-                    ("invalid_clear", "REQ-0660") => {
+                    ("invalid_clear", "LAYER-9") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerInvalidClear
                     }
                     _ => panic!("unexpected test cause"),
@@ -1096,7 +1096,7 @@ mod schema {
                 finding(
                     "schema_version",
                     "schema_version_mismatch",
-                    "REQ-0656",
+                    "LAYER-4",
                     vec![("expected", text("1.0")), ("actual", C::Null)]
                 )
             );
@@ -1105,7 +1105,7 @@ mod schema {
                 finding(
                     "columns.X.name",
                     "duplicate_identifier",
-                    "REQ-0659",
+                    "LAYER-4",
                     vec![("identifier", text("X"))]
                 )
             );
@@ -1176,19 +1176,19 @@ mod schema {
                     finding(
                         "columns[0].name",
                         "invalid_clear",
-                        "REQ-0660",
+                        "LAYER-9",
                         vec![("field", text("name"))]
                     ),
                     finding(
                         "columns[0].type",
                         "invalid_clear",
-                        "REQ-0660",
+                        "LAYER-9",
                         vec![("field", text("type"))]
                     ),
                     finding(
                         "output",
                         "invalid_clear",
-                        "REQ-0660",
+                        "LAYER-9",
                         vec![("field", text("output"))]
                     ),
                 ]
@@ -1249,13 +1249,13 @@ mod schema {
                     finding(
                         "rows.R.options.needed",
                         "invalid_clear",
-                        "REQ-0660",
+                        "LAYER-9",
                         vec![("field", text("needed"))]
                     ),
                     finding(
                         "settings.needed",
                         "invalid_clear",
-                        "REQ-0660",
+                        "LAYER-9",
                         vec![("field", text("needed"))]
                     ),
                 ]
@@ -2137,11 +2137,11 @@ mod schema {
                     .iter()
                     .map(|d| d.definition().requirement)
                     .collect::<Vec<_>>(),
-                [Some("REQ-0012"), Some("SCHEMA-12"), Some("SCHEMA-12")]
+                [Some("VALUE-1"), Some("SCHEMA-12"), Some("SCHEMA-12")]
             );
             let result = validate(&schema, "kind", V::boolean(true), false);
             assert_eq!(findings(&result), [("kind", "invalid_field_type")]);
-            assert_eq!(result[0].definition().requirement, Some("REQ-0287"));
+            assert_eq!(result[0].definition().requirement, Some("SCHEMA-12"));
             assert!(validate(
                 &schema,
                 "number",
@@ -2252,7 +2252,7 @@ mod schema {
             );
             let result = validate(&schema, "derive", V::integer("4"), false);
             assert_eq!(findings(&result), [("derive", "bare_derivation_scalar")]);
-            assert_eq!(result[0].definition().requirement, Some("REQ-0320"));
+            assert_eq!(result[0].definition().requirement, Some("EXPR-5"));
         }
 
         fn case_bundle(registry: &'static str) -> SchemaStructure {
@@ -2372,7 +2372,7 @@ mod schema {
                                     definition.condition,
                                     definition.requirement
                                 ),
-                                ("validation", "invalid_field_type", Some("REQ-0339"))
+                                ("validation", "invalid_field_type", Some("EXPR-7"))
                             );
                             let [("expected", C::Text(text))] = d.context.as_slice() else {
                                 panic!("expected context: {d:?}");
@@ -2394,7 +2394,7 @@ mod schema {
             assert!(
                 result
                     .iter()
-                    .all(|d| d.definition().requirement != Some("REQ-0339")),
+                    .all(|d| d.definition().requirement != Some("EXPR-7")),
                 "{result:?}"
             );
             // The rule belongs to the expression registry's case, not to a like-named entry.

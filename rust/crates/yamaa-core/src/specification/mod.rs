@@ -90,7 +90,7 @@ pub enum PrepareError {
     #[error("specification internal")]
     Internal,
 }
-/// Maximum declared CSV display precision under REQ-0744.
+/// Maximum declared CSV display precision under CSV-6.
 pub const MAX_OUTPUT_DECIMALS: u8 = 18;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -134,7 +134,7 @@ pub enum PreflightFinding {
     DuplicateRowDefault {
         column: String,
         rows: Vec<String>,
-        /// Why the column-level derivation is not row-local (REQ-1260): the
+        /// Why the column-level derivation is not row-local (SPEC-6): the
         /// root cause kind, such as `aggregate`, `lookup`, `window` or
         /// `named_intermediate`.
         not_row_local: String,
@@ -625,7 +625,7 @@ fn preflight(spec: &SpecificationDocument) -> Result<Vec<PreflightFinding>, Prep
             {
                 let value = field(d, default, "value")?;
                 // Aggregate column results belong to the completed dataset and
-                // cannot be promoted into row-local defaults (REQ-1260).
+                // cannot be promoted into row-local defaults (SPEC-6).
                 if d.field(value, "aggregate").is_some() {
                     let mut overridden = Vec::new();
                     for &row in rows {
@@ -1128,7 +1128,7 @@ fn prepare_output_declarations(
         .unwrap_or_default();
     let output_path = String::from(text(d, field(d, output_id, "path")?)?);
     // Retain the complete integer for output-declaration diagnostics, even
-    // when it exceeds REQ-0744's range. Build validation retains its existing
+    // when it exceeds CSV-6's range. Build validation retains its existing
     // post-verification phase; saved-file size is admitted at publication.
     let output_decimals = d
         .field(output_id, "decimals")

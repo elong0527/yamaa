@@ -262,7 +262,7 @@ mod diagnostics {
                     assert_eq!(actual.character, position, "{text}");
                     let d = failure.diagnostic(Field::Predicate, "filter", text, position);
                     assert_eq!(d.definition().condition, "invalid_expression");
-                    assert_eq!(d.definition().requirement, Some("REQ-0188"));
+                    assert_eq!(d.definition().requirement, Some("FORMULA-1"));
                     assert_eq!(
                         d.context,
                         [
@@ -370,7 +370,7 @@ mod diagnostics {
                     finding,
                     "validation",
                     "odm_schema_field_ambiguous",
-                    "REQ-1275",
+                    "NAME-8",
                     "input.D.path",
                     vec![
                         ("dataset", text("D")),
@@ -446,8 +446,8 @@ mod diagnostics {
 
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
                 for (expression, requirement, character, detail) in [
-                    ("STR_CONTAINS(ID, '(')", "REQ-1244", 17, "pattern_byte"),
-                    ("ID = DATE '2026-02-30'", "REQ-0188", 10, "temporal_error"),
+                    ("STR_CONTAINS(ID, '(')", "FORMULA-8", 17, "pattern_byte"),
+                    ("ID = DATE '2026-02-30'", "FORMULA-1", 10, "temporal_error"),
                 ] {
                     let error = compile(
                         expression,
@@ -487,7 +487,7 @@ mod diagnostics {
                     assert_eq!(failure.syntax_diagnostic(), detail_before);
                     assert_eq!(message.as_ptr(), message_address);
                 }
-                // ESCAPE owns REQ-0191 under the one syntax condition.
+                // ESCAPE owns FORMULA-7 under the one syntax condition.
                 let yamaa_core::expression::CompileError::Invalid {
                     failure: failure @ yamaa_core::expression::Failure::InvalidEscape,
                     position,
@@ -507,7 +507,7 @@ mod diagnostics {
                     "ID LIKE '%' ESCAPE 'xx'",
                     position.character,
                 );
-                assert_eq!(finding.definition().requirement, Some("REQ-0191"));
+                assert_eq!(finding.definition().requirement, Some("FORMULA-7"));
                 assert_eq!(
                     finding.context["position"],
                     V::Number(("19").parse().expect("canonical integer"))
@@ -784,7 +784,7 @@ mod diagnostics {
                                         [
                                             ("phase", Fact::Text("derivation")),
                                             ("condition", Fact::Text("function_call_failed")),
-                                            ("requirement", Fact::Text("REQ-0701")),
+                                            ("requirement", Fact::Text("FUNC-8")),
                                             ("context", Fact::Object(diagnostic.context)),
                                         ]
                                         .into()
@@ -863,7 +863,7 @@ mod diagnostics {
                 let Fact::Object(held) = &diagnostics[0].context["failure"] else {
                     panic!("nested borrowed diagnostic")
                 };
-                assert_eq!(held["requirement"], Fact::Text("REQ-0700"));
+                assert_eq!(held["requirement"], Fact::Text("FUNC-5"));
                 let Fact::Object(context) = &held["context"] else {
                     panic!("nested invocation")
                 };
@@ -1069,7 +1069,7 @@ mod diagnostics {
                     findings[0].code,
                     ConditionCode::CodelistAllowedValuesRedundant
                 );
-                assert_eq!(findings[0].definition().requirement, Some("REQ-0955"));
+                assert_eq!(findings[0].definition().requirement, Some("CT-9"));
                 assert_eq!(
                     findings[0].path,
                     "sdtm.specs[0].columns.VALUE.verifications[0].allowed_values"

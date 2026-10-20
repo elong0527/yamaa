@@ -170,15 +170,15 @@ mod project {
                 };
                 let mut want = vec![expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "tests[0].result",
                     json!({"function":"first","case":"ordinary","value":true,"reason":"invalid_case_result","source":function_source,"entry":"held/project.yaml","environment_path":"functions.first"}),
                 )];
                 for obligation in ["boundary", "normal"] {
-                    want.push(expected("project_environment_invalid", "REQ-0695", "tests", json!({"function":"first","obligation":obligation,"reason":"missing_coverage_obligation","source":function_source,"entry":"held/project.yaml","environment_path":"functions.first"})));
+                    want.push(expected("project_environment_invalid", "FUNC-2", "tests", json!({"function":"first","obligation":obligation,"reason":"missing_coverage_obligation","source":function_source,"entry":"held/project.yaml","environment_path":"functions.first"})));
                 }
-                want.push(expected("codelist_shape_invalid", "REQ-0950", "codelists[0].items[0].value", json!({"codelist":"SEX","value":true,"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"})));
-                want.push(expected("codelist_shape_invalid", "REQ-0950", "codelists[2].codelists[0].items[0].value", json!({"codelist":"OTHER","value":true,"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"codelists[2]"})));
+                want.push(expected("codelist_shape_invalid", "CT-4", "codelists[0].items[0].value", json!({"codelist":"SEX","value":true,"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"})));
+                want.push(expected("codelist_shape_invalid", "CT-4", "codelists[2].codelists[0].items[0].value", json!({"codelist":"OTHER","value":true,"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"codelists[2]"})));
                 let result = diagnostic::admission(&rejected).unwrap();
                 assert_eq!(crate::support::rows(&result), want);
                 assert_eq!(diagnostic::admission(&rejected).unwrap(), result);
@@ -195,13 +195,13 @@ mod project {
             let want = [
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "tests[0].result",
                     json!({"reason":"integer_out_of_range","value":wide,"source":"held/function.yaml","entry":"held/project.yaml","environment_path":"functions.first"}),
                 ),
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "codelists[0].items[0].value",
                     json!({"reason":"integer_out_of_range","value":wide,"source":"held/ct.yaml","entry":"held/project.yaml","environment_path":"codelists[1]"}),
                 ),
@@ -435,13 +435,13 @@ mod project {
             let want = [
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "environments.python",
                     json!({"entry":"held/project.yaml","path":"python/environment.yaml","environment_path":"environments.python","cause":"missing"}),
                 ),
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "codelists[0]",
                     json!({"entry":"held/project.yaml","path":"ct.yaml","environment_path":"codelists[0]","cause":"missing"}),
                 ),
@@ -477,19 +477,19 @@ mod project {
             let want = [
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "codelists[0].codelists[0].items[0].value",
                     json!({"reason":"integer_out_of_range","value":number("123456789012345678901234567890"),"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"}),
                 ),
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "codelists[0].codelists[0].items[0].rank",
                     json!({"reason":"integer_out_of_range","value":number("-123456789012345678901234567890"),"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"}),
                 ),
                 expected(
                     "project_environment_invalid",
-                    "REQ-0695",
+                    "FUNC-2",
                     "codelists[0].codelists[0].items[1].value",
                     json!({"reason":"integer_out_of_range","value":number("9223372036854775808"),"source":"held/project.yaml","entry":"held/project.yaml","environment_path":"$"}),
                 ),
@@ -533,19 +533,19 @@ mod project {
                 let want = [
                     expected(
                         "project_environment_invalid",
-                        "REQ-0695",
+                        "FUNC-2",
                         "functions.wide.tests[0].result",
                         json!({"reason":"integer_out_of_range","value":wide,"source":"held/environment.yaml","entry":"held/project.yaml","environment_path":link}),
                     ),
                     expected(
                         "project_environment_invalid",
-                        "REQ-0695",
+                        "FUNC-2",
                         "functions.bad_date.tests[0].result",
                         json!({"reason":"invalid_date","value":"2024-02-30","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":link}),
                     ),
                     expected(
                         "project_environment_invalid",
-                        "REQ-0695",
+                        "FUNC-2",
                         "functions.bad_time.tests[0].result",
                         json!({"reason":"invalid_datetime","value":"2024-01-01T25:00:00","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":link}),
                     ),
@@ -585,7 +585,7 @@ mod project {
             };
             let want = [expected(
                 "project_environment_invalid",
-                "REQ-0695",
+                "FUNC-2",
                 "lock",
                 json!({"reason":"lock_kind_mismatch","language":"python","actual_lock_kind":"renv","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":"lock"}),
             )];
@@ -642,9 +642,9 @@ mod project {
             for index in 0..200 {
                 let name = format!("function_{index}");
                 let declaration = format!("functions.{name}");
-                want.push(expected("project_environment_invalid", "REQ-0695", &format!("{declaration}.tests[0].result"), json!({"function":name,"case":"ordinary","value":true,"reason":"invalid_case_result","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
+                want.push(expected("project_environment_invalid", "FUNC-2", &format!("{declaration}.tests[0].result"), json!({"function":name,"case":"ordinary","value":true,"reason":"invalid_case_result","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
                 for obligation in ["boundary", "normal"] {
-                    want.push(expected("project_environment_invalid", "REQ-0695", &format!("{declaration}.tests"), json!({"function":name,"obligation":obligation,"reason":"missing_coverage_obligation","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
+                    want.push(expected("project_environment_invalid", "FUNC-2", &format!("{declaration}.tests"), json!({"function":name,"obligation":obligation,"reason":"missing_coverage_obligation","source":"held/environment.yaml","entry":"held/project.yaml","environment_path":declaration})));
                 }
             }
             assert_eq!(crate::support::rows(&result), want);
@@ -688,14 +688,14 @@ mod project {
                 (
                     FailureKind::UnknownArguments(vec!["extra".into()]),
                     "invalid_function_argument",
-                    "REQ-0700",
+                    "FUNC-5",
                 ),
                 (
                     FailureKind::MissingRequired {
                         parameter: "weight".into(),
                     },
                     "invalid_function_argument",
-                    "REQ-0700",
+                    "FUNC-5",
                 ),
                 (
                     FailureKind::ArgumentType {
@@ -704,17 +704,17 @@ mod project {
                         actual: ValueType::Int,
                     },
                     "invalid_function_argument",
-                    "REQ-0700",
+                    "FUNC-5",
                 ),
                 (
                     FailureKind::BooleanResult,
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                 ),
                 (
                     FailureKind::UndeclaredMissing,
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                 ),
                 (
                     FailureKind::ResultType {
@@ -722,7 +722,7 @@ mod project {
                         actual: ValueType::Str,
                     },
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                 ),
             ];
             let row = RowIdentity {
@@ -899,31 +899,31 @@ mod project {
                 (
                     Ok(Value::Bool(true)),
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                     false,
                 ),
                 (
                     Ok(Value::Missing),
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                     false,
                 ),
                 (
                     Ok(Value::float(7.0)),
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                     false,
                 ),
                 (
                     Err(HostError::Raised(payload.clone())),
                     "function_call_failed",
-                    "REQ-0701",
+                    "FUNC-8",
                     true,
                 ),
                 (
                     Err(HostError::InvalidResult(payload.clone())),
                     "invalid_function_result",
-                    "REQ-0702",
+                    "FUNC-9",
                     true,
                 ),
             ] {
@@ -1208,7 +1208,7 @@ mod project {
             for (record, (reason, versions, actual)) in records.iter().zip(expected) {
                 assert_eq!(record.phase(), "validation");
                 assert_eq!(record.condition(), "runtime_artifact_mismatch");
-                assert_eq!(record.requirement(), Some("REQ-0697"));
+                assert_eq!(record.requirement(), Some("FUNC-3"));
                 assert_eq!(record.spec_paths, ["lock"]);
                 assert_eq!(
                     yamaa_core::json::Value::Object(record.context.clone()),
@@ -1638,7 +1638,7 @@ mod project {
                         let report = result.observations();
                         assert_eq!(
                             report["diagnostics"],
-                            yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"absent.csv"}}])
+                            yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"FILE-7","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"absent.csv"}}])
                         );
                         assert_eq!(
                             report["source_reads"],
@@ -1711,7 +1711,7 @@ mod project {
             );
             assert_eq!(
                 observed["diagnostics"],
-                yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","requirement":"REQ-0827","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
+                yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","requirement":"TEXT-6","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
             );
             assert_eq!(result.output(), None);
             let mut publisher = Publisher::default();
@@ -2218,7 +2218,7 @@ functions:
                 issues
                     .iter()
                     .any(|issue| issue.condition() == "invalid_derive_step"
-                        && issue.requirement() == Some("REQ-1242")),
+                        && issue.requirement() == Some("LOOKUP-22")),
                 "{issues:?}"
             );
         }
@@ -2466,7 +2466,7 @@ functions:
             let Err(rejected) = PreparedRun::prepare(document, environment()) else {
                 panic!("project calls without a host environment cannot execute")
             };
-            let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "requirement": "REQ-0694", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
+            let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "requirement": "FUNC-1", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
             assert_eq!(
                 crate::support::rows(&yamaa_adapters::project_check::rejected(&rejected).unwrap()),
                 [missing("VALUE", "id"), missing("OTHER", "absent")]
@@ -3086,7 +3086,7 @@ functions:
 
         /// Callbacks keep their logical row order where a call evaluates in a
         /// row template's window stage, before its post-window filter drops
-        /// rows, and in the column phase of the key grain (REQ-0685). Under
+        /// rows, and in the column phase of the key grain (FUNC-8). Under
         /// the equivalence gate's attempt comparison, both executors replay
         /// these calls and must make them in this order.
         #[test]

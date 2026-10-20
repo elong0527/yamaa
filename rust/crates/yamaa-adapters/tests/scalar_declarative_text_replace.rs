@@ -138,7 +138,7 @@ fn authored_negative_benchmark_is_refused_before_any_input_read() {
     let issue = &found[0];
     assert_eq!(issue["phase"], "validation");
     assert_eq!(issue["condition"], "invalid_regex");
-    assert_eq!(issue["requirement"], "REQ-0827");
+    assert_eq!(issue["requirement"], "TEXT-6");
     assert_eq!(
         issue["spec_paths"],
         json!(["columns.AESPDIG.derivation.str_replace.pattern"])
@@ -230,7 +230,7 @@ fn non_string_and_unknown_sources_fail_validation_at_the_source() {
         vec![json!({
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-0308",
+            "requirement": "TEXT-1",
             "spec_paths": ["columns.RESULT.derivation.str_replace.source"],
             "context": {"source": "TEXT", "expected": "str", "actual": "int"}
         })]

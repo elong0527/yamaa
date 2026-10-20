@@ -75,7 +75,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             mapping.select(ValueRef::Int(1)).unwrap_err(),
             "validation",
             "incompatible_input_type",
-            "REQ-0304",
+            "EXPR-11",
             "columns.V.derivation.mapping.source",
             vec![
                 ("source", text("SRC.V")),
@@ -87,7 +87,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             collision,
             "validation",
             "ambiguous_dictionary",
-            "REQ-0714",
+            "EXPR-12",
             "columns.V.derivation.mapping.dict",
             vec![
                 ("folded_key", text("A")),
@@ -98,7 +98,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             mapping.select(ValueRef::Str("unlisted")).unwrap_err(),
             "mapping",
             "unmapped_value",
-            "REQ-0334",
+            "COLUMN-10",
             "columns.V.derivation.mapping",
             vec![("source", text("SRC.V")), ("value", text("unlisted"))],
         ),
@@ -106,7 +106,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             cut.select(ValueRef::Str("1")).unwrap_err(),
             "validation",
             "incompatible_input_type",
-            "REQ-0306",
+            "EXPR-13",
             "columns.C.derivation.cut.source",
             vec![
                 ("source", text("AGE")),
@@ -118,7 +118,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             declaration,
             "validation",
             "invalid_field_type",
-            "REQ-1118",
+            "EXPR-13",
             "columns.C.derivation.cut",
             vec![
                 ("operation", text("cut")),

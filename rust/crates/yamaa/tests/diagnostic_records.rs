@@ -77,7 +77,7 @@ fn unknown_source_column_arrives_as_a_typed_record() {
         assert_eq!(diagnostic.severity, Severity::Error);
         assert_eq!(diagnostic.phase, "validation");
         assert_eq!(diagnostic.code, "unknown_field");
-        assert_eq!(diagnostic.requirement.as_deref(), Some("REQ-0103"));
+        assert_eq!(diagnostic.requirement.as_deref(), Some("NAME-3"));
         // Ordered spec-path segments, not a joined string.
         assert_eq!(diagnostic.spec_path, ["columns.VALUE.derivation.source"]);
         // Structured context, never a formatted string.
@@ -111,7 +111,7 @@ fn evaluation_failures_carry_recorded_geometry() {
         let diagnostic = &report.diagnostics[0];
         assert_eq!(diagnostic.phase, "derivation");
         assert_eq!(diagnostic.code, "division_by_zero");
-        assert_eq!(diagnostic.requirement.as_deref(), Some("REQ-0430"));
+        assert_eq!(diagnostic.requirement.as_deref(), Some("FORMULA-15"));
         assert_eq!(diagnostic.spec_path, ["columns.RATIO.derivation.compute"]);
         assert_eq!(
             diagnostic.context.get("expr"),

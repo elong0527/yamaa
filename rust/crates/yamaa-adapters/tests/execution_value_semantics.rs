@@ -186,7 +186,7 @@ fn unique_counts_missing_values_as_one_repeated_combination() {
         Err(vec![yamaa_adapters::json!({
             "phase": "verification",
             "condition": "unique_failed",
-            "requirement": "REQ-0381",
+            "requirement": "CHECK-10",
             "spec_paths": ["verifications[0].unique"],
             "context": {"columns": ["X"], "failure_count": 1, "keys": [{"ID": 1}, {"ID": 2}]},
         })])
@@ -196,7 +196,7 @@ fn unique_counts_missing_values_as_one_repeated_combination() {
     let report = fs::read_to_string(fixture.0.join("report.csv")).unwrap();
     assert!(
         report.lines().any(|line| line.starts_with(
-            "out.csv,check,verifications[0].unique,unique,,,REQ-0381,error,violated,unique_failed,1,1,"
+            "out.csv,check,verifications[0].unique,unique,,,CHECK-10,error,violated,unique_failed,1,1,"
         )),
         "{report}"
     );
@@ -248,7 +248,7 @@ fn a_conversion_failure_reports_only_the_keys_its_row_has_completed() {
             Err(vec![yamaa_adapters::json!({
                 "phase": "convert",
                 "condition": "conversion_failed",
-                "requirement": "REQ-0013",
+                "requirement": "VALUE-3",
                 "spec_paths": ["columns.VALUE"],
                 "context": context,
             })]),
@@ -282,7 +282,7 @@ fn a_literal_converts_only_in_the_rows_that_hold_it() {
                 [yamaa_adapters::json!({
                     "phase": "convert",
                     "condition": "conversion_failed",
-                    "requirement": "REQ-0013",
+                    "requirement": "VALUE-3",
                     "spec_paths": ["columns.VALUE"],
                     "context": {"from": "str", "to": "float", "value": "TOTAL"},
                 })],
@@ -329,7 +329,7 @@ fn a_key_reads_one_value_by_exact_equality_and_keeps_its_first_representation() 
         Err(vec![yamaa_adapters::json!({
             "phase": "derivation",
             "condition": "multiple_values_per_key",
-            "requirement": "REQ-0075",
+            "requirement": "COLUMN-2",
             "spec_paths": ["columns.I.derivation.source"],
             "context": {"identifier": "SRC.I", "value_count": 2, "keys": [{"ID": 1}]},
         })])

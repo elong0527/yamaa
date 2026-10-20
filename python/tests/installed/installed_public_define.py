@@ -262,7 +262,7 @@ class PublicDefine(unittest.TestCase):
                 if mode == "original source":
                     self.assertTrue(
                         any(
-                            row["requirement"] == "REQ-0919"
+                            row["requirement"] == "SUB-15"
                             and row["condition"] == "origin_source_not_admitted"
                             for row in issues
                         ),
@@ -278,7 +278,7 @@ class PublicDefine(unittest.TestCase):
                         for row in issues
                         if row["condition"] == "allowed_values_failed"
                     )
-                    self.assertEqual(issue["requirement"], "REQ-0957")
+                    self.assertEqual(issue["requirement"], "CT-7")
                     context = json.loads(issue["context"])
                     self.assertEqual(
                         (
@@ -430,7 +430,7 @@ class PublicDefine(unittest.TestCase):
                 (row["condition"], row["requirement"], row["spec_paths"])
                 for row in absent.issues.to_dicts()
             ],
-            [("missing_required_field", "REQ-1337", ["adam"])],
+            [("missing_required_field", "DEFINE-28", ["adam"])],
         )
         self.refused(absent)
 
@@ -549,7 +549,7 @@ class PublicDefine(unittest.TestCase):
         self.assertIn(
             "producer_contract_mismatch", result.issues["condition"].to_list()
         )
-        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        self.assertIn("INPUT-11", result.issues["requirement"].to_list())
         self.refused(result)
         self.metadata_only(directory)
         result = self.call(directory)
@@ -603,7 +603,7 @@ class PublicDefine(unittest.TestCase):
             project.read_text().replace("name: CDISC/NCI", "name: InvalidStandard")
         )
         result = self.call(directory)
-        self.assertIn("REQ-1026", result.issues["requirement"].to_list())
+        self.assertIn("DEFINE-25", result.issues["requirement"].to_list())
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
@@ -676,7 +676,7 @@ class PublicDefine(unittest.TestCase):
             yaml.safe_dump(document, sort_keys=False)
         )
         result = self.call(directory)
-        self.assertIn("REQ-1004", result.issues["requirement"].to_list())
+        self.assertIn("DEFINE-4", result.issues["requirement"].to_list())
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
@@ -717,7 +717,7 @@ class PublicDefine(unittest.TestCase):
         (directory / "parents/base.yaml").write_text(redundant)
         result = self.call(directory)
         self.assertIn("redundant_declaration", result.issues["condition"].to_list())
-        self.assertIn("REQ-0955", result.issues["requirement"].to_list())
+        self.assertIn("CT-9", result.issues["requirement"].to_list())
         self.refused(result)
         self.assertEqual(
             (directory / "artifacts/define.xml").read_bytes(), written["define.xml"]
@@ -744,15 +744,15 @@ class PublicDefine(unittest.TestCase):
             csv.replace("STUDYID,USUBJID", "USUBJID,STUDYID")
         )
         result = self.call(directory)
-        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        self.assertIn("INPUT-11", result.issues["requirement"].to_list())
         self.refused(result)
         (directory / "dm.csv").write_text(csv.replace("STUDYID", "WRONG"))
         result = self.call(directory)
-        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        self.assertIn("INPUT-11", result.issues["requirement"].to_list())
         self.refused(result)
         (directory / "dm.csv").write_text(csv.replace(",F,USA", ",Z,USA"))
         result = self.call(directory)
-        issue = result.issues.filter(result.issues["requirement"] == "REQ-0957").row(
+        issue = result.issues.filter(result.issues["requirement"] == "CT-7").row(
             0, named=True
         )
         self.assertEqual(issue["phase"], "verification")
@@ -788,7 +788,7 @@ class PublicDefine(unittest.TestCase):
         self.assertEqual(
             result.issues["condition"].to_list(), ["transport_path_collision"]
         )
-        self.assertEqual(result.issues["requirement"].to_list(), ["REQ-1226"])
+        self.assertEqual(result.issues["requirement"].to_list(), ["JSON-2"])
         self.assertEqual(result.issues["spec_paths"].to_list(), [["sdtm.specs[1]"]])
         self.assertIn("dm.json", result.issues["context"][0])
         self.refused(result)

@@ -15,7 +15,7 @@
               "folded_key": "Y"
             },
             "phase": "validation",
-            "requirement": "REQ-0714",
+            "requirement": "EXPR-12",
             "spec_paths": [
               "columns.V.derivation.mapping.dict"
             ]
@@ -42,7 +42,7 @@
               "folded_key": "A"
             },
             "phase": "validation",
-            "requirement": "REQ-0714",
+            "requirement": "EXPR-12",
             "spec_paths": [
               "columns.V.derivation.mapping.dict"
             ]
@@ -69,7 +69,7 @@
               "folded_key": "Y"
             },
             "phase": "validation",
-            "requirement": "REQ-0714",
+            "requirement": "EXPR-12",
             "spec_paths": [
               "columns.V.derivation.case[0].then.mapping.dict"
             ]
@@ -93,7 +93,7 @@
               "operation": "cut"
             },
             "phase": "validation",
-            "requirement": "REQ-1118",
+            "requirement": "EXPR-13",
             "spec_paths": [
               "columns.V.derivation.cut"
             ]
@@ -117,7 +117,7 @@
               "operation": "cut"
             },
             "phase": "validation",
-            "requirement": "REQ-1118",
+            "requirement": "EXPR-13",
             "spec_paths": [
               "columns.V.derivation.cut"
             ]

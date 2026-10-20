@@ -2,7 +2,7 @@ phase: impute
 condition: invalid_date_text
 spec_paths:
   - columns.ASTDTF.derivation.precision
-requirement: REQ-0588
+requirement: TIME-13
 context:
   source: AE.AESTDTC
   value: UNK

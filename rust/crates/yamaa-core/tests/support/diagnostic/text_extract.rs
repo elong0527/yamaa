@@ -31,7 +31,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             input,
             "validation",
             "incompatible_input_type",
-            "REQ-0308",
+            "TEXT-1",
             format!("{path}.source"),
             vec![
                 ("source", V::String("SRC.TEXT".into())),
@@ -43,7 +43,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             op.failure_diagnostic(Step::NoMatch("abc")).unwrap(),
             "mapping",
             "unmatched_pattern",
-            "REQ-0334",
+            "COLUMN-10",
             path.into(),
             vec![
                 ("value", V::String("abc".into())),
@@ -62,7 +62,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             make("[", "0").declaration_diagnostic().unwrap().clone(),
             "validation",
             "invalid_regex",
-            "REQ-0827",
+            "TEXT-6",
             format!("{path}.pattern"),
             vec![
                 ("pattern", V::String("[".into())),
@@ -76,7 +76,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             make("(a)", "2").declaration_diagnostic().unwrap().clone(),
             "validation",
             "regex_group_out_of_range",
-            "REQ-0816",
+            "TEXT-10",
             format!("{path}.group"),
             vec![
                 ("group", V::from(2)),

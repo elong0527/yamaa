@@ -26,7 +26,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             definition.condition,
             definition.requirement
         ),
-        ("validation", "incompatible_input_type", Some("REQ-0308"))
+        ("validation", "incompatible_input_type", Some("TEXT-1"))
     );
     assert_eq!(
         diagnostic.spec_paths,

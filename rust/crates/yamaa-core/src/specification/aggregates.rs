@@ -678,7 +678,7 @@ fn bind_groups_and_operands(
             )?;
         }
     }
-    // Baseline for the REQ-0470 guard below: findings already reported
+    // Baseline for the LOOKUP-19 guard below: findings already reported
     // (for example an ungrouped identifier) must not suppress it, while
     // findings from resolving the group_by columns themselves must.
     let group_columns_before = findings.len();
@@ -695,7 +695,7 @@ fn bind_groups_and_operands(
             }
         }
     }
-    // REQ-0470: a qualified aggregate's group_by columns must also be
+    // LOOKUP-19: a qualified aggregate's group_by columns must also be
     // output keys: the keys the reduction joins on, either its explicit
     // `key` pairs or the defaults inferred from the output keys. The
     // Matched executor matches donor records on those keys only, so a

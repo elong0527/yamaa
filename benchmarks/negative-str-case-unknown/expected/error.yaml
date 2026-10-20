@@ -2,7 +2,7 @@ phase: validation
 condition: value_not_permitted
 spec_paths:
   - columns.SITE.derivation.str_case.to
-requirement: REQ-0287
+requirement: SCHEMA-12
 context:
   value: capitalize
   permitted: [upper, lower, sentence, title]

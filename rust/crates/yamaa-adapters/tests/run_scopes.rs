@@ -248,7 +248,7 @@ fn each_route_fails_a_run_then_succeeds_on_the_same_prepared_value() {
         let issue = &issues[0];
         assert_eq!(issue.phase(), "validation");
         assert_eq!(issue.condition(), "resource_path_missing");
-        assert_eq!(issue.requirement(), Some("REQ-0785"));
+        assert_eq!(issue.requirement(), Some("FILE-7"));
         let (dataset, path) = route.input();
         assert_eq!(issue.spec_paths, [format!("input.{dataset}.path")]);
         assert_eq!(
@@ -281,7 +281,7 @@ fn a_second_run_through_the_compile_authority_holds_no_snapshot_of_the_first() {
         // A new object version replaces the study input behind the same path.
         resolver.insert("/spec.yaml", route.input().1, "data:2", Arc::from(STUDY_B));
         // The first run's scope still holds its snapshot, so building in it
-        // again refuses the replacement instead of reading it (REQ-0788).
+        // again refuses the replacement instead of reading it (FILE-10).
         let stale = compiled.run(&mut first);
         assert!(!stale.has_output());
         assert_eq!(

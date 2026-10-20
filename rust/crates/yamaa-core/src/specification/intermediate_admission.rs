@@ -141,7 +141,7 @@ pub(super) fn declaration_findings(
     Ok(findings)
 }
 
-/// Reuse the core REQ-0150 service, retaining its output-key order and first mismatch.
+/// Reuse the core LOOKUP-1 service, retaining its output-key order and first mismatch.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn inferred_keys(
     catalog: &Catalog,

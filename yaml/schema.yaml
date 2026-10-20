@@ -1,6 +1,6 @@
 version: "1.0"
 
-# See REQ-1045.
+# See SPEC-1.
 
 includes:
     - schema_shared.yaml
@@ -44,7 +44,7 @@ root_class:
     - windows:
         type: "dict[identifier, window_spec]"
         required: false
-        description: See REQ-1251.
+        description: See WINDOW-1.
     - intermediates:
         type: "list[intermediate_class]"
         required: false
@@ -143,7 +143,7 @@ record_between_class:
         required: false
         description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
 
-# See REQ-0251.
+# See SCHEMA-5.
 match_key_range_fields:
     - key: {type: match_key}
     - fields_from: match_range_fields
@@ -171,7 +171,7 @@ column_class:
         type: str
         required: false
         description: Descriptive text carried with the column for a reader of the dataset.
-    # See REQ-1260.
+    # See SPEC-6.
     - derivation:
         type: derivation
         required: false
@@ -206,11 +206,11 @@ row_class:
         type: predicate
         required: false
         description: Predicate gating each driver record's candidate row for an ungrouped row template, or completed candidate groups for a grouped row template (ROW-3, ROW-4).
-    # See REQ-0199.
+    # See SPEC-6.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
-        description: Columns this row template derives, whose coverage across row templates follows REQ-0200.
+        description: Columns this row template derives, whose coverage across row templates follows SPEC-5.
 
 variable:
     type: str
@@ -219,7 +219,7 @@ variable:
 
 match_key:
     type: [match_key_columns, "dict[identifier, match_value]"]
-    description: See REQ-0115.
+    description: See LOOKUP-5.
 
 match_key_columns:
     type: "list[identifier]"
@@ -227,7 +227,7 @@ match_key_columns:
 
 match_value:
     type: [variable, expression]
-    description: See REQ-1259.
+    description: See LOOKUP-6.
 
 dataset_source:
     type: [project_path, dataset_class]
@@ -260,7 +260,7 @@ dataset_class:
         required: false
         default: missing
         values: [missing, present]
-        description: See REQ-1158.
+        description: See INPUT-9.
     - ordinal:
         type: identifier
         required: false

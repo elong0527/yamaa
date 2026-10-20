@@ -159,7 +159,7 @@ fn window_filter_evaluates_both_operands_of_and() {
         yamaa_adapters::json!({
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-0190",
+            "requirement": "FORMULA-5",
             "spec_paths": ["columns.SEQ.derivation.row_number.window.filter"],
             "context": {"left_type": "int", "right_type": "str"}
         })

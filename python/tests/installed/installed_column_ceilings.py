@@ -165,7 +165,7 @@ class ColumnCeilings(unittest.TestCase):
                 rows = result.issues.to_dicts()
                 self.assertEqual(len(rows), 1)
                 self.assertEqual(rows[0]["condition"], "incompatible_input_type")
-                self.assertEqual(rows[0]["requirement"], "REQ-0308")
+                self.assertEqual(rows[0]["requirement"], "TEXT-1")
                 self.assertNotIn(
                     "incomplete_checks_from", json.loads(rows[0]["context"])
                 )

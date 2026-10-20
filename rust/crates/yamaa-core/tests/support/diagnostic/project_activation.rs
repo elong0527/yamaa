@@ -31,7 +31,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             FailureKind::UnknownArguments(names.clone()),
             None,
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
         ),
         (
             FailureKind::MissingRequired {
@@ -39,7 +39,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             None,
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
         ),
         (
             FailureKind::ArgumentType {
@@ -49,31 +49,31 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             None,
             "invalid_function_argument",
-            "REQ-0700",
+            "FUNC-5",
         ),
         (
             FailureKind::CallFailed(&payload),
             host,
             "function_call_failed",
-            "REQ-0701",
+            "FUNC-8",
         ),
         (
             FailureKind::InvalidHostResult(&payload),
             host,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
         (
             FailureKind::BooleanResult,
             None,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
         (
             FailureKind::UndeclaredMissing,
             None,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
         (
             FailureKind::ResultType {
@@ -82,7 +82,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             None,
             "invalid_function_result",
-            "REQ-0702",
+            "FUNC-9",
         ),
     ] {
         let failure = InvocationFailure {

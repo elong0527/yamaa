@@ -1,7 +1,7 @@
 {
   "phase": "derivation",
   "condition": "multiple_values_per_key",
-  "requirement": "REQ-0075",
+  "requirement": "COLUMN-2",
   "spec_paths": [
     "columns.A.source"
   ],

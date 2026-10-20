@@ -21,7 +21,7 @@ mod scalar {
                 assert_eq!(error.expression, "SQRT(A)");
                 assert_eq!(error.phase(), "derivation");
                 assert_eq!(error.condition(), "sqrt_of_negative");
-                assert_eq!(error.requirement(), "REQ-0431");
+                assert_eq!(error.requirement(), "FORMULA-15");
             }
         }
 
@@ -338,7 +338,7 @@ mod scalar {
                     "2029-12-31T23:59:59",
                 ),
                 // 0.0249999999 minute is 1.499999994 seconds, 6.0e-9 below the
-                // tie and inside REQ-0418's 2^-26 interval; 0.024999999 minute is
+                // tie and inside FORMULA-16's 2^-26 interval; 0.024999999 minute is
                 // 1.49999994 seconds, 6.0e-8 below and outside it.
                 (
                     "2030-01-01T00:00:00",
@@ -478,27 +478,27 @@ mod scalar {
                 (
                     K::DateShift,
                     vec![date("0001-01-01"), Value::Int(-1)],
-                    "REQ-1298",
+                    "TIME-14",
                 ),
                 (
                     K::DateShift,
                     vec![date("9999-12-31"), Value::Int(1)],
-                    "REQ-1298",
+                    "TIME-14",
                 ),
                 (
                     K::DateShift,
                     vec![date("2030-01-01"), Value::Int(i64::MAX)],
-                    "REQ-1298",
+                    "TIME-14",
                 ),
                 (
                     K::DateTimeShift { unit: U::Second },
                     vec![datetime("9999-12-31T23:59:59"), Value::Int(1)],
-                    "REQ-1300",
+                    "TIME-14",
                 ),
                 (
                     K::DateTimeShift { unit: U::Day },
                     vec![datetime("2030-01-01T00:00:00"), Value::float(f64::MAX)],
-                    "REQ-1300",
+                    "TIME-14",
                 ),
             ] {
                 let error = operation(kind).apply_values(&values).unwrap().unwrap_err();
@@ -935,7 +935,7 @@ mod scalar {
             let operation = StringPad::new("X", "p", "4").unwrap();
             let error = operation.prepare_text(&Value::Bool(true)).unwrap_err();
             assert_eq!(error.condition(), "conversion_failed");
-            assert_eq!(error.requirement(), "REQ-0013");
+            assert_eq!(error.requirement(), "VALUE-3");
             assert_eq!(error.target, yamaa_core::value::ColumnType::Str);
         }
 
@@ -1030,7 +1030,7 @@ mod scalar {
             assert_eq!(findings.len(), 1);
             let finding = &findings[0];
             assert_eq!(finding.definition().condition, "invalid_field_type");
-            assert_eq!(finding.definition().requirement, Some("REQ-1261"));
+            assert_eq!(finding.definition().requirement, Some("TEXT-2"));
             assert_eq!(finding.spec_paths, ["columns.C0.derivation.str_pad.width"]);
         }
     }

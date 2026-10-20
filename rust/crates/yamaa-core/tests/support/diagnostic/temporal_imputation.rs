@@ -59,7 +59,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Some(D::Number("1")),
             P::Month,
             "month_not_permitted",
-            "REQ-0592",
+            "TIME-10",
             "impute.month",
             vec![("month", V::from(6))],
         ),
@@ -68,7 +68,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Some(D::Number("1")),
             P::Year,
             "month_required",
-            "REQ-0592",
+            "TIME-10",
             "impute.month",
             vec![("minimum_source_precision", text("year"))],
         ),
@@ -77,7 +77,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Some(D::Number("1")),
             P::Year,
             "month_out_of_range",
-            "REQ-0608",
+            "TIME-10",
             "impute.month",
             vec![("month", V::from(15))],
         ),
@@ -104,7 +104,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Some(D::Number("32")),
             P::Year,
             "value_not_permitted",
-            "REQ-0608",
+            "TIME-10",
             "impute",
             vec![
                 ("field", text("day")),
@@ -117,7 +117,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             Some(D::Position("mid")),
             P::Year,
             "value_not_permitted",
-            "REQ-0609",
+            "TIME-10",
             "impute.day",
             vec![
                 ("value", text("mid")),
@@ -180,7 +180,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             op.source_value(ValueRef::Str("UNK")).unwrap_err(),
             "impute",
             "invalid_date_text",
-            "REQ-0588",
+            "TIME-13",
             "columns.V.derivation.impute",
             vec![
                 ("operation", text(op.operation())),
@@ -195,7 +195,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .unwrap_err(),
         "impute",
         "invalid_calendar_date",
-        "REQ-0608",
+        "TIME-10",
         "columns.V.derivation.impute",
         vec![
             ("value", text("2023-04")),
@@ -203,13 +203,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ],
     );
     for (kind, requirement, expected) in [
-        (date, "REQ-0606", "str or date"),
-        (datetime, "REQ-1182", "str or datetime"),
+        (date, "TIME-1", "str or date"),
+        (datetime, "TIME-8", "str or datetime"),
         (
             K::Precision {
                 target: T::DateTime,
             },
-            "REQ-1183",
+            "TIME-7",
             "str or datetime",
         ),
         (
@@ -222,7 +222,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
         (
             K::ToDate,
-            "REQ-0607",
+            "TIME-2",
             "datetime, ISO date text, or ISO 8601 datetime text",
         ),
     ] {
@@ -249,7 +249,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .unwrap_err(),
         "validation",
         "invalid_date_text",
-        "REQ-0607",
+        "TIME-2",
         "columns.V.derivation.impute",
         vec![("operation", text("to_date")), ("value", text("2024-13"))],
     );

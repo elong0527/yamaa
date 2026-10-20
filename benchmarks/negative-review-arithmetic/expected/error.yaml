@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.REVIEWFL.derivation.flag.condition
-requirement: REQ-0444
+requirement: FORMULA-12
 context:
   expr: "ASTDT <= TRTEDT + 30"
   source: TRTEDT

@@ -133,7 +133,7 @@ class PublicEnvironment(unittest.TestCase):
         expected = [
             issue(
                 "project_environment_invalid",
-                "REQ-0695",
+                "FUNC-2",
                 [declaration],
                 {
                     "cause": "missing",
@@ -167,7 +167,7 @@ class PublicEnvironment(unittest.TestCase):
         expected = [
             issue(
                 "project_environment_invalid",
-                "REQ-0695",
+                "FUNC-2",
                 ["environments.python"],
                 {
                     "cause": "missing",
@@ -211,7 +211,7 @@ class PublicEnvironment(unittest.TestCase):
                     [
                         issue(
                             "project_environment_missing",
-                            "REQ-0694",
+                            "FUNC-1",
                             ["columns.VALUE.derivation.function.name"],
                             context,
                         )
@@ -223,7 +223,7 @@ class PublicEnvironment(unittest.TestCase):
                 [
                     issue(
                         "project_environment_missing",
-                        "REQ-0694",
+                        "FUNC-1",
                         ["columns.VALUE.derivation.function.name"],
                         {**context, "entry": path, "source": path},
                     )
@@ -235,7 +235,7 @@ class PublicEnvironment(unittest.TestCase):
                 [
                     issue(
                         "unknown_project_function",
-                        "REQ-0698",
+                        "FUNC-4",
                         ["columns.VALUE.derivation.function.name"],
                         {"function": "project_value"},
                     )
@@ -371,7 +371,7 @@ class PublicEnvironment(unittest.TestCase):
                     [
                         issue(
                             "invalid_regex",
-                            "REQ-0827",
+                            "TEXT-6",
                             [TRUTH["verification_pattern_path"]],
                             {"pattern": "\u00e9("},
                         )
@@ -391,7 +391,7 @@ class PublicEnvironment(unittest.TestCase):
             rows = spec.check().issues.to_dicts()
             self.assertEqual(
                 [(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
-                [("redundant_field_type", "REQ-0523", ["input.P.types.ID"])],
+                [("redundant_field_type", "INPUT-6", ["input.P.types.ID"])],
             )
         for name in tuple(TRUTH["unread_graph_files"]):
             self.assertFalse(Path(name).exists())
@@ -642,7 +642,7 @@ class PublicEnvironment(unittest.TestCase):
             self.assertEqual(
                 failed.issues["condition"].to_list(), ["invalid_field_type"]
             )
-            self.assertEqual(failed.issues["requirement"].to_list(), ["REQ-0744"])
+            self.assertEqual(failed.issues["requirement"].to_list(), ["CSV-6"])
             self.assertEqual(
                 failed.issues["spec_paths"].to_list(), [["output.decimals"]]
             )
@@ -662,7 +662,7 @@ class PublicEnvironment(unittest.TestCase):
                 "-9223372036854775809",
                 "rounded.csv",
                 "invalid_field_type",
-                "REQ-0744",
+                "CSV-6",
                 {
                     "expected": TRUTH["csv_precision_expected"],
                     "actual": -9223372036854775809,
@@ -672,7 +672,7 @@ class PublicEnvironment(unittest.TestCase):
                 "2",
                 "rounded.parquet",
                 "decimals_not_applicable",
-                "REQ-0762",
+                "CSV-6",
                 {"path": "rounded.parquet", "profile": "parquet"},
             ),
         ):
@@ -927,7 +927,7 @@ class PublicEnvironment(unittest.TestCase):
             host, "verify_versions", side_effect=AssertionError("activation")
         ):
             rows = project.spec("TEST").check().issues.to_dicts()
-        self.assertEqual({row["requirement"] for row in rows}, {"REQ-0700", "REQ-0953"})
+        self.assertEqual({row["requirement"] for row in rows}, {"FUNC-5", "CT-1"})
 
     def test_approved_math_is_identical_in_root_row_and_nested_case_compute(self):
         expression = {"compute": {"expr": "EXP(0) + LN(1) + POWER(2, 3)"}}
@@ -1071,7 +1071,7 @@ class PublicEnvironment(unittest.TestCase):
         def lock_kind(environment):
             return issue(
                 "project_environment_invalid",
-                "REQ-0695",
+                "FUNC-2",
                 ["lock"],
                 {
                     "actual_lock_kind": "renv",
@@ -1124,7 +1124,7 @@ class PublicEnvironment(unittest.TestCase):
             (row,) = project.check().issues.to_dicts()
         self.assertEqual(
             (row["condition"], row["requirement"], row["spec_paths"]),
-            ("unknown_field", "REQ-0285", ["language"]),
+            ("unknown_field", "SCHEMA-13", ["language"]),
         )
         self.assertEqual(
             json.loads(row["context"])["environment_path"], "environments.python"
@@ -1210,7 +1210,7 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
         self.assertTrue(
             any(
                 row["condition"] == "invalid_derive_step"
-                and row["requirement"] == "REQ-1242"
+                and row["requirement"] == "LOOKUP-22"
                 for row in issues
             ),
             issues,

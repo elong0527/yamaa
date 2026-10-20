@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.SURVDD.derivation.diff.start
-requirement: REQ-0606
+requirement: TIME-1
 context:
   source: RFSTDTM
   expected: date

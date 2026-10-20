@@ -14,7 +14,7 @@
       "spec_paths": [
         "columns.SEX.verifications[0].matches.pattern"
       ],
-      "requirement": "REQ-0827",
+      "requirement": "TEXT-6",
       "context": {
         "pattern": "(?P<code>[MFU])"
       }
@@ -33,7 +33,7 @@
           "spec_paths": [
             "columns.SEX.verifications[0].matches.pattern"
           ],
-          "requirement": "REQ-0827",
+          "requirement": "TEXT-6",
           "context": {
             "pattern": "(?P<code>[MFU])"
           }

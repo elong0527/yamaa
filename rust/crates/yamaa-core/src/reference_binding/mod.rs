@@ -448,7 +448,7 @@ impl Catalog {
     /// Check one bare reference in unknown-name, phase, then expected-type order.
     /// `available` is absent during column derivation and lists available output
     /// declarations during row construction. Candidate datasets only affect the
-    /// qualified spelling suggested for an unresolved bare name (REQ-0106).
+    /// qualified spelling suggested for an unresolved bare name (NAME-3).
     pub fn validate_output(
         &self,
         name: &str,

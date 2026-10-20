@@ -172,9 +172,9 @@ mod execution {
         #[test]
         fn derive_and_range_faults_fail_before_any_output_with_registered_causes() {
             for (operation,condition,requirement) in [
-        ("        derive: []\n        expr: SUM(V)\n","invalid_derive_step","REQ-1189"),
-        ("        derive:\n          - {name: V, type: float, derivation: W}\n        expr: SUM(V)\n","unknown_derive_variable","REQ-1189"),
-        ("        derive:\n          - {name: V, type: float, derivation: {literal: 1}}\n        expr: SUM(V)\n","invalid_derive_step","REQ-1191"),
+        ("        derive: []\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
+        ("        derive:\n          - {name: V, type: float, derivation: W}\n        expr: SUM(V)\n","unknown_derive_variable","LOOKUP-22"),
+        ("        derive:\n          - {name: V, type: float, derivation: {literal: 1}}\n        expr: SUM(V)\n","invalid_derive_step","LOOKUP-22"),
         ("        between: {value: CUT, lower: USE}\n        expr: SUM(B.N)\n","incomparable_range_types","LOOKUP-9"),
         ("        between: {value: CUT, lower: ABSENT}\n        expr: SUM(B.N)\n","unknown_field","LOOKUP-9"),
         // A range with neither bound narrows nothing (LOOKUP-9); 0.4.0 refused
@@ -292,7 +292,7 @@ mod execution {
                 issues
                     .iter()
                     .any(|issue| issue.condition() == "invalid_derive_step"
-                        && issue.requirement() == Some("REQ-1242")),
+                        && issue.requirement() == Some("LOOKUP-22")),
                 "{issues:?}"
             );
         }
@@ -440,7 +440,7 @@ mod execution {
             for (expression, key, identifier, requirement) in [
                 ("COUNT(OTHER.*)", "{ABSENT: K}", "OTHER.ABSENT", "LOOKUP-5"),
                 ("COUNT(OTHER.*)", "{N: ABSENT}", "ABSENT", "LOOKUP-5"),
-                ("COUNT(ABSENT.*)", "{N: K}", "ABSENT.*", "REQ-0103"),
+                ("COUNT(ABSENT.*)", "{N: K}", "ABSENT.*", "NAME-3"),
             ] {
                 let fixture =
                     fieldless_count_fixture(&original_fieldless_count(expression, key, ""));
@@ -467,7 +467,7 @@ mod execution {
                     complete_aggregate_issues(&fixture),
                     vec![yamaa_adapters::json!({
                         "phase": "validation", "condition": "unknown_field",
-                        "requirement": "REQ-0103", "spec_paths": ["columns.V.derivation.aggregate.expr"],
+                        "requirement": "NAME-3", "spec_paths": ["columns.V.derivation.aggregate.expr"],
                         "context": {"identifier": identifier}
                     })],
                     "{expression}"
@@ -716,12 +716,12 @@ S1,002,2024-06
                 .iter()
                 .find(|issue| issue.condition() == "invalid_derive_step")
                 .unwrap();
-            assert_eq!(issue.requirement(), Some("REQ-1191"));
+            assert_eq!(issue.requirement(), Some("LOOKUP-22"));
             let context = yamaa_core::json::Value::Object(issue.context.clone());
             assert_eq!(context["relations"], yamaa_adapters::json!(["QS", "XX"]));
 
             for (source, requirement) in
-                [("QS.NOSUCHFIELD", "REQ-0103"), ("CAP.NOSUCH", "REQ-0125")]
+                [("QS.NOSUCHFIELD", "NAME-3"), ("CAP.NOSUCH", "LOOKUP-11")]
             {
                 let fixture = original_derive_fixture(
                     &format!("- name: A\n  type: float\n  derivation: {source}"),
@@ -752,7 +752,7 @@ S1,002,2024-06
                 .filter(|issue| issue.condition() == "invalid_derive_step")
                 .collect::<Vec<_>>();
             assert_eq!(invalid.len(), 1, "{issues:?}");
-            assert_eq!(invalid[0].requirement(), Some("REQ-1242"));
+            assert_eq!(invalid[0].requirement(), Some("LOOKUP-22"));
             let context = yamaa_core::json::Value::Object(invalid[0].context.clone());
             assert_eq!(context["intermediate"], "CAP");
         }
@@ -879,7 +879,7 @@ S1,002,2024-06
         }
     }
     mod case_item_order {
-        //! REQ-0339 case item order is one validation finding at every expression site,
+        //! EXPR-7 case item order is one validation finding at every expression site,
         //! with the same issue from check and domain in both shared host routes. Paths
         //! follow the schema validator: keyed list members are named by `name` or `id`.
         use std::{
@@ -976,7 +976,7 @@ S1,002,2024-06
 
         fn finding(path: &str, expected: &str) -> Value {
             yamaa_adapters::json!({
-                "phase": "validation", "condition": "invalid_field_type", "requirement": "REQ-0339",
+                "phase": "validation", "condition": "invalid_field_type", "requirement": "EXPR-7",
                 "spec_paths": [path], "context": {"expected": expected}
             })
         }
@@ -1268,17 +1268,17 @@ S1,002,2024-06
                 (
                     "undeclared",
                     "{path: out.csv, columns: [USUBJID, N, ZZZ]}",
-                    yamaa_adapters::json!({"phase":"validation","condition":"undeclared_column","requirement":"REQ-0234","spec_paths":["output.columns[2]"],"context":{"column":"ZZZ"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"undeclared_column","requirement":"OUTPUT-1","spec_paths":["output.columns[2]"],"context":{"column":"ZZZ"}}),
                 ),
                 (
                     "decimals-parquet",
                     "{path: out.parquet, columns: [USUBJID, N], decimals: 2}",
-                    yamaa_adapters::json!({"phase":"validation","condition":"decimals_not_applicable","requirement":"REQ-0762","spec_paths":["output.decimals"],"context":{"path":"out.parquet","profile":"parquet"}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"decimals_not_applicable","requirement":"CSV-6","spec_paths":["output.decimals"],"context":{"path":"out.parquet","profile":"parquet"}}),
                 ),
                 (
                     "decimals-negative",
                     "{path: out.csv, columns: [USUBJID, N], decimals: -1}",
-                    yamaa_adapters::json!({"phase":"validation","condition":"invalid_field_type","requirement":"REQ-0744","spec_paths":["output.decimals"],"context":{"expected":"an integer from 0 through 18","actual":-1}}),
+                    yamaa_adapters::json!({"phase":"validation","condition":"invalid_field_type","requirement":"CSV-6","spec_paths":["output.decimals"],"context":{"expected":"an integer from 0 through 18","actual":-1}}),
                 ),
             ];
             for (name, output, oracle) in rows {
@@ -1574,9 +1574,9 @@ S1,002,2024-06
         /// not a record lookup, then column order over the formulas' reads.
         #[test]
         fn check_reports_formula_qualification_and_column_order() {
-            let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","requirement":"REQ-0442","spec_paths":["columns.A.derivation.compute.expr"],"context":{"expr":expr,"identifier":identifier}});
-            let forward = |dependency: &str| yamaa_adapters::json!({"phase":"validation","condition":"forward_reference","requirement":"REQ-0071","spec_paths":["columns.A.derivation.compute"],"context":{"column":"A","dependency":dependency}});
-            let cycle = yamaa_adapters::json!({"phase":"validation","condition":"dependency_cycle","requirement":"REQ-0072","spec_paths":["columns.A.derivation.compute","columns.B.derivation.compute"],"context":{"cycle":["A","B","A"]}});
+            let qualified = |expr: &str, identifier: &str| yamaa_adapters::json!({"phase":"validation","condition":"qualified_identifier","requirement":"FORMULA-9","spec_paths":["columns.A.derivation.compute.expr"],"context":{"expr":expr,"identifier":identifier}});
+            let forward = |dependency: &str| yamaa_adapters::json!({"phase":"validation","condition":"forward_reference","requirement":"COLUMN-5","spec_paths":["columns.A.derivation.compute"],"context":{"column":"A","dependency":dependency}});
+            let cycle = yamaa_adapters::json!({"phase":"validation","condition":"dependency_cycle","requirement":"COLUMN-6","spec_paths":["columns.A.derivation.compute","columns.B.derivation.compute"],"context":{"cycle":["A","B","A"]}});
             let rows: [(&str, &str, &str, Vec<yamaa_core::json::Value>); 4] = [
                 (
                     "qualified-then-forward",
@@ -2313,7 +2313,7 @@ S1,002,2024-06
                     diagnostic.definition().condition,
                     diagnostic.definition().requirement
                 ),
-                ("validation", "source_profile_unknown", Some("REQ-0852"))
+                ("validation", "source_profile_unknown", Some("INPUT-1"))
             );
             assert_eq!(diagnostic.spec_paths, ["input.LB.path"]);
             assert_eq!(
@@ -2545,8 +2545,8 @@ S1,002,2024-06
             assert_eq!(
                 actual,
                 vec![
-                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"REQ-1245","spec_paths":["intermediates[0].verifications[0].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["ID"],"duplicate_count":1,"verification_id":"donor-id"}}),
-                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"REQ-1245","spec_paths":["intermediates[0].verifications[1].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["X"],"duplicate_count":1}})
+                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"LOOKUP-17","spec_paths":["intermediates[0].verifications[0].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["ID"],"duplicate_count":1,"verification_id":"donor-id"}}),
+                    yamaa_adapters::json!({"phase":"verification","condition":"duplicate_intermediate_records","requirement":"LOOKUP-17","spec_paths":["intermediates[0].verifications[1].unique"],"context":{"intermediate":"P","dataset":"DONOR","columns":["X"],"duplicate_count":1}})
                 ]
             );
             assert!(result.save().is_err());
@@ -2679,7 +2679,7 @@ S1,002,2024-06
         #[test]
         fn contextual_keys_reject_later_unknown_wrong_owner_and_known_type_at_binding() {
             let base = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\nbase: SRC\ninput: {SRC: {path: source.csv, types: {ID: int, VAL: int}}, DONOR: {path: donor.csv, types: {KEY: int}}}\noutput: {path: out.csv, columns: [ID, VALUE]}\nintermediates:\n  - id: EARLIER\n    dataset: SRC\n    key: {ID: DONOR.NEWKEY}\n  - id: LATER\n    dataset: DONOR\n    key: {KEY: ID}\n    derivations:\n      NEWKEY: KEY\n      LOOKED_UP: EARLIER.VAL\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: VALUE, type: int, derivation: LATER.LOOKED_UP}\n";
-            let unknown = |name: &str| yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"REQ-1263","spec_paths":["intermediates[1].derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
+            let unknown = |name: &str| yamaa_adapters::json!({"phase":"validation","condition":"unknown_field","requirement":"LOOKUP-16","spec_paths":["intermediates[1].derivations.LOOKED_UP.source"],"context":{"identifier":name,"intermediate":"LATER","read":"EARLIER"}});
             for (spec, first) in [
                 (
                     base.replace(
@@ -2739,7 +2739,7 @@ S1,002,2024-06
                 assert_eq!(
                     result.issues().iter().map(issue).collect::<Vec<_>>(),
                     vec![yamaa_adapters::json!({
-                        "phase":"validation", "condition":"unknown_field", "requirement":"REQ-1185",
+                        "phase":"validation", "condition":"unknown_field", "requirement":"LOOKUP-15",
                         "spec_paths":["intermediates[0].derivations.TWICE.compute.expr"],
                         "context":{"intermediate":"P", "identifier":reference}
                     })],
@@ -2759,7 +2759,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
-                    "phase":"validation", "condition":"duplicate_derivation", "requirement":"REQ-1185",
+                    "phase":"validation", "condition":"duplicate_derivation", "requirement":"LOOKUP-15",
                     "spec_paths":["intermediates[0].derivations.VALUE"],
                     "context":{"intermediate":"P", "derivation":"VALUE", "identifier":"SELF.VALUE"}
                 })]
@@ -2783,7 +2783,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
-                    "phase":"verification", "condition":"duplicate_intermediate_records", "requirement":"REQ-1245",
+                    "phase":"verification", "condition":"duplicate_intermediate_records", "requirement":"LOOKUP-17",
                     "spec_paths":["intermediates[0].verifications[0].unique"],
                     "context":{"intermediate":"P", "dataset":"SELF", "columns":["TWICE"], "duplicate_count":1}
                 })]
@@ -2925,7 +2925,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-1263",
+                    "phase": "validation", "condition": "unknown_field", "requirement": "LOOKUP-16",
                     "spec_paths": ["intermediates[1].derivations.LD.source"],
                     "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "LAST_DOSE"}
                 })]
@@ -2953,7 +2953,7 @@ S1,002,2024-06
             assert_eq!(
                 result.issues().iter().map(issue).collect::<Vec<_>>(),
                 vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "unknown_field", "requirement": "REQ-1263",
+                    "phase": "validation", "condition": "unknown_field", "requirement": "LOOKUP-16",
                     "spec_paths": ["intermediates[2].derivations.LD.source"],
                     "context": {"intermediate": "SUBJ", "identifier": "ADTM", "read": "SECOND"}
                 })]
@@ -3040,7 +3040,7 @@ S1,002,2024-06
             assert_eq!(run(&chained), refused("W2"));
             assert_eq!(run(&derived), refused("W"));
             assert_eq!(run(&ranged), refused("W"));
-            // A donor record of REF supplies the value under REQ-1263.
+            // A donor record of REF supplies the value under LOOKUP-16.
             let reader = "  - id: R\n    dataset: REF\n    key: [USUBJID]\n    derivations: {WINNAME: W.NAME}\n";
             assert_eq!(
                 run(&format!("{base}{WINDOW}{reader}{}", column("R.WINNAME"))),
@@ -3168,7 +3168,7 @@ S1,002,2024-06
             assert_eq!(
                 built,
                 Err(vec![yamaa_adapters::json!({
-                    "phase": "validation", "condition": "invalid_aggregate_context", "requirement": "REQ-0329",
+                    "phase": "validation", "condition": "invalid_aggregate_context", "requirement": "LOOKUP-18",
                     "spec_paths": ["columns.N.derivation.aggregate.between"],
                     "context": {"expr": "MAX(RDAY)", "reason": "between narrows a qualified right side only"}
                 })])

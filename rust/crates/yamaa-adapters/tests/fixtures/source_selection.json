@@ -1,17 +1,17 @@
 {
   "authorship": "Independently authored normative finite cases, complete diagnostics, declared handler counts, exact CSV and typed public cells. Candidate/reference execution never generated these expectations.",
   "requirements": [
-    "REQ-0074",
+    "COLUMN-7",
     "LOOKUP-10",
-    "REQ-0138",
-    "REQ-0148",
-    "REQ-0240",
-    "REQ-0316",
-    "REQ-0353",
-    "REQ-0354",
-    "REQ-0355",
-    "REQ-0356",
-    "REQ-0361"
+    "LOOKUP-12",
+    "LOOKUP-8",
+    "OUTPUT-3",
+    "WINDOW-10",
+    "COLUMN-12",
+    "COLUMN-12",
+    "COLUMN-12",
+    "COLUMN-14",
+    "COLUMN-14"
   ],
   "cases": {
     "scalar-output-selection": {
@@ -507,7 +507,7 @@
         {
           "phase": "convert",
           "condition": "conversion_failed",
-          "requirement": "REQ-0013",
+          "requirement": "VALUE-3",
           "spec_paths": [
             "columns.ID"
           ],
@@ -533,7 +533,7 @@
         {
           "phase": "output",
           "condition": "missing_key",
-          "requirement": "REQ-0240",
+          "requirement": "OUTPUT-3",
           "spec_paths": [
             "keys[0]"
           ],
@@ -705,7 +705,7 @@
         {
           "phase": "validation",
           "condition": "resource_path_missing",
-          "requirement": "REQ-0785",
+          "requirement": "FILE-7",
           "spec_paths": [
             "input.SRC.path"
           ],
@@ -746,7 +746,7 @@
         {
           "phase": "validation",
           "condition": "key_dependency",
-          "requirement": "REQ-0074",
+          "requirement": "COLUMN-7",
           "spec_paths": [
             "columns.ID.derivation"
           ],
@@ -771,7 +771,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "REQ-0148",
+          "requirement": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],

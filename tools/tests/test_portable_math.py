@@ -75,7 +75,7 @@ class PublicPortableMath(unittest.TestCase):
                     self.assertEqual(result.issues["phase"].to_list(), ["derivation"])
                     self.assertEqual(
                         result.issues["requirement"].to_list(),
-                        ["REQ-0432" if function == "LN" else "REQ-0433"],
+                        ["FORMULA-15" if function == "LN" else "FORMULA-15"],
                     )
                     self.assertEqual(
                         result.issues["spec_paths"].to_list(),
@@ -177,7 +177,7 @@ class PublicPortableMath(unittest.TestCase):
                 {
                     "phase": "verification",
                     "condition": "assert_failed",
-                    "requirement": "REQ-0384",
+                    "requirement": "CHECK-12",
                     "spec_paths": ["verifications[0].assert"],
                     "context": '{"failure_count":1,"keys":[{"ID":1}],'
                     '"verification_id":"historical-exp-one-limit"}',

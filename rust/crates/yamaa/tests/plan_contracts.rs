@@ -227,8 +227,8 @@ fn assert_refused(plan: &Plan, condition: &str, field: &str, path: &str) {
     assert_eq!(report.len(), 1, "{report:?}");
     let refusal = &report.diagnostics[0];
     let (phase, requirement) = match condition {
-        "resource_path_content_changed" => ("ingest", "REQ-0788"),
-        "resource_path_missing" => ("validation", "REQ-0785"),
+        "resource_path_content_changed" => ("ingest", "FILE-10"),
+        "resource_path_missing" => ("validation", "FILE-7"),
         other => panic!("unexpected condition {other}"),
     };
     assert_eq!(refusal.code, condition);
@@ -405,7 +405,7 @@ fn a_redefined_host_function_is_refused_at_activation_until_restored() {
     let first = &refused.report().diagnostics[0];
     assert_eq!(first.phase, "validation");
     assert_eq!(first.code, "project_environment_invalid");
-    assert_eq!(first.requirement.as_deref(), Some("REQ-0695"));
+    assert_eq!(first.requirement.as_deref(), Some("FUNC-2"));
     assert_eq!(
         first.context.get("function"),
         Some(&ContextValue::Text("id".into()))
@@ -495,7 +495,7 @@ fn every_changed_local_file_refuses_runs_under_its_declaring_field() {
         let refusal = &report.diagnostics[0];
         assert_eq!(refusal.code, "resource_path_content_changed", "{name}");
         assert_eq!(refusal.phase, "ingest");
-        assert_eq!(refusal.requirement.as_deref(), Some("REQ-0788"));
+        assert_eq!(refusal.requirement.as_deref(), Some("FILE-10"));
         assert_eq!(refusal.spec_path, [field], "{name}");
         assert_eq!(
             refusal.context.get("path"),
