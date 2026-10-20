@@ -3,10 +3,11 @@
 //! through the local file resolver, and links, junctions and other reparse
 //! points on a share stay refused (FILE-8). Each study reaches its temporary
 //! directory through the administrative share of its drive
-//! (`\\localhost\C$\...`); a runner without that share skips with a message,
-//! and the native Windows lanes of #3061 qualify shares and mapped drives.
-//! The path classification these walks rely on is tested on every host in
-//! `file_resolver.rs`.
+//! (`\\localhost\C$\...`). A host where that share is unreachable fails these
+//! tests, so CI's Windows lanes never pass them unrun; a developer without the
+//! share sets `YAMAA_SKIP_NETWORK_SHARES=1` to skip them with a message, and no
+//! CI lane sets it. The path classification these walks rely on is tested on
+//! every host in `file_resolver.rs`.
 #![cfg(all(windows, feature = "yaml"))]
 
 use std::{
@@ -47,9 +48,15 @@ impl Study {
         let (drive, rest) = text.split_once(":\\").unwrap();
         let share = PathBuf::from(format!(r"\\localhost\{drive}$\{rest}"));
         if !fs::metadata(&share).is_ok_and(|metadata| metadata.is_dir()) {
-            eprintln!("skipped: the administrative share {share:?} is not reachable");
             let _ = fs::remove_dir_all(&local);
-            return None;
+            if std::env::var_os("YAMAA_SKIP_NETWORK_SHARES").is_some_and(|skip| skip == "1") {
+                eprintln!("skipped: the administrative share {share:?} is not reachable");
+                return None;
+            }
+            panic!(
+                "the administrative share {share:?} is not reachable; set \
+                 YAMAA_SKIP_NETWORK_SHARES=1 to skip the network share tests"
+            );
         }
         Some(Self { local, share })
     }
@@ -156,7 +163,7 @@ fn links_on_a_network_share_stay_refused() {
     let (mut resources, _) =
         file_configuration::resources(&study.share(r"study\spec.yaml")).unwrap();
     assert_eq!(resources.capture("linked/src.csv"), Err(Error::Symlink));
-    assert_eq!(resources.capture("../data/src.csv").unwrap().1, true);
+    assert!(resources.capture("../data/src.csv").unwrap().1);
     fs::remove_dir(link).unwrap();
     assert!(Path::new(&study.share(r"data\src.csv")).is_file());
 }

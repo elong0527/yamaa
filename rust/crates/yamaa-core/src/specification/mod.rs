@@ -2,18 +2,18 @@
 //! implicit key grain, source columns and checked numeric computations.
 //! Admission never reads study data; binding consumes only the captured source schema.
 use crate::{
-    bound_expression::{Binding, Read},
-    dataset::{
-        Assignment, BoundNumeric, DatasetPlan, Expression, ResolvedPlan, RowMode, RowTemplate,
-    },
-};
-use crate::{
-    column_dependencies,
+    ast, column_dependencies,
     expression::{compile, CompileError, CompiledExpression, Context as ExpressionContext},
     reference_binding::{self, Catalog},
     schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{Column, TableSchema},
     value::ColumnType,
+};
+use crate::{
+    bound_expression::{Binding, Read},
+    dataset::{
+        Assignment, BoundNumeric, DatasetPlan, Expression, ResolvedPlan, RowMode, RowTemplate,
+    },
 };
 use std::{collections::BTreeMap, vec};
 
@@ -29,9 +29,8 @@ mod lookup_range;
 mod lowering_audit;
 mod match_values;
 mod relation_predicates;
-mod result_types;
 mod static_checks;
-mod static_types;
+mod types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
@@ -358,7 +357,6 @@ enum Operation {
     Case(Vec<cases::Branch>),
     ProjectFunction {
         call: usize,
-        returns: ColumnType,
     },
     Literal(crate::value::Value),
     Window(std::boxed::Box<windows::Declaration>),
@@ -380,6 +378,8 @@ enum Operation {
 struct Declaration {
     handler: Option<crate::conversion::LiteralHandler>,
     path: String,
+    /// The document node of the derivation's operation.
+    value: usize,
     operation: Operation,
 }
 /// Private admitted representation: no caller-provided typed plan or binding indices.
@@ -407,6 +407,8 @@ pub struct PreparedSpecification {
     rows: Option<rows::Rows>,
     verifications: verifications::Verifications,
     column_verifications: Vec<verifications::Verifications>,
+    /// The typed tree of the same admitted document, which result typing reads.
+    tree: types::Tree,
 }
 
 /// A static finding borrowed from one admitted compilation. Allocate its
@@ -1216,7 +1218,8 @@ fn prepare_column_declarations(
             .filter(|&id| !matches!(d.nodes()[id], N::Null))
             .ok_or(PrepareError::Internal)?;
         let handler = literal_handler(d, derivation, &format!("{prefix}.derivation"))?;
-        let ops = mapping(d, field(d, derivation, "value")?)?;
+        let value = field(d, derivation, "value")?;
+        let ops = mapping(d, value)?;
         let &[(op, payload)] = ops else {
             return Err(PrepareError::Internal);
         };
@@ -1253,7 +1256,7 @@ fn prepare_column_declarations(
             }
             _ => match derivations::prepare_value_with_driver(
                 d,
-                field(d, derivation, "value")?,
+                value,
                 &format!("{prefix}.derivation"),
                 project,
                 intermediates,
@@ -1275,6 +1278,7 @@ fn prepare_column_declarations(
             declarations.push(Declaration {
                 handler,
                 path,
+                value,
                 operation,
             });
         }
@@ -1438,13 +1442,21 @@ impl PreparedSpecification {
             &mut column_verifications,
             &mut findings,
         )?;
+        // Operand types before capture: each link's producer types its input.
+        let declared = types::DeclaredTypes::new(
+            lowered.spec(),
+            contracts
+                .iter()
+                .map(|(dataset, contract)| (dataset.as_str(), contract)),
+        );
         rounding::declaration_findings(d, columns, &output, &mut findings)?;
-        temporal::declaration_findings(d, columns, &output, &mut findings)?;
-        imputation::declaration_findings(d, columns, &output, &mut findings)?;
-        str_case::declaration_findings(d, columns, &output, &mut findings)?;
-        scalar::declaration_findings(d, &output, &mut findings)?;
-        let extraction = str_extract::Prepared::new(d, &output, &mut findings)?;
-        let templates = str_template::Prepared::new(d, &output, &mut findings)?;
+        temporal::declaration_findings(d, columns, &output, &declared, &mut findings)?;
+        imputation::declaration_findings(d, columns, &output, &declared, &mut findings)?;
+        str_case::declaration_findings(d, columns, &output, &declared, &mut findings)?;
+        scalar::declaration_findings(d, &declared, &mut findings)?;
+        let extraction = str_extract::Prepared::new(d, &declared, &mut findings)?;
+        let templates = str_template::Prepared::new(d, &output, &declared, &mut findings)?;
+        drop(declared);
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -1530,6 +1542,7 @@ impl PreparedSpecification {
                 }
                 None => None,
             };
+            let tree = types::Tree::new(lowered, d, project.as_ref());
             return Self {
                 check_expressions: Vec::new(),
                 project_calls: project.map(|p| p.calls),
@@ -1551,9 +1564,10 @@ impl PreparedSpecification {
                 rows: Some(rows),
                 verifications,
                 column_verifications,
+                tree,
             }
             .finish_checks()
-            .map(|prepared| prepared.audit_lowering(&lowered));
+            .map(Self::audit_lowering);
         }
         let declarations = prepare_column_declarations(
             d,
@@ -1570,6 +1584,7 @@ impl PreparedSpecification {
         if !extra.is_empty() {
             return Err(PrepareError::Unsupported(extra));
         }
+        let tree = types::Tree::new(lowered, d, project.as_ref());
         Self {
             check_expressions: Vec::new(),
             project_calls: project.map(|p| p.calls),
@@ -1591,9 +1606,10 @@ impl PreparedSpecification {
             rows: None,
             verifications,
             column_verifications,
+            tree,
         }
         .finish_checks()
-        .map(|prepared| prepared.audit_lowering(&lowered))
+        .map(Self::audit_lowering)
     }
     pub fn source(&self) -> &SourceDeclaration {
         &self.sources[self.driver]
@@ -1910,6 +1926,7 @@ impl PreparedSpecification {
             &self.keys,
             Some(&rows.self_columns()),
             self.project_calls.as_ref(),
+            &self.tree,
             &mut findings,
         )?;
         let verifications = self.verifications.bind(self, &secondary, &intermediates)?;
@@ -1973,6 +1990,7 @@ impl PreparedSpecification {
             &self.keys,
             None,
             self.project_calls.as_ref(),
+            &self.tree,
             &mut findings,
         )?;
         let catalog = row_drivers::extend_catalog(
@@ -2035,6 +2053,7 @@ impl PreparedSpecification {
                     None,
                     crate::reference_scope::Phase::Column { groups: &[] },
                     &self.output,
+                    &self.tree,
                     &self.intermediates,
                     secondary,
                     intermediates,
@@ -2223,17 +2242,17 @@ impl PreparedSpecification {
                 )?,
             };
             if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-                let input = |name: &str| {
-                    static_types::result_type(
-                        name,
-                        &self.intermediates,
-                        catalog,
-                        secondary,
-                        intermediates,
-                    )
-                };
+                let captured = types::CapturedTypes::new(
+                    &self.intermediates,
+                    catalog,
+                    secondary,
+                    intermediates,
+                );
+                let result =
+                    self.tree
+                        .result_type(declaration.value, ast::Scope::Row, &captured)?;
                 findings.extend(
-                    self.conversion_finding(column, declaration.operation.result_type(&input))
+                    self.conversion_finding(column, result)
                         .map(BindFinding::Scalar),
                 );
             }
@@ -2557,28 +2576,13 @@ impl PreparedSpecification {
                     });
                 }
             }
-            static_types::numeric(
-                compiled,
-                &bindings,
-                &self.intermediates,
-                catalog,
-                secondary,
-                intermediates,
-                findings,
-            )?;
+            let captured =
+                types::CapturedTypes::new(&self.intermediates, catalog, secondary, intermediates);
+            captured.numeric(compiled, &bindings, findings);
             if findings.len() == start {
                 Some(Expression::Compute(
-                    BoundNumeric::new(
-                        static_types::typed(
-                            compiled,
-                            &self.intermediates,
-                            catalog,
-                            secondary,
-                            intermediates,
-                        ),
-                        bindings,
-                    )
-                    .map_err(BindError::InvalidNumericBinding)?,
+                    BoundNumeric::new(captured.typed(compiled), bindings)
+                        .map_err(BindError::InvalidNumericBinding)?,
                 ))
             } else {
                 None

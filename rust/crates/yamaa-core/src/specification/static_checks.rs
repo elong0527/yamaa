@@ -1,7 +1,7 @@
 //! Retained declaration findings share the compiled operations used by build.
 //! Checking never obtains source schemas, activates functions, or executes a plan.
 use super::*;
-use crate::{diagnostic::Diagnostic, reference_scope::Phase, result_type::ResultType};
+use crate::{diagnostic::Diagnostic, reference_scope::Phase};
 
 /// The rows a derivation evaluates on, as binding scopes its reads.
 #[derive(Clone, Copy, Debug)]
@@ -17,42 +17,42 @@ pub(super) struct Scope<'a> {
     pub(super) phase: Option<Phase<'a>>,
 }
 
-/// The static types of one derivation over the types `input` declares, as
-/// binding checks them: each flag condition and case predicate (FORMULA-5,
+/// The static types of one derivation over the declared types, as binding
+/// checks them: each flag condition and case predicate (FORMULA-5,
 /// FORMULA-12), and each aggregate derive binding's conversion (VALUE-24).
 pub(super) fn derivation_types(
     operation: &Operation,
-    input: &dyn Fn(&str) -> ResultType,
+    tree: &types::Tree,
+    declared: &types::DeclaredTypes<'_>,
     findings: &mut Vec<BindFinding>,
-) {
-    fn check(
-        plan: &CompiledExpression,
-        input: &dyn Fn(&str) -> ResultType,
-        findings: &mut Vec<BindFinding>,
-    ) {
+) -> Result<(), BindError> {
+    let check = |plan: &CompiledExpression, findings: &mut Vec<BindFinding>| {
         findings.extend(
-            static_types::predicate_kinds(plan, |name| input(name).single())
+            types::predicate_kinds(plan, |name| declared.name(name).single())
                 .into_iter()
                 .map(BindFinding::Predicate),
         );
-    }
+    };
     match operation {
         Operation::Flag(flag) => {
             if let Some(condition) = flag.condition() {
-                check(condition, input, findings);
+                check(condition, findings);
             }
         }
         Operation::Case(branches) => {
             for branch in branches {
                 if let Some(Ok(plan)) = branch.predicate() {
-                    check(plan, input, findings);
+                    check(plan, findings);
                 }
-                derivation_types(&branch.operation, input, findings);
+                derivation_types(&branch.operation, tree, declared, findings)?;
             }
         }
-        Operation::Aggregate(aggregate) => aggregate.derive_conversion_findings(input, findings),
+        Operation::Aggregate(aggregate) => {
+            aggregate.derive_conversion_findings(tree, declared, findings)?
+        }
         _ => (),
     }
+    Ok(())
 }
 
 pub(super) fn predicate(
@@ -188,26 +188,6 @@ fn filters(
 }
 
 impl PreparedSpecification {
-    /// A name's type before any schema is captured: a column's or a stored
-    /// field's declared type. Anything else is not known until binding.
-    pub(super) fn declared_input(&self, name: &str) -> ResultType {
-        match name.split_once('.') {
-            Some((owner, field)) => ResultType::declared(
-                self.sources
-                    .iter()
-                    .find(|source| source.name == owner)
-                    .and_then(|source| source.declared_type(field)),
-            ),
-            None => ResultType::declared(
-                self.output
-                    .columns()
-                    .iter()
-                    .find(|column| column.name == name)
-                    .map(|column| column.kind),
-            ),
-        }
-    }
-
     pub(super) fn finish_checks(mut self) -> Result<Self, PrepareError> {
         let mut findings = Vec::new();
         let collect = |findings: &mut Vec<BindFinding>| -> Result<(), BindError> {
@@ -215,7 +195,7 @@ impl PreparedSpecification {
                 filter.check_findings(findings)?;
             }
             self.intermediates
-                .check_findings(&self.sources, &self.output, findings)?;
+                .check_findings(&self.sources, &self.output, &self.tree, findings)?;
             let outputs = self.rows.is_none().then(|| {
                 self.output
                     .columns()
@@ -224,7 +204,7 @@ impl PreparedSpecification {
                     .map(|(index, column)| (column.name.as_str(), index))
                     .collect::<BTreeMap<_, _>>()
             });
-            let input = |name: &str| self.declared_input(name);
+            let declared = self.declared_types();
             // Without row templates, the driver's records build every row.
             let driver = [self.source().name.as_str()];
             let scope = Scope {
@@ -255,10 +235,13 @@ impl PreparedSpecification {
                 if let Some(outputs) = &outputs {
                     dependencies.push(Some(self.formula_reads(declaration, outputs, findings)));
                 }
-                derivation_types(&declaration.operation, &input, findings);
+                derivation_types(&declaration.operation, &self.tree, &declared, findings)?;
                 if findings.len() == start && declaration.handler.is_none() {
+                    let result =
+                        self.tree
+                            .result_type(declaration.value, ast::Scope::Row, &declared)?;
                     findings.extend(
-                        self.conversion_finding(column, declaration.operation.result_type(&input))
+                        self.conversion_finding(column, result)
                             .map(BindFinding::Scalar),
                     );
                 }
@@ -267,7 +250,13 @@ impl PreparedSpecification {
                 self.formula_dependencies(&dependencies, findings)?;
             }
             if let Some(rows) = &self.rows {
-                rows.check_findings(&self.output, &self.source().name, &input, findings)?;
+                rows.check_findings(
+                    &self.output,
+                    &self.source().name,
+                    &self.tree,
+                    &declared,
+                    findings,
+                )?;
             }
             // Binding admits range values once every row's reads are bound.
             lookup_range::check(

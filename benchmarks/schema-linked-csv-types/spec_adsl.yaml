@@ -1,0 +1,47 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  # DM is the artifact spec_dm.yaml saves before this entry is built. The
+  # link types its fields: RFXSTDT and RFXENDT are dates, although a CSV
+  # file stores them as text.
+  DM:
+    path: dm.csv
+    schema: spec_dm.yaml
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, TRTEDT, TRTDURD]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: DM.RFXSTDT
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation: DM.RFXENDT
+
+  # Reads the linked dates themselves, so their type comes from the link.
+  - name: TRTDURD
+    type: int
+    label: Total Treatment Duration (Days)
+    derivation:
+      diff:
+        type: date
+        start: DM.RFXSTDT
+        end: DM.RFXENDT
+        unit: day
+        bounds: inclusive

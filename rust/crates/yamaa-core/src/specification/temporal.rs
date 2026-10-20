@@ -49,7 +49,7 @@ fn datetime(d: &Document, payload: usize) -> Result<bool, PrepareError> {
 /// Read the operation's kind, or the declaration findings that keep it from
 /// having one: a unit or bounds its `type` does not take, or a field its
 /// `type` requires or does not take.
-fn declared(
+fn declared_kind(
     d: &Document,
     payload: usize,
     operation: &str,
@@ -161,49 +161,11 @@ fn declared(
     }))
 }
 
-/// CSV fields have an authored type or the schema-defined string default.
-/// Other resource formats remain unknown until their schema is captured.
-pub(super) fn declared_source_type(
-    d: &Document,
-    source: &str,
-) -> Result<Option<ColumnType>, PrepareError> {
-    let Some((relation, name)) = source.split_once('.') else {
-        return Ok(None);
-    };
-    let Some(input) = d
-        .field(d.root(), "input")
-        .and_then(|id| d.field(id, relation))
-    else {
-        return Ok(None);
-    };
-    let path = text(d, field(d, input, "path")?)?;
-    let profile = SourceProfile::from_path(path);
-    if !matches!(
-        profile,
-        Some(SourceProfile::Csv | SourceProfile::Xport | SourceProfile::Sas7bdat)
-    ) {
-        return Ok(None);
-    }
-    let declared = d.field(input, "types").and_then(|id| d.field(id, name));
-    if declared.is_none() && profile != Some(SourceProfile::Csv) {
-        return Ok(None);
-    }
-    Ok(Some(
-        match declared.map(|id| text(d, id)).transpose()?.unwrap_or("str") {
-            "str" => ColumnType::Str,
-            "int" => ColumnType::Int,
-            "float" => ColumnType::Float,
-            "date" => ColumnType::Date,
-            "datetime" => ColumnType::DateTime,
-            _ => return Err(PrepareError::Internal),
-        },
-    ))
-}
-
 pub(super) fn declaration_findings(
     d: &Document,
     columns: &[usize],
     output: &TableSchema,
+    declared: &types::DeclaredTypes<'_>,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
     #[allow(clippy::too_many_arguments)]
@@ -211,10 +173,9 @@ pub(super) fn declaration_findings(
         d: &Document,
         value: usize,
         prefix: &str,
-        output: &TableSchema,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
-
         rows: bool,
     ) -> Result<(), PrepareError> {
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
@@ -228,7 +189,7 @@ pub(super) fn declaration_findings(
         for &op in OPERATIONS {
             if let Some(payload) = d.field(value, op) {
                 let path = format!("{prefix}.{op}");
-                let operation = match declared(d, payload, op, &path)? {
+                let operation = match declared_kind(d, payload, op, &path)? {
                     Ok(operation) => operation,
                     Err(errors) => {
                         findings.extend(errors);
@@ -279,19 +240,12 @@ pub(super) fn declaration_findings(
                         }
                         continue;
                     };
-                    let declared = if source.contains('.') {
-                        declared_source_type(d, source)?
-                    } else if !rows {
-                        output
-                            .columns()
-                            .iter()
-                            .find(|item| item.name == *source)
-                            .map(|item| item.kind)
-                    } else {
-                        None
-                    };
-                    if let Some(declared) = declared.filter(|&kind| !witness.accepts(index, kind)) {
-                        let actual = match declared {
+                    // With row templates a bare name's phase is binding's to decide.
+                    let kind = (source.contains('.') || !rows)
+                        .then(|| declared.operand(source).column_type())
+                        .flatten();
+                    if let Some(kind) = kind.filter(|&kind| !witness.accepts(index, kind)) {
+                        let actual = match kind {
                             ColumnType::Str => "str",
                             ColumnType::Int => "int",
                             ColumnType::Float => "float",
@@ -319,7 +273,7 @@ pub(super) fn declaration_findings(
                     d,
                     child,
                     &format!("{prefix}.case[{index}].{field}"),
-                    output,
+                    declared,
                     findings,
                     depth + 1,
                     rows,
@@ -339,7 +293,7 @@ pub(super) fn declaration_findings(
                 d,
                 value,
                 &format!("columns.{}.derivation", output.columns()[column].name),
-                output,
+                declared,
                 findings,
                 0,
                 rows,
@@ -351,7 +305,7 @@ pub(super) fn declaration_findings(
             d,
             value,
             path,
-            output,
+            declared,
             findings,
             0,
             present(d, d.root(), "rows"),
@@ -387,7 +341,7 @@ pub(super) fn prepare(
             reject(extra, name, format!("{path}.{name}"));
         }
     }
-    let kind = declared(d, payload, op, path)?.map_err(PrepareError::Invalid)?;
+    let kind = declared_kind(d, payload, op, path)?.map_err(PrepareError::Invalid)?;
     let mut sources = Vec::new();
     for field_name in kind.fields() {
         let id = field(d, payload, field_name)?;
@@ -458,7 +412,8 @@ pub(super) fn bind(
             findings,
         )? {
             if let Some(actual) =
-                static_types::kind(source, declarations, catalog, secondary, intermediates)?
+                types::CapturedTypes::new(declarations, catalog, secondary, intermediates)
+                    .kind(source)
             {
                 let (kind, name) = match actual {
                     crate::value::ValueType::Str => (ColumnType::Str, "str"),

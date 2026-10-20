@@ -241,7 +241,7 @@ owning rule selects: the declaring layer by default, the entry file when
 provenance. A materialized resolved specification writes an inherited relative
 path relative to the entry file, preserving the location it names.
 
-Evidence: `schema-inheritance-project-root`.
+Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`.
 Replaces: REQ-0635, REQ-0636, REQ-0637.
 
 If the platform cannot express that location relative to the entry file, the

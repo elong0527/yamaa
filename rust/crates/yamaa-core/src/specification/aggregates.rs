@@ -16,6 +16,8 @@ pub(super) struct Declaration {
     expression: String,
     expression_path: String,
     path: String,
+    /// The document node of the operation, which the tree types.
+    value: usize,
     compiled: Result<CompiledExpression, CompileError>,
     groups: Vec<String>,
     keys: Option<Vec<(String, match_values::Declaration)>>,
@@ -58,53 +60,41 @@ impl Declaration {
                     && compiled.record_relations().next().is_none()
             })
     }
-    /// VALUE-24 for each derive binding over the types `input` declares, an
-    /// earlier binding naming its declared type, as binding checks them.
+    /// The result type of each derive binding's derivation over `names`, in
+    /// declaration order, typed within the aggregate, where every binding
+    /// names its declared type.
+    fn derive_types(
+        &self,
+        tree: &types::Tree,
+        names: &dyn ast::TypeEnv,
+    ) -> Result<Vec<crate::result_type::ResultType>, BindError> {
+        let env = tree.env(names);
+        let aggregate = tree.expression(self.value)?;
+        let table = ast::Table::new(tree.spec(), aggregate, ast::Scope::Row, &env);
+        self.derive
+            .iter()
+            .flatten()
+            .map(|binding| Ok(table.of(tree.expression(binding.branch.value)?)))
+            .collect()
+    }
+    /// VALUE-24 for each derive binding over the declared types, as binding
+    /// checks them.
     pub(super) fn derive_conversion_findings(
         &self,
-        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+        tree: &types::Tree,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<BindFinding>,
-    ) {
-        let Some(derive) = &self.derive else {
-            return;
-        };
-        for (index, binding) in derive.iter().enumerate() {
-            if binding.handler.is_some() {
-                continue;
+    ) -> Result<(), BindError> {
+        let results = self.derive_types(tree, declared)?;
+        for (binding, result) in self.derive.iter().flatten().zip(results) {
+            if binding.handler.is_none() {
+                findings.extend(
+                    types::conversion_finding(&binding.path, result, binding.kind)
+                        .map(BindFinding::Scalar),
+                );
             }
-            let earlier = &derive[..index];
-            let binding_input = |name: &str| {
-                earlier
-                    .iter()
-                    .find(|earlier| earlier.name == name)
-                    .map_or_else(|| input(name), |earlier| earlier.kind.into())
-            };
-            findings.extend(
-                result_types::conversion_finding(
-                    &binding.path,
-                    binding.branch.operation.result_type(&binding_input),
-                    binding.kind,
-                )
-                .map(BindFinding::Scalar),
-            );
         }
-    }
-    /// EXPR-14 by FORMULA-23 over the relation's fields, a derive binding
-    /// naming its declared type.
-    pub(super) fn result_type(
-        &self,
-        input: &dyn Fn(&str) -> crate::result_type::ResultType,
-    ) -> crate::result_type::ResultType {
-        let Ok(compiled) = &self.compiled else {
-            return crate::result_type::ResultType::UNKNOWN;
-        };
-        compiled.result_type(|name| {
-            self.derive
-                .iter()
-                .flatten()
-                .find(|binding| binding.name == name)
-                .map_or_else(|| input(name), |binding| binding.kind.into())
-        })
+        Ok(())
     }
     /// The range whose value binding reads for the current row: a qualified
     /// aggregate's range that states a bound. Binding reports every other
@@ -247,6 +237,7 @@ fn prepare_keys(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn prepare(
     d: &Document,
+    value: usize,
     payload: usize,
     path: &str,
     project: Option<&functions::Prepared>,
@@ -453,6 +444,7 @@ pub(super) fn prepare(
         expression: expr.into(),
         expression_path,
         path: path.into(),
+        value,
         compiled,
         groups,
         keys,
@@ -776,7 +768,7 @@ fn bind_groups_and_operands(
     }
     let kind = |name: &str| binding_kind(name, &bindings, donor_schema, declaration);
     findings.extend(
-        static_types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }))?
+        types::aggregate_kinds(compiled, kind, matches!(phase, Phase::Row { .. }))?
             .into_iter()
             .map(BindFinding::AggregateDiagnostic),
     );
@@ -932,6 +924,7 @@ fn bound_relation(
     driver: &str,
     row: Option<&str>,
     project: Option<&crate::project_calls::ProjectCalls>,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     intermediates: &[Option<crate::dataset::Intermediate>],
     edges: &mut Vec<usize>,
@@ -1045,7 +1038,7 @@ fn bound_relation(
                     )?;
                     continue;
                 };
-                let expected = value.result_type(values);
+                let expected = value.result_type(tree, values)?;
                 if !expected.comparable(actual.into()) {
                     finding(
                         Finding::KeyType {
@@ -1083,6 +1076,7 @@ fn bound_relation(
                         row,
                         phase,
                         project,
+                        tree,
                         named,
                         secondary,
                         intermediates,
@@ -1119,6 +1113,7 @@ pub(super) fn bind(
     row: Option<&str>,
     phase: Phase<'_>,
     output: &TableSchema,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
@@ -1261,6 +1256,7 @@ pub(super) fn bind(
         driver,
         row,
         project,
+        tree,
         named,
         intermediates,
         edges,
@@ -1310,6 +1306,7 @@ pub(super) fn bind(
         relation,
         &donor_schema,
         output,
+        tree,
         named,
         secondary,
         intermediates,
@@ -1559,6 +1556,7 @@ fn bind_derivations(
     relation: Option<&str>,
     donor: &TableSchema,
     output: &TableSchema,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
@@ -1677,6 +1675,10 @@ fn bind_derivations(
     let catalog = catalog
         .with_selected(selected)
         .map_err(BindError::Catalog)?;
+    let derived_types = declaration.derive_types(
+        tree,
+        &types::CapturedTypes::new(named, &catalog, secondary, intermediates),
+    )?;
     let mut bound = Vec::new();
     for (index, binding) in derive.iter().enumerate() {
         let available = (0..width + index).collect::<Vec<_>>();
@@ -1696,22 +1698,16 @@ fn bind_derivations(
             false,
             &derive_output,
             project,
+            tree,
             named,
             secondary,
             intermediates,
         )?;
         // VALUE-24: a binding converts to its declared type like a column.
         if expression.is_some() && findings.len() == start && binding.handler.is_none() {
-            let input = |name: &str| {
-                static_types::result_type(name, named, &catalog, secondary, intermediates)
-            };
             findings.extend(
-                result_types::conversion_finding(
-                    &binding.path,
-                    binding.branch.operation.result_type(&input),
-                    binding.kind,
-                )
-                .map(BindFinding::Scalar),
+                types::conversion_finding(&binding.path, derived_types[index], binding.kind)
+                    .map(BindFinding::Scalar),
             );
         }
         if let Some(expression) = expression {

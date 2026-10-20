@@ -12,16 +12,19 @@ pub(super) struct Context<'a> {
     pub row: Option<&'a str>,
     pub phase: crate::reference_scope::Phase<'a>,
     pub project: Option<&'a crate::project_calls::ProjectCalls>,
+    pub tree: &'a types::Tree,
     pub named: &'a intermediates::Declarations,
     pub secondary: &'a [crate::dataset::SecondarySource],
     pub intermediates: &'a [Option<crate::dataset::Intermediate>],
 }
+/// A key's current-row value. A written value other than a name keeps its
+/// document node, which the tree types.
 #[derive(Clone, Debug)]
 pub(super) enum Declaration {
     Variable(String),
     Source(String),
-    Literal(crate::value::Value),
-    StrPad(str_pad::Declaration),
+    Literal(crate::value::Value, usize),
+    StrPad(str_pad::Declaration, usize),
     Expression {
         branch: cases::Branch,
         references: Vec<String>,
@@ -49,7 +52,7 @@ impl Declaration {
         let op = text(d, operation)?;
         let operation_path = format!("{path}.{op}");
         let declaration = match op {
-            "literal" => Self::Literal(literal(d, payload, &operation_path)?),
+            "literal" => Self::Literal(literal(d, payload, &operation_path)?, value),
             "source" => {
                 let name = if let N::Text(name) = &d.nodes()[payload] {
                     name.as_str()
@@ -68,14 +71,10 @@ impl Declaration {
                 };
                 Self::Source(name.into())
             }
-            "str_pad" => Self::StrPad(str_pad::prepare(
-                d,
-                payload,
-                &operation_path,
-                None,
-                None,
-                extra,
-            )?),
+            "str_pad" => Self::StrPad(
+                str_pad::prepare(d, payload, &operation_path, None, None, extra)?,
+                value,
+            ),
             "str_case"
             | "impute"
             | "to_date"
@@ -122,7 +121,7 @@ impl Declaration {
             _ => {
                 reject(extra, op, operation_path);
                 // A rejected operation never becomes an executable plan.
-                Self::Literal(crate::value::Value::Missing)
+                Self::Literal(crate::value::Value::Missing, value)
             }
         };
         if let Some(name) = declaration.expression_reference() {
@@ -144,15 +143,15 @@ impl Declaration {
     fn expression_reference(&self) -> Option<&str> {
         match self {
             Self::Source(name) => Some(name),
-            Self::StrPad(pad) => Some(pad.source()),
+            Self::StrPad(pad, _) => Some(pad.source()),
             _ => None,
         }
     }
     pub(super) fn reference(&self) -> Option<&str> {
         match self {
             Self::Variable(name) | Self::Source(name) => Some(name),
-            Self::StrPad(pad) => Some(pad.source()),
-            Self::Literal(_) | Self::Expression { .. } => None,
+            Self::StrPad(pad, _) => Some(pad.source()),
+            Self::Literal(..) | Self::Expression { .. } => None,
         }
     }
     pub(super) fn references(&self) -> Box<dyn Iterator<Item = &str> + '_> {
@@ -167,16 +166,23 @@ impl Declaration {
             _ => format!("key[{field}]"),
         }
     }
-    /// The match value's result type (EXPR-14): the read variable's, a
-    /// literal's, `str_pad`'s text, or the expression's over the names the
-    /// current row types. LOOKUP-6 compares it with the key column's type.
-    pub(super) fn result_type(&self, catalog: &Catalog) -> ResultType {
-        let input = |name: &str| ResultType::declared(catalog.type_of(name));
+    /// The match value's result type (EXPR-14) over the names the current
+    /// row's catalog types: a read name's type, or the written value's.
+    /// LOOKUP-6 compares it with the key column's type.
+    pub(super) fn result_type(
+        &self,
+        tree: &types::Tree,
+        catalog: &Catalog,
+    ) -> Result<ResultType, BindError> {
+        let names = |name: &str| ResultType::declared(catalog.type_of(name));
         match self {
-            Self::Variable(name) | Self::Source(name) => input(name),
-            Self::Literal(value) => ResultType::of_value(value),
-            Self::StrPad(pad) => Operation::StrPad(pad.clone()).result_type(&input),
-            Self::Expression { branch, .. } => branch.operation.result_type(&input),
+            Self::Variable(name) | Self::Source(name) => Ok(names(name)),
+            Self::Literal(_, value) | Self::StrPad(_, value) => {
+                tree.result_type(*value, ast::Scope::Row, &names)
+            }
+            Self::Expression { branch, .. } => {
+                tree.result_type(branch.value, ast::Scope::Row, &names)
+            }
         }
     }
     pub(super) fn bind(
@@ -302,6 +308,7 @@ impl Declaration {
                 false,
                 context.output,
                 context.project,
+                context.tree,
                 context.named,
                 context.secondary,
                 context.intermediates,
@@ -316,18 +323,18 @@ impl Declaration {
                         },
                         reads,
                         TableSchema::new(fields).map_err(|_| BindError::Internal)?,
-                        self.result_type(catalog),
+                        self.result_type(context.tree, catalog)?,
                     )
                     .map(|expression| MatchValue::Expression(Box::new(expression)))
                     .map_err(BindError::InvalidPlan)
                 })
                 .transpose();
         }
-        if let Self::StrPad(operation) = self {
+        if let Self::StrPad(operation, _) = self {
             str_pad::declaration_findings(operation, findings);
         }
         let Some(name) = self.reference() else {
-            let Self::Literal(value) = self else {
+            let Self::Literal(value, _) = self else {
                 return Err(BindError::Internal);
             };
             return Ok(Some(MatchValue::Literal(value.clone())));
@@ -359,14 +366,14 @@ impl Declaration {
                 let declaration = match self {
                     Self::Variable(_) => ContextualMatch::Variable(name.into()),
                     Self::Source(_) => ContextualMatch::Source(name.into()),
-                    Self::StrPad(operation) => ContextualMatch::StrPad {
+                    Self::StrPad(operation, _) => ContextualMatch::StrPad {
                         identifier: name.into(),
                         operation: match operation {
                             str_pad::Declaration::Valid(operation) => Some(operation.clone()),
                             str_pad::Declaration::WidthError { .. } => None,
                         },
                     },
-                    Self::Literal(_) | Self::Expression { .. } => return Err(BindError::Internal),
+                    Self::Literal(..) | Self::Expression { .. } => return Err(BindError::Internal),
                 };
                 return Ok(Some(MatchValue::Contextual(declaration)));
             }
@@ -392,14 +399,14 @@ impl Declaration {
         Ok(Some(match self {
             Self::Variable(_) => MatchValue::Variable(read),
             Self::Source(_) => MatchValue::Source(read),
-            Self::StrPad(operation) => MatchValue::StrPad {
+            Self::StrPad(operation, _) => MatchValue::StrPad {
                 read,
                 operation: match operation {
                     str_pad::Declaration::Valid(operation) => Some(operation.clone()),
                     str_pad::Declaration::WidthError { .. } => None,
                 },
             },
-            Self::Literal(_) | Self::Expression { .. } => return Err(BindError::Internal),
+            Self::Literal(..) | Self::Expression { .. } => return Err(BindError::Internal),
         }))
     }
 }

@@ -731,3 +731,222 @@ fn explicit_named_row_reads_still_promote_their_local_match_defaults() {
     .unwrap();
     spec.bind(&schema).unwrap();
 }
+
+/// A spec over `inputs` whose columns are `ID` from `base.ID` and `columns`,
+/// each a name, a type and a derivation value.
+fn linked_document(
+    inputs: Vec<(&str, Tree)>,
+    base: &str,
+    columns: Vec<(&str, &str, Tree)>,
+) -> SpecificationDocument {
+    let mut declared = vec![Tree::map(vec![
+        ("name", Tree::text("ID")),
+        ("type", Tree::text("int")),
+        ("label", Tree::text("Identifier")),
+        (
+            "derivation",
+            Tree::map(vec![(
+                "value",
+                operation(
+                    "source",
+                    vec![("variable", Tree::text(format!("{base}.ID")))],
+                ),
+            )]),
+        ),
+    ])];
+    let mut names = vec![Tree::text("ID")];
+    for (name, kind, value) in columns {
+        names.push(Tree::text(name));
+        declared.push(Tree::map(vec![
+            ("name", Tree::text(name)),
+            ("type", Tree::text(kind)),
+            ("label", Tree::text(name)),
+            ("derivation", Tree::map(vec![("value", value)])),
+        ]));
+    }
+    let root = Tree::map(vec![
+        ("schema_version", Tree::text("1.0")),
+        ("domain", Tree::text("TEST")),
+        ("base", Tree::text(base)),
+        ("input", Tree::map(inputs)),
+        ("keys", Tree::List(vec![Tree::text("ID")])),
+        ("columns", Tree::List(declared)),
+        (
+            "output",
+            Tree::map(vec![
+                ("path", Tree::text("out.csv")),
+                ("columns", Tree::List(names)),
+            ]),
+        ),
+    ]);
+    let mut nodes = Vec::new();
+    let root = root.append(&mut nodes);
+    SpecificationDocument::admit(Document::new(nodes, root).unwrap())
+        .unwrap()
+        .unwrap()
+}
+/// The producing spec: its artifact holds `ID` and the dates `START` and `END`.
+fn producer() -> SpecificationDocument {
+    let date = |name: &'static str| {
+        (
+            name,
+            "date",
+            operation(
+                "source",
+                vec![("variable", Tree::text(format!("RAW.{name}")))],
+            ),
+        )
+    };
+    linked_document(
+        vec![(
+            "RAW",
+            Tree::map(vec![
+                ("path", Tree::text("raw.csv")),
+                (
+                    "types",
+                    Tree::map(vec![
+                        ("START", Tree::text("date")),
+                        ("END", Tree::text("date")),
+                    ]),
+                ),
+            ]),
+        )],
+        "RAW",
+        vec![date("START"), date("END")],
+    )
+}
+fn linked() -> (&'static str, Tree) {
+    (
+        "SRC",
+        Tree::map(vec![
+            ("path", Tree::text("produced.csv")),
+            ("schema", Tree::text("producer.yaml")),
+        ]),
+    )
+}
+fn prepare_linked(
+    consumer: &SpecificationDocument,
+    producer: &SpecificationDocument,
+) -> Result<PreparedSpecification, PrepareError> {
+    let links = [crate::producer_contract::Link {
+        dataset: "SRC",
+        identity: "/producer.yaml",
+        document: producer,
+    }];
+    PreparedSpecification::prepare_linked(
+        consumer,
+        None,
+        crate::producer_contract::Links {
+            consumer: "/consumer.yaml",
+            links: &links,
+        },
+    )
+}
+
+/// Owner decision 2 on #2844: before capture, a schema-linked delimited
+/// input's fields have its producer's types, so typed verbs over its dates
+/// are admitted before data is read, by `check()` and by build alike.
+#[test]
+fn a_linked_csv_input_has_its_producers_types_before_capture() {
+    let producer = producer();
+    let study_day = operation(
+        "study_day",
+        vec![
+            ("date", Tree::text("SRC.END")),
+            ("reference", Tree::text("SRC.START")),
+        ],
+    );
+    let latest = operation(
+        "greatest",
+        vec![(
+            "sources",
+            Tree::List(vec![Tree::text("SRC.START"), Tree::text("FIRST")]),
+        )],
+    );
+    let consumer = linked_document(
+        vec![linked()],
+        "SRC",
+        vec![
+            (
+                "FIRST",
+                "date",
+                operation("source", vec![("variable", Tree::text("SRC.START"))]),
+            ),
+            ("DAY", "int", study_day),
+            ("LATEST", "date", latest),
+        ],
+    );
+    let prepared = prepare_linked(&consumer, &producer).unwrap();
+    assert_eq!(prepared.check_declaration_diagnostics(), []);
+    // A text verb over the same dates is refused with their date type.
+    let cased = linked_document(
+        vec![linked()],
+        "SRC",
+        vec![(
+            "CASED",
+            "str",
+            operation(
+                "str_case",
+                vec![
+                    ("source", Tree::text("SRC.START")),
+                    ("to", Tree::text("upper")),
+                ],
+            ),
+        )],
+    );
+    let PrepareError::Invalid(findings) = prepare_linked(&cased, &producer).unwrap_err() else {
+        panic!("a declaration finding")
+    };
+    let finding = findings[0].diagnostic();
+    assert_eq!(finding.code, C::StrCaseInput);
+    assert_eq!(finding.context["actual"], crate::json::Value::from("date"));
+}
+
+/// Every input's type authority, before capture (INPUT-5, INPUT-10, EXPR-14).
+#[test]
+fn declared_types_follow_each_inputs_type_authority() {
+    let producer = producer();
+    let contract = crate::producer_contract::prepare(&producer).unwrap();
+    let input = |path: &str, types: Vec<(&str, Tree)>| {
+        let mut fields = vec![("path", Tree::text(path))];
+        if !types.is_empty() {
+            fields.push(("types", Tree::map(types)));
+        }
+        Tree::map(fields)
+    };
+    let consumer = linked_document(
+        vec![
+            linked(),
+            ("CSV", input("plain.csv", vec![("AGE", Tree::text("int"))])),
+            ("XPT", input("plain.xpt", vec![("SEQ", Tree::text("int"))])),
+            ("PQ", input("plain.parquet", vec![])),
+        ],
+        "SRC",
+        vec![("DT", "date", literal(N::Null))],
+    );
+    let lowered = crate::front_end::v0_5::lower(&consumer, None);
+    let declared = DeclaredTypes::new(lowered.spec(), [("SRC", &contract)]);
+    for (name, expected) in [
+        ("SRC.END", ResultType::DATE),
+        ("SRC.ID", ResultType::INT),
+        ("SRC.ABSENT", ResultType::UNKNOWN),
+        ("CSV.AGE", ResultType::INT),
+        ("CSV.OTHER", ResultType::UNKNOWN),
+        ("XPT.SEQ", ResultType::INT),
+        ("XPT.OTHER", ResultType::UNKNOWN),
+        ("PQ.ANY", ResultType::UNKNOWN),
+        ("LOOKUP.FIELD", ResultType::UNKNOWN),
+        ("DT", ResultType::DATE),
+        ("NOT_A_COLUMN", ResultType::UNKNOWN),
+    ] {
+        assert_eq!(declared.name(name), expected, "{name}");
+        // An operand check takes INPUT-5's text for an undeclared field of a
+        // delimited file, should it exist; every other answer is the same.
+        let operand = if name == "CSV.OTHER" {
+            ResultType::STR
+        } else {
+            expected
+        };
+        assert_eq!(declared.operand(name), operand, "{name}");
+    }
+}

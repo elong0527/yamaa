@@ -10,37 +10,81 @@
 //! or member is refused rather than read as the end of the archive.
 use super::Fault;
 use flate2::read::MultiGzDecoder;
-use std::io::{self, Read};
+use std::{
+    fs::File,
+    io::{self, BufReader, Read},
+};
 use yamaa_core::odm_items::Limit;
 
 pub(super) const BLOCK: usize = 512;
 /// GNU long names and PAX records describe one member; real ones are tiny.
 const MAX_METADATA_BYTES: u64 = 1024 * 1024;
 
-/// The archive byte stream over one captured source. Plain data is skipped
-/// within the remaining bytes; gzip data is decompressed and counted against
-/// the expansion bound across the whole archive.
+/// Where an archive's bytes come from: a local file, read and skipped in
+/// place so that no pass holds the archive, or the bytes a caller's resolver
+/// captured.
+pub(super) enum Source<'f> {
+    File(BufReader<&'f File>),
+    Bytes(&'f [u8]),
+}
+
+impl Source<'_> {
+    /// Skip `amount` bytes that the source holds.
+    fn skip(&mut self, amount: u64) -> io::Result<()> {
+        let truncated = || Fault::Archive("truncated TAR member data").into_io();
+        match self {
+            Self::File(file) => file.seek_relative(i64::try_from(amount).map_err(|_| truncated())?),
+            Self::Bytes(data) => {
+                let amount = usize::try_from(amount)
+                    .ok()
+                    .filter(|amount| *amount <= data.len())
+                    .ok_or_else(truncated)?;
+                *data = &data[amount..];
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Read for Source<'_> {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::File(file) => file.read(output),
+            Self::Bytes(data) => data.read(output),
+        }
+    }
+}
+
+/// The archive byte stream. Plain data is skipped within the source's known
+/// length; gzip data is decompressed and counted against the expansion bound
+/// across the whole archive.
 pub(super) enum Stream<'f> {
     Plain {
-        data: &'f [u8],
+        source: Source<'f>,
+        position: u64,
+        length: u64,
     },
     Gzip {
-        decoder: Box<MultiGzDecoder<&'f [u8]>>,
+        decoder: Box<MultiGzDecoder<Source<'f>>>,
         expanded: u64,
         limit: u64,
     },
 }
 
 impl<'f> Stream<'f> {
-    /// A plain archive read from the start of the source.
-    pub(super) fn plain(data: &'f [u8]) -> Self {
-        Self::Plain { data }
+    /// A plain archive of `length` bytes, read from the source's start.
+    pub(super) fn plain(source: Source<'f>, length: u64) -> Self {
+        Self::Plain {
+            source,
+            position: 0,
+            length,
+        }
     }
 
-    /// A gzip archive read from the start of the source.
-    pub(super) fn gzip(data: &'f [u8], limit: u64) -> Self {
+    /// A gzip archive read from the source's start.
+    pub(super) fn gzip(source: Source<'f>, limit: u64) -> Self {
         Self::Gzip {
-            decoder: Box::new(MultiGzDecoder::new(data)),
+            decoder: Box::new(MultiGzDecoder::new(source)),
             expanded: 0,
             limit,
         }
@@ -48,12 +92,16 @@ impl<'f> Stream<'f> {
 
     fn skip(&mut self, amount: u64) -> io::Result<()> {
         match self {
-            Self::Plain { data } => {
-                let amount = usize::try_from(amount)
-                    .ok()
-                    .filter(|amount| *amount <= data.len())
-                    .ok_or_else(|| Fault::Archive("truncated TAR member data").into_io())?;
-                *data = &data[amount..];
+            Self::Plain {
+                source,
+                position,
+                length,
+            } => {
+                if amount > length.saturating_sub(*position) {
+                    return Err(Fault::Archive("truncated TAR member data").into_io());
+                }
+                source.skip(amount)?;
+                *position += amount;
                 Ok(())
             }
             Self::Gzip { .. } => {
@@ -70,7 +118,13 @@ impl<'f> Stream<'f> {
 impl Read for Stream<'_> {
     fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
         match self {
-            Self::Plain { data } => data.read(output),
+            Self::Plain {
+                source, position, ..
+            } => {
+                let read = source.read(output)?;
+                *position += read as u64;
+                Ok(read)
+            }
             Self::Gzip {
                 decoder,
                 expanded,
