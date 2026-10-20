@@ -1,10 +1,17 @@
-//! Expression lowering: every 0.5 operation to its node.
+//! Expression lowering: every 0.5 operation, and every 1.0 expression, to
+//! its node.
 //!
 //! An operation lowers at its written site, `<container>.<operation>`,
 //! the path today's compiler cites; a normalized `value` wrapper adds no
 //! segment. Each operation reads its own fields before it lowers any child,
 //! so a payload outside the language becomes one
 //! [`ExprKind::Unsupported`] node without orphaned children.
+//!
+//! A 1.0 expression field holds text in the closed grammar or a YAML scalar
+//! instead of `literal`, `compute` and the string form of `source` (D18,
+//! D31); each lowers to the node its 0.5 spelling lowers to, at the
+//! expression field itself, except that a reference in a derivation keeps
+//! the canonical `source` binding and its path (RFC 2.4).
 
 use super::{column_type, keyword, Lower};
 use crate::ast::{
@@ -13,7 +20,7 @@ use crate::ast::{
     Operand, OrderTerm, Precision, RankMethod, Role, ScalarOp, Segment, Slot, SourceRead,
     TemporalType, Text, TextCase, TimeRule, TimeUnit, Window, WindowFunction,
 };
-use crate::expression::{compile, CompiledExpression, Context, NodeKind};
+use crate::expression::{compile, CompiledExpression, Context, NodeKind, TemporalKind};
 use crate::schema::DocumentNode as N;
 
 /// One scalar verb's operand fields, in its operand order.
@@ -21,10 +28,39 @@ type Fields = &'static [(&'static str, Slot, bool)];
 
 const SOURCE: Fields = &[("source", Slot::Source, true)];
 
+/// The kind of expression field a 1.0 reference is written in, which
+/// decides its path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Placement {
+    /// A derivation, a `derivations` entry, a handled wrapper's `value` or a
+    /// case result: a bare reference is the canonical `source` binding, at
+    /// `<field>.source` as 0.5 writes it.
+    Derivation,
+    /// A key match value or a function argument: a reference is read at
+    /// the field itself.
+    Value,
+}
+
 impl Lower<'_> {
     /// Lower the expression written at `at`: an operation mapping, or a
-    /// bare name (a case result or key value outside normalization).
+    /// bare name (a case result or key value outside normalization). In 1.0
+    /// it is also text in the closed grammar or a YAML scalar.
     pub(super) fn expression(&mut self, value: usize, at: Meta) -> ExprId {
+        self.placed(value, at, Placement::Derivation)
+    }
+
+    /// [`Lower::expression`], with the reference path `placement` gives.
+    pub(super) fn placed(&mut self, value: usize, at: Meta, placement: Placement) -> ExprId {
+        if self.v1() {
+            match self.node(value) {
+                N::Text(_) => return self.text_expression(value, at, placement),
+                N::Null | N::Boolean(_) | N::Integer(_) | N::Float(_) => {
+                    let here = self.written_at(at, value);
+                    return self.push(ExprKind::Literal(self.literal(value)), here, value);
+                }
+                _ => {}
+            }
+        }
         match self.node(value) {
             N::Text(name) => self.push(ExprKind::Ref(Name(name.clone())), at, value),
             N::Mapping(entries) if entries.len() == 1 => {
@@ -111,17 +147,76 @@ impl Lower<'_> {
         self.formula(Context::Predicate, node, (meta, meta), &path, node)
     }
 
+    /// Text in a 1.0 expression field (D18). Text holding only a name is a
+    /// reference and text holding only a literal is that literal (FORMULA-9,
+    /// EXPR-4), as `source` and `literal` lower in 0.5; other text is a
+    /// formula in the derivation context (FORMULA-27). The text is compiled
+    /// once, at the expression field.
+    fn text_expression(&mut self, node: usize, at: Meta, placement: Placement) -> ExprId {
+        let text = self.text(node).unwrap_or_default();
+        let here = self.written_at(at, node);
+        let compiled = compile(text, Context::Derivation, &self.render(at));
+        if let Ok(compiled) = &compiled {
+            let syntax = compiled.syntax();
+            let root = syntax.root();
+            let leaf = match &syntax.nodes()[root].kind {
+                NodeKind::Identifier => Some(ExprKind::Ref(Name(syntax.text(root).into()))),
+                NodeKind::Number {
+                    fractional: false,
+                    text,
+                } => Some(ExprKind::Literal(Literal::Int(text.clone()))),
+                NodeKind::Number {
+                    fractional: true,
+                    text,
+                } => text
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|value| value.is_finite())
+                    .map(|value| ExprKind::Literal(Literal::Float(value))),
+                NodeKind::String(text) => Some(ExprKind::Literal(Literal::Text(text.clone()))),
+                NodeKind::Temporal { kind, value } => Some(ExprKind::Literal(match kind {
+                    TemporalKind::Date => Literal::Date(value.clone()),
+                    TemporalKind::DateTime => Literal::DateTime(value.clone()),
+                })),
+                NodeKind::Null => Some(ExprKind::Literal(Literal::Missing)),
+                _ => None,
+            };
+            match leaf {
+                Some(kind @ ExprKind::Ref(_)) if placement == Placement::Derivation => {
+                    let meta = self.meta(at, keyword("source"), Some(node));
+                    return self.push(kind, meta, node);
+                }
+                Some(kind) => return self.push(kind, here, node),
+                None => {}
+            }
+        }
+        self.compiled_formula(Context::Derivation, node, (here, here), compiled, node)
+    }
+
     /// Grammar text compiled once, with each name it reads as a child.
     fn formula(
         &mut self,
         context: Context,
         node: usize,
-        (site, text_meta): (Meta, Meta),
+        metas: (Meta, Meta),
         spec_path: &str,
         origin: usize,
     ) -> ExprId {
         let text = self.text(node).unwrap_or_default();
         let compiled = compile(text, context, spec_path);
+        self.compiled_formula(context, node, metas, compiled, origin)
+    }
+
+    /// The formula node of text `node` compiled as `compiled`.
+    fn compiled_formula(
+        &mut self,
+        context: Context,
+        node: usize,
+        (site, text_meta): (Meta, Meta),
+        compiled: Result<CompiledExpression, crate::expression::CompileError>,
+        origin: usize,
+    ) -> ExprId {
+        let text = self.text(node).unwrap_or_default();
         let id = self.reserve(site, origin);
         let mut names = Vec::new();
         if let Ok(compiled) = &compiled {
@@ -221,8 +316,14 @@ impl Lower<'_> {
     }
 
     fn terms(&mut self, list: usize, meta: Meta) -> Vec<OrderTerm> {
+        self.terms_after(list, meta, 0)
+    }
+
+    /// The order terms of `list` from position `first`, each at its own
+    /// position.
+    fn terms_after(&mut self, list: usize, meta: Meta, first: usize) -> Vec<OrderTerm> {
         let mut terms = Vec::new();
-        for (index, &term) in self.items(list).iter().enumerate() {
+        for (index, &term) in self.items(list).iter().enumerate().skip(first) {
             let meta = self.meta(meta, Segment::Index(index as u32), Some(term));
             let variable = match self.text(term) {
                 Some(_) => term,
@@ -260,7 +361,7 @@ impl Lower<'_> {
             for &(key, value) in entries {
                 let Some(name) = self.text(key) else { continue };
                 let pair = self.meta(meta, Segment::Key(name.into()), Some(value));
-                let value = self.expression(value, pair);
+                let value = self.placed(value, pair, Placement::Value);
                 pairs.push((self.named_at(name, pair), value));
             }
             return JoinKey::Pairs { pairs, meta };
@@ -385,6 +486,15 @@ impl Lower<'_> {
                     },
                 },
                 &[("start", Slot::Start, true), ("end", Slot::End, true)],
+            ),
+            // The date `study_day` counts is `date` in 0.5 and `source` in 1.0
+            // (P-OP-1).
+            "study_day" if self.v1() => (
+                ScalarOp::StudyDay,
+                &[
+                    ("source", Slot::Source, true),
+                    ("reference", Slot::Reference, true),
+                ],
             ),
             "study_day" => (
                 ScalarOp::StudyDay,
@@ -742,6 +852,19 @@ impl Lower<'_> {
                 },
                 vec![("source", Slot::Source, required("source")?)],
             ),
+            // 1.0 names the analysis value `source` and the date it is
+            // compared with `reference` (P-OP-2, P-OP-3).
+            "baseline_flag" if self.v1() => (
+                WindowFunction::BaselineFlag {
+                    inclusive: self.boolean(p, "inclusive", true),
+                    window_order_by: Vec::new(),
+                },
+                vec![
+                    ("source", Slot::Source, required("source")?),
+                    ("reference", Slot::Reference, required("reference")?),
+                    ("date", Slot::Source, required("date")?),
+                ],
+            ),
             "baseline_flag" => (
                 WindowFunction::BaselineFlag {
                     inclusive: self.boolean(p, "inclusive", true),
@@ -786,6 +909,26 @@ impl Lower<'_> {
         }
         // The baseline orders eligible rows by the date and then the
         // tie-break terms (P-ORD-1); every other window by its own terms.
+        // 1.0 writes the tie-break terms after the date in `window.order_by`,
+        // which defaults to the date alone; a declared order that does not
+        // start with the date ascending stays written, for its refusal
+        // (WINDOW-5).
+        let declared = match (date, window) {
+            (Some((date, _)), Some((node, _))) if self.v1() => {
+                self.field(node, "order_by").map(|list| {
+                    let head = self.items(list).first().is_some_and(|&term| {
+                        let variable = match self.text(term) {
+                            Some(_) => Some(term),
+                            None => self.field(term, "variable"),
+                        };
+                        variable.and_then(|n| self.text(n)) == self.text(date)
+                            && !matches!(self.text_of(term, "direction"), Some("desc"))
+                    });
+                    (list, head)
+                })
+            }
+            _ => None,
+        };
         let order_by = match date {
             Some((node, meta)) => {
                 let mut order_by = vec![OrderTerm {
@@ -794,7 +937,14 @@ impl Lower<'_> {
                     nulls: None,
                     meta,
                 }];
-                order_by.extend(self.order_by(p, "tie_break", site));
+                match (declared, window) {
+                    (Some((list, true)), Some((_, window_meta))) => {
+                        let list_meta =
+                            self.meta(window_meta, Segment::Field("order_by"), Some(list));
+                        order_by.extend(self.terms_after(list, list_meta, 1));
+                    }
+                    _ => order_by.extend(self.order_by(p, "tie_break", site)),
+                }
                 order_by
             }
             None => match window {
@@ -816,7 +966,9 @@ impl Lower<'_> {
             Some((node, meta)),
         ) = (&mut function, window)
         {
-            *window_order_by = self.order_by(node, "order_by", meta);
+            if !matches!(declared, Some((_, true))) {
+                *window_order_by = self.order_by(node, "order_by", meta);
+            }
         }
         Some(self.fill(
             id,
@@ -858,12 +1010,23 @@ impl Lower<'_> {
             }
             None => Vec::new(),
         };
-        let derive = self.field(p, "derive");
+        // Per-record bindings: 0.5's `derive` list, 1.0's `derivations` map
+        // keyed by name (P-BIND-1).
+        let derive = self.field(p, if self.v1() { "derivations" } else { "derive" });
         let mut bindings = Vec::new();
         if let Some(list) = derive {
-            let list_meta = self.meta(site, Segment::Field("derive"), Some(list));
-            for (index, &item) in self.items(list).iter().enumerate() {
-                bindings.push(self.aggregate_binding(item, index, list_meta));
+            if self.v1() {
+                let map_meta = self.meta(site, Segment::Field("derivations"), Some(list));
+                for &(key, entry) in self.entries(list) {
+                    if let Some(name) = self.text(key) {
+                        bindings.push(self.aggregate_derivation(name, entry, map_meta));
+                    }
+                }
+            } else {
+                let list_meta = self.meta(site, Segment::Field("derive"), Some(list));
+                for (index, &item) in self.items(list).iter().enumerate() {
+                    bindings.push(self.aggregate_binding(item, index, list_meta));
+                }
             }
         }
         // A written long form never holds only `expr` (SCHEMA-15), so such
@@ -894,7 +1057,14 @@ impl Lower<'_> {
                 }
                 _ => true,
             };
-        let key = key.or_else(|| qualified.then_some(JoinKey::Applicable));
+        // A keyless qualified aggregate infers its keys in 0.5 and matches on
+        // the input's declared `key` in 1.0 (P-KEY-1), which P1-6 binds.
+        let keyless = if self.v1() {
+            JoinKey::FromInput
+        } else {
+            JoinKey::Applicable
+        };
+        let key = key.or_else(|| qualified.then_some(keyless));
         Some(self.fill(
             id,
             ExprKind::Aggregate(Aggregate {
@@ -939,6 +1109,29 @@ impl Lower<'_> {
         Binding {
             name: self.named_at(name, name_meta),
             declared: self.text_of(item, "type").and_then(column_type),
+            derivation,
+            meta,
+        }
+    }
+
+    /// One 1.0 `aggregate.derivations` entry: `NAME: {type, derivation}`
+    /// (P-BIND-1), the binding a 0.5 `derive` entry declares.
+    fn aggregate_derivation(&mut self, name: &str, entry: usize, map: Meta) -> Binding {
+        let meta = self.meta(map, Segment::Key(name.into()), Some(entry));
+        let derivation = match self.d.field(entry, "derivation") {
+            Some(node) => {
+                let derivation_meta = self.meta(meta, Segment::Field("derivation"), Some(node));
+                self.derivation(node, derivation_meta)
+            }
+            None => Derivation {
+                expr: self.push(ExprKind::Unsupported("derivations".into()), meta, entry),
+                unconvertible: None,
+                meta,
+            },
+        };
+        Binding {
+            name: self.named_at(name, meta),
+            declared: self.text_of(entry, "type").and_then(column_type),
             derivation,
             meta,
         }
@@ -994,6 +1187,10 @@ impl Lower<'_> {
                 };
                 let meta = self.meta(list_meta, Segment::Key(argument.into()), Some(value));
                 let expr = match self.node(value) {
+                    // A 1.0 argument is one leaf of the grammar: a name, quoted
+                    // text or a temporal literal (FUNC-6). Other text lowers
+                    // to the formula it is, which the 1.0 front end refuses.
+                    N::Text(_) if self.v1() => self.placed(value, meta, Placement::Value),
                     N::Text(_) => self.reference(value, meta),
                     N::Mapping(_) => {
                         let literal = self.argument_literal(value);
