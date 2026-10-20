@@ -12,13 +12,13 @@ LINT_PATHS = [
     "tools",
     "python/src",
     "python/tests",
-    "python/yamaa_build_backend.py",
     "evaluations/harbor",
 ]
 CHECKS = (
     "tools.packaging.check_shared_release_versions",
     "tools.packaging.generate_third_party_notices",
     "tools.packaging.check_minimum_rust",
+    "tools.packaging.check_cargo_lock",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
     "tools.packaging.generate_json_schema",

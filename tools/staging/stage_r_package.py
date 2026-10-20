@@ -12,14 +12,15 @@ asks.
 import argparse
 import fnmatch
 import json
+import re
 import shutil
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from tools.conformance import supplemental_inventory as inventory
 from tools.packaging import generate_third_party_notices as notices
 from tools.paths import ROOT, WORKSPACE
-from tools.staging import vendor_crates
+from tools.staging import engine_bundle, vendor_crates
 
 REPOSITORY = ROOT
 VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
@@ -79,6 +80,97 @@ UNREAD_BY_R_SUITES = (
     "!specification-original/pq/unsupported-*.parquet",
     "!specification-original/pq/utf8*.parquet",
 )
+
+
+def native_test_fixtures(workspace: Path):
+    """Select the original test inputs and truth that the crate tests read.
+
+    The R package carries the crates with their tests, so it carries the
+    explicitly listed benchmark files that they compile in as well.
+    """
+    repository = workspace.parent
+    relative_manifest = "rust/qualification/native-source-fixtures.json"
+    manifest = repository / relative_manifest
+    declaration = json.loads(manifest.read_bytes())
+    if (
+        not isinstance(declaration, dict)
+        or set(declaration) != {"format", "files"}
+        or declaration["format"] != "yamaa-native-source-fixtures/1"
+        or not isinstance(declaration["files"], list)
+    ):
+        raise ValueError("invalid native source fixture manifest")
+    files = declaration["files"]
+    if len(files) > 4096:
+        raise ValueError("native source fixture manifest is too large")
+    selected = [(relative_manifest, manifest)]
+    seen = set()
+    for name in files:
+        if (
+            not isinstance(name, str)
+            or len(name) > 65_536
+            or not name.startswith("benchmarks/")
+            or "\\" in name
+            or ":" in name
+            or any(part in {"", ".", ".."} for part in name.split("/"))
+            or name in seen
+        ):
+            raise ValueError("invalid or duplicate native source fixture path")
+        seen.add(name)
+        selected.append((name, repository / name))
+    for name, path in selected:
+        if not path.is_file():
+            raise ValueError(f"native source fixture is missing: {name}")
+        parent = repository
+        for part in name.split("/"):
+            parent = parent / part
+            if parent.is_symlink():
+                raise ValueError("native source fixtures must not be symlinks")
+    # This conservative source-text scan admits direct include_str!/include_bytes!
+    # calls only with ordinary quoted literals and matching (), [] or {}.
+    # Raw/dynamic arguments and comment-separated tokens are refused. Inputs
+    # outside Cargo's workspace need an explicit declaration before an archive.
+    include = re.compile(r"\binclude_(?:str|bytes)\b")
+    invocation = re.compile(r"\s*!\s*([\(\[\{])\s*")
+    argument = re.compile(r'"((?:[^"\\]|\\.)*)"\s*,?\s*([\)\]\}])')
+    closing = {"(": ")", "[": "]", "{": "}"}
+    crates = workspace / "crates"
+    for source in sorted(crates.rglob("*.rs")):
+        if any(
+            part in {"target", ".git", "__pycache__"}
+            for part in source.relative_to(crates).parts
+        ):
+            continue
+        text = source.read_text(encoding="utf-8")
+        for directive in include.finditer(text):
+            call = invocation.match(text, directive.end())
+            literal = argument.match(text, call.end()) if call is not None else None
+            if literal is None or literal.group(2) != closing[call.group(1)]:
+                raise ValueError(
+                    "native compile fixture arguments must be ordinary string literals"
+                )
+            written = literal.group(1)
+            if (
+                "\\" in written
+                or ":" in written
+                or PurePosixPath(written).is_absolute()
+            ):
+                raise ValueError(
+                    "native compile fixture paths must be unescaped relative paths"
+                )
+            path = source.parent.resolve()
+            for part in PurePosixPath(written).parts:
+                path = path / part
+                if path.is_symlink():
+                    raise ValueError("native compile fixtures must not be symlinks")
+            path = path.resolve()
+            if path.is_relative_to(workspace.resolve()):
+                continue
+            if not path.is_relative_to(repository.resolve()):
+                raise ValueError("native compile fixture escapes the repository")
+            relative = path.relative_to(repository.resolve()).as_posix()
+            if relative not in seen:
+                raise ValueError(f"native compile fixture is not declared: {relative}")
+    return selected
 
 
 def matches(relative: str, pattern: str) -> bool:
@@ -208,13 +300,11 @@ def stage(destination: Path):
         rust / "crates",
         ignore=shutil.ignore_patterns("target", "__pycache__", "*.pyc", "Cargo.lock"),
     )
-    from python import yamaa_build_backend as backend
-
-    for original in backend.vendored_sources(WORKSPACE):
+    for original in engine_bundle.vendored_sources(WORKSPACE):
         target = rust / original.relative_to(WORKSPACE)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original, target)
-    for relative, original in backend.native_test_fixtures(WORKSPACE):
+    for relative, original in native_test_fixtures(WORKSPACE):
         target = destination / "src" / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original, target)
