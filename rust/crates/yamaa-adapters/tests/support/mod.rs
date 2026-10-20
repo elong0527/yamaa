@@ -15,6 +15,7 @@ pub mod predicate_syntax;
 pub mod project_call_compiler;
 pub mod project_codelist_compiler;
 pub mod project_schemas;
+pub mod roots;
 pub mod sas7bdat;
 pub mod schema_declaration;
 pub mod string_template_syntax;

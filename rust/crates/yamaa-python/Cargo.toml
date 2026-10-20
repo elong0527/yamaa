@@ -10,6 +10,9 @@ publish.workspace = true
 [lib]
 name = "_native"
 crate-type = ["cdylib"]
+# No Rust tests: the installed Python suites test the binding, and a test
+# harness would link against Python.
+test = false
 doctest = false
 
 [features]

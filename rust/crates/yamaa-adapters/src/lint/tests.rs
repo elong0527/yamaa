@@ -1190,7 +1190,11 @@ mod files {
 
     impl Directory {
         fn new(name: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            Self::under(&std::env::temp_dir(), name)
+        }
+
+        fn under(root: &Path, name: &str) -> Self {
+            let path = root.join(format!(
                 "yamaa-lint-{name}-{}-{:?}",
                 std::process::id(),
                 std::thread::current().id()
@@ -1301,12 +1305,35 @@ mod files {
     #[cfg(unix)]
     #[test]
     fn directories_skip_special_files_and_links_to_them() {
-        use std::os::unix::{fs::symlink, net::UnixListener};
+        use std::os::unix::{
+            fs::symlink,
+            net::{SocketAddr, UnixListener},
+        };
 
-        let directory = Directory::new("special-files");
+        // A socket's path must fit `sockaddr_un.sun_path` with a closing NUL:
+        // 104 bytes on macOS and 108 on Linux. macOS's temporary directory,
+        // `/var/folders/<2>/<30>/T`, is 48 bytes and leaves too little room,
+        // so this directory goes under `/tmp` there. The socket path is then
+        // at most 83 bytes: `/tmp/yamaa-lint-special-files-` (30), a u32
+        // process id (10), `-ThreadId(` (10), a u64 thread id (20) and
+        // `)/socket.yaml` (13). A path that still does not fit, such as one
+        // under a long TMPDIR elsewhere, skips the socket case.
+        let root = if cfg!(target_os = "macos") {
+            PathBuf::from("/tmp")
+        } else {
+            std::env::temp_dir()
+        };
+        let directory = Directory::under(&root, "special-files");
         let packed_text = super::packed();
         let packed = directory.write("packed.yaml", &packed_text);
         let socket = directory.0.join("socket.yaml");
+        if let Err(error) = SocketAddr::from_pathname(&socket) {
+            eprintln!(
+                "{}: {error}; special-file case not exercised",
+                socket.display()
+            );
+            return;
+        }
         let _listener = UnixListener::bind(&socket).unwrap();
         symlink(&socket, directory.0.join("linked-socket.yaml")).unwrap();
 

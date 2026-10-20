@@ -307,6 +307,24 @@ class DependencyGraphsTests(unittest.TestCase):
         ):
             self.assertLess(notices, step(*later))
 
+    def test_lane_runs_the_workspace_tests_through_the_shared_command(self):
+        """The lane's workspace tests leave out the host bindings, as CI's do."""
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "graph"
+            destination.mkdir()
+            commands = self.lane_commands(ROOT, destination)
+        python = str(
+            destination
+            / "python/.venv"
+            / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        )
+        ran = [arguments for arguments, _ in commands]
+        self.assertIn((python, "-m", "tools.commands.rust_tests"), ran)
+        self.assertNotIn(
+            ("cargo", "test", "--locked", "--workspace"),
+            [arguments[:4] for arguments in ran],
+        )
+
     def test_lane_refuses_to_change_the_checkout_notices(self):
         self.assertEqual(
             NOTICES,

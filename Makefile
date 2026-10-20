@@ -13,10 +13,10 @@ help:
 setup:
 	python -m tools.commands.setup --uv "$(UV)"
 
-# Before a push: lint without the R binding and the repository checks. Pull
-# request CI runs the complete check, including every test suite.
+# Before a push: the lint and repository checks, which need no R. Pull request
+# CI runs the complete check, including every test suite.
 quick:
-	$(TOOLS) tools.commands.repository lint --without-r
+	$(TOOLS) tools.commands.repository lint
 	$(TOOLS) tools.commands.repository check
 
 check: check-lint check-repository test-rust test-python test-r
@@ -33,7 +33,10 @@ test-rust:
 test-python:
 	$(TOOLS) tools.commands.python_tests
 
+# Building the R binding needs R, so its Clippy runs here rather than in
+# check-lint.
 test-r:
+	$(TOOLS) tools.commands.repository lint-r-binding
 	$(TOOLS) tools.commands.r_tests
 
 check-equivalence:

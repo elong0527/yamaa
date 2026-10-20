@@ -106,10 +106,10 @@ pub fn document(study: &Study, dataset: &Dataset, define_name: &str) -> DatasetJ
             .section
             .originator
             .as_ref()
-            .map(|originator| originator.value.clone()),
+            .map(|originator| originator.text.clone()),
         source_name: "yamaa".into(),
         source_version: study.source_version.clone(),
-        study_oid: format!("STDY.{}", study.study.id.value),
+        study_oid: format!("STDY.{}", study.study.id.name),
         metadata_version_oid: format!("MDV.{}", study.metadata_id),
         metadata_ref: define_name.into(),
         item_group_oid: format!("IG.{}", dataset.id),

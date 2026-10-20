@@ -2058,6 +2058,7 @@ columns:
     }
     mod project_activation_diagnostics {
         use crate::support::project_call_compiler as support;
+        use crate::support::roots::{Case, Definition};
         use std::rc::Rc;
         use yamaa_adapters::project_activation_diagnostics::{
             binding_issues, test_issues, DefinitionSource, Error, HostDetails,
@@ -2069,7 +2070,7 @@ columns:
         use yamaa_core::{
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
             project_environment::{LockKind, LockReference},
-            project_function::{Case, Definition, Function, Language},
+            project_function::{Function, Language},
             value::{ColumnType, FiniteFloat, Value},
         };
 
@@ -2173,7 +2174,7 @@ columns:
                     [format!("{}.tests[0]", sources(&functions)[index].path)]
                 );
                 let context = yamaa_core::json::Value::Object(issue.context.clone());
-                assert_eq!(context["function"], functions[index].definition().name);
+                assert_eq!(context["function"], functions[index].name());
                 assert_eq!(context["case"], "normal");
                 assert_eq!(context["args"]["x"], 7);
                 assert_eq!(context["expected"], 7);
@@ -2367,7 +2368,8 @@ columns:
                         args: vec![],
                         result: float(0.0),
                     }],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap();
             let selected = [DefinitionSource {
@@ -2431,7 +2433,8 @@ columns:
                         args: vec![],
                         result: Value::Str("authored é\0🙂".into()),
                     }],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap();
             let selected = [DefinitionSource {

@@ -254,7 +254,7 @@ pub fn activate_registered<'a, P: BatchFunctionPort>(
         if definition.language() != language {
             return Err(Failure::FunctionLanguageMismatch { function });
         }
-        if !names.insert(&definition.definition().name) {
+        if !names.insert(definition.name()) {
             return Err(Failure::DuplicateSelection { function });
         }
         plans.push(
@@ -286,7 +286,12 @@ pub fn activate_registered<'a, P: BatchFunctionPort>(
             .definition()
             .tests
             .iter()
-            .map(|test| test.args.iter().cloned().collect())
+            .map(|test| {
+                test.args
+                    .iter()
+                    .map(|(name, value)| (name.name.clone(), value.clone()))
+                    .collect()
+            })
             .collect();
         let mut cases = Vec::with_capacity(rows.len());
         if rows.is_empty() {
@@ -327,7 +332,7 @@ pub fn activate_registered<'a, P: BatchFunctionPort>(
                         definition.definition().comparison_decimals,
                     ) {
                         cases.push(crate::project_activation::CaseObservation {
-                            id: test.id.clone(),
+                            id: test.id.text.clone(),
                             actual,
                             invoked,
                         });

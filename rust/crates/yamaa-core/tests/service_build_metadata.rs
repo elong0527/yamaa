@@ -519,7 +519,7 @@ mod service {
             }
         }
         struct Environment {
-            document: Document,
+            project: yamaa_core::ast::Project,
             catalogue: Catalogue,
         }
         struct EmptyTable(TableSchema);
@@ -540,8 +540,9 @@ mod service {
         fn text(value: &'static str) -> Tree {
             Tree::text(value)
         }
-        fn document(tree: Tree) -> Document {
-            tree.document()
+        /// The project file, lowered as preparation lowers it.
+        fn lowered(tree: Tree) -> yamaa_core::ast::Project {
+            yamaa_core::front_end::v0_5::project::project(&tree.document(), None).unwrap()
         }
         fn project(with_study: bool) -> Environment {
             let mut fields = vec![(
@@ -571,7 +572,7 @@ mod service {
                 ));
             }
             Environment {
-                document: document(Tree::map(fields)),
+                project: lowered(Tree::map(fields)),
                 catalogue: Catalogue::admit(vec![]).unwrap(),
             }
         }
@@ -627,7 +628,7 @@ mod service {
             }
             fn environment(environment: &Environment) -> define::EnvironmentView<'_> {
                 define::EnvironmentView {
-                    document: &environment.document,
+                    project: &environment.project,
                     catalogue: &environment.catalogue,
                     source: "/project/project.yaml",
                 }
@@ -931,7 +932,7 @@ mod service {
             let mut spy = Spy::new();
             // A run admits this section; only Define composition needs more.
             spy.environment = Some(Environment {
-                document: document(Tree::map(vec![(
+                project: lowered(Tree::map(vec![(
                     "sdtm",
                     Tree::map(vec![("specs", Tree::List(vec![]))]),
                 )])),

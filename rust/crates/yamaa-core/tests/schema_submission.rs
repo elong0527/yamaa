@@ -957,10 +957,10 @@ mod schema {
     mod submission_composition {
         //! Independent metadata arenas exercise complete multi-domain composition.
         use yamaa_core::{
+            front_end::v0_5::sections::sections,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
             submission_composition::{self, Input},
-            submission_document,
         };
 
         #[derive(Default)]
@@ -1079,7 +1079,7 @@ mod schema {
             documents: &[Document],
         ) -> Result<submission_composition::Study, Vec<submission_composition::Finding>> {
             let project = project(documents.len());
-            let declared = submission_document::decode(&project, project.root()).unwrap();
+            let declared = sections(&project).unwrap();
             let sources: Vec<_> = (0..documents.len())
                 .map(|index| format!("d{index}.yaml"))
                 .collect();
@@ -1096,9 +1096,9 @@ mod schema {
                     href: Some(&artifacts[index]),
                 })
                 .collect();
-            let section = &declared.sections()[0];
+            let section = &declared.sections[0];
             let required = submission_composition::Required::admit(
-                declared.study(),
+                declared.study.as_ref(),
                 Some(section),
                 section.family,
             )?;
@@ -1154,15 +1154,21 @@ mod schema {
         }
     }
     mod submission_document {
+        //! The study and sections a 0.5 project lowers into its root
+        //! (`front_end::v0_5::sections`): complete declarations lower to the
+        //! tree, and every closed-shape refusal keeps its exact document nodes.
         use yamaa_core::{
+            ast::{self, Notation},
+            front_end::v0_5::{
+                project::project as lower_project,
+                sections::{self, sections, Cause},
+            },
             project_environment::Submission,
             schema::{Document, DocumentNode as N},
-            submission_document::{self, Cause},
         };
 
+        /// Each value is a distinct occurrence; the sections are null.
         fn declarations() -> Document {
-            // Each value is a distinct occurrence. Null values deliberately establish
-            // locations only; no submission validation/acceptance is inferred here.
             Document::new(
                 vec![
                     N::Text("send".into()),
@@ -1183,62 +1189,45 @@ mod schema {
         }
 
         #[test]
-        fn borrowed_declarations_keep_original_occurrences_and_authored_section_order() {
+        fn a_project_whose_declarations_cannot_be_read_still_lowers_and_keeps_the_refusal() {
             let input = declarations();
-            let facts = submission_document::locate(&input, 10).unwrap();
-            assert!(std::ptr::eq(facts.input(), &input));
-            assert_eq!(facts.study(), Some(3));
+            // Preparation and runs read the rest of the project; only
+            // Define-XML composition requires the study and sections.
+            let project = lower_project(&input, None).unwrap();
+            assert_eq!(project.submission, Err(ast::SubmissionRefused));
+            assert!(project.environments.is_empty() && project.codelists.is_empty());
+            let error = sections(&input).unwrap_err();
+            assert!(std::ptr::eq(error.input, &input));
+            let Cause::Findings(findings) = error.cause else {
+                panic!("findings")
+            };
             assert_eq!(
-                facts.sections(),
+                findings
+                    .iter()
+                    .map(|f| (f.node, f.kind))
+                    .collect::<Vec<_>>(),
                 [
-                    (Submission::Send, 1),
-                    (Submission::Adam, 5),
-                    (Submission::Sdtm, 7)
+                    (1, Kind::ExpectedMapping),
+                    (3, Kind::ExpectedMapping),
+                    (5, Kind::ExpectedMapping),
+                    (7, Kind::ExpectedMapping)
                 ]
             );
-            assert!(matches!(facts.input().nodes()[3], N::Null));
-        }
-
-        #[test]
-        fn repeated_location_scans_preserve_exact_input_and_complete_facts() {
-            let input = declarations();
-            for _ in 0..3 {
-                let facts = submission_document::locate(&input, 10).unwrap();
-                assert!(std::ptr::eq(facts.input(), &input));
-                assert_eq!(facts.study(), Some(3));
-                assert_eq!(
-                    facts.sections(),
-                    [
-                        (Submission::Send, 1),
-                        (Submission::Adam, 5),
-                        (Submission::Sdtm, 7)
-                    ]
-                );
-                assert_eq!(facts.input().field(10, "sdtm"), Some(7));
-            }
         }
 
         #[test]
         fn absent_declarations_and_original_shape_refusals_remain_distinct() {
             let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-            let facts = submission_document::locate(&empty, 0).unwrap();
-            assert_eq!(facts.study(), None);
-            assert!(facts.sections().is_empty());
-            let input = Document::new(
-                vec![N::Integer("1".into()), N::Null, N::Mapping(vec![(0, 1)])],
-                2,
-            )
-            .unwrap();
-            for (root, node) in [(0, 0), (2, 0), (99, 99)] {
-                let error = submission_document::locate(&input, root).unwrap_err();
-                assert!(std::ptr::eq(error.input, &input));
-                assert_eq!(error.cause, Cause::Shape { node });
-            }
+            let owned = sections(&empty).unwrap();
+            assert_eq!(owned.study, None);
+            assert!(owned.sections.is_empty());
+            let input = Document::new(vec![N::Integer("1".into())], 0).unwrap();
+            let error = sections(&input).unwrap_err();
+            assert!(std::ptr::eq(error.input, &input));
+            assert_eq!(error.cause, Cause::Shape { node: 0 });
         }
 
-        use submission_document::{
-            Context, DocumentKind, FieldName as F, GuideName, GuideStatus, Kind, Step,
-        };
+        use sections::{FieldName as F, Kind, Step};
 
         // Independently authored arena fixtures; no decoder or schema normalization
         // helper builds the expected values. Each child is a distinct occurrence.
@@ -1352,158 +1341,145 @@ mod schema {
             ]);
             a.finish(root)
         }
+        /// A node's path in a project root, in today's notation.
+        fn path(project: &ast::Project, meta: ast::Meta) -> String {
+            project.paths.render(meta.path, Notation::V0_5)
+        }
         #[test]
-        fn complete_owned_metadata_preserves_order_overrides_and_occurrences_after_input_drops() {
+        fn complete_declarations_lower_in_authored_order_with_their_paths() {
             let input = full();
-            let root = input.root();
-            let study_node = input.field(root, "study").unwrap();
-            let id_node = input.field(study_node, "id").unwrap();
-            let owned = submission_document::decode(&input, root).unwrap();
+            let project = lower_project(&input, None).unwrap();
             drop(input);
-            assert_eq!(owned.root(), root);
-            let study = owned.study().unwrap();
-            assert_eq!(study.id.value, "STUDY.alpha-1");
-            assert_eq!(study.name.value, "Independent study");
-            assert_eq!(study.description.value, "A & B < C");
-            assert_eq!(study.protocol_name.value, "P-001");
-            assert_eq!(study.origin.node, Some(study_node));
-            assert_eq!(study.id.origin.container, study_node);
-            assert_eq!(study.id.origin.node, Some(id_node));
-            assert_eq!(study.id.origin.field, F::Id);
+            let owned = project.submission.as_ref().unwrap();
+            let study = owned.study.as_ref().unwrap();
+            assert_eq!(study.id.name, "STUDY.alpha-1");
+            assert_eq!(study.name.text, "Independent study");
+            assert_eq!(study.description.text, "A & B < C");
+            assert_eq!(study.protocol_name.text, "P-001");
+            assert_eq!(path(&project, study.meta), "study");
+            assert_eq!(path(&project, study.id.meta), "study.id");
             assert_eq!(
-                owned
-                    .sections()
-                    .iter()
-                    .map(|s| s.family)
-                    .collect::<Vec<_>>(),
+                owned.sections.iter().map(|s| s.family).collect::<Vec<_>>(),
                 [Submission::Send, Submission::Adam, Submission::Sdtm]
             );
-            let send = &owned.sections()[0];
-            let standard = send.standard.as_ref().unwrap();
-            assert_eq!(standard.name.value, GuideName::SendIgDart);
-            assert_eq!(standard.version.value, "3.4");
-            assert_eq!(standard.status.value, GuideStatus::Final);
+            let send = &owned.sections[0];
+            assert_eq!(path(&project, send.meta), "send");
+            assert_eq!(send.standards.len(), 1);
+            let standard = &send.standards[0];
+            assert_eq!(standard.name.text, "SENDIG-DART");
+            assert_eq!(standard.version.text, "3.4");
+            assert_eq!(standard.status, ast::GuideStatus::Final);
+            assert_eq!(path(&project, standard.name.meta), "send.standard.name");
             assert_eq!(
                 send.specs
-                    .value
                     .iter()
-                    .map(|s| s.value.as_str())
+                    .map(|s| s.text.as_str())
                     .collect::<Vec<_>>(),
                 ["specs/dm.yaml", "specs/ae.yaml"]
             );
-            assert_eq!(send.define.as_ref().unwrap().value, "results/define.xml");
-            assert!(send.documents.value.is_empty());
-            // An absent dataset container writes only the Define-XML document.
-            assert!(send.datasets.is_none());
-            assert_eq!(send.context.value, Context::Submission);
-            assert_eq!(send.xml_lang.value, "en");
-            for origin in [
-                send.documents.origin,
-                send.context.origin,
-                send.xml_lang.origin,
-            ] {
-                assert_eq!(origin.node, None);
-                assert_eq!(origin.key, None);
-                assert_eq!(origin.container, send.origin.node.unwrap());
-            }
+            assert_eq!(path(&project, send.specs[1].meta), "send.specs[1]");
+            assert_eq!(send.define.as_ref().unwrap().text, "results/define.xml");
+            assert!(send.documents.is_empty());
+            // An absent transport writes only the Define-XML document.
+            assert!(send.transport.is_none());
+            assert_eq!(send.context, ast::DefineContext::Submission);
+            assert_eq!(send.xml_lang.text, "en");
+            assert_eq!(path(&project, send.xml_lang.meta), "send.xml_lang");
             assert!(
                 send.file_oid.is_none()
                     && send.metadata_version.is_none()
                     && send.originator.is_none()
                     && send.stylesheet.is_none()
             );
-            let adam = &owned.sections()[1];
-            assert_eq!(
-                adam.standard.as_ref().unwrap().name.value,
-                GuideName::AdamIgMd
-            );
-            let datasets = adam.datasets.as_ref().unwrap();
-            assert_eq!(datasets.value, submission_document::Transport::DatasetJson);
-            assert_eq!(datasets.origin.field, F::Datasets);
-            assert!(datasets.origin.node.is_some() && datasets.origin.key.is_some());
-            assert_eq!(adam.context.value, Context::Other);
-            assert_eq!(adam.xml_lang.value, "fr-CA");
-            assert_eq!(adam.file_oid.as_ref().unwrap().value, "FILE.analysis-1");
+            let adam = &owned.sections[1];
+            assert_eq!(adam.standards[0].name.text, "ADaMIG-MD");
+            assert_eq!(adam.transport, Some(ast::Transport::DatasetJson));
+            assert_eq!(adam.context, ast::DefineContext::Other);
+            assert_eq!(adam.xml_lang.text, "fr-CA");
+            assert_eq!(adam.file_oid.as_ref().unwrap().text, "FILE.analysis-1");
             let metadata = adam.metadata_version.as_ref().unwrap();
-            assert_eq!(metadata.id.value, "MDV.analysis-1");
-            assert_eq!(metadata.name.value, "Analysis metadata");
+            assert_eq!(metadata.id.name, "MDV.analysis-1");
+            assert_eq!(metadata.name.text, "Analysis metadata");
             assert_eq!(
-                metadata.description.as_ref().unwrap().value,
+                metadata.description.as_ref().unwrap().text,
                 "Sponsor metadata"
             );
             assert_eq!(
-                adam.originator.as_ref().unwrap().value,
+                adam.originator.as_ref().unwrap().text,
                 "Independent sponsor"
             );
-            assert_eq!(adam.stylesheet.as_ref().unwrap().value, "styles/define.xsl");
+            assert_eq!(adam.stylesheet.as_ref().unwrap().text, "styles/define.xsl");
             assert_eq!(
                 adam.documents
-                    .value
                     .iter()
                     .map(|d| (
-                        d.id.value.as_str(),
-                        d.kind.value,
-                        d.link.value.as_str(),
-                        d.title.value.as_str()
+                        d.id.name.as_str(),
+                        d.kind,
+                        d.link.text.as_str(),
+                        d.title.text.as_str()
                     ))
                     .collect::<Vec<_>>(),
                 [
                     (
                         "review",
-                        DocumentKind::Supplemental,
+                        ast::DocumentKind::Supplemental,
                         "reviewers/review.pdf",
                         "Reviewer guide"
                     ),
                     (
                         "acrf",
-                        DocumentKind::AnnotatedCrf,
+                        ast::DocumentKind::AnnotatedCrf,
                         "forms/acrf.pdf",
                         "Annotated CRF"
                     ),
-                    ("other", DocumentKind::Other, "notes/data.txt", "Notes"),
+                    ("other", ast::DocumentKind::Other, "notes/data.txt", "Notes"),
                 ]
             );
             assert_eq!(
-                owned.sections()[2].standard.as_ref().unwrap().name.value,
-                GuideName::SdtmIgAp
+                path(&project, adam.documents[2].link.meta),
+                "adam.documents[2].link"
+            );
+            assert_eq!(owned.sections[2].standards[0].name.text, "SDTMIG-AP");
+            // The rest of the project lowers beside the declarations.
+            assert_eq!(
+                project.environments[0].file.as_ref().unwrap().text,
+                "python/environment.yaml"
             );
         }
         #[test]
         fn every_shipped_guide_spelling_is_closed_metadata_not_family_composition() {
-            for (text, expected) in [
-                ("ADaMIG", GuideName::AdamIg),
-                ("ADaMIG-MD", GuideName::AdamIgMd),
-                ("BIMO", GuideName::Bimo),
-                ("CDISC/NCI", GuideName::CdiscNci),
-                ("SDTMIG", GuideName::SdtmIg),
-                ("SDTMIG-AP", GuideName::SdtmIgAp),
-                ("SDTMIG-MD", GuideName::SdtmIgMd),
-                ("SENDIG", GuideName::SendIg),
-                ("SENDIG-AR", GuideName::SendIgAr),
-                ("SENDIG-DART", GuideName::SendIgDart),
-                ("SENDIG-GENETOX", GuideName::SendIgGenetox),
+            for text in [
+                "ADaMIG",
+                "ADaMIG-MD",
+                "BIMO",
+                "CDISC/NCI",
+                "SDTMIG",
+                "SDTMIG-AP",
+                "SDTMIG-MD",
+                "SENDIG",
+                "SENDIG-AR",
+                "SENDIG-DART",
+                "SENDIG-GENETOX",
             ] {
                 let mut a = Arena::default();
                 let section = a.section(text);
                 let root = a.map(vec![("sdtm", section)]);
                 let input = a.finish(root);
-                let owned = submission_document::decode(&input, root).unwrap();
-                let standard = owned.sections()[0].standard.as_ref().unwrap();
-                assert_eq!(standard.name.value, expected);
-                assert_eq!(standard.name.value.name(), text);
-                assert!(owned.study().is_none()); // missing generator prerequisites remain a separate use case.
+                let owned = sections(&input).unwrap();
+                assert_eq!(owned.sections[0].standards[0].name.text, text);
+                assert!(owned.study.is_none()); // missing generator prerequisites remain a separate use case.
             }
         }
         #[test]
-        fn absent_declarations_and_explicit_default_values_have_distinct_origin_facts() {
+        fn absent_declarations_and_explicit_default_values_lower_alike() {
             let mut a = Arena::default();
             let r = a.text("r/environment.yaml");
             let environments = a.map(vec![("r", r)]);
             let root = a.map(vec![("environments", environments)]);
             let input = a.finish(root);
-            let owned = submission_document::decode(&input, root).unwrap();
-            assert!(owned.study().is_none());
-            assert!(owned.sections().is_empty());
+            let owned = sections(&input).unwrap();
+            assert!(owned.study.is_none());
+            assert!(owned.sections.is_empty());
             let mut a = Arena::default();
             let guide = a.guide("SDTMIG");
             let specs = a.node(N::Sequence(vec![]));
@@ -1523,18 +1499,12 @@ mod schema {
             ]);
             let root = a.map(vec![("sdtm", section)]);
             let input = a.finish(root);
-            let owned = submission_document::decode(&input, root).unwrap();
-            let s = &owned.sections()[0];
-            for (origin, expected) in [
-                (s.documents.origin, documents),
-                (s.datasets.as_ref().unwrap().origin, datasets),
-                (s.context.origin, context),
-                (s.xml_lang.origin, lang),
-            ] {
-                assert_eq!(origin.node, Some(expected));
-                assert!(origin.key.is_some());
-            }
-            assert!(s.specs.value.is_empty());
+            let owned = sections(&input).unwrap();
+            let s = &owned.sections[0];
+            assert!(s.documents.is_empty() && s.specs.is_empty());
+            assert_eq!(s.transport, Some(ast::Transport::DatasetJson));
+            assert_eq!(s.context, ast::DefineContext::Submission);
+            assert_eq!(s.xml_lang.text, "en");
         }
         fn invalid() -> Document {
             let mut a = Arena::default();
@@ -1583,7 +1553,7 @@ mod schema {
         #[test]
         fn structural_findings_are_complete_ordered_and_only_supported_causes_are_portable() {
             let input = invalid();
-            let error = submission_document::decode(&input, input.root()).unwrap_err();
+            let error = sections(&input).unwrap_err();
             assert!(std::ptr::eq(error.input, &input));
             let Cause::Findings(findings) = error.cause else {
                 panic!("expected complete structural findings")
@@ -1650,7 +1620,7 @@ mod schema {
         fn complete_findings_preserve_original_invalid_input() {
             let input = invalid();
             for _ in 0..2 {
-                let error = submission_document::decode(&input, input.root()).unwrap_err();
+                let error = sections(&input).unwrap_err();
                 assert!(std::ptr::eq(error.input, &input));
                 assert!(error.input.field(error.input.root(), "adam").is_some());
                 assert!(matches!(error.cause, Cause::Findings(v) if v.len() == 20));
@@ -1661,10 +1631,10 @@ mod schema {
         fn independent_whole_model_decodes_keep_all_sections() {
             let input = full();
             for _ in 0..2 {
-                let owner = submission_document::decode(&input, input.root()).unwrap();
-                assert_eq!(owner.sections().len(), 3);
-                assert_eq!(owner.study().unwrap().id.value, "STUDY.alpha-1");
-                assert_eq!(owner.sections()[1].documents.value.len(), 3);
+                let owner = sections(&input).unwrap();
+                assert_eq!(owner.sections.len(), 3);
+                assert_eq!(owner.study.as_ref().unwrap().id.name, "STUDY.alpha-1");
+                assert_eq!(owner.sections[1].documents.len(), 3);
             }
         }
 
@@ -1690,7 +1660,7 @@ mod schema {
             let section = a.map(fields);
             let root = a.map(vec![("send", section)]);
             let input = a.finish(root);
-            let error = submission_document::decode(&input, root).unwrap_err();
+            let error = sections(&input).unwrap_err();
             let Cause::Findings(findings) = error.cause else {
                 panic!("expected findings")
             };
@@ -1727,7 +1697,7 @@ mod schema {
                 let node = a.node(scalar);
                 let root = a.map(vec![("study", node)]);
                 let input = a.finish(root);
-                let error = submission_document::decode(&input, root).unwrap_err();
+                let error = sections(&input).unwrap_err();
                 assert!(std::ptr::eq(error.input, &input));
                 assert!(
                     matches!(error.cause, Cause::Findings(v) if v.len() == 1 && v[0].node == node && v[0].kind == Kind::ExpectedMapping && v[0].rule().is_none())
@@ -1739,9 +1709,7 @@ mod schema {
             let study = a.node(N::Mapping(vec![(key, value)]));
             let root = a.map(vec![("study", study)]);
             let input = a.finish(root);
-            let Cause::Findings(findings) =
-                submission_document::decode(&input, root).unwrap_err().cause
-            else {
+            let Cause::Findings(findings) = sections(&input).unwrap_err().cause else {
                 panic!("findings")
             };
             assert_eq!(findings.len(), 5);
@@ -1777,7 +1745,7 @@ mod schema {
             }
             let root = a.map(vec![("study", child)]);
             let input = a.finish(root);
-            let error = submission_document::decode(&input, root).unwrap_err();
+            let error = sections(&input).unwrap_err();
             assert!(
                 matches!(error.cause, Cause::Findings(v) if v.len() == 1 && v[0].kind == Kind::ExpectedMapping)
             );
@@ -1788,9 +1756,7 @@ mod schema {
             let input = invalid();
             let root = input.root();
             let section = input.field(root, "adam").unwrap();
-            let Cause::Findings(findings) =
-                submission_document::decode(&input, root).unwrap_err().cause
-            else {
+            let Cause::Findings(findings) = sections(&input).unwrap_err().cause else {
                 panic!("findings")
             };
             let unknown = &findings[2];
@@ -1809,9 +1775,7 @@ mod schema {
             let value = a.node(N::Null);
             let root = a.node(N::Mapping(vec![(key, value)]));
             let input = a.finish(root);
-            let Cause::Findings(findings) =
-                submission_document::decode(&input, root).unwrap_err().cause
-            else {
+            let Cause::Findings(findings) = sections(&input).unwrap_err().cause else {
                 panic!("findings")
             };
             assert_eq!(findings.len(), 1);
@@ -1835,11 +1799,11 @@ mod schema {
             ]);
             let root = a.map(vec![("adam", section)]);
             let input = a.finish(root);
-            let owned = submission_document::decode(&input, root).unwrap();
-            let standard = owned.sections()[0].standard.as_ref().unwrap();
-            assert_eq!(standard.status.value, GuideStatus::Draft);
-            assert_eq!(standard.version.value, "1.3");
-            assert!(owned.sections()[0]
+            let owned = sections(&input).unwrap();
+            let standard = &owned.sections[0].standards[0];
+            assert_eq!(standard.status, ast::GuideStatus::Draft);
+            assert_eq!(standard.version.text, "1.3");
+            assert!(owned.sections[0]
                 .metadata_version
                 .as_ref()
                 .unwrap()
@@ -1859,13 +1823,12 @@ mod schema {
             ]);
             let root = a.map(vec![("sdtm", section)]);
             let input = a.finish(root);
-            let owned = submission_document::decode(&input, root).unwrap();
-            assert_eq!(owned.sections()[0].xml_lang.value, "en");
-            assert_eq!(owned.sections()[0].xml_lang.origin.node, None);
+            let owned = sections(&input).unwrap();
+            assert_eq!(owned.sections[0].xml_lang.text, "en");
             let empty = Document::new(vec![N::Mapping(vec![])], 0).unwrap();
-            let owned = submission_document::decode(&empty, 0).unwrap();
-            assert!(owned.sections().is_empty());
-            assert!(owned.study().is_none());
+            let owned = sections(&empty).unwrap();
+            assert!(owned.sections.is_empty());
+            assert!(owned.study.is_none());
         }
         #[test]
         fn a_section_listing_only_specs_admits_and_leaves_define_declarations_to_composition() {
@@ -1881,26 +1844,21 @@ mod schema {
                 let section = a.map(vec![("specs", specs)]);
                 let root = a.map(vec![(name, section)]);
                 let input = a.finish(root);
-                let owned = submission_document::decode(&input, root).unwrap();
+                let owned = sections(&input).unwrap();
                 drop(input);
-                assert!(owned.study().is_none());
-                let s = &owned.sections()[0];
+                assert!(owned.study.is_none());
+                let s = &owned.sections[0];
                 assert_eq!(s.family, family);
                 assert_eq!(
-                    s.specs
-                        .value
-                        .iter()
-                        .map(|v| v.value.as_str())
-                        .collect::<Vec<_>>(),
+                    s.specs.iter().map(|v| v.text.as_str()).collect::<Vec<_>>(),
                     ["specs/dm.yaml"]
                 );
-                assert_eq!(s.specs.origin.node, Some(specs));
-                assert!(s.standard.is_none() && s.define.is_none() && s.datasets.is_none());
-                assert!(s.documents.value.is_empty());
-                assert_eq!(s.context.value, Context::Submission);
-                assert_eq!(s.xml_lang.value, "en");
+                assert!(s.standards.is_empty() && s.define.is_none() && s.transport.is_none());
+                assert!(s.documents.is_empty());
+                assert_eq!(s.context, ast::DefineContext::Submission);
+                assert_eq!(s.xml_lang.text, "en");
                 // Only Define-XML composition requires the study, guide and target.
-                let Err(findings) = Required::admit(owned.study(), Some(s), family) else {
+                let Err(findings) = Required::admit(owned.study.as_ref(), Some(s), family) else {
                     panic!("composition requires the define declarations")
                 };
                 assert_eq!(
@@ -1928,10 +1886,13 @@ mod schema {
             ]);
             let root = a.map(vec![("study", study)]);
             let input = a.finish(root);
-            let owned = submission_document::decode(&input, root).unwrap();
+            let owned = sections(&input).unwrap();
             drop(input);
-            assert_eq!(owned.study().unwrap().name.value, "A\nB\t'\\");
-            assert_eq!(owned.study().unwrap().description.value, "é < 漢字 & 😀");
+            assert_eq!(owned.study.as_ref().unwrap().name.text, "A\nB\t'\\");
+            assert_eq!(
+                owned.study.as_ref().unwrap().description.text,
+                "é < 漢字 & 😀"
+            );
         }
 
         struct DocumentItemFact {
@@ -1994,7 +1955,7 @@ mod schema {
         #[test]
         fn malformed_document_items_retain_actual_occurrences_in_every_family_and_position() {
             let (input, expected) = malformed_document_lists();
-            let error = submission_document::decode(&input, input.root()).unwrap_err();
+            let error = sections(&input).unwrap_err();
             assert!(std::ptr::eq(error.input, &input));
             let Cause::Findings(findings) = error.cause else {
                 panic!("complete shape findings")
@@ -2008,7 +1969,7 @@ mod schema {
                 assert_eq!(finding.rule(), None);
                 assert_eq!(
                     finding.origin,
-                    Some(submission_document::Origin {
+                    Some(sections::Origin {
                         container: fact.sequence,
                         key: None,
                         node: Some(fact.node),
@@ -2038,7 +1999,7 @@ mod schema {
         #[test]
         fn all_malformed_document_items_keep_the_original_input_and_nodes() {
             let (input, expected) = malformed_document_lists();
-            let error = submission_document::decode(&input, input.root()).unwrap_err();
+            let error = sections(&input).unwrap_err();
             assert!(std::ptr::eq(error.input, &input));
             let Cause::Findings(findings) = error.cause else {
                 panic!("complete findings")
@@ -2051,57 +2012,33 @@ mod schema {
         }
 
         #[test]
-        fn valid_document_fields_and_omitted_defaults_remain_owned_after_original_input_drops() {
+        fn valid_document_fields_lower_in_order_with_their_paths() {
             let input = full();
-            let adam = input.field(input.root(), "adam").unwrap();
-            let sequence = input.field(adam, "documents").unwrap();
-            let N::Sequence(items) = &input.nodes()[sequence] else {
-                panic!("document list")
-            };
-            let document_nodes = items.clone();
-            let field_nodes = document_nodes
-                .iter()
-                .map(|&node| {
-                    ["id", "kind", "link", "title"].map(|name| input.field(node, name).unwrap())
-                })
-                .collect::<Vec<_>>();
-            let owned = submission_document::decode(&input, input.root()).unwrap();
+            let project = lower_project(&input, None).unwrap();
             drop(input);
-            let docs = &owned.sections()[1].documents;
-            assert_eq!(docs.origin.container, adam);
-            assert_eq!(docs.origin.node, Some(sequence));
-            assert!(docs.origin.key.is_some());
-            assert_eq!(docs.value.len(), 3);
-            for ((document, &node), expected) in
-                docs.value.iter().zip(&document_nodes).zip(&field_nodes)
-            {
-                assert_eq!(document.node, node);
-                for (origin, &value_node) in [
-                    document.id.origin,
-                    document.kind.origin,
-                    document.link.origin,
-                    document.title.origin,
-                ]
-                .iter()
-                .zip(expected)
-                {
-                    assert_eq!(origin.container, node);
-                    assert_eq!(origin.node, Some(value_node));
-                    assert!(origin.key.is_some());
+            let owned = project.submission.as_ref().unwrap();
+            let docs = &owned.sections[1].documents;
+            assert_eq!(docs.len(), 3);
+            for (index, document) in docs.iter().enumerate() {
+                for (meta, field) in [
+                    (document.id.meta, "id"),
+                    (document.link.meta, "link"),
+                    (document.title.meta, "title"),
+                ] {
+                    assert_eq!(
+                        project.paths.render(meta.path, Notation::V0_5),
+                        format!("adam.documents[{index}].{field}")
+                    );
                 }
             }
-            assert_eq!(docs.value[0].title.value, "Reviewer guide");
-            assert_eq!(docs.value[1].kind.value, DocumentKind::AnnotatedCrf);
-            assert_eq!(docs.value[2].link.value, "notes/data.txt");
-            let send = &owned.sections()[0];
-            assert!(send.documents.value.is_empty());
-            assert_eq!(send.documents.origin.container, send.origin.node.unwrap());
-            assert_eq!(send.documents.origin.key, None);
-            assert_eq!(send.documents.origin.node, None);
+            assert_eq!(docs[0].title.text, "Reviewer guide");
+            assert_eq!(docs[1].kind, ast::DocumentKind::AnnotatedCrf);
+            assert_eq!(docs[2].link.text, "notes/data.txt");
+            assert!(owned.sections[0].documents.is_empty());
         }
 
         #[test]
-        fn approved_source_system_version_is_admitted_for_every_section() {
+        fn an_authored_source_system_version_lowers_for_every_section() {
             for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
                 let mut a = Arena::default();
                 a.section(guide);
@@ -2114,40 +2051,23 @@ mod schema {
                 let section = a.node(N::Mapping(fields));
                 let root = a.map(vec![(family, section)]);
                 let input = a.finish(root);
-                let owned = submission_document::decode(&input, root).unwrap();
+                let project = lower_project(&input, None).unwrap();
                 drop(input);
-                let section = &owned.sections()[0];
+                let section = &project.submission.as_ref().unwrap().sections[0];
                 let field = section.source_system_version.as_ref().unwrap();
-                assert_eq!(field.value, "1.0");
-                assert_eq!(field.origin.field, F::SourceSystemVersion);
-                assert_eq!(field.origin.node, Some(version));
-                assert_eq!(field.origin.key, Some(key));
-                let selected = section.source_versions("0.3.0").unwrap();
-                assert_eq!(selected.metadata(), "1.0");
-                assert_eq!(selected.installed(), "0.3.0");
-                assert_eq!(selected.override_origin(), Some(field.origin));
-                assert_eq!(selected.metadata().as_ptr(), field.value.as_ptr());
+                assert_eq!(field.text, "1.0");
                 assert_eq!(
-                    section.source_versions(""),
-                    Err(submission_document::VersionError::EmptyInstalledVersion)
+                    project.paths.render(field.meta.path, Notation::V0_5),
+                    format!("{family}.source_system_version")
                 );
             }
-        }
-
-        #[test]
-        fn omitted_submission_version_uses_actual_generator_without_creating_an_authored_field() {
+            // Omitted, the installed generator's version is used at composition.
             let input = full();
-            let owned = submission_document::decode(&input, input.root()).unwrap();
-            for section in owned.sections() {
-                assert!(section.source_system_version.is_none());
-                for installed in ["0.3.0", "0.4.0.dev7"] {
-                    let selected = section.source_versions(installed).unwrap();
-                    assert_eq!(selected.metadata(), installed);
-                    assert_eq!(selected.installed(), installed);
-                    assert_eq!(selected.override_origin(), None);
-                    assert_eq!(selected.installed().as_ptr(), installed.as_ptr());
-                }
-            }
+            let owned = sections(&input).unwrap();
+            assert!(owned
+                .sections
+                .iter()
+                .all(|section| section.source_system_version.is_none()));
         }
 
         #[test]
@@ -2169,7 +2089,7 @@ mod schema {
                 let section = a.node(N::Mapping(fields));
                 let root = a.map(vec![("adam", section)]);
                 let input = a.finish(root);
-                let error = submission_document::decode(&input, root).unwrap_err();
+                let error = sections(&input).unwrap_err();
                 assert!(std::ptr::eq(error.input, &input));
                 let Cause::Findings(findings) = error.cause else {
                     panic!("findings")
@@ -2187,7 +2107,7 @@ mod schema {
         }
 
         #[test]
-        fn full_submission_version_text_keeps_its_authored_origin_after_ownership() {
+        fn full_submission_version_text_survives_the_input() {
             let mut a = Arena::default();
             a.section("SENDIG");
             let N::Mapping(mut fields) = a.0.pop().unwrap() else {
@@ -2200,22 +2120,21 @@ mod schema {
             let root = a.map(vec![("send", section)]);
             let input = a.finish(root);
             assert_eq!(input.field(section, "source_system_version"), Some(version));
-            let owned = submission_document::decode(&input, root).unwrap();
+            let owned = sections(&input).unwrap();
             drop(input);
-            let selected = owned.sections()[0].source_system_version.as_ref().unwrap();
-            assert_eq!(selected.value, "v".repeat(4096));
-            assert_eq!(selected.origin.node, Some(version));
-            assert_eq!(selected.origin.key, Some(key));
+            let selected = owned.sections[0].source_system_version.as_ref().unwrap();
+            assert_eq!(selected.text, "v".repeat(4096));
         }
     }
     mod submission_values {
         //! Independently authored normalized metadata; no generator supplies expectations.
         use yamaa_core::{
+            front_end::v0_5::sections::sections,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
             specification_submission_document as declarations,
             submission_composition::{self, Input, Study},
-            submission_document, submission_xml,
+            submission_xml,
         };
 
         #[derive(Default)]
@@ -2464,10 +2383,10 @@ mod schema {
         }
         fn compose(document: &Document) -> Result<Study, Vec<submission_composition::Finding>> {
             let project = project();
-            let declared = submission_document::decode(&project, project.root()).unwrap();
-            let section = &declared.sections()[0];
+            let declared = sections(&project).unwrap();
+            let section = &declared.sections[0];
             let required = submission_composition::Required::admit(
-                declared.study(),
+                declared.study.as_ref(),
                 Some(section),
                 section.family,
             )?;

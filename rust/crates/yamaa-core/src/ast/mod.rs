@@ -1,4 +1,5 @@
-//! The typed specification tree that every front end lowers into.
+//! The typed specification tree that every front end lowers into, and the
+//! roots of a project's own files ([`project`]).
 //!
 //! Each surface has its own front end under [`crate::front_end`] (today's
 //! in `v0_5`; the 1.0 front end comes with #3030 Phase 1). Each lowers into
@@ -13,6 +14,7 @@
 
 mod expr;
 mod path;
+pub mod project;
 pub mod traversal;
 mod types;
 
@@ -23,6 +25,13 @@ pub use expr::{
     Window, WindowFunction,
 };
 pub use path::{Notation, PathId, Paths, Segment};
+pub use project::{
+    Codelist, CodelistDeclaration, CodelistItem, CodelistSource, CodelistType, Codelists,
+    DefineContext, DocumentKind, ExternalDictionary, Function, FunctionDeclaration, FunctionSource,
+    FunctionTest, GuideStatus, HostEnvironment, Implementation, ImplementationGuide,
+    MetadataVersion, Parameter, Project, Section, Study, SubmissionDeclarations, SubmissionRefused,
+    SupportingDocument, TerminologyStandard, Transport,
+};
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
 pub use types::{result_type, Table, TypeEnv};
 
@@ -91,33 +100,14 @@ pub struct Constant {
     pub meta: Meta,
 }
 
-/// One root per file type. The project, codelist and function roots are
-/// lowered in #3030 Phase 1; their fields arrive with that front end.
+/// One root per file type; see [`project`] for the project, codelist and
+/// function roots.
 #[derive(Clone, Debug, PartialEq)]
 pub enum File {
     Spec(Box<Spec>),
-    Project(Project),
-    Codelists(Codelists),
-    Function(Function),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Project {
-    pub header: Header,
-    pub meta: Meta,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Codelists {
-    pub header: Header,
-    pub meta: Meta,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Function {
-    pub header: Header,
-    pub name: Named,
-    pub meta: Meta,
+    Project(Box<Project>),
+    Codelists(Box<Codelists>),
+    Function(Box<Function>),
 }
 
 /// The surface a file is written in and the version it declares.

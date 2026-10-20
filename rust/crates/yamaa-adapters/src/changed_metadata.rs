@@ -1,22 +1,26 @@
 //! The authored declaration of a held metadata file that no longer matches its
 //! snapshot. A refusal names the field that declared the file and the path as
 //! written, with the file's own condition (FILE-10, FILE-11). Nothing here reads
-//! a file: every fact comes from the documents preparation already holds.
+//! a file: every fact comes from what preparation already holds.
 use crate::{
     project_source::{DocumentCapture, LockCapture, Origin},
     specification_source::{CapturedDocument, LinkedSpecification, PreparedDocument},
 };
 use yamaa_core::{
-    diagnostic::Diagnostic, project_function::Language, resource::ResourceFailure,
-    schema::DocumentNode as N,
+    ast::{self, CodelistSource, FunctionSource},
+    diagnostic::Diagnostic,
+    project_function::Language,
+    resource::ResourceFailure,
 };
 
-/// The project file and the environment documents it linked, as captured.
+/// The project file, its lowered root and the environment documents it
+/// linked, as captured.
 pub(crate) struct Environment<'a> {
     /// The project file path as preparation was given it.
     pub(crate) written: &'a str,
     pub(crate) host: Language,
     pub(crate) root: &'a CapturedDocument,
+    pub(crate) project: &'a ast::Project,
     pub(crate) environment_file: Option<&'a CapturedDocument>,
     pub(crate) lock: Option<&'a LockCapture>,
     pub(crate) captures: &'a [DocumentCapture],
@@ -56,24 +60,17 @@ pub(crate) fn links(
 /// The specifications a project's sections list, captured for the submission
 /// inventory in listing order, each declared by `<section>.specs[<index>]`.
 pub(crate) fn inventory(
-    root: &CapturedDocument,
+    project: &ast::Project,
     documents: &[PreparedDocument],
     identity: &str,
     failure: ResourceFailure,
 ) -> Option<Diagnostic> {
-    let project = &root.normalized().document;
-    let locations = yamaa_core::submission_document::locate(project, project.root()).ok()?;
+    let declarations = project.submission.as_ref().ok()?;
     let mut listed = Vec::new();
-    for &(section, node) in locations.sections() {
-        let N::Sequence(specs) = &project.nodes()[project.field(node, "specs")?] else {
-            return None;
-        };
-        for (index, &spec) in specs.iter().enumerate() {
-            let N::Text(written) = &project.nodes()[spec] else {
-                return None;
-            };
-            let key = yamaa_core::project_scope::key(section);
-            listed.push((format!("{key}.specs[{index}]"), written.as_str()));
+    for section in &declarations.sections {
+        let key = yamaa_core::project_scope::key(section.family);
+        for (index, spec) in section.specs.iter().enumerate() {
+            listed.push((format!("{key}.specs[{index}]"), spec.text.as_str()));
         }
     }
     listed
@@ -94,29 +91,24 @@ pub(crate) fn environment(
     if environment.root.source().identity == identity {
         return Some(failure.field_diagnostic("environment", environment.written));
     }
-    let text = |raw: &yamaa_core::schema::Document, node: usize| match &raw.nodes()[node] {
-        N::Text(written) => Some(written.to_owned()),
-        _ => None,
-    };
     // The project declares its environment link and codelists; the linked
     // environment file declares its lock and functions.
-    let project = &environment.root.normalized().document;
-    let linked = environment
+    let project = environment.project;
+    let host = project.environment(environment.host);
+    if environment
         .environment_file
-        .map(|file| (file, &file.normalized().document));
-    if linked.is_some_and(|(file, _)| file.source().identity == identity) {
+        .is_some_and(|file| file.source().identity == identity)
+    {
         let key = environment.host.key();
-        let environments = project.field(project.root(), "environments")?;
-        let written = text(project, project.field(environments, key)?)?;
-        return Some(failure.field_diagnostic(&format!("environments.{key}"), &written));
+        let written = &host?.file.as_ref()?.text;
+        return Some(failure.field_diagnostic(&format!("environments.{key}"), written));
     }
     if environment
         .lock
         .is_some_and(|lock| lock.source.identity == identity)
     {
-        let (_, raw) = linked?;
-        let written = text(raw, raw.field(raw.root(), "lock")?)?;
-        return Some(failure.field_diagnostic("lock", &written));
+        let written = &host?.lock.as_ref()?.text;
+        return Some(failure.field_diagnostic("lock", written));
     }
     let capture = environment
         .captures
@@ -124,18 +116,22 @@ pub(crate) fn environment(
         .find(|capture| capture.document.source().identity == identity)?;
     match &capture.origin {
         Origin::Function(name) => {
-            let (_, raw) = linked?;
-            let functions = raw.field(raw.root(), "functions")?;
-            let written = text(raw, raw.field(functions, name)?)?;
-            Some(failure.field_diagnostic(&format!("functions.{name}"), &written))
-        }
-        Origin::Codelist(index) => {
-            let codelists = project.field(project.root(), "codelists")?;
-            let N::Sequence(codelists) = &project.nodes()[codelists] else {
+            let declaration = project.functions.as_deref()?.iter().find(|declaration| {
+                declaration
+                    .key
+                    .as_ref()
+                    .is_some_and(|key| key.name == *name)
+            })?;
+            let FunctionSource::File(written) = &declaration.source else {
                 return None;
             };
-            let written = text(project, *codelists.get(*index)?)?;
-            Some(failure.field_diagnostic(&format!("codelists[{index}]"), &written))
+            Some(failure.field_diagnostic(&format!("functions.{name}"), &written.text))
+        }
+        Origin::Codelist(index) => {
+            let CodelistSource::File(written) = &project.codelists.get(*index)?.source else {
+                return None;
+            };
+            Some(failure.field_diagnostic(&format!("codelists[{index}]"), &written.text))
         }
         Origin::Lock | Origin::Environment(_) => None,
     }

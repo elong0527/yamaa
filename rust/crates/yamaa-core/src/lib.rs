@@ -45,7 +45,6 @@ pub mod source_ordinal;
 pub mod specification;
 pub mod specification_submission_document;
 pub mod submission_composition;
-pub mod submission_document;
 pub mod submission_inventory;
 pub mod submission_json;
 mod submission_origin;
@@ -71,10 +70,7 @@ pub mod text_pad;
 pub mod project_call_binding;
 pub mod project_call_document;
 pub mod project_calls;
-pub mod project_document;
 pub mod project_environment;
-
-pub mod project_environment_document;
 
 pub mod project_function;
 
@@ -83,8 +79,6 @@ pub mod project_function_document;
 pub mod project_function_result;
 
 pub mod project_terminology;
-
-pub mod project_terminology_document;
 
 pub mod project_environment_diagnostics;
 

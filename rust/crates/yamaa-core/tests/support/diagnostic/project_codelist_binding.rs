@@ -1,9 +1,10 @@
+use crate::support::roots::{Codelist, CodelistType, Item, Source};
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
     json::Value as JsonValue,
     project_codelist_binding::{bind, Binding},
-    project_terminology::{Catalogue, Codelist, DataType, Item, Source},
+    project_terminology::Catalogue,
     value::{ColumnType, Value},
 };
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -12,7 +13,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         codelists: vec![Codelist {
             id: "SEX".into(),
             name: "Sex".into(),
-            data_type: DataType::Text,
+            data_type: CodelistType::Text,
             extensible: false,
             alias: None,
             format_name: None,
@@ -25,7 +26,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }]),
             external: None,
         }],
-    }])
+    }
+    .root()])
     .unwrap();
     let allowed = ["columns.X.verifications[0].allowed_values"];
     let base = Binding {

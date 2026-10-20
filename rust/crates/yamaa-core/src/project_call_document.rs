@@ -42,7 +42,7 @@ impl Call {
         references: &BTreeMap<String, ValueType>,
     ) -> Vec<BindingFinding> {
         let mut findings = Vec::new();
-        if self.name != function.definition().name {
+        if self.name != function.name() {
             findings.push(BindingFinding::FunctionNameMismatch);
             return findings;
         }

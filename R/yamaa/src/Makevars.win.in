@@ -1,17 +1,22 @@
 # Rtools45 uses GCC/MinGW-w64 and UCRT for x86_64 R. Select the GNU Rust
 # target explicitly even when the caller's rustup host defaults to MSVC.
 # configure.win writes this file as src/Makevars.win with the Cargo and rustc
-# that tools/configure.R found, checked and reported.
+# that tools/configure.R found, checked and reported, and the target directory.
 #
 # As in Makevars.in, Cargo reads the locked crates from rust/vendor.tar.xz,
 # never the network (--offline), runs at most two jobs (-j 2, with MAKEFLAGS
 # cleared so that Cargo does not join make's jobserver), keeps its home below
 # rust/target, and builds with the caller's toolchain: the package carries no
 # rust-toolchain.toml, and rustup installs no toolchain (RUSTUP_AUTO_INSTALL=0).
+# The target directory is rust/target unless YAMAA_R_CARGO_TARGET_DIR names
+# another, as in Makevars.in. configure writes it twice: CARGO_TARGET_DIR is
+# absolute, and UNTAR_DIR, for untar(), is relative by default, so that no
+# path of the build tree enters the R expression.
 RUST_TARGET = x86_64-pc-windows-gnu
 CARGO = @CARGO@
 RUSTC = @RUSTC@
-CARGO_TARGET_DIR = $(CURDIR)/rust/target
+CARGO_TARGET_DIR = @CARGO_TARGET_DIR@
+UNTAR_DIR = @UNTAR_DIR@
 CARGO_HOME_DIR = $(CARGO_TARGET_DIR)/cargo-home
 RUST_LIB = $(CARGO_TARGET_DIR)/$(RUST_TARGET)/release/libyamaa_r.a
 PKG_LIBS = "$(RUST_LIB)" -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
@@ -26,7 +31,7 @@ $(RUST_LIB): FORCE
 	rm -rf "$(CARGO_HOME_DIR)" "$(CARGO_TARGET_DIR)/vendor"
 	mkdir -p "$(CARGO_HOME_DIR)" "$(CARGO_TARGET_DIR)/libgcc_mock"
 	touch "$(CARGO_TARGET_DIR)/libgcc_mock/libgcc_eh.a"
-	"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" --vanilla -e 'untar("rust/vendor.tar.xz", exdir = "rust/target", tar = "internal")'
+	"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" --vanilla -e 'untar("rust/vendor.tar.xz", exdir = "$(UNTAR_DIR)", tar = "internal")'
 	cp rust/vendor-config.toml "$(CARGO_HOME_DIR)/config.toml"
 	MAKEFLAGS= MFLAGS= CARGO_MAKEFLAGS= RUSTUP_AUTO_INSTALL=0 CARGO_HOME="$(CARGO_HOME_DIR)" LIBRARY_PATH="$(LIBRARY_PATH);$(CARGO_TARGET_DIR)/libgcc_mock" CC_x86_64_pc_windows_gnu="$(CC)" AR_x86_64_pc_windows_gnu="$(AR)" CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER="$(CC)" RUSTFLAGS="$(RUSTFLAGS) --print=native-static-libs" CARGO_TARGET_DIR="$(CARGO_TARGET_DIR)" RUSTC="$(RUSTC)" "$(CARGO)" build --locked --offline -j 2 --release --target $(RUST_TARGET) --manifest-path rust/Cargo.toml -p yamaa-r
 
