@@ -233,12 +233,23 @@ fn source(path: &Path) -> (Source, String) {
 
 /// A refusal, by its first registered cause where it names one.
 fn refusal(debug: &str) -> String {
-    match debug.find("code: ") {
-        Some(at) => debug[at..]
+    if let Some(at) = debug.find("code: ") {
+        return debug[at..]
             .split([',', ' ', '}'])
             .nth(1)
             .unwrap_or_default()
-            .to_string(),
+            .to_string();
+    }
+    // A parent chain the traversal refuses carries no condition code; its
+    // variant names the fault.
+    match debug.find("Traversal(") {
+        Some(at) => format!(
+            "{})",
+            debug[at..]
+                .split([' ', '{', ')'])
+                .next()
+                .unwrap_or_default()
+        ),
         None => debug.chars().take(80).collect(),
     }
 }
