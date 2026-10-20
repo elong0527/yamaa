@@ -35,25 +35,20 @@ pub fn resolve(
         specification,
         environment,
     };
-    let selected = match resolver {
-        Some(resolver) => crate::file_workflow::select_with_resolver(request, host, resolver),
-        None => crate::file_workflow::select_request(request, host),
-    }
-    .map_err(|error| crate::project_application::selection_failure(&error))?;
-    let artifact = match selected {
-        yamaa_core::build::Prepared::Plain(prepared) => prepared.resolved_specification(),
-        yamaa_core::build::Prepared::Ordinary(prepared) => prepared.resolved_specification(),
-    };
-    artifact.map_err(|error| match error {
-        Error::Resource(error) => crate::file_application::resource_failure(
-            yamaa_core::application_issue::Stage::Resolve,
-            &error,
-        ),
-        _ => crate::file_application::rejected(
-            yamaa_core::application_issue::Stage::Resolve,
-            yamaa_core::application_issue::Fault::ArtifactRepresentation,
-        ),
-    })
+    let selected = crate::file_application::select(host, request, resolver)
+        .map_err(|error| crate::project_application::selection_failure(&error))?;
+    selected
+        .resolved_specification()
+        .map_err(|error| match error {
+            Error::Resource(error) => crate::file_application::resource_failure(
+                yamaa_core::application_issue::Stage::Resolve,
+                &error,
+            ),
+            _ => crate::file_application::rejected(
+                yamaa_core::application_issue::Stage::Resolve,
+                yamaa_core::application_issue::Fault::ArtifactRepresentation,
+            ),
+        })
 }
 
 pub(crate) fn single(

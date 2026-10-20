@@ -203,11 +203,17 @@ pub struct Diagnostic {
     pub operand_route: Option<Vec<String>>,
 }
 
+/// The severity of one issue. Every issue carries error severity today:
+/// warning-severity findings surface as rows of the run report instead.
+pub(crate) fn severity(_: &yamaa_core::diagnostic::Diagnostic) -> Severity {
+    Severity::Error
+}
+
 impl Diagnostic {
     pub(crate) fn from_core(diagnostic: &yamaa_core::diagnostic::Diagnostic) -> Self {
         let definition = diagnostic.definition();
         Self {
-            severity: Severity::Error,
+            severity: severity(diagnostic),
             phase: definition.phase.to_owned(),
             code: definition.condition.to_owned(),
             requirement: definition.requirement.map(str::to_owned),

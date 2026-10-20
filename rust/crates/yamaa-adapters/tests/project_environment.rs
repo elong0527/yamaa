@@ -1314,10 +1314,9 @@ mod project {
         use crate::support::project_schemas as schemas;
         use std::{collections::BTreeMap, convert::Infallible, path::PathBuf, sync::Arc};
         use yamaa_adapters::{
-            project_report,
-            project_run::PreparedRun,
             project_source::{self, OwnedEnvironment, ProjectCapturePort, Reply, Request},
             specification_report::Identity,
+            specification_run::PreparedRun,
             specification_source::Source,
         };
         use yamaa_core::application_observer::Scope;
@@ -1472,15 +1471,20 @@ mod project {
                         &std::fs::read(case.join("spec.yaml")).unwrap(),
                     ))
                     .unwrap();
-                let run = PreparedRun::prepare(document, environment("")).unwrap();
+                let run = PreparedRun::prepare_with_environment(document, environment("")).unwrap();
                 let mut study = Study {
                     root: case.clone(),
                     cached: BTreeMap::new(),
                 };
                 let attempt =
                     run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
-                let result =
-                    project_report::build_result(&run, &attempt, id(example), &[]).unwrap();
+                let result = yamaa_adapters::specification_report::build_result(
+                    &run,
+                    &attempt,
+                    id(example),
+                    &[],
+                )
+                .unwrap();
                 let reads = study.capture_reads();
                 let mut observed = result.observations();
                 assert_eq!(
@@ -1524,7 +1528,7 @@ mod project {
             let document = schemas::domain_schema()
                 .prepare_standalone(source("spec.yaml", raw.as_bytes()))
                 .unwrap();
-            let run=PreparedRun::prepare(document,environment("codelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n")).unwrap();
+            let run=PreparedRun::prepare_with_environment(document,environment("codelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n")).unwrap();
             let mut study = Study {
                 root: PathBuf::new(),
                 cached: BTreeMap::from([(
@@ -1535,7 +1539,13 @@ mod project {
                 )]),
             };
             let attempt = run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
-            let result = project_report::build_result(&run, &attempt, id("codelist"), &[]).unwrap();
+            let result = yamaa_adapters::specification_report::build_result(
+                &run,
+                &attempt,
+                id("codelist"),
+                &[],
+            )
+            .unwrap();
             assert_eq!(result.output(), None);
             assert_eq!(result.issues().len(), 1);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
@@ -1550,9 +1560,14 @@ mod project {
                 context
             );
             assert_eq!(
-                project_report::build_result(&run, &attempt, id("codelist"), &[])
-                    .unwrap()
-                    .observations(),
+                yamaa_adapters::specification_report::build_result(
+                    &run,
+                    &attempt,
+                    id("codelist"),
+                    &[]
+                )
+                .unwrap()
+                .observations(),
                 observed
             );
             let mut publisher = Publisher::default();
@@ -1618,7 +1633,7 @@ mod project {
             let document = schemas::domain_schema()
                 .prepare_standalone(source("spec.yaml", raw.as_bytes()))
                 .unwrap();
-            let run = PreparedRun::prepare(document, environment("")).unwrap();
+            let run = PreparedRun::prepare_with_environment(document, environment("")).unwrap();
             for inspect in [false, true] {
                 for classified in [false, true] {
                     let mut resources = Resources {
@@ -1630,8 +1645,12 @@ mod project {
                     };
                     let attempt =
                         run.execute_with_ports(&mut NoActivation, &mut resources, Scope::default());
-                    let candidate =
-                        project_report::build_result(&run, &attempt, id("failed-resource"), &[]);
+                    let candidate = yamaa_adapters::specification_report::build_result(
+                        &run,
+                        &attempt,
+                        id("failed-resource"),
+                        &[],
+                    );
                     if classified {
                         let result = candidate.unwrap();
                         assert_eq!(result.issues().len(), 1);
@@ -1656,14 +1675,13 @@ mod project {
                         ));
                         assert!(publisher.0.is_empty());
                     } else {
-                        let project_report::Error::Source(held) = candidate.unwrap_err() else {
-                            panic!("original source boundary")
-                        };
-                        assert!(std::ptr::eq(
-                            held,
-                            attempt.dataset.result.as_ref().unwrap_err()
+                        // An unclassified failure refuses the result without
+                        // a finding; the attempt keeps the original payload.
+                        assert!(matches!(
+                            candidate.unwrap_err(),
+                            yamaa_adapters::specification_report::Refusal::Report(_)
                         ));
-                        let payload = match held {
+                        let payload = match attempt.dataset.result.as_ref().unwrap_err() {
                             yamaa_core::specification_run::PortError::Capture(error) => error,
                             yamaa_core::specification_run::PortError::Inspect(failures) => {
                                 &failures[0].error
@@ -1684,7 +1702,7 @@ mod project {
             let document = schemas::domain_schema()
                 .prepare_standalone(source("spec.yaml", raw.as_bytes()))
                 .unwrap();
-            let run=PreparedRun::prepare(document,environment("codelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n")).unwrap();
+            let run=PreparedRun::prepare_with_environment(document,environment("codelists:\n  - codelists: [{id: SEX, name: Sex, data_type: text, items: [{value: F}, {value: M}]}]\n")).unwrap();
             let mut study = Study {
                 root: PathBuf::new(),
                 cached: BTreeMap::from([(
@@ -1695,8 +1713,13 @@ mod project {
                 )]),
             };
             let attempt = run.execute_with_ports(&mut NoActivation, &mut study, Scope::default());
-            let result =
-                project_report::build_result(&run, &attempt, id("codelist-prefix"), &[]).unwrap();
+            let result = yamaa_adapters::specification_report::build_result(
+                &run,
+                &attempt,
+                id("codelist-prefix"),
+                &[],
+            )
+            .unwrap();
             let observed = result.observations();
             assert_eq!(observed["outcome"], "failure");
             assert_eq!(observed["verifications"].as_array().unwrap().len(), 1);
@@ -1726,8 +1749,8 @@ mod project {
         use crate::support::project_schemas as schemas;
         use std::{cell::RefCell, rc::Rc, sync::Arc};
         use yamaa_adapters::{
-            project_run::{BoundaryFailure, PreparedRun},
             project_source::{self, Kind, OwnedEnvironment, ProjectCapturePort, Reply, Request},
+            specification_run::{BoundaryFailure, PreparedRun},
             specification_source::{PreparedDocument, Source},
         };
         use yamaa_core::application_observer::Scope;
@@ -2030,7 +2053,7 @@ functions:
                     .definition()
                     .tests
                     .as_ptr();
-                let prepared = PreparedRun::prepare(document, environment);
+                let prepared = PreparedRun::prepare_with_environment(document, environment);
                 let (document, captured, environment) = match &prepared {
                     Ok(run) => {
                         assert!(run.check_diagnostics().is_empty());
@@ -2060,7 +2083,8 @@ functions:
 
         #[test]
         fn every_build_reactivates_only_called_definitions_on_exact_cached_study_bytes() {
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             assert_eq!(run.compiled().called_functions(), [1]);
             assert!(activation.trace.borrow().is_empty());
@@ -2147,7 +2171,7 @@ functions:
                     let document = schemas::domain_schema()
                         .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                         .unwrap();
-                    let run = PreparedRun::prepare(document, environment())
+                    let run = PreparedRun::prepare_with_environment(document, environment())
                         .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                     assert_eq!(run.compiled().called_functions(), [1]);
                     let (mut activation, mut study) = ports();
@@ -2183,7 +2207,7 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
-            let run = PreparedRun::prepare(document, environment())
+            let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
@@ -2210,10 +2234,11 @@ functions:
                         .as_bytes(),
                 ))
                 .unwrap();
-            let Err(rejected) = PreparedRun::prepare(document, environment()) else {
+            let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
+            else {
                 panic!("kept scalar read required");
             };
-            let issues = yamaa_adapters::project_check::rejected(&rejected).unwrap();
+            let issues = yamaa_adapters::specification_check::rejected(&rejected).unwrap();
             assert!(
                 issues
                     .iter()
@@ -2229,7 +2254,7 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
-            let run = PreparedRun::prepare(document, environment())
+            let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
@@ -2278,7 +2303,8 @@ functions:
 
         #[test]
         fn rejected_activation_preserves_original_payloads_and_has_zero_study_authority() {
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             for mode in [
                 Mode::LockFailure,
                 Mode::BindFailure,
@@ -2336,7 +2362,8 @@ functions:
 
         #[test]
         fn unwound_activation_keeps_original_boundary_payload_and_completed_case_evidence() {
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::CaseUnwind;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
@@ -2377,7 +2404,8 @@ functions:
 
         #[test]
         fn live_host_failure_retains_exact_study_snapshot_and_typed_activation_success() {
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::LiveFailure;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
@@ -2451,7 +2479,7 @@ functions:
                 .into_owned()
             };
             // A specification that calls no project function still runs.
-            let run = PreparedRun::prepare(document(None), environment()).unwrap();
+            let run = PreparedRun::prepare_with_environment(document(None), environment()).unwrap();
             let (mut activation, mut study) = ports();
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             assert!(attempt.boundary.is_ok());
@@ -2463,12 +2491,15 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
-            let Err(rejected) = PreparedRun::prepare(document, environment()) else {
+            let Err(rejected) = PreparedRun::prepare_with_environment(document, environment())
+            else {
                 panic!("project calls without a host environment cannot execute")
             };
             let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "requirement": "REQ-0694", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
             assert_eq!(
-                crate::support::rows(&yamaa_adapters::project_check::rejected(&rejected).unwrap()),
+                crate::support::rows(
+                    &yamaa_adapters::specification_check::rejected(&rejected).unwrap()
+                ),
                 [missing("VALUE", "id"), missing("OTHER", "absent")]
             );
             assert!(rejected.captured.environment_file().is_none());
@@ -2476,7 +2507,7 @@ functions:
 
         #[test]
         fn unused_environment_does_not_request_any_host_activation() {
-            let run = PreparedRun::prepare(document(None), environment()).unwrap();
+            let run = PreparedRun::prepare_with_environment(document(None), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::LockFailure;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
@@ -2491,7 +2522,8 @@ functions:
         #[test]
         fn activation_projection_validates_forged_case_order_without_effects() {
             use yamaa_adapters::project_activation_observations::{activation, Error};
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut host, mut study) = ports();
             let mut attempt = run.execute_with_ports(&mut host, &mut study, Scope::default());
             let trace = host.trace.borrow().clone();
@@ -2508,8 +2540,9 @@ functions:
 
         #[test]
         fn repeated_forged_activation_facts_cannot_gain_report_authority() {
-            use yamaa_adapters::{project_activation_observations as activation, project_report};
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            use yamaa_adapters::project_activation_observations as activation;
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut host, mut study) = ports();
             let mut attempt = run.execute_with_ports(&mut host, &mut study, Scope::default());
             let trace = host.trace.borrow().clone();
@@ -2535,8 +2568,13 @@ functions:
                     Err(activation::Error::InvalidObservation)
                 );
                 assert!(matches!(
-                    project_report::build_result(&run, &attempt, report_identity(), &[]),
-                    Err(project_report::Error::Report(
+                    yamaa_adapters::specification_report::build_result(
+                        &run,
+                        &attempt,
+                        report_identity(),
+                        &[]
+                    ),
+                    Err(yamaa_adapters::specification_report::Refusal::Report(
                         yamaa_adapters::specification_report::Error::InvalidObservation
                     ))
                 ));
@@ -2574,7 +2612,8 @@ functions:
 
         #[test]
         fn complete_project_output_and_save_borrow_the_exact_attempt_without_reactivation() {
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
             let trace = activation.trace.borrow().clone();
@@ -2583,7 +2622,7 @@ functions:
                 .as_ref()
                 .unwrap()
                 .as_ptr();
-            let result = yamaa_adapters::project_report::build_result(
+            let result = yamaa_adapters::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
@@ -2648,10 +2687,11 @@ functions:
         #[test]
         fn project_reports_keep_opaque_failures_and_interrupts_original_and_failed_saves_inert() {
             use yamaa_adapters::{
-                project_function_diagnostics::HostDetails,
-                project_report::{Classified, Error},
+                project_function_diagnostics::HostDetails, project_report::Classified,
+                specification_report::Refusal as Error,
             };
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             for mode in [
                 Mode::BindFailure,
                 Mode::CaseFailure,
@@ -2663,7 +2703,7 @@ functions:
                 activation.mode = mode;
                 let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
                 let trace = activation.trace.borrow().clone();
-                let unclassified = yamaa_adapters::project_report::build_result(
+                let unclassified = yamaa_adapters::specification_report::build_result(
                     &run,
                     &attempt,
                     report_identity(),
@@ -2686,7 +2726,7 @@ functions:
                             message: "é failure",
                         },
                     }];
-                    let result = yamaa_adapters::project_report::build_result(
+                    let result = yamaa_adapters::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
@@ -2731,10 +2771,11 @@ functions:
         #[test]
         fn report_classifications_cannot_target_a_different_failure_or_supply_duplicates() {
             use yamaa_adapters::{
-                project_function_diagnostics::HostDetails,
-                project_report::{Classified, Error},
+                project_function_diagnostics::HostDetails, project_report::Classified,
+                specification_report::Refusal as Error,
             };
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::BindFailure;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
@@ -2768,7 +2809,7 @@ functions:
                 ],
             ] {
                 assert!(matches!(
-                    yamaa_adapters::project_report::build_result(
+                    yamaa_adapters::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
@@ -2785,9 +2826,10 @@ functions:
 
         #[test]
         fn complete_reports_refuse_missing_or_contradictory_activation_success() {
-            use yamaa_adapters::{project_report::Error, specification_report};
+            use yamaa_adapters::specification_report::{self, Refusal as Error};
             use yamaa_core::project_activation::BindingOutcome;
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             for change in 0..5 {
                 let (mut activation, mut study) = ports();
                 let mut attempt =
@@ -2803,7 +2845,7 @@ functions:
                     _ => attempt.activation.bindings[0].outcome = BindingOutcome::Rejected,
                 }
                 assert!(matches!(
-                    yamaa_adapters::project_report::build_result(
+                    yamaa_adapters::specification_report::build_result(
                         &run,
                         &attempt,
                         report_identity(),
@@ -2823,9 +2865,11 @@ functions:
         fn lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports() {
             use yamaa_adapters::{
                 project_lock::{Finding, Reason},
-                project_report::{Classified, Error},
+                project_report::Classified,
+                specification_report::Refusal as Error,
             };
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (mut activation, mut study) = ports();
             activation.mode = Mode::LockFailure;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
@@ -2839,7 +2883,7 @@ functions:
                 expected: vec![],
                 actual: None,
             }];
-            let result = yamaa_adapters::project_report::build_result(
+            let result = yamaa_adapters::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
@@ -2863,7 +2907,7 @@ functions:
             assert_eq!(study.capture_reads(), 0);
             assert!(Rc::ptr_eq(&original.original, &activation.original));
             assert!(matches!(
-                yamaa_adapters::project_report::build_result(
+                yamaa_adapters::specification_report::build_result(
                     &run,
                     &attempt,
                     report_identity(),
@@ -2877,7 +2921,7 @@ functions:
             let (mut activation, mut study) = ports();
             activation.mode = Mode::CaseMismatch;
             let attempt = run.execute_with_ports(&mut activation, &mut study, Scope::default());
-            let result = yamaa_adapters::project_report::build_result(
+            let result = yamaa_adapters::specification_report::build_result(
                 &run,
                 &attempt,
                 report_identity(),
@@ -2921,9 +2965,8 @@ functions:
         #[test]
         fn zero_sized_host_failures_remain_opaque_and_never_accept_address_classification() {
             use yamaa_adapters::{
-                project_function_diagnostics::HostDetails,
-                project_report::{self, Classified, Error},
-                specification_report,
+                project_function_diagnostics::HostDetails, project_report::Classified,
+                specification_report, specification_report::Refusal as Error,
             };
             struct EmptyFailure;
             struct RejectLock;
@@ -2956,7 +2999,8 @@ functions:
                     panic!("rejected lock grants no invocation authority")
                 }
             }
-            let run = PreparedRun::prepare(document(Some("id")), environment()).unwrap();
+            let run =
+                PreparedRun::prepare_with_environment(document(Some("id")), environment()).unwrap();
             let (_, mut study) = ports();
             let attempt = run.execute_with_ports(&mut RejectLock, &mut study, Scope::default());
             let Err(BoundaryFailure::Activation(Failure::Lock(original))) = &attempt.boundary
@@ -2964,7 +3008,12 @@ functions:
                 panic!("held original zero-sized lock failure")
             };
             assert!(matches!(
-                project_report::build_result(&run, &attempt, report_identity(), &[]),
+                yamaa_adapters::specification_report::build_result(
+                    &run,
+                    &attempt,
+                    report_identity(),
+                    &[]
+                ),
                 Err(Error::Opaque(_))
             ));
             let foreign = EmptyFailure;
@@ -2986,7 +3035,12 @@ functions:
                 }],
             ] {
                 assert!(matches!(
-                    project_report::build_result(&run, &attempt, report_identity(), &facts),
+                    yamaa_adapters::specification_report::build_result(
+                        &run,
+                        &attempt,
+                        report_identity(),
+                        &facts
+                    ),
                     Err(Error::Report(
                         specification_report::Error::InvalidObservation
                     ))
@@ -3060,7 +3114,7 @@ functions:
                 let document = schemas::domain_schema()
                     .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                     .unwrap();
-                let run = PreparedRun::prepare(document, environment())
+                let run = PreparedRun::prepare_with_environment(document, environment())
                     .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                 let (mut activation, _) = ports();
                 let mut study = TwoSources {
@@ -3181,7 +3235,7 @@ functions:
                 let document = schemas::domain_schema()
                     .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                     .unwrap();
-                let run = PreparedRun::prepare(document, environment())
+                let run = PreparedRun::prepare_with_environment(document, environment())
                     .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                 let (mut activation, _) = ports();
                 let mut study = Unordered {
@@ -3215,7 +3269,7 @@ functions:
                     let document = schemas::domain_schema()
                         .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                         .unwrap();
-                    let run = PreparedRun::prepare(document, environment())
+                    let run = PreparedRun::prepare_with_environment(document, environment())
                         .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
                     assert_eq!(run.compiled().called_functions(), [1]);
                     let (mut activation, mut study) = ports();
@@ -3249,7 +3303,7 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
-            let run = PreparedRun::prepare(document, environment())
+            let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID,N\n1,10\n1,30\n2,40\n".as_slice());
@@ -3281,7 +3335,7 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
-            let run = PreparedRun::prepare(document, environment())
+            let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             activation.function = "pair";
@@ -3313,7 +3367,7 @@ functions:
             let document = schemas::domain_schema()
                 .prepare_standalone(source("study/domain.yaml", raw.as_bytes()))
                 .unwrap();
-            let run = PreparedRun::prepare(document, environment())
+            let run = PreparedRun::prepare_with_environment(document, environment())
                 .unwrap_or_else(|run| panic!("{:?}", run.rejection.error));
             let (mut activation, mut study) = ports();
             study.bytes = Arc::from(b"ID\n1\n".as_slice());

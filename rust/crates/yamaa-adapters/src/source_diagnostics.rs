@@ -153,26 +153,48 @@ pub fn findings(
     error: &Error,
     source: Option<&SourceDeclaration>,
 ) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
+    findings_in(&[(error, source)])
+}
+
+/// [`findings`] of several sources' failures read as one failure that lists
+/// them, each with its own declaration.
+pub fn findings_of(
+    failures: &[(&SourceDeclaration, &Error)],
+) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
+    let roots = failures
+        .iter()
+        .map(|&(source, error)| (error, Some(source)))
+        .collect::<Vec<_>>();
+    findings_in(&roots)
+}
+
+fn findings_in(
+    roots: &[(&Error, Option<&SourceDeclaration>)],
+) -> Result<Option<Vec<Diagnostic>>, SourceProjectionError> {
     let mut semantic_only = true;
     let mut missing_source = false;
-    walk(error, source, |error, source| {
-        if !semantic(error) {
-            semantic_only = false;
-            return Ok(std::ops::ControlFlow::Break(()));
+    for &(error, source) in roots {
+        walk(error, source, |error, source| {
+            if !semantic(error) {
+                semantic_only = false;
+                return Ok(std::ops::ControlFlow::Break(()));
+            }
+            missing_source |= source.is_none() && !matches!(error, Error::ProducerMetadata(_));
+            Ok(std::ops::ControlFlow::Continue(()))
+        })?;
+        if !semantic_only {
+            return Ok(None);
         }
-        missing_source |= source.is_none() && !matches!(error, Error::ProducerMetadata(_));
-        Ok(std::ops::ControlFlow::Continue(()))
-    })?;
-    if !semantic_only {
-        return Ok(None);
     }
     if missing_source {
         return Err(SourceProjectionError::InvalidContext);
     }
     let mut diagnostics = Vec::new();
-    walk(error, source, |error, source| {
-        append(error, source, &mut diagnostics)?;
-        Ok(std::ops::ControlFlow::Continue(()))
-    })?;
+    for &(error, source) in roots {
+        walk(error, source, |error, source| {
+            append(error, source, &mut diagnostics)?;
+            Ok(std::ops::ControlFlow::Continue(()))
+        })?;
+    }
     Ok(Some(diagnostics))
 }

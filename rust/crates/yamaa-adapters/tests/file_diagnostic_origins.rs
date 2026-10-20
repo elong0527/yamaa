@@ -11,7 +11,6 @@ mod file {
             sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{file_resources::Resources, file_workflow, shipped_schema};
-        use yamaa_core::build::Prepared;
         use yamaa_core::project_function::Language;
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -70,9 +69,7 @@ mod file {
                     shipped_schema::capture_project().unwrap(),
                 )
                 .unwrap();
-                let Prepared::Plain(prepared) = &owner else {
-                    panic!("plain owner");
-                };
+                let prepared = &owner;
                 let document = prepared.run().document();
                 let parent = study.identity("parent/base.yaml");
                 assert_eq!(
@@ -143,9 +140,7 @@ mod file {
                 shipped_schema::capture_project().unwrap(),
             )
             .unwrap();
-            let Prepared::Plain(prepared) = &owner else {
-                panic!("plain owner");
-            };
+            let prepared = &owner;
             let before = prepared.capture_reads();
             let parent = study.identity("parent/base.yaml");
             let findings = prepared.run().check_diagnostics();
@@ -275,18 +270,22 @@ mod file {
             let reads = prepared.capture_reads();
             fs::write(study.0.join("input.csv"), b"ID\n2\n").unwrap();
             let mut run_scope = prepared.run_scope(None);
-            let attempt = prepared.build(&mut run_scope, Scope::default());
+            let attempt = prepared.build(
+                &mut run_scope,
+                &mut yamaa_adapters::specification_run::NoActivation,
+                Scope::default(),
+            );
             assert!(matches!(
-                &attempt.result,
+                &attempt.dataset.result,
                 Err(PortError::Capture(
                     yamaa_adapters::file_resources::Error::Changed
                 ))
             ));
-            assert!(file_preparation::opaque_resource_failure(&attempt).is_none());
+            assert!(file_preparation::opaque_resource_failure(&attempt.dataset).is_none());
             assert_eq!(run_scope.capture_reads(), reads);
             assert_eq!(original.as_ref(), b"ID\n1\n");
             let result =
-                specification_report::build_result(prepared.run(), &attempt, identity(&path))
+                specification_report::build_result(prepared.run(), &attempt, identity(&path), &[])
                     .unwrap();
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
@@ -497,19 +496,34 @@ mod file {
             assert_eq!(prepared.capture_reads(), 1);
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_err());
             assert_eq!(run_scope.capture_reads(), 1);
             fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
             fs::write(study.0.join("yamaa-project.yaml"), b"[changed").unwrap();
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
@@ -1020,7 +1034,7 @@ mod file {
                 Scope::default(),
             );
             assert!(attempt.boundary.is_ok());
-            let result = yamaa_adapters::project_report::build_result(
+            let result = yamaa_adapters::specification_report::build_result(
                 project.run(),
                 &attempt,
                 identity(&spec),
@@ -1213,15 +1227,14 @@ mod file {
         };
         use yamaa_adapters::{
             file_entry::{Error, RejectedEntry},
-            file_preparation::{Error as DocumentError, FileSpecification, RejectedPlain},
+            file_preparation::{Error as DocumentError, FileSpecification, Rejected},
             file_resources::{Error as ResourceError, Resources},
             file_workflow::{self, SelectionError},
             resolved_artifact::model::{Location, ResourceRole},
             shipped_schema,
         };
         use yamaa_core::{
-            build::Prepared, project_function::Language, specification::PrepareError,
-            value::ColumnType,
+            project_function::Language, specification::PrepareError, value::ColumnType,
         };
 
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -1275,8 +1288,7 @@ mod file {
             result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
         ) -> FileSpecification {
             match result {
-                Ok(Prepared::Plain(prepared)) => prepared,
-                Ok(Prepared::Ordinary(_)) => panic!("plain owner"),
+                Ok(prepared) => prepared,
                 Err(error) => panic!("plain preparation: {error:?}"),
             }
         }
@@ -1291,9 +1303,9 @@ mod file {
         }
         fn rejected_plain(
             result: Result<yamaa_adapters::file_workflow::Selected, SelectionError>,
-        ) -> Box<RejectedPlain> {
+        ) -> Box<Rejected> {
             match result {
-                Err(SelectionError::Plain(error)) => error,
+                Err(SelectionError::Compile(error)) => error,
                 Ok(_) => panic!("expected a compilation rejection"),
                 Err(error) => panic!("expected a compilation rejection: {error:?}"),
             }
@@ -1589,11 +1601,8 @@ mod file {
                     assert_eq!(prepared.capture_reads(), 2);
                 } else {
                     let failure = rejected_plain(result);
-                    let DocumentError::Compile(yamaa_adapters::specification_run::Error::Prepare(
-                        PrepareError::Invalid(findings),
-                    )) = failure.error()
-                    else {
-                        panic!("consumer compilation: {:?}", failure.error());
+                    let PrepareError::Invalid(findings) = &failure.run().rejection.error else {
+                        panic!("consumer compilation: {:?}", failure.run().rejection.error);
                     };
                     assert!(findings.iter().any(|finding| finding
                         .diagnostic()
@@ -1621,10 +1630,7 @@ mod file {
                 ),
             );
             let failure = rejected_plain(study.select());
-            let DocumentError::Compile(yamaa_adapters::specification_run::Error::Prepare(
-                PrepareError::Invalid(findings),
-            )) = failure.error()
-            else {
+            let PrepareError::Invalid(findings) = &failure.run().rejection.error else {
                 panic!("original redundant authority");
             };
             let finding = findings[0].diagnostic();
@@ -1645,11 +1651,8 @@ mod file {
                 ),
             );
             let failure = rejected_plain(study.select());
-            let DocumentError::Compile(yamaa_adapters::specification_run::Error::Prepare(
-                PrepareError::Invalid(findings),
-            )) = failure.error()
-            else {
-                panic!("self link: {:?}", failure.error());
+            let PrepareError::Invalid(findings) = &failure.run().rejection.error else {
+                panic!("self link: {:?}", failure.run().rejection.error);
             };
             let finding = findings[0].diagnostic();
             assert_eq!(finding.definition().condition, "invalid_producer_contract");
@@ -1809,12 +1812,22 @@ mod file {
             fs::write(study.0.join("entry/input.csv"), b"ID\n1\n").unwrap();
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
@@ -1841,7 +1854,12 @@ mod file {
             assert_eq!(prepared.capture_reads(), 1);
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 2);
@@ -1903,12 +1921,22 @@ mod file {
             fs::write(study.0.join("parent/input.csv"), b"ID\n1\n").unwrap();
             let mut run_scope = prepared.run_scope(None);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 3);
             assert!(prepared
-                .build(&mut run_scope, Scope::default())
+                .build(
+                    &mut run_scope,
+                    &mut yamaa_adapters::specification_run::NoActivation,
+                    Scope::default()
+                )
+                .dataset
                 .result
                 .is_ok());
             assert_eq!(run_scope.capture_reads(), 3);
@@ -2035,7 +2063,11 @@ mod file {
                             }
                         }
                     }
-                    let attempt = prepared.build(&mut run_scope, Scope::default());
+                    let attempt = prepared.build(
+                        &mut run_scope,
+                        &mut yamaa_adapters::specification_run::NoActivation,
+                        Scope::default(),
+                    );
                     let result = specification_report::build_result(
                         prepared.run(),
                         &attempt,
@@ -2047,6 +2079,7 @@ mod file {
                             specification: entry,
                             base_directory: ".",
                         },
+                        &[],
                     )
                     .unwrap();
                     assert_eq!(

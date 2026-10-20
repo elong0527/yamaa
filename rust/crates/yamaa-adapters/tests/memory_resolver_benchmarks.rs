@@ -33,19 +33,17 @@ use std::{
 use arrow_array::{Float64Array, Int64Array, RecordBatch, StringArray};
 use yamaa_adapters::{
     arrow_table::{self, ArrowTable},
-    file_application::{self, Domain, RuntimePort},
-    file_preparation::FileSpecification,
+    file_application::{self, Domain},
     host_resources::{MemoryResolver, ResourceKind},
     specification_report::Identity,
+    specification_run::NoActivation,
     yaml_decode::decode_yaml,
 };
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
     application_observer::Scope,
     domain_entry,
-    function_invocation::HostError,
     json::Value as Json,
-    project_activation::ActivationPort,
     project_function::Language,
     schema::{Document, DocumentNode},
     table::{Column, TableSchema},
@@ -889,45 +887,7 @@ impl TypedTable {
     }
 }
 
-/// Project functions execute in a host language runtime; the adapters
-/// test embeds none, so an invocation is refused if it is ever reached.
-/// A project run that calls no project function never enters the port.
-struct NoActivation;
-
-impl ActivationPort for NoActivation {
-    type Handle = ();
-    type Error = String;
-
-    fn verify_lock(
-        &mut self,
-        _: Language,
-        _: &yamaa_core::project_environment::LockReference,
-        _: &[yamaa_core::function_signature::ProjectFunctionIdentity],
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn bind(
-        &mut self,
-        _: &yamaa_core::function_signature::ProjectFunctionIdentity,
-        _: &yamaa_core::function_signature::LogicalSignature,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn invoke(
-        &mut self,
-        _: &(),
-        _: &[yamaa_core::function_invocation::Argument<'_>],
-    ) -> Result<yamaa_core::value::Value, HostError<String>> {
-        Err(HostError::Raised(
-            "no project language runtime in the adapters benchmark route".to_string(),
-        ))
-    }
-}
-
-/// A built entry, whichever route the application selected. Plain and
-/// project builds share the public domain result.
+/// A built entry: its public domain result.
 struct Built(Domain);
 
 impl Built {
@@ -954,77 +914,17 @@ impl Built {
     }
 }
 
-/// The runtime port for this route: plain builds run in process, and so
-/// does a project build whose run calls no project
-/// function, because the engine then never enters the activation port.
-/// A project build that calls one refuses, exactly like the adapters'
-/// native port, because project functions need a host language runtime.
-struct MemoryRuntime<'a> {
-    identity: Identity<'a>,
-    resolver: Arc<MemoryResolver>,
-}
-
-impl MemoryRuntime<'_> {
-    fn identity(&self) -> Identity<'_> {
-        Identity {
-            runtime: self.identity.runtime,
-            runtime_version: self.identity.runtime_version,
-            engine_version: self.identity.engine_version,
-            example: self.identity.example,
-            specification: self.identity.specification,
-            base_directory: self.identity.base_directory,
-        }
-    }
-}
-
-impl RuntimePort for MemoryRuntime<'_> {
-    type Result = Built;
-    type Error = file_application::Failure;
-
-    fn resolver(&self) -> Option<Arc<dyn yamaa_adapters::host_resources::Resolver>> {
-        Some(self.resolver.clone())
-    }
-
-    fn plain(
-        &mut self,
-        prepared: &FileSpecification,
-        scope: Scope<'_>,
-    ) -> Result<Built, file_application::Failure> {
-        let mut run_scope = prepared.run_scope(None);
-        file_application::plain(prepared, &mut run_scope, self.identity(), scope).map(Built)
-    }
-
-    fn project(
-        &mut self,
-        project: &yamaa_adapters::file_project::FileProject,
-        scope: Scope<'_>,
-    ) -> Result<Built, file_application::Failure> {
-        if !project.run().compiled().called_functions().is_empty() {
-            return Err(file_application::unsupported(
-                "environment",
-                Some("environment"),
-            ));
-        }
-        let mut run_scope = project.run_scope(None);
-        let attempt = project.build(&mut run_scope, &mut NoActivation, scope);
-        let result = yamaa_adapters::project_report::build_result(
-            project.run(),
-            &attempt,
-            self.identity(),
-            &[],
-        )
-        .map_err(|error| error.refusal().issues())?;
-        Domain::from_project(result, project, &run_scope).map(Built)
-    }
-}
-
 enum Outcome {
     Built(Box<Built>),
     Failed(Vec<Diagnostic>),
 }
 
 /// Run one planned entry through the shared application with every
-/// resource served by the memory resolver.
+/// resource served by the memory resolver. Project functions execute in a
+/// host language runtime and the adapters test embeds none, so an entry that
+/// calls one is refused, as an engine without functions refuses it; any
+/// other entry, with or without a project, runs in process and never enters
+/// the empty functions port.
 fn run_entry(case: &Path, call: &EntryCall, backend: &Arc<MemoryResolver>) -> Outcome {
     let _ = case;
     let identity = Identity {
@@ -1035,23 +935,37 @@ fn run_entry(case: &Path, call: &EntryCall, backend: &Arc<MemoryResolver>) -> Ou
         specification: &call.specification,
         base_directory: ".",
     };
-    let mut application = file_application::Application {
-        host: Language::Python,
-        runtime: MemoryRuntime {
-            identity,
-            resolver: Arc::clone(backend),
-        },
-    };
     let request = domain_entry::Request {
         specification: &call.specification,
         environment: call.environment.as_deref(),
     };
-    match domain_entry::domain(request, &mut application, Scope::default()) {
-        Ok(built) => Outcome::Built(Box::new(built)),
-        Err(file_application::ApplicationError::Preparation(error)) => Outcome::Failed(
-            yamaa_adapters::project_application::selection_failure(&error),
-        ),
-        Err(file_application::ApplicationError::Runtime(issues)) => Outcome::Failed(issues),
+    let prepared = match file_application::select(Language::Python, request, Some(backend.clone()))
+    {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            return Outcome::Failed(yamaa_adapters::project_application::selection_failure(
+                &error,
+            ))
+        }
+    };
+    if !prepared.run().compiled().called_functions().is_empty() {
+        return Outcome::Failed(file_application::unsupported(
+            "environment",
+            Some("environment"),
+        ));
+    }
+    let mut run_scope = prepared.run_scope(None);
+    let (_, result) = file_application::run(
+        &prepared,
+        &mut run_scope,
+        &mut NoActivation,
+        |_| file_application::Classification::Opaque,
+        identity,
+        Scope::default(),
+    );
+    match result {
+        Ok(domain) => Outcome::Built(Box::new(Built(domain))),
+        Err(issues) => Outcome::Failed(issues),
     }
 }
 
