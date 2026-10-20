@@ -60,7 +60,7 @@ SPEC-6 makes a column-level derivation row-local "unless it uses a lookup, an
 aggregate or a window". LOOKUP-25 makes every implicit join, named
 intermediate and qualified aggregate a lookup, so read literally every
 `ADSL.AGE` read is column-phase, which SPEC-6's own detail contradicts. The
-code (`default_reads` in `rust/crates/yamaa-core/src/specification/rows.rs`)
+code (`not_row_local` in `rust/crates/yamaa-core/src/specification/phases.rs`)
 treats a default as not row-local only for an aggregate, a window operation
 (also inside `case`), a read of a `SELF` intermediate, or a read of a column
 that is not row-local. The style guide's `repeated_row_derivation` uses a
