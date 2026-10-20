@@ -478,11 +478,15 @@ impl Lower<'_> {
                 ScalarOp::Diff {
                     kind: temporal()?,
                     unit: unit("unit")?,
-                    closed: match text("bounds") {
-                        None | Some("exclusive") => Closed::Right,
-                        Some("inclusive") => Closed::Both,
-                        Some("between") => Closed::Neither,
-                        Some(_) => return None,
+                    // 0.5 spells endpoint inclusion `bounds`, 1.0 `closed`
+                    // (P-ORD-2); both default to the end only.
+                    closed: match (self.v1(), text(if self.v1() { "closed" } else { "bounds" })) {
+                        (_, None) | (false, Some("exclusive")) | (true, Some("right")) => {
+                            Closed::Right
+                        }
+                        (false, Some("inclusive")) | (true, Some("both")) => Closed::Both,
+                        (false, Some("between")) | (true, Some("neither")) => Closed::Neither,
+                        (_, Some(_)) => return None,
                     },
                 },
                 &[("start", Slot::Start, true), ("end", Slot::End, true)],
@@ -768,7 +772,14 @@ impl Lower<'_> {
             Some((breaks, labels)) => ScalarOp::Cut {
                 breaks,
                 labels,
-                closed: if self.boolean(p, "right", false) {
+                // 0.5 writes `right: true`, 1.0 `closed: right` (P-ORD-2);
+                // both default to left-closed intervals.
+                closed: if self.v1() {
+                    match self.text_of(p, "closed") {
+                        Some("right") => Closed::Right,
+                        _ => Closed::Left,
+                    }
+                } else if self.boolean(p, "right", false) {
                     Closed::Right
                 } else {
                     Closed::Left

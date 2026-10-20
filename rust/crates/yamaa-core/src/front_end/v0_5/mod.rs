@@ -950,7 +950,9 @@ impl<'d> Lower<'d> {
             has_no_data: self.boolean(node, "has_no_data", false),
             domain: self.named(meta, node, "domain"),
             comment: self.comment(node, meta),
-            standard: None,
+            // The section standard a 1.0 spec selects (P-STD-1); P1-13
+            // checks it.
+            standard: self.named(meta, node, "standard"),
             meta,
         }
     }
@@ -984,16 +986,31 @@ impl<'d> Lower<'d> {
                         };
                         let meta =
                             self.meta(clause_meta, Segment::Key(column.into()), Some(values));
-                        // 1.0 normalizes the list into its comparison class
-                        // (P-VLM-1); a class holding only `values` is the
-                        // list written bare (SCHEMA-15), whose values keep
-                        // their written paths.
-                        let list = self.field(values, "values").unwrap_or(values);
+                        // 1.0 holds the list in its comparison class, beside
+                        // an optional NE or NOTIN (P-VLM-1), each a
+                        // comparison that selects no listed value; P1-14
+                        // tells the two apart. A class holding only `values`
+                        // is the expanded list written bare (SCHEMA-15),
+                        // whose values keep their written paths.
+                        let (comparator, list, list_meta) = match self.field(values, "values") {
+                            Some(list) => match self.text_of(values, "comparator") {
+                                Some(_) => (
+                                    Comparator::NotIn,
+                                    list,
+                                    self.field_meta(meta, "values", list),
+                                ),
+                                None => (Comparator::In, list, meta),
+                            },
+                            None => (Comparator::In, values, meta),
+                        };
                         let mut listed = Vec::new();
                         for (position, &value) in self.items(list).iter().enumerate() {
                             if let Some(text) = self.text(value) {
-                                let meta =
-                                    self.meta(meta, Segment::Index(position as u32), Some(value));
+                                let meta = self.meta(
+                                    list_meta,
+                                    Segment::Index(position as u32),
+                                    Some(value),
+                                );
                                 listed.push(Text {
                                     text: text.into(),
                                     meta,
@@ -1002,7 +1019,7 @@ impl<'d> Lower<'d> {
                         }
                         conditions.push(WhereClause {
                             column: self.named_at(column, meta),
-                            comparator: Comparator::In,
+                            comparator,
                             values: listed,
                             meta,
                         });
@@ -1025,19 +1042,21 @@ impl<'d> Lower<'d> {
     }
 
     fn submission_metadata(&mut self, node: usize, meta: Meta) -> SubmissionMetadata {
-        let origins = self
-            .field(node, "origin")
-            .map(|origin| {
-                let meta = self.field_meta(meta, "origin", origin);
-                vec![Origin {
-                    kind: self.required_text(meta, origin, "type"),
-                    source: self.text_field(meta, origin, "source"),
-                    description: self.text_field(meta, origin, "description"),
-                    documents: self.documents(origin, meta),
-                    meta,
-                }]
-            })
-            .unwrap_or_default();
+        // 0.5 declares one `origin`; 1.0 declares `origins`, always a list
+        // (P-ORIGIN-1). Both lower to the list.
+        let mut origins = Vec::new();
+        if self.v1() {
+            if let Some(list) = self.field(node, "origins") {
+                let list_meta = self.field_meta(meta, "origins", list);
+                for (index, &origin) in self.items(list).iter().enumerate() {
+                    let meta = self.meta(list_meta, Segment::Index(index as u32), Some(origin));
+                    origins.push(self.origin(origin, meta));
+                }
+            }
+        } else if let Some(origin) = self.field(node, "origin") {
+            let meta = self.field_meta(meta, "origin", origin);
+            origins.push(self.origin(origin, meta));
+        }
         let method = self.field(node, "method").map(|method| {
             let meta = self.field_meta(meta, "method", method);
             if let Some(text) = self.text(method) {
@@ -1086,6 +1105,16 @@ impl<'d> Lower<'d> {
             origins,
             method,
             comment: self.comment(node, meta),
+        }
+    }
+
+    fn origin(&mut self, origin: usize, meta: Meta) -> Origin {
+        Origin {
+            kind: self.required_text(meta, origin, "type"),
+            source: self.text_field(meta, origin, "source"),
+            description: self.text_field(meta, origin, "description"),
+            documents: self.documents(origin, meta),
+            meta,
         }
     }
 

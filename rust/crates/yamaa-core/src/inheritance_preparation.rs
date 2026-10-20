@@ -276,10 +276,10 @@ pub fn prepare<P: PathPort>(
 /// The resolved specification of a 1.x chain: its layers composed root
 /// ancestor first and normalized at the version the chain needs (LAYER-1,
 /// P-VER-1). It holds no `parent` and no `clear`, uses the long form of every
-/// shorthand, keeps root and member fields in schema order, expands every
-/// named window (LAYER-14), and records the chain's version in `yamaa`.
-/// Pruning and dependency order read the lowered specification and are not
-/// part of this preparation yet.
+/// shorthand, holds only the declarations its roots reach, lists a layered
+/// specification's columns in dependency order, keeps root and member fields
+/// in schema order, expands every named window (LAYER-14), and records the
+/// chain's version in `yamaa`.
 #[derive(Debug)]
 pub struct ResolvedVersioned {
     pub document: Document,
@@ -314,6 +314,9 @@ pub enum VersionedError<E> {
     /// address the retained composed document, whose provenance names the
     /// layer that wrote each path.
     Normalize(Box<FailureContext<NormalizationError>>),
+    /// A live column reads a name no column declares, or the columns read
+    /// each other in a cycle (LAYER-11, LAYER-13).
+    Prune(Box<resolution::Error>),
 }
 
 impl<E> From<Rebase<E>> for VersionedError<E> {
@@ -353,9 +356,9 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
 /// at the version it declares; its relative paths are respelled from the
 /// entry (LAYER-10); the layers compose, each layer's `clear` applied before
 /// its own fields (LAYER-9); the chain's version replaces `yamaa`; the
-/// composition is normalized at that version, which materializes defaults
-/// and checks requiredness (LAYER-7); and every named window expands where
-/// it is read, which the 1.0 front end lowers.
+/// composition is pruned and ordered on its 1.0 lowering (LAYER-11,
+/// LAYER-13); and what survives is normalized at the chain's version, which
+/// materializes defaults and checks requiredness (LAYER-7, LAYER-12).
 pub fn prepare_versioned<P: PathPort>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
@@ -462,17 +465,57 @@ pub fn prepare_versioned<P: PathPort>(
     let failed = |error: NormalizationError, document: Document, shorthand: &[bool]| {
         normalize_failure(error, document, shorthand, &composed.provenance, chain)
     };
-    let resolved = match view.normalize_resolved_root(&composed.document) {
-        Ok(resolved) => resolved,
+    // The resolution lifecycle a 0.5 chain takes (`resolution::resolve`):
+    // named windows expand, keeping unknown references for pruning; the
+    // declarations no root reaches are pruned, and a layered specification's
+    // columns are ordered by dependency (LAYER-11, LAYER-13); requiredness and
+    // defaults apply to what survives (LAYER-7, LAYER-12); and the strict
+    // expansion refuses an unknown window and drops the definitions.
+    let expanded = match view.expand_named_windows(&composed.document, false) {
+        Ok(expanded) => expanded,
         Err(error) => return Err(failed(error, composed.document, &composed_shorthand)),
+    };
+    let expanded_origins = expanded
+        .origins
+        .iter()
+        .map(|&node| composed_origins[node])
+        .collect::<Vec<_>>();
+    let expanded_shorthand = expanded
+        .origins
+        .iter()
+        .map(|&node| composed_shorthand[node])
+        .collect::<Vec<_>>();
+    // A specification without a `parent` keeps its declaration order, which
+    // must be a dependency order (COLUMN-5, D33).
+    let order = if chain.layers.len() > 1 {
+        Order::Dependencies
+    } else {
+        Order::Declared
+    };
+    let lowered = crate::front_end::v1::spec::lower(&expanded.document, None);
+    let pruned = resolution::prune_lowered(&expanded.document, lowered.spec(), order)
+        .map_err(|error| VersionedError::Prune(Box::new(error)))?;
+    let pruned_origins = pruned
+        .origins
+        .iter()
+        .map(|&origin| LayerNodeOrigin::through(origin, &expanded_origins))
+        .collect::<Vec<_>>();
+    let pruned_shorthand = pruned
+        .origins
+        .iter()
+        .map(|origin| {
+            matches!(origin.source, SchemaSource::Input) && expanded_shorthand[origin.node]
+        })
+        .collect::<Vec<_>>();
+    let resolved = match view.normalize_resolved_root(&pruned.document) {
+        Ok(resolved) => resolved,
+        Err(error) => return Err(failed(error, pruned.document, &pruned_shorthand)),
     };
     let resolved_origins = resolved
         .origins
         .iter()
-        .map(|&origin| LayerNodeOrigin::through(origin, &composed_origins))
+        .map(|&origin| LayerNodeOrigin::through(origin, &pruned_origins))
         .collect::<Vec<_>>();
-    // Every named window expands where it is read, and the definitions go
-    // (WINDOW-1, LAYER-14); an unknown name fails.
     let strict = match view.expand_named_windows(&resolved.document, true) {
         Ok(strict) => strict,
         Err(error) => {
@@ -480,7 +523,7 @@ pub fn prepare_versioned<P: PathPort>(
                 .origins
                 .iter()
                 .map(|origin| {
-                    matches!(origin.source, SchemaSource::Input) && composed_shorthand[origin.node]
+                    matches!(origin.source, SchemaSource::Input) && pruned_shorthand[origin.node]
                 })
                 .collect::<Vec<_>>();
             return Err(failed(error, resolved.document, &shorthand));

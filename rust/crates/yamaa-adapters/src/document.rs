@@ -176,10 +176,9 @@ impl AdmittedDocument {
 }
 
 /// A 1.x specification: its layers, each admitted at its own version, the
-/// version the chain needs, and the resolved specification they compose into
-/// (LAYER-1), with the provenance of every value. Pruning and dependency
-/// order read the lowered specification and are not part of this
-/// preparation yet.
+/// version the chain needs, and the resolved specification they compose
+/// into, pruned and ordered (LAYER-1, LAYER-14), with the provenance of every
+/// value.
 #[derive(Debug)]
 pub struct PreparedSpecification {
     schema: Arc<CapturedSchema>,
@@ -201,8 +200,9 @@ impl PreparedSpecification {
         self.chain.version
     }
     /// The resolved specification: the layers composed, each layer's `clear`
-    /// applied before it, and normalized at the chain's version, which `yamaa`
-    /// records, with every named window expanded (LAYER-9, LAYER-14).
+    /// applied before it, pruned, ordered and normalized at the chain's
+    /// version, which `yamaa` records, with every named window expanded
+    /// (LAYER-9, LAYER-14).
     pub fn resolved(&self) -> &Document {
         &self.resolved.document
     }
@@ -382,6 +382,11 @@ impl VersionedDocument {
                 return Err(SpecificationError::Entry(Error::Normalize(
                     NormalizationError::Document(error),
                 )))
+            }
+            // An unknown dependency or a cycle of the live columns
+            // (LAYER-11, LAYER-13), reported as a 0.5 chain reports it.
+            Err(VersionedError::Prune(error)) => {
+                return Err(SpecificationError::Entry(Error::Dependencies(*error)))
             }
         };
         // Lower once, each node located where its layer wrote it, and check

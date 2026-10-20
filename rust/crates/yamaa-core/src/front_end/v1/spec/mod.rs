@@ -2,7 +2,8 @@
 //!
 //! A 1.0 specification is decoded, each layer admitted at the version it
 //! declares and the layers composed with their `clear` lists (P1-3, P1-4),
-//! and every named window of the resolved specification expanded
+//! pruned and ordered on its lowering (LAYER-11, LAYER-13), and every named
+//! window of the resolved specification expanded
 //! ([`crate::inheritance_preparation::prepare_versioned`]). This module
 //! lowers that resolved specification into the same [`crate::ast`] nodes as
 //! its 0.5 counterpart, so every analysis and the binder read one tree:
@@ -10,10 +11,13 @@
 //! - an expression field holds text in the closed grammar or a YAML scalar,
 //!   where a bare name is a reference and quoted text a literal (D18, D31);
 //! - the renamed operands, handlers and bindings of the approved rename
-//!   table (D58) lower to the nodes their 0.5 spellings lower to, and
-//!   `baseline_flag`'s `window.order_by` to the order its `tie_break` gave;
-//! - `model` and an input's `key` are stored for the pull requests that
-//!   check or bind them (P1-6, P1-10).
+//!   table (D58) lower to the nodes their 0.5 spellings lower to, with
+//!   `closed` (P-ORD-2), `origins` (P-ORIGIN-1), and `baseline_flag`'s
+//!   `window.order_by` to the order its `tie_break` gave;
+//! - `model`, an input's `key`, a dataset's `standard`, several origins and
+//!   a value-level comparator are stored for the pull requests that check,
+//!   bind or build them (P1-6, P1-10, P1-13, P1-14); until then the switch
+//!   refuses what is not built (P1-9).
 //!
 //! Every node carries the position of the deepest node its layer wrote
 //! (P-ISSUE-1), and paths render in the 1.0 notation (P-CLR-2).

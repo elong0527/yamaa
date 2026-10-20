@@ -20,9 +20,7 @@
 //! - join keys, which P1-6 declares: an input's `key`, and the key a 0.5
 //!   lookup infers against the one its conversion declares (D23, D63);
 //! - a written `minimum_source_precision` that the month and day rules
-//!   already imply (D61);
-//! - `closed` and `origins`, which the second part of P1-5 lowers, as it
-//!   prunes and orders the 1.0 tree (LAYER-11, LAYER-13).
+//!   already imply (D61).
 //!
 //! Every specification whose trees still differ is listed in [`EXPECTED`]
 //! with the reason, and the test fails when the list is wrong in either
@@ -39,8 +37,7 @@ use yamaa_adapters::shipped_schema;
 use yamaa_adapters::specification_source::{InheritancePort, Source};
 use yamaa_adapters::yaml_decode::decode_yaml;
 use yamaa_core::ast::{
-    Closed, Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec,
-    Step, SubmissionMetadata,
+    Constant, ExprKind, JoinKey, KeyDecl, Literal, Notation, Precision, ScalarOp, Spec, Step,
 };
 use yamaa_core::expression::Context;
 use yamaa_core::front_end::v0_5::lower;
@@ -69,19 +66,11 @@ const EXPECTED: &[(&str, &str)] = &[
          this negative retire",
     ),
     (
-        "negative-review-unknown-date/spec.yaml",
-        "LAYER-11: the 0.5 tree prunes the unread column ASTDT, and part 2 prunes \
-         the 1.0 tree",
-    ),
-    (
-        "negative-subject-reference/spec.yaml",
-        "LAYER-11: the 0.5 tree prunes the unread column SITEID, and part 2 prunes \
-         the 1.0 tree",
-    ),
-    (
-        "schema-inheritance/spec_study.yaml",
-        "LAYER-11: the 0.5 tree prunes the unread input UNUSED, intermediate \
-         unused_reference and column TEMP, and part 2 prunes the 1.0 tree",
+        "negative-lookup-rename-intermediate/spec.yaml",
+        "P1-6: the converter declares the key of the intermediate CODED but not the \
+         key of its input CODING, so the 1.0 tree cannot tell that CODED only renames \
+         CODING (LOOKUP-4, D23) and prunes it unread, where 0.5 keeps it to refuse it; \
+         P1-6 writes the input's key",
     ),
     (
         "sdtm-tr-tumor-measurements/spec.yaml",
@@ -285,8 +274,6 @@ enum Normalized {
     InputKey,
     LookupKey,
     MinimumPrecision,
-    Closed,
-    Origins,
 }
 
 impl Normalized {
@@ -296,8 +283,6 @@ impl Normalized {
             Self::InputKey => "an input's declared key (P1-6)",
             Self::LookupKey => "a lookup key 0.5 infers and 1.0 declares (P1-6)",
             Self::MinimumPrecision => "minimum_source_precision the rules imply (D61)",
-            Self::Closed => "endpoint inclusion, which part 2 lowers (P-ORD-2)",
-            Self::Origins => "origins, which part 2 lowers (P-ORIGIN-1)",
         }
     }
 }
@@ -324,21 +309,6 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
             left_out.insert(Normalized::InputKey);
         }
         input.key = KeyDecl::Inferred;
-    }
-    // Part 2 lowers `origins` (P-ORIGIN-1); until then 1.0 trees hold none.
-    let mut origins = |metadata: &mut SubmissionMetadata| {
-        if !metadata.origins.is_empty() {
-            metadata.origins.clear();
-            left_out.insert(Normalized::Origins);
-        }
-    };
-    for column in &mut spec.columns {
-        if let Some(submission) = &mut column.submission {
-            origins(&mut submission.metadata);
-            for level in &mut submission.value_level {
-                origins(&mut level.metadata);
-            }
-        }
     }
     for item in &mut spec.intermediates {
         if inferred.contains(&item.id.name) {
@@ -401,17 +371,6 @@ fn normalize(spec: &mut Spec, inferred: &BTreeSet<String>, out: &mut BTreeSet<No
                 false
             }
             ExprKind::Scalar { op, handlers, .. } => {
-                // Part 2 lowers `closed` (P-ORD-2); until then 1.0 trees hold
-                // each verb's default.
-                let (closed, default) = match op {
-                    ScalarOp::Diff { closed, .. } => (Some(closed), Closed::Right),
-                    ScalarOp::Cut { closed, .. } => (Some(closed), Closed::Left),
-                    _ => (None, Closed::Left),
-                };
-                if let Some(closed) = closed.filter(|closed| **closed != default) {
-                    *closed = default;
-                    left_out.insert(Normalized::Closed);
-                }
                 matches!(
                     op,
                     ScalarOp::Mapping { .. }
