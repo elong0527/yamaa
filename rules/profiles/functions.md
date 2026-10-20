@@ -1,100 +1,128 @@
 # Project functions
 
 This file is a profile: it is optional, and it applies only to a build whose
-caller supplies a project file linking an environment file that declares
-`functions` for the host language, and to the specification calls that name
-them. Project code runs in that host language through statically named
-installed callables, its contract is closed, and its inline tests run before
-any study data is read. A build without project functions is unaffected,
-except that a linked environment file is admitted under [FUNC-2](#func-2).
+caller supplies a project file that lists function files, and to the
+specification calls that name them. Project code runs in the host language
+through the statically named installed callable each function file names for
+it, its contract is closed, and its inline tests run before any study data is
+read. A build without project functions is unaffected, except that each listed
+function file is admitted under [FUNC-2](#func-2). A project file that declares
+`schema_version` links an environment file per host language instead, under
+the rules at the `yamaa-v0.5.0` tag ([Rules](../README.md)).
 
-## The environment file
+## Function files
 
 <a id="func-1"></a>
 
-### FUNC-1. Project functions come only from the environment file the caller's project links for the host language
+### FUNC-1. Project functions come only from the function files the caller's project lists, through the running host's implementation
 
 A portable specification may declare a logical `function` call before project
 code exists: structural authoring validates its versionless `name` and closed
 argument-leaf shape, and contract-dependent checks require an explicitly
-supplied project file that links an environment for the host language. The
-project's `environments` entry for that language links the one environment
-file the host reads ([PROJECT-2](project.md#project-2)). A specification cannot
-select, replace or override the project or its environments.
+supplied project file whose `functions` lists the function file defining that
+name. The host running the build calls the callable that file's
+`implementations` names for its language, and a called function with no
+implementation for that host fails before any input is read. A specification
+cannot select, replace or override the project or its function files.
 
-Fails: `project_environment_missing`.
-Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
+Fails: `function_implementation_missing`, `project_environment_missing`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::function_implementation_missing`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
 
-Omission never creates an environment implicitly, and no adjacent environment
-or language subdirectory is discovered. Every path an environment file declares
-resolves relative to that file under the admitted resource policy of
+No function file is discovered, and none is created by omission. A function
+file that names no implementation for the host is admitted, since another host
+may run the build; a call of it fails with `function_implementation_missing`
+at the call's `name`, reported at each call with the function and the host
+language, while the specification is checked, before activation. A call when
+no project is supplied names no declared function under [FUNC-4](#func-4).
+
+In a project file that declares `schema_version`, the project's `environments`
+entry for the host language links the one environment file the host reads
+([PROJECT-2](project.md#project-2)), and every path it declares resolves
+relative to it under the admitted resource policy of
 [File resolution](../reference/files.md). A supplied project file that cannot
-be read fails with `project_environment_missing`. A call to a project function
-when the supplied project links no environment for the host language cannot
-execute: it fails with `project_environment_missing`, reported at each call
-with the host language. A call when no project is supplied names no declared
-function under [FUNC-4](#func-4).
+be read fails with `project_environment_missing`, and so does each call, with
+the host language, when the project links no environment for it.
 
 <a id="func-2"></a>
 
-### FUNC-2. An environment file is admitted on its own against the environment schema before any activation or study read
+### FUNC-2. A function file is admitted on its own against the function schema before any activation or study read
 
-An environment file is independently admitted against
-`schema_environment.yaml`. `schema_version` selects the schema bundle, and
-there is no environment content version. A missing, unreadable or invalid
-project file, linked environment file or declared metadata resource fails
-before activation or study reads. An invalid project file, environment file,
-definition, test or duplicate logical declaration fails, and static checking
-returns every independently inferable finding before activation.
+A function file is independently admitted against the function schema; it
+declares `yamaa` and `type: function`
+([SCHEMA-2](../reference/schema-language.md#schema-2)), and there is no
+function content version. A missing, unreadable or invalid project file,
+listed function file or declared metadata resource fails before activation or
+study reads. An invalid definition or test, or a logical name that two listed
+files declare, fails, and static checking returns every independently
+inferable finding before activation.
 
-Fails: `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
+Fails: `function_file_invalid`, `project_environment_invalid`.
+Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::function_file_findings_name_the_function_file_and_its_listing`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_listed_function_file_without_the_1_0_header_fails_in_that_file`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
 
-A missing or invalid declared metadata resource, including the environment
-file a project links, reports its written path, declaring field and concrete
-cause, and invalid YAML retains its line, column and parser reason.
+A function file declares `yamaa`, `type`, its own `name`, and the definition
+of [FUNC-4](#func-4). The project's `functions` checks the header of each
+file it lists as every referencing field does
+([SCHEMA-2](../reference/schema-language.md#schema-2)). Every listed function
+file is read and admitted, whichever host languages it implements. Study
+terminology and submission metadata belong to the project file
+([PROJECT-3](project.md#project-3)), not to a function file.
 
-An environment file declares `schema_version`, and `lock` and `functions`
-declare installed code. The language comes from the project `environments` key
-that links the file ([FUNC-3](#func-3)). Study terminology and submission
-metadata belong to the project file ([PROJECT-3](project.md#project-3)), not to
-an environment file.
+A finding in a function file fails with `function_file_invalid` at the file's
+own path, such as `tests[0].result` or `implementations.r`, and names the
+function file as its `source`, the project file as its `entry` and the listing
+as its `environment_path`, such as `functions[0]`. A logical name that a
+second listed file declares fails at that file's `name`. A value its declared
+type cannot read, or an integer outside the `int` range, fails with its
+`reason` and the text it is written as.
 
-The `lock` and external function declarations are local resource paths under
-[File resolution](../reference/files.md). Relative spellings start at the
-environment file that declares them, not at the project file that links it
-([PROJECT-4](project.md#project-4)). Absolute local paths and parent segments
-have the same meaning as domain resource paths, and an absent file fails at
-that location without configuration discovery or fallback search.
+Each listed function file is a local resource path under
+[File resolution](../reference/files.md), relative to the project file
+([PROJECT-4](project.md#project-4)), as is the lock
+([FUNC-3](#func-3)). Absolute local paths and parent segments have the same
+meaning as domain resource paths, and an absent file fails at that location
+without configuration discovery or fallback search.
+
+In a project file that declares `schema_version`, the environment file a
+project links declares `schema_version`, and its `lock` and `functions` declare
+installed code; its language comes from the `environments` key that links it,
+and its relative spellings start at that environment file. A missing or invalid
+declared metadata resource, including that environment file, fails with
+`project_environment_invalid`, reporting its written path, declaring field and
+concrete cause, and invalid YAML retains its line, column and parser reason.
 
 <a id="func-3"></a>
 
 ### FUNC-3. One host language applies to every function, and a declared lock pins the called packages
 
-The `environments` key that links an environment file, exactly `python` or
-`r`, states the language of that file and applies to every function definition
-it declares; an environment file has no language field of its own. `lock`
-optionally names the packaging lock for that language: uv TOML for Python or
-renv JSON for R. On each build that calls a function with a declared lock,
-before any study read, the host verifies the installed version of yamaa and of
-every called function package against the captured lock.
+One host language, `python` or `r`, runs a whole build: each called function
+runs through the callable its `implementations` entry names for that language.
+`environments.<host>.lock` in the project file optionally names that
+language's packaging lock: uv TOML for Python or renv JSON for R. On each build
+that calls a function with a declared lock, before any study read, the host
+verifies the installed version of yamaa and of every called function package
+against the captured lock.
 
-Fails: `runtime_artifact_mismatch`, `project_environment_invalid`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`.
+Fails: `runtime_artifact_mismatch`, `function_file_invalid`, `project_environment_invalid`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`.
 
-Parallel bindings and per-function language choices are invalid. `lock` is
-optional, including when `functions` is present. Omission uses the installed
-callable without a package-version audit; yamaa does not search for a lock
-beside the environment file. An explicitly declared lock must exist and be
-valid. The packaging tool manages installation, code and transitive
-dependencies; yamaa neither vendors, resolves, pins nor caches project code.
-Captured bytes establish the lock format independently of the filename.
+Parallel bindings and per-function language choices are invalid:
+`implementations` names one callable per host language. A lock is optional,
+including when `functions` is present. Omission uses the installed callable
+without a package-version audit; yamaa does not search for a lock beside the
+project file. An explicitly declared lock must exist and be valid. The
+packaging tool manages installation, code and transitive dependencies; yamaa
+neither vendors, resolves, pins nor caches project code. Captured bytes
+establish the lock format independently of the filename.
 
-Static checking rejects a lock format incompatible with the language the
-linking `environments` key states, without importing project code or reading
-study data, and fails with `project_environment_invalid`. Standard-library and
+Static checking rejects a lock format incompatible with the host key that
+holds it, without importing project code or reading study data, and fails with
+`function_file_invalid` at `environments.<host>.lock`. Standard-library and
 base-package functions are exempt from the version check. This is a
-called-package check; a full environment audit belongs to uv or renv.
+called-package check; a full environment audit belongs to uv or renv. In a
+project file that declares `schema_version`, the linked environment file
+declares the lock, the `environments` key that links that file states its
+language, and an incompatible lock format fails with
+`project_environment_invalid`.
 
 A missing, invalid, ambiguous or mismatched installed called-package version
 fails with `runtime_artifact_mismatch`; its context identifies the package,
@@ -106,28 +134,33 @@ the expected lock versions and the observed installed version.
 
 ### FUNC-4. Each logical function has one closed definition, and a call names only the function and its arguments
 
-`functions` maps unique logical names to one definition each, either inline or
-through a path. A definition contains a qualified `function`, a non-empty
-`description`, closed ordered `params`, a scalar `returns`,
-`may_return_missing` (default false), `comparison_decimals` (default four) and
-inline `tests`. A specification call contains only the logical `name` and
-`args`, and its result is one scalar for one logical row. A call naming no
-declared logical function fails.
+The project's `functions` lists function files, each holding one definition
+under a unique logical `name`. A definition contains `name`, a non-empty
+`description`, closed ordered `params`, a scalar `returns`, `implementations`
+naming a qualified callable for `python`, `r` or both, `may_return_missing`
+(default false), `comparison_decimals` (default four) and inline `tests`. A
+specification call contains only the logical `name` and `args`, and its result
+is one scalar for one logical row. A call naming no function the project lists
+fails.
 
 Fails: `unknown_project_function`.
-Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Evidence: `schema-functions`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_function_file_names_its_function_and_types_its_values_by_declaration`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
 A call contains no implementation language, callable name or contract version.
 A `function` call's exact argument and result types are those its definition
 states. `expressions.function.name` selects a logical function from the
-environment the project links for the host language, and `args` supplies its
-named argument leaves; the result
-is one scalar for one logical row under the shared invocation lifecycle.
+function files the project lists, and `args` supplies its named argument
+leaves; the result is one scalar for one logical row under the shared
+invocation lifecycle.
 
-A definition file contains that one definition and does not repeat its logical
-name or schema version. Definition and test paths use the declaring-file
-resource policy, and a definition is not split into contract, binding and
-conformance documents.
+A function file holds one definition and declares its own `name`, `yamaa` and
+`type`; the project holds no inline definition. A function file that names
+no callable at all fails with `function_file_invalid`
+([FUNC-2](#func-2)). A definition is not split into contract, binding and
+conformance documents. In a project file that declares `schema_version`, the
+linked environment file's `functions` maps logical names to definitions,
+inline or through a path, and a definition file does not repeat its logical
+name or schema version.
 
 <a id="func-5"></a>
 
@@ -135,7 +168,7 @@ conformance documents.
 
 Signatures are closed and named: each parameter name is unique, and a binding
 has no positional, variadic or arbitrary keyword parameter bag. `required`
-defaults to true; every optional parameter declares an environment `default`,
+defaults to true; every optional parameter declares a `default`,
 and a required parameter declares no `default`. Parameter types are the
 [Values](../values.md) column vocabulary plus function-only
 `bool`, and return types do not include `bool`. Every argument and default
@@ -153,6 +186,11 @@ and exact types are contract-dependent checks at the implementation stage;
 structural validation before then checks only the closed argument-leaf forms of
 [FUNC-6](#func-6). An unknown, missing required, or incorrectly typed argument
 or default fails with `invalid_function_argument`.
+
+A function file writes a `date` or `datetime` default, test argument or result
+as text, which the declared parameter or return type reads; text that type
+cannot read fails the file under [FUNC-2](#func-2). Each parameter name must be
+a name in every host language the file implements.
 
 <a id="func-6"></a>
 
@@ -174,7 +212,7 @@ then passed by name, preserving its visible dependency.
 
 ### FUNC-7. An omitted optional argument takes its default, and a missing argument short-circuits unless its parameter accepts missing
 
-Omitting an optional argument selects the environment default; passing missing
+Omitting an optional argument selects the default; passing missing
 explicitly never selects the default. `accepts_missing` is false by default for
 each parameter. If any supplied value is missing for a non-accepting parameter,
 the call is not invoked and its result is missing. A missing value for an
@@ -192,11 +230,11 @@ does not require `may_return_missing: true`.
 
 ### FUNC-8. A binding is a statically named installed callable, invoked once for each logical row
 
-`function` is a statically written fully qualified callable, such as
-`projectbmi.bmi` or `projectbmi::bmi`, whose concrete closed named signature
+Each `implementations` entry is a statically written fully qualified callable,
+such as `projectbmi.bmi` or `projectbmi::bmi`, whose concrete closed named signature
 matches the parameter names exactly. Inline code, anonymous functions,
 evaluation, shell commands, script paths, executable argument transforms and
-variadic signatures are invalid. After applying environment defaults and
+variadic signatures are invalid. After applying defaults and
 missing short-circuiting, the runner maps the logical arguments and invokes the
 callable once for one logical row, supplying no undeclared data or execution
 context.
@@ -273,8 +311,8 @@ every parameter its applicable missing behavior, and both values of every
 Boolean parameter are covered. A nullable contract covers `nullable-output`,
 and a float-returning contract `numeric-comparison`.
 
-Fails: `project_environment_invalid`.
-Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
+Fails: `function_file_invalid`, `project_environment_invalid`.
+Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/support/project_environment.rs::function_file_reached`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
 
 Tests do not repeat a logical name or contract version. `covers` is a
 non-empty list of unique obligations demonstrated by that case:
@@ -291,13 +329,14 @@ non-empty list of unique obligations demonstrated by that case:
 | `numeric-comparison` | Non-missing `float` result tests decimal comparison |
 
 Static validation checks each tagged case for inferable evidence and rejects
-missing obligations with `project_environment_invalid`. The contract author
-identifies which input is the contract semantic boundary. Activation checks the
-declared result.
+missing obligations with `function_file_invalid` (in an environment file a
+project that declares `schema_version` links, with
+`project_environment_invalid`). The contract author identifies which input is
+the contract semantic boundary. Activation checks the declared result.
 
-Equivalent projects in another language carry the same logical parameter
-declarations, comparison policy and test content. Qualified callable names and
-packaging locks differ by host.
+One function file serves every host language, with one set of parameter
+declarations, comparison policy and tests; only each host's callable and lock
+differ.
 
 <a id="func-12"></a>
 

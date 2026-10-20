@@ -165,8 +165,8 @@ artifact.
 
 ### SPEC-8. Language source is ASCII
 
-Schema documents, specifications, inheritance layers, project files and
-environment files contain only bytes from `0x00` through `0x7F`. A non-ASCII source byte fails
+Schema documents, specifications, inheritance layers, project files, codelist
+files and function files contain only bytes from `0x00` through `0x7F`. A non-ASCII source byte fails
 validation, reporting its file and position. A format's ASCII escape notation
 may denote a non-ASCII value; the decoded value is then an ordinary string.
 
@@ -174,7 +174,8 @@ Fails: `non_ascii_source`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::original_decode_diagnostics_remain_bounded_and_owned`, `rust/crates/yamaa-core/tests/support/diagnostic/yaml_source.rs`.
 
 For example, the YAML double-quoted escape `"\u00E9"` denotes the
-one-character string U+00E9.
+one-character string U+00E9. The environment files a project file declaring
+`schema_version` links are held to the same boundary.
 
 The repository holding the language keeps the same boundary: its conformance
 documents, rules, documentation and implementation source are ASCII, and they

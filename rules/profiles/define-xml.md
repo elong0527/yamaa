@@ -32,7 +32,7 @@ and a directory listing is not one. Composition requires the `study`,
 ### DEFINE-2. The section's `define` target names the document's file, ends in `.xml`, and is `define.xml` beside a transport
 
 The selected section's `define` names the file the document produces, and its
-extension must be `.xml`; when the section declares `datasets`, requesting a
+extension must be `.xml`; when the section declares `transport`, requesting a
 transport file per dataset, its file name must be exactly `define.xml`. The
 extension mapping of [OUTPUT-5](../output.md#output-5) is not consulted: that
 mapping selects a profile for a dataset artifact, and this artifact has one
@@ -440,7 +440,7 @@ A declared `Purpose` could only agree with or contradict the derivation.
 
 The dataset's `def:leaf` names the file the package carries for that dataset:
 its transport file beside the document when the selected section declares
-`datasets` ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
+`transport` ([JSON-1](dataset-json.md#json-1)), and otherwise the artifact its
 specification produces. `xlink:href` is that path relative to the directory
 holding the generated document, written with `/` separators, and `def:title`
 is the path's final component. The href must not begin with a parent
@@ -608,7 +608,7 @@ reference.
 `SASDatasetName` is written only for a dataset name matching
 `^[A-Z][A-Z0-9]{0,7}$`, and `SASFieldName` only for a column name matching
 `^[A-Z][A-Z0-9_]{0,7}$`. A name its pattern refuses is omitted, and fails
-instead under `Submission` or when the section sets `datasets: xpt`. Define-XML
+instead under `Submission` or when the section sets `transport: xpt`. Define-XML
 carries a long `Alias` element, which [DEFINE-26](#define-26) defers.
 
 Fails: `sas_name_too_long`.
@@ -698,7 +698,7 @@ failure at any point publishes nothing. A failed publication fails under
 
 The constructs listed below are outside this profile. None has a field in the
 schema that [Submission metadata](submission.md),
-[Controlled terminology](terminology.md) and `schema_project.yaml` close,
+[Controlled terminology](terminology.md) and the project schema close,
 so a specification that tries to declare one is rejected as an unknown field.
 An `Alias` carrying a transport name longer than eight characters is not
 generated, and a `FormalExpression` is generated only from a declared
@@ -717,7 +717,7 @@ Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_te
 The long transport-name `Alias` and `FormalExpression` have a declaration but
 no generation, and each is stated rather than silently dropped. For a name
 longer than eight characters [DEFINE-22](#define-22) omits the attribute and
-fails under `Submission` or `datasets: xpt` instead.
+fails under `Submission` or `transport: xpt` instead.
 
 <a id="define-27"></a>
 
@@ -770,17 +770,19 @@ entry; it never quietly omits a per-value definition.
 
 <a id="define-28"></a>
 
-### DEFINE-28. Define-XML requires the project's `study` and the section's `standard` and `define`, which a run does not
+### DEFINE-28. Define-XML requires the project's `study` and the section's `standards` and `define`, which a run does not
 
 A Define-XML generation whose project declares no `study`, no section for the
-selected family, or a selected section without `standard` or `define` fails
+selected model, or a selected section without `standards` or `define` fails
 with `missing_required_field` before any specification is captured. It reports
 every missing field at once, each at its project path such as `study`,
-`sdtm.standard` or `sdtm.define`. A run of the same project needs none of them
+`sdtm.standards` or `sdtm.define`. A run of the same project needs none of them
 and does not report them.
 
 Fails: `missing_required_field`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
 
 A project can therefore list its specifications and run them before its
-submission metadata is ready ([PROJECT-3](project.md#project-3)).
+submission metadata is ready ([PROJECT-3](project.md#project-3)). A project
+file that declares `schema_version` writes the section's one guide as
+`standard`, reported at `sdtm.standard`.

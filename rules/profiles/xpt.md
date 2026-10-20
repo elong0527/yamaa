@@ -1,7 +1,8 @@
 # SAS Transport
 
 This file is a profile: it is optional, and it applies only to a build whose
-selected submission section of a project file sets `datasets: xpt`. Such a
+selected submission section of a project file sets `transport: xpt`
+(`datasets: xpt` in a project file that declares `schema_version`). Such a
 build writes one SAS Transport version 5 file per composed dataset in the
 public record layout SAS documents as TS-140, carrying the published dataset
 and the names, labels and formats the [Define-XML](define-xml.md) document is
@@ -12,9 +13,9 @@ the [SAS source profiles](../reference/sas.md)' concern.
 
 <a id="xpt-1"></a>
 
-### XPT-1. A section's `datasets: xpt` writes each composed dataset as one SAS Transport version 5 file
+### XPT-1. A section's `transport: xpt` writes each composed dataset as one SAS Transport version 5 file
 
-`datasets: xpt` requests one transport file per composed specification, named
+`transport: xpt` requests one transport file per composed specification, named
 and placed as [JSON-1](dataset-json.md#json-1) fixes and written by one writer
 under [JSON-2](dataset-json.md#json-2). A dataset declared to have no data has
 no file under [JSON-3](dataset-json.md#json-3). The rows are the published
@@ -23,9 +24,9 @@ dataset's leaf names the file under [DEFINE-16](define-xml.md#define-16), and
 the files publish before the document under
 [JSON-14](dataset-json.md#json-14).
 
-Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
+Evidence: `sdtm-dm-xpt`, `adam-adsl-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_section_keeps_to_its_own_surface_spellings`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::every_define_benchmark_matches_its_independent_truth_in_both_hosts`.
 
-Read as [JSON-5](dataset-json.md#json-5) reads them, the rows carry no display
+A project file that declares `schema_version` writes `datasets: xpt`. Read as [JSON-5](dataset-json.md#json-5) reads them, the rows carry no display
 precision: a composed specification declares no `output.decimals`, whose
 rounded text the file would otherwise carry as the submitted numbers, and a
 numeric variable's display is its format under [XPT-9](#xpt-9).
@@ -125,7 +126,7 @@ and each must be a name [DEFINE-22](define-xml.md#define-22) admits:
 `^[A-Z][A-Z0-9]{0,7}$` for a dataset and `^[A-Z][A-Z0-9_]{0,7}$` for a column.
 The dataset's `submission.label` and each column's `label` are at most 40
 characters of printable ASCII, `0x20` through `0x7E`. A name or label that does
-not fit fails before any data is read, under `datasets: xpt` in every context.
+not fit fails before any data is read, under `transport: xpt` in every context.
 
 Fails: `sas_name_too_long`, `transport_label_invalid`.
 Evidence: `negative-transport-name-too-long`, `negative-transport-label-too-long`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionLabelInvalid`.
@@ -218,8 +219,8 @@ NAMESTR when it parses as a SAS format: a name of at most eight upper-case
 letters, digits and underscores that begins and ends with a letter or an
 underscore, an optional width, `.`, and optional decimals, the name empty only
 beside a width. A declared format that does not parse fails under
-`datasets: xpt`. An
-`adam` date carries `DATE9.` and a datetime `DATETIME20.`; a character variable
+`transport: xpt`. An
+`ADaM` date carries `DATE9.` and a datetime `DATETIME20.`; a character variable
 carries no format.
 
 Fails: `xpt_display_format_invalid`.
