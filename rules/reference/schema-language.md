@@ -290,17 +290,18 @@ not define a different expansion.
 
 <a id="schema-15"></a>
 
-### SCHEMA-15. A written long form that holds only the field its shorthand fills is refused
+### SCHEMA-15. A written long form that holds only what its shorthand fills is refused
 
-A value has one spelling. A written value that matches the class of a
-shorthand union and holds nothing but the field a bare value of that union
-fills restates the shorthand and fails validation, reporting its path, that
-field and the shorthand to write instead. A long form that writes any other
-field, even a default or a null, keeps its meaning. The refusal applies to
-what an author wrote, never to the canonical form a validation produces.
+A value written through a shorthand union has one spelling. A written value
+that matches the class of a shorthand union and holds nothing but what a bare
+value of that union fills restates the shorthand and fails validation,
+reporting its path, the restated field if there is one, and the shorthand to
+write instead. A long form that writes any other field, even one restating a
+default, keeps its meaning. The refusal applies to what an author wrote, never
+to the canonical form a validation produces.
 
 Fails: `redundant_long_form`.
-Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-core/tests/schema_references.rs::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
+Evidence: `negative-redundant-long-form`, `rust/crates/yamaa-adapters/tests/declaration_one_spelling.rs`, `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_check_that_declares_no_field_is_written_as_its_bare_keyword`, `rust/crates/yamaa-core/tests/schema_references.rs::a_dataset_mapping_holding_only_its_path_restates_the_path_shorthand`.
 
 The shorthand unions of the specification bundle, and the long form each one
 refuses, are:
@@ -317,18 +318,17 @@ refuses, are:
 | an input dataset | `D: path.csv` | `D: {path: path.csv}` |
 | a derivation | `E` | `{value: E}` |
 | a submission comment, method or document reference | `T` | `{text: T}`, `{description: T}`, `{document: T}` |
+| a column verification that declares no field | `- not_missing` | `- not_missing: {}` |
 
-A bare string derivation or case result is the source shorthand of
-[EXPR-5](../expressions.md#expr-5), and a written `{source: X}` with a string
-`X` in a `derivation`, a `derivations` entry or a `case` `then` or `otherwise`
-restates it and fails the same way. A restatement around another one names the
-innermost shorthand: `derivation: {value: {source: X}}` reports `X`.
+The refused long form of a bare keyword is the entry that keyword names with
+nothing in it, and it reports the keyword as both the field and the shorthand.
 
 The check runs on the document each author wrote: a standalone specification,
 and each inheritance layer before composition. A composed, pruned or resolved
 document holds the canonical class of every shorthand and is validated
-without this check. A clear marker in a layer is a written field and keeps a
-long form valid.
+without this check. A file that declares `schema_version` is read under the
+rules at the `yamaa-v0.5.0` tag, where a bare string derivation is the source
+shorthand of EXPR-5 and a written `{source: X}` restates it.
 
 ## Descriptors
 

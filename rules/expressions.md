@@ -54,27 +54,27 @@ invariant.
 
 ### EXPR-3. Expressions nest only in case results and key match values
 
-`source` and `literal` are expression leaves. Every other expression names its
+Text in an expression field, a YAML number, Boolean or null, and a
+structured `source` are expression leaves. Every other expression names its
 input variables directly, except in fields whose declared type contains
-`expression`, which are evaluated recursively: each `case` `then` and trailing
-`otherwise`, and a `key` match value under [LOOKUP-6](lookup.md#lookup-6). A
-derivation's own top-level expression, in `derivation` or
-`handled_expression_class.value`, is not restricted by this rule. Fields typed `numeric_expression`,
-`string_template` and `aggregate_expression` are leaves whose identifiers
-their own rules resolve.
+`expression`, which are evaluated recursively: each `case` `then` and
+trailing `otherwise`, and a `key` match value under
+[LOOKUP-6](lookup.md#lookup-6). A derivation's own top-level expression, in
+`derivation` or `handled_expression_class.value`, is not restricted by this
+rule. That text and fields typed `string_template` and
+`aggregate_expression` are leaves whose identifiers their own rules resolve.
 
 Evidence: `schema-expressions`.
 
 `case` selects among expressions, and a key match value computes the operand
 it matches. [FORMULA-9](formulas.md#formula-9) resolves the identifiers of
-`numeric_expression` and `aggregate_expression` leaves, and
+expression-field text and of `aggregate_expression`, and
 [Text](text.md) those of `string_template`.
 
-A plain string is a value unless its schema field is typed `variable`,
-`function_arg`, `predicate` or `string_template`.
-[Project functions](profiles/functions.md) closes `function_arg`: a string
-is a variable, while string, date and datetime literals use their explicit
-tagged leaf forms.
+A plain string's meaning follows its field's kind ([EXPR-5](#expr-5)):
+grammar text in an expression field, one variable in a name field
+([NAME-5](names.md#name-5)) and text in a value field. A function argument is
+one leaf ([FUNC-6](profiles/functions.md#func-6)).
 
 <a id="expr-14"></a>
 
@@ -85,8 +85,8 @@ data is read: fixed by the expression, set by a declared parameter, or taken
 from the types of what it reads, as the table below gives. A selecting
 expression's type is the set of the types it can select; a computing
 expression's type is one type. Key matching, intermediate fields and drivers,
-derive bindings, range bounds, inferred keys, operand checks, extremes and
-column conversion all read that type.
+aggregate derivations, range bounds, operand checks, extremes and column
+conversion all read that type.
 
 Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_result_type`, `rust/crates/yamaa-core/src/specification/types/tests.rs::numeric_and_aggregate_result_types_follow_their_operands`, `rust/crates/yamaa-core/src/specification/types/tests.rs::declared_types_follow_each_inputs_type_authority`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`, `rust/crates/yamaa-core/tests/support/diagnostic/intermediate_scopes.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::callback_derived_fields_expose_their_declared_result_type_to_row_drivers`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_over_an_int_and_a_float_is_refused_as_integer_days_when_bound`.
 
@@ -101,14 +101,13 @@ Evidence: `rust/crates/yamaa-core/src/ast/types.rs::verbs_fix_or_set_their_resul
 | `impute`, `shift` | by parameter | the declared `type` |
 | `function` | by parameter | the result type its definition declares ([FUNC-9](profiles/functions.md#func-9)) |
 | `source`, `row_value`, `locf` | from inputs | the variable's type |
-| `literal` | from inputs | the scalar's type: `str`, `int`, `float` or `bool`; `{literal: null}` is always missing |
+| text in an expression field | from inputs | a reference's variable type; a literal's type, under [FORMULA-3](formulas.md#formula-3) for a grammar literal and `int`, `float` or `bool` for a YAML scalar, with YAML null always missing; or [VALUE-10](values.md#value-10) over arithmetic: `int` while every operator and operand keeps `int`, and `float` otherwise |
 | `first_available` | from inputs | the types its `sources` and `missing` can take |
 | `greatest`, `least` | from inputs | the types its `sources` can take |
 | `case` | from inputs | the types its `then` and `otherwise` values can take |
 | `mapping` | from inputs | the types its dictionary values can take |
 | `flag` | from inputs | the types its `true_value`, `false_value` and `missing` can take |
-| `compute` | from inputs | [VALUE-10](values.md#value-10) over its operands: `int` while every operator and operand keeps `int`, and `float` otherwise |
-| `aggregate` | from inputs | [FORMULA-23](formulas.md#formula-23) over its relation's fields and derive bindings |
+| `aggregate` | from inputs | [FORMULA-23](formulas.md#formula-23) over its relation's fields and aggregate derivations |
 
 A variable's type is its column's declared type, a stored field's type under
 [INPUT-5](inputs.md#input-5), or an intermediate field's: a typed
@@ -124,13 +123,13 @@ taken from it are not yet known. So is a name a lookup reads from the current
 record that another intermediate over the same input derives: the record of
 the intermediate that reads the lookup holds that field.
 
-The selecting expressions are `source`, `row_value`, `locf`, `literal`,
-`first_available`, `greatest`, `least`, `case`, `mapping` and `flag`. Each
+The selecting expressions are a reference, a literal, `source`, `row_value`,
+`locf`, `first_available`, `greatest`, `least`, `case`, `mapping` and `flag`. Each
 returns the value it selects unchanged, with that value's own type
 ([EXPR-6](#expr-6)), so its type is the set of the types of its alternatives:
 one type when every alternative has it, and otherwise a type decided per value,
 such as `int` or `float` for a `case` between an `int` and a `float` column.
-`{literal: null}` adds no type, and local `missing`, `invalid`, `absent`,
+YAML null adds no type, and local `missing`, `invalid`, `absent`,
 `unmapped` and `no_match` handlers take no part.
 
 Every other expression computes its result, and its type is one type. `NULLIF`
@@ -151,59 +150,78 @@ field it exposes has one column type ([ROW-2](rows.md#row-2)).
 
 <a id="expr-4"></a>
 
-### EXPR-4. source copies a named variable, and literal returns its declared scalar unchanged
+### EXPR-4. A reference or a structured source copies a named variable, and a literal returns its value unchanged
 
-`source` copies a named source or derived variable, and `literal` returns the
-declared scalar value unchanged. Both are expression leaves.
+A reference or a structured `source` copies a named source or derived
+variable, and a literal returns its value unchanged ([EXPR-5](#expr-5)). Each
+is an expression leaf.
 
 Evidence: `schema-expressions`, `schema-source-binding`.
 
-A dataset-qualified `source` reads through the implicit join, and a structured
-`source:` binding adds its range, filter, selection and absent value
-([LOOKUP-1](lookup.md#lookup-1)). Each returns its variable's value under
-[EXPR-6](#expr-6), with the variable's type ([EXPR-14](#expr-14)).
+A dataset-qualified reference reads through the implicit join, and a
+structured `source:` binding adds its range, filter, selection and absent
+value ([LOOKUP-1](lookup.md#lookup-1)). Each returns its variable's value
+under [EXPR-6](#expr-6), with the variable's type ([EXPR-14](#expr-14)). A
+literal is quoted text, a number, `NULL` or a `DATE` or `DATETIME` literal
+written as expression-field text, or a YAML number, Boolean or null.
 
 <a id="expr-5"></a>
 
-### EXPR-5. A bare string derivation or case result is only a source reference, never a literal or a call
+### EXPR-5. An expression field reads a bare name as a reference and quoted text as a literal
 
-A `derivation`, a `derivations` entry, `case_branch_class.then` or
-`case_otherwise_class.otherwise` written as a bare string is the source
-shorthand: it desugars to `{source: <string>}` before registry dispatch, and
-the string is always the variable copied. It is never a literal or an
-operation call, so `DM` with no variable `DM` and `to_date(DM.D)` both fail
-validation. A written `{source: <string>}` there restates the shorthand and
-fails. A non-string scalar derivation is invalid, and the error names the dict
-form.
+A `derivation`, a `derivations` entry, `then`, `otherwise`, a handled
+wrapper's `value`, a key match value and a function argument are expression
+fields: each holds one expression of the closed grammar
+([FORMULA-1](formulas.md#formula-1)), in which a bare name is a reference,
+quoted text such as `'DM'` is a literal, and a YAML number, Boolean or null
+is a literal. A forgotten quote therefore fails validation as an unknown
+name. A value field holds a constant, and its bare text is text.
 
-Fails: `bare_derivation_scalar`, `redundant_long_form`.
-Evidence: `negative-derivation-call-form`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
+Fails: `unknown_field`, `bare_derivation_scalar`, `redundant_long_form`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::text_holding_one_literal_lowers_to_it_and_other_text_to_a_formula`, `rust/crates/yamaa-adapters/tests/front_end_comparison.rs`, `negative-derivation-call-form`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
 
-For a `derivation`, the handled-expression expansion of
-[SCHEMA-10](reference/schema-language.md#schema-10) then applies unchanged.
-`derivation: 5` must be written `{literal: 5}`, and an operation is written as
-its mapping, such as `{to_date: {source: DM.BRTHDTC}}`. Text spelled like a
-call, such as `to_date(DM.BRTHDTC)`, is copied as written into the expanded
-`source`, where it names no variable and fails as `pattern_mismatch` under
-[SCHEMA-12](reference/schema-language.md#schema-12); a well-formed name that
-no input or column declares fails when the source binds. A written
-`{source: X}` with a string `X` fails as `redundant_long_form` under
-[SCHEMA-15](reference/schema-language.md#schema-15). The mapping form stays
-where it adds something: a structured `source:` binding
-([LOOKUP-1](lookup.md#lookup-1)), a `key` match value
-([LOOKUP-6](lookup.md#lookup-6)) or the `value` of a handled expression. The
-specification reader uses YAML 1.2 core, so only `true`/`false` spellings,
-numbers and null parse as non-strings; quote a column reference that YAML
-would otherwise parse as a non-string.
+Text in an expression field is one expression in the derivation context of
+[FORMULA-27](formulas.md#formula-27): text that holds only a name is a
+reference, text that holds only a literal is that literal
+([EXPR-4](#expr-4)), and other text returns one value per current row. So
+`derivation: DM.AGE` copies `DM.AGE`, `derivation: "'DM'"` is the text `DM`,
+`derivation: 5` and `derivation: "5"` are the number 5, and
+`derivation: "AGE * 2"` computes. An operation is written as its mapping,
+such as `{to_date: {source: DM.BRTHDTC}}`; written as text,
+`to_date(DM.BRTHDTC)` calls a function the field does not admit and fails as
+`prohibited_function` under FORMULA-27. A name that no input or column
+declares fails when it binds, as `unknown_field` under
+[NAME-3](names.md#name-3), so a forgotten quote around `DM` never becomes the
+text `DM`.
+
+A reference keeps the canonical `source` binding and its path, so a finding
+about `derivation: DM.AGE` names `derivation.source`; a literal or other text
+is located at its field, such as `derivation` or `case[0].then`. The
+structured `source:` binding ([LOOKUP-1](lookup.md#lookup-1)) stays where it
+adds a range, filter, selection or absence answer.
+
+The schema marks each field's kind. A value field, such as a handler, a
+`dict` value, a `cut` label, a `flag` value or an `allowed_values` entry,
+holds a constant, in which bare text is text and YAML null is missing
+([COLUMN-10](columns.md#column-10)). The specification reader uses YAML 1.2
+core, so only `true`/`false` spellings, numbers and null parse as non-strings;
+quote text that YAML would otherwise parse as one.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a bare string derivation or case result is the
+source shorthand `{source: <string>}`: a string that names no variable fails as
+`pattern_mismatch`, a non-string scalar derivation fails as
+`bare_derivation_scalar`, and a written `{source: X}` restates the shorthand
+and fails as `redundant_long_form`.
 
 <a id="expr-6"></a>
 
 ### EXPR-6. An expression that selects a value returns it unchanged, with its collected precision
 
-`source` returns the value of its variable and `literal` its YAML scalar after
-non-finite normalization. Mapping, conditional, coalescing and extreme
-expressions return the value they select, never a converted one, and a
-selected temporal value keeps its collected precision. The result type each
+A reference or a structured `source` returns the value of its variable, and a
+literal its value after non-finite normalization. Mapping, conditional,
+coalescing and extreme expressions return the value they select, never a
+converted one, and a selected temporal value keeps its collected precision. The result type each
 expression declares is [EXPR-14](#expr-14)'s.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`, `schema-expressions`.
@@ -238,8 +256,8 @@ which defaults to `"Y"`; `FALSE` returns `false_value`, or missing when it is
 absent; `UNKNOWN` returns `missing`, or missing when it is absent, counted
 under `missing` either way. An unknown condition never falls through to
 `false_value`. A `flag` that declares `false_value` also declares `missing`,
-which may repeat `false_value`, name another value, or be `{literal: null}`
-for missing.
+which may repeat `false_value`, name another value, or be YAML null for
+missing.
 
 Fails: `missing_value_required`.
 Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`.

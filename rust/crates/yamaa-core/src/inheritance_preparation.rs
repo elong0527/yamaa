@@ -276,9 +276,10 @@ pub fn prepare<P: PathPort>(
 /// The resolved specification of a 1.x chain: its layers composed root
 /// ancestor first and normalized at the version the chain needs (LAYER-1,
 /// P-VER-1). It holds no `parent` and no `clear`, uses the long form of every
-/// shorthand, keeps root and member fields in schema order (LAYER-14), and
-/// records the chain's version in `yamaa`. Pruning and dependency order read
-/// the lowered specification and are not part of this preparation.
+/// shorthand, keeps root and member fields in schema order, expands every
+/// named window (LAYER-14), and records the chain's version in `yamaa`.
+/// Pruning and dependency order read the lowered specification and are not
+/// part of this preparation yet.
 #[derive(Debug)]
 pub struct ResolvedVersioned {
     pub document: Document,
@@ -351,9 +352,10 @@ fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
 /// against `schema`, the 1.0 specification closure. Each layer is normalized
 /// at the version it declares; its relative paths are respelled from the
 /// entry (LAYER-10); the layers compose, each layer's `clear` applied before
-/// its own fields (LAYER-9); the chain's version replaces `yamaa`; and the
+/// its own fields (LAYER-9); the chain's version replaces `yamaa`; the
 /// composition is normalized at that version, which materializes defaults
-/// and checks requiredness (LAYER-7).
+/// and checks requiredness (LAYER-7); and every named window expands where
+/// it is read, which the 1.0 front end lowers.
 pub fn prepare_versioned<P: PathPort>(
     schema: &SchemaStructure,
     chain: &VersionedChain,
@@ -426,7 +428,9 @@ pub fn prepare_versioned<P: PathPort>(
             }
         }
     }
-    // Every composed node, traced to its occurrence in the layer as written.
+    // Every composed node, traced to its occurrence in the layer as written,
+    // and whether it is a key that shorthand expansion wrote, which a
+    // finding's path names its value through (P-CLR-2).
     let composed_origins = composed
         .node_origins
         .iter()
@@ -442,64 +446,90 @@ pub fn prepare_versioned<P: PathPort>(
             }
         })
         .collect::<Vec<_>>();
+    let composed_shorthand = composed
+        .node_origins
+        .iter()
+        .map(|origin| {
+            shorthand_key(
+                &normalized,
+                origin.layer.map(|input| CompositionOrigin {
+                    input,
+                    node: origin.origin.node,
+                }),
+            )
+        })
+        .collect::<Vec<_>>();
+    let failed = |error: NormalizationError, document: Document, shorthand: &[bool]| {
+        normalize_failure(error, document, shorthand, &composed.provenance, chain)
+    };
     let resolved = match view.normalize_resolved_root(&composed.document) {
         Ok(resolved) => resolved,
+        Err(error) => return Err(failed(error, composed.document, &composed_shorthand)),
+    };
+    let resolved_origins = resolved
+        .origins
+        .iter()
+        .map(|&origin| LayerNodeOrigin::through(origin, &composed_origins))
+        .collect::<Vec<_>>();
+    // Every named window expands where it is read, and the definitions go
+    // (WINDOW-1, LAYER-14); an unknown name fails.
+    let strict = match view.expand_named_windows(&resolved.document, true) {
+        Ok(strict) => strict,
         Err(error) => {
-            // A finding inside a value a layer wrote bare names it through its
-            // shorthand, as the layer wrote it (P-CLR-2).
-            let error = match error {
-                NormalizationError::Invalid(findings) => {
-                    let shorthand = composed
-                        .node_origins
-                        .iter()
-                        .map(|origin| {
-                            shorthand_key(
-                                &normalized,
-                                origin.layer.map(|input| CompositionOrigin {
-                                    input,
-                                    node: origin.origin.node,
-                                }),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-                    NormalizationError::Invalid(
-                        findings
-                            .into_iter()
-                            .map(|mut finding| {
-                                finding.path = written_path(
-                                    &composed.document,
-                                    &|key| shorthand[key],
-                                    &finding.path,
-                                );
-                                finding
-                            })
-                            .collect(),
-                    )
-                }
-                error => error,
-            };
-            let retained = matches!(&error, NormalizationError::Invalid(_));
-            return Err(VersionedError::Normalize(Box::new(FailureContext {
-                error,
-                input: retained.then_some(composed.document),
-                provenance: composed.provenance,
-                sources: chain
-                    .layers
-                    .iter()
-                    .map(|layer| layer.source.identity.clone())
-                    .collect(),
-            })));
+            let shorthand = resolved
+                .origins
+                .iter()
+                .map(|origin| {
+                    matches!(origin.source, SchemaSource::Input) && composed_shorthand[origin.node]
+                })
+                .collect::<Vec<_>>();
+            return Err(failed(error, resolved.document, &shorthand));
         }
     };
     Ok(ResolvedVersioned {
-        origins: resolved
+        origins: strict
             .origins
             .iter()
-            .map(|&origin| LayerNodeOrigin::through(origin, &composed_origins))
+            .map(|&node| resolved_origins[node])
             .collect(),
-        document: resolved.document,
+        document: strict.document,
         provenance: composed.provenance,
     })
+}
+
+/// A resolved 1.x specification's pass failed: its findings address
+/// `document`, and a finding inside a value a layer wrote bare names it
+/// through its shorthand, as the layer wrote it (P-CLR-2).
+fn normalize_failure<E>(
+    error: NormalizationError,
+    document: Document,
+    shorthand: &[bool],
+    provenance: &[LayerProvenance],
+    chain: &VersionedChain,
+) -> VersionedError<E> {
+    let error = match error {
+        NormalizationError::Invalid(findings) => NormalizationError::Invalid(
+            findings
+                .into_iter()
+                .map(|mut finding| {
+                    finding.path = written_path(&document, &|key| shorthand[key], &finding.path);
+                    finding
+                })
+                .collect(),
+        ),
+        error => error,
+    };
+    let retained = matches!(&error, NormalizationError::Invalid(_));
+    VersionedError::Normalize(Box::new(FailureContext {
+        error,
+        input: retained.then_some(document),
+        provenance: provenance.to_vec(),
+        sources: chain
+            .layers
+            .iter()
+            .map(|layer| layer.source.identity.clone())
+            .collect(),
+    }))
 }
 
 /// Borrow original contributor identities for human attribution only. Diagnostic

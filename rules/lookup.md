@@ -259,8 +259,8 @@ whose key is verified unique needs neither `order_by` nor `keep`
 
 A lookup with no candidate for a row, or with a missing match or range value,
 answers absence: an implicit join gives its `source` binding's `absent` value
-and a named intermediate its `no_match` value, either missing when undeclared
-and counted under that handler unless a predicate made the read.
+and a named intermediate its own `absent` value, either missing when
+undeclared and counted under that handler unless a predicate made the read.
 `require_match: true` on the binding or intermediate, or on an input for joins
 that declare no `absent`, instead fails the read as `unmatched_key`; one
 lookup cannot declare both. An aggregate's empty match yields missing
@@ -300,14 +300,12 @@ rule ([EXPR-8](expressions.md#expr-8)). Counts follow
 way as the default.
 
 A named intermediate with no candidate gives every column reading it its
-`no_match` literal, or missing when `no_match` is omitted, independently for
-each column read and counted under that column's `no_match` handler, declared
-or by default. One column's handling never answers for another.
-`no_match: {literal: null}` answers with missing, the same answer as an
-omitted `no_match`, and it keeps that meaning when an empty child inherits the
-specification. A YAML null declares no handler: written over an inherited
-`no_match` it clears the handler, and the read answers with missing again,
-under [LAYER-9](inheritance.md#layer-9).
+`absent` value, or missing when `absent` is omitted, independently for each
+column read and counted under that column's `absent` handler, declared or by
+default. One column's handling never answers for another. `absent: null`
+answers missing as an omitted `absent` does; in a child layer it overrides an
+inherited answer, and `clear` restores the default
+([LAYER-9](inheritance.md#layer-9)).
 
 An aggregate declares no absence handler and no `require_match`. A row whose
 match leaves no candidate, or whose match or range value is missing, reduces
@@ -317,9 +315,9 @@ an empty group, which yields missing under the empty-group rule of
 A missing match or range value is incomplete, not unmatched: no record is
 sought, and the row is answered, or fails, the same way. A matched record
 whose value is missing is a collected blank, not an absent record, and is not
-answered. `absent` keeps answering a variable or ODM item that does not exist
-([COLUMN-11](columns.md#column-11)), and with several candidates `order_by`
-and `keep` choose one first ([LOOKUP-10](#lookup-10)).
+answered. A variable that does not exist is no absence and fails under
+[NAME-3](names.md#name-3) ([COLUMN-11](columns.md#column-11)), and with
+several candidates `order_by` and `keep` choose one first ([LOOKUP-10](#lookup-10)).
 
 `require_match: true` asserts that every row the read is made for finds a
 record. On a binding it covers that binding, and on a named intermediate every
@@ -327,14 +325,13 @@ read of it. On an input, `input.<NAME>.require_match` covers every read
 through an implicit join to that input, the concise form, operands and
 predicate reads included, and it may be declared on an input no join reads. A
 binding's declared `absent` still answers its own reads, and a named
-intermediate over the input keeps its own absence policy: `no_match`,
+intermediate over the input keeps its own absence policy: `absent`,
 `require_match` or neither. A row that finds no record fails as
 `unmatched_key` at the read's path, reporting the sought key values in the
 vocabulary of [LOOKUP-14](#lookup-14), and a read that requires a match counts
 nothing.
 
-`require_match: true` beside `absent` on one binding, or beside `no_match` on
-one intermediate, declares both that a row without a record is an error and
+`require_match: true` beside `absent` on one binding or one intermediate, declares both that a row without a record is an error and
 what it gives, and fails validation as `conflicting_absence_policy` at the two
 fields: choose one, or add the condition that keeps the rows that must match.
 A source that reads the driver's own record, an output column or a named
@@ -1211,25 +1208,26 @@ ungrouped row template.
 
 <a id="lookup-22"></a>
 
-### LOOKUP-22. A qualified aggregate's derive bindings compute typed per-record values before reduction
+### LOOKUP-22. A qualified aggregate's derivations compute typed per-record values before reduction
 
-A qualified aggregate may declare `derive` to bind per-record intermediate
-variables before reduction. Each binding declares a `name`, a `type` and a
-`derivation`; bindings evaluate once per record of the aggregate's relation,
-in declaration order, and each derivation reads the record's fields and the
-values bound by earlier bindings. The reducer expression names each bound
-variable by its unqualified `name`. A binding cannot use a window operation,
-and `derive` is not available on unqualified or grouped-input aggregates.
+A qualified aggregate may declare `derivations` to bind per-record
+intermediate variables before reduction. Each entry, keyed by the variable's
+name, declares its `type` and `derivation`; entries evaluate once per record
+of the aggregate's relation, in declaration order, and each derivation reads
+the record's fields and the values bound by earlier entries. The reducer
+expression names each bound variable by its unqualified name. An entry cannot
+use a window operation, and `derivations` is not available on unqualified or
+grouped-input aggregates.
 
 Fails: `invalid_derive_step`, `unknown_derive_variable`.
 Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::donor_keep_reached`.
 
-A derive binding is not an expression function. Text becomes a number only
-through the binding's declared `type`, and a date becomes an integer only
-through an operation such as `to_epoch_day` in the binding's own derivation;
-an `aggregate` or `compute` expression never parses text or dates itself. Each
-binding's evaluated value converts to its declared `type` under
-[VALUE-3](values.md#value-3), and a binding whose result type
+An aggregate derivation is not an expression function. Text becomes a number
+only through the entry's declared `type`, and a date becomes an integer only
+through an operation such as `to_epoch_day` in the entry's own derivation; an
+`aggregate` expression or a derivation's text never parses text or dates
+itself. Each entry's evaluated value converts to its declared `type` under
+[VALUE-3](values.md#value-3), and an entry whose result type
 ([EXPR-14](expressions.md#expr-14)) can never convert to it fails validation
 under [VALUE-24](values.md#value-24). Text that is not convertible to the
 declared numeric type fails as a conversion failure under
@@ -1241,20 +1239,22 @@ The window operations are `row_number`, `rank`, `row_value`, `locf` and
 `baseline_flag`, including inside `case`; validation reports
 `invalid_derive_step` at the window's path.
 
-A binding's derivation that names an unqualified variable no earlier binding
-binds, or a reducer expression that names one no binding binds, fails
-validation as `unknown_derive_variable`.
+An entry's derivation that names an unqualified variable no earlier entry
+binds, or a reducer expression that names one no entry binds, fails validation
+as `unknown_derive_variable`. The map composes by key under
+[LAYER-6](inheritance.md#layer-6), and a finding names an entry
+`aggregate.derivations.<name>`.
 
-The relation a derived aggregate reduces is the one relation its derive
-bindings and filter name, and naming two relations is an error. A reducer
+The relation a derived aggregate reduces is the one relation its derivations
+and filter name, and naming two relations is an error. A reducer
 expression that mixes a bound variable with a qualified identifier is an error
 under [LOOKUP-18](#lookup-18). Qualifiers naming declared named intermediates
-do not count as relations for this rule. A binding may read a named
+do not count as relations for this rule. An entry may read a named
 intermediate that declares `keep`: with `keep` the intermediate selects
 exactly one record per row ([LOOKUP-10](#lookup-10)), and the read is a
-row-scoped value, not another reduced relation. The binding still evaluates
+row-scoped value, not another reduced relation. The entry still evaluates
 once per record of the aggregate's one relation, and each record sees the same
-intermediate value for its row. A binding that reads a named intermediate
+intermediate value for its row. An entry that reads a named intermediate
 without `keep` is an error.
 
 A project function called in an intermediate derivation

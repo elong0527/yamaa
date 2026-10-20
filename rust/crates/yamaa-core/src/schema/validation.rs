@@ -763,6 +763,17 @@ impl Run<'_> {
                 .unwrap_or(value)
         } else if let Some(text) = source.then(|| source_text(site.value)).flatten() {
             text
+        } else if self.keyword_restated(members, member, field, value) {
+            // A registry entry that writes nothing restates the keyword of
+            // the same union that names it bare, as `- not_missing: {}`
+            // restates `- not_missing` (P-HND-4): the keyword is both the
+            // long form's field and its shorthand.
+            let keyword = Self::text(field.as_str());
+            return Ok(vec![self.diagnostic(
+                site,
+                ConditionCode::SchemaRedundantLongForm,
+                vec![("field", keyword.clone()), ("shorthand", keyword)],
+            )]);
         } else {
             return Ok(Vec::new());
         };
@@ -778,6 +789,35 @@ impl Run<'_> {
                 ("shorthand", shorthand),
             ],
         )])
+    }
+    /// Whether `member`, a registry, matched an entry `{keyword: {}}` whose
+    /// empty payload another member of the union writes as the bare
+    /// `keyword`: a value type that admits exactly that text.
+    fn keyword_restated(
+        &self,
+        members: &[TypeExpression],
+        member: &TypeExpression,
+        keyword: &str,
+        payload: usize,
+    ) -> bool {
+        let schema = self.schema;
+        let named = |expression: &TypeExpression| {
+            expression
+                .node_text(expression.root())
+                .and_then(|name| schema.alias_named(name))
+                .map(|(_, alias)| &alias.kind)
+        };
+        matches!(named(member), Some(SchemaAliasKind::Registry(_)))
+            && matches!(&self.input.nodes()[payload], N::Mapping(items) if items.is_empty())
+            && members.iter().any(|other| {
+                let Some(SchemaAliasKind::Descriptor(descriptor)) = named(other) else {
+                    return false;
+                };
+                schema.descriptors()[*descriptor]
+                    .descriptor
+                    .permitted()
+                    .is_some_and(|values| values.iter().any(|value| value == keyword))
+            })
     }
     fn union(
         &mut self,
