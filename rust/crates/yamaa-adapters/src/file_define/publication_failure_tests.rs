@@ -305,7 +305,7 @@ fn define_caps_only_the_public_issue_prefix_and_retains_every_original_finding()
                     (0..10_001)
                         .map(|index| {
                             Finding::cause(
-                                ConditionCode::ApplicationRejected,
+                                ConditionCode::DefineStandardName,
                                 &format!("findings[{index}]"),
                                 "authored metadata refusal",
                             )
