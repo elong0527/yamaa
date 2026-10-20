@@ -449,7 +449,7 @@ def condition_literals(source: str) -> list[tuple[int, str]]:
     return found
 
 
-def json_decodes(source: str) -> list[int]:
+def json_decodes(source: str, *, crate_root: bool = True) -> list[int]:
     """JSON reading capabilities outside test items, including Rust imports.
 
     Resolve use trees before checking paths so renames, nested imports and
@@ -463,7 +463,7 @@ def json_decodes(source: str) -> list[int]:
     code = blank(source, tokens, {"comment", "character", "string"})
     tests = cfg_test_items(code)
     code = blank(code, [("test", low, high, 0, None) for low, high in tests], {"test"})
-    imports = RustImports(code)
+    imports = RustImports(code, crate_root=crate_root)
 
     def reader(path, offset):
         return any(
@@ -505,14 +505,54 @@ def json_decodes(source: str) -> list[int]:
     for match in RUST_PATH.finditer(imports.code_without_uses):
         if reader(tuple(re.split(r"\s*::\s*", match[0])), match.start()):
             sites.add(match.start())
-    # A qualified trait call separates the receiver from `deserialize`:
-    # `<Value as serde::Deserialize>::deserialize(deserializer)`.
+    # Qualified trait calls separate the reader target from its method.
     for match in re.finditer(
-        rf"<\s*({RUST_PATH.pattern})\s+as\s+{RUST_PATH.pattern}(?:\s*<[^>]*>)?\s*>\s*::\s*deserialize\b",
+        rf"<\s*({RUST_PATH.pattern})\s+as\s+({RUST_PATH.pattern})(?:\s*<[^>]*>)?\s*>\s*::\s*(?:r#)?(deserialize|from_str)\b",
+        code,
+    ):
+        if match[3] == "from_str" and not any(
+            candidate
+            in {
+                ("std", "str", "FromStr"),
+                ("core", "str", "FromStr"),
+                ("", "std", "str", "FromStr"),
+                ("", "core", "str", "FromStr"),
+            }
+            for candidate in imports.resolve(
+                tuple(re.split(r"\s*::\s*", match[2])), imports.scope_at(match.start())
+            )
+        ):
+            continue
+        if reader(tuple(re.split(r"\s*::\s*", match[1])) + (match[3],), match.start()):
+            sites.add(match.start())
+    # str::parse selects FromStr through its explicit type argument. Do not
+    # infer that an unrelated free parse<T> function is a text reader.
+    for match in re.finditer(
+        rf"\.\s*(?:r#)?parse\s*::\s*<\s*({RUST_PATH.pattern})\s*,?\s*>\s*\(",
         code,
     ):
         if reader(
-            tuple(re.split(r"\s*::\s*", match[1])) + ("deserialize",), match.start()
+            tuple(re.split(r"\s*::\s*", match[1])) + ("from_str",), match.start()
+        ):
+            sites.add(match.start())
+    for match in re.finditer(
+        rf"({RUST_PATH.pattern})\s*::\s*<\s*({RUST_PATH.pattern})\s*,?\s*>\s*\(",
+        code,
+    ):
+        if any(
+            candidate
+            in {
+                ("str", "parse"),
+                ("std", "primitive", "str", "parse"),
+                ("core", "primitive", "str", "parse"),
+                ("", "std", "primitive", "str", "parse"),
+                ("", "core", "primitive", "str", "parse"),
+            }
+            for candidate in imports.resolve(
+                tuple(re.split(r"\s*::\s*", match[1])), imports.scope_at(match.start())
+            )
+        ) and reader(
+            tuple(re.split(r"\s*::\s*", match[2])) + ("from_str",), match.start()
         ):
             sites.add(match.start())
     for attribute in re.finditer(r"#\s*\[\s*serde\s*\(", code):
@@ -586,16 +626,18 @@ def rust_imports(
 
 
 class RustImports:
-    """Resolve use items within their Rust block and module scopes.
+    """Resolve use and extern-crate items in Rust block and module scopes.
 
     Items apply throughout their block. Blocks inherit imports; child modules
     do not, and `super` skips enclosing function blocks. Each alias resolves
     in its declaration scope, so a caller's shadow cannot retarget it. Multiple
     declarations in one scope are kept for conditional compilation alternatives.
+    Root extern-crate aliases also enter the extern prelude. Their targets are
+    canonical crate identities, independent of local aliases with that name.
     This resolves source ownership, not Rust's privacy or type checking.
     """
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, crate_root: bool = True):
         uses = list(re.finditer(r"\buse\s+([^;]+);", code))
         self.code_without_uses = blank(
             code,
@@ -642,6 +684,26 @@ class RustImports:
                 )
             stack.append(scope)
         self.leaves = []
+        self.extern_targets = {}
+        self.extern_prelude = {}
+        for match in re.finditer(
+            rf"\bextern\s+crate\s+({RUST_NAME})(?:\s+as\s+({RUST_NAME}))?\s*;",
+            code,
+        ):
+            crate = match[1].removeprefix("r#")
+            alias = (match[2] or match[1]).removeprefix("r#")
+            if alias == "_":
+                continue
+            scope = self.scope_at(match.start())
+            if crate == "self":
+                target = 0 if crate_root else ("crate",)
+            else:
+                target = ("", crate)
+            offset = match.start(1)
+            self.extern_targets[scope, offset] = target
+            self.bindings[scope].setdefault(alias, []).append((target, scope, offset))
+            if scope == 0 and crate_root:
+                self.extern_prelude.setdefault(alias, set()).add(target)
         for match in uses:
             scope = self.scope_at(match.start())
             for path, alias, offset in rust_imports(match[1], match.start(1)):
@@ -666,8 +728,11 @@ class RustImports:
         if not path:
             return set()
         if path[0] == "":  # Absolute paths name the extern prelude.
-            return {path}
-        if path[0] in {"crate", "self", "super"}:
+            if len(path) < 2:
+                return {path}
+            targets = self.extern_prelude.get(path[1], {path[:2]})
+            path = path[2:]
+        elif path[0] in {"crate", "self", "super"}:
             target = 0 if path[0] == "crate" else self.module[scope]
             if path[0] == "super":
                 parent = self.parents[target]
@@ -681,7 +746,7 @@ class RustImports:
         else:
             targets = self.lookup(path[0], scope, seen, lexical=True)
             if not targets:
-                targets = {(path[0],)}
+                targets = self.extern_prelude.get(path[0], {(path[0],)})
             path = path[1:]
         for name in path:
             expanded = set()
@@ -703,7 +768,9 @@ class RustImports:
                     key = (declaration, offset)
                     if key in seen:
                         continue
-                    if isinstance(path, int):
+                    if key in self.extern_targets:
+                        targets.add(self.extern_targets[key])
+                    elif isinstance(path, int):
                         targets.add(path)
                     else:
                         targets.update(self.resolve(path, declaration, seen | {key}))
@@ -772,7 +839,7 @@ def json_test_sources(sources: dict[Path, str]) -> set[Path]:
             visible,
         ):
             # Comments are already blank; reject matches inside string literals.
-            start = match.end() - len(match[0].lstrip())
+            start = match.start(2)
             if not re.search(r"\bmod\s+", code[match.start() : match.end()]):
                 continue
             directories = [name for low, high, name in inline if low < start < high]
@@ -1117,7 +1184,11 @@ def violations(root: Path) -> list[str]:
                 + ", ".join(literals)
             )
         if Path(relative) not in JSON_CODECS and path not in json_tests:
-            for number in json_decodes(source):
+            crate_root = (
+                path.parent == root / "rust/crates" / crate / "src"
+                and path.name in {"lib.rs", "main.rs"}
+            )
+            for number in json_decodes(source, crate_root=crate_root):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
         if (
             Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
