@@ -141,10 +141,22 @@ fn collect(
                 collect(&entry.path(), parents, found)?;
                 parents.pop();
             }
-        } else if name.ends_with(".yaml") && !(kind.is_symlink() && entry.path().is_dir()) {
-            let mut parts = parents.clone();
-            parts.push(name);
-            found.push(parts);
+        } else if name.ends_with(".yaml") {
+            // Inspect link targets without opening them: a linked pipe must
+            // not block discovery either. Regular file links stay candidates
+            // so the resolver can refuse them after specification discovery.
+            let regular = if kind.is_symlink() {
+                std::fs::metadata(entry.path())
+                    .map_err(|error| discovery_error(&entry.path(), error))?
+                    .is_file()
+            } else {
+                kind.is_file()
+            };
+            if regular {
+                let mut parts = parents.clone();
+                parts.push(name);
+                found.push(parts);
+            }
         }
     }
     Ok(())

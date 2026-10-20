@@ -1233,6 +1233,30 @@ mod files {
 
     #[cfg(unix)]
     #[test]
+    fn directories_skip_special_files_and_links_to_them() {
+        use std::os::unix::{fs::symlink, net::UnixListener};
+
+        let directory = Directory::new("special-files");
+        let packed_text = super::packed();
+        let packed = directory.write("packed.yaml", &packed_text);
+        let socket = directory.0.join("socket.yaml");
+        let _listener = UnixListener::bind(&socket).unwrap();
+        symlink(&socket, directory.0.join("linked-socket.yaml")).unwrap();
+
+        for fix in [false, true] {
+            let linted = lint(&[text(&directory.0)], fix).unwrap();
+            assert_eq!(linted.len(), 1);
+            assert_eq!(linted[0].file, display(&packed));
+            assert_eq!(linted[0].fixed, fix);
+            assert_eq!(
+                std::fs::read_to_string(&packed).unwrap(),
+                if fix { CANONICAL } else { &packed_text }
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn unreadable_directories_refuse_before_any_file_is_fixed() {
         use std::os::unix::fs::PermissionsExt;
 
