@@ -121,63 +121,75 @@ impl<'a> BindContext<'a, '_> {
             self.donors.items,
         )
     }
-    /// Bind one derivation, the operation at `path` that derives `column`.
+    /// The tree binding reads.
+    pub(super) fn spec(&self) -> &'a ast::Spec {
+        self.tree.spec()
+    }
+
+    /// Bind one derivation: the expression `e`, which derives `column`.
+    /// Preparation admitted every expression it binds, so a value the tree
+    /// cannot give binding is an internal failure.
     pub(super) fn bind(
         &mut self,
-        operation: &Operation,
-        path: &str,
+        e: ExprId,
         column: usize,
     ) -> Result<Option<Expression>, BindError> {
-        match operation {
-            Operation::Literal(value) => Ok(Some(Expression::Literal(value.clone()))),
-            Operation::Source(source) => source_expressions::bind(self, source, column, path),
-            Operation::Compute(compiled) => match self.implicit() {
-                Some(_) => self.implicit_formula(compiled, path),
-                None => self.formula(compiled, path),
-            },
-            Operation::InvalidNumeric { expression, error } => {
-                if !self.reported {
-                    self.findings.push(BindFinding::Numeric {
-                        path: format!("{path}.expr"),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                }
-                Ok(None)
+        let spec = self.spec();
+        let path = checks::path(spec, e);
+        let internal = |_| BindError::Internal;
+        match &spec.expr(e).kind {
+            ExprKind::Literal(value) => Ok(Some(Expression::Literal(bound_constant(value)?))),
+            ExprKind::Ref(_) | ExprKind::Source(_) => {
+                let source =
+                    source_expressions::Declaration::from_tree(spec, e).map_err(internal)?;
+                source_expressions::bind(self, &source, column, &path)
             }
-            Operation::Case(branches) => cases::bind(self, branches, column),
-            Operation::Flag(flag) => flags::bind(flag, self),
-            Operation::FirstAvailable(selection) => match self.implicit() {
-                Some(implicit) => self.implicit_first_available(implicit, selection, path, column),
-                None => self.first_available(selection, path, column),
-            },
-            Operation::Round(_)
-            | Operation::Temporal(_)
-            | Operation::Imputation(_)
-            | Operation::StrCase(_)
-            | Operation::StrPad(_)
-            | Operation::StrExtract(_)
-            | Operation::StrReplace(_)
-            | Operation::StrTemplate(_)
-            | Operation::Scalar(_)
-            | Operation::MappingCut(_) => self.scalar(operation, column),
-            Operation::Window(window) => self.window(window),
-            Operation::Aggregate(aggregate) => aggregates::bind(
-                aggregate,
-                self.catalog,
-                self.scope.driver,
-                self.row(),
-                self.scope.phase,
-                self.output,
-                self.tree,
-                self.donors.named,
-                self.donors.secondary,
-                self.donors.items,
-                self.project,
-                self.edges,
-                self.findings,
+            ExprKind::Formula(formula) => self.compute(formula),
+            ExprKind::Case(arms) => cases::bind(self, arms, column),
+            ExprKind::Flag { .. } => flags::bind(
+                &flags::Declaration::from_tree(spec, e).map_err(internal)?,
+                self,
             ),
-            Operation::Odm(odm) => {
+            ExprKind::FirstAvailable { sources, missing } => {
+                let selection =
+                    source_expressions::FirstAvailable::from_tree(spec, sources, missing.as_ref())
+                        .map_err(internal)?;
+                match self.implicit() {
+                    Some(implicit) => {
+                        self.implicit_first_available(implicit, &selection, &path, column)
+                    }
+                    None => self.first_available(&selection, &path, column),
+                }
+            }
+            ExprKind::Scalar { op, .. } => self.scalar(e, op, column),
+            ExprKind::Window(_) => {
+                self.window(&windows::Declaration::from_tree(spec, e).map_err(internal)?)
+            }
+            ExprKind::Aggregate(_) => {
+                let aggregate = aggregates::Declaration::from_tree(
+                    spec,
+                    e,
+                    self.donors.named,
+                    self.project.is_some(),
+                )
+                .map_err(internal)?;
+                aggregates::bind(
+                    &aggregate,
+                    self.catalog,
+                    self.scope.driver,
+                    self.row(),
+                    self.scope.phase,
+                    self.output,
+                    self.tree,
+                    self.donors.named,
+                    self.donors.secondary,
+                    self.donors.items,
+                    self.project,
+                    self.edges,
+                    self.findings,
+                )
+            }
+            ExprKind::Odm(_) => {
                 // With record rows a key reads its row's one record, as an
                 // ungrouped row template's derivation does.
                 let (phase, records) = match self.implicit() {
@@ -188,7 +200,7 @@ impl<'a> BindContext<'a, '_> {
                     None => (self.scope.phase, false),
                 };
                 odm::bind(
-                    odm,
+                    &odm::Declaration::from_tree(spec, e).map_err(internal)?,
                     self.catalog,
                     self.scope.driver,
                     self.row(),
@@ -197,7 +209,31 @@ impl<'a> BindContext<'a, '_> {
                     self.findings,
                 )
             }
-            Operation::ProjectFunction { call } => self.call(*call),
+            ExprKind::Call { .. } => self.call(self.tree.call(e)?),
+            ExprKind::Unsupported(_) => Err(BindError::Internal),
+        }
+    }
+
+    /// A formula in a derivation: bound, or its grammar finding reported
+    /// unless the derivation's declaration findings came first.
+    fn compute(&mut self, formula: &ast::Formula) -> Result<Option<Expression>, BindError> {
+        let text_path = checks::render(self.spec(), formula.text.meta);
+        match &formula.compiled {
+            Ok(compiled) => match self.implicit() {
+                Some(_) => self.implicit_formula(compiled, &text_path),
+                None => self.formula(compiled, &text_path),
+            },
+            Err(error @ CompileError::Invalid { .. }) => {
+                if !self.reported {
+                    self.findings.push(BindFinding::Numeric {
+                        path: text_path,
+                        expression: formula.text.text.clone(),
+                        error: error.clone(),
+                    });
+                }
+                Ok(None)
+            }
+            Err(_) => Err(BindError::Internal),
         }
     }
 
@@ -205,21 +241,72 @@ impl<'a> BindContext<'a, '_> {
     /// the verb's own module checks and wraps them.
     fn scalar(
         &mut self,
-        operation: &Operation,
+        e: ExprId,
+        op: &ast::ScalarOp,
         column: usize,
     ) -> Result<Option<Expression>, BindError> {
-        match operation {
-            Operation::Round(rounding) => rounding::bind(rounding, column, self),
-            Operation::Temporal(temporal) => temporal::bind(temporal, column, self),
-            Operation::Imputation(imputation) => imputation::bind(imputation, column, self),
-            Operation::StrCase(case) => str_case::bind(case, column, self),
-            Operation::StrPad(pad) => str_pad::bind(pad, column, self),
-            Operation::StrExtract(extract) => str_extract::bind(extract, column, self),
-            Operation::StrReplace(replace) => str_extract::bind_replace(replace, column, self),
-            Operation::StrTemplate(template) => str_template::bind(template, column, self),
-            Operation::Scalar(extreme) => scalar::bind(extreme, column, self),
-            Operation::MappingCut(mapping) => mapping_cut::bind(mapping, column, self),
-            _ => Err(BindError::Internal),
+        use ast::ScalarOp as Op;
+        let spec = self.spec();
+        let internal = |_| BindError::Internal;
+        match op {
+            Op::Round { .. } => rounding::bind(
+                &rounding::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
+            Op::Diff { .. }
+            | Op::StudyDay
+            | Op::ToEpochDay
+            | Op::Shift { .. }
+            | Op::DurationValue { .. }
+            | Op::Dtc
+            | Op::TimeOfDay => temporal::bind(
+                &temporal::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
+            Op::Impute { .. } | Op::Precision { .. } | Op::ImputationFlag { .. } | Op::ToDate => {
+                imputation::bind(
+                    &imputation::from_tree(spec, e).map_err(internal)?,
+                    column,
+                    self,
+                )
+            }
+            Op::StrCase { .. } => str_case::bind(
+                &str_case::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
+            Op::StrPad { .. } => str_pad::bind(
+                &str_pad::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
+            Op::StrExtract { .. } | Op::StrReplace { .. } => {
+                match str_extract::from_tree(spec, e).map_err(internal)? {
+                    str_extract::Admitted::Search(extract) => {
+                        str_extract::bind(&extract, column, self)
+                    }
+                    str_extract::Admitted::Replace(replace) => {
+                        str_extract::bind_replace(&replace, column, self)
+                    }
+                }
+            }
+            Op::StrTemplate { .. } => str_template::bind(
+                &str_template::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
+            Op::Greatest | Op::Least => scalar::bind(
+                &scalar::Declaration::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
+            Op::Mapping { .. } | Op::Cut { .. } => mapping_cut::bind(
+                &mapping_cut::from_tree(spec, e).map_err(internal)?,
+                column,
+                self,
+            ),
         }
     }
 
@@ -493,9 +580,9 @@ impl<'a> BindContext<'a, '_> {
     fn formula(
         &mut self,
         compiled: &CompiledExpression,
-        path: &str,
+        text_path: &str,
     ) -> Result<Option<Expression>, BindError> {
-        let text_path = format!("{path}.expr");
+        let text_path = String::from(text_path);
         let before = self.findings.len();
         let mut bindings = Vec::new();
         for identifier in compiled.identifiers() {
@@ -554,9 +641,9 @@ impl<'a> BindContext<'a, '_> {
     fn implicit_formula(
         &mut self,
         compiled: &CompiledExpression,
-        path: &str,
+        text_path: &str,
     ) -> Result<Option<Expression>, BindError> {
-        let text_path = format!("{path}.expr");
+        let text_path = String::from(text_path);
         let before = self.findings.len();
         let Donors {
             named,
@@ -626,9 +713,9 @@ impl<'a> BindContext<'a, '_> {
     pub(super) fn branch_formula(
         &mut self,
         compiled: &CompiledExpression,
-        path: &str,
+        text_path: &str,
     ) -> Result<Option<Expression>, BindError> {
-        let text_path = format!("{path}.expr");
+        let text_path = String::from(text_path);
         let before = self.findings.len();
         let Donors {
             named,

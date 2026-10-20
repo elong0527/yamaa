@@ -51,33 +51,38 @@ pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFindi
 }
 
 /// The fields a row driver intermediate writes that it may not declare
-/// (ROW-2), in this order. Each counts once written, whatever its value; a
-/// `no_match` counts even when written null. Binding refuses the same list.
-/// `item` is the intermediate's document node: the tree keeps no written
-/// empty list or map, or a written `require_match: false`, so the checks a
-/// written field decides read the document the tree was lowered from.
-pub(in crate::specification) fn driver_prohibited(d: &Document, item: usize) -> Vec<&'static str> {
-    [
-        "key",
-        "between",
-        "order_by",
-        "keep",
-        "no_match",
-        "require_match",
-    ]
-    .into_iter()
-    .filter(|&field| match field {
-        "no_match" => d.field(item, field).is_some(),
-        _ => present(d, item, field),
-    })
-    .collect()
+/// (ROW-2), in this order. Each counts once written, whatever its value; an
+/// absence answer counts even when written null. Binding refuses the same
+/// list.
+pub(in crate::specification) fn driver_prohibited(
+    spec: &Spec,
+    item: &ast::Intermediate,
+) -> Vec<&'static str> {
+    // The absence answer as its surface spells it: `no_match` in 0.5.
+    let answer = item
+        .absent
+        .as_ref()
+        .map(|answer| spec.paths.segment(answer.meta.path));
+    let mut fields = ["key", "between", "order_by", "keep"]
+        .into_iter()
+        .filter(|&field| item.written.contains(field))
+        .collect::<Vec<_>>();
+    if let Some(ast::Segment::Field(answer)) = answer {
+        fields.push(answer);
+    }
+    fields.extend(
+        ["require_match"]
+            .into_iter()
+            .filter(|&field| item.written.contains(field)),
+    );
+    fields
 }
 
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing, by default or as `no_match: {literal: null}`,
 /// reads what the implicit join reads (LOOKUP-4). A written field changes
 /// the relation even when it is empty, such as `derivations: {}`.
-fn rename_only(d: &Document, item: usize) -> bool {
+fn rename_only(item: &ast::Intermediate) -> bool {
     let changes_relation = [
         "key",
         "between",
@@ -89,30 +94,23 @@ fn rename_only(d: &Document, item: usize) -> bool {
         "verifications",
     ]
     .iter()
-    .any(|field| present(d, item, field));
+    .any(|field| item.written.contains(field));
     !changes_relation
-        && !requires_match(d, item)
-        && d.field(item, "no_match")
-            .filter(|&node| !matches!(d.nodes()[node], N::Null))
-            .is_none_or(|node| missing_literal(d, node))
+        && !item.require_match
+        && item
+            .absent
+            .as_ref()
+            .is_none_or(|answer| answer.value == ast::Literal::Missing)
 }
 
 /// Declaration failures that precede source access and key-type binding:
 /// identifier collisions, the dataset read, empty and repeated keys, a
 /// rename-only lookup, two absence policies, and an unpaired selection.
-/// `items` are the intermediates' document nodes, in written order.
-pub(in crate::specification) fn admission_findings(
-    spec: &Spec,
-    d: &Document,
-    items: &[usize],
-) -> Result<Vec<PreflightFinding>, PrepareError> {
+pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<PreflightFinding> {
     let mut findings = Vec::new();
     let mut identifiers = BTreeMap::<&str, String>::new();
     let inputs = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
-    if items.len() != spec.intermediates.len() {
-        return Err(PrepareError::Internal);
-    }
-    for ((index, item), &node) in spec.intermediates.iter().enumerate().zip(items) {
+    for (index, item) in spec.intermediates.iter().enumerate() {
         let path = format!("intermediates[{index}]");
         let name = item.id.name.as_str();
         let dataset = item.dataset.name.as_str();
@@ -169,16 +167,21 @@ pub(in crate::specification) fn admission_findings(
                 }
             }
         }
-        if rename_only(d, node) {
+        if rename_only(item) {
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
         // Asserting a match and answering its absence are two absence policies.
-        if requires_match(d, node) && present(d, node, "no_match") {
+        // An absence answer written null states no policy.
+        let answer = item.absent.as_ref().filter(|answer| {
+            matches!(spec.paths.segment(answer.meta.path),
+                ast::Segment::Field(field) if item.written.contains(field))
+        });
+        if let Some(answer) = answer.filter(|_| item.require_match) {
             findings.push(PreflightFinding::Scalar(lookup::absence_conflict(
-                format!("{path}.no_match"),
+                render(spec, answer.meta),
                 format!("{path}.require_match"),
                 Owner::Intermediate(name),
             )));
@@ -191,9 +194,13 @@ pub(in crate::specification) fn admission_findings(
             (
                 "order_by",
                 "keep",
-                present(d, node, "order_by") && !present(d, node, "keep"),
+                item.written.contains("order_by") && !item.written.contains("keep"),
             ),
-            ("keep", "order_by", present(d, node, "keep") && !ordered),
+            (
+                "keep",
+                "order_by",
+                item.written.contains("keep") && !ordered,
+            ),
         ] {
             if unpaired {
                 findings.push(PreflightFinding::Scalar(lookup::selection_unpaired(
@@ -205,23 +212,14 @@ pub(in crate::specification) fn admission_findings(
             }
         }
     }
-    Ok(findings)
+    findings
 }
 
 /// The input whose records build every row template's rows: a template's
 /// input, or the input its driver intermediate reads. A driver intermediate
 /// declares no relation of its own (ROW-2): each field it writes that it may
 /// not declare refuses it, as binding refuses it.
-pub(in crate::specification) fn common_driver<'s>(
-    spec: &'s Spec,
-    d: &Document,
-) -> Result<&'s str, PrepareError> {
-    let items = d
-        .field(d.root(), "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        .map(|id| sequence(d, id))
-        .transpose()?
-        .unwrap_or(&[]);
+pub(in crate::specification) fn common_driver(spec: &Spec) -> Result<&str, PrepareError> {
     let mut common = None;
     for (index, template) in spec.rows.templates.iter().enumerate() {
         // Preflight has already refused a template without a driver.
@@ -230,13 +228,12 @@ pub(in crate::specification) fn common_driver<'s>(
         let name = if input(name) {
             name
         } else {
-            let (item, &node) = spec
+            let item = spec
                 .intermediates
                 .iter()
-                .zip(items)
-                .find(|(item, _)| item.id.name == name)
+                .find(|item| item.id.name == name)
                 .ok_or(PrepareError::Internal)?;
-            let mut prohibited = driver_prohibited(d, node);
+            let mut prohibited = driver_prohibited(spec, item);
             if !input(&item.dataset.name) {
                 prohibited.push("dataset");
             }
@@ -266,14 +263,12 @@ pub(in crate::specification) fn common_driver<'s>(
 /// qualified name at all (ROW-6), which binding reports. Every alternative
 /// is checked, selected or not.
 pub(in crate::specification) fn first_template(
-    d: &Document,
-    lowered: &Lowered,
+    spec: &Spec,
     rows: &[ExprId],
     filter: Option<ExprId>,
-    project: Option<&functions::Prepared>,
+    calls: bool,
     named: &intermediates::Declarations,
 ) -> Result<Vec<PreflightFinding>, PrepareError> {
-    let spec = lowered.spec();
     let mut findings = Vec::new();
     let mut stack = rows
         .iter()
@@ -328,9 +323,11 @@ pub(in crate::specification) fn first_template(
                 }
             }
             kind => {
-                let mut names = Vec::new();
-                derivations::references(d, lowered.origin(e), project, &mut names, 0)?;
-                names.extend(template_names(spec, e));
+                let scan = reads::Scan {
+                    relation: true,
+                    windows: true,
+                };
+                let names = reads::names(spec, e, scan, calls)?;
                 let path = match kind {
                     ExprKind::Formula(formula) => render(spec, formula.text.meta),
                     _ => path(spec, e),
@@ -358,21 +355,6 @@ pub(in crate::specification) fn first_template(
 enum Visit {
     Expression(ExprId),
     Names(Vec<String>, String),
-}
-
-/// A `str_template`'s placeholders.
-fn template_names(spec: &Spec, e: ExprId) -> Vec<String> {
-    match &spec.expr(e).kind {
-        ExprKind::Scalar {
-            op: ScalarOp::StrTemplate { .. },
-            operands,
-            ..
-        } => operands
-            .iter()
-            .filter_map(|operand| name(spec, operand.expr).map(String::from))
-            .collect(),
-        _ => Vec::new(),
-    }
 }
 
 /// A read of a first-template SELF lookup, followed through the `between`
@@ -435,14 +417,12 @@ fn register(
 /// intermediate is no driver. Preparation refuses such a read before any
 /// data is read, so `check` and `domain` report it alike.
 pub(in crate::specification) fn unaddressable(
-    d: &Document,
-    lowered: &Lowered,
+    spec: &Spec,
     root: ExprId,
     driver: &str,
     aggregate: bool,
-    project: Option<&functions::Prepared>,
+    calls: bool,
 ) -> Result<bool, PrepareError> {
-    let spec = lowered.spec();
     let Some(item) = spec
         .intermediates
         .iter()
@@ -450,10 +430,12 @@ pub(in crate::specification) fn unaddressable(
     else {
         return Ok(false);
     };
-    let mut names = Vec::new();
-    derivations::current_references(d, lowered.origin(root), project, &mut names, 0)?;
+    let scan = reads::Scan {
+        relation: false,
+        windows: true,
+    };
+    let mut names = reads::names(spec, root, scan, calls)?;
     for position in positions(spec, root) {
-        names.extend(template_names(spec, position));
         // The imputation bounds and fallback the shared reference scan skips.
         if let ExprKind::Scalar {
             op: ScalarOp::Impute { .. },

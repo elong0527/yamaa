@@ -1,11 +1,12 @@
 //! Bounded original-specification compiler: declared typed sources,
 //! implicit key grain, source columns and checked numeric computations.
 //! Admission never reads study data; binding consumes only the captured source schema.
+use crate::ast::{ExprId, ExprKind};
 use crate::{
     ast, column_dependencies,
-    expression::{compile, CompileError, CompiledExpression, Context as ExpressionContext},
+    expression::{CompileError, CompiledExpression, Context as ExpressionContext},
     reference_binding::{self, Catalog},
-    schema::{Document, DocumentNode as N, SpecificationDocument},
+    schema::SpecificationDocument,
     table::{Column, TableSchema},
     value::ColumnType,
 };
@@ -29,7 +30,6 @@ mod intermediate_range;
 mod intermediates;
 mod lookup_diagnostics;
 mod lookup_range;
-mod lowering_audit;
 mod match_values;
 mod relation_predicates;
 mod types;
@@ -42,6 +42,7 @@ mod root_filter;
 mod source_expressions;
 pub use source_expressions::SourceFinding;
 mod column_checks;
+mod reads;
 mod report;
 mod row_drivers;
 mod row_intermediates;
@@ -119,9 +120,13 @@ pub enum PreflightFinding {
         source: String,
         actual: &'static str,
     },
+    /// TIME-5's refusal of a `diff`'s endpoints, spelled as the tree's
+    /// surface writes them: `bounds` in 0.5, `closed` in 1.0 (P-ORD-2).
     TemporalBounds {
         path: String,
-        value: String,
+        field: &'static str,
+        value: &'static str,
+        permitted: &'static str,
     },
     ProjectFunction(FunctionFinding),
     ProjectCodelist(std::boxed::Box<crate::project_codelist_binding::Finding>),
@@ -338,44 +343,6 @@ impl SourceDeclaration {
         !self.empty_string_present && value.is_empty()
     }
 }
-#[derive(Clone, Debug)]
-enum Operation {
-    Odm(std::boxed::Box<odm::Declaration>),
-    Aggregate(std::boxed::Box<aggregates::Declaration>),
-    MappingCut(std::boxed::Box<mapping_cut::Declaration>),
-    Scalar(std::boxed::Box<scalar::Declaration>),
-    Flag(flags::Declaration),
-    StrExtract(crate::text_extract::StringExtract),
-    StrReplace(crate::text_replace::StringReplace),
-    StrTemplate(crate::text_template::StringTemplate),
-    Case(Vec<cases::Branch>),
-    ProjectFunction {
-        call: usize,
-    },
-    Literal(crate::value::Value),
-    Window(std::boxed::Box<windows::Declaration>),
-    Source(std::boxed::Box<source_expressions::Declaration>),
-    FirstAvailable(std::boxed::Box<source_expressions::FirstAvailable>),
-    Compute(CompiledExpression),
-    Round(crate::dataset::Rounding),
-    Temporal(crate::dataset::Temporal),
-    StrCase(crate::text_case::StringCase),
-    StrPad(str_pad::Declaration),
-    Imputation(crate::dataset::Imputation),
-    /// Reference planning emits formula diagnostics after source ingestion.
-    InvalidNumeric {
-        expression: String,
-        error: CompileError,
-    },
-}
-#[derive(Clone, Debug)]
-struct Declaration {
-    handler: Option<crate::conversion::LiteralHandler>,
-    path: String,
-    /// The document node of the derivation's operation.
-    value: usize,
-    operation: Operation,
-}
 /// Private admitted representation: no caller-provided typed plan or binding indices.
 #[derive(Debug)]
 pub struct PreparedSpecification {
@@ -438,49 +405,45 @@ impl VerificationDeclarationFinding<'_> {
     }
 }
 
-/// Preserve omitted versus explicit-null recovery at every declaration.
+/// A derivation's answer for a value its declared type cannot hold
+/// (`unconvertible`), kept with the path that owns it.
 fn literal_handler(
-    d: &Document,
-    id: usize,
-    prefix: &str,
+    spec: &ast::Spec,
+    derivation: &ast::Derivation,
 ) -> Result<Option<crate::conversion::LiteralHandler>, PrepareError> {
-    d.field(id, "unconvertible")
-        .map(|id| {
-            let spec_path = format!("{prefix}.unconvertible");
+    derivation
+        .unconvertible
+        .as_ref()
+        .map(|handler| {
+            let spec_path = checks::render(spec, handler.meta);
             Ok(crate::conversion::LiteralHandler {
-                value: literal(d, id, &spec_path)?,
+                value: constant(&handler.value, &spec_path)?,
                 spec_path,
             })
         })
         .transpose()
 }
 
-/// `{literal: null}`, the one spelling of the missing value a handler, flag,
-/// mapping entry or function argument substitutes (COLUMN-10).
-pub(crate) fn missing_literal(d: &Document, id: usize) -> bool {
-    matches!(&d.nodes()[id], N::Mapping(items) if matches!(
-        items.as_slice(),
-        &[(key, value)] if matches!(&d.nodes()[key], N::Text(key) if key == "literal")
-            && matches!(d.nodes()[value], N::Null)
-    ))
-}
-
-/// Read an admitted scalar leaf once; rows and columns share the same boundary.
-fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, PrepareError> {
+/// A written scalar's value (COLUMN-10): an integer beyond 64 bits and a
+/// value outside the language are refused at `path`, as preparation always
+/// refused them.
+pub(super) fn constant(
+    literal: &ast::Literal,
+    path: &str,
+) -> Result<crate::value::Value, PrepareError> {
     use crate::value::Value;
-    Ok(match &d.nodes()[id] {
-        N::Null => Value::Missing,
-        N::Mapping(_) if missing_literal(d, id) => Value::Missing,
-        N::Text(value) => Value::Str(value.clone()),
-        N::Boolean(value) => Value::Bool(*value),
-        N::Float(value) => Value::float(*value),
-        N::Integer(value) => Value::Int(value.parse().map_err(|_| {
+    Ok(match literal {
+        ast::Literal::Missing => Value::Missing,
+        ast::Literal::Text(value) => Value::Str(value.clone()),
+        ast::Literal::Bool(value) => Value::Bool(*value),
+        ast::Literal::Float(value) => Value::float(*value),
+        ast::Literal::Int(value) => Value::Int(value.parse().map_err(|_| {
             PrepareError::Invalid(vec![PreflightFinding::IntegerLiteralOverflow {
                 path: path.into(),
                 value: value.clone(),
             }])
         })?),
-        _ => {
+        ast::Literal::Date(_) | ast::Literal::DateTime(_) | ast::Literal::Unsupported => {
             return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
                 operation: "literal".into(),
                 path: path.into(),
@@ -489,62 +452,21 @@ fn literal(d: &Document, id: usize, path: &str) -> Result<crate::value::Value, P
     })
 }
 
-fn text(d: &Document, id: usize) -> Result<&str, PrepareError> {
-    match &d.nodes()[id] {
-        N::Text(v) => Ok(v),
-        _ => Err(PrepareError::Internal),
-    }
+/// A written value binding reads; preparation has already admitted it.
+pub(super) fn bound_constant(literal: &ast::Literal) -> Result<crate::value::Value, BindError> {
+    constant(literal, "").map_err(|_| BindError::Internal)
 }
-fn field(d: &Document, id: usize, name: &str) -> Result<usize, PrepareError> {
-    d.field(id, name).ok_or(PrepareError::Internal)
-}
-fn sequence(d: &Document, id: usize) -> Result<&[usize], PrepareError> {
-    match &d.nodes()[id] {
-        N::Sequence(v) => Ok(v),
-        _ => Err(PrepareError::Internal),
-    }
-}
-fn mapping(d: &Document, id: usize) -> Result<&[(usize, usize)], PrepareError> {
-    match &d.nodes()[id] {
-        N::Mapping(v) => Ok(v),
-        _ => Err(PrepareError::Internal),
-    }
-}
-fn present(d: &Document, id: usize, name: &str) -> bool {
-    d.field(id, name)
-        .is_some_and(|id| !matches!(d.nodes()[id], N::Null))
-}
-/// A lookup or structured source asserts a match only with `require_match:
-/// true`; omitted or false, a row without a record is answered (LOOKUP-24).
-pub(crate) fn requires_match(d: &Document, id: usize) -> bool {
-    d.field(id, "require_match")
-        .is_some_and(|id| matches!(d.nodes()[id], N::Boolean(true)))
-}
-/// Decode one admitted order term as `(variable, descending, nulls_first)`.
-/// Every `list[order_by_term]` field uses this one reading (VALUE-22): an
-/// omitted `nulls` sorts missing lowest, first under `asc` and last under
-/// `desc`, while a declared `nulls` is absolute and never flips.
-fn order_term(d: &Document, term: usize) -> Result<(String, bool, bool), PrepareError> {
-    let (name, direction, nulls) = match &d.nodes()[term] {
-        N::Text(name) => (name.as_str(), None, None),
-        _ => (
-            text(d, field(d, term, "variable")?)?,
-            d.field(term, "direction")
-                .map(|id| text(d, id))
-                .transpose()?,
-            d.field(term, "nulls").map(|id| text(d, id)).transpose()?,
-        ),
-    };
-    let descending = match direction {
-        None | Some("asc") => false,
-        Some("desc") => true,
-        Some(_) => return Err(PrepareError::Internal),
-    };
-    let nulls_first = match nulls {
+
+fn tree_order_term(
+    spec: &ast::Spec,
+    term: &ast::OrderTerm,
+) -> Result<(String, bool, bool), PrepareError> {
+    let name = checks::name(spec, term.variable).ok_or(PrepareError::Internal)?;
+    let descending = term.direction == ast::Direction::Desc;
+    let nulls_first = match term.nulls {
         None => !descending,
-        Some("first") => true,
-        Some("last") => false,
-        Some(_) => return Err(PrepareError::Internal),
+        Some(ast::Nulls::First) => true,
+        Some(ast::Nulls::Last) => false,
     };
     Ok((name.into(), descending, nulls_first))
 }
@@ -554,101 +476,56 @@ fn reject(extra: &mut Vec<UnsupportedFeature>, operation: &str, path: String) {
         path,
     });
 }
-fn optional_features(
-    d: &Document,
-    id: usize,
-    fields: &[&str],
-    prefix: &str,
-    extra: &mut Vec<UnsupportedFeature>,
-) {
-    for &name in fields {
-        if present(d, id, name) {
-            reject(
-                extra,
-                name,
-                if prefix.is_empty() {
-                    name.into()
-                } else {
-                    format!("{prefix}.{name}")
-                },
-            )
-        }
-    }
-}
-
 type BuiltSources = (
     Vec<SourceDeclaration>,
     Vec<SourceInterpretation>,
     Vec<Option<crate::producer_contract::Contract>>,
 );
 
-fn build_sources<'a>(
-    d: &'a Document,
-    inputs: &[(usize, usize)],
-    odm_inputs: &std::collections::BTreeSet<&'a str>,
+fn build_sources(
+    spec: &ast::Spec,
+    odm_inputs: &std::collections::BTreeSet<&str>,
     contracts: Vec<(String, crate::producer_contract::Contract)>,
 ) -> Result<BuiltSources, PrepareError> {
     let mut sources = Vec::new();
     let mut source_interpretations = Vec::new();
     let mut source_contracts = Vec::new();
     let mut contracts = contracts.into_iter().peekable();
-    for &(name, selected) in inputs {
-        source_interpretations.push(if odm_inputs.contains(text(d, name)?) {
+    for input in &spec.inputs {
+        let name = input.name.name.as_str();
+        source_interpretations.push(if odm_inputs.contains(name) {
             SourceInterpretation::Odm
         } else {
             SourceInterpretation::Ordinary
         });
-        let mut source_types = Vec::new();
-        if let Some(id) = d
-            .field(selected, "types")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            let fields = mapping(d, id)?;
-            if fields.len() > crate::limits::Limits::COLUMNS {
-                return Err(PrepareError::limit(
-                    "source_fields",
-                    crate::limits::Limits::COLUMNS,
-                    Some(fields.len()),
-                    Some(&format!("input.{}.types", text(d, name)?)),
-                ));
-            }
-            for &(name, kind) in fields {
-                let kind = match text(d, kind)? {
-                    "str" => ColumnType::Str,
-                    "int" => ColumnType::Int,
-                    "float" => ColumnType::Float,
-                    "date" => ColumnType::Date,
-                    "datetime" => ColumnType::DateTime,
-                    _ => return Err(PrepareError::Internal),
-                };
-                source_types.push((text(d, name)?.into(), kind));
-            }
+        if input.source.types.len() > crate::limits::Limits::COLUMNS {
+            return Err(PrepareError::limit(
+                "source_fields",
+                crate::limits::Limits::COLUMNS,
+                Some(input.source.types.len()),
+                Some(&format!("input.{name}.types")),
+            ));
         }
+        let path = input.source.path.text.as_str();
         sources.push(SourceDeclaration {
-            name: text(d, name)?.into(),
-            types: source_types,
-            path: text(d, field(d, selected, "path")?)?.into(),
+            name: name.into(),
+            types: input
+                .source
+                .types
+                .iter()
+                .map(|(field, kind)| (field.name.clone(), *kind))
+                .collect(),
+            path: path.into(),
             // Unsupported formats never produce an accepted plan.
-            profile: SourceProfile::from_path(text(d, field(d, selected, "path")?)?)
-                .unwrap_or(SourceProfile::Csv),
-            encoding: d
-                .field(selected, "encoding")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| text(d, id).map(String::from))
-                .transpose()?,
-            empty_string_present: d
-                .field(selected, "empty_string")
-                .is_some_and(|id| matches!(&d.nodes()[id], N::Text(value) if value == "present")),
-            ordinal: d
-                .field(selected, "ordinal")
-                .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                .map(|id| text(d, id).map(String::from))
-                .transpose()?,
+            profile: SourceProfile::from_path(path).unwrap_or(SourceProfile::Csv),
+            encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
+            empty_string_present: input.source.empty_string == ast::EmptyString::Present,
+            ordinal: input.source.ordinal.as_ref().map(|name| name.name.clone()),
         });
         // Admission returns contracts in authored input order, so a linked
         // source always takes the next contract.
         let contract = contracts
-            .next_if(|(dataset, _)| dataset == text(d, name).unwrap_or(""))
+            .next_if(|(dataset, _)| dataset == name)
             .map(|(_, contract)| contract);
         if let Some(contract) = &contract {
             // The producing specification's output contract is the sole type
@@ -765,96 +642,6 @@ fn prepare_output_declarations(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn prepare_column_declarations(
-    d: &Document,
-    columns: &[usize],
-    output: &TableSchema,
-    driver: &str,
-    project: Option<&functions::Prepared>,
-    intermediates: &intermediates::Declarations,
-    extraction: &str_extract::Prepared,
-    templates: &str_template::Prepared,
-    keys: &[usize],
-    extra: &mut Vec<UnsupportedFeature>,
-) -> Result<Vec<Declaration>, PrepareError> {
-    let mut declarations = Vec::new();
-    for (column, &id) in columns.iter().enumerate() {
-        let prefix = format!("columns.{}", output.columns()[column].name);
-
-        let derivation = d
-            .field(id, "derivation")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .ok_or(PrepareError::Internal)?;
-        let handler = literal_handler(d, derivation, &format!("{prefix}.derivation"))?;
-        let value = field(d, derivation, "value")?;
-        let ops = mapping(d, value)?;
-        let &[(op, payload)] = ops else {
-            return Err(PrepareError::Internal);
-        };
-        let op = text(d, op)?;
-        let path = format!("{prefix}.derivation.{op}");
-        let operation = match op {
-            "source" => {
-                let source = source_expressions::Declaration::prepare(
-                    d,
-                    payload,
-                    &path,
-                    extra,
-                    intermediates,
-                )?;
-                Some(Operation::Source(std::boxed::Box::new(source)))
-            }
-            "mapping" | "cut" => Some(Operation::MappingCut(std::boxed::Box::new(
-                mapping_cut::prepare(d, payload, op, &path, intermediates, extra)?,
-            ))),
-            "first_available" => {
-                let selection = source_expressions::FirstAvailable::prepare(
-                    d,
-                    payload,
-                    &path,
-                    extra,
-                    intermediates,
-                )?;
-                Some(Operation::FirstAvailable(std::boxed::Box::new(selection)))
-            }
-            "row_number" | "rank" | "row_value" | "locf" | "baseline_flag" => {
-                Some(Operation::Window(std::boxed::Box::new(
-                    windows::Declaration::prepare(d, payload, op, &path)?,
-                )))
-            }
-            _ => match derivations::prepare_value_with_driver(
-                d,
-                value,
-                &format!("{prefix}.derivation"),
-                project,
-                intermediates,
-                keys.contains(&column),
-                0,
-                extraction,
-                templates,
-                Some(driver),
-            ) {
-                Ok(branch) => Some(*branch.operation),
-                Err(PrepareError::Unsupported(features)) => {
-                    extra.extend(features);
-                    None
-                }
-                Err(error) => return Err(error),
-            },
-        };
-        if let Some(operation) = operation {
-            declarations.push(Declaration {
-                handler,
-                path,
-                value,
-                operation,
-            });
-        }
-    }
-    Ok(declarations)
-}
-
 impl PreparedSpecification {
     /// Reject unsupported declarations before requesting any source bytes. Effective
     /// source empty-string behavior is missing unless explicitly declared otherwise.
@@ -901,13 +688,10 @@ impl PreparedSpecification {
         inventory: Option<&crate::submission_inventory::Inventory>,
         undeclared: Option<crate::project_function::Language>,
     ) -> Result<Self, PrepareError> {
-        let d = spec.document();
-        let root = d.root();
-        // The typed tree of the same admitted document. Project calls are
-        // analysed on it; every other declaration is still compiled from
-        // the document below.
-        let lowered = crate::front_end::v0_5::lower(spec, None);
-        checks::root::limits(lowered.spec())?;
+        // The one typed tree of the admitted document, which preparation and
+        // binding read.
+        let tree = crate::front_end::v0_5::lower(spec, None).into_spec();
+        checks::root::limits(&tree)?;
         // Link admission precedes every other declaration finding: a refused
         // type authority or contract leaves nothing to compile against.
         let contracts = crate::producer_contract::admit(spec, links).map_err(|error| {
@@ -922,10 +706,23 @@ impl PreparedSpecification {
                 AdmissionError::Boundary => PrepareError::Internal,
             }
         })?;
-        match_values::declaration_admission(d)?;
-        let mut findings = checks::root::findings(lowered.spec());
-        findings.extend(checks::odm::context_findings(lowered.spec())?);
-        let columns = sequence(d, field(d, root, "columns")?)?;
+        Self::from_tree(tree, contracts, functions, catalogue, inventory, undeclared)
+    }
+    /// Prepare the specification `tree`, whose linked inputs have the
+    /// producer `contracts`, before any source is read: every refusal the
+    /// declarations decide, then what binding reads.
+    fn from_tree(
+        tree: ast::Spec,
+        contracts: Vec<(String, crate::producer_contract::Contract)>,
+        functions: Option<&[crate::project_function::Function]>,
+        catalogue: Option<&crate::project_terminology::Catalogue>,
+        inventory: Option<&crate::submission_inventory::Inventory>,
+        undeclared: Option<crate::project_function::Language>,
+    ) -> Result<Self, PrepareError> {
+        let spec = &tree;
+        match_values::declaration_admission(spec)?;
+        let mut findings = checks::root::findings(spec);
+        findings.extend(checks::odm::context_findings(spec)?);
         if findings.iter().any(|finding| {
             matches!(finding,
                 PreflightFinding::Scalar(diagnostic)
@@ -935,29 +732,20 @@ impl PreparedSpecification {
             return Err(PrepareError::Invalid(findings));
         }
         let output = TableSchema::new(
-            columns
+            spec.columns
                 .iter()
-                .map(|&id| {
-                    Ok(Column {
-                        name: text(d, field(d, id, "name")?)?.into(),
-                        kind: match text(d, field(d, id, "type")?)? {
-                            "str" => ColumnType::Str,
-                            "int" => ColumnType::Int,
-                            "float" => ColumnType::Float,
-                            "date" => ColumnType::Date,
-                            "datetime" => ColumnType::DateTime,
-                            _ => return Err(PrepareError::Internal),
-                        },
-                    })
+                .map(|column| Column {
+                    name: column.name.name.clone(),
+                    kind: column.kind,
                 })
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect(),
         )
         .map_err(PrepareError::OutputSchema)?;
         // Absence supplies no callable definitions. It does not invent an
         // environment document, and unknown calls retain ordinary static causes.
         // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(d, &lowered, columns, functions, undeclared) {
+        let project = match functions::prepare(spec, functions, undeclared) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);
@@ -966,69 +754,59 @@ impl PreparedSpecification {
             Err(error) => return Err(error),
         };
         let inventory = inventory.map_or(&[][..], |inventory| inventory.names());
-        let column_verifications = verifications::prepare_columns(
-            lowered.spec(),
-            &output,
-            catalogue,
-            inventory,
-            &mut findings,
-        )?;
+        let column_verifications =
+            verifications::prepare_columns(spec, &output, catalogue, inventory, &mut findings)?;
         // Operand types before capture: each link's producer types its input.
         let declared = types::DeclaredTypes::new(
-            lowered.spec(),
+            spec,
             contracts
                 .iter()
                 .map(|(dataset, contract)| (dataset.as_str(), contract)),
         );
-        let checks::verbs::Text {
-            extraction,
-            templates,
-        } = checks::verbs::findings(d, &lowered, &declared, &mut findings)?;
+        checks::verbs::findings(spec, &declared, &mut findings)?;
         drop(declared);
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
         let mut extra = Vec::new();
-        let has_rows = d
-            .field(root, "rows")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-            .map(|id| sequence(d, id))
-            .transpose()?
-            .is_some_and(|rows| !rows.is_empty());
-        optional_features(d, root, &["parent"], "", &mut extra);
-        let root_filter = root_filter::RootFilter::prepare(d)?;
-        let inputs = mapping(d, field(d, root, "input")?)?;
-        let odm_inputs = checks::odm::inputs(lowered.spec())?;
+        let has_rows = !spec.rows.templates.is_empty();
+        if spec.written.contains("parent") {
+            reject(&mut extra, "parent", "parent".into());
+        }
+        root_filter::admit(spec, spec.rows.filter)?;
+        let odm_inputs = checks::odm::inputs(spec)?;
         let driver = if has_rows {
-            checks::lookups::common_driver(lowered.spec(), d)?
+            checks::lookups::common_driver(spec)?
         } else {
-            match spec.default_driver() {
+            match checks::default_driver(spec) {
                 Some(driver) => driver,
                 None if !extra.is_empty() => return Err(PrepareError::Unsupported(extra)),
                 None => return Err(PrepareError::Internal),
             }
         };
-        let driver_index = inputs
+        let driver_index = spec
+            .inputs
             .iter()
-            .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
+            .position(|input| input.name.name == driver)
             .ok_or(PrepareError::Internal)?;
-        let source_findings = checks::root::source_findings(lowered.spec(), d, &odm_inputs)?;
+        let source_findings = checks::root::source_findings(spec, &odm_inputs)?;
         if !source_findings.is_empty() {
             return Err(PrepareError::Invalid(source_findings));
         }
-        // Unsupported row/intermediate/metadata semantics must never reach the
-        // closed no-row lowering representation, even when their shapes are valid.
+        // An uncomposed spec never reaches the closed lowering representation,
+        // even when its shapes are valid.
         if extra.iter().any(|feature| feature.operation == "parent") {
             return Err(PrepareError::Unsupported(extra));
         }
         let (sources, source_interpretations, source_contracts) =
-            build_sources(d, inputs, &odm_inputs, contracts)?;
+            build_sources(spec, &odm_inputs, contracts)?;
         // Every implicit join through these inputs must find a record.
-        let required_matches = inputs
+        let required_matches = spec
+            .inputs
             .iter()
-            .filter(|&&(_, id)| requires_match(d, id))
-            .map(|&(name, _)| text(d, name).map(String::from))
-            .collect::<Result<Vec<_>, _>>()?;
+            .filter(|input| input.require_match)
+            .map(|input| input.name.name.clone())
+            .collect();
         let PreparedOutputDeclarations {
             output_order,
             output_path,
@@ -1037,82 +815,41 @@ impl PreparedSpecification {
             keys,
             verifications,
             output_report,
-        } = prepare_output_declarations(lowered.spec(), &output, &column_verifications)?;
+        } = prepare_output_declarations(spec, &output, &column_verifications)?;
         let intermediates = intermediates::Declarations::prepare(
-            d,
-            lowered.spec(),
+            spec,
             &sources,
-            driver_index,
             &output,
             &keys,
             project.as_ref(),
-            &extraction,
-            &templates,
             &mut extra,
         )?;
-        if has_rows {
+        let admission = derivations::Admission {
+            project: project.as_ref(),
+            intermediates: &intermediates,
+        };
+        let rows = if has_rows {
             if !extra.is_empty() {
                 return Err(PrepareError::Unsupported(extra));
             }
-            let rows = rows::Templates::prepare(
-                d,
-                &lowered,
-                &output,
-                driver,
-                project.as_ref(),
-                catalogue.is_some(),
-                &extraction,
-                &templates,
-                &intermediates,
-            )?;
-            let project = match project {
-                Some(project) => {
-                    let uses = project.row_uses(rows.declaration_values())?;
-                    Some(functions::select_rows(project, functions, &uses)?)
-                }
-                None => None,
-            };
-            let tree = types::Tree::new(lowered, d, project.as_ref());
-            return Self {
-                check_expressions: Vec::new(),
-                written_filter_types: Vec::new(),
-                project_calls: project.map(|p| p.calls),
-                sources,
-                source_interpretations,
-                source_contracts,
-                required_matches,
-                driver: driver_index,
-                intermediates,
-                output,
-                projection,
-                output_path,
-                output_report,
-                output_decimals,
-                output_order,
-                keys,
-                rows: rows::Rows::Templates(rows),
-                verifications,
-                column_verifications,
-                tree,
+            rows::Rows::Templates(rows::Templates::prepare(spec, &output, driver, &admission)?)
+        } else {
+            let implicit = rows::Implicit::prepare(spec, &keys, &admission, &mut extra)?;
+            if !extra.is_empty() {
+                return Err(PrepareError::Unsupported(extra));
             }
-            .finish(d);
-        }
-        let declarations = prepare_column_declarations(
-            d,
-            columns,
-            &output,
-            driver,
-            project.as_ref(),
-            &intermediates,
-            &extraction,
-            &templates,
-            &keys,
-            &mut extra,
-        )?;
-        if !extra.is_empty() {
-            return Err(PrepareError::Unsupported(extra));
-        }
-        let tree = types::Tree::new(lowered, d, project.as_ref());
+            rows::Rows::Implicit(implicit)
+        };
+        // A template's calls take their uses once the per-template defaults
+        // and overrides are known.
+        let project = match (project, &rows) {
+            (Some(project), rows::Rows::Templates(templates)) => {
+                let uses = project.row_uses(templates.declaration_roots())?;
+                Some(functions::select_rows(project, functions, &uses)?)
+            }
+            (project, _) => project,
+        };
+        let tree = types::Tree::new(tree, project.as_ref());
         Self {
             check_expressions: Vec::new(),
             written_filter_types: Vec::new(),
@@ -1130,30 +867,29 @@ impl PreparedSpecification {
             output_decimals,
             output_order,
             keys,
-            rows: rows::Rows::Implicit(rows::Implicit::new(declarations, root_filter)),
+            rows,
             verifications,
             column_verifications,
             tree,
         }
-        .finish(d)
+        .finish()
     }
-    /// Keep the declaration findings `check()` reports, then audit the
-    /// lowered tree in debug builds.
-    fn finish(mut self, d: &Document) -> Result<Self, PrepareError> {
+    /// Keep the declaration findings `check()` reports.
+    fn finish(mut self) -> Result<Self, PrepareError> {
         let refusal = |error| match error {
             BindError::ExpressionPolicy(error) => PrepareError::expression(error, None),
             _ => PrepareError::Internal,
         };
-        let findings = checks::declared::findings(&self, d).map_err(refusal)?;
+        let findings = checks::declared::findings(&self).map_err(refusal)?;
         self.written_filter_types =
-            checks::declared::written_filter_types(&self, d).map_err(refusal)?;
+            checks::declared::written_filter_types(&self).map_err(refusal)?;
         for finding in findings {
             let diagnostics = finding
                 .diagnostics(self.source())
                 .ok_or(PrepareError::Internal)?;
             self.check_expressions.extend(diagnostics);
         }
-        Ok(self.audit_lowering())
+        Ok(self)
     }
     /// All intrinsically known declaration findings, without study binding.
     /// Actual dataset fields and values remain a build-time responsibility.
@@ -1326,9 +1062,8 @@ impl PreparedSpecification {
     pub fn row_constructions(&self) -> Vec<(String, &str)> {
         match &self.rows {
             rows::Rows::Templates(rows) => rows
-                .drivers()
-                .enumerate()
-                .map(|(index, driver)| (std::format!("rows[{index}]"), driver))
+                .constructions()
+                .map(|(path, driver)| (path.to_string(), driver))
                 .collect(),
             rows::Rows::Implicit(_) => vec![("base".into(), self.source().name.as_str())],
         }
@@ -1472,7 +1207,7 @@ impl PreparedSpecification {
     /// themselves, not their distinct key combinations.
     pub(super) fn record_rows(&self) -> bool {
         match &self.rows {
-            rows::Rows::Implicit(implicit) => implicit.record_rows(&self.keys),
+            rows::Rows::Implicit(implicit) => implicit.record_rows(),
             rows::Rows::Templates(_) => false,
         }
     }

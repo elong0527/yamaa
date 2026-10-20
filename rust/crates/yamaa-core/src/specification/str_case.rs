@@ -2,52 +2,44 @@
 use super::*;
 use crate::text_case::{Case, StringCase};
 
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    path: &str,
-    _driver: Option<&str>,
-    _intermediates: Option<&intermediates::Declarations>,
-    extra: &mut Vec<UnsupportedFeature>,
-) -> Result<StringCase, PrepareError> {
-    for &(key, _) in mapping(d, payload)? {
-        let name = text(d, key)?;
-        if !["source", "to", "missing"].contains(&name) {
-            reject(extra, name, format!("{path}.{name}"));
-        }
-    }
-    let source = text(d, field(d, payload, "source")?)?;
-    let missing = d.field(payload, "missing");
-    let mode = match text(d, field(d, payload, "to")?)? {
-        "upper" => Case::Upper,
-        "lower" => Case::Lower,
-        "sentence" => Case::Sentence,
-        "title" => Case::Title,
-        // The original schema owns enum rejection, before compiler admission.
-        _ => return Err(PrepareError::Internal),
+/// The executor's case conversion for the verb at `e`.
+pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<StringCase, PrepareError> {
+    let ExprKind::Scalar {
+        op: ast::ScalarOp::StrCase { to },
+        operands,
+        handlers,
+    } = &spec.expr(e).kind
+    else {
+        return Err(PrepareError::Internal);
+    };
+    let source =
+        checks::operand_name(spec, operands, ast::Slot::Source).ok_or(PrepareError::Internal)?;
+    let mode = match to {
+        ast::TextCase::Upper => Case::Upper,
+        ast::TextCase::Lower => Case::Lower,
+        ast::TextCase::Sentence => Case::Sentence,
+        ast::TextCase::Title => Case::Title,
     };
     StringCase::new(
         source.into(),
-        path.into(),
+        checks::path(spec, e),
         mode,
-        missing
-            .map(|id| literal(d, id, &format!("{path}.missing")))
-            .transpose()?,
+        checks::handler(spec, handlers.missing.as_ref())?,
     )
     .ok_or(PrepareError::Internal)
 }
 
 /// `str_case` reads text (TEXT-1). With `rows` a bare name's phase is
+/// `str_case` reads text (TEXT-1). With `rows` a bare name's phase is
 /// binding's to decide, so its type is not checked here.
 pub(super) fn operand_findings(
-    d: &Document,
-    payload: usize,
-    path: &str,
+    spec: &ast::Spec,
+    e: ExprId,
     declared: &types::DeclaredTypes<'_>,
     rows: bool,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
-    let operation = prepare(d, payload, path, None, None, &mut Vec::new())?;
+    let operation = from_tree(spec, e)?;
     let source = operation.source();
     let kind = (source.contains('.') || !rows)
         .then(|| declared.name(source).column_type())

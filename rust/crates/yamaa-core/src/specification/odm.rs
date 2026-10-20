@@ -14,62 +14,10 @@ pub(super) struct Declaration {
     item: String,
     item_oid: String,
     path: String,
+    /// Whether the read is a row template's own derivation.
+    row: bool,
     selectors: [Option<Vec<String>>; 3],
     filter: Option<(String, Result<CompiledExpression, CompileError>)>,
-}
-
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    path: &str,
-) -> Result<Declaration, PrepareError> {
-    let item = text(d, field(d, payload, "item")?)?;
-    let (dataset, item_oid) = item.split_once('.').ok_or(PrepareError::Internal)?;
-    let selectors = ["event", "form", "item_group"].map(|name| {
-        d.field(payload, name)
-            .filter(|&node| !matches!(d.nodes()[node], N::Null))
-            .map(|node| {
-                sequence(d, node)?
-                    .iter()
-                    .map(|&node| text(d, node).map(String::from))
-                    .collect()
-            })
-            .transpose()
-    });
-    let [events, forms, item_groups] = selectors;
-    let filter = d
-        .field(payload, "filter")
-        .filter(|&node| !matches!(d.nodes()[node], N::Null))
-        .map(|node| {
-            let expression = text(d, node)?;
-            let compiled = compile(
-                expression,
-                ExpressionContext::Predicate,
-                &format!("{path}.filter"),
-            );
-            match &compiled {
-                Ok(_) | Err(CompileError::Invalid { .. }) => (),
-                Err(error) => {
-                    return Err(PrepareError::expression(
-                        error.clone(),
-                        Some(&format!("{path}.filter")),
-                    ))
-                }
-            }
-            Ok((expression.into(), compiled))
-        })
-        .transpose()?;
-    Ok(Declaration {
-        declared: mapping(d, field(d, d.root(), "input")?)?
-            .iter()
-            .any(|&(name, _)| text(d, name).is_ok_and(|name| name == dataset)),
-        dataset: dataset.into(),
-        item: item.into(),
-        item_oid: item_oid.into(),
-        path: path.into(),
-        selectors: [events?, forms?, item_groups?],
-        filter,
-    })
 }
 
 /// `record_rows` makes each row of the implicit template one base record,
@@ -96,7 +44,7 @@ pub(super) fn bind(
             crate::diagnostic::OdmFinding::InvalidContext {
                 path: &declaration.path,
                 dataset: &declaration.dataset,
-                location: if declaration.path.starts_with("rows[") {
+                location: if declaration.row {
                     crate::diagnostic::OdmLocation::Row
                 } else {
                     crate::diagnostic::OdmLocation::Column
@@ -195,7 +143,7 @@ pub(super) fn bind(
         item_oid: declaration.item_oid.clone(),
         path: declaration.path.clone(),
         row: row.map(String::from),
-        phase: if declaration.path.starts_with("rows[") {
+        phase: if declaration.row {
             AggregatePhase::RowConstruction
         } else {
             AggregatePhase::Derivation
@@ -224,4 +172,41 @@ pub(super) fn bind(
         .map_err(BindError::InvalidPlan)
 }
 
-impl Declaration {}
+impl Declaration {
+    /// The `odm` read at `e`: its item, whether an input declares the item's
+    /// dataset, its selectors and filter.
+    pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Self, PrepareError> {
+        let ExprKind::Odm(read) = &spec.expr(e).kind else {
+            return Err(PrepareError::Internal);
+        };
+        let item = checks::name(spec, read.item).ok_or(PrepareError::Internal)?;
+        let (dataset, item_oid) = item.split_once('.').ok_or(PrepareError::Internal)?;
+        let selector = |list: &Option<Vec<ast::Text>>| {
+            list.as_ref()
+                .map(|list| list.iter().map(|value| value.text.clone()).collect())
+        };
+        let filter = read
+            .filter
+            .map(|filter| match &spec.expr(filter).kind {
+                ExprKind::Formula(formula) => {
+                    Ok((formula.text.text.clone(), formula.compiled.clone()))
+                }
+                _ => Err(PrepareError::Internal),
+            })
+            .transpose()?;
+        Ok(Self {
+            declared: spec.inputs.iter().any(|input| input.name.name == dataset),
+            dataset: dataset.into(),
+            item: item.into(),
+            item_oid: item_oid.into(),
+            path: checks::path(spec, e),
+            row: checks::under(spec, spec.expr(e).meta, "rows"),
+            selectors: [
+                selector(&read.event),
+                selector(&read.form),
+                selector(&read.item_group),
+            ],
+            filter,
+        })
+    }
+}

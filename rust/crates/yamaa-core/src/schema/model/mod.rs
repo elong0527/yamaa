@@ -61,26 +61,6 @@ impl SpecificationDocument {
     pub fn document(&self) -> &Document {
         &self.document
     }
-    /// Explicit base wins; multiple unselected sources have no implicit driver.
-    pub fn default_driver(&self) -> Option<&str> {
-        let root = self.document.root();
-        if let Some(id) = self.document.field(root, "base") {
-            if let N::Text(value) = &self.document.nodes()[id] {
-                return Some(value);
-            }
-        }
-        let input = self.document.field(root, "input")?;
-        let N::Mapping(entries) = &self.document.nodes()[input] else {
-            return None;
-        };
-        if entries.len() != 1 {
-            return None;
-        }
-        match &self.document.nodes()[entries[0].0] {
-            N::Text(value) => Some(value),
-            _ => None,
-        }
-    }
 }
 
 struct Run<'a> {

@@ -13,9 +13,8 @@
 //! reports each of them from binding, in binding's order, together with
 //! what only the captured schemas decide.
 //!
-//! A check that needs an operation's executor type constructs it with the
-//! preparation's own constructor, from the document node the tree was
-//! lowered from, until binding reads the tree.
+//! A check that needs an operation's executor type constructs it from the
+//! tree, as binding does.
 
 pub(super) mod boundaries;
 pub(super) mod declared;
@@ -25,17 +24,60 @@ pub(super) mod root;
 pub(super) mod verbs;
 
 use super::*;
-use crate::ast::{self, ExprId, ExprKind, JoinKey, Notation, Spec};
-use crate::front_end::v0_5::Lowered;
+use crate::ast::{self, ExprId, ExprKind, JoinKey, Spec};
 
-/// A node's path in today's notation.
-pub(super) fn path(spec: &Spec, e: ExprId) -> String {
-    spec.render(spec.expr(e).meta.path, Notation::V0_5)
+/// A node's path, as the spec's diagnostics cite it.
+pub(in crate::specification) fn path(spec: &Spec, e: ExprId) -> String {
+    spec.cite(spec.expr(e).meta)
 }
 
-/// A node's written position in today's notation.
-pub(super) fn render(spec: &Spec, meta: ast::Meta) -> String {
-    spec.render(meta.path, Notation::V0_5)
+/// A node's written position, as the spec's diagnostics cite it.
+pub(in crate::specification) fn render(spec: &Spec, meta: ast::Meta) -> String {
+    spec.cite(meta)
+}
+
+/// The operand of a verb in `slot`.
+pub(in crate::specification) fn operand(
+    operands: &[ast::Operand],
+    slot: ast::Slot,
+) -> Option<ExprId> {
+    operands
+        .iter()
+        .find(|operand| operand.slot == slot)
+        .map(|operand| operand.expr)
+}
+
+/// The name a verb's operand in `slot` reads.
+pub(in crate::specification) fn operand_name<'s>(
+    spec: &'s Spec,
+    operands: &[ast::Operand],
+    slot: ast::Slot,
+) -> Option<&'s str> {
+    operand(operands, slot).and_then(|e| name(spec, e))
+}
+
+/// A written handler's value, refused at its own path as preparation
+/// refuses any written value it cannot hold.
+pub(in crate::specification) fn handler(
+    spec: &Spec,
+    handler: Option<&ast::Constant>,
+) -> Result<Option<crate::value::Value>, PrepareError> {
+    handler
+        .map(|handler| constant(&handler.value, &render(spec, handler.meta)))
+        .transpose()
+}
+
+/// Whether the node at `meta` is written below the spec's field `field`,
+/// such as `rows` for a row template's own derivation.
+pub(in crate::specification) fn under(spec: &Spec, meta: ast::Meta, field: &str) -> bool {
+    let mut at = meta.path;
+    while let Some(parent) = spec.paths.parent(at) {
+        if spec.paths.parent(parent).is_none() {
+            return matches!(spec.paths.segment(at), ast::Segment::Field(name) if *name == field);
+        }
+        at = parent;
+    }
+    false
 }
 
 /// The derivation positions at and below `root`: the root, then each case
@@ -141,19 +183,6 @@ pub(super) fn variable(spec: &Spec, e: ExprId) -> Option<&str> {
         ExprKind::Source(source) => name(spec, source.variable),
         _ => None,
     }
-}
-
-/// The document operation an expression was lowered from: its keyword and
-/// payload node.
-pub(super) fn operation<'d>(
-    d: &'d Document,
-    lowered: &Lowered,
-    e: ExprId,
-) -> Result<(&'d str, usize), PrepareError> {
-    let &[(keyword, payload)] = mapping(d, lowered.origin(e))? else {
-        return Err(PrepareError::Internal);
-    };
-    Ok((text(d, keyword)?, payload))
 }
 
 /// A written type's name.

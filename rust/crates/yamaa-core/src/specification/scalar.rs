@@ -7,31 +7,26 @@ pub(super) struct Declaration {
     largest: bool,
     path: String,
 }
-pub(super) fn prepare(
-    d: &Document,
-    payload: usize,
-    op: &str,
-    path: &str,
-    depth: usize,
-) -> Result<Declaration, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
-            Some(depth),
-            None,
-        ));
+impl Declaration {
+    /// The operation at `e`: each source a name, at the verb's path.
+    pub(super) fn from_tree(spec: &ast::Spec, e: ExprId) -> Result<Self, PrepareError> {
+        let ExprKind::Scalar { op, operands, .. } = &spec.expr(e).kind else {
+            return Err(PrepareError::Internal);
+        };
+        Ok(Declaration {
+            sources: operands
+                .iter()
+                .map(|operand| {
+                    checks::name(spec, operand.expr)
+                        .map(String::from)
+                        .ok_or(PrepareError::Internal)
+                })
+                .collect::<Result<_, _>>()?,
+            largest: matches!(op, ast::ScalarOp::Greatest),
+            path: checks::path(spec, e),
+        })
     }
-    Ok(Declaration {
-        sources: sequence(d, field(d, payload, "sources")?)?
-            .iter()
-            .map(|&id| text(d, id).map(String::from))
-            .collect::<Result<_, _>>()?,
-        largest: op == "greatest",
-        path: path.into(),
-    })
 }
-impl Declaration {}
 /// VALUE-19's comparability of two declared operand types.
 fn comparable(a: ColumnType, b: ColumnType) -> bool {
     crate::result_type::ResultType::from(a).comparable(b.into())
@@ -102,73 +97,4 @@ pub(super) fn bind(
         })
         .collect::<Result<Vec<_>, BindError>>()?;
     finish_extreme(sources, path, *largest, types, cx.findings, operands, start)
-}
-/// These new scalar operands may read the driver and an admitted named
-/// intermediate; implicit secondary joins are a separate language work package.
-pub(super) fn operand_references(
-    d: &Document,
-    value: usize,
-    names: &mut Vec<String>,
-    depth: usize,
-) -> Result<(), PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
-            Some(depth),
-            None,
-        ));
-    }
-    if let Some(payload) = d.field(value, "source") {
-        names.push(text(d, field(d, payload, "variable")?)?.into());
-        // An implicit join's range reads its value from the current row.
-        if let Some(range) = d
-            .field(payload, "between")
-            .filter(|&range| !matches!(d.nodes()[range], N::Null))
-        {
-            names.push(text(d, field(d, range, "value")?)?.into());
-        }
-    }
-    for op in ["mapping", "cut"] {
-        if let Some(payload) = d.field(value, op) {
-            let source = field(d, payload, "source")?;
-            names.push(match &d.nodes()[source] {
-                N::Text(name) => name.clone(),
-                _ => text(d, field(d, source, "variable")?)?.into(),
-            });
-        }
-    }
-    for op in ["greatest", "least"] {
-        if let Some(payload) = d.field(value, op) {
-            for &id in sequence(d, field(d, payload, "sources")?)? {
-                names.push(text(d, id)?.into());
-            }
-        }
-    }
-    for &op in temporal::OPERATIONS {
-        if let Some(payload) = d.field(value, op) {
-            for &field_name in temporal::fields(op) {
-                if let Some(N::Text(source)) = d.field(payload, field_name).map(|id| &d.nodes()[id])
-                {
-                    names.push(source.clone());
-                }
-            }
-        }
-    }
-    for op in [
-        "str_case",
-        "str_extract",
-        "str_pad",
-        "str_replace",
-        "round_half_away_from_zero",
-        "impute",
-        "precision",
-        "imputation_flag",
-        "to_date",
-    ] {
-        if let Some(payload) = d.field(value, op) {
-            names.push(text(d, field(d, payload, "source")?)?.into());
-        }
-    }
-    Ok(())
 }
