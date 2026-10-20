@@ -572,7 +572,7 @@ mod numeric {
                         position.character,
                     );
                     assert_eq!(finding.definition().condition, "prohibited_function");
-                    assert_eq!(finding.definition().requirement, Some("REQ-0440"));
+                    assert_eq!(finding.definition().rule, Some("FORMULA-13"));
                     assert_eq!(finding.spec_paths, ["columns.V.derivation.compute"]);
                     assert_eq!(finding.context["function"], V::String(function.into()));
                     assert_eq!(finding.context["hint"], V::String(hint.into()));
