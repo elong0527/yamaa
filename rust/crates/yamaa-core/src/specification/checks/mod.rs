@@ -11,7 +11,10 @@
 //! before binding ([`verbs`], [`odm`], [`lookups`]) refuses it in both. The
 //! declaration findings ([`declared`]) are what `check()` reports; `run()`
 //! reports each of them from binding, in binding's order, together with
-//! what only the captured schemas decide.
+//! what only the captured schemas decide. Among them are what binding
+//! decides of each read of a row template or the column phase
+//! ([`boundaries`]) and the scopes it admits once the rows are bound
+//! ([`scopes`]).
 //!
 //! A check that needs an operation's executor type constructs it from the
 //! tree, as binding does.
@@ -21,6 +24,7 @@ pub(super) mod declared;
 pub(super) mod lookups;
 pub(super) mod odm;
 pub(super) mod root;
+pub(super) mod scopes;
 pub(super) mod verbs;
 
 use super::*;
