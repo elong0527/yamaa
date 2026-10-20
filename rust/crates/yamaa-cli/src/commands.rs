@@ -224,10 +224,12 @@ fn not_implemented(what: &str) -> Execution {
 
 /// The command line's engine: the local file resolver and no project
 /// functions, so a build that calls one is refused before it reads data and
-/// every other build runs as a host runs it (#3030 section 2.3, D110). The
-/// facade asks every engine for a host language, which picks the
-/// environment a project links for its functions; the command line has none
-/// and takes the facade's default.
+/// every other build runs as a host runs it (#3030 section 2.3, D110).
+///
+/// The facade asks every engine for a host language, which picks the
+/// environment a project links for its functions. The command line claims
+/// none (section 2.10), so the facade's default here is a stopgap until the
+/// facade offers a neutral engine (#3324).
 fn engine() -> Engine {
     Engine::new(EngineOptions::new(
         HostLanguage::default(),
