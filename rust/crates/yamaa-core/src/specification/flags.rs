@@ -149,220 +149,142 @@ fn finish(
     .map(|flag| Some(Expression::Flag(flag)))
     .map_err(|_| BindError::Internal)
 }
-/// `record` states whether the column reads one base record, as a key does
-/// and every column does with record rows; otherwise a base read collects the
-/// distinct readings of the key combination's records.
-#[allow(clippy::too_many_arguments)]
+/// Each name of the condition binds once, in this scope. The implicit
+/// template's condition may read a lookup, and a driver field of its
+/// non-key column collects the distinct readings of the row's records
+/// unless record rows make the row one record.
 pub(super) fn bind(
     operation: &Declaration,
-    record: bool,
-    driver: &str,
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    declarations_reported: bool,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
-    if !declarations_reported {
-        operation.findings(findings);
+    if !cx.reported {
+        operation.findings(cx.findings);
     }
     let Ok(condition) = &operation.condition else {
         return Ok(None);
     };
-    let start = findings.len();
+    let implicit = cx.implicit();
+    let path = condition.spec_path();
+    let start = cx.findings.len();
     let mut bindings = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for name in condition.identifiers() {
         if !seen.insert(name) {
             continue;
         }
-        let read = if let Some((index, field)) = declarations.reference(name) {
-            if let Some(item) = &intermediates[index] {
-                edges.extend(row_intermediates::dependencies(index, intermediates)?);
-                match item.source_column(secondary, field) {
-                    Some(column) => Some(FlagRead::Read(Read::Intermediate { index, column })),
-                    None => {
-                        findings.push(BindFinding::Lookup(LookupFinding::reference(
-                            condition.spec_path(),
+        let joined = name
+            .split_once('.')
+            .is_some_and(|(dataset, _)| cx.catalog.joined(dataset).is_some());
+        let read = if let Some((index, field)) =
+            implicit.and(cx.donors.named.reference(name))
+        {
+            let Some(item) = &cx.donors.items[index] else {
+                cx.findings.push(unknown(path, name));
+                continue;
+            };
+            cx.edges.extend(row_intermediates::dependencies(
+                index,
+                cx.donors.items,
+            )?);
+            match item.source_column(cx.donors.secondary, field) {
+                Some(column) => Some(FlagRead::Read(Read::Intermediate { index, column })),
+                None => {
+                    cx.findings
+                        .push(BindFinding::Lookup(LookupFinding::reference(
+                            path,
                             name,
                             None,
                             ReferenceCause::Value,
                             None,
                         )));
-                        continue;
-                    }
+                    continue;
                 }
-            } else {
-                None
             }
-        } else if !name.contains('.') {
-            output_binding(
-                name,
-                condition.spec_path(),
-                catalog,
-                driver,
-                None,
-                None,
-                edges,
-                findings,
-            )?
-        } else if name
-            .split_once('.')
-            .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
+        } else if let (crate::reference_scope::Phase::Row { group_by }, true) =
+            (cx.scope.phase, joined)
         {
-            source_expressions::bind_catalog_join(
-                name,
-                condition.spec_path(),
-                catalog,
-                None,
-                None,
-                edges,
-                findings,
-            )?
-            .and_then(|expression| match expression {
-                Expression::Joined(read) => Some(FlagRead::Read(Read::Joined(read))),
-                _ => None,
-            })
-        } else {
-            match catalog.bind(name) {
-                Some(reference_binding::Binding::Dataset { field, .. }) => Some(if record {
-                    FlagRead::Read(Read::Source(field))
+            let mut finding = LookupFinding::new(
+                path,
+                if group_by.is_some() {
+                    C::GroupedRowNumericSourceScope
                 } else {
-                    FlagRead::Collect {
-                        column: field,
-                        identifier: name.into(),
-                    }
-                }),
-                _ => None,
-            }
-        };
-        if let Some(read) = read {
-            bindings.push(FlagBinding {
-                name: name.into(),
-                read,
-            });
-        } else if name.contains('.') {
-            findings.push(unknown(condition.spec_path(), name));
-        }
-    }
-    let captured = types::CapturedTypes::new(declarations, catalog, secondary, intermediates);
-    if findings.len() == start {
-        captured.predicate(condition, findings);
-    }
-    if findings.len() != start {
-        Ok(None)
-    } else {
-        finish(operation, |condition| captured.typed(condition), bindings)
-    }
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &Declaration,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    declarations_reported: bool,
-) -> Result<Option<Expression>, BindError> {
-    if !declarations_reported {
-        operation.findings(findings);
-    }
-    let Ok(condition) = &operation.condition else {
-        return Ok(None);
-    };
-    let start = findings.len();
-    let mut bindings = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
-    for name in condition.identifiers() {
-        if !seen.insert(name) {
+                    C::RowNumericSourceScope
+                },
+            );
+            finding.text("identifier", name);
+            finding.texts("drivers", &[cx.scope.driver]);
+            cx.findings.push(BindFinding::Lookup(finding));
             continue;
-        }
-        if let crate::reference_scope::Phase::Row { group_by } = phase {
-            if name
-                .split_once('.')
-                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
-            {
-                let mut finding = LookupFinding::new(
-                    condition.spec_path(),
-                    if group_by.is_some() {
-                        C::GroupedRowNumericSourceScope
-                    } else {
-                        C::RowNumericSourceScope
-                    },
-                );
-                finding.text("identifier", name);
-                finding.texts("drivers", &[driver]);
-                findings.push(BindFinding::Lookup(finding));
-                continue;
-            }
-        }
-        let read = if matches!(phase, crate::reference_scope::Phase::Column { .. })
-            && name
-                .split_once('.')
-                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
-        {
-            source_expressions::bind_catalog_join(
+        } else if joined {
+            let read = source_expressions::bind_catalog_join(
                 name,
-                condition.spec_path(),
-                catalog,
-                row,
-                available,
-                edges,
-                findings,
+                path,
+                cx.catalog,
+                cx.row(),
+                cx.scope.available,
+                cx.edges,
+                cx.findings,
             )?
             .and_then(|expression| match expression {
                 Expression::Joined(read) => Some(FlagRead::Read(Read::Joined(read))),
                 _ => None,
-            })
+            });
+            // The implicit template also names a refused join read an
+            // unknown predicate field.
+            if read.is_none() && implicit.is_some() {
+                cx.findings.push(unknown(path, name));
+            }
+            read
         } else if !name.contains('.') {
             output_binding(
                 name,
-                condition.spec_path(),
-                catalog,
-                driver,
-                available,
-                row,
-                edges,
-                findings,
+                path,
+                cx.catalog,
+                cx.scope.driver,
+                cx.scope.available,
+                cx.row(),
+                cx.edges,
+                cx.findings,
             )?
         } else {
             use crate::reference_scope::{self, Reach, Scope};
             let causes = reference_scope::validate(
-                catalog,
+                cx.catalog,
                 name,
                 None,
                 Scope {
-                    drivers: &[driver],
+                    drivers: &[cx.scope.driver],
                     current_driver: false,
                     reach: Reach::Scalar,
                     joined: false,
-                    phase,
+                    phase: cx.scope.phase,
                 },
             )
             .map_err(BindError::Catalog)?;
             if !causes.is_empty() {
                 for cause in causes {
                     if cause == reference_scope::Finding::UnknownField {
-                        findings.push(unknown(condition.spec_path(), name));
+                        cx.findings.push(unknown(path, name));
                     } else {
-                        findings.push(BindFinding::QualifiedReference {
-                            path: condition.spec_path().into(),
+                        cx.findings.push(BindFinding::QualifiedReference {
+                            path: path.into(),
                             name: name.into(),
-                            row: row.map(String::from),
+                            row: cx.row().map(String::from),
                             finding: cause,
                         });
                     }
                 }
                 None
             } else {
-                match catalog.bind(name) {
+                match cx.catalog.bind(name) {
                     Some(reference_binding::Binding::Dataset { field, .. }) => {
-                        Some(FlagRead::Read(Read::Source(field)))
+                        Some(match implicit {
+                            Some(implicit) if !implicit.record() => FlagRead::Collect {
+                                column: field,
+                                identifier: name.into(),
+                            },
+                            _ => FlagRead::Read(Read::Source(field)),
+                        })
                     }
                     _ => None,
                 }
@@ -375,14 +297,26 @@ pub(super) fn bind_row(
             });
         }
     }
-    if findings.len() == start {
-        findings.extend(
+    if implicit.is_some() {
+        // The implicit template types a lookup read by its donor's capture.
+        let captured = cx.captured();
+        if cx.findings.len() == start {
+            captured.predicate(condition, cx.findings);
+        }
+        if cx.findings.len() != start {
+            return Ok(None);
+        }
+        return finish(operation, |condition| captured.typed(condition), bindings);
+    }
+    let catalog = cx.catalog;
+    if cx.findings.len() == start {
+        cx.findings.extend(
             types::predicate_kinds(condition, |name| catalog.type_of(name).map(Into::into))
                 .into_iter()
                 .map(BindFinding::Predicate),
         );
     }
-    if findings.len() != start {
+    if cx.findings.len() != start {
         Ok(None)
     } else {
         finish(

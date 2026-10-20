@@ -12,7 +12,7 @@ use super::*;
 use crate::dataset::{ColumnBinding, ColumnScope, Verification};
 use crate::{
     bound_expression::{Binding, BoundPredicate, Read},
-    reference_scope::{self, Phase, Reach, Scope},
+    reference_scope::Phase,
 };
 
 #[derive(Debug)]
@@ -357,178 +357,38 @@ fn resolve_reference(
     selected
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Bind one row declaration in its context: a call, a read of a variable or
+/// an operation. A derivation that bound without a finding states its result
+/// type once per column (VALUE-24): a default shared by several templates
+/// states one derivation.
 fn bind_assignment(
-    source: &TableSchema,
-    name: &str,
-    catalog: &Catalog,
+    cx: &mut BindContext<'_, '_>,
     declaration: &RowDeclaration,
-    phase: Phase<'_>,
-    row: Option<&str>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    declarations_reported: bool,
-    project: Option<&crate::project_calls::ProjectCalls>,
-    output: &TableSchema,
-    tree: &types::Tree,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Assignment>, BindError> {
-    let start = findings.len();
+    let start = cx.findings.len();
     let expression = match &declaration.operation {
-        RowOperation::ProjectFunction { call, .. } => {
-            let project = project.ok_or(BindError::Internal)?;
-            match crate::project_call_binding::bind(
-                project,
-                *call,
-                catalog,
-                crate::project_call_binding::Context {
-                    source_dataset: 0,
-                    source_mode: crate::project_call_binding::SourceMode::Record,
-                    available_outputs: available,
-                    scope: Scope {
-                        drivers: &[name],
-                        current_driver: true,
-                        reach: Reach::Scalar,
-                        joined: false,
-                        phase,
-                    },
-                },
-            ) {
-                Ok(bound) => {
-                    edges.extend(bound.dependencies);
-                    Some(Expression::ProjectFunction(bound.function))
-                }
-                Err(crate::project_call_binding::Error::Findings(errors)) => {
-                    findings.extend(functions::bind_findings(project, *call, errors, row)?);
-                    None
-                }
-                Err(crate::project_call_binding::Error::Reference(error)) => {
-                    return Err(BindError::Catalog(error))
-                }
-                Err(_) => return Err(BindError::Internal),
-            }
+        RowOperation::ProjectFunction { call } => cx.call(*call)?,
+        RowOperation::Output(reference) | RowOperation::Source(reference) => {
+            cx.operand(reference, &declaration.path)?
         }
-        RowOperation::Output(reference) => {
-            if let Some(finding) = catalog
-                .validate_output(reference, None, available, &[0])
-                .map_err(BindError::Catalog)?
-            {
-                findings.push(BindFinding::OutputReference {
-                    path: declaration.path.clone(),
-                    name: reference.clone(),
-                    row: row.map(String::from),
-                    finding,
-                });
-                None
-            } else {
-                let Some(reference_binding::Binding::Output { column, .. }) =
-                    catalog.bind(reference)
-                else {
-                    return Err(BindError::Internal);
-                };
-                edges.push(column);
-                Some(Expression::Column(column))
-            }
-        }
-        RowOperation::Shared(branch) => derivations::bind_row(
-            &branch.operation,
-            &branch.path,
-            declaration.column,
-            catalog,
-            name,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            declarations_reported,
-            output,
-            project,
-            tree,
-            named,
-            secondary,
-            intermediates,
-        )?,
-        RowOperation::Source(reference) => {
-            if reference
-                .split_once('.')
-                .is_some_and(|(dataset, _)| catalog.joined(dataset).is_some())
-            {
-                source_expressions::bind_catalog_join(
-                    reference,
-                    &declaration.path,
-                    catalog,
-                    row,
-                    available,
-                    edges,
-                    findings,
-                )?
-            } else if named.reference(reference).is_some()
-                && reference
-                    .split_once('.')
-                    .is_none_or(|(owner, _)| owner != name)
-            {
-                row_intermediates::bind(
-                    reference,
-                    &declaration.path,
-                    named,
-                    secondary,
-                    intermediates,
-                    output,
-                    catalog,
-                    row,
-                    available,
-                    edges,
-                    findings,
-                )?
-            } else if let Some(column) =
-                resolve_reference(reference, &declaration.path, source, name, findings)
-            {
-                let scoped = reference_scope::validate(
-                    catalog,
-                    reference,
-                    None,
-                    Scope {
-                        drivers: &[name],
-                        current_driver: false,
-                        reach: Reach::Scalar,
-                        joined: false,
-                        phase,
-                    },
-                )
-                .map_err(BindError::Catalog)?;
-                let valid = scoped.is_empty();
-                findings.extend(scoped.into_iter().map(|finding| {
-                    BindFinding::QualifiedReference {
-                        path: declaration.path.clone(),
-                        name: reference.clone(),
-                        row: row.map(String::from),
-                        finding,
-                    }
-                }));
-                valid.then_some(Expression::Source(column))
-            } else {
-                None
-            }
+        RowOperation::Shared(branch) => {
+            cx.bind(&branch.operation, &branch.path, declaration.column)?
         }
     };
-    // VALUE-24 once per column: a default shared by several templates states
-    // one derivation.
-    if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-        let captured = types::CapturedTypes::new(named, catalog, secondary, intermediates);
-        let result = tree.result_type(declaration.value, ast::Scope::Row, &captured)?;
-        let column = &output.columns()[declaration.column];
+    if expression.is_some() && cx.findings.len() == start && declaration.handler.is_none() {
+        let result = cx
+            .tree
+            .result_type(declaration.value, ast::Scope::Row, &cx.captured())?;
+        let column = &cx.output.columns()[declaration.column];
         if let Some(finding) =
             types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
         {
-            if !findings
+            if !cx
+                .findings
                 .iter()
                 .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
             {
-                findings.push(BindFinding::Scalar(finding));
+                cx.findings.push(BindFinding::Scalar(finding));
             }
         }
     }
@@ -872,25 +732,30 @@ fn bind_template(
             }
         }
     }
+    let scope = binder::Scope {
+        template: binder::Template::Row(&template.id),
+        phase,
+        driver: &template.driver,
+        available: Some(&available),
+    };
+    let donors = binder::Donors {
+        named,
+        secondary,
+        items: intermediates,
+    };
     for declaration in &template.declarations {
-        if let Some(value) = bind_assignment(
-            row_source,
-            &template.driver,
-            &row_catalog,
-            declaration,
-            phase,
-            Some(&template.id),
-            Some(&available),
-            &mut graph[declaration.column],
-            findings,
-            declarations_reported,
-            project,
+        let mut cx = BindContext {
+            scope,
+            donors,
+            catalog: &row_catalog,
             output,
+            project,
             tree,
-            named,
-            secondary,
-            intermediates,
-        )? {
+            edges: &mut graph[declaration.column],
+            findings: &mut *findings,
+            reported: declarations_reported,
+        };
+        if let Some(value) = bind_assignment(&mut cx, declaration)? {
             assignments.insert(declaration.column, value);
         }
     }
@@ -1501,8 +1366,8 @@ impl Rows {
             let mut edges = Vec::new();
             for (scope, members) in scopes {
                 let column_catalog;
-                let (catalog_ref, column_source, column_driver, port) = match scope {
-                    ColumnScope::Dataset => (&catalog, source, name, 0),
+                let (catalog_ref, column_driver, port) = match scope {
+                    ColumnScope::Dataset => (&catalog, name, 0),
                     ColumnScope::Template => {
                         // Resolve the driver as its row template does: an
                         // input's stored schema or the intermediate's visible
@@ -1530,30 +1395,33 @@ impl Rows {
                             &secondary,
                             driver,
                         )?;
-                        (&column_catalog, driver_source, driver, port)
+                        (&column_catalog, driver, port)
                     }
                 };
                 let mut binding_edges = Vec::new();
-                if let Some(mut value) = bind_assignment(
-                    column_source,
-                    column_driver,
-                    catalog_ref,
-                    declaration,
-                    Phase::Column {
-                        groups: &column_groups,
+                let mut cx = BindContext {
+                    scope: binder::Scope {
+                        template: binder::Template::Any,
+                        phase: Phase::Column {
+                            groups: &column_groups,
+                        },
+                        driver: column_driver,
+                        available: None,
                     },
-                    None,
-                    None,
-                    &mut binding_edges,
-                    &mut findings,
-                    false,
-                    project,
+                    donors: binder::Donors {
+                        named,
+                        secondary: &secondary,
+                        items: &intermediates,
+                    },
+                    catalog: catalog_ref,
                     output,
-                    &prepared.tree,
-                    named,
-                    &secondary,
-                    &intermediates,
-                )? {
+                    project,
+                    tree: &prepared.tree,
+                    edges: &mut binding_edges,
+                    findings: &mut findings,
+                    reported: false,
+                };
+                if let Some(mut value) = bind_assignment(&mut cx, declaration)? {
                     // An ODM read takes the scope of each row's template.
                     crate::dataset::odm::visit_mut(&mut value.expression, &mut |bound| {
                         let contexts = odm_contexts.get_or_insert_with(|| {

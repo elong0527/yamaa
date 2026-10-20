@@ -1,36 +1,38 @@
 //! Structured source operands preserve options in every scalar row wrapper.
 use super::*;
-#[allow(clippy::too_many_arguments)]
+
+/// A structured source of a row template, the column phase or a lookup's
+/// own records: a lookup read through its selector, another input's field
+/// through its implicit join, a driver field or a column, each in this
+/// scope ([`BindContext::direct_read`]).
 pub(in crate::specification) fn bind(
+    cx: &mut BindContext<'_, '_>,
     declaration: &Declaration,
     column: usize,
     path: &str,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
 ) -> Result<Option<Expression>, BindError> {
-    if declaration.report_declaration(findings) {
+    if declaration.report_declaration(cx.findings) {
         return Ok(None);
     }
-    if declaration.reject_group_key_filter(path, driver, phase, findings) {
+    let driver = cx.scope.driver;
+    let phase = cx.scope.phase;
+    if declaration.reject_group_key_filter(path, driver, phase, cx.findings) {
         return Ok(None);
     }
-    let before = findings.len();
+    let binder::Donors {
+        named,
+        secondary,
+        items,
+    } = cx.donors;
+    let catalog = cx.catalog;
+    let before = cx.findings.len();
     let name = &declaration.variable;
     let mut variable_absent = false;
     let expression = if let Some((index, field)) = named.reference(name).filter(|_| {
         name.split_once('.')
             .is_none_or(|(owner, _)| owner != driver)
     }) {
-        let Some(item) = intermediates.get(index).and_then(Option::as_ref) else {
+        let Some(item) = items.get(index).and_then(Option::as_ref) else {
             // An earlier selector may be unavailable in this donor scope.
             // Let the named-read owner report it at the authored operand path.
             return row_intermediates::bind(
@@ -38,16 +40,16 @@ pub(in crate::specification) fn bind(
                 path,
                 named,
                 secondary,
-                intermediates,
-                output,
+                items,
+                cx.output,
                 catalog,
-                row,
-                available,
-                edges,
-                findings,
+                cx.row(),
+                cx.scope.available,
+                cx.edges,
+                cx.findings,
             );
         };
-        declaration.bind_row_filter(path, driver, catalog, named, findings)?;
+        declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?;
         if declaration.absent.is_some()
             && !item.source.is_self()
             && item.source_column(secondary, field).is_none()
@@ -60,13 +62,13 @@ pub(in crate::specification) fn bind(
                 path,
                 named,
                 secondary,
-                intermediates,
-                output,
+                items,
+                cx.output,
                 catalog,
-                row,
-                available,
-                edges,
-                findings,
+                cx.row(),
+                cx.scope.available,
+                cx.edges,
+                cx.findings,
             )?
         }
     } else {
@@ -95,15 +97,15 @@ pub(in crate::specification) fn bind(
             None
         };
         let filter = if let (Some(dataset), Some(schema)) = (dataset, schema.as_deref()) {
-            declaration.bind_filter_named(path, dataset, schema, named, findings)?
+            declaration.bind_filter_named(path, dataset, schema, named, cx.findings)?
         } else {
-            declaration.bind_row_filter(path, driver, catalog, named, findings)?
+            declaration.bind_row_filter(path, driver, catalog, named, cx.findings)?
         };
         let selection = if declaration.is_group_key(driver, phase) {
             // NAME-4: the key is already scalar; keep/order cannot choose a new record.
             None
         } else if let (Some(dataset), Some(schema)) = (dataset, schema.as_deref()) {
-            declaration.bind_selection(path, dataset, schema, findings)
+            declaration.bind_selection(path, dataset, schema, cx.findings)
         } else {
             None
         };
@@ -118,9 +120,7 @@ pub(in crate::specification) fn bind(
             variable_absent = true;
             Some(Expression::Literal(Value::Missing))
         } else {
-            match rounding::bind_row_operand(
-                name, path, catalog, driver, row, phase, available, edges, findings,
-            )? {
+            match cx.direct_read(name, path)? {
                 // A source binding keeps its range, options and absence answer
                 // on the implicit join (LOOKUP-25).
                 Some(Expression::Joined(read)) => {
@@ -132,7 +132,8 @@ pub(in crate::specification) fn bind(
                             .is_some_and(|(owner, _)| owner == driver)
                     }) {
                         use crate::reference_scope::{self, Reach, Scope};
-                        findings.extend(
+                        let row = cx.row();
+                        cx.findings.extend(
                             reference_scope::validate(
                                 catalog,
                                 value,
@@ -147,13 +148,11 @@ pub(in crate::specification) fn bind(
                             )
                             .map_err(BindError::Catalog)?
                             .into_iter()
-                            .map(|finding| {
-                                BindFinding::QualifiedReference {
-                                    path: format!("{path}.between.value"),
-                                    name: value.into(),
-                                    row: row.map(String::from),
-                                    finding,
-                                }
+                            .map(|finding| BindFinding::QualifiedReference {
+                                path: format!("{path}.between.value"),
+                                name: value.into(),
+                                row: row.map(String::from),
+                                finding,
                             }),
                         );
                     }
@@ -162,12 +161,12 @@ pub(in crate::specification) fn bind(
                             &read.schema,
                             catalog,
                             secondary,
-                            intermediates,
-                            row,
+                            items,
+                            cx.row(),
                             Some(driver),
-                            available,
-                            edges,
-                            findings,
+                            cx.scope.available,
+                            cx.edges,
+                            cx.findings,
                         )?
                         .map(|range| Expression::JoinedSource {
                             read,
@@ -189,12 +188,12 @@ pub(in crate::specification) fn bind(
             }
         }
     };
-    if findings.len() != before {
+    if cx.findings.len() != before {
         return Ok(None);
     }
     if expression.as_ref().is_some_and(|expression| {
-        declaration.refuse_require_match(path, expression, findings)
-            | declaration.refuse_range(path, expression, findings)
+        declaration.refuse_require_match(path, expression, cx.findings)
+            | declaration.refuse_range(path, expression, cx.findings)
     }) {
         return Ok(None);
     }

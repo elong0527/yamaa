@@ -212,81 +212,16 @@ pub(super) fn operand_findings(
         Err(error) => Err(error),
     }
 }
-#[allow(clippy::too_many_arguments)]
+/// Each operand binds as the scope decides; the operation needs every one.
 pub(super) fn bind(
     operation: &Imputation,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
     let mut operands = Vec::new();
     for (field, name) in operation.operands() {
         let path = format!("{}.{}", operation.path(), field);
-        if let Some(expression) = rounding::bind_operand(
-            name,
-            &path,
-            column,
-            keys,
-            catalog,
-            declarations,
-            secondary,
-            intermediates,
-            edges,
-            findings,
-        )? {
-            operands.push(Assignment {
-                column,
-                path,
-                expression,
-            });
-        }
-    }
-    Ok(
-        (operands.len() == operation.operands().count()).then(|| Expression::Imputation {
-            operands,
-            operation: operation.clone(),
-        }),
-    )
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &Imputation,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    let mut operands = Vec::new();
-    for (field, name) in operation.operands() {
-        let path = format!("{}.{}", operation.path(), field);
-        if let Some(expression) = self_relations::bind_operand(
-            name,
-            &path,
-            catalog,
-            driver,
-            row,
-            phase,
-            available,
-            edges,
-            findings,
-            output,
-            named,
-            secondary,
-            intermediates,
-        )? {
+        if let Some(expression) = cx.operand(name, &path)? {
             operands.push(Assignment {
                 column,
                 path,

@@ -19,6 +19,8 @@ use std::{collections::BTreeMap, vec};
 
 mod compiler_limits;
 pub use compiler_limits::CompilerLimit;
+mod binder;
+use binder::BindContext;
 mod binding_diagnostics;
 mod checks;
 mod intermediate_admission;
@@ -1477,7 +1479,6 @@ impl PreparedSpecification {
                 self.bind_column_catalog(source, schemas)?;
             let (assignments, dependencies) = self.bind_column_declarations(
                 &catalog,
-                source,
                 &secondary,
                 &intermediates,
                 &mut findings,
@@ -1597,7 +1598,6 @@ impl PreparedSpecification {
     fn bind_column_declarations(
         &self,
         catalog: &Catalog,
-        source: &TableSchema,
         secondary: &[crate::dataset::SecondarySource],
         intermediates: &[Option<crate::dataset::Intermediate>],
         findings: &mut Vec<BindFinding>,
@@ -1616,220 +1616,32 @@ impl PreparedSpecification {
             let declarations_reported = cases::padding_findings(&declaration.operation, findings)?;
             let mut edges = Vec::new();
             let path = &declaration.path;
-            let reference_path = if matches!(
-                declaration.operation,
-                Operation::Compute(_) | Operation::InvalidNumeric { .. }
-            ) {
-                format!("{path}.expr")
-            } else {
-                path.clone()
-            };
             let start = findings.len();
-            let expression = match &declaration.operation {
-                Operation::Odm(operation) => odm::bind(
-                    operation,
-                    catalog,
-                    &self.source().name,
-                    None,
-                    self.odm_phase(column),
-                    self.record_rows(),
-                    findings,
-                )?,
-                Operation::Aggregate(operation) => aggregates::bind(
-                    operation,
-                    catalog,
-                    &self.source().name,
-                    None,
-                    crate::reference_scope::Phase::Column { groups: &[] },
-                    &self.output,
-                    &self.tree,
-                    &self.intermediates,
+            let expression = BindContext {
+                scope: binder::Scope {
+                    template: binder::Template::Implicit(binder::Implicit {
+                        keys: &self.keys,
+                        key: self.keys.contains(&column),
+                        records: self.record_rows(),
+                    }),
+                    phase: crate::reference_scope::Phase::Column { groups: &[] },
+                    driver: &self.source().name,
+                    available: None,
+                },
+                donors: binder::Donors {
+                    named: &self.intermediates,
                     secondary,
-                    intermediates,
-                    self.project_calls.as_ref(),
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Flag(operation) => flags::bind(
-                    operation,
-                    self.reads_one_record(column),
-                    &self.source().name,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    declarations_reported,
-                )?,
-                Operation::Case(branches) => cases::bind(
-                    self,
-                    branches,
-                    column,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    declarations_reported,
-                )?,
-                Operation::ProjectFunction { call, .. } => {
-                    self.bind_project_function(*call, column, catalog, &mut edges, findings)?
-                }
-                Operation::Literal(value) => Some(Expression::Literal(value.clone())),
-                Operation::MappingCut(operation) => mapping_cut::bind(
-                    self,
-                    operation,
-                    column,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Round(rounding) => rounding::bind(
-                    rounding,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrTemplate(operation) => str_template::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Scalar(operation) => scalar::bind(
-                    self,
-                    operation,
-                    column,
-                    catalog,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrExtract(operation) => str_extract::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrReplace(operation) => str_extract::bind_replace(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrCase(operation) => str_case::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::StrPad(operation) => str_pad::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Imputation(operation) => imputation::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Temporal(operation) => temporal::bind(
-                    operation,
-                    column,
-                    &self.keys,
-                    catalog,
-                    &self.intermediates,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Window(window) => window.bind(catalog, &mut edges, findings)?,
-                Operation::InvalidNumeric { expression, error } => {
-                    findings.push(BindFinding::Numeric {
-                        path: reference_path.clone(),
-                        expression: expression.clone(),
-                        error: error.clone(),
-                    });
-                    None
-                }
-                Operation::Source(declaration) => source_expressions::bind(
-                    self,
-                    declaration,
-                    column,
-                    path,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::FirstAvailable(selection) => self.bind_first_available(
-                    selection,
-                    column,
-                    path,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                )?,
-                Operation::Compute(compiled) => self.bind_compute(
-                    compiled,
-                    reference_path.clone(),
-                    catalog,
-                    secondary,
-                    intermediates,
-                    &mut edges,
-                    findings,
-                    start,
-                )?,
-            };
+                    items: intermediates,
+                },
+                catalog,
+                output: &self.output,
+                project: self.project_calls.as_ref(),
+                tree: &self.tree,
+                edges: &mut edges,
+                findings: &mut *findings,
+                reported: declarations_reported,
+            }
+            .bind(&declaration.operation, path, column)?;
             if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
                 let captured = types::CapturedTypes::new(
                     &self.intermediates,
@@ -1873,247 +1685,6 @@ impl PreparedSpecification {
                 })
             })
     }
-    /// Whether a no-rows derivation of `column` reads one base record: a key
-    /// is computed per record, and with record rows every column reads its
-    /// row's one record. Otherwise a base read collects the distinct readings
-    /// of the records that feed the key combination.
-    pub(super) fn reads_one_record(&self, column: usize) -> bool {
-        self.keys.contains(&column) || self.record_rows()
-    }
-    /// The phase an `odm` read of `column` binds in without row templates.
-    /// With record rows a key is a derivation of its row's one record, as an
-    /// ungrouped row template's is; every other column is column-phase.
-    pub(super) fn odm_phase(&self, column: usize) -> crate::reference_scope::Phase<'static> {
-        if self.record_rows() && self.keys.contains(&column) {
-            crate::reference_scope::Phase::Row { group_by: None }
-        } else {
-            crate::reference_scope::Phase::Column { groups: &[] }
-        }
-    }
-    fn bind_project_function(
-        &self,
-        call: usize,
-        column: usize,
-        catalog: &Catalog,
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<Expression>, BindError> {
-        let expression = {
-            let calls = self.project_calls.as_ref().ok_or(BindError::Internal)?;
-            let record = self.reads_one_record(column);
-            let context = crate::project_call_binding::Context {
-                source_dataset: 0,
-                source_mode: if record {
-                    crate::project_call_binding::SourceMode::Record
-                } else {
-                    crate::project_call_binding::SourceMode::Collect
-                },
-                available_outputs: None,
-                scope: crate::reference_scope::Scope {
-                    drivers: &[self.source().name.as_str()],
-                    current_driver: true,
-                    reach: if record {
-                        crate::reference_scope::Reach::Record
-                    } else {
-                        crate::reference_scope::Reach::Relation
-                    },
-                    joined: false,
-                    phase: crate::reference_scope::Phase::Column { groups: &[] },
-                },
-            };
-            match crate::project_call_binding::bind(calls, call, catalog, context) {
-                Ok(bound) => {
-                    edges.extend(bound.dependencies);
-                    Some(Expression::ProjectFunction(bound.function))
-                }
-                Err(crate::project_call_binding::Error::Findings(errors)) => {
-                    findings.extend(functions::bind_findings(calls, call, errors, None)?);
-                    None
-                }
-                Err(crate::project_call_binding::Error::Reference(error)) => {
-                    return Err(BindError::Catalog(error))
-                }
-                Err(_) => return Err(BindError::Internal),
-            }
-        };
-        Ok(expression)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_first_available(
-        &self,
-        selection: &source_expressions::FirstAvailable,
-        column: usize,
-        path: &str,
-        catalog: &Catalog,
-        source: &TableSchema,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-    ) -> Result<Option<Expression>, BindError> {
-        let expression = {
-            let mut operands = Vec::new();
-            for (index, operand) in selection.sources.iter().enumerate() {
-                let operand_path = format!("{path}.sources[{index}]");
-                if let Some(expression) = source_expressions::bind(
-                    self,
-                    operand,
-                    column,
-                    &operand_path,
-                    catalog,
-                    source,
-                    secondary,
-                    intermediates,
-                    edges,
-                    findings,
-                )? {
-                    // Distinct-value collection failures belong to first_available.
-                    // Recursive operands retain their own expression and handler paths.
-                    let read = match expression {
-                        // A row that is one base record reads that record's
-                        // value: the operand keeps its own collected read.
-                        Expression::Collect {
-                            column,
-                            identifier,
-                            filter,
-                            selection: None,
-                        } if !self.record_rows() => crate::dataset::SelectionRead::Collect {
-                            column,
-                            identifier,
-                            filter: filter.map(std::boxed::Box::new),
-                        },
-                        expression => crate::dataset::SelectionRead::Expression(
-                            std::boxed::Box::new(crate::dataset::Assignment {
-                                column,
-                                expression,
-                                path: operand_path.clone(),
-                            }),
-                        ),
-                    };
-                    operands.push(crate::dataset::SelectionSource {
-                        path: operand_path.clone(),
-                        read,
-                    });
-                }
-            }
-            Some(Expression::FirstAvailable(std::boxed::Box::new(
-                crate::dataset::FirstAvailable::new(
-                    path.into(),
-                    operands,
-                    selection.missing.clone(),
-                ),
-            )))
-        };
-        Ok(expression)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn bind_compute(
-        &self,
-        compiled: &CompiledExpression,
-        reference_path: String,
-        catalog: &Catalog,
-        secondary: &[crate::dataset::SecondarySource],
-        intermediates: &[Option<crate::dataset::Intermediate>],
-        edges: &mut Vec<usize>,
-        findings: &mut Vec<BindFinding>,
-        start: usize,
-    ) -> Result<Option<Expression>, BindError> {
-        let expression = {
-            let bind = |name: &str,
-                        findings: &mut Vec<BindFinding>|
-             -> Result<Option<reference_binding::Binding>, BindError> {
-                if !name.contains('.') {
-                    if let Some(finding) = catalog
-                        .validate_output(name, None, None, &[0])
-                        .map_err(BindError::Catalog)?
-                    {
-                        findings.push(BindFinding::OutputReference {
-                            path: reference_path.clone(),
-                            name: name.into(),
-                            row: None,
-                            finding,
-                        });
-                        return Ok(None);
-                    }
-                }
-                let binding = catalog.bind(name);
-                if binding.is_none() {
-                    findings.push(BindFinding::UnknownReference {
-                        path: reference_path.clone(),
-                        name: name.into(),
-                    });
-                }
-                Ok(binding)
-            };
-            // The reference emits expression-local qualification findings first,
-            // then validates bare references, preserving written occurrence order.
-            checks::declared::qualified_numeric_findings(
-                compiled,
-                &reference_path,
-                &self.intermediates,
-                findings,
-            );
-            let mut bindings = Vec::new();
-            for name in compiled
-                .identifiers()
-                .filter(|name| self.intermediates.reference(name).is_some())
-            {
-                let (index, field) = self
-                    .intermediates
-                    .reference(name)
-                    .ok_or(BindError::Internal)?;
-                if let Some(item) = &intermediates[index] {
-                    edges.extend(row_intermediates::dependencies(index, intermediates)?);
-                    if let Some(column) = item.source_column(secondary, field) {
-                        bindings.push(Binding {
-                            name: name.into(),
-                            read: Read::Intermediate { index, column },
-                        });
-                    } else {
-                        findings.push(BindFinding::UnknownReference {
-                            path: reference_path.clone(),
-                            name: name.into(),
-                        });
-                    }
-                } else {
-                    findings.push(BindFinding::UnknownReference {
-                        path: reference_path.clone(),
-                        name: name.into(),
-                    });
-                }
-            }
-            for name in compiled.identifiers().filter(|name| !name.contains('.')) {
-                if let Some(binding) = bind(name, findings)? {
-                    let read = match binding {
-                        reference_binding::Binding::Output { column, .. } => {
-                            edges.push(column);
-                            Read::Column(column)
-                        }
-                        reference_binding::Binding::Dataset { field, .. } => Read::Source(field),
-                    };
-                    bindings.push(Binding {
-                        name: name.into(),
-                        read,
-                    });
-                }
-            }
-            let captured =
-                types::CapturedTypes::new(&self.intermediates, catalog, secondary, intermediates);
-            captured.numeric(compiled, &bindings, findings);
-            if findings.len() == start {
-                Some(Expression::Compute(
-                    BoundNumeric::new(captured.typed(compiled), bindings)
-                        .map_err(BindError::InvalidNumericBinding)?,
-                ))
-            } else {
-                None
-            }
-        };
-        Ok(expression)
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn finish_column_plan(
         &self,

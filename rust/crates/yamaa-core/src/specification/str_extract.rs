@@ -181,66 +181,19 @@ fn finish(
         operation: operation.clone(),
     }))
 }
-#[allow(clippy::too_many_arguments)]
+/// The source binds as the scope decides; an unknown source is the text
+/// operation's own finding.
 pub(super) fn bind(
     operation: &StringExtract,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
-    let start = findings.len();
-    let source = rounding::bind_operand(
+    let start = cx.findings.len();
+    let source = cx.operand(
         operation.source(),
         &format!("{}.source", operation.path()),
-        column,
-        keys,
-        catalog,
-        declarations,
-        secondary,
-        intermediates,
-        edges,
-        findings,
     )?;
-    finish(operation, source, start, catalog, findings, column)
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row(
-    operation: &StringExtract,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    let start = findings.len();
-    let source = self_relations::bind_operand(
-        operation.source(),
-        &format!("{}.source", operation.path()),
-        catalog,
-        driver,
-        row,
-        phase,
-        available,
-        edges,
-        findings,
-        output,
-        named,
-        secondary,
-        intermediates,
-    )?;
-    finish(operation, source, start, catalog, findings, column)
+    finish(operation, source, start, cx.catalog, cx.findings, column)
 }
 fn replaced(expression: Expression, operation: &StringReplace) -> Expression {
     match expression {
@@ -251,61 +204,11 @@ fn replaced(expression: Expression, operation: &StringReplace) -> Expression {
         _ => unreachable!("extraction binding"),
     }
 }
-#[allow(clippy::too_many_arguments)]
+/// A replacement binds its search as an extraction does.
 pub(super) fn bind_replace(
     operation: &StringReplace,
     column: usize,
-    keys: &[usize],
-    catalog: &Catalog,
-    declarations: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
+    cx: &mut BindContext<'_, '_>,
 ) -> Result<Option<Expression>, BindError> {
-    Ok(bind(
-        operation.search(),
-        column,
-        keys,
-        catalog,
-        declarations,
-        secondary,
-        intermediates,
-        edges,
-        findings,
-    )?
-    .map(|expression| replaced(expression, operation)))
-}
-#[allow(clippy::too_many_arguments)]
-pub(super) fn bind_row_replace(
-    operation: &StringReplace,
-    column: usize,
-    catalog: &Catalog,
-    driver: &str,
-    row: Option<&str>,
-    phase: crate::reference_scope::Phase<'_>,
-    available: Option<&[usize]>,
-    edges: &mut Vec<usize>,
-    findings: &mut Vec<BindFinding>,
-    output: &TableSchema,
-    named: &intermediates::Declarations,
-    secondary: &[crate::dataset::SecondarySource],
-    intermediates: &[Option<crate::dataset::Intermediate>],
-) -> Result<Option<Expression>, BindError> {
-    Ok(bind_row(
-        operation.search(),
-        column,
-        catalog,
-        driver,
-        row,
-        phase,
-        available,
-        edges,
-        findings,
-        output,
-        named,
-        secondary,
-        intermediates,
-    )?
-    .map(|expression| replaced(expression, operation)))
+    Ok(bind(operation.search(), column, cx)?.map(|expression| replaced(expression, operation)))
 }
