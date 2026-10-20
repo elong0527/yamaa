@@ -25,7 +25,6 @@ mapping of [OUTPUT-5](../output.md#output-5) stays closed at `.csv` and
 `.parquet`.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `adam-adsl-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
-Replaces: REQ-1193, REQ-1194.
 
 One section requests one transport. The file's place depends on the document
 and the dataset name alone, not on where the artifact is published: a `DM`
@@ -52,7 +51,6 @@ conflicting paths.
 
 Fails: `transport_path_collision`, `artifact_path_collision`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::transport_targets_equal_after_lowercasing_are_refused_before_overwriting_a_sentinel`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::a_transport_file_never_replaces_a_declared_input`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineTransportCollision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactCollision`.
-Replaces: REQ-1195, REQ-1226.
 
 A transport file equal to another transport file or to a declared input path
 fails with `transport_path_collision`, reporting the specification or the
@@ -74,7 +72,6 @@ the dataset and the artifact.
 
 Fails: `transport_dataset_empty`.
 Evidence: `rust/crates/yamaa-adapters/tests/submission_transport.rs::datasets_without_data_have_no_file_and_empty_ones_must_declare_it`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportEmpty`.
-Replaces: REQ-1196, REQ-1227.
 
 The document still describes a dataset with no data, with `def:HasNoData`; it
 names no file for it ([DEFINE-15](define-xml.md#define-15)). The failure
@@ -92,7 +89,6 @@ schema fails, reporting the violation, and the generation publishes nothing.
 
 Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionJsonInvalid`, `python/tests/installed/installed_public_define.py::test_dm_goldens_public_issues_and_held_save`.
-Replaces: REQ-1197, REQ-1198, REQ-1231.
 
 A later release of the standard is a new profile under a new name rather than a
 redefinition of this one. The newline-delimited form carries the same
@@ -118,7 +114,6 @@ or a composed `output.decimals` fails.
 
 Fails: `producer_contract_mismatch`, `decimals_not_applicable`.
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionTransportDecimals`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1199, REQ-1200, REQ-1230.
 
 The artifact is read:
 
@@ -163,7 +158,6 @@ second time. A specification a document composes already declares
 therefore produces no Dataset-JSON file, as it produces no Define-XML entry.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1201, REQ-1202.
 
 There is no case in which the column block and the Define-XML disagree and a
 rule has to say which one wins. This is the posture of
@@ -183,7 +177,6 @@ the missing value of a row. A file always has rows ([JSON-3](#json-3)), and
 `dbLastModifiedDateTime` is never written.
 
 Evidence: `sdtm-dm-metadata`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1203, REQ-1204, REQ-1205, REQ-1207, REQ-1208.
 
 | Member | Source |
 |---|---|
@@ -221,7 +214,6 @@ Dataset-JSON file and [DEFINE-2](define-xml.md#define-2) names. The reference
 therefore never leaves that directory.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::mutual_references_and_published_contract_fail_before_any_publication`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`.
-Replaces: REQ-1206, REQ-1229.
 
 The pair travels together: the file names the document its `itemOID`s point
 into, and [JSON-12](#json-12) has that document name the file.
@@ -238,7 +230,6 @@ are its `Length` and `def:DisplayFormat`, and `keySequence` is the `ItemRef`
 `KeySequence` [DEFINE-18](define-xml.md#define-18) writes.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::integer_terminology_items_admit_equal_float_published_values`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1209.
 
 | Member | Source |
 |---|---|
@@ -270,7 +261,6 @@ collapsed types are carried as text and keep their submission type in the
 `targetDataType`, and `boolean`, `decimal` and `double` are never written.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_transport.rs::adam_dataset_json_targets_the_integer_its_document_submits`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1210, REQ-1211.
 
 | Submission data type | `dataType` |
 |---|---|
@@ -307,7 +297,6 @@ value is `null` and a collected empty string is `""`; which of them reaches
 this file is decided by the artifact's own container and by nothing else.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/src/submission_json.rs::streamed_cells_preserve_exact_json_and_full_width_scalar_spelling`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1212, REQ-1213, REQ-1214.
 
 | Column type | Written as |
 |---|---|
@@ -338,7 +327,6 @@ path. When no transport is requested, the leaf names the specification's
 published `output.path` ([DEFINE-16](define-xml.md#define-16)).
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::entry_relative_inherited_output_supplies_json_capture_and_publication_targets`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-1215.
 
 <a id="json-13"></a>
 
@@ -352,7 +340,6 @@ a file. A generation's data files are byte-identical for the same inputs, and a
 golden file is compared byte for byte.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`, `rust/crates/yamaa-adapters/src/submission_json.rs::streamed_cells_preserve_exact_json_and_full_width_scalar_spelling`.
-Replaces: REQ-1216, REQ-1217, REQ-1218, REQ-1219, REQ-1220.
 
 The layout is fixed exactly:
 
@@ -401,7 +388,6 @@ publishes nothing further and leaves every untouched target as it was.
 
 Fails: `publication_failed`.
 Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/file_resources.rs::semantic_failure_and_target_admission_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
-Replaces: REQ-1221, REQ-1222, REQ-1232.
 
 A visible document therefore never points at a data file that is not there yet,
 which is the order of [OUTPUT-10](../output.md#output-10) applied to
@@ -419,5 +405,3 @@ primary artifact and its report file. A failed publication fails under
 This container is not a source. The extension mapping of
 [Inputs](../inputs.md) stays closed at `.csv` and
 `.parquet`, and a `dataset_class.path` ending in `.json` names no profile.
-
-Replaces: REQ-1223.

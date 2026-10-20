@@ -252,7 +252,7 @@ def compare_define(case, staged, define):
                 )
             return expected == actual
 
-        keys = ("phase", "condition", "spec_paths", "requirement")
+        keys = ("phase", "condition", "spec_paths", "rule")
         if first is None or any(
             want.get(key) != first.get(key) for key in keys if key in want
         ):

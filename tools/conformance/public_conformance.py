@@ -27,7 +27,7 @@ from tools.paths import ROOT
 PROTOCOL = "public-conformance/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 RESOLVED_REASON = "reference-only resolved specification until cutover (#1973.14)"
-# The run report's integer columns (REQ-0392); every other column is text.
+# The run report's integer columns (CHECK-24); every other column is text.
 REPORT_INTS = {"COUNT", "TOTAL"}
 # R doubles hold every integer up to this magnitude exactly.
 EXACT_DOUBLE = 2**53
@@ -105,7 +105,7 @@ def key_order_texts(document):
 
     Eligible documents have no `rows` and no `parent`, at least two keys,
     and every key column reading one input field or a literal, so key columns
-    may be declared in any order (REQ-0060, REQ-0062, REQ-0220).
+    may be declared in any order (COLUMN-5, OUTPUT-1, OUTPUT-2).
     """
     if (
         not isinstance(document, dict)
@@ -149,7 +149,7 @@ def example_variants(fixtures, example):
     Returns (descriptors, contents): descriptors maps each runtime to its
     variant list; contents maps each variant specification path, relative to
     the staged case directory, to the text to stage there. Every entry gets
-    an empty child (REQ-0627); positive entries may also get the key-order
+    an empty child (LAYER-5); positive entries may also get the key-order
     control and permutation.
     """
     descriptors = {"python": [], "r": []}
@@ -425,7 +425,7 @@ def expected_table(path, types):
 
 
 def reported_table(table, decimals):
-    """Independently project binary64 using REQ-0747 and REQ-0418's interval.
+    """Independently project binary64 using CSV-9 and FORMULA-16's interval.
 
     Committed precision CSVs contain reported values. Use integer ratios so
     ties, and near ties within 2^-26 below a scaled tie, round away from zero
@@ -472,7 +472,7 @@ def diagnostic_matches(want, got):
             got.get(field) == want[field]
             for field in ("phase", "condition", "spec_paths")
         )
-        and ("requirement" not in want or got.get("requirement") == want["requirement"])
+        and ("rule" not in want or got.get("rule") == want["rule"])
         and subset(want.get("context") or {}, got.get("context") or {})
     )
 
@@ -561,7 +561,7 @@ def load_metamorphic_expectations(fixtures):
 def unordered_report(tables):
     """The tables with the run report's rows as a sorted multiset.
 
-    Check rows follow column declaration order (REQ-1175), so declaring the
+    Check rows follow column declaration order (CHECK-23), so declaring the
     key columns in another order moves their rows; no row's facts change.
     """
     report = tables.get("report")
@@ -588,7 +588,7 @@ def build_difference(reference, variant, unordered_report_rows=False):
         return None
     if not reference_issues or not variant_issues:
         return "exactly one build reports issues"
-    fields = ("phase", "condition", "requirement", "spec_paths")
+    fields = ("phase", "condition", "rule", "spec_paths")
     if any(
         reference_issues[0].get(field) != variant_issues[0].get(field)
         for field in fields
@@ -956,7 +956,7 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
                 result["not_compared"].append(
                     {
                         "artifact": truth.name,
-                        "reason": "unrounded float values: independent CSV supplies declared reported precision only (REQ-0747)",
+                        "reason": "unrounded float values: independent CSV supplies declared reported precision only (CSV-9)",
                     }
                 )
             if actual != expected:

@@ -2299,7 +2299,7 @@
             "match_count": 2
           },
           "phase": "join",
-          "requirement": "REQ-0127",
+          "rule": "LOOKUP-10",
           "spec_paths": [
             "columns.V.derivation.source"
           ]
@@ -2337,7 +2337,7 @@
                 "match_count": 2
               },
               "phase": "join",
-              "requirement": "REQ-0127",
+              "rule": "LOOKUP-10",
               "spec_paths": [
                 "columns.V.derivation.source"
               ]
@@ -2458,7 +2458,7 @@
             ]
           },
           "phase": "validation",
-          "requirement": "LOOKUP-5",
+          "rule": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.source"
           ]
@@ -2481,7 +2481,7 @@
                 ]
               },
               "phase": "validation",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.source"
               ]
@@ -2716,7 +2716,7 @@
             "variable": "SRC.UNKNOWN"
           },
           "phase": "convert",
-          "requirement": "REQ-0013",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.V",
             "columns.V.derivation.source.absent"
@@ -2751,7 +2751,7 @@
                 "variable": "SRC.UNKNOWN"
               },
               "phase": "convert",
-              "requirement": "REQ-0013",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.V",
                 "columns.V.derivation.source.absent"

@@ -69,7 +69,7 @@ impl Fixture {
         let [issue] =
             <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
         yamaa_adapters::json!({"phase": issue.phase(), "condition": issue.condition(),
-            "requirement": issue.requirement(), "spec_paths": issue.spec_paths,
+            "rule": issue.rule(), "spec_paths": issue.spec_paths,
             "context": issue.context.clone()})
     }
 }
@@ -159,7 +159,7 @@ fn window_filter_evaluates_both_operands_of_and() {
         yamaa_adapters::json!({
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-0190",
+            "rule": "FORMULA-5",
             "spec_paths": ["columns.SEQ.derivation.row_number.window.filter"],
             "context": {"left_type": "int", "right_type": "str"}
         })
@@ -313,7 +313,7 @@ fn baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied(
         yamaa_adapters::json!({
             "phase": "derivation",
             "condition": "ambiguous_baseline",
-            "requirement": "WINDOW-9",
+            "rule": "WINDOW-9",
             "spec_paths": ["columns.BLFL.derivation.baseline_flag"],
             "context": {"date": "2025-01-03", "match_count": 2, "keys": [{"G": "a"}]}
         })
@@ -370,7 +370,7 @@ fn window_context_table_counts_its_source_field_against_the_column_limit() {
         yamaa_adapters::json!({
             "phase": "engine",
             "condition": "engine_rejected",
-            "requirement": null,
+            "rule": null,
             "spec_paths": ["columns.W.derivation.row_number"],
             "context": {
                 "stage": "execute",

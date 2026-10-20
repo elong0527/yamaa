@@ -2,7 +2,7 @@ phase: validation
 condition: value_level_where_invalid
 spec_paths:
   - columns.LBORRES.submission.value_level.GLUC.where.LBTESTCD
-requirement: SUB-12
+rule: SUB-12
 context:
   column: LBORRES
   entry: GLUC

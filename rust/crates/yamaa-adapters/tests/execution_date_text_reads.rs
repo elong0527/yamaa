@@ -201,7 +201,7 @@ fn a_reached_part_is_read_and_refused_as_before() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "multiple_matches");
-    assert_eq!(failure["requirement"], "REQ-0127");
+    assert_eq!(failure["rule"], "LOOKUP-10");
     assert_eq!(
         failure["context"]["keys"],
         yamaa_adapters::json!([{"ID": 2}])
@@ -214,7 +214,7 @@ fn a_reached_part_is_read_and_refused_as_before() {
     );
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "invalid_date_text");
-    assert_eq!(failure["requirement"], "TIME-19");
+    assert_eq!(failure["rule"], "TIME-19");
     assert_eq!(
         failure["context"],
         yamaa_adapters::json!({"operation": "dtc", "part": "day", "source": "LK.D", "value": "5", "keys": [{"ID": 3}]})
@@ -242,7 +242,7 @@ fn to_date_refuses_an_interval_with_its_source_and_row() {
         (
             failure["phase"].as_str(),
             failure["condition"].as_str(),
-            failure["requirement"].as_str()
+            failure["rule"].as_str()
         ),
         (
             Some("impute"),

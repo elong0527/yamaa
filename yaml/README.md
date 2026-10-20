@@ -21,7 +21,7 @@ The [contract index](../rules/README.md#rule-files) organizes the language by se
 
 Schemas own structure, defaults, and structural constraints. Indexed contracts
 own shared and operation-local behavior. Schema descriptions link to the owning
-requirement. Examples demonstrate those contracts without redefining them.
+rule. Examples demonstrate those contracts without redefining them.
 
 Closed grammars are defined once in [grammar/](grammar/README.md). Their
 contract blocks are generated views checked against those files; R and Python
@@ -38,10 +38,11 @@ replay the same parser vectors.
 | [rules/](../rules/README.md) | Normative contracts |
 | [Schema fields](https://elong0527.github.io/yamaa/reference/schema-fields/) | Generated shapes, defaults, and semantic links |
 | [Schema fields (1.0)](https://elong0527.github.io/yamaa/reference/schema-fields-v1/) | The same view of `v1/`, with each field's kind |
-| [Requirement index](https://elong0527.github.io/yamaa/reference/requirements/) | Generated canonical IDs and owners |
+| [Rule index](https://elong0527.github.io/yamaa/reference/rule-index/) | Generated canonical IDs and owners |
 | [benchmarks/](../benchmarks/README.md) | Specifications, inputs, and expected outcomes |
 | [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
+| [vocabulary/cdisc.yaml](vocabulary/cdisc.yaml) | Closed CDISC vocabularies: dataset classes and subclasses, standard names, origin types and sources, column roles |
 
 ## The 1.0 schema
 
@@ -164,6 +165,14 @@ rule, grammar, or fixture:
   compared with it, and both hosts replay its vectors, so a change made
   anywhere else fails validation. Add a vector for every behavior the change
   decides, in each context that decides it.
+- Change a closed CDISC vocabulary in `vocabulary/cdisc.yaml` first, giving
+  each added value the language version that admits it, then the schema
+  type the vocabulary names in `yaml/` and `v1/` and the engine's list.
+  `python -m tools.validation.check_cdisc_vocabulary` keeps each list that
+  names a Define-XML enumeration equal to that enumeration in the Define-XML
+  schema bundled with the engine, and each schema type equal to its list; a
+  Rust test compares the engine's lists with the file. A vocabulary only
+  grows: no value is removed in 1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

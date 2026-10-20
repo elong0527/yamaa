@@ -19,6 +19,8 @@ CHECKS = (
     "tools.packaging.generate_third_party_notices",
     "tools.packaging.check_minimum_rust",
     "tools.packaging.check_cargo_lock",
+    "tools.packaging.check_crate_purposes",
+    "tools.packaging.generate_component_inventory",
     "tools.packaging.generate_style_orders",
     "tools.packaging.generate_shipped_schema",
     "tools.packaging.generate_json_schema",
@@ -27,6 +29,7 @@ CHECKS = (
     "tools.validation.validate_repository",
     "tools.validation.check_execution_manifest",
     "tools.validation.check_vocabulary_coverage",
+    "tools.validation.check_cdisc_vocabulary",
     "tools.rules.check",
     "tools.validation.check_documentation",
     "tools.validation.check_diagnostics",
@@ -39,16 +42,30 @@ def run(*arguments, cwd=ROOT):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("lint", "check"))
     parser.add_argument(
-        "--without-r",
-        action="store_true",
-        help="leave the R binding, which needs R to build, out of Clippy",
+        "command",
+        choices=("lint", "lint-r-binding", "check"),
+        help="lint-r-binding runs Clippy over the R binding alone, which needs R",
     )
     args = parser.parse_args()
-    if args.without_r and args.command != "lint":
-        parser.error("--without-r is supported only for lint")
-    if args.command == "lint":
+    if args.command == "lint-r-binding":
+        # Building the R binding needs R, so `make test-r` runs this beside
+        # the R package check, rather than `lint`. `--no-deps` leaves the
+        # workspace crates that it depends on to `lint`.
+        run(
+            "cargo",
+            "clippy",
+            "--locked",
+            "-p",
+            "yamaa-r",
+            "--all-targets",
+            "--",
+            "--no-deps",
+            "-D",
+            "warnings",
+            cwd=WORKSPACE,
+        )
+    elif args.command == "lint":
         for arguments in (("format", "--check"), ("check",)):
             run(sys.executable, "-m", "ruff", *arguments, *LINT_PATHS)
         # Type-check the package with the configuration in python/pyproject.toml.
@@ -67,12 +84,16 @@ def main():
                 str(WORKSPACE / manifest),
                 cwd=WORKSPACE,
             )
+        # Every crate but the R binding, whose extendr build scripts run R
+        # (see lint-r-binding). Clippy links nothing, so PyO3's build script
+        # needs no more than the Python interpreter that runs this.
         run(
             "cargo",
             "clippy",
             "--locked",
             "--workspace",
-            *(("--exclude", "yamaa-r") if args.without_r else ()),
+            "--exclude",
+            "yamaa-r",
             "--all-targets",
             "--all-features",
             "--",

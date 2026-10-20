@@ -402,8 +402,8 @@ pub fn project<'a>(
                     ("phase", Fact::Text(mapping.phase)),
                     ("condition", Fact::Text(mapping.condition)),
                     (
-                        "requirement",
-                        Fact::Text(mapping.requirement.expect("registered normative check")),
+                        "rule",
+                        Fact::Text(mapping.rule.expect("registered normative check")),
                     ),
                     (
                         "spec_paths",
@@ -444,8 +444,8 @@ pub fn project<'a>(
                             .unwrap_or(Fact::Null),
                     ),
                     (
-                        "requirement",
-                        Fact::Text(mapping.requirement.expect("registered normative check")),
+                        "rule",
+                        Fact::Text(mapping.rule.expect("registered normative check")),
                     ),
                     (
                         "verification_id",

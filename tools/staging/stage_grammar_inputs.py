@@ -142,7 +142,7 @@ def specification(contract, case):
     later name binding rejects a case. Exact dependencies and shapes are checked
     separately through the typed core replay.
     """
-    # Every specification is pruned after composition (REQ-0638): no column
+    # Every specification is pruned after composition (LAYER-11): no column
     # reads SRC, so declare it as the driver with base to keep it live.
     # Otherwise the unread input is discarded, the implicit driver is gone and
     # driver_unavailable replaces the grammar decision under test.
@@ -204,7 +204,7 @@ def stage(destination, root=REPOSITORY):
                 encoding="utf-8",
             )
             condition = case.get("condition", "")
-            # Empty expression fields fail the public schema's REQ-0287 before parsing.
+            # Empty expression fields fail the public schema's SCHEMA-12 before parsing.
             public_condition = (
                 "minimum_length"
                 if not case["text"] and case["parse"] == "reject"

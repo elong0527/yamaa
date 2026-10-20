@@ -6,8 +6,9 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped public_contract.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
+projects <- normalizePath("project-base",winslash="/",mustWork=TRUE)
+define_fixtures <- normalizePath("define-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-contract")
 messages <- host_truth[["messages"]]
@@ -30,7 +31,7 @@ for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_spe
 check_issues <- function(frame) {
   stopifnot(is.data.frame(frame),
     identical(names(frame), fixture_strings(host_truth[["issue_columns"]])),
-    all(vapply(frame[c("phase", "condition", "requirement", "context")], is.character, logical(1))),
+    all(vapply(frame[c("phase", "condition", "rule", "context")], is.character, logical(1))),
     all(vapply(frame[c("spec_paths", "source_span", "operand_route")], is.list, logical(1))),
     all(vapply(frame$spec_paths, is.character, logical(1))),
     all(startsWith(frame$context, "{")),
@@ -52,14 +53,14 @@ unknown_member <- function(error, available) {
   issue <- error$issues
   nrow(issue) == 1L && identical(issue$phase, "validation") &&
     identical(issue$condition, "unknown_specification_name") &&
-    identical(issue$requirement, "REQ-1339") && identical(issue$spec_paths, list(character())) &&
+    identical(issue$rule, "PROJECT-6") && identical(issue$spec_paths, list(character())) &&
     identical(issue$context, paste0('{"available":', available, ',"name":"ADSL"}'))
 }
 # The one issue of a save with nothing to write, under `rule`.
 nothing_to_save <- function(error, rule) {
   issue <- error$issues
   nrow(issue) == 1L && identical(issue$phase, "output") &&
-    identical(issue$condition, "nothing_to_save") && identical(issue$requirement, rule) &&
+    identical(issue$condition, "nothing_to_save") && identical(issue$rule, rule) &&
     identical(issue$spec_paths, list(character())) && identical(issue$context, "{}")
 }
 # Argument mistakes are ordinary errors, never yamaa_error.
@@ -223,14 +224,14 @@ run_contract <- function() {
   report <- failed$report
   checks <- report[report$KIND == "check", , drop = FALSE]
   stopifnot(identical(issues$phase, "verification"), identical(issues$condition, "range_failed"),
-    identical(issues$requirement, "REQ-0377"),
+    identical(issues$rule, "CHECK-7"),
     identical(issues$context, '{"column":"VALUE","failure_count":1,"keys":[{"ID":"b"}],"verification_id":"fatal"}'),
     is.null(failed$output),
     identical(names(report), fixture_strings(host_truth[["report_columns"]])),
     identical(report$KIND, c("run", "input", "rows", "check", "check")),
     identical(checks$ID, c("warn", "fatal")), identical(checks$OUTCOME, c("violated", "violated")),
     identical(checks$COUNT, c(1, 1)), identical(checks$TOTAL, c(3, 3)),
-    identical(checks$RULE, c("REQ-0377", "REQ-0377")))
+    identical(checks$RULE, c("CHECK-7", "CHECK-7")))
   unlink(path(c("spec.yaml", "input.csv"))); invisible(gc())
   # Every save rewrites the report, then raises: a deleted report comes back
   # unchanged and the stale output is never touched.
@@ -272,7 +273,7 @@ qualify_callbacks <- function() {
   writeBin(charToRaw(host_truth[["specification_yaml"]]), path("spec.yaml"))
   writeBin(charToRaw(host_truth[["r_input_csv"]]), path("input.csv"))
   beyond <- "is beyond 2^53 and cannot be held exactly by an R double"
-  original <- system.file("project-base", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  original <- file.path(projects, "negative-function-contract")
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- path("negative-function-contract")
   entry <- file.path(case, "spec.yaml")
@@ -372,7 +373,7 @@ qualify_callbacks()
 qualify_project_run_members <- function() {
   root <- tempfile("yamaa-project-run-"); dir.create(root)
   on.exit(unlink(root, recursive = TRUE))
-  original <- system.file("project-base", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  original <- file.path(projects, "negative-function-contract")
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
@@ -429,7 +430,7 @@ qualify_every_save_rewrites <- function() {
   unlink(file.path(root, c("spec.yaml", "input.csv")))
   held <- restored(root, c("output.csv", "report.csv"), run$save)
   stopifnot(identical(held[["output.csv"]], charToRaw(host_truth[["r_input_csv"]])))
-  original <- system.file("project-base", "negative-function-contract", package = "yamaa", mustWork = TRUE)
+  original <- file.path(projects, "negative-function-contract")
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
@@ -439,7 +440,7 @@ qualify_every_save_rewrites <- function() {
   unlink(file.path(case, "input"), recursive = TRUE); unlink(entry)
   held <- restored(case, "test.csv", runs$save)
   stopifnot(identical(held[["test.csv"]], charToRaw("ID,RESULT\n01,1.5\n")))
-  fixture <- system.file("define-fixtures", "sdtm-dm-metadata", package = "yamaa", mustWork = TRUE)
+  fixture <- file.path(define_fixtures, "sdtm-dm-metadata")
   directory <- file.path(root, "submission"); dir.create(directory)
   stopifnot(file.copy(file.path(fixture, c("project.yaml", "spec.yaml")), directory),
     file.copy(file.path(fixture, "expected", "dm.csv"), directory))
@@ -534,7 +535,7 @@ qualify_issue_geometry <- function() {
     "output: {path: output.csv, columns: [ID, N]}"), path("spec.yaml"))
   frame <- check_issues(yamaa_spec(path("spec.yaml"))$check()$issues)
   stopifnot(identical(frame$phase, "validation"), identical(frame$condition, "integer_overflow"),
-    identical(frame$requirement, "REQ-0014"), identical(frame$spec_paths, list("columns.N.derivation.literal")),
+    identical(frame$rule, "VALUE-5"), identical(frame$spec_paths, list("columns.N.derivation.literal")),
     identical(frame$context, '{"actual":18446744073709551616,"maximum":9223372036854775807,"minimum":-9223372036854775808}'),
     is.null(frame$source_span[[1L]]), is.null(frame$operand_route[[1L]]))
   # A division by zero fails at one node of the compute expression: the span
@@ -579,10 +580,10 @@ qualify_issue_parity <- function() {
     expected <- case$issues
     text <- function(field) vapply(expected, function(issue)
       if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-    actual <- list(phase = frame$phase, condition = frame$condition, requirement = frame$requirement,
+    actual <- list(phase = frame$phase, condition = frame$condition, rule = frame$rule,
       spec_paths = frame$spec_paths, context = frame$context, source_span = frame$source_span,
       operand_route = frame$operand_route)
-    truth <- list(phase = text("phase"), condition = text("condition"), requirement = text("requirement"),
+    truth <- list(phase = text("phase"), condition = text("condition"), rule = text("rule"),
       spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
       context = enc2utf8(text("context")),
       source_span = lapply(expected, function(issue)
@@ -641,7 +642,7 @@ qualify_resolve <- function() {
   stopifnot(identical(facts$project, file.path(root, "project.yaml")), identical(facts$entry, entry))
   error <- refusal(yamaa_spec(entry)$resolve())
   stopifnot(identical(error$issues$condition, "unknown_project_function"),
-    identical(error$issues$requirement, "REQ-0698"),
+    identical(error$issues$rule, "FUNC-4"),
     identical(error$issues$spec_paths, list("columns.V.derivation.function.name")),
     identical(error$issues$context, '{"function":"text"}'))
 

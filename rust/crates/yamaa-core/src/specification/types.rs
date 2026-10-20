@@ -156,6 +156,15 @@ impl<'a> DeclaredTypes<'a> {
     }
     /// The type of `name`, a column or a qualified stored field.
     pub(super) fn name(&self, name: &str) -> ResultType {
+        self.typed(name, ResultType::STR)
+    }
+    /// The type a declaration writes for `name`: as [`Self::name`], except
+    /// that a delimited input's field no `types` entry names is not known.
+    pub(super) fn written(&self, name: &str) -> ResultType {
+        self.typed(name, ResultType::UNKNOWN)
+    }
+    /// `typeless` types a field of a delimited input no `types` entry names.
+    fn typed(&self, name: &str, typeless: ResultType) -> ResultType {
         let Some((owner, field)) = name.split_once('.') else {
             return ResultType::declared(
                 self.columns
@@ -178,7 +187,7 @@ impl<'a> DeclaredTypes<'a> {
                     .find(|stored| stored.name == field)
                     .map(|stored| stored.kind),
             ),
-            Some((_, Stored::Typeless(types))) => declared(types).unwrap_or(ResultType::STR),
+            Some((_, Stored::Typeless(types))) => declared(types).unwrap_or(typeless),
             Some((_, Stored::Narrowed(types))) => declared(types).unwrap_or(ResultType::UNKNOWN),
             Some((_, Stored::Captured)) | None => ResultType::UNKNOWN,
         }

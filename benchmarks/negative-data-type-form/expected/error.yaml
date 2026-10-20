@@ -2,7 +2,7 @@ phase: verification
 condition: data_type_failed
 spec_paths:
   - columns.BRTHDTC.submission.data_type
-requirement: SUB-26
+rule: SUB-26
 context:
   column: BRTHDTC
   data_type: date

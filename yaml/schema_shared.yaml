@@ -1,6 +1,6 @@
 version: "1.0"
 
-# See REQ-1150.
+# See VALUE-1.
 
 column_type:
     type: str

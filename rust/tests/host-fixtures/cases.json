@@ -54,7 +54,7 @@
         "SECOND",
         "THIRD"
       ],
-      "rounding_type_error_yaml": "phase: validation\ncondition: incompatible_input_type\nspec_paths:\n  - columns.RNDVAL.derivation.round_half_away_from_zero.source\nrequirement: REQ-0418\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n",
+      "rounding_type_error_yaml": "phase: validation\ncondition: incompatible_input_type\nspec_paths:\n  - columns.RNDVAL.derivation.round_half_away_from_zero.source\nrule: FORMULA-16\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n",
       "integer_boundary_csv": "ID\n-9223372036854775808\n9223372036854775807\n",
       "section_order_csv": "ID,SECTION,K,SEQ,V,FINAL,FIRST\na,first,x,2,5,115,5\nb,first,x,1,9,115,5\ng,second,x,4,15,115,5\nc,third,x,9,115,115,5\nd,third,x,9,115,115,5\n",
       "duplicate_donor_csv": "SEQ,ID,A,B\n1,1,first,\n1,1,tied,second\n0,2,two,both\n",
@@ -82,7 +82,7 @@
       "issue_columns": [
         "phase",
         "condition",
-        "requirement",
+        "rule",
         "spec_paths",
         "context"
       ],
@@ -321,7 +321,7 @@
           "run_issue": {
             "phase": "convert",
             "condition": "conversion_failed",
-            "requirement": "REQ-0021",
+            "rule": "VALUE-7",
             "spec_path": "columns.SECONDS"
           },
           "invalid_count": 0
@@ -369,13 +369,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.source"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.source"
           },
           "invalid_count": 0,
@@ -393,13 +393,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.days"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.days"
           },
           "invalid_count": 0,
@@ -417,13 +417,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1299",
+            "rule": "TIME-4",
             "spec_path": "columns.RESULT.derivation.diff.start"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1299",
+            "rule": "TIME-4",
             "spec_path": "columns.RESULT.derivation.diff.start"
           },
           "invalid_count": 0,
@@ -441,13 +441,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.source"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.source"
           },
           "invalid_count": 0,
@@ -465,13 +465,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.amount"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.amount"
           },
           "invalid_count": 0,
@@ -489,13 +489,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.amount"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift.amount"
           },
           "invalid_count": 0,
@@ -513,13 +513,13 @@
           "check_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1301",
+            "rule": "TIME-17",
             "spec_path": "columns.RESULT.derivation.duration_value.source"
           },
           "run_issue": {
             "phase": "validation",
             "condition": "incompatible_input_type",
-            "requirement": "REQ-1301",
+            "rule": "TIME-17",
             "spec_path": "columns.RESULT.derivation.duration_value.source"
           },
           "invalid_count": 0,
@@ -538,7 +538,7 @@
           "run_issue": {
             "phase": "convert",
             "condition": "conversion_failed",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0,
@@ -557,7 +557,7 @@
           "run_issue": {
             "phase": "convert",
             "condition": "conversion_failed",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0,
@@ -576,7 +576,7 @@
           "run_issue": {
             "phase": "convert",
             "condition": "conversion_failed",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0,
@@ -595,7 +595,7 @@
           "run_issue": {
             "phase": "convert",
             "condition": "conversion_failed",
-            "requirement": "REQ-1300",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0,
@@ -614,7 +614,7 @@
           "run_issue": {
             "phase": "impute",
             "condition": "invalid_duration_text",
-            "requirement": "REQ-1301",
+            "rule": "TIME-17",
             "spec_path": "columns.RESULT.derivation.duration_value"
           },
           "invalid_count": 0,
@@ -644,7 +644,7 @@
           "run_issue": {
             "phase": "convert",
             "condition": "conversion_failed",
-            "requirement": "REQ-1298",
+            "rule": "TIME-14",
             "spec_path": "columns.RESULT.derivation.shift"
           },
           "invalid_count": 0
@@ -842,7 +842,7 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-0659",
+              "rule": "LAYER-4",
               "spec_paths": [
                 "rows.repeated.id"
               ],
@@ -859,7 +859,7 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-0113",
+              "rule": "LOOKUP-3",
               "spec_paths": [
                 "intermediates[0].id",
                 "domain"
@@ -877,7 +877,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0079",
+              "rule": "NAME-1",
               "spec_paths": [
                 "intermediates[0].dataset"
               ],
@@ -895,7 +895,7 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-0659",
+              "rule": "LAYER-4",
               "spec_paths": [
                 "intermediates.LOOK.id"
               ],
@@ -912,7 +912,7 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-0113",
+              "rule": "LOOKUP-3",
               "spec_paths": [
                 "intermediates[0].id",
                 "input.SRC"
@@ -930,7 +930,7 @@
             {
               "phase": "validation",
               "condition": "duplicate_identifier",
-              "requirement": "REQ-0080",
+              "rule": "NAME-2",
               "spec_paths": [
                 "input.SRC",
                 "domain"
@@ -954,7 +954,7 @@
             {
               "phase": "validation",
               "condition": "unresolvable_name",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
@@ -977,7 +977,7 @@
             {
               "phase": "validation",
               "condition": "unresolvable_name",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "rows[0].derivations.DTHFL.case[0].when"
               ],
@@ -1000,7 +1000,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -1014,7 +1014,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0120",
+              "rule": "LOOKUP-7",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -1027,12 +1027,58 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.source"
               ],
               "context": {
                 "identifier": "LOOK.V"
+              }
+            }
+          ],
+          "csv": null
+        },
+        {
+          "name": "original_lookup_wrong_qualifier_without_inputs",
+          "specification": "{\"schema_version\":\"1.0\",\"domain\":\"OUT\",\"input\":{\"SRC\":{\"path\":\"input/source.csv\",\"types\":{\"X\":\"str\"}},\"RIGHT\":{\"path\":\"input/right.csv\",\"types\":{\"X\":\"str\",\"V\":\"float\"}}},\"base\":\"SRC\",\"keys\":[\"X\"],\"output\":{\"path\":\"out.csv\",\"columns\":[\"X\",\"V\"]},\"columns\":[{\"name\":\"X\",\"type\":\"str\",\"derivation\":\"SRC.X\"},{\"name\":\"V\",\"type\":\"float\",\"derivation\":\"LOOK.V\"}],\"intermediates\":[{\"id\":\"LOOK\",\"dataset\":\"RIGHT\",\"key\":[\"X\"],\"filter\":\"SRC.V > 0\"}]}",
+          "inputs": {},
+          "check_issues": [
+            {
+              "phase": "validation",
+              "condition": "incompatible_input_type",
+              "rule": "FORMULA-5",
+              "spec_paths": [
+                "intermediates[0].filter"
+              ],
+              "context": {
+                "left_type": "str",
+                "right_type": "int"
+              }
+            }
+          ],
+          "issues": [
+            {
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "input.SRC.path"
+              ],
+              "context": {
+                "dataset": "SRC",
+                "path": "input/source.csv"
+              }
+            },
+            {
+              "phase": "validation",
+              "condition": "resource_path_missing",
+              "rule": "FILE-7",
+              "spec_paths": [
+                "input.RIGHT.path"
+              ],
+              "context": {
+                "dataset": "RIGHT",
+                "path": "input/right.csv"
               }
             }
           ],
@@ -1049,7 +1095,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
@@ -1072,7 +1118,7 @@
             {
               "phase": "validation",
               "condition": "unresolvable_name",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
@@ -1105,7 +1151,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -1119,7 +1165,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0120",
+              "rule": "LOOKUP-7",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -1131,7 +1177,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.source"
               ],
@@ -1154,7 +1200,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0120",
+              "rule": "LOOKUP-7",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -1167,7 +1213,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.source"
               ],
@@ -1189,7 +1235,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
@@ -1211,7 +1257,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "columns.DTHFL.derivation.case[0].when"
               ],
@@ -1233,7 +1279,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.DTHFL.derivation.source"
               ],
@@ -1255,7 +1301,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0106",
+              "rule": "NAME-3",
               "spec_paths": [
                 "rows[0].derivations.DTHFL.source"
               ],
@@ -1277,7 +1323,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0189",
+              "rule": "FORMULA-9",
               "spec_paths": [
                 "rows[0].derivations.DTHFL.case[0].when"
               ],
@@ -1301,7 +1347,7 @@
             {
               "phase": "validation",
               "condition": "dependency_cycle",
-              "requirement": "REQ-1263",
+              "rule": "LOOKUP-16",
               "spec_paths": [
                 "intermediates[0].derivations.BACK.source",
                 "intermediates[1].derivations.EP.source"
@@ -1328,7 +1374,7 @@
             {
               "phase": "validation",
               "condition": "dependency_cycle",
-              "requirement": "REQ-1263",
+              "rule": "LOOKUP-16",
               "spec_paths": [
                 "intermediates[0].derivations.BACK.source"
               ],
@@ -1353,7 +1399,7 @@
             {
               "phase": "validation",
               "condition": "dependency_cycle",
-              "requirement": "REQ-1263",
+              "rule": "LOOKUP-16",
               "spec_paths": [
                 "intermediates[0].derivations.BACK.source",
                 "intermediates[2].derivations.FORWARD.source",
@@ -1470,7 +1516,7 @@
             {
               "phase": "validation",
               "condition": "no_applicable_keys",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0]"
               ],
@@ -1515,7 +1561,7 @@
             {
               "phase": "validation",
               "condition": "invalid_intermediate_driver",
-              "requirement": "REQ-1262",
+              "rule": "ROW-2",
               "spec_paths": [
                 "rows[0].dataset"
               ],
@@ -1531,7 +1577,7 @@
             {
               "phase": "validation",
               "condition": "invalid_intermediate_driver",
-              "requirement": "REQ-1262",
+              "rule": "ROW-2",
               "spec_paths": [
                 "rows[0].dataset"
               ],
@@ -1558,7 +1604,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.VSDTC.derivation.odm.filter"
               ],
@@ -1572,7 +1618,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.VSDTC.derivation.odm.filter"
               ],
@@ -1594,7 +1640,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1607,7 +1653,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1628,7 +1674,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1641,7 +1687,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1662,7 +1708,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1675,7 +1721,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1696,7 +1742,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1709,7 +1755,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.AVAL.derivation.aggregate.expr"
               ],
@@ -1732,7 +1778,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "LOOKUP-9",
+              "rule": "LOOKUP-9",
               "spec_paths": [
                 "columns.V.derivation.aggregate.filter"
               ],
@@ -1763,7 +1809,7 @@
               "check": "row_count",
               "evaluated_count": 1,
               "failure": null,
-              "requirement": "REQ-0385",
+              "rule": "CHECK-13",
               "severity": "error",
               "spec_path": "verifications[0].row_count",
               "specification": "__SPECIFICATION__",
@@ -1789,7 +1835,7 @@
               "check": "row_count",
               "evaluated_count": 1,
               "failure": null,
-              "requirement": "REQ-0385",
+              "rule": "CHECK-13",
               "severity": "error",
               "spec_path": "verifications[0].row_count",
               "specification": "__SPECIFICATION__",
@@ -1811,7 +1857,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "verifications[0].row_count.filter"
               ],
@@ -1838,7 +1884,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0405",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "verifications[0].row_count.filter"
               ],
@@ -1864,7 +1910,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0405",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "verifications[0].row_count.when"
               ],
@@ -1890,7 +1936,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "verifications[0].row_count.filter"
               ],
@@ -1921,7 +1967,7 @@
               "check": "row_count",
               "evaluated_count": 1,
               "failure": null,
-              "requirement": "REQ-0385",
+              "rule": "CHECK-13",
               "severity": "error",
               "spec_path": "verifications[0].row_count",
               "specification": "__SPECIFICATION__",
@@ -1947,7 +1993,7 @@
               "check": "row_count",
               "evaluated_count": 1,
               "failure": null,
-              "requirement": "REQ-0385",
+              "rule": "CHECK-13",
               "severity": "error",
               "spec_path": "verifications[0].row_count",
               "specification": "__SPECIFICATION__",
@@ -1969,7 +2015,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0405",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "verifications[1].row_count.when"
               ],
@@ -1985,7 +2031,7 @@
               "check": "row_count",
               "evaluated_count": 1,
               "failure": null,
-              "requirement": "REQ-0385",
+              "rule": "CHECK-13",
               "severity": "error",
               "spec_path": "verifications[0].row_count",
               "specification": "__SPECIFICATION__",
@@ -2008,7 +2054,7 @@
             {
               "phase": "join",
               "condition": "unmatched_key",
-              "requirement": "LOOKUP-24",
+              "rule": "LOOKUP-24",
               "spec_paths": [
                 "intermediates[0]"
               ],
@@ -2049,7 +2095,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2065,7 +2111,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2089,7 +2135,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2105,7 +2151,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2129,7 +2175,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2145,7 +2191,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2169,7 +2215,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2185,7 +2231,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2209,7 +2255,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2225,7 +2271,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2249,7 +2295,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2265,7 +2311,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2290,7 +2336,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2315,7 +2361,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0323",
+              "rule": "VALUE-2",
               "spec_paths": [
                 "rows[0].derivations.RESULT.baseline_flag.date"
               ],
@@ -2370,7 +2416,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0106",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.date"
               ],
@@ -2392,7 +2438,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0106",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.reference_date"
               ],
@@ -2413,7 +2459,7 @@
             {
               "phase": "validation",
               "condition": "window_order_by_forbidden",
-              "requirement": "REQ-0341",
+              "rule": "WINDOW-5",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.window.order_by"
               ],
@@ -2426,7 +2472,7 @@
             {
               "phase": "validation",
               "condition": "window_order_by_forbidden",
-              "requirement": "REQ-0341",
+              "rule": "WINDOW-5",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.window.order_by"
               ],
@@ -2448,7 +2494,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0106",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.RESULT.derivation.baseline_flag.window.group_by[0]"
               ],
@@ -2473,7 +2519,7 @@
             {
               "phase": "validation",
               "condition": "unknown_field",
-              "requirement": "REQ-0103",
+              "rule": "NAME-3",
               "spec_paths": [
                 "rows[0].derivations.V.source"
               ],
@@ -2518,7 +2564,7 @@
             {
               "phase": "validation",
               "condition": "ungrouped_driver_field",
-              "requirement": "REQ-0067",
+              "rule": "ROW-5",
               "spec_paths": [
                 "rows[0].derivations.V.source"
               ],
@@ -2972,7 +3018,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "intermediates[0].key.M.case"
               ],
@@ -2985,7 +3031,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "intermediates[0].key.M.case"
               ],
@@ -3196,7 +3242,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0308",
+              "rule": "TEXT-1",
               "spec_paths": [
                 "intermediates[0].key.M.str_case.source"
               ],
@@ -3211,7 +3257,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0308",
+              "rule": "TEXT-1",
               "spec_paths": [
                 "intermediates[0].key.M.str_case.source"
               ],
@@ -3235,7 +3281,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3250,7 +3296,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3274,7 +3320,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3289,7 +3335,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "intermediates[0].key"
               ],
@@ -3374,7 +3420,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0308",
+              "rule": "TEXT-1",
               "spec_paths": [
                 "intermediates[0].key.M.str_case.source"
               ],
@@ -3399,7 +3445,7 @@
             {
               "phase": "validation",
               "condition": "phase_boundary",
-              "requirement": "REQ-0068",
+              "rule": "ROW-6",
               "spec_paths": [
                 "rows[0].filter"
               ],
@@ -3924,7 +3970,7 @@
             {
               "phase": "derivation",
               "condition": "ambiguous_baseline",
-              "requirement": "WINDOW-9",
+              "rule": "WINDOW-9",
               "spec_paths": [
                 "intermediates[0].key.M.baseline_flag"
               ],
@@ -4014,7 +4060,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "intermediates[0].key.M.impute.not_before"
               ],
@@ -4027,7 +4073,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "intermediates[0].key.M.impute.not_before"
               ],
@@ -4107,7 +4153,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -4121,7 +4167,7 @@
             {
               "phase": "derivation",
               "condition": "multiple_values_per_key",
-              "requirement": "REQ-0075",
+              "rule": "COLUMN-2",
               "spec_paths": [
                 "intermediates[0]"
               ],
@@ -4161,7 +4207,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -4175,7 +4221,7 @@
             {
               "phase": "validation",
               "condition": "incompatible_input_type",
-              "requirement": "REQ-0190",
+              "rule": "FORMULA-5",
               "spec_paths": [
                 "intermediates[0].filter"
               ],
@@ -4205,7 +4251,7 @@
       "issue_columns": [
         "phase",
         "condition",
-        "requirement",
+        "rule",
         "spec_paths",
         "context",
         "source_span",
@@ -4336,7 +4382,7 @@
       "issue_columns": [
         "phase",
         "condition",
-        "requirement",
+        "rule",
         "spec_paths",
         "context",
         "source_span",
@@ -4398,7 +4444,7 @@
             {
               "phase": "validation",
               "condition": "untransportable_text",
-              "requirement": "REQ-1025",
+              "rule": "DEFINE-24",
               "spec_paths": [
                 "datasets.DM.columns.DOMAIN.label"
               ],
@@ -4423,7 +4469,7 @@
             {
               "phase": "validation",
               "condition": "transport_label_invalid",
-              "requirement": "XPT-5",
+              "rule": "XPT-5",
               "spec_paths": [
                 "sdtm.specs[0].columns.DOMAIN.label"
               ],
@@ -4452,7 +4498,7 @@
             {
               "phase": "validation",
               "condition": "untransportable_text",
-              "requirement": "REQ-1025",
+              "rule": "DEFINE-24",
               "spec_paths": [
                 "sdtm.documents[0].title"
               ],
@@ -4482,7 +4528,7 @@
             {
               "phase": "validation",
               "condition": "untransportable_text",
-              "requirement": "REQ-1025",
+              "rule": "DEFINE-24",
               "spec_paths": [
                 "datasets.DM.columns.DOMAIN.label"
               ],
@@ -4516,7 +4562,7 @@
             {
               "phase": "validation",
               "condition": "untransportable_text",
-              "requirement": "REQ-1025",
+              "rule": "DEFINE-24",
               "spec_paths": [
                 "datasets.DM.columns.DOMAIN.label"
               ],
@@ -4559,7 +4605,7 @@
       "issue_columns": [
         "phase",
         "condition",
-        "requirement",
+        "rule",
         "spec_paths",
         "context",
         "source_span",
@@ -4699,7 +4745,7 @@
       "integer_column_yaml": "  - {name: VALUE, type: int, derivation: SRC.VALUE}",
       "fatal_integer_column_yaml": "  - name: VALUE\n    type: int\n    derivation: SRC.VALUE\n    verifications:\n      - range: {max: 0, severity: warning, id: warn}\n      - range: {max: 0, severity: error, id: fatal}",
       "failed_input_csv": "ID,VALUE\na,-3\nb,7\nc,\n",
-      "failed_report_csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\noutput.csv,run,output,,,,,,failed,range_failed,,,,{}\noutput.csv,input,input.SRC,SRC,,,,,,,3,,,\"{\"\"bytes\"\":21,\"\"path\"\":\"\"input.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\noutput.csv,rows,base,SRC,,,,,,,3,3,,{}\noutput.csv,check,columns.VALUE.verifications[0].range,range,warn,VALUE,REQ-0377,warning,violated,range_failed,1,3,\"[{\"\"ID\"\":\"\"b\"\"}]\",\"{\"\"column\"\":\"\"VALUE\"\"}\"\noutput.csv,check,columns.VALUE.verifications[1].range,range,fatal,VALUE,REQ-0377,error,violated,range_failed,1,3,\"[{\"\"ID\"\":\"\"b\"\"}]\",\"{\"\"column\"\":\"\"VALUE\"\"}\"\n",
+      "failed_report_csv": "ARTIFACT,KIND,SPEC_PATH,NAME,ID,TARGET,RULE,SEVERITY,OUTCOME,CONDITION,COUNT,TOTAL,KEYS,DETAILS\noutput.csv,run,output,,,,,,failed,range_failed,,,,{}\noutput.csv,input,input.SRC,SRC,,,,,,,3,,,\"{\"\"bytes\"\":21,\"\"path\"\":\"\"input.csv\"\",\"\"profile\"\":\"\"csv\"\"}\"\noutput.csv,rows,base,SRC,,,,,,,3,3,,{}\noutput.csv,check,columns.VALUE.verifications[0].range,range,warn,VALUE,CHECK-7,warning,violated,range_failed,1,3,\"[{\"\"ID\"\":\"\"b\"\"}]\",\"{\"\"column\"\":\"\"VALUE\"\"}\"\noutput.csv,check,columns.VALUE.verifications[1].range,range,fatal,VALUE,CHECK-7,error,violated,range_failed,1,3,\"[{\"\"ID\"\":\"\"b\"\"}]\",\"{\"\"column\"\":\"\"VALUE\"\"}\"\n",
       "typed_specification_yaml": "schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID]\ninput:\n  SRC:\n    path: input.csv\n    types: {ID: int, S: str, I: int, F: float, D: date, T: datetime}\ncolumns:\n  - {name: ID, type: int, label: Identifier, derivation: SRC.ID}\n  - {name: S, type: str, label: Text, derivation: SRC.S}\n  - {name: I, type: int, label: Integer, derivation: SRC.I}\n  - {name: F, type: float, label: Float, derivation: SRC.F}\n  - {name: D, type: date, label: Date, derivation: SRC.D}\n  - {name: T, type: datetime, label: Datetime, derivation: SRC.T}\noutput: {path: output.csv, columns: [ID, S, I, F, D, T]}\n",
       "typed_input_csv": "ID,S,I,F,D,T\n1,\u03b1,-9007199254740992,-0.0,0001-01-01,0001-01-01T00:00:00\n2,,,,,\n3,\u00e9,9007199254740992,1.25,9999-12-31,9999-12-31T23:59:59\n",
       "typed_values": {
@@ -4774,7 +4820,7 @@
             {
               "phase": "validation",
               "condition": "integer_overflow",
-              "requirement": "REQ-0014",
+              "rule": "VALUE-5",
               "spec_paths": [
                 "columns.N.derivation.literal"
               ],
@@ -4795,7 +4841,7 @@
             {
               "phase": "derivation",
               "condition": "division_by_zero",
-              "requirement": "REQ-0430",
+              "rule": "FORMULA-15",
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
@@ -4817,7 +4863,7 @@
             {
               "phase": "derivation",
               "condition": "division_by_zero",
-              "requirement": "REQ-0430",
+              "rule": "FORMULA-15",
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],
@@ -4841,7 +4887,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
@@ -4860,7 +4906,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ],
@@ -4879,7 +4925,7 @@
             {
               "phase": "validation",
               "condition": "invalid_field_type",
-              "requirement": "LOOKUP-9",
+              "rule": "LOOKUP-9",
               "spec_paths": [
                 "columns.V.derivation.aggregate.between"
               ],
@@ -4898,7 +4944,7 @@
             {
               "phase": "validation",
               "condition": "undeclared_column",
-              "requirement": "REQ-0234",
+              "rule": "OUTPUT-1",
               "spec_paths": [
                 "output.columns[1]"
               ],
@@ -4909,7 +4955,7 @@
             {
               "phase": "validation",
               "condition": "undeclared_column",
-              "requirement": "REQ-0234",
+              "rule": "OUTPUT-1",
               "spec_paths": [
                 "output.columns[2]"
               ],
@@ -4928,7 +4974,7 @@
             {
               "phase": "engine",
               "condition": "engine_rejected",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [],
               "context": "{\"code\":\"resource_missing\",\"stage\":\"prepare\"}",
               "source_span": null,
@@ -4945,7 +4991,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "columns.WT.derivation.aggregate.between.value"
               ],
@@ -4964,7 +5010,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "columns.WT.derivation.aggregate.derive[1].derivation.source"
               ],
@@ -4983,7 +5029,7 @@
             {
               "phase": "planning",
               "condition": "unsupported_operation",
-              "requirement": null,
+              "rule": null,
               "spec_paths": [
                 "columns.N.derivation.aggregate"
               ],
@@ -5260,7 +5306,7 @@
         {
           "phase": "ingest",
           "condition": "source_parquet_invalid",
-          "requirement": "REQ-1038",
+          "rule": "PARQUET-5",
           "spec_paths": [
             "input.SRC.path"
           ],
@@ -5289,7 +5335,7 @@
             {
               "phase": "derivation",
               "condition": "division_by_zero",
-              "requirement": "REQ-0430",
+              "rule": "FORMULA-15",
               "spec_paths": [
                 "columns.RATIO.derivation.compute"
               ],

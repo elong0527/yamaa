@@ -1,0 +1,40 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM_RAW: input/dm_raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, AGE, AGEU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM_RAW.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM_RAW.AGE
+
+  # The defect: Qualifier names the group of the five qualifier roles, not a
+  # role, so the spec is rejected before any data is read. The age unit
+  # qualifies AGE, which the SDTM model calls a Variable Qualifier.
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation: {literal: YEARS}
+    submission:
+      core: Exp
+      role: Qualifier
+      length: 5
+      origin:
+        type: Assigned
+        source: Sponsor

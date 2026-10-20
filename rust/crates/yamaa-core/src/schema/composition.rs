@@ -67,6 +67,10 @@ struct Run<'a> {
     schema: &'a SchemaStructure,
     nodes: Vec<N>,
     origins: Vec<CompositionOrigin>,
+    /// `Clear` composes a 0.5 layer, whose YAML null clears what it inherits
+    /// (LAYER-9 at the `yamaa-v0.5.0` tag); `Value` composes a 1.x layer, in
+    /// which null is the missing value and never removes anything.
+    nulls: NullPolicy,
 }
 impl Run<'_> {
     fn step(&mut self, depth: usize) -> Result<(), NormalizationError> {
@@ -113,7 +117,8 @@ impl Run<'_> {
         };
         Ok(self.push(value, site))
     }
-    /// The first union member a fragment matches. Clear markers read as absent.
+    /// The first union member a fragment matches. In a 0.5 layer clear markers
+    /// read as absent.
     fn selected<'a>(
         &mut self,
         descriptor: usize,
@@ -131,7 +136,7 @@ impl Run<'_> {
                 (expression, expression.root()),
                 site.node,
                 true,
-                NullPolicy::Clear,
+                self.nulls,
                 &[],
             )? {
                 return Ok(Some(Member {
@@ -207,8 +212,9 @@ impl Run<'_> {
             Entries::Values(member) => self.member(member, old, new, depth),
         }
     }
-    /// A class merges field by field and a dictionary key by key. A null entry
-    /// is a clear: it removes the inherited entry and is never itself retained.
+    /// A class merges field by field and a dictionary key by key. In a 0.5
+    /// layer a null entry is a clear: it removes the inherited entry and is
+    /// never itself retained. In a 1.x layer it composes as the value it is.
     fn mapping(
         &mut self,
         entries: Entries<'_>,
@@ -229,7 +235,11 @@ impl Run<'_> {
             for &(key, value) in before {
                 let inherited = old.child(value);
                 let value = match self.matching_key(old.child(key), new)? {
-                    Some((_, value)) if matches!(new.child(value).value(), N::Null) => continue,
+                    Some((_, value))
+                        if self.nulls.clears() && matches!(new.child(value).value(), N::Null) =>
+                    {
+                        continue
+                    }
                     Some((_, value)) => self.entry(
                         entries,
                         old.child(key),
@@ -248,7 +258,7 @@ impl Run<'_> {
                     continue;
                 }
             }
-            if matches!(new.child(value).value(), N::Null) {
+            if self.nulls.clears() && matches!(new.child(value).value(), N::Null) {
                 continue;
             }
             let value = self.entry(entries, new.child(key), None, new.child(value), depth + 1)?;
@@ -376,6 +386,7 @@ impl SchemaStructure {
             schema: self,
             nodes: Vec::new(),
             origins: Vec::new(),
+            nulls: NullPolicy::Clear,
         };
         let root = run.descriptor(
             descriptor,
@@ -400,12 +411,14 @@ impl SchemaStructure {
 
     /// Compose one member of a keyed root collection, a `list[T]` or `dict[K, T]`
     /// field, by its member type `T` (LAYER-5). Without an inherited member the
-    /// incoming member is taken with its clear markers dropped.
+    /// incoming member is taken with a 0.5 layer's clear markers dropped; under
+    /// `NullPolicy::Value` YAML null composes as a value.
     pub(super) fn compose_member_at(
         &self,
         collection: usize,
         accumulated: Option<(&Document, usize)>,
         incoming: (&Document, usize),
+        nulls: NullPolicy,
     ) -> Result<ComposedValue, NormalizationError> {
         let located = self
             .descriptors()
@@ -428,6 +441,7 @@ impl SchemaStructure {
             schema: self,
             nodes: Vec::new(),
             origins: Vec::new(),
+            nulls,
         };
         let root = run.member(
             Member {

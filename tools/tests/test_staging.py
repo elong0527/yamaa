@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tools.commands import installed
 from tools.packaging import check_cargo_lock
 from tools.staging import engine_bundle, vendor_crates
 from tools.staging import stage_grammar_inputs as grammar
@@ -80,7 +81,8 @@ class StagingTests(unittest.TestCase):
                 ],
                 [],
             )
-            # The installed R package carries the Python package notices.
+            # The installed R package carries the Python package notices, with
+            # the component inventory of its own bundle.
             notices = tomllib.loads(
                 (staging.REPOSITORY / "python/pyproject.toml").read_text(
                     encoding="utf-8"
@@ -88,11 +90,18 @@ class StagingTests(unittest.TestCase):
             )["project"]["license-files"]
             self.assertIn("LICENSE.txt", notices)
             self.assertIn("LICENSE-THIRD-PARTY.txt", notices)
+            self.assertIn("COMPONENTS.tsv", notices)
             for name in notices:
+                host = "R/yamaa/inst" if name == "COMPONENTS.tsv" else "python"
                 self.assertEqual(
                     (destination / "inst" / name).read_bytes(),
-                    (staging.REPOSITORY / "python" / name).read_bytes(),
+                    (staging.REPOSITORY / host / name).read_bytes(),
                 )
+            inventory = (destination / "inst/COMPONENTS.tsv").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("\nyamaa-r\t", inventory)
+            self.assertNotIn("\nyamaa-python\t", inventory)
             self.assertEqual(
                 (destination / "inst/LICENSE.txt").read_bytes(),
                 (staging.REPOSITORY / "LICENSE").read_bytes(),
@@ -112,7 +121,38 @@ class StagingTests(unittest.TestCase):
                 )
             )
             self.assertFalse((embedded / "target").exists())
-            grammar = destination / "inst/grammar-original/grammar"
+            # R installs inst/, which holds AUTHORS and the notices alone; the
+            # inputs that the suites read sit beside them in tests/ (#3105).
+            self.assertEqual(
+                {path.name for path in (destination / "inst").iterdir()},
+                {"AUTHORS", *notices},
+            )
+            tests = destination / "tests"
+            self.assertEqual(
+                {path.name for path in tests.iterdir() if path.is_file()},
+                {
+                    path.name
+                    for path in (staging.REPOSITORY / "R/yamaa/tests").glob("*.R")
+                },
+            )
+            self.assertEqual(
+                {path.name for path in tests.iterdir() if path.is_dir()},
+                {*staging.TEST_INPUTS, "host-fixtures"},
+            )
+            for source in staging.PROJECTS.rglob("*"):
+                if source.is_file():
+                    relative = source.relative_to(staging.PROJECTS)
+                    self.assertEqual(
+                        (tests / "project-base" / relative).read_bytes(),
+                        source.read_bytes(),
+                    )
+            # R CMD check notes a file path that a tar file may not store: one
+            # longer than 100 bytes, archive directory included.
+            for path in destination.rglob("*"):
+                if path.is_file():
+                    name = Path("yamaa", path.relative_to(destination)).as_posix()
+                    self.assertLessEqual(len(name.encode()), 100, name)
+            grammar = tests / "grammar-original/grammar"
             for source in (staging.REPOSITORY / "yaml/grammar").glob("*.yaml"):
                 self.assertEqual(
                     (grammar / source.name).read_bytes(), source.read_bytes()
@@ -161,7 +201,7 @@ class StagingTests(unittest.TestCase):
                 },
                 registry | {("yamaa-saphyr-parser", "0.2.1")},
             )
-            original = destination / "inst/specification-original"
+            original = tests / "specification-original"
             for module in (original / "schema").glob("*.yaml"):
                 self.assertEqual(
                     module.read_bytes(),
@@ -219,25 +259,24 @@ class StagingTests(unittest.TestCase):
                     json.loads(truth.read_text()),
                 )
 
-            # Installed inputs are what the installed R suites read, and each
-            # third-party fixture keeps its license beside it.
-            resources = destination / "inst"
-            for path in resources.rglob("*"):
+            # The inputs are what the R suites read, and each third-party
+            # fixture keeps its license beside it.
+            for path in tests.rglob("*"):
                 if path.is_file():
-                    relative = path.relative_to(resources).as_posix()
+                    relative = path.relative_to(tests).as_posix()
                     left_out = False
                     for pattern in staging.UNREAD_BY_R_SUITES:
                         if staging.matches(relative, pattern.removeprefix("!")):
                             left_out = not pattern.startswith("!")
                     self.assertFalse(left_out, relative)
-            self.assertFalse((resources / "host_fixtures.py").exists())
-            self.assertFalse((resources / "define-fixtures/schemas").exists())
+            self.assertFalse((tests / "host_fixtures.py").exists())
+            self.assertFalse((tests / "define-fixtures/schemas").exists())
             self.assertEqual(
-                [path.relative_to(resources) for path in resources.rglob("uv.lock")],
+                [path.relative_to(tests) for path in tests.rglob("uv.lock")],
                 [Path("project-base/negative-function-contract/python/uv.lock")],
             )
-            projects = resources / "project-base"
-            self.assertFalse((resources / "project-original").exists())
+            projects = tests / "project-base"
+            self.assertFalse((tests / "project-original").exists())
             for path in projects.rglob("*"):
                 if path.is_file():
                     self.assertNotIn(b"yamaabenchmarks", path.read_bytes(), str(path))
@@ -257,10 +296,27 @@ class StagingTests(unittest.TestCase):
             fixtures = staging.WORKSPACE / "crates/yamaa-adapters/tests/fixtures/sas"
             for name in ("LICENSE-haven.txt", "LICENSE-pandas.txt"):
                 self.assertEqual(
-                    (resources / "host-fixtures/sas" / name).read_bytes(),
+                    (tests / "host-fixtures/sas" / name).read_bytes(),
                     (fixtures / name).read_bytes(),
                 )
-            self.assertFalse((resources / "host-fixtures/sas/README.md").exists())
+            self.assertFalse((tests / "host-fixtures/sas/README.md").exists())
+            # Native qualification stages the same inputs beside the installed
+            # suites that R CMD check reads from the package's tests directory.
+            native = Path(directory) / "native"
+            with contextlib.redirect_stdout(io.StringIO()):
+                installed.stage("r", native)
+
+            def files(root):
+                return {
+                    path.relative_to(root).as_posix(): path.read_bytes()
+                    for path in root.rglob("*")
+                    if path.is_file()
+                }
+
+            for name in (*staging.TEST_INPUTS, "host-fixtures"):
+                self.assertEqual(files(native / name), files(tests / name), name)
+            for suite in (staging.REPOSITORY / "R/yamaa/tests").glob("*.R"):
+                self.assertEqual((native / suite.name).read_bytes(), suite.read_bytes())
             # The package passes the check that its built archive gets.
             built = Path(directory) / "yamaa_0.5.0.tar.gz"
             with tarfile.open(built, "w:gz", compresslevel=1) as output:
@@ -268,7 +324,7 @@ class StagingTests(unittest.TestCase):
             self.assertEqual(check_cargo_lock.check_bundle_archive(built), ("r", kept))
 
     def test_shared_specification_inputs_keep_both_preparation_copies(self):
-        """Both copies retain the fixture-owned facts and requirement citations."""
+        """Both copies retain the fixture-owned facts and rule citations."""
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "specification-original"
             specification.stage(destination)
@@ -377,3 +433,23 @@ class StagingTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 staging.stage(destination)
             self.assertEqual(marker.read_text(), "prior build")
+
+    def test_existing_test_inputs_are_refused_before_staging(self):
+        """Neither the package nor native qualification overwrites a tree."""
+        for name in staging.TEST_INPUTS:
+            for stage in (
+                staging.stage_test_inputs,
+                lambda destination: installed.stage("r", destination),
+            ):
+                with self.subTest(name=name), tempfile.TemporaryDirectory() as root:
+                    marker = Path(root) / name / "keep.txt"
+                    marker.parent.mkdir()
+                    marker.write_text("prior inputs")
+                    with self.assertRaises(FileExistsError):
+                        stage(Path(root))
+                    self.assertEqual(
+                        sorted(
+                            path.relative_to(root) for path in Path(root).rglob("*")
+                        ),
+                        [Path(name), Path(name, "keep.txt")],
+                    )

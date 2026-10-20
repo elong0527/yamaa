@@ -131,7 +131,7 @@ mod execution {
         assert_eq!(
             issue_rows(&domain.issues()),
             json!([{
-                "phase":"derivation", "condition":"multiple_values_per_key", "requirement":"REQ-0075",
+                "phase":"derivation", "condition":"multiple_values_per_key", "rule":"COLUMN-2",
                 "spec_paths":["columns.VALUE.derivation.source"],
                 "context":{"identifier":"ODM.Value", "value_count":count, "keys":[{"SubjectKey":"001"}]}
             }])
@@ -186,7 +186,7 @@ mod execution {
             assert_eq!(
                 issue_rows(&issues),
                 json!([{
-                    "phase":"validation", "condition":"unknown_field", "requirement":"REQ-0132",
+                    "phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-8",
                     "spec_paths":["columns.VALUE.derivation.source.filter"],
                     "context":{"identifier":"OTHER.ItemOID", "dataset":"ODM"}
                 }])
@@ -213,7 +213,7 @@ mod execution {
             assert_eq!(
                 issue_rows(&domain.issues()),
                 json!([{
-                    "phase":"derivation", "condition":"multiple_values_per_key", "requirement":"REQ-0075",
+                    "phase":"derivation", "condition":"multiple_values_per_key", "rule":"COLUMN-2",
                     "spec_paths":["columns.VALUE.derivation.source"],
                     "context":{"identifier":"ODM.VISITDT", "value_count":2, "keys":[{"SubjectKey":"001"}]}
                 }])
@@ -348,7 +348,7 @@ mod execution {
             assert_eq!(
                 issue_rows(&issues),
                 json!([{
-                    "phase":"ingest", "condition":"odm_schema_value_missing", "requirement":"REQ-1276",
+                    "phase":"ingest", "condition":"odm_schema_value_missing", "rule":"NAME-9",
                     "spec_paths":["input.ODM.path"],
                     "context":{"dataset":"ODM", "field":"SubjectKey", "record":3, "records":2}
                 }])
@@ -413,7 +413,7 @@ mod execution {
             yamaa_adapters::json!(rows
                 .iter()
                 .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),
+                    "phase":row.phase(),"condition":row.condition(),"rule":row.rule(),
                     "spec_paths":row.spec_paths,"context":row.context.clone()
                 }))
                 .collect::<Vec<_>>())
@@ -705,7 +705,7 @@ mod execution {
                     let issue = &result.issues()[0];
                     assert_eq!(issue.phase(), "validation");
                     assert_eq!(issue.condition(), "incompatible_input_type");
-                    assert_eq!(issue.requirement(), Some("REQ-0510"));
+                    assert_eq!(issue.rule(), Some("FORMULA-23"));
                     assert_eq!(issue.spec_paths, ["rows[0].derivations.VALUE.aggregate"]);
                     assert_eq!(
                         yamaa_core::json::Value::Object(issue.context.clone()),
@@ -767,7 +767,7 @@ mod execution {
             assert!(result.output().is_none());
             assert!(result.save().is_err());
             assert_eq!(result.issues()[0].condition(), "multiple_matches");
-            assert_eq!(result.issues()[0].requirement(), Some("REQ-0127"));
+            assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
         }
         #[test]
         fn unchanged_vs_units_benchmark_runs_row_cases_and_numeric_branches() {
@@ -878,8 +878,8 @@ rows:
 "#,
                 b"I,V\n3,8\n2,3\n1,5\n2,4\n",
             );
-            // REQ-0058/REQ-0059 run grouped filters after the complete row graph,
-            // including windows. REQ-0068's pre-window restriction is ungrouped.
+            // COLUMN-3/COLUMN-4 run grouped filters after the complete row graph,
+            // including windows. ROW-6's pre-window restriction is ungrouped.
             assert_eq!(saved(&fixture), b"ID,TOTAL,SEQ\n2,7,2\n");
         }
     }
@@ -974,7 +974,7 @@ rows:
                         Some(owner_identity.as_str())
                     );
                     assert_eq!(prepared.capture_reads(), if inherited { 2 } else { 1 });
-                    let expected = json!([{"phase":"validation","condition":"invalid_expression","requirement":"REQ-0188","spec_paths":["rows[1].filter"],"context":context}]);
+                    let expected = json!([{"phase":"validation","condition":"invalid_expression","rule":"FORMULA-1","spec_paths":["rows[1].filter"],"context":context}]);
                     let written = entry.to_str().unwrap();
                     let request = || Request {
                         specification: written,
@@ -1202,10 +1202,15 @@ rows:
             }
         }
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
-            issues.iter().map(|row| yamaa_adapters::json!({
-        "phase": row.phase(), "condition": row.condition(), "requirement": row.requirement(),
-        "spec_paths": row.spec_paths, "context": row.context.clone()
-    })).collect()
+            issues
+                .iter()
+                .map(|row| {
+                    yamaa_adapters::json!({
+                        "phase": row.phase(), "condition": row.condition(), "rule": row.rule(),
+                        "spec_paths": row.spec_paths, "context": row.context.clone()
+                    })
+                })
+                .collect()
         }
         #[test]
         fn row_joins_preserve_original_driver_key_scope_and_constructed_output_keys() {
@@ -1380,7 +1385,7 @@ rows:
             let issues = result.issues();
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition(), "row_count_failed");
-            assert_eq!(issues[0].requirement(), Some("REQ-0385"));
+            assert_eq!(issues[0].rule(), Some("CHECK-13"));
             let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(context["failure_count"], 2);
             assert_eq!(context["counts"], yamaa_adapters::json!([2, 0]));
@@ -1434,7 +1439,7 @@ verifications:
             // One bound group held of the two groups evaluated.
             assert!(fs::read_to_string(study.0.join("checks.csv"))
                 .unwrap()
-                .contains(",row_count,,,REQ-0385,error,held,,0,2,,{}\n"));
+                .contains(",row_count,,,CHECK-13,error,held,,0,2,,{}\n"));
         }
 
         #[test]
@@ -1982,7 +1987,7 @@ rows:
                     issues.iter().any(|issue| {
                         issue.phase() == expected["phase"].as_str().unwrap()
                             && issue.condition() == expected["condition"].as_str().unwrap()
-                            && issue.requirement() == expected["requirement"].as_str()
+                            && issue.rule() == expected["rule"].as_str()
                             && issue.spec_paths == [expected["spec_path"].as_str().unwrap()]
                     }),
                     "{name}: {issues:?}"
@@ -2156,7 +2161,7 @@ rows:
                             .iter()
                             .find(|issue| issue.condition() == condition)
                             .unwrap();
-                        assert_eq!(issue.requirement(), Some("LOOKUP-9"));
+                        assert_eq!(issue.rule(), Some("LOOKUP-9"));
                         assert_eq!(issue.spec_paths, ["intermediates[0].key"]);
                     }
                 } else {

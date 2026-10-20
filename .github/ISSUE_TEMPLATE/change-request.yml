@@ -54,4 +54,4 @@ body:
     attributes:
       label: "Where does this show up today?"
       description: "Benchmarks, REQ IDs, rule files or URLs that show the need."
-      placeholder: "benchmarks/adam-advs-windows, REQ-1260, rules/specification.md"
+      placeholder: "benchmarks/adam-advs-windows, SPEC-6, rules/specification.md"

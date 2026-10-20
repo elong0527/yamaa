@@ -38,12 +38,12 @@ EXPECTED_NOTES = {
         r"Size of tarball: \d+ bytes",
     ),
     # Above 5 MB, R 4.4 reports the installed size as a NOTE, and R 4.6.1 and
-    # R-devel as INFO. The shared object links the Rust engine statically,
-    # and the installed tests read the inputs under inst/.
+    # R-devel as INFO: the shared object links the Rust engine statically.
+    # The tests' inputs stay in tests/, which R does not install.
     "installed package size": (
         r"installed size is +\d+\.\d+Mb",
         r"sub-directories of 1Mb or more:",
-        r"(grammar-original|host-fixtures|libs|specification-original) +\d+\.\d+Mb",
+        r"libs +\d+\.\d+Mb",
     ),
 }
 # CRAN's Repository Policy: tarballs "should if possible not exceed 10MB", and

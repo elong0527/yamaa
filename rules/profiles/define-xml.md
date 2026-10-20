@@ -20,7 +20,6 @@ implementation guide, supporting documents, an ordered `specs` list and one
 selected project section is the only place the composition is declared.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::explicit_section_selector_datetime_and_missing_published_artifact_are_refused`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
-Replaces: REQ-0959, REQ-0960, REQ-1061, REQ-1062, REQ-1063.
 
 An implementation must not assemble a document from whatever specifications a
 directory holds: which datasets one submission represents is a study decision,
@@ -43,7 +42,6 @@ a transport, fails validation.
 
 Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `negative-transport-define-name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDefineExtension`.
-Replaces: REQ-0961, REQ-1014.
 
 The transport files are written beside the document
 ([JSON-1](dataset-json.md#json-1)) and Dataset-JSON names it as `define.xml`
@@ -63,7 +61,6 @@ the current UTC time during preparation, and Save retains that time. An omitted
 
 Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
-Replaces: REQ-0962.
 
 Explicit overrides retain their admitted text, independently of these
 defaults. An explicit `created` that is not a whole-second civil datetime fails
@@ -83,7 +80,6 @@ position.
 
 Fails: `missing_required_field`, `sas_name_too_long`, `transport_label_invalid`, `transport_text_invalid`.
 Evidence: `sdtm-dm-metadata`, `sdtm-ta-sponsor-epoch`, `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCdiscAliasMissing`, `rust/tests/host-fixtures/cases.json::submission-column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`.
-Replaces: REQ-0963, REQ-1003, REQ-1004, REQ-1024.
 
 Nothing in this profile is relaxed by `Other`; that context only omits the
 requirements a regulator imposes. Under `Submission`:
@@ -139,7 +135,6 @@ artifact path.
 
 Fails: `duplicate_dataset_entry`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateDataset`, `rust/crates/yamaa-core/tests/schema_submission.rs::thirty_domains_with_fifteen_hundred_nodes_admit_complete_column_and_row_scans`.
-Replaces: REQ-0964, REQ-0966, REQ-0969, REQ-1018.
 
 Written resource and output paths retain their original declaring layer under
 [File resolution](../reference/files.md). This profile imposes no other order:
@@ -162,7 +157,6 @@ by its bound codelists' sources.
 
 Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
-Replaces: REQ-0965, REQ-1074.
 
 [SUB-3](submission.md#sub-3) reads each dataset's family from the bound
 standard's name.
@@ -179,7 +173,6 @@ column in its `output.columns` must declare both `label` and
 
 Fails: `submission_metadata_missing`, `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMetadataMissing`, `rust/crates/yamaa-core/tests/service_build_metadata.rs::missing_study_is_the_real_typed_owner_before_any_metadata_verification`.
-Replaces: REQ-0967, REQ-1015.
 
 A document reports on the whole artifact, so a column with nothing to report is
 a gap in the document, not an omitted row. The failure reports
@@ -199,7 +192,6 @@ here.
 
 Fails: `unknown_standard`, `unknown_codelist`, `unknown_document`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path`.
-Replaces: REQ-0968, REQ-1016.
 
 A `standard`, `codelist` or document reference naming no declaration fails with
 `unknown_standard`, `unknown_codelist` or `unknown_document`, reporting the
@@ -218,13 +210,13 @@ random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
 Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_keep_their_text_with_xml_escaping`.
-Replaces: REQ-0970, REQ-0972, REQ-0973, REQ-1068.
 
 | Object | Identifier |
 |---|---|
 | `Study` | `STDY.<study.id>` |
 | `MetaDataVersion` | `MDV.<metadata_version.id>` |
-| `def:Standard` | `STD.<standard.id>` |
+| `def:Standard`, implementation guide | `STD.<standard.name>` |
+| `def:Standard`, terminology | `STD.CT_<standard.publishing_set>` |
 | `ItemGroupDef` | `IG.<dataset.id>` |
 | `ItemDef` | `IT.<dataset.id>.<column>` |
 | `ItemDef`, per value | `IT.<dataset.id>.<column>.<entry id>` |
@@ -238,6 +230,14 @@ Replaces: REQ-0970, REQ-0972, REQ-0973, REQ-1068.
 | `def:CommentDef`, per value | `COM.<dataset.id>.<column>.<entry id>` |
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
+
+In the `def:Standard` rows, `standard` is the selected section's `standard`
+for the implementation guide ([DEFINE-6](#define-6)), and for a terminology
+standard the `standard` of a codelist source whose codelists the document binds
+([CT-2](terminology.md#ct-2)). Sources that declare the same `name`,
+`publishing_set` and `version` cite one terminology standard and share its
+`def:Standard`; two terminology standards with one `publishing_set` fail under
+[DEFINE-10](#define-10).
 
 A per-value entry id is the `id` of the column's value-level entry
 ([SUB-12](submission.md#sub-12)), an identifier unique within the column. It
@@ -262,12 +262,16 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
-Replaces: REQ-0971, REQ-1017.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
-`id`, standard `id`, codelist `id` or document `id`, or a document `id` equal
-to a dataset `id`, fails with `duplicate_define_identifier`.
+`id`, codelist `id` or document `id`, or a document `id` equal to a dataset
+`id`, fails with `duplicate_define_identifier`. A terminology standard's
+identifier is generated from its `publishing_set` alone
+([DEFINE-9](#define-9)), so when two codelist sources whose codelists the
+document binds declare one `publishing_set` with a different `name` or
+`version`, the later source's `publishing_set` fails with
+`duplicate_define_identifier`, reporting the identifier.
 
 ## Document structure
 
@@ -284,7 +288,6 @@ declares the ODM 1.3 namespace as the default, `def` for
 `http://www.w3.org/1999/xlink`, and no other namespace.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
-Replaces: REQ-0974, REQ-0975, REQ-0976, REQ-0977, REQ-0978.
 
 ```text
 <?xml version="1.0" encoding="UTF-8"?>
@@ -335,7 +338,6 @@ that order.
 
 Fails: `source_system_incomplete`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSourceVersion`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
-Replaces: REQ-0979, REQ-0980, REQ-0981.
 
 | Attribute | Source |
 |---|---|
@@ -368,7 +370,6 @@ the document's literal `link`, and whose `def:title` is its `title`. A
 document's kind decides where else it is listed.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::unused_terminology_is_omitted_and_missing_document_links_do_not_read_study_files`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
-Replaces: REQ-0982, REQ-0983, REQ-1020, REQ-1065, REQ-1070.
 
 - a document of kind `annotated_crf` is also listed in `def:AnnotatedCRF`;
 - one of kind `supplemental` is also listed in `def:SupplementalDoc`; and
@@ -393,7 +394,6 @@ requires one, fails validation.
 
 Fails: `origin_document_missing`, `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMultiplicity`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAnnotatedCrfMissing`.
-Replaces: REQ-0984, REQ-1019.
 
 [SUB-17](submission.md#sub-17) names that document and, under `context: Other`,
 derives the reference to it, and neither is possible unless exactly one exists.
@@ -412,7 +412,6 @@ table below lists. `Purpose` is derived from the family alone, not declared:
 for `adam`.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::ae_and_vs_metadata_only_fixed_time_projection_has_independent_structure`.
-Replaces: REQ-0985, REQ-0986.
 
 | Attribute or child | Source |
 |---|---|
@@ -449,7 +448,6 @@ traversal. A dataset with no data and no transport file has no leaf.
 
 Fails: `artifact_outside_document`.
 Evidence: `sdtm-dm-metadata`, `sdtm-dm-xpt`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_original_output_supplies_both_json_capture_and_publication_target`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::DefineArtifactOutsidePackage`.
-Replaces: REQ-0987, REQ-0988, REQ-1021.
 
 A document that pointed outside its own directory would describe a file that is
 not in the package it belongs to. Without a transport, an artifact path that
@@ -477,7 +475,6 @@ planned dataset holds no records. A `has_no_data` dataset with no
 
 Fails: `submission_metadata_missing`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionNoDataComment`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
-Replaces: REQ-0989, REQ-1022.
 
 <a id="define-18"></a>
 
@@ -492,7 +489,6 @@ sponsor variable in `output.order_by` or a `unique` verification does not
 independently assign it.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
-Replaces: REQ-0990, REQ-0991.
 
 | Attribute | Source |
 |---|---|
@@ -523,7 +519,6 @@ when [Submission metadata](submission.md) admits one, `Source`. Exactly one
 carries `leafID`, the referenced document's generated leaf identifier.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
-Replaces: REQ-0992, REQ-0993, REQ-0994.
 
 | Attribute or child | Source |
 |---|---|
@@ -564,7 +559,6 @@ produces `CodeListItem` children when its items declare `decode` and
 carries one `ExternalCodeList` child and no items.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-ae-coding`, `sdtm-ta-sponsor-epoch`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
-Replaces: REQ-0995, REQ-0996, REQ-0997, REQ-0998.
 
 A codelist declaring `items` therefore always carries exactly one of
 `def:StandardOID` and `def:IsNonStandard`, the choice Define-XML requires of
@@ -599,7 +593,6 @@ Each declared method produces one `MethodDef` carrying `OID`, `Name` from
 `language`, and one document carries one language.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
-Replaces: REQ-0999, REQ-1000, REQ-1001, REQ-1073.
 
 A `MethodDef`'s `Description` child carries the method's `description`, one
 `FormalExpression` child follows when `expression` is declared, carrying
@@ -620,7 +613,6 @@ carries a long `Alias` element, which [DEFINE-26](#define-26) defers.
 
 Fails: `sas_name_too_long`.
 Evidence: `sdtm-dm-metadata`, `negative-transport-name-too-long`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionSasName`.
-Replaces: REQ-1002, REQ-1023.
 
 A transport name this rule does not admit fails with `sas_name_too_long` at the
 dataset's or column's position, reporting the name and the pattern; lower case,
@@ -639,7 +631,6 @@ bytes are fixed rather than the information: the same inputs produce
 byte-identical files, and a golden document is compared byte for byte.
 
 Evidence: `sdtm-dm-metadata`, `rust/tests/host-fixtures/cases.json::newlines-in-text`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_keep_their_text_with_xml_escaping`.
-Replaces: REQ-1005, REQ-1006, REQ-1008.
 
 - the first line is `<?xml version="1.0" encoding="UTF-8"?>`;
 - a declared `stylesheet` produces a second line,
@@ -673,7 +664,6 @@ an attribute-value `U+000A` in generated text fails.
 
 Fails: `untransportable_text`.
 Evidence: `rust/tests/host-fixtures/cases.json::column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionXmlWhitespace`.
-Replaces: REQ-1007, REQ-1025.
 
 The failure reports `untransportable_text` with the declaration that carries
 the character.
@@ -692,7 +682,6 @@ previous file and no residue.
 
 Fails: `value_not_permitted`, `publication_failed`.
 Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionXmlInvalid`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
-Replaces: REQ-1009, REQ-1010, REQ-1026, REQ-1027.
 
 Conformance to this profile is not a substitute for schema validation: an
 implementation that produces a schema-invalid document has a defect regardless
@@ -716,7 +705,6 @@ generated, and a `FormalExpression` is generated only from a declared
 `method.expression`, never from a derivation.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_submission.rs::unknown_and_non_text_fields_preserve_exact_occurrences_without_fabricated_causes`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`.
-Replaces: REQ-1011, REQ-1012.
 
 - `arm:AnalysisResultDisplays`: an analysis-results metadata design
 - Split datasets and their `Alias` domain description: a specification that
@@ -744,7 +732,6 @@ the column's metadata merged with the entry's. The column's own `ItemDef`
 carries the `def:ValueListRef`.
 
 Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
-Replaces: REQ-1013, REQ-1169.
 
 The mapping to Define-XML is fixed:
 
@@ -794,7 +781,6 @@ and does not report them.
 
 Fails: `missing_required_field`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
-Replaces: REQ-1337.
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready ([PROJECT-3](project.md#project-3)).

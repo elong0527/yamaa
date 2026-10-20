@@ -40,7 +40,7 @@ fn converted(stored: &ColumnDescriptor) -> core_profile::Converted {
 }
 /// The width a field's signed integer annotation declares, logical or legacy.
 /// Every stored value of an `INT32` field that reads as `int` must fit it
-/// (REQ-1032).
+/// (PARQUET-7).
 pub(super) fn declared_width(stored: &ColumnDescriptor) -> Option<u8> {
     use core_profile::{Converted as C, Logical as L};
     match (logical(stored), converted(stored)) {
@@ -50,7 +50,7 @@ pub(super) fn declared_width(stored: &ColumnDescriptor) -> Option<u8> {
         _ => None,
     }
 }
-/// The embedded Arrow schema chooses a layout, never a type (REQ-1032): every
+/// The embedded Arrow schema chooses a layout, never a type (PARQUET-7): every
 /// string layout is text, and a dictionary reads as its value type whatever
 /// its index type.
 fn representation(arrow: &DataType) -> core_profile::Representation {

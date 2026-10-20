@@ -211,15 +211,31 @@
       ],
       "description": "Scalar constant in which YAML null is the missing value; a non-finite float becomes missing (VALUE-4)."
     },
+    "standard_name": {
+      "type": "string",
+      "enum": [
+        "ADaMIG",
+        "ADaMIG-MD",
+        "BIMO",
+        "CDISC/NCI",
+        "SDTMIG",
+        "SDTMIG-AP",
+        "SDTMIG-MD",
+        "SENDIG",
+        "SENDIG-AR",
+        "SENDIG-DART",
+        "SENDIG-GENETOX"
+      ],
+      "description": "Standard name, in the exact case Define-XML 2.1 publishes."
+    },
     "terminology_standard_class": {
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "minLength": 1,
+          "$ref": "#/$defs/standard_name",
           "description": "Name of the published terminology (CT-2).",
           "x-yamaa-kind": "value",
-          "x-yamaa-type": "str"
+          "x-yamaa-type": "standard_name"
         },
         "publishing_set": {
           "type": "string",

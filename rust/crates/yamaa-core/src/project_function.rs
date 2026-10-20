@@ -1,7 +1,9 @@
 //! Static admission of versionless project function definitions.
 //!
-//! This trusted typed service receives bounded, structurally admitted documents.
-//! It owns no source reader, lock verifier, import mechanism or callable port.
+//! This trusted typed service admits lowered definition roots
+//! ([`ast::Function`]). It owns no source reader, lock verifier, import
+//! mechanism or callable port.
+use crate::ast::{self, FunctionTest};
 use crate::value::{ColumnType, Value, ValueType};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,35 +20,6 @@ impl Language {
             Self::R => "r",
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Parameter {
-    pub name: String,
-    pub kind: ValueType,
-    pub required: bool,
-    pub default: Option<Value>,
-    pub accepts_missing: bool,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Case {
-    pub id: String,
-    pub covers: Vec<String>,
-    pub args: Vec<(String, Value)>,
-    pub result: Value,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Definition {
-    pub name: String,
-    pub function: String,
-    pub description: String,
-    pub params: Vec<Parameter>,
-    pub returns: ColumnType,
-    pub may_return_missing: bool,
-    pub comparison_decimals: i64,
-    pub tests: Vec<Case>,
 }
 
 /// Authored indices survive admission and identify the exact rejected fields.
@@ -104,13 +77,13 @@ pub enum CallFinding {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Function {
     language: Language,
-    definition: Definition,
+    definition: ast::Function,
 }
 impl Function {
     /// The environment has already admitted the complete definition collection
     /// once. Transfer its definitions without repeating admission or copying
     /// their test cases.
-    pub(crate) fn from_admitted(language: Language, definition: Definition) -> Self {
+    pub(crate) fn from_admitted(language: Language, definition: ast::Function) -> Self {
         Self {
             language,
             definition,
@@ -119,8 +92,18 @@ impl Function {
     pub fn language(&self) -> Language {
         self.language
     }
-    pub fn definition(&self) -> &Definition {
+    /// The lowered definition.
+    pub fn definition(&self) -> &ast::Function {
         &self.definition
+    }
+    /// The logical name specifications call the function by.
+    pub fn name(&self) -> &str {
+        &self.definition.name.name
+    }
+    /// The callable this host binds. Admission refuses a definition without
+    /// a valid one for its language.
+    pub fn call(&self) -> &str {
+        callable_of(self.language, &self.definition)
     }
     /// Reuse the shared exact-type/default/missing invocation signature without
     /// inventing versions or a logical-to-host parameter mapping.
@@ -138,8 +121,8 @@ impl Function {
             .params
             .iter()
             .map(|p| BoundParameter {
-                name: p.name.clone(),
-                host_name: p.name.clone(),
+                name: p.name.name.clone(),
+                host_name: p.name.name.clone(),
                 kind: p.kind,
                 accepts_missing: p.accepts_missing,
                 presence: if p.required {
@@ -151,8 +134,8 @@ impl Function {
             .collect();
         ProjectInvocationPlan::new(
             ProjectFunctionIdentity {
-                name: self.definition.name.clone(),
-                call: self.definition.function.clone(),
+                name: self.name().into(),
+                call: self.call().into(),
             },
             parameters,
             self.definition.returns,
@@ -169,7 +152,12 @@ impl Function {
             if !names.insert(&item.name) {
                 findings.push(CallFinding::DuplicateArgument { argument });
             }
-            match self.definition.params.iter().find(|p| p.name == item.name) {
+            match self
+                .definition
+                .params
+                .iter()
+                .find(|p| p.name.name == item.name)
+            {
                 None => findings.push(CallFinding::UnknownArgument { argument }),
                 Some(parameter) => {
                     if let Some(actual) = item.kind {
@@ -185,13 +173,13 @@ impl Function {
             }
         }
         for (parameter, item) in self.definition.params.iter().enumerate() {
-            if item.required && !names.contains(&item.name) {
+            if item.required && !names.contains(&item.name.name) {
                 findings.push(CallFinding::MissingRequiredArgument { parameter });
             }
         }
         findings
     }
-    pub fn admit(language: Language, definition: Definition) -> Result<Self, Vec<Finding>> {
+    pub fn admit(language: Language, definition: ast::Function) -> Result<Self, Vec<Finding>> {
         let findings = validate(language, &definition);
         if findings.is_empty() {
             Ok(Self {
@@ -204,6 +192,12 @@ impl Function {
     }
 }
 
+/// The callable `language` binds, or nothing to admit when the definition
+/// writes none for it.
+fn callable_of(language: Language, def: &ast::Function) -> &str {
+    def.implementation(language)
+        .map_or("", |implementation| implementation.callable.text.as_str())
+}
 fn identifier(name: &str) -> bool {
     let mut bytes = name.bytes();
     bytes
@@ -328,24 +322,24 @@ fn column_kind(kind: ColumnType) -> ValueType {
     }
 }
 
-fn obligations(def: &Definition) -> BTreeSet<String> {
+fn obligations(def: &ast::Function) -> BTreeSet<String> {
     let mut needed = BTreeSet::from([String::from("normal"), String::from("boundary")]);
     for p in &def.params {
+        let name = &p.name.name;
         if !p.required {
-            needed.insert(std::format!("default:{}", p.name));
+            needed.insert(std::format!("default:{name}"));
         }
         needed.insert(std::format!(
-            "{}:{}",
+            "{}:{name}",
             if p.accepts_missing {
                 "accepted-missing"
             } else {
                 "short-circuit-missing"
             },
-            p.name
         ));
         if p.kind == ValueType::Bool {
-            needed.insert(std::format!("boolean-true:{}", p.name));
-            needed.insert(std::format!("boolean-false:{}", p.name));
+            needed.insert(std::format!("boolean-true:{name}"));
+            needed.insert(std::format!("boolean-false:{name}"));
         }
     }
     if def.may_return_missing {
@@ -359,8 +353,8 @@ fn obligations(def: &Definition) -> BTreeSet<String> {
 
 fn evidence(
     tag: &str,
-    def: &Definition,
-    case: &Case,
+    def: &ast::Function,
+    case: &FunctionTest,
     args: &BTreeMap<&str, &Value>,
     short_circuit: bool,
 ) -> Option<bool> {
@@ -384,7 +378,7 @@ fn evidence(
     ) {
         return None;
     }
-    let Some(p) = def.params.iter().find(|p| p.name == name) else {
+    let Some(p) = def.params.iter().find(|p| p.name.name == name) else {
         return Some(false);
     };
     let explicit = args.get(name).copied();
@@ -405,15 +399,15 @@ fn evidence(
 
 /// Report all independent static faults, followed by unsatisfied obligations in
 /// lexical tag order. Cases with invalid arguments/results cannot supply coverage.
-pub fn validate(language: Language, def: &Definition) -> Vec<Finding> {
+pub fn validate(language: Language, def: &ast::Function) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if !identifier(&def.name) {
+    if !identifier(&def.name.name) {
         findings.push(Finding::InvalidName);
     }
-    if !callable(language, &def.function) {
+    if !callable(language, callable_of(language, def)) {
         findings.push(Finding::InvalidCallable);
     }
-    if def.description.is_empty() {
+    if def.description.text.is_empty() {
         findings.push(Finding::EmptyDescription);
     }
     if def.comparison_decimals < 0 {
@@ -421,10 +415,10 @@ pub fn validate(language: Language, def: &Definition) -> Vec<Finding> {
     }
     let mut names = BTreeSet::new();
     for (parameter, p) in def.params.iter().enumerate() {
-        if !identifier(&p.name) || !host_name(language, &p.name) {
+        if !identifier(&p.name.name) || !host_name(language, &p.name.name) {
             findings.push(Finding::InvalidParameterName { parameter });
         }
-        if !names.insert(p.name.as_str()) {
+        if !names.insert(p.name.name.as_str()) {
             findings.push(Finding::DuplicateParameter { parameter });
         }
         match (p.required, &p.default) {
@@ -444,21 +438,21 @@ pub fn validate(language: Language, def: &Definition) -> Vec<Finding> {
     let mut covered = BTreeSet::new();
     for (case_index, case) in def.tests.iter().enumerate() {
         let start = findings.len();
-        if !case_id(&case.id) {
+        if !case_id(&case.id.text) {
             findings.push(Finding::InvalidCaseId { case: case_index });
         }
-        if !ids.insert(&case.id) {
+        if !ids.insert(&case.id.text) {
             findings.push(Finding::DuplicateCaseId { case: case_index });
         }
         let mut args = BTreeMap::new();
         for (argument, (name, value)) in case.args.iter().enumerate() {
-            if args.insert(name.as_str(), value).is_some() {
+            if args.insert(name.name.as_str(), value).is_some() {
                 findings.push(Finding::DuplicateArgument {
                     case: case_index,
                     argument,
                 });
             }
-            match def.params.iter().find(|p| &p.name == name) {
+            match def.params.iter().find(|p| p.name.name == name.name) {
                 None => findings.push(Finding::UnknownArgument {
                     case: case_index,
                     argument,
@@ -474,7 +468,11 @@ pub fn validate(language: Language, def: &Definition) -> Vec<Finding> {
         }
         let mut short_circuit = false;
         for (parameter, p) in def.params.iter().enumerate() {
-            match args.get(p.name.as_str()).copied().or(p.default.as_ref()) {
+            match args
+                .get(p.name.name.as_str())
+                .copied()
+                .or(p.default.as_ref())
+            {
                 None if p.required => findings.push(Finding::MissingRequiredArgument {
                     case: case_index,
                     parameter,
@@ -501,6 +499,7 @@ pub fn validate(language: Language, def: &Definition) -> Vec<Finding> {
         }
         let mut tags = BTreeSet::new();
         for (tag_index, tag) in case.covers.iter().enumerate() {
+            let tag = &tag.text;
             if !tags.insert(tag) {
                 findings.push(Finding::DuplicateCoverage {
                     case: case_index,

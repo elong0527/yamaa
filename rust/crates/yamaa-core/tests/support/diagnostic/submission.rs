@@ -1,6 +1,7 @@
 //! Independently authored arenas reach submission detectors and portable boundary policy.
 #![allow(unused_imports)]
 pub(crate) use crate::support::document::Tree;
+pub(crate) use crate::support::roots as rt;
 pub(crate) use std::{collections::BTreeSet, convert::Infallible};
 pub(crate) use yamaa_core::json::Value as JsonValue;
 pub(crate) use yamaa_core::{
@@ -9,7 +10,7 @@ pub(crate) use yamaa_core::{
     project_environment::Submission,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
-    submission_document, submission_transport, submission_xml, submission_xpt,
+    submission_transport, submission_xml, submission_xpt,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -97,21 +98,21 @@ pub(crate) fn document_reference(id: &str, kind: &str) -> Tree {
     ])
 }
 pub(crate) fn catalogue(standard: bool, value: Value) -> ct::Catalogue {
-    ct::Catalogue::admit(vec![ct::Source {
-        standard: standard.then(|| ct::Standard {
+    ct::Catalogue::admit(vec![rt::Source {
+        standard: standard.then(|| rt::Standard {
             name: "CDISC/NCI".into(),
             publishing_set: "SDTM".into(),
             version: "2026-09-30".into(),
         }),
-        codelists: vec![ct::Codelist {
+        codelists: vec![rt::Codelist {
             id: "LIST".into(),
             name: "Independent list".into(),
-            data_type: ct::DataType::Text,
+            data_type: rt::CodelistType::Text,
             extensible: false,
             alias: None,
             format_name: None,
             external: None,
-            items: Some(vec![ct::Item {
+            items: Some(vec![rt::Item {
                 value,
                 decode: None,
                 rank: None,
@@ -119,7 +120,8 @@ pub(crate) fn catalogue(standard: bool, value: Value) -> ct::Catalogue {
                 extended: false,
             }]),
         }],
-    }])
+    }
+    .root()])
     .unwrap()
 }
 pub(crate) fn compose(
@@ -142,7 +144,7 @@ pub(crate) fn compose_study(
     created: &str,
 ) -> Result<Study, Vec<Finding>> {
     let project = project.document();
-    let declared = submission_document::decode(&project, project.root()).unwrap();
+    let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
     let docs: Vec<_> = docs.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.into_iter().map(Tree::document).collect();
     let others: Vec<_> = others.iter().collect();
@@ -155,8 +157,9 @@ pub(crate) fn compose_study(
             href: Some("d0.csv"),
         })
         .collect();
-    let section = &declared.sections()[0];
-    let required = composition::Required::admit(declared.study(), Some(section), section.family)?;
+    let section = &declared.sections[0];
+    let required =
+        composition::Required::admit(declared.study.as_ref(), Some(section), section.family)?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
 }
 pub(crate) fn one(
@@ -172,7 +175,7 @@ pub(crate) fn reached_finding(
     code: ConditionCode,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
 ) {
     let finding = findings
         .iter()
@@ -180,12 +183,8 @@ pub(crate) fn reached_finding(
         .unwrap_or_else(|| panic!("missing {code:?}: {findings:?}"));
     let definition = finding.definition();
     assert_eq!(
-        (
-            definition.phase,
-            definition.condition,
-            definition.requirement
-        ),
-        (phase, condition, Some(requirement))
+        (definition.phase, definition.condition, definition.rule),
+        (phase, condition, Some(rule))
     );
     assert!(!finding.path.is_empty());
     assert!(finding.context.contains_key("detail"));
@@ -250,117 +249,112 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let empty = ct::Catalogue::admit(vec![]).unwrap();
     assert!(one(project(), specification(), &empty).is_ok());
-    for (code, condition, requirement, change) in [
+    for (code, condition, rule, change) in [
         (
             SubmissionMetadataMissing,
             "submission_metadata_missing",
-            "REQ-1015",
+            "DEFINE-7",
             0,
         ),
-        (SubmissionOriginMissing, "origin_missing", "REQ-0918", 1),
-        (SubmissionSasName, "sas_name_too_long", "REQ-1023", 2),
+        (SubmissionOriginMissing, "origin_missing", "SUB-14", 1),
+        (SubmissionSasName, "sas_name_too_long", "DEFINE-22", 2),
         (
             SubmissionCoreMandatory,
             "core_mandatory_conflict",
-            "REQ-0915",
+            "SUB-10",
             3,
         ),
         (
             VerificationNotMissingRedundant,
             "redundant_declaration",
-            "REQ-0375",
+            "CHECK-5",
             4,
         ),
-        (SubmissionAdamField, "value_not_permitted", "REQ-0917", 5),
+        (SubmissionAdamField, "value_not_permitted", "SUB-5", 5),
         (
             SubmissionOriginSource,
             "origin_source_not_admitted",
-            "REQ-0919",
+            "SUB-15",
             6,
         ),
         (
             SubmissionOriginDescription,
             "origin_description_missing",
-            "REQ-0920",
+            "SUB-16",
             7,
         ),
-        (SubmissionMethodMissing, "method_missing", "REQ-0923", 8),
+        (SubmissionMethodMissing, "method_missing", "SUB-18", 8),
         (
             SubmissionOriginRefuted,
             "origin_contradicts_derivation",
-            "REQ-0922",
+            "SUB-19",
             9,
         ),
         (
             SubmissionAnnotatedCrfMissing,
             "origin_document_missing",
-            "REQ-0984",
+            "DEFINE-14",
             10,
         ),
         (
             SubmissionOriginDocument,
             "origin_document_missing",
-            "REQ-0893",
+            "SUB-17",
             11,
         ),
         (
             SubmissionDataType,
             "submission_data_type_not_admitted",
-            "REQ-0914",
+            "SUB-6",
             12,
         ),
         (
             SubmissionLengthMissing,
             "submission_length_missing",
-            "REQ-0912",
+            "SUB-7",
             13,
         ),
         (
             SubmissionLengthNotApplicable,
             "submission_length_not_applicable",
-            "REQ-0912",
+            "SUB-7",
             14,
         ),
         (
             SubmissionLengthInvalid,
             "submission_length_invalid",
-            "REQ-0911",
+            "SUB-7",
             15,
         ),
         (
             SubmissionLengthConflict,
             "declared_length_conflict",
-            "REQ-0913",
+            "SUB-8",
             16,
         ),
-        (
-            SubmissionKeyMandatory,
-            "value_not_permitted",
-            "REQ-0881",
-            17,
-        ),
+        (SubmissionKeyMandatory, "value_not_permitted", "SUB-10", 17),
         (
             SubmissionUnknownDocument,
             "unknown_document",
-            "REQ-1016",
+            "DEFINE-8",
             18,
         ),
         (
             SubmissionReservedMetadata,
             "reserved_metadata_key",
-            "REQ-0910",
+            "SUB-2",
             19,
         ),
         (
             SubmissionReferenceRepeating,
             "reference_data_repeating_conflict",
-            "REQ-0925",
+            "SUB-4",
             20,
         ),
         (
             SubmissionNoDataComment,
             "submission_metadata_missing",
-            "REQ-1022",
+            "DEFINE-17",
             21,
         ),
         (
@@ -372,32 +366,32 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             SubmissionKeyNotOutput,
             "value_not_permitted",
-            "REQ-1015",
+            "DEFINE-7",
             23,
         ),
         (
             SubmissionColumnNotOutput,
             "submission_not_output_column",
-            "REQ-0909",
+            "SUB-1",
             24,
         ),
-        (SubmissionClassFamily, "value_not_permitted", "REQ-0882", 25),
+        (SubmissionClassFamily, "value_not_permitted", "SUB-10", 25),
         (
             VerificationUniqueRedundant,
             "redundant_declaration",
-            "REQ-0381",
+            "CHECK-10",
             26,
         ),
         (
             CodelistAllowedValuesRedundant,
             "redundant_declaration",
-            "REQ-0955",
+            "CT-9",
             27,
         ),
         (
             SubmissionMandatoryRedundant,
             "redundant_declaration",
-            "REQ-0916",
+            "SUB-11",
             28,
         ),
         (
@@ -621,14 +615,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             _ => unreachable!(),
         }
         let findings = one(project, spec, &lists).unwrap_err();
-        reached_finding(
-            &mut reached,
-            &findings,
-            code,
-            "validation",
-            condition,
-            requirement,
-        );
+        reached_finding(&mut reached, &findings, code, "validation", condition, rule);
         if change == 31 {
             assert_eq!(findings.len(), 1, "{findings:?}");
             assert_eq!(findings[0].path, "sdtm.specs[0].output.decimals");
@@ -670,30 +657,31 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     // list carries its NCI code, and a sponsor-extended item, which has none,
     // carries no alias.
     let epoch = |alias: Option<&str>| {
-        let item = |value: &str, alias: Option<&str>, extended| ct::Item {
+        let item = |value: &str, alias: Option<&str>, extended| rt::Item {
             value: Value::Str(value.into()),
             decode: None,
             rank: None,
             alias: alias.map(String::from),
             extended,
         };
-        ct::Catalogue::admit(vec![ct::Source {
-            standard: Some(ct::Standard {
+        ct::Catalogue::admit(vec![rt::Source {
+            standard: Some(rt::Standard {
                 name: "CDISC/NCI".into(),
                 publishing_set: "SDTM".into(),
                 version: "2026-09-30".into(),
             }),
-            codelists: vec![ct::Codelist {
+            codelists: vec![rt::Codelist {
                 id: "LIST".into(),
                 name: "Independent list".into(),
-                data_type: ct::DataType::Text,
+                data_type: rt::CodelistType::Text,
                 extensible: true,
                 alias: Some("C99079".into()),
                 format_name: None,
                 external: None,
                 items: Some(vec![item("SCREENING", alias, false), item("X", None, true)]),
             }],
-        }])
+        }
+        .root()])
         .unwrap()
     };
     let mut env = project();
@@ -725,7 +713,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("method", Tree::text("Independent algorithm")),
         ]
     };
-    for (code, condition, requirement, entries, path) in [
+    for (code, condition, rule, entries, path) in [
         (
             SubmissionValueWhereInvalid,
             "value_level_where_invalid",
@@ -763,14 +751,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let findings = one(project(), value_spec(entries), &empty).unwrap_err();
-        reached_finding(
-            &mut reached,
-            &findings,
-            code,
-            "validation",
-            condition,
-            requirement,
-        );
+        reached_finding(&mut reached, &findings, code, "validation", condition, rule);
         let finding = findings.iter().find(|f| f.code == code).unwrap();
         assert_eq!(finding.path, path);
         if code == SubmissionValueOriginRefuted {
@@ -840,47 +821,47 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     ] {
         assert_eq!(findings[0].context[key], JsonValue::String(value.into()));
     }
-    for (code, condition, requirement, change) in [
+    for (code, condition, rule, change) in [
         (
             SubmissionStandardFamily,
             "unknown_standard_family",
-            "REQ-0924",
+            "SUB-3",
             0,
         ),
         (
             SubmissionDefineExtension,
             "value_not_permitted",
-            "REQ-1014",
+            "DEFINE-2",
             1,
         ),
         (
             SubmissionSourceVersion,
             "source_system_incomplete",
-            "REQ-0979",
+            "DEFINE-12",
             2,
         ),
         (
             SubmissionDuplicateIdentifier,
             "duplicate_define_identifier",
-            "REQ-1017",
+            "DEFINE-10",
             3,
         ),
         (
             SubmissionAnnotatedCrfMultiplicity,
             "value_not_permitted",
-            "REQ-1019",
+            "DEFINE-14",
             4,
         ),
         (
             SubmissionDuplicateDataset,
             "duplicate_dataset_entry",
-            "REQ-1018",
+            "DEFINE-5",
             5,
         ),
         (
             SubmissionCdiscAliasMissing,
             "missing_required_field",
-            "REQ-1004",
+            "DEFINE-4",
             6,
         ),
         (SubmissionDefineName, "value_not_permitted", "DEFINE-2", 7),
@@ -932,14 +913,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "2026-09-30T00:00:00",
         )
         .unwrap_err();
-        reached_finding(
-            &mut reached,
-            &findings,
-            code,
-            "validation",
-            condition,
-            requirement,
-        );
+        reached_finding(&mut reached, &findings, code, "validation", condition, rule);
     }
     let mut spec = specification();
     *spec.at(&["columns", "0", "label"]) = Tree::text("A\tB");
@@ -951,7 +925,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionXmlWhitespace,
         "validation",
         "untransportable_text",
-        "REQ-1025",
+        "DEFINE-24",
     );
     let study = compose(
         project(),
@@ -968,7 +942,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionXmlInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-1026",
+        "DEFINE-25",
     );
     let study = one(project(), specification(), &empty).unwrap();
     let table = Held {
@@ -986,7 +960,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionJsonInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-1231",
+        "JSON-4",
     );
     let mut spec = specification();
     spec.set(
@@ -1009,7 +983,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         SubmissionInventoryFailed,
         "verification",
         "allowed_values_failed",
-        "REQ-1156",
+        "CT-11",
     );
     assert_eq!(
         finding.path,
@@ -1043,7 +1017,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineStandardName,
         "validation",
         "value_not_permitted",
-        "REQ-1074",
+        "DEFINE-6",
     );
     // A section that lists only its specifications admits for runs. Define
     // composition reports the study and the section's guide and target it
@@ -1067,7 +1041,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineRequiredDeclaration,
         "validation",
         "missing_required_field",
-        "REQ-1337",
+        "DEFINE-28",
     );
     // A project without the selected family's section names that section.
     assert_eq!(
@@ -1085,7 +1059,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         DefineCreatedInvalid,
         "validation",
         "value_not_permitted",
-        "REQ-0962",
+        "DEFINE-3",
     );
     assert!(define_diagnostics::admit_relation(
         TargetRelation::Independent,
@@ -1093,24 +1067,24 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "held paths"
     )
     .is_ok());
-    for (relation, code, condition, requirement) in [
+    for (relation, code, condition, rule) in [
         (
             TargetRelation::ArtifactOutsidePackage,
             DefineArtifactOutsidePackage,
             "artifact_outside_document",
-            "REQ-1021",
+            "DEFINE-16",
         ),
         (
             TargetRelation::ArtifactCollision,
             DefineArtifactCollision,
             "artifact_path_collision",
-            "REQ-1195",
+            "JSON-2",
         ),
         (
             TargetRelation::TransportCollision,
             DefineTransportCollision,
             "transport_path_collision",
-            "REQ-1226",
+            "JSON-2",
         ),
     ] {
         let finding = define_diagnostics::admit_relation(
@@ -1134,7 +1108,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             code,
             "validation",
             condition,
-            requirement,
+            rule,
         );
     }
     reached

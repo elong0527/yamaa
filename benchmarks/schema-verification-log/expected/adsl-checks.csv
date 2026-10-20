@@ -4,6 +4,6 @@ adsl.csv,input,input.DM,DM,,,,,,,3,,,"{""bytes"":66,""path"":""input/dm.csv"",""
 adsl.csv,rows,base,DM,,,,,,,3,3,,{}
 adsl.csv,column,columns.USUBJID,USUBJID,,,,,,,0,3,,"{""max_length"":3}"
 adsl.csv,column,columns.AGE,AGE,,,,,,,0,3,,{}
-adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{}
-adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,warning,violated,range_failed,1,3,"[{""USUBJID"":""S-2""}]","{""column"":""AGE""}"
-adsl.csv,check,verifications[0].row_count,row_count,,,REQ-0385,error,held,,0,1,,{}
+adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{}
+adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,warning,violated,range_failed,1,3,"[{""USUBJID"":""S-2""}]","{""column"":""AGE""}"
+adsl.csv,check,verifications[0].row_count,row_count,,,CHECK-13,error,held,,0,1,,{}

@@ -15,7 +15,7 @@ use super::{CompileError, Resource};
 use crate::limits::Limits;
 use std::{collections::BTreeSet, fmt::Write};
 
-/// ECMA-262 WhiteSpace and LineTerminator, without U+0085 (REQ-0822).
+/// ECMA-262 WhiteSpace and LineTerminator, without U+0085 (TEXT-8).
 const SPACE: &str = r"\x{9}-\x{D}\x{20}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}";
 const DIGIT: &str = "0-9";
 const WORD: &str = "0-9A-Za-z_";
@@ -440,7 +440,7 @@ impl Parser<'_> {
             return Err(self.invalid("empty code point escape"));
         }
         self.require('}')?;
-        // REQ-0825 expands braced escapes into REQ-0022 scalar values.
+        // TEXT-8 expands braced escapes into VALUE-11 scalar values.
         // Surrogate code points cannot cross that normalization boundary.
         if char::from_u32(value).is_none() {
             return Err(self.invalid("code point escape is not a Unicode scalar"));

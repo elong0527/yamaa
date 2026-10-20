@@ -14,8 +14,7 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 source(file.path(host_fixture_root,"context.R"),local=TRUE)
 local({
@@ -27,7 +26,7 @@ local({
     !context_equal(actual,decode('{"dataset":"SRC","keys":[{"A":1,"B":2}]}')))
 })
 host_truth <- read_host_fixture(host_fixture_root,"original-specifications")
-root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
+root <- normalizePath("specification-original", winslash="/", mustWork=TRUE)
 fixture_rows <- function(filename) {
   jsonlite::fromJSON(file.path(root,filename),simplifyVector=FALSE)
 }
@@ -86,7 +85,7 @@ failed_save <- function(result) save_refused(result,"cannot save a failed run; s
 refused_save <- function(result) save_refused(result,"nothing was saved; see issues")
 # Every public issues table has the authored finding fields first, then the
 # source geometry columns. Truth compares the fields it authors.
-issue_columns <- c("phase","condition","requirement","spec_paths","context","source_span","operand_route")
+issue_columns <- c("phase","condition","rule","spec_paths","context","source_span","operand_route")
 authored_columns <- fixture_strings(host_truth[["issue_columns"]])
 stopifnot(identical(issue_columns[seq_along(authored_columns)],authored_columns))
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
@@ -95,11 +94,11 @@ check_issue_frame <- function(actual,expected) {
   stopifnot(is.data.frame(actual),identical(names(actual),issue_columns),all(authored_columns %in% fields),
     identical(fields,issue_columns[seq_along(fields)]))
   stopifnot(nrow(actual)==length(expected$phase),identical(lapply(actual[fields],identity),expected))
-  stopifnot(all(vapply(actual[c("phase","condition","requirement","context")],is.character,logical(1))),
+  stopifnot(all(vapply(actual[c("phase","condition","rule","context")],is.character,logical(1))),
     all(vapply(actual[c("spec_paths","source_span","operand_route")],is.list,logical(1))))
 }
 # One run report replaces the retired verification and warning logs: every
-# run that began returns it, first its run row (REQ-0393, REQ-0392).
+# run that began returns it, first its run row (CHECK-23, CHECK-24).
 report_columns <- c("ARTIFACT","KIND","SPEC_PATH","NAME","ID","TARGET","RULE","SEVERITY",
   "OUTCOME","CONDITION","COUNT","TOTAL","KEYS","DETAILS")
 check_run_report <- function(result) {
@@ -273,7 +272,7 @@ refused <- absent$run()
 stopifnot(identical(refused$names,character()),identical(names(refused$report),report_columns),
   nrow(refused$report)==0L,identical(refused$issues$phase,"validation"),
   identical(refused$issues$condition,"project_environment_missing"),
-  identical(refused$issues$requirement,"REQ-0694"),identical(refused$issues$spec_paths,list("environment")),
+  identical(refused$issues$rule,"FUNC-1"),identical(refused$issues$spec_paths,list("environment")),
   identical(refused$issues$context,paste0('{"cause":"missing","path":',
     json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-project.yaml")),'}')),
   identical(refused$issues,absent$check()$issues),
@@ -376,26 +375,26 @@ local({
   writeBin(charToRaw(source),entry)
   entry <- normalizePath(entry,winslash="/",mustWork=TRUE)
 cases <- list(
-  c("utf8","source_parquet_invalid","REQ-1038",'"dataset":"SRC","path":"input.parquet"'),
-  c("utf8-bool","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"OTHER","path":"input.parquet","stored_type":"bool"'),
-  c("utf8-time","source_field_value_invalid","REQ-1041",'"dataset":"SRC","field":"OTHER","path":"input.parquet","row":1,"value":1'),
-  c("empty-name","source_field_name_empty","REQ-1039",'"dataset":"SRC","field":1,"path":"input.parquet"'),
-  c("duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"'),
-  c("mixed-struct","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"S","path":"input.parquet","stored_type":"struct<left: int64, right: string>"'),
-  c("mixed-map","source_field_type_unsupported","REQ-1040",'"dataset":"SRC","field":"M","path":"input.parquet","stored_type":"map<string, int64 (\'M\')>"'),
-  c("mixed-empty","source_field_name_empty","REQ-1039",'"dataset":"SRC","field":1,"path":"input.parquet"'),
-  c("mixed-duplicate","source_field_name_duplicate","REQ-1039",'"dataset":"SRC","field":"I","path":"input.parquet"')
+  c("utf8","source_parquet_invalid","PARQUET-5",'"dataset":"SRC","path":"input.parquet"'),
+  c("utf8-bool","source_field_type_unsupported","PARQUET-7",'"dataset":"SRC","field":"OTHER","path":"input.parquet","stored_type":"bool"'),
+  c("utf8-time","source_field_value_invalid","PARQUET-9",'"dataset":"SRC","field":"OTHER","path":"input.parquet","row":1,"value":1'),
+  c("empty-name","source_field_name_empty","PARQUET-6",'"dataset":"SRC","field":1,"path":"input.parquet"'),
+  c("duplicate","source_field_name_duplicate","PARQUET-6",'"dataset":"SRC","field":"I","path":"input.parquet"'),
+  c("mixed-struct","source_field_type_unsupported","PARQUET-7",'"dataset":"SRC","field":"S","path":"input.parquet","stored_type":"struct<left: int64, right: string>"'),
+  c("mixed-map","source_field_type_unsupported","PARQUET-7",'"dataset":"SRC","field":"M","path":"input.parquet","stored_type":"map<string, int64 (\'M\')>"'),
+  c("mixed-empty","source_field_name_empty","PARQUET-6",'"dataset":"SRC","field":1,"path":"input.parquet"'),
+  c("mixed-duplicate","source_field_name_duplicate","PARQUET-6",'"dataset":"SRC","field":"I","path":"input.parquet"')
 )
 unsupported_types <- c(uint64="uint64",float32="float",binary="binary",
   milliseconds="timestamp[ms]",timezone="timestamp[us, tz=UTC]",list="list<element: int64>",
   "fixed-list"="fixed_size_list<element: int64>[2]",struct="struct<item: int64>",decimal="decimal128(10, 2)")
 for(name in names(unsupported_types)) cases[[length(cases)+1L]] <- c(
-  paste0("unsupported-",name),"source_field_type_unsupported","REQ-1040",
+  paste0("unsupported-",name),"source_field_type_unsupported","PARQUET-7",
   paste0('"dataset":"SRC","field":"FIELD","path":"input.parquet","stored_type":"',unsupported_types[[name]],'"'))
 for (test in cases) {
   stopifnot(file.copy(file.path(root,"pq",paste0(test[[1L]],".parquet")),file.path(directory,"input.parquet"),overwrite=TRUE))
   result <- run_spec(entry)
-  finding <- paste0('{"condition":"',test[[2L]],'","context":{',test[[4L]],'},"phase":"ingest","requirement":"',test[[3L]],'","spec_paths":["input.SRC.path"]}')
+  finding <- paste0('{"condition":"',test[[2L]],'","context":{',test[[4L]],'},"phase":"ingest","rule":"',test[[3L]],'","spec_paths":["input.SRC.path"]}')
   expected <- paste0('{"artifacts":[],"backend":"rust","callbacks":[],"diagnostics":[',finding,'],"engine_version":"',yamaa:::.core_version(),'","error":null,"example":"',test[[1L]],'","handler_counts":[],"nodes":[{"diagnostics":[',finding,'],"handler_counts":[],"outcome":"failure","specification":"spec.yaml","unsupported":[]}],"outcome":"failure","report_version":"0.3.0-draft","runtime":"r","runtime_version":"',as.character(getRversion()),'","source_reads":[{"base_directory":".","condition":null,"outcome":"captured","path":"input.parquet","snapshots_created":1}],"tables":[],"unsupported":[],"verifications":[]}')
   expected <- public_expected(expected,entry)
   stopifnot(is.null(result$output),context_equal(public_observed(result),expected),
@@ -403,7 +402,7 @@ for (test in cases) {
     !file.exists(file.path(directory,"output.csv")))
 }
   # 0.4.0 refused this pyarrow int32 field. An unannotated INT32 is a signed
-  # 32-bit integer, so it reads as int (REQ-1032, #2940); R exchanges int as
+  # 32-bit integer, so it reads as int (PARQUET-7, #2940); R exchanges int as
   # double.
   stopifnot(file.copy(file.path(root,"pq","unsupported-int32.parquet"),file.path(directory,"input.parquet"),overwrite=TRUE))
   int32 <- file.path(directory,"int32.yaml")
@@ -432,7 +431,7 @@ local({
 
 local({
   # arrow writes a factor as a BYTE_ARRAY String field whose embedded Arrow
-  # schema names a dictionary. A layout is not a type (REQ-1032), so each
+  # schema names a dictionary. A layout is not a type (PARQUET-7), so each
   # field reads as its text (#2940). arrow is a suggested package: where it is
   # not installed, this control is skipped.
   if (!requireNamespace("arrow", quietly = TRUE)) {
@@ -484,7 +483,7 @@ local({
   checked <- check_spec(file.path(case,"spec.yaml"))$issues
   rejected <- run_spec(file.path(case,"spec.yaml"))
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),
-    identical(checked$condition,"incompatible_input_type"),identical(checked$requirement,"REQ-0418"),
+    identical(checked$condition,"incompatible_input_type"),identical(checked$rule,"FORMULA-16"),
     identical(checked$spec_paths,list("columns.RNDVAL.derivation.round_half_away_from_zero.source")),
     identical(checked$context,'{"actual":"str","expected":"numeric","source":"SEX"}'),
     identical(rejected$issues,checked),is.null(rejected$output),
@@ -522,14 +521,14 @@ local({
     case <- file.path(directory,item[[1L]]);unlink(file.path(case,"input"),recursive=TRUE)
     bounds <- is.null(item[[3L]])
     condition <- if(bounds) "value_not_permitted" else "incompatible_input_type"
-    requirement <- if(bounds) "REQ-0613" else "REQ-0606"
+    rule <- if(bounds) "TIME-5" else "TIME-1"
     context_yaml <- if(bounds) "  value: inclusive\n  permitted: [exclusive]\n" else paste0("  source: ",item[[3L]],"\n  expected: date\n  actual: ",item[[4L]],"\n")
     context <- if(bounds) '{"permitted":["exclusive"],"value":"inclusive"}' else paste0('{"actual":"',item[[4L]],'","expected":"date","source":"',item[[3L]],'"}')
-    stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),paste0("phase: validation\ncondition: ",condition,"\nspec_paths:\n  - ",item[[2L]],"\nrequirement: ",requirement,"\ncontext:\n",context_yaml)))
+    stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),paste0("phase: validation\ncondition: ",condition,"\nspec_paths:\n  - ",item[[2L]],"\nrule: ",rule,"\ncontext:\n",context_yaml)))
     checked <- check_spec(file.path(case,"spec.yaml"))$issues
     rejected <- run_spec(file.path(case,"spec.yaml"))
     stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,condition),
-      identical(checked$requirement,requirement),identical(checked$spec_paths,list(item[[2L]])),
+      identical(checked$rule,rule),identical(checked$spec_paths,list(item[[2L]])),
       identical(checked$context,context),identical(rejected$issues,checked),is.null(rejected$output),
       is.null(domain_observations(rejected)),
       failed_save(rejected),!file.exists(file.path(case,"input")))
@@ -568,7 +567,7 @@ local({
     checked <- check_spec(entry)$issues
     result <- run_spec(entry);actual <- result$issues
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),
-      identical(actual$condition,finding$condition),identical(actual$requirement,finding$requirement),
+      identical(actual$condition,finding$condition),identical(actual$rule,finding$rule),
       identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
       is.null(result$output),identical(is.null(domain_observations(result)),static),
       failed_save(result),length(list.files(case,pattern="[.]csv$"))==0L)
@@ -608,7 +607,7 @@ local({
     unlink(file.path(case,"input"),recursive=TRUE)
     checked <- check_spec(entry)$issues;rejected <- run_spec(entry);actual <- rejected$issues
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
-      identical(actual$requirement,finding$requirement),identical(actual$spec_paths,list(finding$spec_path)),
+      identical(actual$rule,finding$rule),identical(actual$spec_paths,list(finding$spec_path)),
       identical(actual$context,finding$context),identical(checked,actual),is.null(rejected$output),
       is.null(domain_observations(rejected)),
       failed_save(rejected),!file.exists(file.path(case,"input")))
@@ -649,7 +648,7 @@ local({
   writeBin(charToRaw("ID,REC,SORT,KEEP\n"),data)
   result <- run_spec(entry);actual <- result$issues
   stopifnot(nrow(actual)==1L,identical(actual$phase,"validation"),identical(actual$condition,"ordinal_field_collision"),
-    identical(actual$requirement,"REQ-1294"),identical(actual$spec_paths,list("input.SRC.ordinal")),
+    identical(actual$rule,"INPUT-4"),identical(actual$spec_paths,list("input.SRC.ordinal")),
     identical(actual$context,'{"dataset":"SRC","field":"REC"}'),is.null(result$output),
     failed_save(result),!file.exists(output))
   cat("public raw source filter retains multiline record positions and internal presentation order with independent exact cached CSV twice without Python passed\n")
@@ -674,7 +673,7 @@ local({
       expected <- findings[findings$case==name,]
       actual <- result$issues
       stopifnot(nrow(actual)==nrow(expected),is.null(result$output),identical(actual$phase,expected$phase),
-        identical(actual$condition,expected$condition),identical(actual$requirement,expected$requirement),
+        identical(actual$condition,expected$condition),identical(actual$rule,expected$rule),
         identical(actual$context,expected$context))
       for(index in seq_len(nrow(expected))) {
         # Each captured padding cause has one independently authored full path.
@@ -699,7 +698,7 @@ local({
   case <- file.path(directory,"negative-str-pad-width");unlink(file.path(case,"input"),recursive=TRUE)
   entry <- file.path(case,"spec.yaml");checked <- check_spec(entry)$issues;rejected <- run_spec(entry)
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_field_type"),
-    identical(checked$requirement,"REQ-0287"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
+    identical(checked$rule,"SCHEMA-12"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
     identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
     is.null(rejected$output),!file.exists(file.path(case,"input")))
   cat("public canonical scalar padding matches complete independent CSV, findings and handlers with missing passthrough and original width failure before input without Python passed\n")
@@ -806,7 +805,7 @@ local({
   case <- file.path(directory,case_name);unlink(file.path(case,"input"),recursive=TRUE)
   checked <- check_spec(file.path(case,"spec.yaml"))$issues;rejected <- run_spec(file.path(case,"spec.yaml"))
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"regex_group_out_of_range"),
-    identical(checked$requirement,"REQ-0816"),identical(checked$spec_paths,list("columns.SITEID.derivation.str_extract.group")),
+    identical(checked$rule,"TEXT-10"),identical(checked$spec_paths,list("columns.SITEID.derivation.str_extract.group")),
     identical(checked$context,'{"group":2,"group_count":1,"pattern":"^CATH-([^-]+)-[0-9]{4}$"}'),
     identical(rejected$issues,checked),is.null(rejected$output),is.null(domain_observations(rejected)),
     failed_save(rejected))
@@ -817,7 +816,7 @@ local({
     case <- file.path(directory,case_name);rejected <- run_spec(file.path(case,"spec.yaml"));actual <- rejected$issues
     check_handlers(rejected,case_name)
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
-      identical(actual$requirement,finding$requirement),identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
+      identical(actual$rule,finding$rule),identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
       is.null(rejected$output),failed_save(rejected),!file.exists(file.path(case,"output.csv")))
   }
   for(case_name in c("optional-unentered","entered-empty","whole-empty","leftmost-alternative","last-repeated-capture","literal-null","nested-case","row-extract")) {
@@ -860,12 +859,12 @@ local({
   case <- file.path(directory,name);unlink(file.path(case,"input"),recursive=TRUE)
   checked <- check_spec(file.path(case,"spec.yaml"))$issues;result <- run_spec(file.path(case,"spec.yaml"))
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_string_template"),
-    identical(checked$requirement,"REQ-0461"),identical(checked$spec_paths,list("columns.SUBJREF.derivation.str_template")),
+    identical(checked$rule,"TEXT-3"),identical(checked$spec_paths,list("columns.SUBJREF.derivation.str_template")),
     identical(checked$context,'{"placeholder":"SITEID + \':\' + SUBJID","reason":"invalid_placeholder"}'),
     identical(result$issues,checked),is.null(result$output),is.null(domain_observations(result)),
     failed_save(result))
   failures <- read.delim(file.path(root,"text-template-diagnostics.tsv"),quote="",colClasses="character",check.names=FALSE)
-  failures$requirement[!nzchar(failures$requirement)] <- NA_character_
+  failures$rule[!nzchar(failures$rule)] <- NA_character_
   for(name in unique(failures$case)) {
     stopifnot(file.copy(file.path(root,"text-template-cases",directories[[name]]),directory,recursive=TRUE))
     case <- file.path(directory,name)
@@ -873,7 +872,7 @@ local({
     result <- run_spec(file.path(case,"spec.yaml"));actual <- result$issues
     expected <- failures[failures$case==name,];check_handlers(result,name)
     stopifnot(nrow(actual)==nrow(expected),identical(actual$phase,expected$phase),identical(actual$condition,expected$condition),
-      identical(actual$requirement,expected$requirement),identical(actual$spec_paths,lapply(expected$spec_path,identity)),
+      identical(actual$rule,expected$rule),identical(actual$spec_paths,lapply(expected$spec_path,identity)),
       identical(actual$context,expected$context),is.null(result$output),
       failed_save(result),!file.exists(file.path(case,"output.csv")))
   }
@@ -933,7 +932,7 @@ local({
 local({
   source(file.path(root,"key-truth.R"),local=TRUE)
   original <- file.path(root,"keys","dependency_before_bad_filter")
-  type_truth <- list(phase="validation",condition="incompatible_input_type",requirement="REQ-0190",
+  type_truth <- list(phase="validation",condition="incompatible_input_type",rule="FORMULA-5",
     spec_paths=list("intermediates[0].filter"),context='{"left_type":"int","right_type":"str"}')
   directory <- tempfile("retained-filter-types-");dir.create(directory)
   on.exit(unlink(directory,recursive=TRUE))
@@ -954,7 +953,7 @@ local({
     writeBin(charToRaw(written),entry)
     result <- run_spec(entry)
     if(variant=="unused") {
-      # Every specification is pruned after composition (REQ-0638, REQ-0641): no
+      # Every specification is pruned after composition (LAYER-11, LAYER-12): no
       # column reads LOOK, so pruning discards the intermediate together with its
       # ill-typed filter and the specification builds with no issues instead of
       # refusing the dead declaration.
@@ -1032,7 +1031,7 @@ local({
 
   unlink(file.path(directory,fixture_strings(host_truth[["section_case_files"]])))
   writeBin(charToRaw(sub("SECTION: {literal: first}","SECTION: P.K",body,fixed=TRUE)),entry)
-  expected <- list(phase="validation",condition="phase_boundary",requirement="REQ-0120",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
+  expected <- list(phase="validation",condition="phase_boundary",rule="LOOKUP-7",spec_paths=list("rows[0].derivations.SECTION.source"),context="{\"available_phase\":\"completed_prior_row_template\",\"identifier\":\"P.K\",\"required_phase\":\"row_construction\"}")
   check_issue_frame(check_spec(entry)$issues,expected)
   rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected)
   stopifnot(is.null(rejected$output),is.null(domain_observations(rejected)),failed_save(rejected),!file.exists(file.path(directory,"src.csv")),!file.exists(file.path(directory,"result.csv")))
@@ -1054,12 +1053,12 @@ local({
   check_handler_ledger(observed,'[{"spec_path":"columns.A.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.A.derivation.source.no_match","handler":"no_match","count":1},{"spec_path":"columns.B.derivation.source.multiple_matches","handler":"multiple_matches","count":1},{"spec_path":"columns.B.derivation.source.no_match","handler":"no_match","count":1}]')
   unlink(c(file.path(directory,"src.csv"),file.path(directory,"donor.csv"),file.path(directory,"result.csv")))
   cases <- list(
-    list(remove=host_truth[["lookup_first_clause"]],condition="rename_only_intermediate",requirement="REQ-1248",context='{"dataset":"DONOR","intermediate":"P"}'),
-    list(remove="    keep: first\n",condition="unpaired_fields",requirement="LOOKUP-10",context='{"declared":["order_by"],"intermediate":"P","missing":["keep"]}'),
-    list(remove="    order_by: [DONOR.SEQ]\n",condition="unpaired_fields",requirement="LOOKUP-10",context='{"declared":["keep"],"intermediate":"P","missing":["order_by"]}'))
+    list(remove=host_truth[["lookup_first_clause"]],condition="rename_only_intermediate",rule="LOOKUP-4",context='{"dataset":"DONOR","intermediate":"P"}'),
+    list(remove="    keep: first\n",condition="unpaired_fields",rule="LOOKUP-10",context='{"declared":["order_by"],"intermediate":"P","missing":["keep"]}'),
+    list(remove="    order_by: [DONOR.SEQ]\n",condition="unpaired_fields",rule="LOOKUP-10",context='{"declared":["keep"],"intermediate":"P","missing":["order_by"]}'))
   for(case in cases) {
     writeBin(charToRaw(sub(case$remove,"",body,fixed=TRUE)),entry)
-    expected <- list(phase="validation",condition=case$condition,requirement=case$requirement,
+    expected <- list(phase="validation",condition=case$condition,rule=case$rule,
       spec_paths=list("intermediates[0]"),context=case$context)
     checked <- check_spec(entry);check_issue_frame(checked$issues,expected)
     rejected <- run_spec(entry);check_issue_frame(rejected$issues,expected)
@@ -1106,7 +1105,7 @@ local({
   unlink(file.path(directory,"result.csv"))
   writeBin(charToRaw("schema_version: '1.0'\ndomain: TEST\nbase: SRC\nkeys: [ID, SEQ]\ninput:\n  SRC: {path: src.csv, types: {ID: int, SEQ: int, CUT: int}}\n  ALT: {path: alt.csv, types: {ID: int, SEQ: int, CUT: int}}\n  D: {path: donor.csv, types: {ID: int, TIME: int}}\noutput: {path: result.csv, columns: [ID, SEQ, A, B]}\nintermediates:\n  - id: P\n    dataset: D\n    key: [ID]\n    filter: \"D.TIME < SRC.CUT\"\n    order_by: [D.TIME]\n    keep: last\n    no_match: {literal: null}\nrows:\n  - id: alternate\n    dataset: ALT\n    derivations: {ID: ALT.ID, SEQ: ALT.SEQ, A: P.A, B: P.B}\ncolumns:\n  - {name: ID, type: int}\n  - {name: SEQ, type: int}\n  - {name: A, type: str}\n  - {name: B, type: str}\n"),entry)
   rejected <- run_spec(entry)
-  check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",requirement="REQ-0120",spec_paths=list("intermediates[0].filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'))
+  check_issue_frame(rejected$issues,list(phase="validation",condition="unknown_field",rule="LOOKUP-7",spec_paths=list("intermediates[0].filter"),context='{"identifier":"SRC.CUT","intermediate":"P"}'))
   stopifnot(is.null(rejected$output),failed_save(rejected),!file.exists(file.path(directory,"result.csv")))
   cat("correlated donor filters, actual current driver, complete findings and handler accounting passed without Python\n")
 })
@@ -1152,7 +1151,7 @@ local({
     } else {
       finding <- failures[failures$case==basename(case),,drop=FALSE]
       stopifnot(nrow(finding)==1L)
-      check_issue_frame(result$issues,list(phase=finding$phase,condition=finding$condition,requirement=finding$requirement,spec_paths=list(finding$spec_path),context=finding$context))
+      check_issue_frame(result$issues,list(phase=finding$phase,condition=finding$condition,rule=finding$rule,spec_paths=list(finding$spec_path),context=finding$context))
       stopifnot(is.null(result$output),failed_save(result),!file.exists(file.path(directory,"result.csv")))
     }
     unlink(directory,recursive=TRUE)
@@ -1175,7 +1174,7 @@ local({
   for (name in names(case_predicate_dispositions)) {
     disposition <- case_predicate_dispositions[[name]]
     stopifnot(identical(disposition$classification,"historical_private_reference_defect"),
-      identical(disposition$requirement,"REQ-0148"),
+      identical(disposition$rule,"LOOKUP-8"),
       identical(rawfile(file.path(root,"case-predicate-history",name,"expected.csv")),
         charToRaw(disposition$historical_csv)))
   }
@@ -1300,7 +1299,7 @@ local({
     if (is.null(expected)) stopifnot(nrow(actual)==0L)
     else stopifnot(any(vapply(seq_len(nrow(actual)),function(i)
       actual$phase[i]==expected$phase && actual$condition[i]==expected$condition &&
-      actual$requirement[i]==expected$requirement &&
+      actual$rule[i]==expected$rule &&
       identical(actual$spec_paths[[i]],expected$spec_path),logical(1))))
   }
   for (truth in host_truth[["temporal_arithmetic"]]) {
@@ -1344,7 +1343,7 @@ local({
           expected <- truth$issues[[index]]
           stopifnot(identical(frame$phase[[index]],expected$phase),
             identical(frame$condition[[index]],expected$condition),
-            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$rule[[index]],expected$rule),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
@@ -1378,7 +1377,7 @@ local({
           expected <- check$expected[[index]]
           stopifnot(identical(frame$phase[[index]],expected$phase),
             identical(frame$condition[[index]],expected$condition),
-            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$rule[[index]],expected$rule),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
@@ -1414,7 +1413,7 @@ local({
             expected <- truth$issues[[index]]
             stopifnot(identical(frame$phase[[index]],expected$phase),
               identical(frame$condition[[index]],expected$condition),
-              identical(frame$requirement[[index]],expected$requirement),
+              identical(frame$rule[[index]],expected$rule),
               identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
               context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
           }
@@ -1458,7 +1457,7 @@ local({
           expected <- check$expected[[index]]
           stopifnot(identical(frame$phase[[index]],expected$phase),
             identical(frame$condition[[index]],expected$condition),
-            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$rule[[index]],expected$rule),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
@@ -1483,7 +1482,7 @@ local({
       context <- jsonlite::fromJSON(actual$context[[i]],simplifyVector=FALSE)
       stopifnot(identical(actual$phase[[i]],finding$phase),
         identical(actual$condition[[i]],finding$condition),
-        identical(actual$requirement[[i]],finding$requirement),
+        identical(actual$rule[[i]],finding$rule),
         identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
         context_equal(context,finding$context))
     }
@@ -1531,7 +1530,7 @@ local({
           expected <- check$expected[[index]]
           stopifnot(identical(frame$phase[[index]],expected$phase),
             identical(frame$condition[[index]],expected$condition),
-            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$rule[[index]],expected$rule),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
@@ -1574,7 +1573,7 @@ local({
           expected <- check$expected[[index]]
           stopifnot(identical(frame$phase[[index]],expected$phase),
             identical(frame$condition[[index]],expected$condition),
-            identical(frame$requirement[[index]],expected$requirement),
+            identical(frame$rule[[index]],expected$rule),
             identical(frame$spec_paths[[index]],fixture_strings(expected$spec_paths)),
             context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),expected$context))
         }
@@ -1599,7 +1598,7 @@ local({
       context <- jsonlite::fromJSON(actual$context[[i]],simplifyVector=FALSE)
       stopifnot(identical(actual$phase[[i]],finding$phase),
         identical(actual$condition[[i]],finding$condition),
-        identical(actual$requirement[[i]],finding$requirement),
+        identical(actual$rule[[i]],finding$rule),
         identical(actual$spec_paths[[i]],fixture_strings(finding$spec_paths)),
         context_equal(context,finding$context))
     }
@@ -1636,10 +1635,10 @@ local({
     stopifnot(nrow(frame)==length(expected))
     for (index in seq_along(expected)) {
       row <- expected[[index]]
-      requirement <- if(is.null(row$requirement)) NA_character_ else row$requirement
+      rule <- if(is.null(row$rule)) NA_character_ else row$rule
       stopifnot(identical(frame$phase[[index]],row$phase),
         identical(frame$condition[[index]],row$condition),
-        identical(frame$requirement[[index]],requirement),
+        identical(frame$rule[[index]],rule),
         identical(frame$spec_paths[[index]],fixture_strings(row$spec_paths)),
         context_equal(jsonlite::fromJSON(frame$context[[index]],simplifyVector=FALSE),row$context))
     }

@@ -203,7 +203,7 @@ mod transport {
                     let got = yamaa_adapters::json!({
                         "phase": issue.phase(),
                         "condition": issue.condition(),
-                        "requirement": issue.requirement(),
+                        "rule": issue.rule(),
                         "spec_paths": issue.spec_paths,
                         "context": issue.context.clone(),
                     });

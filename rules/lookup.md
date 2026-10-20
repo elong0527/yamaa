@@ -72,8 +72,6 @@ no record, and a record missing a key or a stated bound does not match.
 
 Fails: `incompatible_input_type`, `incomparable_range_types`, `invalid_field_type`, `prohibited_construct`, `unknown_field`.
 Evidence: `negative-lookup-bad-range`, `negative-lookup-range-other-input`, `negative-aggregate-range-other-input`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `schema-lookup-intermediate-range-driver`, `schema-aggregate-range-driver`, `sdtm-lb-lab-specific-ranges`, `adam-advs-window-table`, `adam-adtr-nadir`, `adam-adsl-new-therapy`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
-Replaces: REQ-0121, REQ-0128, REQ-0134, REQ-0330, REQ-0472, REQ-0473, REQ-0474,
-REQ-0509, REQ-1049.
 
 The key pairs are those of [LOOKUP-5](#lookup-5). Every pair is compared on
 every record offered, so a record value whose type cannot compare with its
@@ -163,7 +161,6 @@ select among fails.
 
 Fails: `unknown_field`, `prohibited_construct`.
 Evidence: `schema-lookup-filters`, `negative-source-missing-field`, `negative-source-trivial-filter`, `negative-row-filter-lookup-scope`, `schema-aggregation`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
-Replaces: REQ-0132, REQ-0133, REQ-0148, REQ-0471.
 
 For an input dataset, `order_by` names qualified fields of that dataset only,
 `columns` lists bare field names, and every `filter` field is qualified. The
@@ -240,7 +237,6 @@ stored order.
 
 Fails: `unpaired_fields`, `multiple_matches`.
 Evidence: `negative-lookup-unordered`, `negative-lookup-empty-order`, `negative-lookup-unchosen`, `negative-source-duplicate-key`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`.
-Replaces: REQ-0119, REQ-0127, REQ-0135, REQ-0145.
 
 Declaring one of `order_by` and `keep` without the other fails as
 `unpaired_fields`, on a named intermediate and a source binding alike, and an
@@ -272,7 +268,6 @@ lookup cannot declare both. An aggregate's empty match yields missing
 
 Fails: `unmatched_key`, `conflicting_absence_policy`, `prohibited_construct`.
 Evidence: `schema-lookup-absent-default`, `negative-source-require-match`, `negative-input-require-match`, `negative-lookup-unmatched-key`, `negative-lookup-missing-sex`, `negative-lookup-require-match-no-match`, `schema-handlers`, `adam-adae-death`, `rust/crates/yamaa-adapters/tests/execution_implicit_join_absence.rs`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
-Replaces: REQ-0124, REQ-0129, REQ-0130, REQ-0131, REQ-0147.
 
 ```yaml
 input:
@@ -360,7 +355,6 @@ the type each side declares, whether the pairs were inferred or declared, and
 the absence policy that answers a miss.
 
 Evidence: `negative-lookup-unmatched-key`, `rust/crates/yamaa-adapters/tests/fixtures/specs/lookup-failures.json`.
-Replaces: REQ-0139, REQ-0143, REQ-0144, REQ-0149.
 
 Neither failure renames the other's fields. Handler accounting follows
 [COLUMN-14](columns.md#column-14), whose counts are `handler` rows of the run
@@ -388,8 +382,6 @@ must exist, and every match value must read a known current-row value.
 
 Fails: `invalid_field_type`, `no_applicable_keys`, `unknown_field`, `invalid_aggregate_context`.
 Evidence: `negative-lookup-mismatched`, `negative-lookup-unknown-key`, `negative-lookup-repeated-key`, `negative-lookup-key-other-template`, `negative-aggregate-key-other-template`, `negative-verification-lookup-key`, `negative-row-aggregate-keys`, `sdtm-lb-lab-specific-ranges`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_aggregate_key_reads.rs`.
-Replaces: REQ-0115, REQ-0116, REQ-0117, REQ-0118, REQ-0140, REQ-0141, REQ-0142,
-REQ-0305.
 
 ```yaml
 intermediates:
@@ -461,7 +453,6 @@ result type ([EXPR-14](expressions.md#expr-14)) before any record is matched;
 a result type decided per value is compared when each value is matched.
 
 Evidence: `adam-adlb-supplb-padded-key`, `adam-adlb-end-of-treatment`, `rust/crates/yamaa-core/tests/relations_aggregate_compiler.rs::key_expressions_compare_by_their_one_result_type_before_matching`.
-Replaces: REQ-1259.
 
 The result type is the expression's ordinary non-missing result: a local
 `missing`, `invalid` or `no_match` replacement takes no part, and a non-missing
@@ -489,7 +480,6 @@ join ([LOOKUP-25](#lookup-25)). The join gives one value per current row and
 preserves the row. The qualifier of the row template's driver is not a join.
 
 Evidence: `schema-lookup`, `schema-source-binding`, `schema-lookup-source-range`, `schema-lookup-source-range-driver`, `sdtm-sv-subject-visits`, `negative-input-require-match`.
-Replaces: REQ-0111, REQ-0150, REQ-0151, REQ-0152, REQ-1051, REQ-1052.
 
 ```yaml
 input:
@@ -547,7 +537,6 @@ phase fails.
 
 Fails: `ungrouped_driver_field`, `unknown_field`, `phase_boundary`.
 Evidence: `negative-grouped-lookup-ungrouped-key`, `negative-grouped-range-ungrouped-value`, `negative-lookup-key-column-phase`, `negative-lookup-match-column-phase`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`, `adam-adlb-supplb-padded-key`, `schema-lookup-source-range-driver`, `rust/crates/yamaa-adapters/tests/execution_lookup_model.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
-Replaces: REQ-0126, REQ-0156, REQ-0157.
 
 In ungrouped row construction each retained input record builds one candidate
 row ([ROW-3](rows.md#row-3)). The input record's fields are
@@ -610,7 +599,6 @@ is stated only when the intended match differs from that inferred match.
 
 Fails: `duplicate_identifier`, `missing_required_field`.
 Evidence: `negative-lookup-id-collision`, `negative-lookup-unknown-key`, `schema-lookup`.
-Replaces: REQ-0112, REQ-0113, REQ-0114, REQ-0153, REQ-1048, REQ-1050.
 
 For a named intermediate, `dataset: SELF` instead reads the specification's
 completed derived rows ([LOOKUP-7](#lookup-7)). The current row is the output
@@ -621,7 +609,7 @@ survive `filter` ([LOOKUP-25](#lookup-25)).
 
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
-requirement attached. An omitted `key` with no applicable key fails as
+rule cited. An omitted `key` with no applicable key fails as
 `no_applicable_keys` ([LOOKUP-5](#lookup-5)).
 
 ```yaml
@@ -659,7 +647,6 @@ no output reads the declaration.
 
 Fails: `rename_only_intermediate`.
 Evidence: `negative-lookup-rename-intermediate`, `sdtm-cm-whodrug-coding`.
-Replaces: REQ-1248.
 
 ```yaml
 # rejected: CODED adds nothing to CODING
@@ -704,7 +691,6 @@ only through a named intermediate, never as a directly qualified source.
 
 Fails: `phase_boundary`, `unknown_field`.
 Evidence: `adam-adae-prior-serious-event`, `adam-advs-windows`, `negative-self-window-first-template`, `negative-self-filter-first-template`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs`.
-Replaces: REQ-0120.
 
 A read from the first template fails as `phase_boundary`. So does a
 first-template read of another named intermediate whose `between` value reads
@@ -762,7 +748,6 @@ have, or one outside a declared `columns` list, fails.
 
 Fails: `unknown_field`.
 Evidence: `adam-adae-death`, `rust/crates/yamaa-core/tests/relations_reference_scope.rs`.
-Replaces: REQ-0122, REQ-0125.
 
 Naming in `columns` a column the dataset does not have fails as
 `unknown_field`, and so does a lookup-qualified read of a missing or
@@ -780,7 +765,6 @@ absence answer or an `unmatched_key` failure under `require_match`, and never
 changes the row count. An input lookup's dataset is read once per run.
 
 Evidence: `rust/crates/yamaa-adapters/tests/execution_key_lookup_reads.rs`, `rust/crates/yamaa-adapters/tests/execution_per_template_defaults.rs`.
-Replaces: REQ-0136, REQ-0138, REQ-0146, REQ-1264.
 
 The per-row match selects among records already read and never re-reads the
 dataset. An intermediate declaring `require_match: true` never fails as
@@ -806,7 +790,6 @@ behave there like stored fields.
 
 Fails: `unknown_field`, `duplicate_derivation`.
 Evidence: `schema-lookup-intermediate-derived-filter`, `schema-lookup-intermediate-correlated-derive`, `schema-lookup-intermediate-closest-datetime`, `schema-window-intermediate-rank`, `negative-lookup-derivation-scope`, `rust/crates/yamaa-adapters/tests/execution_lookup_read_contexts.rs`, `rust/crates/yamaa-adapters/tests/execution_lookup_matched_derivations.rs`.
-Replaces: REQ-1185.
 
 Each entry is either an untyped expression, including its
 `{value: <expression>}` wrapper, or a typed binding
@@ -1052,7 +1035,6 @@ donor record.
 
 Fails: `unknown_field`, `phase_boundary`, `dependency_cycle`.
 Evidence: `adam-adlb-end-of-treatment`, `adam-adsl-crossover-sequence`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs`, `rust/crates/yamaa-adapters/tests/project_environment.rs::intermediate_callback_reads_a_kept_selection_beside_its_own_donor_field`.
-Replaces: REQ-1263.
 
 Either form of a donor-record name names a stored field or a derivation
 declared before the reading one, and a name the donor record cannot supply
@@ -1119,7 +1101,6 @@ neither `keep` nor `order_by`.
 
 Fails: `duplicate_intermediate_records`, `unknown_field`, `correlated_filter_with_unique_verification`, `correlated_derivation_with_unique_verification`.
 Evidence: `schema-lookup-intermediate-unique`, `negative-lookup-duplicate-intermediate`.
-Replaces: REQ-1245.
 
 ```yaml
 - id: DS_EOS
@@ -1167,8 +1148,6 @@ mixed.
 
 Fails: `invalid_aggregate_context`, `mixed_relations`.
 Evidence: `schema-aggregation`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-adapters/tests/fixtures/row_reductions.json`.
-Replaces: REQ-0296, REQ-0329, REQ-0465, REQ-0466, REQ-0467, REQ-0468,
-REQ-0469, REQ-0504, REQ-0506, REQ-1088.
 
 An identifier is `NAME` or `DATASET.NAME`, which
 [Name binding](names.md) resolves in the same phase; a
@@ -1222,7 +1201,6 @@ relation and keys.
 
 Fails: `invalid_aggregate_context`.
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`, `rust/crates/yamaa-core/tests/schema_windows.rs`.
-Replaces: REQ-0331, REQ-0470, REQ-0507, REQ-0508.
 
 A qualified `group_by` column that is not an output key fails, as does an
 unqualified expression with no `group_by` or with a `between`. A grouped-row
@@ -1245,7 +1223,6 @@ and `derive` is not available on unqualified or grouped-input aggregates.
 
 Fails: `invalid_derive_step`, `unknown_derive_variable`.
 Evidence: `schema-derive-text-score`, `schema-derive-date-epoch`, `schema-aggregate-derive-intermediate`, `negative-donor-function-unkept`, `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::donor_keep_reached`.
-Replaces: REQ-1189, REQ-1190, REQ-1191, REQ-1192, REQ-1242.
 
 A derive binding is not an expression function. Text becomes a number only
 through the binding's declared `type`, and a date becomes an integer only

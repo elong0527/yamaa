@@ -602,11 +602,10 @@
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "minLength": 1,
+          "$ref": "#/$defs/standard_name",
           "description": "Name of the published terminology (CT-2).",
           "x-yamaa-kind": "value",
-          "x-yamaa-type": "str"
+          "x-yamaa-type": "standard_name"
         },
         "publishing_set": {
           "type": "string",

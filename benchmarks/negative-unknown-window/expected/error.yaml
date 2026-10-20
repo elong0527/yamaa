@@ -2,6 +2,6 @@ phase: validation
 condition: unknown_window
 spec_paths:
   - columns.VISITSEQ.derivation.row_number.window
-requirement: REQ-1253
+rule: WINDOW-1
 context:
   window: VISITS_ORDER

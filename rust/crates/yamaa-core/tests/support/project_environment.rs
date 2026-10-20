@@ -1,11 +1,12 @@
+use crate::support::roots::{Codelist, External, Item, Source, Standard};
 use std::collections::BTreeSet;
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::{
+    ast::CodelistType,
     diagnostic::ConditionCode,
     project_environment::{self, Draft, LockKind, LockReference},
     project_environment_diagnostics,
     project_function::Language,
-    project_terminology::{Codelist, DataType, External, Item, Source, Standard},
     value::Value,
 };
 /// CT-6: a sponsor-extended item of a published extensible list has no
@@ -29,7 +30,7 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
         codelists: vec![Codelist {
             id: "EPOCH".into(),
             name: "Epoch".into(),
-            data_type: DataType::Text,
+            data_type: CodelistType::Text,
             extensible: true,
             alias: Some("C99079".into()),
             format_name: None,
@@ -40,7 +41,8 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
             ]),
             external: None,
         }],
-    }];
+    }
+    .root()];
     draft.language = Some(Language::Python);
     let findings = project_environment::validate(Language::Python, &draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
@@ -50,7 +52,7 @@ pub fn extended_alias_reached() -> BTreeSet<ConditionCode> {
         (
             finding.definition().phase,
             finding.definition().condition,
-            finding.definition().requirement
+            finding.definition().rule
         ),
         ("validation", "codelist_extended_alias", Some("CT-6"))
     );
@@ -74,7 +76,7 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
     let list = |id: &str, format: &str| Codelist {
         id: id.into(),
         name: id.into(),
-        data_type: DataType::Text,
+        data_type: CodelistType::Text,
         extensible: false,
         alias: None,
         format_name: Some(format.into()),
@@ -91,7 +93,8 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
     draft.codelists = vec![Source {
         standard: None,
         codelists: vec![list("NY", "$NY"), list("SEX", "SEX")],
-    }];
+    }
+    .root()];
     let findings = project_environment::validate(Language::Python, &draft);
     let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
     assert_eq!(projected.len(), 1, "{projected:?}");
@@ -100,7 +103,7 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
         (
             finding.definition().phase,
             finding.definition().condition,
-            finding.definition().requirement
+            finding.definition().rule
         ),
         ("validation", "value_not_permitted", Some("CT-12"))
     );
@@ -138,7 +141,7 @@ pub fn draft() -> Draft {
     let list = Codelist {
         id: "SEX".into(),
         name: "Sex".into(),
-        data_type: DataType::Text,
+        data_type: CodelistType::Text,
         extensible: false,
         alias: None,
         format_name: None,
@@ -156,7 +159,8 @@ pub fn draft() -> Draft {
         codelists: vec![Source {
             standard: None,
             codelists: vec![list.clone(), list],
-        }],
+        }
+        .root()],
     }
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -166,95 +170,95 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let expected = [
         (
             "codelist_shape_invalid",
-            "REQ-0947",
+            "CT-3",
             "codelists[0].codelists[0]",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[0].items[0].value",
         ),
         (
             "codelist_extension_not_admitted",
-            "REQ-0952",
+            "CT-6",
             "codelists[0].codelists[0].items[0].extended",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[0].items[1].value",
         ),
         (
             "codelist_duplicate_value",
-            "REQ-0949",
+            "CT-4",
             "codelists[0].codelists[0].items[1].value",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[0]",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[0]",
         ),
         (
             "duplicate_define_identifier",
-            "REQ-0948",
+            "CT-1",
             "codelists[0].codelists[1].id",
         ),
         (
             "duplicate_define_identifier",
-            "REQ-0948",
+            "CT-1",
             "codelists[0].codelists[1].name",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0947",
+            "CT-3",
             "codelists[0].codelists[1]",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[1].items[0].value",
         ),
         (
             "codelist_extension_not_admitted",
-            "REQ-0952",
+            "CT-6",
             "codelists[0].codelists[1].items[0].extended",
         ),
         (
             "codelist_shape_invalid",
-            "REQ-0950",
+            "CT-4",
             "codelists[0].codelists[1].items[1].value",
         ),
         (
             "codelist_duplicate_value",
-            "REQ-0949",
+            "CT-4",
             "codelists[0].codelists[1].items[1].value",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[1]",
         ),
         (
             "codelist_partial_item_field",
-            "REQ-0951",
+            "CT-5",
             "codelists[0].codelists[1]",
         ),
     ];
     assert_eq!(projected.len(), expected.len());
     let mut reached = BTreeSet::new();
-    for (finding, (condition, requirement, path)) in projected.iter().zip(expected) {
+    for (finding, (condition, rule, path)) in projected.iter().zip(expected) {
         assert_eq!(
             (
                 finding.definition().phase,
                 finding.definition().condition,
-                finding.definition().requirement
+                finding.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, [path]);
         assert_eq!(finding.source_span, None);
@@ -278,13 +282,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             finding.definition().phase,
             finding.definition().condition,
-            finding.definition().requirement,
+            finding.definition().rule,
         ),
-        (
-            "validation",
-            "project_environment_invalid",
-            Some("REQ-0695")
-        ),
+        ("validation", "project_environment_invalid", Some("FUNC-2")),
     );
     assert_eq!(finding.spec_paths, ["lock"]);
     assert_eq!(finding.context.len(), 3);
@@ -309,13 +309,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 finding.definition().phase,
                 finding.definition().condition,
-                finding.definition().requirement,
+                finding.definition().rule,
             ),
-            (
-                "validation",
-                "project_environment_missing",
-                Some("REQ-0694"),
-            ),
+            ("validation", "project_environment_missing", Some("FUNC-1"),),
         );
         assert_eq!(finding.spec_paths, ["environment"]);
         assert_eq!(finding.context.len(), 2);

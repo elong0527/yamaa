@@ -7,7 +7,7 @@ if(nzchar(rm_path)) invisible(file.symlink(rm_path,file.path(runtime_path,"rm"))
 Sys.setenv(PATH=runtime_path)
 stopifnot(!nzchar(Sys.which("python")),!nzchar(Sys.which("python3")))
 library(yamaa)
-root <- system.file("specification-original",package="yamaa",mustWork=TRUE)
+root <- normalizePath("specification-original",winslash="/",mustWork=TRUE)
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 # The report counts input bytes, so inputs end lines with LF on every
 # platform: writeLines would write CRLF on Windows.
@@ -24,7 +24,7 @@ json_text <- function(value) {
   paste0('"',paste0(escaped,collapse=""),'"')
 }
 # One run report replaces the verification and warning logs: fourteen
-# columns, with COUNT and TOTAL int and every other column str (REQ-0392).
+# columns, with COUNT and TOTAL int and every other column str (CHECK-24).
 report_columns <- c("ARTIFACT","KIND","SPEC_PATH","NAME","ID","TARGET","RULE","SEVERITY",
   "OUTCOME","CONDITION","COUNT","TOTAL","KEYS","DETAILS")
 # An authored report CSV as R holds the run's report view: missing cells NA,
@@ -92,8 +92,8 @@ stopifnot(nrow(held)==8L,identical(held$TOTAL[held$KIND=="check"],truth$TOTAL[tr
 cat(case_name,"public domain complete Rust run report and successful save observations passed\n")
 
 # A failed run keeps its report: the checks it evaluated, up to the violated
-# error, and no column rows (REQ-0393). Save writes only the report file, for
-# a failed run too (REQ-1173), and then signals the run's issues.
+# error, and no column rows (CHECK-23). Save writes only the report file, for
+# a failed run too (CHECK-22), and then signals the run's issues.
 entry <- file.path(case,"spec.yaml")
 source <- rawToChar(rawfile(file.path(root,"cases",case_name,"spec.yaml")))
 writeBin(charToRaw(sub("severity: warning","severity: error",source,fixed=TRUE)),entry)
@@ -103,8 +103,8 @@ fatal <- c(
   "adsl.csv,run,output,,,,,,failed,range_failed,,,,{}",
   'adsl.csv,input,input.DM,DM,,,,,,,3,,,"{""bytes"":66,""path"":""input/dm.csv"",""profile"":""csv""}"',
   "adsl.csv,rows,base,DM,,,,,,,3,3,,{}",
-  "adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,REQ-0375,error,held,,0,3,,{}",
-  'adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,REQ-0377,error,violated,range_failed,1,3,"[{""USUBJID"":""S-2""}]","{""column"":""AGE""}"')
+  "adsl.csv,check,columns.AGE.verifications[0].not_missing,not_missing,,AGE,CHECK-5,error,held,,0,3,,{}",
+  'adsl.csv,check,columns.AGE.verifications[1].range,range,,AGE,CHECK-7,error,violated,range_failed,1,3,"[{""USUBJID"":""S-2""}]","{""column"":""AGE""}"')
 stopifnot(is.null(failed$output),identical(failed$issues$condition,"range_failed"))
 check_report_view(failed$report,report_view(rawToChar(report_csv(fatal))))
 issues <- failed$issues
@@ -137,7 +137,7 @@ warned <- c(
   'absent/out.csv,input,input.SRC,SRC,,,,,,,8,,,"{""bytes"":19,""path"":""input.csv"",""profile"":""csv""}"',
   "absent/out.csv,rows,base,SRC,,,,,,,8,8,,{}",
   "absent/out.csv,column,columns.ID,ID,,,,,,,0,8,,{}",
-  paste0("absent/out.csv,check,columns.ID.verifications[0].range,range,\u00e9,ID,REQ-0377,warning,violated,range_failed,8,8,\"",
+  paste0("absent/out.csv,check,columns.ID.verifications[0].range,range,\u00e9,ID,CHECK-7,warning,violated,range_failed,8,8,\"",
     gsub('"','""',keys,fixed=TRUE),'","{""column"":""ID""}"'))
 warn <- yamaa_spec(entry)$run()
 stopifnot(nrow(warn$issues)==0L,identical(warn$report$ID[warn$report$KIND=="check"],intToUtf8(233L)),

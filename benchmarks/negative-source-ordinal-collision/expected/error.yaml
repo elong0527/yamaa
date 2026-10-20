@@ -2,7 +2,7 @@ phase: validation
 condition: ordinal_field_collision
 spec_paths:
   - input.SOURCE.ordinal
-requirement: REQ-1294
+rule: INPUT-4
 context:
   dataset: SOURCE
   field: SourceOrdinal

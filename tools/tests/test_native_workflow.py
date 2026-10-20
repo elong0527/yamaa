@@ -15,6 +15,7 @@ from unittest.mock import patch
 import yaml
 from tools.ci import native, release_assets
 from tools.ci import select_release_artifacts as release
+from tools.commands import rust_tests
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
@@ -175,6 +176,32 @@ class NativeWorkflowContract(unittest.TestCase):
                     self.assertNotIn("cargo clippy", command)
                     self.assertNotIn("tools.commands.rust_tests", command)
 
+    def test_each_rust_lane_leaves_out_the_host_bindings_and_installs_no_r(self):
+        # The bindings have no Rust tests. The workspace tests leave them out,
+        # as `make test-rust` does, so no step builds PyO3 or extendr, and the
+        # job installs no R and sets no interpreter for PyO3 (#3106).
+        for lane in self.coverage["rust"]["include"]:
+            job = "native-rust ({os}, {python})".format(**lane)
+            steps = self.jobs[job]["definitions"]
+            tests = [
+                line.strip()
+                for step in steps
+                for line in step.get("run", "").splitlines()
+                if "cargo test" in line
+            ]
+            with self.subTest(job=job):
+                self.assertTrue(tests)
+                for command in tests:
+                    self.assertEqual(
+                        re.findall(r"--exclude (\S+)", command),
+                        list(rust_tests.BINDINGS),
+                    )
+                self.assertNotIn(
+                    "r-lib/actions/setup-r",
+                    [step.get("uses", "").split("@")[0] for step in steps],
+                )
+                self.assertNotIn("PYO3_PYTHON", yaml.safe_dump(steps))
+
     def test_only_the_source_platform_keeps_its_python_source_archive(self):
         # A release artifact holds exactly its declared assets, so the other
         # Python build lanes drop the source archive they built as a check.
@@ -275,6 +302,101 @@ class NativeWorkflowContract(unittest.TestCase):
                     ],
                     [r_source],
                 )
+        sources = {
+            "python": ("native-python-", python_source),
+            "r": ("native-r-", r_source),
+        }
+        for job, host in self.offline_source_jobs():
+            prefix, source = sources[host]
+            with self.subTest(job=job):
+                self.assertEqual(
+                    [
+                        name
+                        for name in self.jobs[job]["downloads"]
+                        if name.startswith(prefix)
+                    ],
+                    [source],
+                )
+
+    def offline_source_jobs(self):
+        """List each offline source lane's job name with its host."""
+        return [
+            (f"native-offline-source ({platform}, {host})", host)
+            for platform in self.coverage["offline_source"]["os"]
+            for host in self.coverage["offline_source"]["host"]
+        ]
+
+    def test_both_source_archives_install_offline_on_every_platform(self):
+        # Each platform that a wheel is built for also builds and installs
+        # both published source archives with the network disabled (#3030
+        # D55), Linux aarch64 included.
+        self.assertEqual(
+            sorted(self.coverage["offline_source"]["os"]),
+            sorted(lane["os"] for lane in self.coverage["build"]["include"]),
+        )
+        self.assertEqual(
+            sorted(self.coverage["offline_source"]["host"]), ["python", "r"]
+        )
+
+    def test_offline_source_lanes_refuse_the_network_while_they_install_and_run(self):
+        # The steps that build the archive and run the installed package go
+        # behind a proxy that refuses every connection (macOS and Windows) and
+        # run every container without a network and with a read-only root
+        # (Linux). The steps before them reach package mirrors.
+        proxy = {
+            "http_proxy": "http://127.0.0.1:9",
+            "HTTPS_PROXY": "http://127.0.0.1:9",
+            "ALL_PROXY": "http://127.0.0.1:9",
+            "NO_PROXY": "",
+        }
+        names = {name.lower() for name in proxy}
+        required = release.required_jobs(self.coverage)
+        for job, _ in self.offline_source_jobs():
+            with self.subTest(job=job):
+                inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
+                self.assertFalse(names & inherited)
+                offline = []
+                for step in self.jobs[job]["definitions"]:
+                    environment = step.get("env", {})
+                    chosen = {
+                        name: value
+                        for name, value in environment.items()
+                        if name.lower() in names
+                    }
+                    if step.get("name") not in required[job]:
+                        self.assertEqual(chosen, {})
+                        continue
+                    offline.append(step["name"])
+                    self.assertEqual(chosen, proxy)
+                    self.assertNotIn("if", step)
+                    containers = [
+                        line
+                        for line in step["run"].replace("\\\n", " ").splitlines()
+                        if "docker run" in line
+                    ]
+                    self.assertTrue(containers)
+                    for line in containers:
+                        self.assertIn("--network none", line)
+                        self.assertIn("--read-only", line)
+                self.assertEqual(offline, list(required[job]))
+
+    def test_offline_source_lanes_build_as_the_install_guidance_says(self):
+        # pip builds the Python source archive with the maturin installed
+        # beforehand and no package index, and R CMD INSTALL builds the R
+        # source package, once in a container on Linux and once on macOS and
+        # Windows; both packages then run the conformance corpus and compare it.
+        commands = {
+            "python": "pip install --no-build-isolation --no-index --no-cache-dir "
+            "native-dist/yamaa-*.tar.gz",
+            "r": "R CMD INSTALL",
+        }
+        required = release.required_jobs(self.coverage)
+        for job, host in self.offline_source_jobs():
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            install, conformance = required[job]
+            with self.subTest(job=job):
+                self.assertEqual(steps[install]["run"].count(commands[host]), 2)
+                self.assertIn("public_conformance compare", steps[conformance]["run"])
 
     def test_cran_checks_run_on_the_published_r_source_archive(self):
         # CRAN's incoming checks judge the bytes that a release publishes.
@@ -347,7 +469,7 @@ class NativeWorkflowContract(unittest.TestCase):
                     self.assertNotRegex(step.get("run", ""), r"install\.packages|pak::")
 
     def test_every_python_lane_is_compared_beside_r_reports_of_its_os(self):
-        # Linux aarch64 has no R lane yet; its lanes use Linux x86_64's.
+        # Linux aarch64 has no native-r lane yet; its lanes use Linux x86_64's.
         commands = []
         with patch.object(
             native.subprocess,

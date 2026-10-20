@@ -14,7 +14,7 @@
             "field": "ABSENT"
           },
           "phase": "validation",
-          "requirement": "REQ-0532",
+          "rule": "INPUT-6",
           "spec_paths": [
             "input.SRC.types.ABSENT"
           ]
@@ -34,7 +34,7 @@
                 "field": "ABSENT"
               },
               "phase": "validation",
-              "requirement": "REQ-0532",
+              "rule": "INPUT-6",
               "spec_paths": [
                 "input.SRC.types.ABSENT"
               ]
@@ -80,7 +80,7 @@
             "field": "ABSENT"
           },
           "phase": "validation",
-          "requirement": "REQ-0532",
+          "rule": "INPUT-6",
           "spec_paths": [
             "input.SRC.types.ABSENT"
           ]
@@ -100,7 +100,7 @@
                 "field": "ABSENT"
               },
               "phase": "validation",
-              "requirement": "REQ-0532",
+              "rule": "INPUT-6",
               "spec_paths": [
                 "input.SRC.types.ABSENT"
               ]
@@ -148,7 +148,7 @@
             "value": "bad"
           },
           "phase": "ingest",
-          "requirement": "REQ-0536",
+          "rule": "INPUT-7",
           "spec_paths": [
             "input.SRC.types.B"
           ]
@@ -170,7 +170,7 @@
                 "value": "bad"
               },
               "phase": "ingest",
-              "requirement": "REQ-0536",
+              "rule": "INPUT-7",
               "spec_paths": [
                 "input.SRC.types.B"
               ]
@@ -218,7 +218,7 @@
             "value": "2026-02-30"
           },
           "phase": "ingest",
-          "requirement": "REQ-0536",
+          "rule": "INPUT-7",
           "spec_paths": [
             "input.SRC.types.V"
           ]
@@ -240,7 +240,7 @@
                 "value": "2026-02-30"
               },
               "phase": "ingest",
-              "requirement": "REQ-0536",
+              "rule": "INPUT-7",
               "spec_paths": [
                 "input.SRC.types.V"
               ]

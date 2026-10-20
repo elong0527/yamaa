@@ -2,7 +2,7 @@
 use crate::value::{ColumnType, Value, ValueType};
 use std::collections::BTreeSet;
 
-/// Resolved identity retained on every fatal invocation failure (REQ-0704).
+/// Resolved identity retained on every fatal invocation failure (FUNC-10).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionIdentity {
     pub name: String,
@@ -12,7 +12,7 @@ pub struct FunctionIdentity {
 }
 
 /// Required parameters have no default; optional parameters always have one.
-/// A missing default remains distinct from an absent default (REQ-0676).
+/// A missing default remains distinct from an absent default (FUNC-5).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Presence {
     Required,

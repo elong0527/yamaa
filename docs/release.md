@@ -38,6 +38,17 @@ describes.
 combination on manual dispatch and weekly on main. A release is cut from a
 commit whose complete native run passed.
 
+The native run builds and installs both source archives that a release
+publishes with the network disabled, on Linux x86_64 and aarch64, macOS
+arm64 and Windows x64: its `native-offline-source` jobs. pip installs the
+Python source archive with `--no-build-isolation --no-index` into a Python
+that already has `maturin`, and `R CMD INSTALL` installs the R source
+package. On Linux both run in a container without a network: the Python
+archive in the manylinux_2_28 image, whose glibc 2.28 is RHEL 8's, and the R
+package in the `rocker/r-ver` image of R 4.6.1. On macOS and Windows they run
+behind a proxy that refuses every connection. Each installed package then
+runs the conformance corpus without a network.
+
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
 `native-cran` jobs. Each runs `R CMD check --as-cran` through
@@ -236,6 +247,10 @@ components are tracked by hand:
   wheels bundle libxml2 2.11.9, an end-of-life branch that lxml describes as
   security-patched.
 
+The first three are also rows of the component inventory that every package
+ships, with the versions and sources that their provenance records give
+(see [source package contents](#source-package-contents)).
+
 ## Release checklist
 
 Before pushing the release tag, confirm on the final commit:
@@ -288,9 +303,9 @@ git push origin refs/tags/<tag>
 run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
-`qualification/issue-*` push. It requires all installed lanes, shared
-Rust/math, complete cohort comparisons, strict R package checks and CRAN's
-incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
+`qualification/issue-*` push. It requires all installed lanes, the offline
+source installs among them, shared Rust/math, complete cohort comparisons,
+strict R package checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named
@@ -503,18 +518,26 @@ CRAN's guidance asks. It looks for `cargo` and `rustc` on the PATH and then in
 versions in the installation log before compilation starts, and otherwise
 stops with installation advice. On Windows it also requires the GNU target.
 It writes `src/Makevars` or `src/Makevars.win` from their `.in` templates with
-the paths it checked, and on macOS the deployment target. The Makevars unpack
-the archive below `src/rust/target`, give Cargo a home there whose
-configuration, `src/rust/vendor-config.toml`, replaces crates.io with the
-unpacked crates, and run `cargo build --locked --offline -j 2` with
+the paths it checked, the target directory, and on macOS the deployment
+target. The Makevars unpack the archive below `src/rust/target`, give Cargo a
+home there whose configuration, `src/rust/vendor-config.toml`, replaces
+crates.io with the unpacked crates, and run
+`cargo build --locked --offline -j 2` with
 `MAKEFLAGS` cleared: Cargo otherwise joins the jobserver of a parallel make
 (GNU make 4.4 passes it to every command) and runs as many jobs as make
 allows. The installation therefore reads nothing from the network, runs at
 most two jobs and writes nothing outside the build tree and the temporary
-directory. The Makevars build the release profile, which strips nothing, so
-the shared object keeps its symbols: CRAN's Repository Policy asks a package
-not to remove diagnostic information such as symbols in shared objects.
-`check_cargo_lock` refuses an R source package whose build would strip.
+directory. The recipe passes the target directory to Cargo, so a
+`CARGO_TARGET_DIR` set for other projects does not move the build. Only
+`YAMAA_R_CARGO_TARGET_DIR`, an absolute directory that `configure` reads,
+moves Cargo's build, its home and the unpacked crates there, where the next
+installation reuses them. CI's `r` job points it at the Rust cache that the job
+restores, so the installation in `R CMD check` reuses the build of the one
+before it; CRAN, users and the native R lanes leave it unset. The Makevars
+build the release profile, which strips nothing, so the shared object keeps
+its symbols: CRAN's Repository Policy asks a package not to remove diagnostic
+information such as symbols in shared objects. `check_cargo_lock` refuses an
+R source package whose build would strip.
 
 CRAN's policy admits no binary executable code in a source package, and
 neither package carries any: the vendoring script leaves out the prebuilt
@@ -529,9 +552,15 @@ bundles its declared authors, license and repository, and names the files
 left out; `DESCRIPTION` credits those authors, and the authors of the bundled
 ReadStat C sources, as contributors and copyright holders.
 
-The installed R package carries only the test inputs that its installed suites
-read, and each third-party SAS fixture keeps its license beside it.
-`tools/staging/stage_r_package.py` lists the staged inputs it leaves out.
+The R source package carries the inputs that its tests read in `tests/`,
+beside the suites: `R CMD check` copies that directory and runs the suites
+from it, and R never installs it, so the installed package holds no test
+inputs (#3105). Its `inst/` holds `AUTHORS`, the license notices and the
+component inventory. Native qualification stages the same inputs beside the
+installed suites that it runs, as it stages the Python suites' inputs, and
+each third-party SAS fixture keeps its license beside it.
+`tools/staging/stage_r_package.py` lists the staged inputs that no R suite
+reads, which neither route carries.
 
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
@@ -560,6 +589,27 @@ matching notice entry, when `rustc` in `rust/` is not the pinned toolchain, and
 when the committed section differs from that toolchain's notice.
 Native qualification and the release selector require every wheel and source
 package to carry each notice unchanged.
+
+Every package also carries `COMPONENTS.tsv` beside the notices, the component
+inventory of its host: the wheels and the Python source archive carry the
+Python inventory, and the R source package the R inventory, which R installs
+with the notices. It lists every package of the host's trimmed lock,
+including the crates that only build scripts and procedural macros use and
+those that no supported target compiles, and the C code that those crates
+compile from sources that they carry: ReadStat in `yamaa-adapters` and the
+zstd library that `zstd-sys` bundles. It is tab-separated text with a header
+row and one row per component, giving its name and version; its license, the
+SPDX expression that a crate's manifest declares, with Cargo's legacy `/`
+written as `OR`, or the C code's upstream license; its source, `crates.io`
+or the component's directory in this repository, with the upstream
+repository and commit of vendored code, or the crate that bundles it; and its
+purpose, from `tools/packaging/crate_purposes.toml`. It records no digests.
+Packages that pip or R install beside yamaa, such as Polars, are not among
+its components. `tools.packaging.generate_component_inventory` writes both
+inventories, and the repository check fails while one differs from what its
+host's trimmed lock, the crates' manifests, the purposes and the vendored
+sources' provenance give. The package notice checks require each package to
+carry its own host's inventory unchanged.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
@@ -594,7 +644,7 @@ owns decoding behavior.
   output and in project function calls, raising on an integer beyond 2^53 or
   text containing NUL. R has no exact-value classes.
 - Report every finding in one issues table, built in Rust and identical in
-  both hosts: `phase`, `condition`, `requirement`, `spec_paths`, `context` as
+  both hosts: `phase`, `condition`, `rule`, `spec_paths`, `context` as
   canonical JSON text, and the optional `source_span` and `operand_route`. No
   host interprets conditions, and there are no separate diagnostic records.
 - Give each run one run report, written to `output.report`, in place of the
@@ -606,7 +656,7 @@ owns decoding behavior.
   link types a stored artifact from its producing specification and never runs
   it; callers build and save producers before their consumers.
 - Keep normative diagnostics registry-owned, including the reviewed
-  `unsupported_operation` and `engine_rejected` null-requirement exceptions.
+  `unsupported_operation` and `engine_rejected` null-rule exceptions.
   Cut breaks remain finite and strictly ascending; signed-i64 predicate
   overflow, CSV empty-string refusal, greatest/least first-source ties and
   row-filter behavior follow the normative rules and expected benchmark data.
@@ -674,7 +724,7 @@ give the installation commands.
 ## Resource refusals
 
 In the shared engine, a fixed resource boundary produces `engine_rejected` with
-a null requirement and its authored specification paths. The context retains the lifecycle stage, the
+a null rule and its authored specification paths. The context retains the lifecycle stage, the
 boundary's code, its resource name and integer limit, and the observed `actual`
 size when available. Compiler boundaries use `compiler_limit`; physical capture,
 preparation and execution boundaries retain their corresponding resource code

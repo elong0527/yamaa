@@ -6,11 +6,10 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped public_file_resources.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"file-resources")
-root <- system.file("specification-original", package="yamaa", mustWork=TRUE)
+root <- normalizePath("specification-original", winslash="/", mustWork=TRUE)
 observations <- function(run) yamaa:::.run_observations(run)
 rawfile <- function(path) readBin(path,"raw",n=file.info(path)$size)
 
@@ -231,7 +230,7 @@ if(linked) {
   actual <- yamaa_spec(entry)$run()
   stopifnot(is.null(actual$output),identical(actual$issues$phase,"validation"),
     identical(actual$issues$condition,"resource_path_symlink"),
-    identical(actual$issues$requirement,"REQ-0783"),
+    identical(actual$issues$rule,"FILE-8"),
     identical(actual$issues$spec_paths,list("input.SRC.path")),
     identical(actual$issues$context,host_truth[["alias_context_json"]]),
     is.null(actual$issues$source_span[[1L]]),is.null(actual$issues$operand_route[[1L]]),

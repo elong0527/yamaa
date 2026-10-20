@@ -229,7 +229,7 @@ pub struct TemplateFilter {
 pub enum FilterPlacement {
     /// Key grain: over every source record, before any key binding.
     BeforeKeys,
-    /// After the prewindow bindings, before the window stage (REQ-0036, REQ-0218).
+    /// After the prewindow bindings, before the window stage (ROW-3, COLUMN-9).
     Prewindow,
     /// A grouped filter that reads the window stage.
     Postwindow,

@@ -1,0 +1,17 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - columns.AGEU.submission.role
+rule: SCHEMA-12
+context:
+  value: Qualifier
+  permitted:
+    - Identifier
+    - Topic
+    - Timing
+    - Grouping Qualifier
+    - Result Qualifier
+    - Synonym Qualifier
+    - Record Qualifier
+    - Variable Qualifier
+    - Rule

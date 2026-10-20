@@ -108,7 +108,7 @@ fn recover<E>(
     })
 }
 
-/// REQ-0364 retains the reached binding handler and completed-result context
+/// COLUMN-10 retains the reached binding handler and completed-result context
 /// when an absent variable's literal fails conversion.
 fn absent_context<E>(run: &Run<'_, '_, E>, binding: BindingId, failure: Fail<E>) -> Fail<E> {
     let plan = run.plan;

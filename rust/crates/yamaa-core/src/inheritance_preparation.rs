@@ -1,11 +1,13 @@
 //! Inheritance application lifecycle over captured documents and explicit path authority.
-use crate::inheritance::{self, InheritanceSourcePort, Layer, Source};
+use crate::inheritance::{self, InheritanceSourcePort, Layer, Source, VersionedChain};
 use crate::resolution::{self, Failure, Order};
 use crate::schema::{
-    Document, DocumentError, DocumentNode as N, LayerCompositionError, LayerNodeOrigin,
-    LayerProvenance, NormalizationError, SchemaDiagnostic, SchemaOrigin, SchemaSource,
-    SchemaStructure, SpecificationDocument, ValidationError, WindowReference,
+    shorthand_key, written_path, CompositionOrigin, Document, DocumentError, DocumentNode as N,
+    LayerCompositionError, LayerNodeOrigin, LayerProvenance, NormalizationError, SchemaDiagnostic,
+    SchemaOrigin, SchemaSource, SchemaStructure, SpecPath, SpecificationDocument, ValidationError,
+    VersionedCompositionError, WindowReference,
 };
+use std::collections::BTreeMap;
 
 /// The host respells paths using captured canonical file identities, without reopening them.
 pub trait PathPort: InheritanceSourcePort {
@@ -108,17 +110,32 @@ impl PreparedInheritance {
 fn rebase<P: PathPort>(
     layer: &mut Layer,
     entry: &Source,
-    input_bases: &std::collections::BTreeMap<String, bool>,
+    input_bases: &BTreeMap<String, bool>,
     port: &mut P,
 ) -> Result<(), Error<P::Error>> {
-    let document = &layer.document;
+    layer.document = rebased(&layer.document, &layer.source, entry, input_bases, port)?;
+    Ok(())
+}
+
+/// The layer at `source`, its relative paths respelled from the entry
+/// (LAYER-10): an input's `path` and `schema` from the base its composed
+/// `relative_to` selects, and `output`'s `path` and `report` from the base
+/// its own `relative_to` selects, since output composes whole. Node indices
+/// are kept, so origins addressing the layer still hold.
+fn rebased<P: PathPort>(
+    document: &Document,
+    source: &Source,
+    entry: &Source,
+    input_bases: &BTreeMap<String, bool>,
+    port: &mut P,
+) -> Result<Document, Rebase<P::Error>> {
     let mut paths = Vec::new();
     if let Some(input) = document.field(document.root(), "input") {
         if let N::Mapping(inputs) = &document.nodes()[input] {
-            for &(name, source) in inputs {
+            for &(name, declaration) in inputs {
                 let from_entry = matches!(&document.nodes()[name], N::Text(name) if input_bases.get(name) == Some(&true));
                 for field in ["path", "schema"] {
-                    if let Some(id) = document.field(source, field) {
+                    if let Some(id) = document.field(declaration, field) {
                         paths.push((id, from_entry));
                     }
                 }
@@ -126,7 +143,7 @@ fn rebase<P: PathPort>(
         }
     }
     if let Some(output) = document.field(document.root(), "output") {
-        // REQ-0629 replaces output atomically, keeping its paths and selector together.
+        // LAYER-5 replaces output atomically, keeping its paths and selector together.
         let from_entry = document
             .field(output, "relative_to")
             .is_some_and(|id| matches!(&document.nodes()[id], N::Text(base) if base == "entry"));
@@ -140,17 +157,49 @@ fn rebase<P: PathPort>(
     for (id, from_entry) in paths {
         if let N::Text(written) = &document.nodes()[id] {
             let path = port
-                .rebase(
-                    if from_entry { entry } else { &layer.source },
-                    entry,
-                    written,
-                )
-                .map_err(Error::Path)?;
+                .rebase(if from_entry { entry } else { source }, entry, written)
+                .map_err(Rebase::Path)?;
             nodes[id] = N::Text(path);
         }
     }
-    layer.document = Document::new(nodes, document.root()).map_err(Error::Document)?;
-    Ok(())
+    Document::new(nodes, document.root()).map_err(Rebase::Document)
+}
+
+/// Why a layer's paths were not respelled.
+enum Rebase<E> {
+    Path(E),
+    Document(DocumentError),
+}
+
+impl<E> From<Rebase<E>> for Error<E> {
+    fn from(error: Rebase<E>) -> Self {
+        match error {
+            Rebase::Path(error) => Self::Path(error),
+            Rebase::Document(error) => Self::Document(error),
+        }
+    }
+}
+
+/// Record the explicit `relative_to` each input of a layer writes: whether it
+/// selects the entry's directory (FILE-2).
+fn record_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
+    let Some(input) = document.field(document.root(), "input") else {
+        return;
+    };
+    let N::Mapping(inputs) = &document.nodes()[input] else {
+        return;
+    };
+    for &(name, source) in inputs {
+        let N::Text(name) = &document.nodes()[name] else {
+            continue;
+        };
+        if let Some(base) = document.field(source, "relative_to") {
+            bases.insert(
+                name.clone(),
+                matches!(&document.nodes()[base], N::Text(base) if base == "entry"),
+            );
+        }
+    }
 }
 
 /// Traverse once, compose, then resolve the composition in dependency order.
@@ -169,24 +218,9 @@ pub fn prepare<P: PathPort>(
     // Input members merge field by field. Select the final explicit base
     // before rebasing any contributing path, including a path whose base is
     // overridden or cleared by a later layer independently from its spelling.
-    let mut input_bases = std::collections::BTreeMap::new();
+    let mut input_bases = BTreeMap::new();
     for layer in &layers {
-        let document = &layer.document;
-        if let Some(input) = document.field(document.root(), "input") {
-            if let N::Mapping(inputs) = &document.nodes()[input] {
-                for &(name, source) in inputs {
-                    let N::Text(name) = &document.nodes()[name] else {
-                        continue;
-                    };
-                    if let Some(base) = document.field(source, "relative_to") {
-                        input_bases.insert(
-                            name.clone(),
-                            matches!(&document.nodes()[base], N::Text(base) if base == "entry"),
-                        );
-                    }
-                }
-            }
-        }
+        record_input_bases(&layer.document, &mut input_bases);
     }
     for layer in &mut layers {
         rebase(layer, &entry, &input_bases, port)?;
@@ -236,6 +270,235 @@ pub fn prepare<P: PathPort>(
         origins: resolved.origins,
         original_origins: resolved.traced,
         windows: resolved.windows,
+    })
+}
+
+/// The resolved specification of a 1.x chain: its layers composed root
+/// ancestor first and normalized at the version the chain needs (LAYER-1,
+/// P-VER-1). It holds no `parent` and no `clear`, uses the long form of every
+/// shorthand, keeps root and member fields in schema order (LAYER-14), and
+/// records the chain's version in `yamaa`. Pruning and dependency order read
+/// the lowered specification and are not part of this preparation.
+#[derive(Debug)]
+pub struct ResolvedVersioned {
+    pub document: Document,
+    /// Parallel to `document`'s nodes: each node's occurrence in the layer
+    /// that wrote it, as written, or the schema default it came from.
+    pub origins: Vec<LayerNodeOrigin>,
+    /// The layer, numbered in contribution order, that contributed each
+    /// written path, keyed members named by identity (P-CLR-2).
+    pub provenance: Vec<LayerProvenance>,
+}
+
+/// Why a 1.x chain does not resolve.
+#[derive(Debug)]
+pub enum VersionedError<E> {
+    /// The host could not respell a path from the entry (LAYER-10).
+    Path(E),
+    Document(DocumentError),
+    /// An admitted layer, numbered in contribution order, did not normalize.
+    Layer {
+        layer: usize,
+        error: NormalizationError,
+    },
+    /// The layer numbered `layer` lists in `clear` a value it cannot clear:
+    /// findings in that layer, each `invalid_clear` at its `clear[i]`
+    /// (LAYER-9).
+    Clear {
+        layer: usize,
+        findings: Vec<SchemaDiagnostic>,
+    },
+    /// The composed specification is not valid at the chain's version, a
+    /// required field missing among them (LAYER-7, LAYER-12). Findings
+    /// address the retained composed document, whose provenance names the
+    /// layer that wrote each path.
+    Normalize(Box<FailureContext<NormalizationError>>),
+}
+
+impl<E> From<Rebase<E>> for VersionedError<E> {
+    fn from(error: Rebase<E>) -> Self {
+        match error {
+            Rebase::Path(error) => Self::Path(error),
+            Rebase::Document(error) => Self::Document(error),
+        }
+    }
+}
+
+/// Set the inputs whose `relative_to` a layer clears back to the declaring
+/// layer's directory, the default the resolved specification takes again.
+fn clear_input_bases(document: &Document, bases: &mut BTreeMap<String, bool>) {
+    let Some(N::Sequence(entries)) = document
+        .field(document.root(), "clear")
+        .map(|list| &document.nodes()[list])
+    else {
+        return;
+    };
+    for &entry in entries {
+        let N::Text(written) = &document.nodes()[entry] else {
+            continue;
+        };
+        if let Some(path) = SpecPath::parse(written) {
+            if let [input, name, base] = path.keys() {
+                if input == "input" && base == "relative_to" {
+                    bases.insert(name.clone(), false);
+                }
+            }
+        }
+    }
+}
+
+/// Resolve a 1.x chain that [`inheritance::traverse_versioned`] admitted
+/// against `schema`, the 1.0 specification closure. Each layer is normalized
+/// at the version it declares; its relative paths are respelled from the
+/// entry (LAYER-10); the layers compose, each layer's `clear` applied before
+/// its own fields (LAYER-9); the chain's version replaces `yamaa`; and the
+/// composition is normalized at that version, which materializes defaults
+/// and checks requiredness (LAYER-7).
+pub fn prepare_versioned<P: PathPort>(
+    schema: &SchemaStructure,
+    chain: &VersionedChain,
+    port: &mut P,
+) -> Result<ResolvedVersioned, VersionedError<P::Error>> {
+    let mut normalized = Vec::with_capacity(chain.layers.len());
+    for (index, layer) in chain.layers.iter().enumerate() {
+        let view = schema.at_version(layer.version);
+        normalized.push(
+            view.normalize_versioned_layer(&layer.document)
+                .map_err(|error| VersionedError::Layer {
+                    layer: index,
+                    error,
+                })?,
+        );
+    }
+    let entry = &chain.layers.last().expect("a chain holds its entry").source;
+    // As in a 0.5 chain, the final base of each input is selected before any
+    // contributing path is respelled; a cleared `relative_to` selects the
+    // declaring layer again.
+    let mut input_bases = BTreeMap::new();
+    for layer in &normalized {
+        clear_input_bases(&layer.document, &mut input_bases);
+        record_input_bases(&layer.document, &mut input_bases);
+    }
+    for (layer, written) in normalized.iter_mut().zip(&chain.layers) {
+        layer.document = rebased(&layer.document, &written.source, entry, &input_bases, port)?;
+    }
+    let view = schema.at_version(chain.version);
+    let mut composed = view
+        .compose_versioned_layers(&normalized)
+        .map_err(|error| match error {
+            VersionedCompositionError::Clear { layer, findings } => {
+                VersionedError::Clear { layer, findings }
+            }
+            VersionedCompositionError::Normalization(error) => VersionedError::Layer {
+                layer: chain.layers.len() - 1,
+                error,
+            },
+        })?;
+    // The resolved specification records the newest version any layer
+    // declares, written by the latest layer that declares it (P-VER-1).
+    let newest = chain
+        .layers
+        .iter()
+        .rposition(|layer| layer.version == chain.version)
+        .expect("the chain's version is a layer's");
+    let document = &composed.document;
+    if let (Some(value), Some(written)) = (
+        document.field(document.root(), "yamaa"),
+        normalized[newest]
+            .document
+            .field(normalized[newest].document.root(), "yamaa"),
+    ) {
+        let mut nodes = document.nodes().to_vec();
+        nodes[value] = N::Text(chain.version.to_string());
+        composed.document =
+            Document::new(nodes, document.root()).map_err(VersionedError::Document)?;
+        composed.node_origins[value] = LayerNodeOrigin {
+            layer: Some(newest),
+            origin: SchemaOrigin {
+                source: SchemaSource::Input,
+                node: written,
+                generated: false,
+            },
+        };
+        for origin in &mut composed.provenance {
+            if origin.path == "yamaa" {
+                origin.layer = newest;
+            }
+        }
+    }
+    // Every composed node, traced to its occurrence in the layer as written.
+    let composed_origins = composed
+        .node_origins
+        .iter()
+        .map(|&original| {
+            let Some(layer) = original.layer else {
+                return original;
+            };
+            let mut origin = normalized[layer].origins[original.origin.node];
+            origin.generated |= original.origin.generated;
+            LayerNodeOrigin {
+                layer: matches!(origin.source, SchemaSource::Input).then_some(layer),
+                origin,
+            }
+        })
+        .collect::<Vec<_>>();
+    let resolved = match view.normalize_resolved_root(&composed.document) {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            // A finding inside a value a layer wrote bare names it through its
+            // shorthand, as the layer wrote it (P-CLR-2).
+            let error = match error {
+                NormalizationError::Invalid(findings) => {
+                    let shorthand = composed
+                        .node_origins
+                        .iter()
+                        .map(|origin| {
+                            shorthand_key(
+                                &normalized,
+                                origin.layer.map(|input| CompositionOrigin {
+                                    input,
+                                    node: origin.origin.node,
+                                }),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    NormalizationError::Invalid(
+                        findings
+                            .into_iter()
+                            .map(|mut finding| {
+                                finding.path = written_path(
+                                    &composed.document,
+                                    &|key| shorthand[key],
+                                    &finding.path,
+                                );
+                                finding
+                            })
+                            .collect(),
+                    )
+                }
+                error => error,
+            };
+            let retained = matches!(&error, NormalizationError::Invalid(_));
+            return Err(VersionedError::Normalize(Box::new(FailureContext {
+                error,
+                input: retained.then_some(composed.document),
+                provenance: composed.provenance,
+                sources: chain
+                    .layers
+                    .iter()
+                    .map(|layer| layer.source.identity.clone())
+                    .collect(),
+            })));
+        }
+    };
+    Ok(ResolvedVersioned {
+        origins: resolved
+            .origins
+            .iter()
+            .map(|&origin| LayerNodeOrigin::through(origin, &composed_origins))
+            .collect(),
+        document: resolved.document,
+        provenance: composed.provenance,
     })
 }
 

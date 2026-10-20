@@ -1504,7 +1504,7 @@ mod table {
         #[test]
         fn artifacts_keep_complete_temporal_fields_and_drop_collected_precision() {
             use yamaa_core::temporal::{Date, DateTime, Precision};
-            // REQ-0570: precision is internal provenance. Even imputed values carry
+            // VALUE-17: precision is internal provenance. Even imputed values carry
             // complete calendar fields; artifacts deliberately retain only those fields.
             let table = table(
                 &[("D", ColumnType::Date), ("T", ColumnType::DateTime)],
@@ -2036,7 +2036,7 @@ mod table {
         #[test]
         fn the_pyarrow_int32_fixture_reads_as_int() {
             // An unannotated INT32, as pyarrow writes an int32 column, is a
-            // signed 32-bit integer (REQ-1032). The fixture keeps the name it
+            // signed 32-bit integer (PARQUET-7). The fixture keeps the name it
             // had while 0.4.0 refused it.
             let table = parse(&content("unsupported-int32")).unwrap();
             let column = &table.schema().columns()[0];
@@ -2293,7 +2293,7 @@ mod table {
             #[test]
             fn every_record_reads_in_order_past_the_row_groups_one_footer_numbers() {
                 // Row-group sizing does not change the delivered records
-                // (REQ-1037), whichever row groups hold an ordinal.
+                // (PARQUET-10), whichever row groups hold an ordinal.
                 for (rows, ordinals) in [
                     (32_768, Some(Ordinals::Polars)),
                     (32_769, Some(Ordinals::Absent)),
@@ -2604,7 +2604,7 @@ mod table {
         mod schema_layouts {
             //! Files written here by the parquet crate's Arrow writer, whose Arrow
             //! schema hint names a view or dictionary layout. The stored Parquet
-            //! type still decides the column type (REQ-1032). Expected cells are
+            //! type still decides the column type (PARQUET-7). Expected cells are
             //! authored here, never read back from a candidate reader.
             use arrow_array::{
                 types::{

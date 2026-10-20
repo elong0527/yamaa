@@ -12,9 +12,9 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             d.definition().phase,
             d.definition().condition,
-            d.definition().requirement
+            d.definition().rule
         ),
-        ("validation", "invalid_field_type", Some("REQ-1261"))
+        ("validation", "invalid_field_type", Some("TEXT-2"))
     );
     assert_eq!(d.spec_paths, ["columns.V.derivation.str_pad.width"]);
     assert_eq!(

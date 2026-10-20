@@ -20,25 +20,18 @@ fn texts(values: &[&str]) -> Value {
 fn check(
     finding: &Diagnostic,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     paths: &[&str],
     context: &[(&str, Value)],
 ) -> ConditionCode {
-    check_at(
-        finding,
-        "validation",
-        condition,
-        requirement,
-        paths,
-        context,
-    )
+    check_at(finding, "validation", condition, rule, paths, context)
 }
 
 fn check_at(
     finding: &Diagnostic,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     paths: &[&str],
     context: &[(&str, Value)],
 ) -> ConditionCode {
@@ -46,9 +39,9 @@ fn check_at(
         (
             finding.definition().phase,
             finding.definition().condition,
-            finding.definition().requirement
+            finding.definition().rule
         ),
-        (phase, condition, Some(requirement))
+        (phase, condition, Some(rule))
     );
     assert_eq!(finding.spec_paths, paths);
     assert_eq!(
@@ -74,7 +67,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
         "duplicate_specification_name",
-        "REQ-1338",
+        "PROJECT-5",
         &["sdtm.specs[0]", "adam.specs[1]"],
         &[
             ("name", Value::String("DM".into())),
@@ -87,7 +80,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         &project_scope::unknown_name("ADXX", &["DM", "ADSL", "AE"]),
         "unknown_specification_name",
-        "REQ-1339",
+        "PROJECT-6",
         &[],
         &[
             ("name", Value::String("ADXX".into())),
@@ -97,7 +90,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         &project_scope::unlinked_producer("DM", "../sdtm/dm.csv", "/study/sdtm/dm.yaml"),
         "unlinked_producer",
-        "REQ-1344",
+        "PROJECT-10",
         &["input.DM.path"],
         &[
             ("dataset", Value::String("DM".into())),
@@ -108,7 +101,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         &project_scope::producer_not_completed("DM", "/study/sdtm/dm.yaml"),
         "producer_not_completed",
-        "REQ-1345",
+        "PROJECT-11",
         &["input.DM.schema"],
         &[
             ("dataset", Value::String("DM".into())),
@@ -120,7 +113,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     reached.insert(check(
         &cycle,
         "producer_workflow_cycle",
-        "REQ-1342",
+        "PROJECT-8",
         &["input.B.schema"],
         &[("cycle", texts(&["/a.yaml", "/b.yaml", "/a.yaml"]))],
     ));

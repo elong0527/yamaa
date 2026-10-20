@@ -743,7 +743,7 @@ mod declaration {
         fn unchanged_independent_rational_rounding_corpus_matches_the_rounding_operation() {
             use yamaa_core::{dataset::Rounding, table::ValueRef, value::Value};
             // Original cb34f38a3:rust/tools/assess_rounding.py, using
-            // Fraction(abs(value)) and the exact REQ-0418 half-minus-2^-26 threshold.
+            // Fraction(abs(value)) and the exact FORMULA-16 half-minus-2^-26 threshold.
             // All 2,936 unchanged boundary/range/seed-1585 inputs and expected bits
             // were copied from that independent rational oracle, never a native run.
             let mut seen = BTreeSet::new();
@@ -846,7 +846,14 @@ mod declaration {
                         );
                         if actual["status"] == "invalid" {
                             assert!(actual["context"].is_object());
-                            assert!(actual["requirement"].as_str().unwrap().starts_with("REQ-"));
+                            let rule = actual["rule"].as_str().unwrap();
+                            let (prefix, number) = rule.split_once('-').unwrap();
+                            assert!(
+                                !prefix.is_empty()
+                                    && prefix.bytes().all(|byte| byte.is_ascii_uppercase())
+                                    && number.parse::<u32>().is_ok(),
+                                "{family}: {text}: {rule} is not a card ID"
+                            );
                         }
                     }
                     _ => panic!(
@@ -1305,7 +1312,7 @@ mod declaration {
             assert_eq!(
                 crate::support::rows(&rejection.into_issues()),
                 [
-                    json!({"phase":"engine","condition":"engine_rejected","requirement":null,"spec_paths":[],"context":{"stage":"capture","code":"resource_limit","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
+                    json!({"phase":"engine","condition":"engine_rejected","rule":null,"spec_paths":[],"context":{"stage":"capture","code":"resource_limit","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
                 ]
             );
             assert_eq!(host.calls.len(), 2);
@@ -1488,7 +1495,7 @@ mod declaration {
                 let expected = decode_yaml(case["resolved"].as_str().unwrap().as_bytes()).unwrap();
                 let mut expected = value(&expected.document);
                 // The committed resolved documents precede the separately specified
-                // REQ-1158 and REQ-0780 defaults; descriptor authority is pinned below.
+                // INPUT-9 and FILE-2 defaults; descriptor authority is pinned below.
                 for declaration in expected["input"].as_object_mut().unwrap().values_mut() {
                     declaration["empty_string"] = "missing".into();
                     declaration["relative_to"] = "declaring".into();
@@ -1620,7 +1627,7 @@ mod declaration {
                 let report = specification_diagnostics::inheritance_failure_ref(&error).unwrap();
                 assert_eq!(
                     crate::support::findings(report),
-                    json!([{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}])
+                    json!([{"phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}])
                 );
                 assert_eq!(
                     missing.events,
@@ -1760,7 +1767,7 @@ mod declaration {
             let mut authored = window();
             authored["intermediates"] =
                 json!([{"id":"LOOK","dataset":"SRC","key":["ID"],"no_match":{"literal":null}}]);
-            // Pruning (REQ-0638) keeps only declarations a resolved column
+            // Pruning (LAYER-11) keeps only declarations a resolved column
             // reads: LK reads LOOK and is itself an output column, so the
             // intermediate under test survives standalone preparation.
             authored["output"]["columns"] = json!(["ID", "PREV", "LK"]);
@@ -2065,7 +2072,7 @@ mod declaration {
                     String::from_utf8(std::fs::read(dir.join("expected/error.yaml")).unwrap())
                         .unwrap();
                 assert!(expected.contains("condition: dependency_cycle"), "{name}");
-                assert!(expected.contains("requirement: REQ-0072"), "{name}");
+                assert!(expected.contains("rule: COLUMN-6"), "{name}");
                 for path in paths {
                     assert!(
                         expected.contains(path),
@@ -2089,7 +2096,7 @@ mod declaration {
                 let diagnostic = &diagnostics[0];
                 assert_eq!(diagnostic["phase"], "validation", "{name}");
                 assert_eq!(diagnostic["condition"], "dependency_cycle", "{name}");
-                assert_eq!(diagnostic["requirement"], "REQ-0072", "{name}");
+                assert_eq!(diagnostic["rule"], "COLUMN-6", "{name}");
                 assert_eq!(diagnostic["spec_paths"], json!(paths), "{name}");
                 let members = cycle
                     .trim_matches(['[', ']'])
@@ -2195,7 +2202,7 @@ mod declaration {
             );
             let mut source = spec(json!({"literal":1}));
             source["intermediates"] = json!([{"id":"AGES","dataset":"ODM","derivations":{"AGE":{"odm":"ODM.IT.DM.AGE"}}}]);
-            // AGE reads AGES so pruning (REQ-0638) keeps the intermediate
+            // AGE reads AGES so pruning (LAYER-11) keeps the intermediate
             // live and its ODM context is still refused.
             source["columns"][1]["derivation"] = json!("AGES.AGE");
             let observed = observe(source, &[]);
@@ -2538,9 +2545,9 @@ mod declaration {
             assert_eq!(captured.source().identity.as_ptr(), identity);
             let decoded = decode_yaml(text.as_bytes()).unwrap();
             assert_eq!(captured.document(), Some(&decoded.document));
-            let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
+            let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"rule\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
             assert_eq!(outcome(&error), json!([expected]));
-            // Output names both columns so pruning (REQ-0638) keeps them live
+            // Output names both columns so pruning (LAYER-11) keeps them live
             // and strict window expansion still reports their unknown windows.
             let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {columns: [Z, A]}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
             let entry = source(text);
@@ -2561,8 +2568,8 @@ mod declaration {
             assert_eq!(
                 outcome(&error),
                 json!([
-                    {"phase":"validation","condition":"unknown_window","requirement":"REQ-1253","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
-                    {"phase":"validation","condition":"unknown_window","requirement":"REQ-1253","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
+                    {"phase":"validation","condition":"unknown_window","rule":"WINDOW-1","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
+                    {"phase":"validation","condition":"unknown_window","rule":"WINDOW-1","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
                 ])
             );
         }
@@ -2583,9 +2590,9 @@ mod declaration {
             assert_eq!(
                 outcome(&error),
                 json!([
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.path"],"context":{"reason":"Field required"}},
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-13","spec_paths":["output.path"],"context":{"reason":"Field required"}},
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-13","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
                 ])
             );
         }
@@ -2743,7 +2750,7 @@ mod declaration {
                     assert_eq!(
                         study.report(&format!("{VALID}parent: {parent}\n")),
                         json!([{
-                            "phase":"validation","condition":"invalid_field_type","requirement":"REQ-0287","spec_paths":["parent"],
+                            "phase":"validation","condition":"invalid_field_type","rule":"SCHEMA-12","spec_paths":["parent"],
                             "context":{"expected":"path","actual":actual,"source":study.identity("entry/root.yaml"),"entry":study.identity("entry/root.yaml")}
                         }])
                     );
@@ -2759,13 +2766,13 @@ mod declaration {
                         VALID.replace("'1.0'", "'99.0'")
                     )),
                     json!([{
-                        "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0245","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":root,"entry":root}
+                        "phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":root,"entry":root}
                     }])
                 );
                 assert_eq!(
                     study.report(&format!("{VALID}parent: absent.yaml\n")),
                     json!([{
-                        "phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":root}
+                        "phase":"validation","condition":"parent_not_found","rule":"LAYER-2","spec_paths":["parent"],"context":{"path":"absent.yaml","source":root}
                     }])
                 );
                 fs::write(
@@ -2776,7 +2783,7 @@ mod declaration {
                 assert_eq!(
                     study.report(&format!("{VALID}parent: ../parent/base.yaml\n")),
                     json!([{
-                        "phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.identity("parent/base.yaml"),"entry":root}
+                        "phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.identity("parent/base.yaml"),"entry":root}
                     }])
                 );
             }

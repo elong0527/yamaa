@@ -31,7 +31,7 @@ partitioned attempt `P` must have the same observable result as `W`:
   Verification row positions and key identities refer to the same pre-sort
   candidates as today; concatenating independently sorted batches is insufficient.
 - **Diagnostics and evidence:** identical success/failure classification and
-  ordered diagnostics, including condition/category, requirement, ordered paths,
+  ordered diagnostics, including condition/category, rule, ordered paths,
   exact structured context, optional source span and operand route, and original
   source/output coordinates. Preserve all `CheckRecord` counts, offending rows
   and values, codelist/inventory/count observations, handler declaration order

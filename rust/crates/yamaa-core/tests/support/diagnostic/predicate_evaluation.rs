@@ -43,41 +43,41 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             "FALSE AND UNKNOWN = 1",
             "unknown_field",
-            "REQ-0189",
+            "FORMULA-9",
             vec![("identifier", text("UNKNOWN"))],
             vec!["Right", "Left"],
         ),
         (
             "NOT (FLAG = 1)",
             "incompatible_input_type",
-            "REQ-0190",
+            "FORMULA-5",
             vec![("left_type", text("bool")), ("right_type", text("int"))],
             vec!["Child"],
         ),
         (
             "DAY LIKE '%'",
             "incompatible_input_type",
-            "REQ-0190",
+            "FORMULA-5",
             vec![("expected", text("str")), ("actual", text("date"))],
             vec![],
         ),
         (
             "TRUE OR str_contains(FLAG, 'a')",
             "incompatible_input_type",
-            "REQ-1244",
+            "FORMULA-8",
             vec![("expected", text("str")), ("actual", text("bool"))],
             vec!["Right"],
         ),
         (
             "TEXT LIKE PATTERN ESCAPE '!'",
             "invalid_expression",
-            "REQ-0191",
+            "FORMULA-7",
             vec![("reason", text("LIKE pattern has a dangling escape"))],
             vec![],
         ),
     ];
     let mut reached = BTreeSet::new();
-    for (expression, condition, requirement, fields, route) in causes {
+    for (expression, condition, rule, fields, route) in causes {
         let error = match expression {
             "FALSE AND UNKNOWN = 1" => plan(expression).evaluate_truth(&mut Absent),
             _ => plan(expression).evaluate_truth(&mut Typed),
@@ -88,16 +88,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 d.definition().phase,
                 d.definition().condition,
-                d.definition().requirement
+                d.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         let ErrorKind::Condition(c) = &error.kind else {
             panic!("language condition")
         };
         assert_eq!(
-            (c.phase(), c.condition(), c.requirement()),
-            ("validation", condition, requirement)
+            (c.phase(), c.condition(), c.rule()),
+            ("validation", condition, rule)
         );
         assert_eq!(d.spec_paths, ["rows[2].filter"]);
         assert_eq!(

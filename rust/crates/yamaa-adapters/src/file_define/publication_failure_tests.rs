@@ -35,7 +35,7 @@ fn target_admission_keeps_typed_publication_fault_and_original_error_in_both_hos
             let finding = &result.issues()[0];
             assert_eq!(finding.phase(), "engine");
             assert_eq!(finding.condition(), "engine_rejected");
-            assert_eq!(finding.requirement(), None);
+            assert_eq!(finding.rule(), None);
             assert_eq!(finding.spec_paths, ["define"]);
             assert_eq!(
                 yamaa_core::json::Value::Object(finding.context.clone()),
@@ -135,7 +135,7 @@ fn actual_changed_define_resource_keeps_authored_cause_path_and_snapshot() {
     let finding = &findings[0];
     assert_eq!(finding.phase(), "ingest");
     assert_eq!(finding.condition(), "resource_path_content_changed");
-    assert_eq!(finding.requirement(), Some("REQ-0788"));
+    assert_eq!(finding.rule(), Some("FILE-10"));
     assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
     assert_eq!(
         yamaa_core::json::Value::Object(finding.context.clone()),
@@ -234,7 +234,7 @@ fn changed_define_metadata_uses_original_project_environment_spec_parent_and_dic
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].phase(), "ingest");
         assert_eq!(findings[0].condition(), "resource_path_content_changed");
-        assert_eq!(findings[0].requirement(), Some("REQ-0788"));
+        assert_eq!(findings[0].rule(), Some("FILE-10"));
         assert_eq!(findings[0].spec_paths, [field]);
         assert_eq!(
             yamaa_core::json::Value::Object(findings[0].context.clone()),
@@ -318,7 +318,7 @@ fn later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_re
     assert!(matches!(error, file_publication::Error::InvalidTarget));
     assert_eq!(result.issues()[0].phase(), "output");
     assert_eq!(result.issues()[0].condition(), "publication_failed");
-    assert_eq!(result.issues()[0].requirement(), Some("REQ-0764"));
+    assert_eq!(result.issues()[0].rule(), Some("OUTPUT-8"));
     assert_eq!(result.issues()[0].spec_paths, ["define"]);
     assert_eq!(
         yamaa_core::json::Value::Object(result.issues()[0].context.clone()),

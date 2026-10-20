@@ -1,4 +1,4 @@
-//! Basic arithmetic over already evaluated, typed operands (REQ-0420-0434).
+//! Basic arithmetic over already evaluated, typed operands (FORMULA-12 to FORMULA-15, VALUE-5 and VALUE-10).
 //!
 //! Parsing, operand evaluation order, callbacks and handler application belong
 //! to later layers. These functions do not skip evaluating an expression tree.
@@ -115,13 +115,13 @@ impl ArithmeticError {
         self.kind.diagnostic_code().definition().condition
     }
 
-    /// Return the normative arithmetic requirement, matching the Python reference.
-    pub fn requirement(&self) -> &'static str {
+    /// Return the normative arithmetic rule, matching the Python reference.
+    pub fn rule(&self) -> &'static str {
         self.kind
             .diagnostic_code()
             .definition()
-            .requirement
-            .expect("numeric and conversion causes have a normative requirement")
+            .rule
+            .expect("numeric and conversion causes have a normative rule")
     }
 }
 
@@ -225,7 +225,7 @@ pub fn null_if(left: Number, right: Number) -> Number {
     }
 }
 
-/// Integral-valued functions that always return float (REQ-0423).
+/// Integral-valued functions that always return float (VALUE-10).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntegralFunction {
     Ceil,
@@ -261,7 +261,7 @@ pub fn integral(function: IntegralFunction, number: Number) -> Number {
     Number::float(result)
 }
 
-/// Return the binary64 square root after numeric promotion (REQ-0422/0431).
+/// Return the binary64 square root after numeric promotion (FORMULA-15 and VALUE-10).
 /// Missing propagates; negative present input reports a domain condition. Negative
 /// zero is valid and retains its sign, matching the Python reference.
 pub fn sqrt(number: Number, expression: &str) -> Result<Number, ArithmeticError> {
@@ -284,7 +284,7 @@ pub enum MathFunction {
     Ln,
 }
 
-/// Apply the explicitly selected portable math policy (REQ-0422/0427/0432).
+/// Apply the explicitly selected portable math policy (FORMULA-14, FORMULA-15 and VALUE-10).
 /// Promote before math, propagate missing, and normalize overflow to missing.
 pub fn math(
     function: MathFunction,
@@ -325,7 +325,7 @@ pub fn power(left: Number, right: Number, expression: &str) -> Result<Number, Ar
     Ok(Number::float(libm::pow(base, exponent)))
 }
 
-/// Round to decimal places under REQ-0418, returning float or normalized missing.
+/// Round to decimal places under FORMULA-16, returning float or normalized missing.
 /// The integer digits declaration is admitted before any value is read.
 pub(crate) fn round_integer_places(value: Number, digits: i64) -> Number {
     value.as_float().map_or(Number::Missing, |value| {

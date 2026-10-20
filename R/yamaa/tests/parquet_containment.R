@@ -1,6 +1,6 @@
 # Installed Parquet containment: parquet 55.2.0's metadata decoder panics on
 # an INT96 statistic longer than 12 bytes. The engine contains that panic as
-# source_parquet_invalid (REQ-1038), prints nothing, and later reads in the
+# source_parquet_invalid (PARQUET-5), prints nothing, and later reads in the
 # same process still work. On Windows this runs the GNU build, whose unwinding
 # no Rust test reaches. Python reads the same truth.
 library(yamaa)
@@ -10,8 +10,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped parquet_containment.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 truth <- read_host_fixture(host_fixture_root, "parquet-containment")
 
@@ -32,9 +31,9 @@ saved_csv <- function() readBin(saved, "raw", file.size(saved))
 issues_equal <- function(frame, expected) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  actual <- list(frame$phase, frame$condition, frame$requirement, frame$spec_paths,
+  actual <- list(frame$phase, frame$condition, frame$rule, frame$spec_paths,
     frame$context, frame$source_span, frame$operand_route)
-  authored <- list(text("phase"), text("condition"), text("requirement"),
+  authored <- list(text("phase"), text("condition"), text("rule"),
     lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
     enc2utf8(text("context")),
     lapply(expected, function(issue)

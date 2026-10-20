@@ -3,7 +3,7 @@
 use num_bigint::BigUint;
 
 /// Round the exact magnitude of a finite binary64 to `digits` decimal places
-/// under REQ-0418: |value| × 10^digits becomes an integer, where a fraction of
+/// under FORMULA-16: |value| × 10^digits becomes an integer, where a fraction of
 /// one half, or within 2^-26 below one half, rounds away from zero. This is the
 /// language's only rounding interval. The rounding operation, CSV display
 /// precision, project-function result comparison and float `shift` amounts

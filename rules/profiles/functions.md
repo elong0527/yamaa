@@ -24,7 +24,6 @@ select, replace or override the project or its environments.
 
 Fails: `project_environment_missing`.
 Evidence: `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
-Replaces: REQ-0662, REQ-0663, REQ-0694.
 
 Omission never creates an environment implicitly, and no adjacent environment
 or language subdirectory is discovered. Every path an environment file declares
@@ -50,7 +49,6 @@ returns every independently inferable finding before activation.
 
 Fails: `project_environment_invalid`.
 Evidence: `schema-functions`, `rust/crates/yamaa-adapters/tests/file_project.rs::metadata_failures_name_each_written_dependency_and_cause_before_study_reads`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::inline_scalars_report_alone_without_study_or_language_findings_and_unlinked_hosts_read_nothing`.
-Replaces: REQ-0664, REQ-0695, REQ-1080.
 
 A missing or invalid declared metadata resource, including the environment
 file a project links, reports its written path, declaring field and concrete
@@ -83,7 +81,6 @@ every called function package against the captured lock.
 
 Fails: `runtime_artifact_mismatch`, `project_environment_invalid`.
 Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_kind_and_function_findings_are_core_owned_after_capture_without_code_authority`, `rust/crates/yamaa-adapters/tests/project_environment.rs::lock_and_actual_conformance_mismatches_keep_complete_zero_read_reports`.
-Replaces: REQ-0665, REQ-0666, REQ-0667, REQ-0697.
 
 Parallel bindings and per-function language choices are invalid. `lock` is
 optional, including when `functions` is present. Omission uses the installed
@@ -119,7 +116,6 @@ declared logical function fails.
 
 Fails: `unknown_project_function`.
 Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
-Replaces: REQ-0314, REQ-0668, REQ-0669, REQ-0698, REQ-1083, REQ-1085.
 
 A call contains no implementation language, callable name or contract version.
 A `function` call's exact argument and result types are those its definition
@@ -147,7 +143,6 @@ matches its declared exact type, with no implicit conversion.
 
 Fails: `invalid_function_argument`.
 Evidence: `negative-function-contract`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/project_execution.rs::complete_static_faults_are_projected_in_authored_call_order_without_source_binding`.
-Replaces: REQ-0676, REQ-0677, REQ-0678, REQ-0700.
 
 The function-only `bool` introduces neither Boolean columns nor Boolean
 derivation results. There is no `int`-to-`float` widening, and
@@ -171,7 +166,6 @@ text must be a [Values](../values.md) value. No argument may
 contain another expression.
 
 Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
-Replaces: REQ-0679, REQ-0680, REQ-1086.
 
 A calculation needed by a function is first declared as an internal column and
 then passed by name, preserving its visible dependency.
@@ -188,7 +182,6 @@ accepting parameter is passed to the binding as the host runtime's canonical
 missing scalar.
 
 Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::versionless_invocation_defaults_missing_types_and_repeated_effects_share_one_service`.
-Replaces: REQ-0681, REQ-0682.
 
 A short-circuit result is not a result returned by the binding and therefore
 does not require `may_return_missing: true`.
@@ -210,7 +203,6 @@ context.
 
 Fails: `function_call_failed`.
 Evidence: `schema-functions`, `rust/crates/yamaa-core/tests/project_execution.rs::observer_counts_actual_calls_and_preserves_signature_short_circuit_and_original_failure`, `rust/crates/yamaa-adapters/tests/project_environment.rs::actual_engine_failures_project_without_a_second_callback_or_payload_consumption`.
-Replaces: REQ-0683, REQ-0684, REQ-0685, REQ-0701.
 
 No argument-name mapping or computed name is permitted. Normal installed module
 or namespace resolution runs only after the lock gate of [FUNC-3](#func-3)
@@ -236,7 +228,6 @@ invalid result fails and is not converted.
 
 Fails: `invalid_function_result`.
 Evidence: `schema-non-finite`, `rust/crates/yamaa-core/tests/project_function_invocation.rs::shared_function_invocation_vectors`, `R/yamaa/tests/function_values.R`.
-Replaces: REQ-0686, REQ-0702.
 
 Conversion under the [Column derivation](../columns.md) is not a
 repair mechanism for an invalid function result. A wrong type or shape, or an
@@ -267,7 +258,6 @@ original host context when code ran. Original host error and interrupt objects
 remain retained independently of human-readable issue formatting.
 
 Evidence: `rust/crates/yamaa-adapters/tests/project_environment.rs::every_runtime_failure_keeps_versionless_identity_and_authored_provenance`, `rust/crates/yamaa-adapters/tests/project_environment.rs::opaque_payload_is_borrowed_unchanged_and_complete_ordinary_facts_remain_exact`, `rust/crates/yamaa-adapters/tests/file_project.rs::project_report_uses_held_external_function_origins_after_metadata_files_change`.
-Replaces: REQ-0338, REQ-0704.
 
 ## Activation conformance
 
@@ -285,7 +275,6 @@ and a float-returning contract `numeric-comparison`.
 
 Fails: `project_environment_invalid`.
 Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-adapters/tests/project_environment.rs::complete_static_report_keeps_semantics_alongside_original_opaque_capture_and_authored_holes`.
-Replaces: REQ-0687, REQ-0688, REQ-0689, REQ-0690.
 
 Tests do not repeat a logical name or contract version. `covers` is a
 non-empty list of unique obligations demonstrated by that case:
@@ -323,7 +312,6 @@ numeric comparison fails.
 
 Fails: `function_conformance_failed`.
 Evidence: `rust/crates/yamaa-core/tests/project_execution.rs::owned_environment_repeats_selected_activation_before_cached_study_capture`, `rust/crates/yamaa-core/tests/project_execution.rs::lock_binding_case_and_original_interrupt_failures_never_enter_study_ports`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::real_activation_mismatches_keep_every_case_in_selected_order_without_retry`.
-Replaces: REQ-0691, REQ-0703.
 
 <a id="func-13"></a>
 
@@ -337,7 +325,6 @@ four by default, rounded with the one rounding of
 mutates the runtime result, and calculations use the unrounded result.
 
 Evidence: `adam-advs-percentiles`, `rust/crates/yamaa-core/tests/project_execution.rs::ties_and_near_ties_go_away_from_zero_with_the_one_rounding_interval`, `rust/crates/yamaa-core/tests/project_execution.rs::comparison_never_mutates_runtime_bits_or_normalizes_text`.
-Replaces: REQ-0692, REQ-0693.
 
 At four places, `1.23445` becomes `1.2345` and `-1.23445` becomes `-1.2345`;
 at two places, `2.675` becomes `2.68`.

@@ -1,8 +1,8 @@
-//! Completed-result conversion under REQ-0009-0021 and REQ-0601.
+//! Completed-result conversion under VALUE-1, VALUE-3, VALUE-5 to VALUE-9 and VALUE-15.
 
 use crate::value::{ColumnType, FiniteFloat, Value, ValueType};
 
-/// The requirement owning a conversion failure, separate from arithmetic.
+/// The rule owning a conversion failure, separate from arithmetic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConversionReason {
     IncompatibleOrInvalidText,
@@ -37,12 +37,12 @@ impl ConversionError {
         "unconvertible"
     }
 
-    /// Return the requirement that owns this conversion failure.
-    pub fn requirement(&self) -> &'static str {
+    /// Return the rule that owns this conversion failure.
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("numeric and conversion causes have a normative requirement")
+            .rule
+            .expect("numeric and conversion causes have a normative rule")
     }
 
     /// Preserve the parsed source kind independently of its JSON representation.
@@ -61,7 +61,7 @@ fn failed(value: &Value, target: ColumnType, reason: ConversionReason) -> Conver
     }
 }
 
-/// Recognize only REQ-0015's non-finite spellings, including sign restrictions.
+/// Recognize only VALUE-6's non-finite spellings, including sign restrictions.
 fn nonfinite_text(text: &str) -> bool {
     matches!(text, ".nan" | ".NaN" | ".NAN")
         || matches!(
@@ -177,7 +177,7 @@ fn numeric_text(text: &str, target: ColumnType) -> Result<Value, ConversionError
     }
 }
 
-/// Render the shortest round-trip digits in positional notation (REQ-0018).
+/// Render the shortest round-trip digits in positional notation (VALUE-8).
 /// Ryu's tie-to-even digits match Python repr; Rust Display differs on exact ties.
 /// Scientific notation is expanded without performing any floating-point math.
 pub fn float_text(value: FiniteFloat) -> String {

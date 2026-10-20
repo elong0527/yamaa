@@ -5,20 +5,22 @@ HELP = """yamaa repository commands (run from the repository root)
   setup             Build the installed dev-profile Python extension and locked tools.
                     Needs uv, the pinned Rust toolchain and a platform C compiler.
                     Under rustup it also adds Clippy and rustfmt to that toolchain.
-  quick             Before a push: check-lint without the R binding, then
-                    check-repository. Runs no test suite and needs no R.
+  quick             Before a push: check-lint, then check-repository. Runs no test
+                    suite and needs no R.
   check             Run the five PR checks below, in the same order locally.
-  check-lint        Ruff, cargo fmt, workspace Clippy (requires R as well) and Clippy
-                    over the fuzz targets. Needs Clippy and rustfmt added to the
+  check-lint        Ruff, cargo fmt, Clippy over the workspace except the R binding
+                    and over the fuzz targets. Needs Clippy and rustfmt added to the
                     pinned Rust toolchain, and a C++ compiler for libFuzzer.
   check-repository  Repository/rule/notice validation and a strict generated docs build.
-  test-rust         cargo test --locked --workspace, including both host bindings.
-                    Needs the selected Python interpreter and R 4.6.1.
+  test-rust         cargo test --locked --workspace without the two host bindings,
+                    which have no Rust tests. Needs no R.
   test-python       Package/tools tests and standalone public-host suites outside checkout.
-  test-r            Build/install a standalone R archive and run R CMD check --as-cran;
-                    only the notes that R/yamaa/cran-comments.md explains may remain.
-                    Needs R 4.6.1, Rust, make and the package's Suggests installed;
-                    with checkbashisms and aspell it also checks configure and spelling.
+  test-r            Clippy over the R binding, then build/install a standalone R archive
+                    and run R CMD check --as-cran; only the notes that
+                    R/yamaa/cran-comments.md explains may remain.
+                    Needs R 4.6.1, Rust with Clippy, make and the package's Suggests
+                    installed; with checkbashisms and aspell it also checks configure
+                    and spelling.
   check-equivalence Executor equivalence gate: both hosts built from the checkout for
                     public benchmark conformance, installed Python suites, R CMD check.
                     Needs what test-python and test-r need. Not part of CI.

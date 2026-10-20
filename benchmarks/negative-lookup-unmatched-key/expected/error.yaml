@@ -2,7 +2,7 @@ phase: join
 condition: unmatched_key
 spec_paths:
   - intermediates[0]
-requirement: LOOKUP-24
+rule: LOOKUP-24
 context:
   intermediate: REFRANGE
   dataset: LBRANGE

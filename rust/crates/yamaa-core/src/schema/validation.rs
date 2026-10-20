@@ -161,6 +161,20 @@ impl NullPolicy {
     }
 }
 
+/// The language a document is written in (#3030 D75). Two rules belong to the
+/// 0.5 language alone: a bare string in a derivation or case result is the
+/// source shorthand (EXPR-5 at the `yamaa-v0.5.0` tag), and a bare derivation
+/// scalar is refused with a hint to write `{literal: ...}`. A 1.x document's
+/// expression fields hold the closed grammar's text instead, and its findings
+/// write the spec path notation: a key that is not a bare segment is quoted
+/// (P-CLR-1, P-CLR-2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Surface {
+    #[default]
+    Legacy,
+    Versioned,
+}
+
 /// Root fields whose members compose by identifier from a mapping; each member
 /// value is a definition, never a clearing null.
 pub(super) const MAPPING_MEMBERS: [&str; 2] = ["input", "windows"];
@@ -181,6 +195,26 @@ pub(super) fn diagnostic(
     }
 }
 
+/// Shared context for an undeclared field, including a retired parent list.
+pub(super) fn unknown_field_context(
+    field: &str,
+    class: &str,
+) -> Vec<(&'static str, SchemaContext)> {
+    let mut context = vec![
+        ("field", SchemaContext::Text(field.into())),
+        ("class", SchemaContext::Text(class.into())),
+    ];
+    if class == "root_class" && field == "parents" {
+        context.push((
+            "hint",
+            SchemaContext::Text(
+                "write at most one parent per file; replace parents: [organization.yaml, compound.yaml] with parent: compound.yaml in the entry and parent: organization.yaml in compound.yaml; organization.yaml has no parent".into(),
+            ),
+        ));
+    }
+    context
+}
+
 /// An undeclared class field (SCHEMA-13), or one this view of the closure
 /// leaves out as newer than the version the document declares (SCHEMA-2).
 pub(super) fn unknown_field(
@@ -189,10 +223,7 @@ pub(super) fn unknown_field(
     class: &str,
     later: Option<crate::language::LanguageVersion>,
 ) -> SchemaDiagnostic {
-    let mut context = vec![
-        ("field", SchemaContext::Text(field.into())),
-        ("class", SchemaContext::Text(class.into())),
-    ];
+    let mut context = unknown_field_context(field, class);
     let code = match later {
         Some(since) => {
             context.push(("since", SchemaContext::Text(since.to_string())));
@@ -229,6 +260,7 @@ pub(super) fn matches_member(
         resolved_output: false,
         nulls,
         written: false,
+        surface: Surface::Legacy,
     }
     .single(
         member.0,
@@ -347,6 +379,7 @@ struct Run<'a> {
     /// that only restates its shorthand fails (SCHEMA-15). A canonical document
     /// produced by normalization holds those long forms and is never checked.
     written: bool,
+    surface: Surface,
 }
 
 impl Run<'_> {
@@ -399,6 +432,14 @@ impl Run<'_> {
         } else {
             format!("{path}.{member}")
         })
+    }
+    /// The path of a member a value's key or identity names: in a 1.x
+    /// document a key that is not a bare segment is quoted (P-CLR-1).
+    fn keyed(&mut self, path: &str, member: &str, index: bool) -> Result<String, ValidationError> {
+        if self.surface == Surface::Versioned && !index {
+            return Ok(super::spec_path::join(path, member));
+        }
+        self.joined(path, member, index)
     }
     fn constraints(
         &mut self,
@@ -458,6 +499,18 @@ impl Run<'_> {
             return self.invalid(site, name);
         };
         let mut diagnostics = Vec::new();
+        // A retired parent list may supply the absent root fields. Report its
+        // spelling before asking for those fields; written values, including
+        // missing fields inside them, still receive their own findings.
+        let retired_parent = site.root
+            && self.nulls.clears()
+            && name == "root_class"
+            && fields.iter().any(|field| field.name == "parent")
+            && !fields.iter().any(|field| field.name == "parents")
+            && self.input.field(site.value, "parents").is_some_and(|node| {
+                matches!(&self.input.nodes()[node], N::Sequence(parents) if !parents.is_empty())
+            })
+            && self.input.field(site.value, "parent").is_none();
         for field in fields {
             let path = self.joined(site.path, &field.name, false)?;
             match self.field(site.value, &field.name)? {
@@ -484,6 +537,7 @@ impl Run<'_> {
                     diagnostics.extend(self.descriptor(field.descriptor, child)?)
                 }
                 None if !site.fragment
+                    && !retired_parent
                     && self.schema.descriptors()[field.descriptor]
                         .descriptor
                         .required() =>
@@ -512,7 +566,7 @@ impl Run<'_> {
                     _ => None,
                 };
                 let (key, index) = self.key(key)?;
-                let path = self.joined(site.path, &key, index)?;
+                let path = self.keyed(site.path, &key, index)?;
                 diagnostics.push(unknown_field(&path, &key, name, later));
             }
         }
@@ -671,7 +725,8 @@ impl Run<'_> {
         let N::Text(field) = &self.input.nodes()[key] else {
             return Ok(Vec::new());
         };
-        let source = alias.is_some_and(|name| SOURCE_SHORTHAND.contains(&name));
+        let source = self.surface == Surface::Legacy
+            && alias.is_some_and(|name| SOURCE_SHORTHAND.contains(&name));
         // The string of a written `{source: <string>}`, the source shorthand's
         // long form in a derivation or case result.
         let source_text = |node: usize| match &self.input.nodes()[node] {
@@ -802,20 +857,37 @@ impl Run<'_> {
                     }
                     let (key, payload) = items[0];
                     let (operation, index) = self.key(key)?;
-                    let path = self.joined(site.path, &operation, index)?;
+                    let path = self.keyed(site.path, &operation, index)?;
                     let entry = if matches!(self.input.nodes()[key], N::Text(_)) {
                         registry.entries.iter().find(|e| e.name == operation)
                     } else {
                         None
                     };
                     let Some(entry) = entry else {
+                        let mut context = vec![
+                            ("registry", Self::text(&registry.name)),
+                            ("operation", Self::text(&operation)),
+                        ];
+                        if registry.name == "expressions" {
+                            let hint = match operation.as_str() {
+                                "date_diff" => Some("write diff with type: date"),
+                                "datetime_diff" => Some("write diff with type: datetime"),
+                                "date_shift" => Some("write shift with type: date"),
+                                "datetime_shift" => Some("write shift with type: datetime"),
+                                "date_impute" => Some("write impute with type: date"),
+                                "datetime_impute" => Some("write impute with type: datetime"),
+                                "date_precision" => Some("write precision with type: date"),
+                                "datetime_precision" => Some("write precision with type: datetime"),
+                                _ => None,
+                            };
+                            if let Some(hint) = hint {
+                                context.push(("hint", Self::text(hint)));
+                            }
+                        }
                         return Ok(vec![self.diagnostic(
                             site.child(site.value, &path),
                             ConditionCode::SchemaUnknownOperation,
-                            vec![
-                                ("registry", Self::text(&registry.name)),
-                                ("operation", Self::text(&operation)),
-                            ],
+                            context,
                         )]);
                     };
                     match &entry.shape {
@@ -838,7 +910,8 @@ impl Run<'_> {
                 SchemaAliasKind::Descriptor(descriptor) => {
                     let members = schema.descriptors()[descriptor].descriptor.members();
                     let diagnostics = self.union(members, Some(name), site.deeper())?;
-                    if matches!(name, "derivation" | "untyped_intermediate_derivation")
+                    if self.surface == Surface::Legacy
+                        && matches!(name, "derivation" | "untyped_intermediate_derivation")
                         && !diagnostics.is_empty()
                         && !matches!(self.input.nodes()[site.value], N::Text(_) | N::Mapping(_))
                     {
@@ -899,7 +972,7 @@ impl Run<'_> {
         self.active.pop();
         result
     }
-    /// REQ-0339 orders the items of a `case`, which its list type cannot state.
+    /// EXPR-7 orders the items of a `case`, which its list type cannot state.
     /// Like a descriptor constraint, it runs only after every item matched its
     /// class, so each item is either a `when`/`then` branch or an `otherwise`.
     fn case_items(&mut self, site: Site<'_>) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
@@ -952,11 +1025,17 @@ impl Run<'_> {
                     } else {
                         None
                     };
+                    // A 1.x member is named by an identity written as text,
+                    // and otherwise by its index (P-CLR-2).
+                    let suffix = suffix.filter(|&node| {
+                        self.surface == Surface::Legacy
+                            || matches!(self.input.nodes()[node], N::Text(_))
+                    });
                     let (suffix, index) = match suffix {
                         Some(node) => self.key(node)?,
                         None => (index.to_string(), true),
                     };
-                    let path = self.joined(site.path, &suffix, index)?;
+                    let path = self.keyed(site.path, &suffix, index)?;
                     diagnostics.extend(self.single(
                         expression,
                         *inner,
@@ -981,7 +1060,7 @@ impl Run<'_> {
                         // A null entry is absent.
                         continue;
                     }
-                    let path = self.joined(site.path, &name, index)?;
+                    let path = self.keyed(site.path, &name, index)?;
                     diagnostics.extend(self.single(expression, *value, site.child(v, &path))?);
                 }
                 Ok(diagnostics)
@@ -1051,6 +1130,21 @@ impl SchemaStructure {
         path: &str,
         fragment: bool,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_types_on(types, input, value, path, fragment, true, Surface::Legacy)
+    }
+    /// Validate a projected type union written in `surface`, as an author
+    /// wrote it or, when `written` is false, as normalization produced it.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn validate_types_on(
+        &self,
+        types: &[TypeExpression],
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+        written: bool,
+        surface: Surface,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
         }
@@ -1060,7 +1154,8 @@ impl SchemaStructure {
             active: Vec::new(),
             resolved_output: false,
             nulls: NullPolicy::Value,
-            written: true,
+            written,
+            surface,
         }
         .union(
             types,
@@ -1111,6 +1206,7 @@ impl SchemaStructure {
             nulls,
             // A resolved document is the canonical result of normalization.
             written: !resolved_output,
+            surface: Surface::Legacy,
         };
         let site = Site {
             value: input.root(),
@@ -1174,7 +1270,37 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_descriptor_mode(descriptor, input, value, path, fragment, nulls, true)
+        self.validate_descriptor_mode(
+            descriptor,
+            input,
+            value,
+            path,
+            fragment,
+            nulls,
+            true,
+            Surface::Legacy,
+        )
+    }
+    /// Interpret a descriptor over a 1.x document as its author wrote it, in
+    /// which YAML null is an ordinary value its type admits or refuses.
+    pub(super) fn validate_versioned_descriptor(
+        &self,
+        descriptor: usize,
+        input: &Document,
+        value: usize,
+        path: &str,
+        fragment: bool,
+    ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
+        self.validate_descriptor_mode(
+            descriptor,
+            input,
+            value,
+            path,
+            fragment,
+            NullPolicy::Value,
+            true,
+            Surface::Versioned,
+        )
     }
     /// Interpret a descriptor over a canonical document that normalization or
     /// composition produced, whose long forms restate expanded shorthand.
@@ -1187,7 +1313,16 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
-        self.validate_descriptor_mode(descriptor, input, value, path, fragment, nulls, false)
+        self.validate_descriptor_mode(
+            descriptor,
+            input,
+            value,
+            path,
+            fragment,
+            nulls,
+            false,
+            Surface::Legacy,
+        )
     }
     #[allow(clippy::too_many_arguments)]
     fn validate_descriptor_mode(
@@ -1199,6 +1334,7 @@ impl SchemaStructure {
         fragment: bool,
         nulls: NullPolicy,
         written: bool,
+        surface: Surface,
     ) -> Result<Vec<SchemaDiagnostic>, ValidationError> {
         if descriptor >= self.descriptors().len() || value >= input.nodes().len() {
             return Err(ValidationError::InvalidDescriptor);
@@ -1210,6 +1346,7 @@ impl SchemaStructure {
             resolved_output: false,
             nulls,
             written,
+            surface,
         }
         .descriptor(
             descriptor,

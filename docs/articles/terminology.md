@@ -11,7 +11,9 @@ The programming lead selects the terminology release when preparing the
 specification. Review the published [SDTM terminology](https://evs.nci.nih.gov/ftp1/CDISC/SDTM/SDTM%20Terminology.html)
 and [ADaM terminology](https://evs.nci.nih.gov/ftp1/CDISC/ADaM/ADaM%20Terminology.html),
 choose the lists needed for the study, and record each selected release in its
-source's `standard.version`. These publishing sets can use different versions.
+source's `standard.version`. These publishing sets can use different versions,
+but a Define-XML document cites one release of each: give every source of one
+publishing set the same `standard.version`.
 Keep sponsor-defined lists in a source that omits `standard`.
 
 | Source | How to declare it |

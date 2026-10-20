@@ -373,7 +373,7 @@ impl application::SourceDecoder for SourceDecoder {
 }
 
 /// A linked artifact's stored fields, in order and with their decoded types,
-/// must equal the producing specification's output contract (REQ-0535). The
+/// must equal the producing specification's output contract (INPUT-11). The
 /// generated ordinal is appended only after this comparison.
 fn stored_contract(
     source: &SourceDeclaration,

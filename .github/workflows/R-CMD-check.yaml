@@ -218,6 +218,13 @@ jobs:
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
     steps:
+      # The installed package is checked against a benchmark of the checkout.
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -260,6 +267,7 @@ jobs:
         run: |
           mkdir -p library home tmp
           cp "${GITHUB_WORKSPACE}/tools/ci/check_r_offline_install.R" .
+          cp -R "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum" .
           docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
             --volume "${PWD}:/work" --volume "$(rustc --print sysroot):/opt/rust:ro" \
             --env PATH=/opt/rust/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
@@ -267,7 +275,7 @@ jobs:
             docker.io/rocker/r-ver:4.6.1 sh -c '
               set -e
               R CMD INSTALL --library=/work/library /work/yamaa_*.tar.gz
-              Rscript --vanilla /work/check_r_offline_install.R /work/library
+              Rscript --vanilla /work/check_r_offline_install.R /work/library /work/adam-adlb-ordered-sum
               test -z "$(ls -A /work/home)"'
 
       - name: Install behind a proxy that refuses connections
@@ -284,4 +292,5 @@ jobs:
           mkdir -p library
           Rscript --vanilla -e 'install.packages(Sys.glob("yamaa_*.tar.gz"), repos = NULL, type = "source", lib = "library")' \
             -e 'stopifnot("yamaa" %in% rownames(installed.packages(lib.loc = "library")))'
-          Rscript --vanilla "${GITHUB_WORKSPACE}/tools/ci/check_r_offline_install.R" library
+          Rscript --vanilla "${GITHUB_WORKSPACE}/tools/ci/check_r_offline_install.R" library \
+            "${GITHUB_WORKSPACE}/benchmarks/adam-adlb-ordered-sum"

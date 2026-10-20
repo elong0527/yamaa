@@ -1685,7 +1685,7 @@ impl<'p> Builder<'p> {
     }
 
     /// Intermediate uniqueness, column check groups in declared column order,
-    /// output keys, then dataset checks in declaration order (REQ-0372).
+    /// output keys, then dataset checks in declaration order (CHECK-1).
     fn lower_checks(&mut self, cx: &Cx<'p>) -> Result<(), ResolutionError> {
         use VerificationSeverity::Error;
         let plan = cx.plan;

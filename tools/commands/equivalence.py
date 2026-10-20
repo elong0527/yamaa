@@ -6,7 +6,7 @@ installs both outside it, and runs on those installs:
 
 - public benchmark conformance for each host: every active benchmark
   reproduces its expected bytes, and every negative benchmark its expected
-  first diagnostic (phase, condition, requirement and specification paths);
+  first diagnostic (phase, condition, rule and specification paths);
   a repeat pass runs each entry's spec object a second time and requires it
   to reuse the plan its first run compiled, as its private observations
   record, with the same issues, tables and saved bytes (#2821);

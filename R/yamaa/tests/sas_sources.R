@@ -6,8 +6,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped sas_sources.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if (file.exists("host-fixtures/sas-cases.json")) "host-fixtures" else
-  system.file("host-fixtures", package = "yamaa", mustWork = TRUE)
+host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
 truth <- jsonlite::fromJSON(file.path(host_fixture_root, "sas-cases.json"), simplifyVector = FALSE)
 stopifnot(identical(truth$version, "1"))
 check <- function(path) yamaa_spec(path)$check()

@@ -12,8 +12,8 @@
 //! Two other refusals of a window's qualified read are decided from the
 //! declarations as well, so `check` reports them where `domain` does: a field
 //! of the shared driver that a grouped row template does not group by
-//! (REQ-0107), and a field of a dataset whose records build none of the rows,
-//! in any window (REQ-0103).
+//! (NAME-4), and a field of a dataset whose records build none of the rows,
+//! in any window (NAME-3).
 use std::{
     fs,
     path::PathBuf,
@@ -92,7 +92,7 @@ impl Fixture {
                     yamaa_adapters::json!({
                         "phase": "validation",
                         "condition": "unknown_field",
-                        "requirement": "WINDOW-11",
+                        "rule": "WINDOW-11",
                         "spec_paths": [path],
                         "context": {
                             "identifier": identifier,
@@ -136,30 +136,30 @@ fn row(issue: &Diagnostic) -> Value {
     yamaa_adapters::json!({
         "phase": issue.phase(),
         "condition": issue.condition(),
-        "requirement": issue.requirement(),
+        "rule": issue.rule(),
         "spec_paths": issue.spec_paths,
         "context": issue.context.clone()
     })
 }
 
 /// A column-level read of `dataset`'s field outside a grouped row template's
-/// groups (REQ-0107).
+/// groups (NAME-4).
 fn ungrouped(path: &str, identifier: &str, dataset: &str) -> Value {
     yamaa_adapters::json!({
         "phase": "validation",
         "condition": "ungrouped_driver_field",
-        "requirement": "REQ-0107",
+        "rule": "NAME-4",
         "spec_paths": [path],
         "context": {"identifier": identifier, "dataset": dataset}
     })
 }
 
-/// A window's read of a dataset other than the driver of its rows (REQ-0103).
+/// A window's read of a dataset other than the driver of its rows (NAME-3).
 fn unknown(path: &str, identifier: &str) -> Value {
     yamaa_adapters::json!({
         "phase": "validation",
         "condition": "unknown_field",
-        "requirement": "REQ-0103",
+        "rule": "NAME-3",
         "spec_paths": [path],
         "context": {"identifier": identifier}
     })
@@ -232,7 +232,7 @@ fn a_window_reading_a_driver_another_template_lacks_is_refused() {
         "row_number",
     )]);
     // A field of the later template's driver, which binding used to refuse
-    // as a field of no dataset (REQ-0103), is refused the same way.
+    // as a field of no dataset (NAME-3), is refused the same way.
     numbered("", &[SUBJECTS, EVENTS], "AE.AESEQ").refused(&[(
         ORDER,
         "AE.AESEQ",

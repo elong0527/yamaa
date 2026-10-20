@@ -1,9 +1,10 @@
+use crate::support::roots::{Codelist, CodelistType, Item, Source};
 use std::collections::BTreeSet;
 use yamaa_core::{
     diagnostic::ConditionCode,
     json::Value as JsonValue,
     project_codelist_binding::{bind, Binding},
-    project_terminology::{Catalogue, Codelist, DataType, Item, Source},
+    project_terminology::Catalogue,
     value::{ColumnType, Value},
 };
 pub fn reached() -> BTreeSet<ConditionCode> {
@@ -12,7 +13,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         codelists: vec![Codelist {
             id: "SEX".into(),
             name: "Sex".into(),
-            data_type: DataType::Text,
+            data_type: CodelistType::Text,
             extensible: false,
             alias: None,
             format_name: None,
@@ -25,7 +26,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             }]),
             external: None,
         }],
-    }])
+    }
+    .root()])
     .unwrap();
     let allowed = ["columns.X.verifications[0].allowed_values"];
     let base = Binding {
@@ -51,12 +53,12 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         panic!("real catalogue faults")
     };
     let mut reached = BTreeSet::new();
-    for (finding, condition, requirement) in findings
+    for (finding, condition, rule) in findings
         .iter()
         .zip([
-            ("unknown_codelist", "REQ-0953"),
-            ("codelist_type_mismatch", "REQ-0954"),
-            ("redundant_declaration", "REQ-0955"),
+            ("unknown_codelist", "CT-1"),
+            ("codelist_type_mismatch", "CT-8"),
+            ("redundant_declaration", "CT-9"),
         ])
         .map(|(f, (c, r))| (f, c, r))
     {
@@ -65,9 +67,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         reached.insert(diagnostic.code);
     }

@@ -34,6 +34,7 @@ mod types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
+mod phases;
 mod preflight_diagnostics;
 mod root_filter;
 mod source_expressions;
@@ -90,7 +91,7 @@ pub enum PrepareError {
     #[error("specification internal")]
     Internal,
 }
-/// Maximum declared CSV display precision under REQ-0744.
+/// Maximum declared CSV display precision under CSV-6.
 pub const MAX_OUTPUT_DECIMALS: u8 = 18;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -134,7 +135,7 @@ pub enum PreflightFinding {
     DuplicateRowDefault {
         column: String,
         rows: Vec<String>,
-        /// Why the column-level derivation is not row-local (REQ-1260): the
+        /// Why the column-level derivation is not row-local (SPEC-6): the
         /// root cause kind, such as `aggregate`, `lookup`, `window` or
         /// `named_intermediate`.
         not_row_local: String,
@@ -377,6 +378,8 @@ struct Declaration {
 #[derive(Debug)]
 pub struct PreparedSpecification {
     check_expressions: Vec<crate::diagnostic::Diagnostic>,
+    /// The intermediate filter type faults that written declarations decide.
+    written_filter_types: Vec<crate::diagnostic::Diagnostic>,
     project_calls: Option<crate::project_calls::ProjectCalls>,
     sources: Vec<SourceDeclaration>,
     source_interpretations: Vec<SourceInterpretation>,
@@ -701,7 +704,7 @@ fn prepare_output_declarations(
         .collect::<Result<Vec<_>, _>>()?;
     let output_path = declared.path.text.clone();
     // Retain the complete integer for output-declaration diagnostics, even
-    // when it exceeds REQ-0744's range. Build validation retains its existing
+    // when it exceeds CSV-6's range. Build validation retains its existing
     // post-verification phase; saved-file size is admitted at publication.
     let output_decimals = declared
         .decimals
@@ -1004,7 +1007,7 @@ impl PreparedSpecification {
         let inputs = mapping(d, field(d, root, "input")?)?;
         let odm_inputs = checks::odm::inputs(lowered.spec())?;
         let driver = if has_rows {
-            checks::lookups::common_driver(lowered.spec())?
+            checks::lookups::common_driver(lowered.spec(), d)?
         } else {
             match spec.default_driver() {
                 Some(driver) => driver,
@@ -1016,7 +1019,7 @@ impl PreparedSpecification {
             .iter()
             .position(|&(name, _)| text(d, name).is_ok_and(|name| name == driver))
             .ok_or(PrepareError::Internal)?;
-        let source_findings = checks::root::source_findings(lowered.spec(), &odm_inputs)?;
+        let source_findings = checks::root::source_findings(lowered.spec(), d, &odm_inputs)?;
         if !source_findings.is_empty() {
             return Err(PrepareError::Invalid(source_findings));
         }
@@ -1079,6 +1082,7 @@ impl PreparedSpecification {
             let tree = types::Tree::new(lowered, d, project.as_ref());
             return Self {
                 check_expressions: Vec::new(),
+                written_filter_types: Vec::new(),
                 project_calls: project.map(|p| p.calls),
                 sources,
                 source_interpretations,
@@ -1120,6 +1124,7 @@ impl PreparedSpecification {
         let tree = types::Tree::new(lowered, d, project.as_ref());
         Self {
             check_expressions: Vec::new(),
+            written_filter_types: Vec::new(),
             project_calls: project.map(|p| p.calls),
             sources,
             source_interpretations,
@@ -1146,10 +1151,13 @@ impl PreparedSpecification {
     /// Keep the declaration findings `check()` reports, then audit the
     /// lowered tree in debug builds.
     fn finish(mut self, d: &Document) -> Result<Self, PrepareError> {
-        let findings = checks::declared::findings(&self, d).map_err(|error| match error {
+        let refusal = |error| match error {
             BindError::ExpressionPolicy(error) => PrepareError::expression(error, None),
             _ => PrepareError::Internal,
-        })?;
+        };
+        let findings = checks::declared::findings(&self, d).map_err(refusal)?;
+        self.written_filter_types =
+            checks::declared::written_filter_types(&self, d).map_err(refusal)?;
         for finding in findings {
             let diagnostics = finding
                 .diagnostics(self.source())
@@ -1181,12 +1189,14 @@ impl PreparedSpecification {
         diagnostics.extend(self.output_findings().iter().map(OutputFinding::diagnostic));
         diagnostics
     }
-    /// Captured declaration types can refuse a donor filter even when source
-    /// schemas are unavailable. Other declaration checkpoints remain separate.
+    /// Declared types can refuse a donor filter even when source schemas are
+    /// unavailable: the faults written declarations decide, without the
+    /// `str` that INPUT-5 gives an undeclared field once its input is read.
+    /// Other declaration checkpoints remain separate.
     pub fn intermediate_filter_type_diagnostics(
         &self,
     ) -> impl Iterator<Item = &crate::diagnostic::Diagnostic> {
-        self.check_expressions
+        self.written_filter_types
             .iter()
             .filter(|finding| self.intermediates.owns_filter_type_finding(finding))
     }

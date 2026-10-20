@@ -75,16 +75,16 @@ mod execution {
                         actual: ValueType::Str,
                     },
                 ];
-                for (error, requirement) in faults.iter().zip([
-                    "REQ-0075",
+                for (error, rule) in faults.iter().zip([
+                    "COLUMN-2",
                     "LOOKUP-24",
                     "LOOKUP-24",
-                    "REQ-0127",
+                    "LOOKUP-10",
                     "WINDOW-9",
-                    "REQ-0510",
+                    "FORMULA-23",
                 ]) {
                     let finding = error.diagnostic().unwrap().unwrap();
-                    assert_eq!(finding.definition().requirement, Some(requirement));
+                    assert_eq!(finding.definition().rule, Some(rule));
                     assert_eq!(error.diagnostic(), Ok(Some(finding)));
                     match error {
                         ExecutionError::MultipleValues {

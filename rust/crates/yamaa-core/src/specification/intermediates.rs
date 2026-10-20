@@ -554,46 +554,6 @@ impl Declarations {
             .get(index)
             .is_some_and(|item| matches!(item.source, self_relations::Relation::SelfRows))
     }
-    pub fn self_donor_fields(&self) -> impl Iterator<Item = &str> {
-        self.0
-            .iter()
-            .filter(|item| matches!(item.source, self_relations::Relation::SelfRows))
-            .flat_map(|item| {
-                item.keys
-                    .as_ref()
-                    .into_iter()
-                    .flatten()
-                    .map(|(field, _)| field.as_str())
-                    .chain(
-                        item.order
-                            .iter()
-                            .map(|(field, _, _)| field.strip_prefix("SELF.").unwrap_or(field)),
-                    )
-                    .chain(
-                        item.filter
-                            .as_ref()
-                            .and_then(|filter| filter.as_ref().ok())
-                            .into_iter()
-                            .flat_map(|plan| plan.identifiers())
-                            .filter(|field| !field.contains('.') || field.starts_with("SELF."))
-                            .map(|field| field.strip_prefix("SELF.").unwrap_or(field)),
-                    )
-                    .chain(
-                        item.derivations
-                            .iter()
-                            .flat_map(|derive| &derive.references)
-                            .filter(|name| !name.contains('.') || name.starts_with("SELF."))
-                            .map(|name| name.strip_prefix("SELF.").unwrap_or(name)),
-                    )
-                    .chain(item.range.iter().flat_map(|range| range.donor_fields()))
-                    .chain(item.columns.iter().flatten().map(String::as_str))
-                    .chain(
-                        item.unique.iter().flat_map(|(_, columns, _)| {
-                            columns.iter().map(|(name, _)| name.as_str())
-                        }),
-                    )
-            })
-    }
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|item| item.name == name)
     }
@@ -779,7 +739,7 @@ impl Declarations {
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
-        let findings = checks::lookups::admission_findings(tree);
+        let findings = checks::lookups::admission_findings(tree, d, items)?;
         if !findings.is_empty() {
             return Err(PrepareError::Invalid(findings));
         }
@@ -949,24 +909,10 @@ impl Declarations {
                 .transpose()?;
             let require_match = requires_match(d, id);
             let unique = Self::prepare_unique_checks(d, id, &path)?;
-            let driver_prohibited = [
-                "key",
-                "between",
-                "order_by",
-                "keep",
-                "no_match",
-                "require_match",
-            ]
-            .into_iter()
-            .filter(|name| {
-                if *name == "no_match" {
-                    d.field(id, name).is_some()
-                } else {
-                    present(d, id, name)
-                }
-            })
-            .map(String::from)
-            .collect();
+            let driver_prohibited = checks::lookups::driver_prohibited(d, id)
+                .into_iter()
+                .map(String::from)
+                .collect();
             let derivations = intermediate_derivations::prepare(
                 d, id, &path, dataset, project, extraction, templates, &result,
             )?;

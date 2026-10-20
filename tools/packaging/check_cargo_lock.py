@@ -13,6 +13,7 @@ import argparse
 import dataclasses
 import io
 import json
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -49,6 +50,31 @@ LAYOUTS = {
 # theirs with the dist profile (rust/Cargo.toml).
 R_PACKAGE = ROOT / "R/yamaa"
 R_MAKEVARS = ("src/Makevars.in", "src/Makevars.win.in")
+KEEPS_SYMBOLS = "the R package keeps its symbols, as CRAN's Repository Policy asks"
+# R's linker, not rustc, links the engine's static library into the shared
+# object, so Cargo's strip never reaches it: R's link step is the one that
+# could strip it. These linker options remove symbols or debug information,
+# as the compiler driver passes them on after -Wl, or -Xlinker: -s
+# (--strip-all), -S (--strip-debug) and -x (--discard-all) for GNU ld and lld,
+# and -S and -x for macOS's ld64.
+LINKER_STRIP = {"s", "S", "x", "discard-all"}
+# make's $(strip ...) function trims whitespace and strips nothing.
+MAKE_STRIP = re.compile(r"\$[({]strip\s")
+# make's conditional directives, and the line that opens a define body.
+CONDITIONAL = re.compile(r"(?:ifeq|ifneq|ifdef|ifndef|else|endif)\b")
+DEFINE = re.compile(r"(?:(?:override|export|private)\s+)*define\b")
+# A variable assignment, with its modifiers, or another directive: a make line
+# that opens no rule.
+ASSIGNMENT = re.compile(
+    r"(?:(?:override|export|unexport|private)\s+)*"
+    r"(?:[^\s:#=]+\s*(?::{1,3}=|[+?!]?=)"
+    r"|(?:undefine|vpath|-?include|sinclude|-?load)\b)"
+)
+# A # that no backslash escapes starts a make comment.
+COMMENT = re.compile(r"(?<!\\)#")
+# Recipe commands that strip without the word strip: objcopy's -g
+# (--strip-debug), -S (--strip-all) and -x (--discard-all), and install -s.
+TOOL_STRIP = {"objcopy": {"-g", "-S", "-x", "--discard-all"}, "install": {"-s"}}
 
 
 def makevars_profile(label, makevars):
@@ -59,7 +85,7 @@ def makevars_profile(label, makevars):
     """
     commands = [
         line
-        for line in makevars.replace("\\\n", " ").splitlines()
+        for line in makevars.replace("\r\n", "\n").replace("\\\n", " ").splitlines()
         if '"$(CARGO)" build ' in line
     ]
     if len(commands) != 1:
@@ -80,6 +106,147 @@ def makevars_profile(label, makevars):
     return profiles[0] if profiles else "dev"
 
 
+def logical_lines(makevars):
+    """make's logical lines, each as its physical lines: a line that ends in an
+    odd number of backslashes continues on the next, and make reads CRLF as
+    LF."""
+    lines = [[]]
+    for line in makevars.replace("\r\n", "\n").split("\n"):
+        lines[-1].append(line)
+        if (len(line) - len(line.rstrip("\\"))) % 2 == 0:
+            lines.append([])
+    return [physical for physical in lines if physical]
+
+
+def opens_rule(text):
+    """Whether a make line, neither a recipe nor a conditional, opens a rule:
+    a target line, as opposed to an assignment, a directive or a
+    target-specific variable.
+
+    A trailing comment is cut first, so that a colon in it, as in a URL, does
+    not make a directive look like a rule. make reads a # inside a variable
+    reference literally; cutting there too can only close a rule early, which
+    gives the lines after it the stricter test.
+    """
+    text = COMMENT.split(text, maxsplit=1)[0]
+    if ASSIGNMENT.match(text):
+        return False
+    depth = 0
+    for index, char in enumerate(text):
+        depth += (char in "({") - (char in ")}")
+        if char == ":" and depth <= 0:
+            rest = text[index:].lstrip(":")
+            if not rest.startswith("="):
+                return not ASSIGNMENT.match(rest.lstrip())
+    return False
+
+
+def strips_at_link(previous, word, recipe):
+    """Whether a word, after `previous`, passes a strip option to a link.
+
+    The word's comma-separated pieces count as words, as in make's
+    $(if $(DEBUG),,-s), and make's parentheses and braces around them hide
+    nothing. The pieces after -Wl, and a word after -Xlinker, are linker
+    options. The compiler driver's -s counts outside recipes only: a recipe's
+    -s belongs to its own command, as in ln -s.
+    """
+    linker = previous.split(",")[-1].strip("(){}") == "-Xlinker"
+    for part in word.split(","):
+        piece = part.strip("(){}")
+        if piece == "-Wl":
+            linker = True
+        elif piece == "-s" and not recipe:
+            return True
+        elif linker and piece.startswith("-") and piece.lstrip("-") in LINKER_STRIP:
+            return True
+    return False
+
+
+def refuse_strip(label, line, recipe):
+    """Refuse a make line that mentions strip or passes a strip option, or a
+    recipe command in TOOL_STRIP that strips."""
+    text = MAKE_STRIP.sub(" ", line.replace('"', "").replace("'", ""))
+    words = text.split()
+    for previous, word in zip(["", *words], words):
+        if "strip" in word.lower():
+            shown = word
+        elif strips_at_link(previous, word, recipe):
+            shown = word.strip("(){}")
+        else:
+            continue
+        problem = (
+            f"a recipe runs {shown}"
+            if recipe
+            else f"{shown} strips the shared object at R's link step"
+        )
+        raise ValueError(f"{label}: {problem}; {KEEPS_SYMBOLS}")
+    if not recipe:
+        return
+    # Each shell command is named by its first word, as in @objcopy or
+    # $(OBJCOPY), or a cross tool's x86_64-w64-mingw32-objcopy.
+    for command in re.split(r"&&|\|\||[;|]", text):
+        tool, *options = command.split() or [""]
+        name = tool.strip("@+-$(){}").rsplit("/", 1)[-1].lower()
+        for key, strips in TOOL_STRIP.items():
+            if name.endswith(key) and (found := strips.intersection(options)):
+                raise ValueError(
+                    f"{label}: a recipe runs {tool} {min(found)}; {KEEPS_SYMBOLS}"
+                )
+
+
+def check_r_link(label, makevars):
+    """Refuse a Makevars template that would strip the shared object at R's
+    link step.
+
+    Outside comments, nothing may mention strip: a command such as strip or
+    $(STRIP_SHARED_LIB) in a recipe, or an option such as -Wl,--strip-all. No
+    line may pass a linker option in LINKER_STRIP after -Wl, or -Xlinker.
+    Outside the recipes, in PKG_LIBS or a variable that it reads, no line may
+    pass the compiler driver's -s either, and no recipe may run a command in
+    TOOL_STRIP with its strip option. make's $(strip ...) function is
+    admitted, but not an option inside it.
+
+    The lines are read as make reads them. A tab-led line is a recipe only
+    while a rule is open: from a target line, through blank and comment
+    lines, to the next other line. A define body is a variable's value,
+    whatever its lines look like. make keeps a rule open through a
+    conditional, but this check, which evaluates none, closes it there, since
+    a rule that one branch opens is not open in the other.
+    """
+    rule, depth = False, 0
+    for physical in logical_lines(makevars):
+        line = " ".join(part.removesuffix("\\") for part in physical)
+        text = line.strip()
+        if depth:
+            # make counts define and endef on lines that do not start with a tab.
+            if not line.startswith("\t"):
+                depth += bool(re.match(r"define\b", text))
+                depth -= bool(re.match(r"endef\b", text))
+            if depth:
+                refuse_strip(label, line, recipe=False)
+        elif rule and line.startswith("\t"):
+            # make hands a recipe line to the shell with its backslash-newlines
+            # and drops the tab that leads each continuation line. The shell
+            # joins the lines there without a space, but a comment ends at its
+            # newline, so it does not hide the line after it.
+            commands, command = [], ""
+            for part in physical:
+                if part.lstrip().startswith("#"):
+                    commands.append(command)
+                    command = ""
+                else:
+                    piece = part.removeprefix("\t") if command else part
+                    command += piece.removesuffix("\\")
+            for shell_command in [*commands, command]:
+                refuse_strip(label, shell_command, recipe=True)
+        elif text and not text.startswith("#"):
+            refuse_strip(label, line, recipe=False)
+            if DEFINE.match(text):
+                rule, depth = False, 1
+            else:
+                rule = not CONDITIONAL.match(text) and opens_rule(text)
+
+
 def check_r_symbols(label, manifest, config, makevars):
     """Refuse an R build that would strip its shared object.
 
@@ -87,7 +254,8 @@ def check_r_symbols(label, manifest, config, makevars):
     and Cargo configuration, and `makevars` maps each Makevars template's name
     to its text. Neither the profile that a template's cargo build selects nor
     a profile that it inherits from may set strip, other than to false or
-    "none", in the manifest or in the configuration.
+    "none", in the manifest or in the configuration, and no template may
+    strip at R's link step (check_r_link).
     """
     sources = [
         ("the Cargo configuration", tomllib.loads(config).get("profile", {})),
@@ -95,6 +263,7 @@ def check_r_symbols(label, manifest, config, makevars):
     ]
     for name, text in makevars.items():
         selected = makevars_profile(f"{label}: {name}", text)
+        check_r_link(f"{label}: {name}", text)
         profile, seen = selected, set()
         while profile is not None and profile not in seen:
             seen.add(profile)
@@ -107,8 +276,7 @@ def check_r_symbols(label, manifest, config, makevars):
                     )
                     raise ValueError(
                         f"{label}: {where} sets strip in the {profile} profile, "
-                        f"{use}; the R package keeps its symbols, as CRAN's "
-                        "Repository Policy asks"
+                        f"{use}; {KEEPS_SYMBOLS}"
                     )
             profile = next(
                 (
@@ -229,8 +397,8 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
     each crates.io crate of that lock, with every file that its
     `.cargo-checksum.json` lists and no other: in vendor/ in a Python source
     archive, and in src/rust/vendor.tar.xz in an R source package. An R source
-    package's Makevars must build with a profile that strips nothing
-    (check_r_symbols). Returns the host and the lock's packages.
+    package's Makevars must strip nothing, through the Cargo profile or at R's
+    link step (check_r_symbols). Returns the host and the lock's packages.
     """
     canonical = (workspace / "Cargo.lock").read_bytes().decode()
     with tarfile.open(path, "r:gz") as archive:
@@ -333,7 +501,10 @@ def main():
                 for name in R_MAKEVARS
             },
         )
-        print("R package: the profile that its Makevars build with strips nothing")
+        print(
+            "R package: its Makevars strip nothing, through the Cargo profile "
+            "or at R's link step"
+        )
     if args.output_dir:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         (args.output_dir / "cargo-metadata.json").write_text(metadata)

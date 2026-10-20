@@ -25,8 +25,6 @@ where a truth value belongs.
 
 Fails: `invalid_expression`.
 Evidence: `schema-predicates`, `schema-numeric-functions`, `schema-aggregation`, `negative-flag-condition`, `yaml/grammar/expression.yaml`.
-Replaces: REQ-0158, REQ-0160, REQ-0162, REQ-0188, REQ-0413, REQ-0439,
-REQ-0475, REQ-0499, REQ-1089, REQ-1120.
 
 <!-- grammar: expression -->
 
@@ -95,7 +93,6 @@ are case-insensitive, and identifiers are case-sensitive. A reserved keyword
 is not a bare name, but a qualified field may use one after its qualifier.
 
 Evidence: `yaml/grammar/expression.yaml`, `schema-predicates`.
-Replaces: REQ-0161, REQ-0414, REQ-0476.
 
 The reserved keywords are `AND`, `BETWEEN`, `FALSE`, `IN`, `IS`, `LIKE`,
 `NOT`, `NULL`, `OR` and `TRUE`. `DATE` and `DATETIME` begin a temporal
@@ -124,7 +121,6 @@ must parse under [Values](values.md) for the named type.
 
 Fails: `invalid_expression`, `integer_overflow`.
 Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/predicate_diagnostics.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_literals.tsv`.
-Replaces: REQ-0163, REQ-0164, REQ-0165, REQ-0192.
 
 `-9223372036854775808` is the least `int`, and `- 1` is the literal `-1`. An
 integer literal outside the `int` range of [VALUE-5](values.md#value-5),
@@ -160,7 +156,6 @@ does an admitted function called with another number of arguments.
 
 Fails: `prohibited_construct`, `prohibited_function`.
 Evidence: `negative-formula-flag`, `negative-row-aggregate`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
-Replaces: REQ-0407, REQ-0441, REQ-0512, REQ-1119, REQ-1121.
 
 | Written in | Root | Admits | Refuses |
 | --- | --- | --- | --- |
@@ -209,9 +204,6 @@ unresolved name fails rather than leaving an expression dependency-free.
 
 Fails: `unresolvable_name`, `unknown_field`, `qualified_identifier`.
 Evidence: `negative-review-unknown-date`, `negative-direct-dose-read`, `adam-adsl-bmi`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-adapters/tests/scalar_language.rs`.
-Replaces: REQ-0178, REQ-0179, REQ-0180, REQ-0181, REQ-0182, REQ-0183,
-REQ-0184, REQ-0185, REQ-0186, REQ-0189, REQ-0408, REQ-0409, REQ-0410,
-REQ-0411, REQ-0412, REQ-0442, REQ-0443.
 
 | Site | Visible names |
 | --- | --- |
@@ -291,7 +283,6 @@ missingness and are never `UNKNOWN`. A filter retains a row or record only for
 `TRUE`, and a verification holds only for `TRUE`.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`, `schema-predicates`.
-Replaces: REQ-0159, REQ-0166, REQ-0171.
 
 `NOT TRUE` is `FALSE`, `NOT FALSE` is `TRUE`, and `NOT UNKNOWN` is `UNKNOWN`.
 
@@ -324,7 +315,6 @@ Every other pair fails: a temporal value is not comparable to text, and a
 
 Fails: `incompatible_input_type`.
 Evidence: `negative-review-date-text`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`.
-Replaces: REQ-0167, REQ-0168, REQ-0169, REQ-0190.
 
 | Types | Order |
 |---|---|
@@ -353,7 +343,6 @@ operand must be comparable with `x`. `x BETWEEN a AND b` is
 operand produces `UNKNOWN`, not `TRUE`.
 
 Evidence: `schema-predicates`, `rust/crates/yamaa-core/tests/fixtures/predicate_evaluation.tsv`.
-Replaces: REQ-0172, REQ-0173, REQ-0174, REQ-0175.
 
 These compound operators expand into the primitive logic of
 [FORMULA-4](#formula-4) and the comparisons of [FORMULA-5](#formula-5).
@@ -371,7 +360,6 @@ as literal. An invalid `ESCAPE` literal or a trailing escape character fails.
 
 Fails: `incompatible_input_type`, `invalid_expression`.
 Evidence: `adam-adae-protocol-review`, `schema-predicates`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
-Replaces: REQ-0176, REQ-0177, REQ-0191.
 
 A non-string operand fails with `incompatible_input_type`. An invalid
 `ESCAPE` literal, or a pattern with a dangling escape, fails with
@@ -395,7 +383,6 @@ fails with `invalid_expression` when the expression is admitted.
 
 Fails: `incompatible_input_type`, `invalid_expression`, `prohibited_function`.
 Evidence: `schema-str-contains`, `negative-str-contains-invalid-regex`.
-Replaces: REQ-1244.
 
 The portable regex contract is the one of
 [Text operations](text.md#text-6). Each pattern is compiled once, when its
@@ -420,7 +407,6 @@ is converted by binding it to a numeric column first.
 
 Fails: `incompatible_input_type`.
 Evidence: `negative-review-arithmetic`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`.
-Replaces: REQ-0307, REQ-0426, REQ-0444.
 
 The failure reports the expression, the operand as written, `numeric` and the
 operand's actual type, once however often the operand is written; a
@@ -441,7 +427,6 @@ this list.
 
 Fails: `prohibited_function`.
 Evidence: `schema-numeric-functions`, `yaml/grammar/expression.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/grammar_diagnostics.tsv`.
-Replaces: REQ-0415, REQ-0416, REQ-0417, REQ-0425, REQ-0440.
 
 - `ABS(x)`: absolute value.
 - `CEIL(x)`: least integer value not less than `x`.
@@ -476,7 +461,6 @@ missing input. A formula that must yield missing rather than fail uses
 `100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/numeric_selection.tsv`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `adam-adsl-bmi`.
-Replaces: REQ-0427, REQ-0428.
 
 In a predicate, a comparison whose arithmetic operand is missing is
 `UNKNOWN` under [FORMULA-4](#formula-4); the logical operators and `IS NULL`
@@ -495,8 +479,6 @@ explicitly. A failure reports the expression and the operation that failed.
 
 Fails: `division_by_zero`, `sqrt_of_negative`, `ln_of_nonpositive`, `invalid_power`, `integer_overflow`.
 Evidence: `negative-zero-division`, `negative-negative-sqrt`, `negative-log-zero`, `negative-integer-overflow`.
-Replaces: REQ-0429, REQ-0430, REQ-0431, REQ-0432, REQ-0433, REQ-0445,
-REQ-0496, REQ-0513.
 
 An invalid `POWER` fails with `invalid_power`, and an `int` result outside
 the range fails with `integer_overflow` under [VALUE-5](values.md#value-5).
@@ -526,7 +508,6 @@ rounding exists.
 
 Fails: `incompatible_input_type`.
 Evidence: `schema-round-half-away-from-zero-ties`, `negative-round-half-away-from-zero-non-numeric-source`, `rust/crates/yamaa-adapters/tests/scalar_declarative_rounding.rs`.
-Replaces: REQ-0418, REQ-0419, REQ-1172.
 
 `2^-26` is `sqrt(2^-52)`. At two places, `2.675` (stored as
 `2.674999999999999822...`, inside the window) rounds to `2.68`, and
@@ -560,7 +541,6 @@ expression keeps the type it reduces, and any other expression is numeric
 ([FORMULA-23](#formula-23)).
 
 Evidence: `schema-aggregation`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`.
-Replaces: REQ-0295, REQ-1091, REQ-1092.
 
 The grammar is [FORMULA-1](#formula-1)'s, and its vocabulary closes the
 reducers of [FORMULA-18](#formula-18). `100 * SUM(EX.EXDOSE) / EX.EXPLDOS`
@@ -577,7 +557,6 @@ amends this table.
 
 Fails: `prohibited_function`, `invalid_expression`.
 Evidence: `schema-aggregation`, `adam-adlb-mean`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`.
-Replaces: REQ-0477, REQ-0478, REQ-0481, REQ-0484, REQ-0500, REQ-0505.
 
 | Reducer | Result |
 |---|---|
@@ -623,7 +602,6 @@ with the numeric `/`, and it inherits the binary64 rounding of `SUM`. A
 reduction does not sort the records.
 
 Evidence: `adam-adlb-ordered-sum`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::sum_adds_matched_donor_records_in_stored_order_and_mean_divides_that_sum`.
-Replaces: REQ-0479, REQ-0480, REQ-0498.
 
 The `filter`, when present, removes records and keeps the order of the records
 that remain. [Inputs](inputs.md) defines stored-source
@@ -648,7 +626,6 @@ and the record count.
 
 Fails: `aggregate_multiple_records`.
 Evidence: `negative-multiple-baselines`, `negative-adlb-duplicate-wbc`, `adam-adlb-bds`.
-Replaces: REQ-0482, REQ-0494, REQ-0501.
 
 `ONLY` is the reduction for a grouped calculation that requires one source
 record and must reject duplicates.
@@ -667,7 +644,6 @@ through `dataset_class.schema`.
 
 Fails: `nested_reduction`.
 Evidence: `yaml/grammar/expression.yaml`, `rust/crates/yamaa-core/tests/numeric_aggregate_parser.rs`, `rust/crates/yamaa-adapters/tests/fixtures/syntax_controls.json`.
-Replaces: REQ-0483, REQ-0502.
 
 The link through `dataset_class.schema`
 ([INPUT-10](inputs.md#input-10)) types the stored fields from the
@@ -699,7 +675,6 @@ enclosing `row.group_by` supplies the grouped columns.
 
 Fails: `aggregate_identifier_not_grouped`.
 Evidence: `negative-dose-intensity`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
-Replaces: REQ-0485, REQ-0486, REQ-0503.
 
 `SUM(EX.EXDOSE) / EX.EXPLDOS` is legal exactly when `EX.EXPLDOS` is declared
 in `group_by`.
@@ -718,8 +693,6 @@ promotion gives its type.
 
 Fails: `incompatible_input_type`, `incomparable_sources`.
 Evidence: `negative-sum-non-numeric`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
-Replaces: REQ-0313, REQ-0317, REQ-0487, REQ-0488, REQ-0489, REQ-0490,
-REQ-0510, REQ-0511.
 
 `SUM` or `MEAN` over a non-numeric argument fails, as does arithmetic over a
 non-numeric reduction or grouped identifier. `MIN` or `MAX` over incomparable
@@ -746,7 +719,6 @@ missing, never zero, and `COUNT(x)` yields `0`. An uncollected quantity is
 never reported as a measured zero.
 
 Evidence: `adam-adex-uncollected`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
-Replaces: REQ-0491, REQ-0492, REQ-0493, REQ-0495.
 
 | Group | Result |
 |---|---|
@@ -778,7 +750,6 @@ that does any of these is enabled. `/` never truncates. String comparison uses
 missing-value behavior is taken from a host SQL engine.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`, `rust/crates/yamaa-core/tests/portable_math_golden.rs`, `tools/tests/test_portable_math.py`.
-Replaces: REQ-0187, REQ-0436, REQ-0437, REQ-0438, REQ-0497.
 
 `a / (b * b)` and `a / b / b` are different formulas and may return different
 doubles. Both are correct, and evaluation returns the double for the written

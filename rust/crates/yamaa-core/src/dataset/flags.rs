@@ -110,7 +110,7 @@ impl Flag {
 }
 
 /// Flag predicates own their public validation vocabulary, including regex input
-/// types (REQ-0190). A numeric operand's failure keeps the shared projection.
+/// types (FORMULA-5). A numeric operand's failure keeps the shared projection.
 pub fn flag_condition_diagnostic<E>(
     error: &EvaluationError<E>,
 ) -> Option<crate::diagnostic::Diagnostic> {

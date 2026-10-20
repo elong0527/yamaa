@@ -171,7 +171,7 @@ fn an_input_requiring_a_match_fails_a_concise_read_as_unmatched_key() {
     let failure = fixture.failure();
     assert_eq!(failure["phase"], "join");
     assert_eq!(failure["condition"], "unmatched_key");
-    assert_eq!(failure["requirement"], "LOOKUP-24");
+    assert_eq!(failure["rule"], "LOOKUP-24");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["columns.TRTSDT.derivation.source"])
@@ -208,7 +208,7 @@ fn an_input_requiring_a_match_fails_operand_and_predicate_reads_at_their_paths()
         ));
         let failure = fixture.failure();
         assert_eq!(failure["condition"], "unmatched_key", "{column}");
-        assert_eq!(failure["requirement"], "LOOKUP-24", "{column}");
+        assert_eq!(failure["rule"], "LOOKUP-24", "{column}");
         assert_eq!(failure["spec_paths"], yamaa_adapters::json!([path]));
     }
 }
@@ -306,7 +306,7 @@ fn a_row_template_counts_an_operand_read_and_fails_it_when_required() {
         Fixture::new(&ROWS.replace("ADSL_DECLARATION", "{path: adsl.csv, require_match: true}"));
     let failure = fixture.failure();
     assert_eq!(failure["condition"], "unmatched_key");
-    assert_eq!(failure["requirement"], "LOOKUP-24");
+    assert_eq!(failure["rule"], "LOOKUP-24");
     assert_eq!(
         failure["spec_paths"],
         yamaa_adapters::json!(["rows[0].derivations.ARMU.str_case.source"])

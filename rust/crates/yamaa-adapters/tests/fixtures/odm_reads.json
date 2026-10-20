@@ -1754,7 +1754,7 @@
             }
           },
           "phase": "derivation",
-          "requirement": "REQ-1278",
+          "rule": "NAME-13",
           "spec_paths": [
             "columns.VAL.derivation.odm"
           ]
@@ -1787,7 +1787,7 @@
                 }
               },
               "phase": "derivation",
-              "requirement": "REQ-1278",
+              "rule": "NAME-13",
               "spec_paths": [
                 "columns.VAL.derivation.odm"
               ]
@@ -1972,7 +1972,7 @@
             }
           },
           "phase": "row_construction",
-          "requirement": "REQ-1278",
+          "rule": "NAME-13",
           "spec_paths": [
             "rows[0].derivations.VAL.odm"
           ]
@@ -2004,7 +2004,7 @@
                 }
               },
               "phase": "row_construction",
-              "requirement": "REQ-1278",
+              "rule": "NAME-13",
               "spec_paths": [
                 "rows[0].derivations.VAL.odm"
               ]
@@ -2241,7 +2241,7 @@
             }
           },
           "phase": "derivation",
-          "requirement": "REQ-1278",
+          "rule": "NAME-13",
           "spec_paths": [
             "columns.VAL.derivation.odm"
           ]
@@ -2279,7 +2279,7 @@
                 }
               },
               "phase": "derivation",
-              "requirement": "REQ-1278",
+              "rule": "NAME-13",
               "spec_paths": [
                 "columns.VAL.derivation.odm"
               ]
@@ -2500,7 +2500,7 @@
             "records": 2
           },
           "phase": "ingest",
-          "requirement": "REQ-1276",
+          "rule": "NAME-9",
           "spec_paths": [
             "input.SRC.path"
           ]
@@ -2522,7 +2522,7 @@
                 "records": 2
               },
               "phase": "ingest",
-              "requirement": "REQ-1276",
+              "rule": "NAME-9",
               "spec_paths": [
                 "input.SRC.path"
               ]
@@ -2698,7 +2698,7 @@
             ]
           },
           "phase": "validation",
-          "requirement": "REQ-1275",
+          "rule": "NAME-8",
           "spec_paths": [
             "input.SRC.path"
           ]
@@ -2721,7 +2721,7 @@
                 ]
               },
               "phase": "validation",
-              "requirement": "REQ-1275",
+              "rule": "NAME-8",
               "spec_paths": [
                 "input.SRC.path"
               ]
@@ -2772,7 +2772,7 @@
             ]
           },
           "phase": "validation",
-          "requirement": "REQ-1275",
+          "rule": "NAME-8",
           "spec_paths": [
             "input.SRC.path"
           ]
@@ -2796,7 +2796,7 @@
                 ]
               },
               "phase": "validation",
-              "requirement": "REQ-1275",
+              "rule": "NAME-8",
               "spec_paths": [
                 "input.SRC.path"
               ]

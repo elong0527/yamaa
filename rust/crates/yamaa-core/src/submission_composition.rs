@@ -1,11 +1,11 @@
 //! Shared submission composition over admitted metadata. No study or host ports.
 use crate::{
-    application_issue as issue,
+    application_issue as issue, ast,
     diagnostic::{ConditionCode, Definition},
     project_environment::Submission,
     project_terminology as ct,
     schema::{Document, DocumentNode as N},
-    specification_submission_document as spec, submission_document as env,
+    specification_submission_document as spec,
     submission_origin::{self as origin, Reads},
     submission_values as values,
 };
@@ -113,7 +113,7 @@ pub struct Dataset {
 }
 #[derive(Clone, Debug)]
 pub struct Codelist {
-    pub declaration: ct::Codelist,
+    pub declaration: ast::Codelist,
     pub standard: Option<String>,
 }
 #[derive(Clone, Debug)]
@@ -129,8 +129,8 @@ pub struct Standard {
 /// an unadmitted declaration or fitting prefix of the selected dataset set.
 #[derive(Debug)]
 pub struct Study {
-    pub(crate) study: env::Study,
-    pub(crate) section: env::Section,
+    pub(crate) study: ast::Study,
+    pub(crate) section: ast::Section,
     /// The implementation guide every represented dataset follows.
     pub(crate) guide: String,
     pub(crate) file_oid: String,
@@ -157,8 +157,8 @@ impl Study {
         &self.codelists
     }
     /// The transport file the selected section requests, if any.
-    pub fn transport(&self) -> Option<env::Transport> {
-        self.section.datasets.as_ref().map(|field| field.value)
+    pub fn transport(&self) -> Option<ast::Transport> {
+        self.section.transport
     }
 }
 impl Dataset {
@@ -447,12 +447,9 @@ const DATASET_NAME: &str = "^[A-Z][A-Z0-9]{0,7}$";
 const COLUMN_NAME: &str = "^[A-Z][A-Z0-9_]{0,7}$";
 /// Names and labels meet the transport limits under `Submission`, and under
 /// `xpt` in every context (DEFINE-4, DEFINE-22, XPT-5).
-fn transport_limits(section: &env::Section) -> bool {
-    section.context.value == env::Context::Submission
-        || section
-            .datasets
-            .as_ref()
-            .is_some_and(|field| field.value == env::Transport::Xpt)
+fn transport_limits(section: &ast::Section) -> bool {
+    section.context == ast::DefineContext::Submission
+        || section.transport == Some(ast::Transport::Xpt)
 }
 fn name_finding(path: &str, name: &str, pattern: &str) -> Finding {
     let mut finding = Finding::cause(ConditionCode::SubmissionSasName, path, name);
@@ -527,10 +524,10 @@ struct ColumnAdmission<'a> {
     doc: &'a Document,
     /// The dataset name, reported with transport findings.
     dataset: &'a str,
-    section: &'a env::Section,
+    section: &'a ast::Section,
     catalogue: &'a ct::Catalogue,
     known: &'a BTreeSet<&'a str>,
-    acrfs: &'a [&'a env::DocumentReference],
+    acrfs: &'a [&'a ast::SupportingDocument],
     keys: &'a [String],
     reads: &'a Reads,
     /// The dataset's class decides whether `core` derives `mandatory` (SUB-10).
@@ -705,7 +702,7 @@ impl ColumnAdmission<'_> {
         {
             // SUB-17: under `Submission` the reference says where in the form
             // the value was collected; only `Other` derives a page-less one.
-            let submission = section.context.value == env::Context::Submission;
+            let submission = section.context == ast::DefineContext::Submission;
             if acrfs.len() != 1 {
                 findings.push(Finding::cause(
                     ConditionCode::SubmissionAnnotatedCrfMissing,
@@ -721,12 +718,12 @@ impl ColumnAdmission<'_> {
                     ));
                 } else {
                     refs.push(spec::DocumentReference::Plain(spec::Field {
-                        value: acrfs[0].id.value.clone(),
+                        value: acrfs[0].id.name.clone(),
                         origin: origin.documents.origin,
                     }));
                 }
             } else if refs.is_empty()
-                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.value)
+                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.name)
                 || (submission && !refs.iter().any(paged))
             {
                 findings.push(Finding::cause(
@@ -816,10 +813,7 @@ impl ColumnAdmission<'_> {
         // XPT-9: a numeric variable's declared display format must be a SAS
         // format the transport can carry; only the column's own one is written.
         if level == Level::Column
-            && section
-                .datasets
-                .as_ref()
-                .is_some_and(|field| field.value == env::Transport::Xpt)
+            && section.transport == Some(ast::Transport::Xpt)
             && matches!(
                 column_type,
                 spec::ColumnType::Integer | spec::ColumnType::Float
@@ -1130,6 +1124,17 @@ fn compose_values(
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),
                 text: declared.column_type.value == spec::ColumnType::String,
+                codelist: declared.submission.as_ref().and_then(|metadata| {
+                    values::admitted(
+                        admission.catalogue,
+                        metadata.codelist.as_ref().map(|list| list.value.as_str()),
+                        metadata
+                            .value_level
+                            .iter()
+                            .filter_map(|entry| entry.metadata.codelist.as_ref())
+                            .map(|list| list.value.as_str()),
+                    )
+                }),
             })
         });
         for finding in &static_findings {
@@ -1342,12 +1347,12 @@ fn predecessor_labels(
 /// `study` holds every specification any submission section lists.
 #[allow(clippy::too_many_arguments)]
 fn compose_datasets(
-    section: &env::Section,
+    section: &ast::Section,
     catalogue: &ct::Catalogue,
     inputs: &[Input<'_>],
     study: &[&Document],
     known: &BTreeSet<&str>,
-    acrfs: &[&env::DocumentReference],
+    acrfs: &[&ast::SupportingDocument],
     findings: &mut Vec<Finding>,
     bound: &mut BTreeSet<String>,
 ) -> Vec<Dataset> {
@@ -1384,7 +1389,7 @@ fn compose_datasets(
         }
         // JSON-5: a transport re-reads the published artifact, so display digits
         // the csv profile writes would become the submitted values.
-        if section.datasets.is_some() {
+        if section.transport.is_some() {
             if let Some(decimals) = doc
                 .field(doc.root(), "output")
                 .and_then(|output| doc.field(output, "decimals"))
@@ -1397,10 +1402,10 @@ fn compose_datasets(
                 finding
                     .context
                     .insert("dataset".into(), crate::json::Value::String(id.clone()));
-                if let Some(written) = section.specs.value.get(index) {
+                if let Some(written) = section.specs.get(index) {
                     finding.context.insert(
                         "specification".into(),
-                        crate::json::Value::String(written.value.clone()),
+                        crate::json::Value::String(written.text.clone()),
                     );
                 }
                 if let N::Integer(value) = &doc.nodes()[decimals] {
@@ -1641,13 +1646,28 @@ fn compose_datasets(
     datasets
 }
 
+/// The source-system version Define-XML and Dataset-JSON metadata carry: the
+/// section's authored override, or else the version the calling package
+/// supplies as installed (DEFINE-12). Core's own crate version is never a
+/// substitute for the Python or R generator, and neither may be empty.
+fn source_version<'a>(section: &'a ast::Section, installed: &'a str) -> Option<&'a str> {
+    if installed.is_empty() {
+        return None;
+    }
+    let metadata = section
+        .source_system_version
+        .as_ref()
+        .map_or(installed, |version| version.text.as_str());
+    (!metadata.is_empty()).then_some(metadata)
+}
+
 /// The declarations composition requires beyond the specifications a run uses.
 #[derive(Clone, Copy, Debug)]
 pub struct Required<'a> {
-    pub study: &'a env::Study,
-    pub section: &'a env::Section,
-    pub standard: &'a env::ImplementationGuide,
-    pub define: &'a env::Field<String>,
+    pub study: &'a ast::Study,
+    pub section: &'a ast::Section,
+    pub standard: &'a ast::ImplementationGuide,
+    pub define: &'a ast::Text,
 }
 impl<'a> Required<'a> {
     /// A section admits for runs with only its `specs`. Composition requires the
@@ -1655,15 +1675,15 @@ impl<'a> Required<'a> {
     /// `standard` and `define`, and reports every missing one together as a
     /// missing required field.
     pub fn admit(
-        study: Option<&'a env::Study>,
-        section: Option<&'a env::Section>,
+        study: Option<&'a ast::Study>,
+        section: Option<&'a ast::Section>,
         family: Submission,
     ) -> Result<Self, Vec<Finding>> {
         let family = family_name(family);
         let missing = |path: String, field: &str| {
             Finding::cause(ConditionCode::DefineRequiredDeclaration, &path, field)
         };
-        let standard = section.and_then(|section| section.standard.as_ref());
+        let standard = section.and_then(|section| section.standards.first());
         let define = section.and_then(|section| section.define.as_ref());
         if let (Some(study), Some(section), Some(standard), Some(define)) =
             (study, section, standard, define)
@@ -1726,14 +1746,14 @@ pub fn compose(
     let mut fail = |code, suffix: &str, detail: &str| {
         findings.push(Finding::cause(code, &format!("{prefix}.{suffix}"), detail));
     };
-    if inputs.len() != section.specs.value.len() {
+    if inputs.len() != section.specs.len() {
         fail(
             ConditionCode::SubmissionMetadataMissing,
             "specs",
             "incomplete captured dataset set",
         );
     }
-    let guide = guide_declaration.name.value.name();
+    let guide = guide_declaration.name.text.as_str();
     let compatible = match section.family {
         Submission::Sdtm => guide.starts_with("SDTMIG"),
         Submission::Adam => guide.starts_with("ADaMIG"),
@@ -1746,13 +1766,13 @@ pub fn compose(
             guide,
         );
     }
-    if !define.value.to_ascii_lowercase().ends_with(".xml") {
+    if !define.text.to_ascii_lowercase().ends_with(".xml") {
         fail(
             ConditionCode::SubmissionDefineExtension,
             "define",
             "expected .xml extension",
         );
-    } else if section.datasets.is_some() && define.value.rsplit('/').next() != Some("define.xml") {
+    } else if section.transport.is_some() && define.text.rsplit('/').next() != Some("define.xml") {
         // DEFINE-2: the transport files sit beside a document named define.xml.
         fail(
             ConditionCode::SubmissionDefineName,
@@ -1760,9 +1780,9 @@ pub fn compose(
             "a transport requires the document file name define.xml",
         );
     }
-    let source_version = match section.source_versions(installed) {
-        Ok(v) => v.metadata().into(),
-        Err(_) => {
+    let source_version = match source_version(section, installed) {
+        Some(version) => version.into(),
+        None => {
             fail(
                 ConditionCode::SubmissionSourceVersion,
                 "source_system_version",
@@ -1772,20 +1792,19 @@ pub fn compose(
         }
     };
     let mut known = BTreeSet::new();
-    for document in &section.documents.value {
-        if !known.insert(document.id.value.as_str()) {
+    for document in &section.documents {
+        if !known.insert(document.id.name.as_str()) {
             fail(
                 ConditionCode::SubmissionDuplicateIdentifier,
                 "documents",
-                &document.id.value,
+                &document.id.name,
             );
         }
     }
     let acrfs: Vec<_> = section
         .documents
-        .value
         .iter()
-        .filter(|d| d.kind.value == env::DocumentKind::AnnotatedCrf)
+        .filter(|d| d.kind == ast::DocumentKind::AnnotatedCrf)
         .collect();
     if acrfs.len() > 1 {
         fail(
@@ -1810,60 +1829,59 @@ pub fn compose(
         name: guide.into(),
         kind: "IG",
         publishing_set: None,
-        version: guide_declaration.version.value.clone(),
-        status: match guide_declaration.status.value {
-            env::GuideStatus::Draft => "Draft",
-            env::GuideStatus::Final => "Final",
-        }
+        version: guide_declaration.version.text.clone(),
+        status: guide_declaration.status.name(),
     }];
     let mut codelists = Vec::new();
-    for source in catalogue.sources() {
-        if !source.codelists.iter().any(|c| bound.contains(&c.id)) {
+    for (index, source) in catalogue.sources().iter().enumerate() {
+        if !source.codelists.iter().any(|c| bound.contains(&c.id.name)) {
             continue;
         }
         let standard = source.standard.as_ref().map(|ct| {
-            let candidate = format!("CT_{}", ct.publishing_set);
-            if let Some(prior) = standards.iter().find(|s| {
-                s.kind == "CT"
-                    && s.publishing_set.as_ref() == Some(&ct.publishing_set)
-                    && s.name == ct.name
-                    && s.version == ct.version
-            }) {
-                return prior.id.clone();
+            // DEFINE-9: a terminology standard is identified by its publishing set.
+            let id = format!("CT_{}", ct.publishing_set.text);
+            match standards.iter().find(|s| s.id == id) {
+                // Sources citing one standard share its definition.
+                Some(prior)
+                    if prior.kind == "CT"
+                        && prior.name == ct.name.text
+                        && prior.version == ct.version.text => {}
+                // DEFINE-10: another standard under the same identifier is
+                // refused, never numbered.
+                Some(_) => findings.push(Finding::cause(
+                    ConditionCode::SubmissionDuplicateIdentifier,
+                    &format!("codelists[{index}].standard.publishing_set"),
+                    &format!("STD.{id}"),
+                )),
+                None => standards.push(Standard {
+                    id: id.clone(),
+                    name: ct.name.text.clone(),
+                    kind: "CT",
+                    publishing_set: Some(ct.publishing_set.text.clone()),
+                    version: ct.version.text.clone(),
+                    status: "Final",
+                }),
             }
-            let id = if standards.iter().any(|s| s.id == candidate) {
-                format!("{candidate}_{}", standards.len())
-            } else {
-                candidate
-            };
-            standards.push(Standard {
-                id: id.clone(),
-                name: ct.name.clone(),
-                kind: "CT",
-                publishing_set: Some(ct.publishing_set.clone()),
-                version: ct.version.clone(),
-                status: "Final",
-            });
             id
         });
         for list in &source.codelists {
-            if !bound.contains(&list.id) {
+            if !bound.contains(&list.id.name) {
                 continue;
             }
             // DEFINE-4: a sponsor-extended item has no NCI code, so only the
             // published items carry one (CT-6 refuses an alias on the others).
-            if section.context.value == env::Context::Submission
+            if section.context == ast::DefineContext::Submission
                 && source
                     .standard
                     .as_ref()
-                    .is_some_and(|s| s.name == "CDISC/NCI")
+                    .is_some_and(|s| s.name.text == "CDISC/NCI")
                 && list.items.as_ref().is_some_and(|items| {
                     list.alias.is_none() || items.iter().any(|i| !i.extended && i.alias.is_none())
                 })
             {
                 findings.push(Finding::cause(
                     ConditionCode::SubmissionCdiscAliasMissing,
-                    &format!("codelists.{}", list.id),
+                    &format!("codelists.{}", list.id.name),
                     "alias",
                 ));
             }
@@ -1877,20 +1895,20 @@ pub fn compose(
         return Err(findings);
     }
     let metadata_id = section.metadata_version.as_ref().map_or_else(
-        || format!("{}.{}", study.id.value, family),
-        |m| m.id.value.clone(),
+        || format!("{}.{}", study.id.name, family),
+        |m| m.id.name.clone(),
     );
     let metadata_name = section.metadata_version.as_ref().map_or_else(
-        || format!("{} {} metadata", study.name.value, family),
-        |m| m.name.value.clone(),
+        || format!("{} {} metadata", study.name.text, family),
+        |m| m.name.text.clone(),
     );
     Ok(Study {
         study: study.clone(),
         section: section.clone(),
         guide: guide.into(),
         file_oid: section.file_oid.as_ref().map_or_else(
-            || format!("{}.{}.Define-XML_2.1", study.id.value, family),
-            |f| f.value.clone(),
+            || format!("{}.{}.Define-XML_2.1", study.id.name, family),
+            |f| f.text.clone(),
         ),
         metadata_id,
         metadata_name,
@@ -1898,7 +1916,7 @@ pub fn compose(
             .metadata_version
             .as_ref()
             .and_then(|m| m.description.as_ref())
-            .map(|f| f.value.clone()),
+            .map(|f| f.text.clone()),
         source_version,
         installed_version: installed.into(),
         created: created.into(),
@@ -1912,6 +1930,42 @@ pub fn compose(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// DEFINE-12: an authored source-system version overrides the version
+    /// the calling package supplies as installed; neither may be empty.
+    #[test]
+    fn the_source_system_version_is_the_override_or_else_the_installed_package() {
+        let text = |text: &str| ast::Text {
+            text: text.into(),
+            meta: ast::Meta {
+                path: ast::Paths::new().root(),
+                span: ast::Span::UNKNOWN,
+            },
+        };
+        let mut section = ast::Section {
+            family: Submission::Sdtm,
+            specs: Vec::new(),
+            standards: Vec::new(),
+            define: None,
+            documents: Vec::new(),
+            transport: None,
+            context: ast::DefineContext::Submission,
+            xml_lang: text("en"),
+            file_oid: None,
+            metadata_version: None,
+            originator: None,
+            stylesheet: None,
+            source_system_version: None,
+            meta: text("").meta,
+        };
+        assert_eq!(source_version(&section, "0.3.0"), Some("0.3.0"));
+        assert_eq!(source_version(&section, ""), None);
+        section.source_system_version = Some(text("1.0"));
+        assert_eq!(source_version(&section, "0.3.0"), Some("1.0"));
+        assert_eq!(source_version(&section, ""), None);
+        section.source_system_version = Some(text(""));
+        assert_eq!(source_version(&section, "0.3.0"), None);
+    }
 
     /// An engine refusal at a submission path names its stage and closed
     /// code; a bound adds its resource facts, without an unknown size.

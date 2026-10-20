@@ -2631,7 +2631,7 @@
             "reason": "a grouped row aggregate reads 'SRC', not 'OTHER'"
           },
           "phase": "validation",
-          "requirement": "REQ-0329",
+          "rule": "LOOKUP-18",
           "spec_paths": [
             "rows[0].derivations.V.aggregate"
           ]
@@ -2651,7 +2651,7 @@
                 "reason": "a grouped row aggregate reads 'SRC', not 'OTHER'"
               },
               "phase": "validation",
-              "requirement": "REQ-0329",
+              "rule": "LOOKUP-18",
               "spec_paths": [
                 "rows[0].derivations.V.aggregate"
               ]
@@ -2734,7 +2734,7 @@
             "reason": "a grouped row aggregate reads 'SRC', not 'OTHER'"
           },
           "phase": "validation",
-          "requirement": "REQ-0329",
+          "rule": "LOOKUP-18",
           "spec_paths": [
             "rows[0].derivations.V.aggregate"
           ]
@@ -2754,7 +2754,7 @@
                 "reason": "a grouped row aggregate reads 'SRC', not 'OTHER'"
               },
               "phase": "validation",
-              "requirement": "REQ-0329",
+              "rule": "LOOKUP-18",
               "spec_paths": [
                 "rows[0].derivations.V.aggregate"
               ]
@@ -2837,7 +2837,7 @@
             "reason": "a grouped row aggregate reads its row driver"
           },
           "phase": "validation",
-          "requirement": "REQ-0329",
+          "rule": "LOOKUP-18",
           "spec_paths": [
             "rows[0].derivations.V.aggregate"
           ]
@@ -2857,7 +2857,7 @@
                 "reason": "a grouped row aggregate reads its row driver"
               },
               "phase": "validation",
-              "requirement": "REQ-0329",
+              "rule": "LOOKUP-18",
               "spec_paths": [
                 "rows[0].derivations.V.aggregate"
               ]
@@ -3080,7 +3080,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "REQ-0375",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -3222,7 +3222,7 @@
           "check": "not_missing",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "REQ-0375",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",

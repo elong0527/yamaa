@@ -2,7 +2,7 @@ phase: verification
 condition: allowed_values_failed
 spec_paths:
   - columns.EPOCH.submission.codelist
-requirement: REQ-0957
+rule: CT-7
 context:
   column: EPOCH
   codelist: EPOCH

@@ -98,43 +98,71 @@ stops instead of guessing when a crate needs a license outside its reviewed
 list or ships an unclassified license file; review the crate and extend the
 tables in `tools/packaging/generate_third_party_notices.py`.
 
+Every crate of either host's trimmed lock has a purpose in
+`tools/packaging/crate_purposes.toml`: the source archives ship them all,
+including the crates that only build scripts and procedural macros use and
+those that no supported target compiles. `make check-repository` fails while
+a shipped crate has no purpose, a purpose names a crate that neither host
+ships, or a purpose is empty (`tools.packaging.check_crate_purposes`). After a
+dependency change, add a line for each new crate saying why yamaa ships it, as
+the file's header describes, and remove the lines of crates that no host ships
+any more. From `rust/`,
+`cargo tree --locked --offline --workspace --target all -i <crate>` shows what
+pulls a crate in.
+
+Every package also ships `COMPONENTS.tsv` beside the notices: an inventory,
+without digests, of the components that its host's packages are built from.
+`tools.packaging.generate_component_inventory` writes `python/COMPONENTS.tsv`
+and `R/yamaa/inst/COMPONENTS.tsv` from each host's trimmed lock, the crates'
+declared licenses, those purposes and the provenance that the vendored YAML
+parser, ReadStat and zstd record. `make check-repository` fails while either
+differs from what they give. After changing the lock, a purpose or a vendored
+component, regenerate both and commit the results:
+
+```sh
+uv run --project python --no-sync python -m tools.packaging.generate_component_inventory --write
+```
+
 ## Develop and verify
 
 Run `make help` at the repository root for prerequisites, configuration variables
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
+The R package's build ignores it: `make test-r` installs the package twice,
+each time building the engine inside the package, unless
+`YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
+to share, as CI's `r` job does.
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 
 Before a push, run `make quick` and the tests nearest the change. It runs lint
-and the repository checks, leaving out only the R binding's Clippy, and no test
-suite, so it needs no R. Pull request CI runs the complete `make check`; when a
-job fails, reproduce it with that job's own target below. Run `make setup` again
-after changing `rust/` or `python/src/` before Python tests, which import the
-installed package.
+and the repository checks, which leave the R binding's Clippy to `make test-r`,
+and no test suite, so it needs no R. Pull request CI runs the complete
+`make check`; when a job fails, reproduce it with that job's own target below.
+Run `make setup` again after changing `rust/` or `python/src/` before Python
+tests, which import the installed package.
 
 | Command | Purpose |
 | --- | --- |
 | `make setup` | Install the locked development environment. |
-| `make quick` | Run lint without the R binding and the repository checks, before a push. |
+| `make quick` | Run lint and the repository checks, before a push. |
 | `make check` | Run the checks required by ordinary CI. |
-| `make check-lint` | Check formatting and lint across Python and Rust. |
+| `make check-lint` | Check formatting and lint across Python and Rust, except the R binding. |
 | `make check-repository` | Check authored specifications, layout, rules, references and the site. |
-| `make test-rust` | Run `cargo test --locked --workspace`, including both host bindings. |
+| `make test-rust` | Run `cargo test --locked --workspace` without the two host bindings. |
 | `make test-python` | Run package/tool tests and standalone installed-host suites. |
-| `make test-r` | Build, install and strictly check a fresh R source package. |
+| `make test-r` | Lint the R binding, then build, install and strictly check a fresh R source package. |
 | `make check-equivalence` | Require unchanged results from fresh builds of both hosts (executor gate). |
 | `make probe-executor` | Time the executor probe on a release build; not part of CI. |
 | `make docs-test docs` | Test page ownership, generate dashboards and build the strict site. |
 
 For a focused Rust change, run `cargo test --locked -p <crate>` from `rust/`.
-The workspace test command needs Python and R 4.6.1 installed because it builds
-and links both binding test targets. `make test-rust` selects its development
-Python interpreter for PyO3. On Windows, run
-`python -m tools.ci.r_import_library` after installing R and the MSVC build tools
-to create the required import library. The Python extension feature belongs to
-maturin packaging; enabling every feature would select extension linking instead of
-normal Python linking for these Cargo tests. Ordinary CI runs them in the
+The workspace test command leaves out the two host bindings, which have no Rust
+tests (`test = false` in their manifests): the installed Python suites and the
+R package check test them. The workspace tests therefore build neither PyO3 nor
+extendr, and need no R and, on Windows, no R import library. `make check-lint`
+runs Clippy over the Python binding as well; building the R binding runs R, so
+its Clippy runs in `make test-r`. Ordinary CI runs the workspace tests in the
 development profile, with Clippy, on Linux; native qualification runs them on
 Linux, macOS and Windows with the optimized `release-test` profile alone.
 Cargo discovers integration tests in each crate's `tests/*.rs` files. Add a
@@ -159,12 +187,11 @@ import repository packages.
 
 For rule or schema changes, follow their area guides; `make quick` runs the
 repository checks. `make check-repository` runs `tools.rules.check`, which reads the
-rules once through `tools/rules/model.py` and checks cards, legacy requirements,
-every rule citation and markdown links. During the 0.5.0 conversion, run
+rules once through `tools/rules/model.py` and checks cards,
+every rule citation and markdown links. Run
 `python -m tools.rules.migrate statements --base origin/main` to list
 the card titles and statements a pull request adds, changes or removes for
-review; `report` accounts for the replaced requirements and `links` moves
-markdown citations to their cards.
+review.
 
 Repository Python checks source syntax, physical schema includes, fixture
 metadata, grammar documents, layout and editorial rules without importing an
@@ -187,7 +214,7 @@ exact head, and says so in the PR. The gate builds the Python and R packages
 from the checkout and installs both outside it. On each host it runs public
 benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
-requirement and specification paths. A repeat pass runs each entry's spec
+rule and specification paths. A repeat pass runs each entry's spec
 object a second time and requires it to reuse what the first run compiled,
 with the same issues, tables and saved bytes. On the same installs it then
 runs the installed Python suites and `R CMD check`, which carry the
@@ -382,8 +409,10 @@ Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source combinations on
 dispatch, on a `qualification/issue-*` push and weekly on main. It checks public
 benchmark conformance, installed host suites, packaging, optimized Rust behavior
-and portable math, and runs CRAN's incoming checks on the R source archive that
-a release publishes (its `native-cran` jobs). Passing ordinary CI does not qualify a release. The final
+and portable math, installs both source archives that a release publishes with
+the network disabled on every platform (its `native-offline-source` jobs), and
+runs CRAN's incoming checks on the R source archive that a release publishes
+(its `native-cran` jobs). Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
@@ -445,7 +474,7 @@ to this contributor guide. A site page links a repository file outside `docs/`
 by relative path, such as `../rules/reference/csv.md`: the site points it at the
 file on main, and a copy read at a release tag names that tag's file.
 
-The requirement index, rules summary and schema-field references are generated
+The rule index, rules summary and schema-field references are generated
 from `rules/` and `yaml/` on every build. Edit the owning rule or schema, not a
 generated page.
 Benchmark dashboards likewise render authored fixtures without executing the

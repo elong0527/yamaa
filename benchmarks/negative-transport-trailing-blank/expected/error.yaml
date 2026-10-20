@@ -2,7 +2,7 @@ phase: output
 condition: transport_text_invalid
 spec_paths:
   - datasets.DM.columns.SITEID
-requirement: XPT-7
+rule: XPT-7
 context:
   dataset: DM
   column: SITEID

@@ -21,7 +21,7 @@ fn defined(code: ConditionCode) -> (&'static str, String, Option<String>) {
     (
         definition.phase,
         definition.condition.into(),
-        definition.requirement.map(String::from),
+        definition.rule.map(String::from),
     )
 }
 

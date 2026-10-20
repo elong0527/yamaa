@@ -71,7 +71,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 fn run(specification: &str) -> Result<String, Vec<Value>> {
@@ -79,11 +79,11 @@ fn run(specification: &str) -> Result<String, Vec<Value>> {
 }
 
 /// One `unknown_field` finding at `path` for `identifier`, read by `intermediate`.
-fn refused(requirement: &str, path: &str, identifier: &str, intermediate: &str) -> Vec<Value> {
+fn refused(rule: &str, path: &str, identifier: &str, intermediate: &str) -> Vec<Value> {
     vec![yamaa_adapters::json!({
         "phase": "validation",
         "condition": "unknown_field",
-        "requirement": requirement,
+        "rule": rule,
         "spec_paths": [path],
         "context": {"identifier": identifier, "intermediate": intermediate}
     })]
@@ -113,7 +113,7 @@ fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "ungrouped_driver_field",
-            "requirement": "REQ-0067",
+            "rule": "ROW-5",
             "spec_paths": [path],
             "context": {
                 "identifier": identifier,
@@ -153,7 +153,7 @@ fn a_grouped_row_template_reads_a_lookup_only_through_its_groups() {
     assert_eq!(
         run(&grouped(filtered, "GRP", "W.NAME", "")),
         Err(refused(
-            "REQ-0120",
+            "LOOKUP-7",
             "intermediates[0].filter",
             "SRC.VAL",
             "W"
@@ -205,7 +205,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "REQ-1185",
+            "rule": "LOOKUP-15",
             "spec_paths": ["intermediates[0].derivations.DAY.source"],
             "context": {"identifier": "SRC.VAL", "intermediate": "W"}
         })])
@@ -236,7 +236,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
             literal
         )),
         Err(refused(
-            "REQ-0120",
+            "LOOKUP-7",
             "intermediates[0].filter",
             "DONOR.X",
             "R"
@@ -262,7 +262,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "LOOKUP-9",
+            "rule": "LOOKUP-9",
             "spec_paths": ["intermediates[0].between.value"],
             "context": {"identifier": "DONOR.X", "intermediate": "R"}
         })])
@@ -296,7 +296,7 @@ fn a_correlated_lookup_reads_only_the_driver_of_the_reading_template() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "ungrouped_driver_field",
-            "requirement": "REQ-0067",
+            "rule": "ROW-5",
             "spec_paths": ["intermediates[0].key"],
             "context": {
                 "identifier": "DONOR.X",
@@ -334,7 +334,7 @@ fn a_dataset_verification_reads_a_lookup_as_a_column_does() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "LOOKUP-9",
+            "rule": "LOOKUP-9",
             "spec_paths": ["intermediates[0].between.value"],
             "context": {"identifier": "WIN.LO", "intermediate": "P"}
         })])
@@ -369,7 +369,7 @@ fn a_lookup_read_by_several_row_templates_is_reported_once() {
     assert_eq!(
         run(&specification("DONOR", "KEY")),
         Err(refused(
-            "REQ-0120",
+            "LOOKUP-7",
             "intermediates[0].filter",
             "SRC.VAL",
             "P"

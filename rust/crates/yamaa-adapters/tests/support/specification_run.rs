@@ -443,7 +443,7 @@ pub(crate) fn replay_source_selection_truth(truth: &str, prefix: &str, cases: us
                 let mut phase_boundaries = 0;
                 for finding in values.as_array().unwrap() {
                     if finding["condition"] == "phase_boundary" {
-                        assert_eq!(finding["requirement"], yamaa_adapters::json!("REQ-0068"));
+                        assert_eq!(finding["rule"], yamaa_adapters::json!("ROW-6"));
                         assert_eq!(
                             finding["spec_paths"],
                             yamaa_adapters::json!(["rows[0].filter"])

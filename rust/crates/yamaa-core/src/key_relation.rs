@@ -29,7 +29,7 @@ pub enum Inference {
 /// pair whose types cannot compare (LOOKUP-9).
 /// Right fields are normalized schema metadata (including SELF/derived fields), not values.
 /// Validate every submitted name before semantic early exits; invalid output identity
-/// is explicit so hosts can retain their earlier REQ-0220 declaration diagnostic.
+/// is explicit so hosts can retain their earlier OUTPUT-2 declaration diagnostic.
 pub fn infer(catalog: &Catalog, keys: &[&str], fields: &[Field<'_>]) -> Result<Inference, Error> {
     let fields = fields
         .iter()

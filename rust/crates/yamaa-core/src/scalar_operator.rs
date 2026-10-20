@@ -90,8 +90,8 @@ pub fn operate(code: i32, left: &Value, right: Option<&Value>) -> Result<Value, 
 fn arithmetic_error(error: numeric::ArithmeticError) -> String {
     match error.kind {
         numeric::ArithmeticErrorKind::IntegerOverflow { value } => {
-            format!("{}: {value} ({})", error.condition(), error.requirement())
+            format!("{}: {value} ({})", error.condition(), error.rule())
         }
-        _ => format!("{} ({})", error.condition(), error.requirement()),
+        _ => format!("{} ({})", error.condition(), error.rule()),
     }
 }

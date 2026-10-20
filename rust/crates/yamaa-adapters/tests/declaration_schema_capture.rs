@@ -122,10 +122,10 @@ mod declaration {
                 }
                 for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
                     finding["phase"] = json!("validation");
-                    finding["requirement"] = json!(match finding["condition"].as_str().unwrap() {
-                        "non_ascii_source" => "REQ-0705",
-                        "invalid_text" => "REQ-0029",
-                        "invalid_yaml" => "REQ-0280",
+                    finding["rule"] = json!(match finding["condition"].as_str().unwrap() {
+                        "non_ascii_source" => "SPEC-8",
+                        "invalid_text" => "VALUE-11",
+                        "invalid_yaml" => "SCHEMA-3",
                         condition => panic!("unexpected original source condition: {condition}"),
                     });
                     if finding["condition"] == "non_ascii_source" {
@@ -239,11 +239,11 @@ mod declaration {
             assert_eq!(
                 fixture::observe(SCHEMA, "count: true\nextra: null\n"),
                 json!({"issues": [
-                    {"phase":"validation", "condition":"missing_required_field", "requirement":"REQ-0285",
+                    {"phase":"validation", "condition":"missing_required_field", "rule":"SCHEMA-13",
                         "spec_paths":["needed"], "context":{"field":"needed", "class":"root_class"}},
-                    {"phase":"validation", "condition":"invalid_field_type", "requirement":"REQ-0287",
+                    {"phase":"validation", "condition":"invalid_field_type", "rule":"SCHEMA-12",
                         "spec_paths":["count"], "context":{"expected":"int", "actual":"bool"}},
-                    {"phase":"validation", "condition":"unknown_field", "requirement":"REQ-0285",
+                    {"phase":"validation", "condition":"unknown_field", "rule":"SCHEMA-13",
                         "spec_paths":["extra"], "context":{"field":"extra", "class":"root_class"}}
                 ]})
             );
@@ -257,7 +257,7 @@ mod declaration {
                     "needed: kept\nitems: [1, false, 9223372036854775808]\n"
                 ),
                 json!({"issues": [{"phase":"validation", "condition":"invalid_field_type",
-            "requirement":"REQ-0287", "spec_paths":["items[1]"],
+            "rule":"SCHEMA-12", "spec_paths":["items[1]"],
             "context":{"expected":"int", "actual":"bool"}}]})
             );
             assert_eq!(
@@ -298,7 +298,7 @@ mod declaration {
             assert_eq!(
                 observed,
                 json!({"issues": [{"phase":"validation", "condition":"invalid_field_type",
-        "requirement":"REQ-0287", "spec_paths":["language"],
+        "rule":"SCHEMA-12", "spec_paths":["language"],
         "context":{"expected":"str", "actual":"bool"}}]})
             );
         }
@@ -339,10 +339,10 @@ mod declaration {
             let held_nodes = captured.document().unwrap().nodes().as_ptr();
             let held_findings = captured.findings().as_ptr();
             let expected: Value = yamaa_adapters::json_wire::decode(&format!(r#"[
-        {{"phase":"validation","condition":"value_not_permitted","requirement":"REQ-0287","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","permitted":["z","a","z"]}}}},
-        {{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","pattern":"^OK$"}}}},
-        {{"phase":"validation","condition":"minimum_length","requirement":"REQ-0287","spec_paths":["alpha"],"context":{{"minimum":{BIG}}}}},
-        {{"phase":"validation","condition":"invalid_size","requirement":"REQ-0287","spec_paths":["items"],"context":{{"size":{BIG}}}}}
+        {{"phase":"validation","condition":"value_not_permitted","rule":"SCHEMA-12","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","permitted":["z","a","z"]}}}},
+        {{"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","pattern":"^OK$"}}}},
+        {{"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["alpha"],"context":{{"minimum":{BIG}}}}},
+        {{"phase":"validation","condition":"invalid_size","rule":"SCHEMA-12","spec_paths":["items"],"context":{{"size":{BIG}}}}}
     ]"#)).unwrap();
             for _ in 0..2 {
                 let rows = crate::support::findings(capture_failure(&error));
@@ -380,8 +380,8 @@ mod declaration {
             assert_eq!(captured.findings()[1].path, "last");
             let original = captured.document().unwrap().nodes().as_ptr();
             let expected = json!([
-                {"phase":"validation","condition":"value_not_permitted","requirement":"REQ-0287","spec_paths":["first"],"context":{"value":"x".repeat(1_400_000),"permitted":["OK"]}},
-                {"phase":"validation","condition":"value_not_permitted","requirement":"REQ-0287","spec_paths":["last"],"context":{"value":"y".repeat(1_400_000),"permitted":["OK"]}}
+                {"phase":"validation","condition":"value_not_permitted","rule":"SCHEMA-12","spec_paths":["first"],"context":{"value":"x".repeat(1_400_000),"permitted":["OK"]}},
+                {"phase":"validation","condition":"value_not_permitted","rule":"SCHEMA-12","spec_paths":["last"],"context":{"value":"y".repeat(1_400_000),"permitted":["OK"]}}
             ]);
             for _ in 0..2 {
                 assert_eq!(crate::support::findings(capture_failure(&error)), expected);
@@ -570,23 +570,23 @@ mod declaration {
             let cases = [
                 (
                     VALID.replace("'1.0'", "'99.0'"),
-                    json!({"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
+                    json!({"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
                 ),
                 (
                     VALID.replace("schema_version: '1.0'\n", ""),
-                    json!({"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
+                    json!({"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
                 ),
                 (
                     VALID.replace("domain: TEST", "domain: bad-name"),
-                    json!({"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$"}}),
+                    json!({"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$"}}),
                 ),
                 (
                     VALID.replace("type: int", "type: unknown"),
-                    json!({"phase":"validation","condition":"value_not_permitted","requirement":"REQ-0012","spec_paths":["columns.ID.type"],"context":{"value":"unknown","permitted":["str","int","float","date","datetime"]}}),
+                    json!({"phase":"validation","condition":"value_not_permitted","rule":"VALUE-1","spec_paths":["columns.ID.type"],"context":{"value":"unknown","permitted":["str","int","float","date","datetime"]}}),
                 ),
                 (
                     VALID.replace("path: output.csv", "path: ''"),
-                    json!({"phase":"validation","condition":"minimum_length","requirement":"REQ-0287","spec_paths":["output.path"],"context":{"minimum":1}}),
+                    json!({"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["output.path"],"context":{"minimum":1}}),
                 ),
             ];
             for (text, expected) in cases {
@@ -643,7 +643,7 @@ mod declaration {
             // Independent expected/error.yaml is unchanged.
             assert_eq!(
                 crate::support::findings(capture_failure(&error)),
-                json!([{"phase":"validation","condition":"unknown_window","spec_paths":["columns.VISITSEQ.derivation.row_number.window"],"requirement":"REQ-1253","context":{"window":"VISITS_ORDER"}}])
+                json!([{"phase":"validation","condition":"unknown_window","spec_paths":["columns.VISITSEQ.derivation.row_number.window"],"rule":"WINDOW-1","context":{"window":"VISITS_ORDER"}}])
             );
         }
 
@@ -660,7 +660,7 @@ mod declaration {
             assert!(matches!(&error, Error::Findings(_)));
             assert_eq!(
                 crate::support::findings(capture_failure(&error)),
-                json!([{"phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":version}}])
+                json!([{"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":version}}])
             );
         }
 
@@ -682,10 +682,10 @@ mod declaration {
                 }
                 for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
                     finding["phase"] = json!("validation");
-                    finding["requirement"] = json!(match finding["condition"].as_str().unwrap() {
-                        "non_ascii_source" => "REQ-0705",
-                        "invalid_text" => "REQ-0029",
-                        "invalid_yaml" => "REQ-0280",
+                    finding["rule"] = json!(match finding["condition"].as_str().unwrap() {
+                        "non_ascii_source" => "SPEC-8",
+                        "invalid_text" => "VALUE-11",
+                        "invalid_yaml" => "SCHEMA-3",
                         condition => panic!("unexpected original source condition: {condition}"),
                     });
                     if finding["condition"] == "non_ascii_source" {
@@ -779,7 +779,7 @@ mod declaration {
                 crate::support::findings(
                     inheritance_failure_ref(&inherited_error(&entry, invalid_parent)).unwrap()
                 ),
-                json!([{"phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":"parent.yaml","entry":"entry.yaml"}}])
+                json!([{"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":"parent.yaml","entry":"entry.yaml"}}])
             );
             let empty_parent = "schema_version: '1.0'\n";
             let missing = inherited_error(&entry.replace("domain: TEST\n", ""), empty_parent);
@@ -793,7 +793,7 @@ mod declaration {
             assert!(context.input.is_some());
             assert_eq!(
                 crate::support::findings(inheritance_failure_ref(&missing).unwrap()),
-                json!([{"phase":"validation","condition":"missing_required_field","requirement":"REQ-0285","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}])
+                json!([{"phase":"validation","condition":"missing_required_field","rule":"SCHEMA-13","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}])
             );
             let unknown = inherited_error(
                 &entry.replace(
@@ -804,13 +804,13 @@ mod declaration {
             );
             assert_eq!(
                 crate::support::findings(inheritance_failure_ref(&unknown).unwrap()),
-                json!([{"phase":"validation","condition":"unknown_reference","requirement":"REQ-0070","spec_paths":["columns.ID.derivation"],"context":{"column":"ID","dependency":"UNKNOWN"}}])
+                json!([{"phase":"validation","condition":"unknown_reference","rule":"COLUMN-5","spec_paths":["columns.ID.derivation"],"context":{"column":"ID","dependency":"UNKNOWN"}}])
             );
         }
 
         #[test]
-        fn shipped_project_version_override_reaches_the_same_owned_submission_model() {
-            use yamaa_core::submission_document;
+        fn shipped_project_version_override_reaches_the_same_lowered_section() {
+            use yamaa_core::front_end::v0_5::project::project;
             let schema = shipped_schema::capture_project().unwrap().project;
             for (family, guide) in [("sdtm", "SDTMIG"), ("adam", "ADaMIG"), ("send", "SENDIG")] {
                 for version in [None, Some("1.0")] {
@@ -821,13 +821,16 @@ mod declaration {
                         text.push_str(&format!("  source_system_version: '{version}'\n"));
                     }
                     let captured = schema.prepare_structural(source(&text)).unwrap();
-                    let input = &captured.normalized().document;
-                    let owned = submission_document::decode(input, input.root()).unwrap();
+                    let lowered = project(&captured.normalized().document, None).unwrap();
                     drop(captured);
-                    let selected = owned.sections()[0].source_versions("0.3.0").unwrap();
-                    assert_eq!(selected.metadata(), version.unwrap_or("0.3.0"));
-                    assert_eq!(selected.installed(), "0.3.0");
-                    assert_eq!(selected.override_origin().is_some(), version.is_some());
+                    let section = &lowered.submission.as_ref().unwrap().sections[0];
+                    assert_eq!(
+                        section
+                            .source_system_version
+                            .as_ref()
+                            .map(|version| version.text.as_str()),
+                        version
+                    );
                 }
             }
         }
@@ -960,9 +963,9 @@ mod declaration {
             assert_eq!(captured.source().identity.as_ptr(), identity);
             let decoded = decode_yaml(text.as_bytes()).unwrap();
             assert_eq!(captured.document(), Some(&decoded.document));
-            let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
+            let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"rule\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
             assert_eq!(outcome(&error), json!([expected]));
-            // Output names both columns so pruning (REQ-0638) keeps them live
+            // Output names both columns so pruning (LAYER-11) keeps them live
             // and strict window expansion still reports their unknown windows.
             let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {columns: [Z, A]}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
             let entry = source(text);
@@ -983,8 +986,8 @@ mod declaration {
             assert_eq!(
                 outcome(&error),
                 json!([
-                    {"phase":"validation","condition":"unknown_window","requirement":"REQ-1253","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
-                    {"phase":"validation","condition":"unknown_window","requirement":"REQ-1253","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
+                    {"phase":"validation","condition":"unknown_window","rule":"WINDOW-1","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
+                    {"phase":"validation","condition":"unknown_window","rule":"WINDOW-1","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
                 ])
             );
         }
@@ -1005,9 +1008,9 @@ mod declaration {
             assert_eq!(
                 outcome(&error),
                 json!([
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.path"],"context":{"reason":"Field required"}},
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-13","spec_paths":["output.path"],"context":{"reason":"Field required"}},
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-13","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
                 ])
             );
         }
@@ -1168,7 +1171,7 @@ mod declaration {
                 assert_eq!(rows.len(), 1, "{derivation}: {rows:?}");
                 assert_eq!(rows[0].condition(), condition, "{derivation}");
                 assert_eq!(rows[0].spec_paths, [path], "{derivation}");
-                assert!(rows[0].requirement().is_some());
+                assert!(rows[0].rule().is_some());
             }
         }
 
@@ -1250,7 +1253,7 @@ mod declaration {
                     yamaa_adapters::json_wire::encode(&false_value)
                 );
                 assert_eq!(rows[0].condition(), "missing_value_required");
-                assert_eq!(rows[0].requirement(), Some("REQ-1258"));
+                assert_eq!(rows[0].rule(), Some("EXPR-8"));
                 assert_eq!(rows[0].spec_paths, ["columns.F.derivation.flag.missing"]);
                 let context = yamaa_core::json::Value::Object(rows[0].context.clone());
                 assert_eq!(context, yamaa_adapters::json!({"false_value": false_value}));
@@ -1286,7 +1289,7 @@ mod declaration {
                 observed["outcome"],
                 json!({
                     "status":"invalid", "condition":"invalid_string_template",
-                    "requirement":"REQ-0461",
+                    "rule":"TEXT-3",
                     "context":{"reason":"invalid_placeholder","placeholder":"A + B"},
                     "position":{"byte":2,"character":1},
                     "span":{"byte_start":2,"byte_end":9,"character_start":1,"character_end":8}
@@ -1304,6 +1307,7 @@ mod declaration {
             specification_source::{CapturedSchema, Error, Source},
             yaml_decode::decode_yaml,
         };
+        use yamaa_core::ast::Notation;
         use yamaa_core::schema::{DocumentNode as N, SchemaContext as C, SchemaDiagnostic};
 
         #[derive(Debug, PartialEq, Eq)]
@@ -1476,7 +1480,7 @@ mod declaration {
             for (finding, field) in findings[1..].iter().zip(["language", "runtime", "version"]) {
                 assert_eq!(finding.path, field);
                 assert_eq!(finding.definition().condition, "unknown_field");
-                assert_eq!(finding.definition().requirement, Some("REQ-0285"));
+                assert_eq!(finding.definition().rule, Some("SCHEMA-13"));
                 assert_eq!(
                     finding.context,
                     vec![
@@ -1754,10 +1758,11 @@ mod declaration {
         }
 
         #[test]
-        fn captured_function_decodes_directly_to_an_admitted_versionless_core_plan() {
+        fn captured_function_lowers_directly_to_an_admitted_versionless_core_plan() {
+            use crate::support::roots::{Case, Definition, Parameter};
             use yamaa_core::{
-                project_function::{Case, Definition, Function, Language, Parameter},
-                project_function_document,
+                front_end::v0_5::project::function,
+                project_function::{Function, Language},
                 temporal::{Date, Precision},
                 value::{ColumnType, Value, ValueType},
             };
@@ -1769,11 +1774,10 @@ mod declaration {
                 .prepare_class(source("functions/identity.yaml", text))
                 .unwrap();
             let document = &captured.normalized().document;
-            let decoded =
-                project_function_document::decode(document, document.root(), "identity").unwrap();
+            let decoded = function(document, None, "identity", Language::Python).unwrap();
             let date = Value::Date(Date::new(2024, 2, 29, Precision::Day).unwrap());
             assert_eq!(
-                decoded,
+                Definition::of(&decoded),
                 Definition {
                     name: "identity".into(),
                     function: "project.identity".into(),
@@ -1813,9 +1817,10 @@ mod declaration {
         }
 
         #[test]
-        fn scalar_decoder_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
+        fn scalar_lowering_keeps_exact_int_float_boolean_nul_and_temporal_defaults() {
             use yamaa_core::{
-                project_function_document,
+                front_end::v0_5::project::function,
+                project_function::Language,
                 temporal::{Date, DateTime, Precision},
                 value::Value,
             };
@@ -1825,7 +1830,7 @@ mod declaration {
             let text="function: project.identity\ndescription: Exact defaults.\nparams:\n  - {name: integer, type: int, required: false, default: -9223372036854775808}\n  - {name: float, type: float, required: false, default: -0.0}\n  - {name: boolean, type: bool, required: false, default: false}\n  - {name: text, type: str, required: false, default: \"a\\0b\\u96ea\"}\n  - {name: date, type: date, required: false, default: {date: '2024-02-29'}}\n  - {name: datetime, type: datetime, required: false, default: {datetime: '2024-02-29T08:30'}}\n  - {name: missing, type: str, required: false, default: null, accepts_missing: true}\nreturns: str\ntests: []\n";
             let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let decoded = project_function_document::decode(doc, doc.root(), "defaults").unwrap();
+            let decoded = function(doc, None, "defaults", Language::Python).unwrap();
             let date = Date::new(2024, 2, 29, Precision::Day).unwrap();
             assert_eq!(
                 decoded
@@ -1853,14 +1858,17 @@ mod declaration {
 
         #[test]
         fn every_invalid_scalar_retains_its_node_without_exposing_a_partial_model() {
-            use yamaa_core::project_function_document::{self, Kind};
+            use yamaa_core::{
+                front_end::v0_5::project::function, project_function::Language,
+                project_function_document::Kind,
+            };
             let schema =
                 CapturedSchema::admit_root(environment_modules(), 0, "function_definition_class")
                     .unwrap();
             let text="function: project.identity\ndescription: Invalid leaves.\nparams: [{name: x, type: int, required: false, default: 9223372036854775808}]\nreturns: date\ntests:\n  - {id: invalid, covers: [normal, boundary], args: {x: -9223372036854775809}, result: {date: '2023-02-29'}}\n  - {id: invalid-time, covers: [boundary], args: {x: 1}, result: {datetime: '2024-01-01T08:30Z'}}\n";
             let captured = schema.prepare_class(source("function.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let errors = project_function_document::decode(doc, doc.root(), "invalid").unwrap_err();
+            let errors = function(doc, None, "invalid", Language::Python).unwrap_err();
             assert_eq!(
                 errors
                     .iter()
@@ -1881,25 +1889,36 @@ mod declaration {
                 doc.nodes()[errors[1].node],
                 N::Integer("-9223372036854775809".into())
             );
+            // Each finding keeps the text a diagnostic reports.
+            assert_eq!(
+                errors
+                    .iter()
+                    .map(|f| f.value.as_deref())
+                    .collect::<Vec<_>>(),
+                [
+                    Some("9223372036854775808"),
+                    Some("-9223372036854775809"),
+                    Some("2023-02-29"),
+                    Some("2024-01-01T08:30Z")
+                ]
+            );
             assert_eq!(captured.source().bytes, text.as_bytes());
         }
 
         #[test]
-        fn codelist_source_decodes_directly_with_source_standard_and_unread_external_href() {
+        fn codelist_source_lowers_directly_with_source_standard_and_unread_external_href() {
+            use crate::support::roots::{
+                Codelist, CodelistType, External, Item, Source as TerminologySource, Standard,
+            };
             use yamaa_core::{
-                project_terminology::{
-                    Catalogue, Codelist, DataType, External, Item, Source as TerminologySource,
-                    Standard,
-                },
-                project_terminology_document,
-                value::Value,
+                front_end::v0_5::project::codelists, project_terminology::Catalogue, value::Value,
             };
             let schema =
                 CapturedSchema::admit_root(project_modules(), 0, "codelist_source_class").unwrap();
             let text="standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2023-12-15'}\ncodelists:\n  - {id: SEX, name: Sex, items: [{value: F, decode: Female, rank: 1}, {value: M, decode: Male, rank: 2}]}\n  - {id: DICT, name: Dictionary, external: {dictionary: MedDRA, version: '27.0', href: '../unread/dictionary'}}\n";
             let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let source = project_terminology_document::decode(doc, doc.root()).unwrap();
+            let source = codelists(doc, None).unwrap();
             let expected = TerminologySource {
                 standard: Some(Standard {
                     name: "CDISC/NCI".into(),
@@ -1910,7 +1929,7 @@ mod declaration {
                     Codelist {
                         id: "SEX".into(),
                         name: "Sex".into(),
-                        data_type: DataType::Text,
+                        data_type: CodelistType::Text,
                         extensible: false,
                         alias: None,
                         format_name: None,
@@ -1935,7 +1954,7 @@ mod declaration {
                     Codelist {
                         id: "DICT".into(),
                         name: "Dictionary".into(),
-                        data_type: DataType::Text,
+                        data_type: CodelistType::Text,
                         extensible: false,
                         alias: None,
                         format_name: None,
@@ -1948,20 +1967,22 @@ mod declaration {
                     },
                 ],
             };
-            assert_eq!(source, expected);
+            assert_eq!(TerminologySource::of(&source), expected);
             assert!(Catalogue::admit(vec![source]).is_ok());
             assert_eq!(captured.source().bytes, text.as_bytes());
         }
 
         #[test]
-        fn source_decoder_retains_every_wide_value_and_rank_failure() {
-            use yamaa_core::{project_function_document::Kind, project_terminology_document};
+        fn source_lowering_retains_every_wide_value_and_rank_failure() {
+            use yamaa_core::{
+                front_end::v0_5::project::codelists, project_function_document::Kind,
+            };
             let schema =
                 CapturedSchema::admit_root(project_modules(), 0, "codelist_source_class").unwrap();
             let text="codelists:\n  - {id: BIG, name: Big, data_type: integer, items: [{value: 9223372036854775808, rank: -9223372036854775809}, {value: -9223372036854775809}]}\n";
             let captured = schema.prepare_class(source("ct.yaml", text)).unwrap();
             let doc = &captured.normalized().document;
-            let errors = project_terminology_document::decode(doc, doc.root()).unwrap_err();
+            let errors = codelists(doc, None).unwrap_err();
             assert_eq!(
                 errors
                     .iter()
@@ -1976,42 +1997,69 @@ mod declaration {
         }
 
         #[test]
-        fn environment_decoder_keeps_the_lock_and_inline_or_path_function_order() {
-            use yamaa_core::project_environment_document::{self, Declaration};
+        fn environment_lowering_keeps_the_lock_and_inline_or_path_function_order() {
+            use yamaa_core::{
+                ast::FunctionSource, front_end::v0_5::project::environment,
+                project_function::Language,
+            };
+            let mut root =
+                project_root("schema_version: '1.0'\nenvironments: {python: environment.yaml}\n");
             let schema = environment_schema();
             let text="schema_version: '1.0'\nlock: ../uv.lock\nfunctions:\n  first: functions/first.yaml\n  second: {function: project.constant, description: Constant, params: [], returns: int, tests: []}\n";
             let captured = schema
                 .prepare_structural(source("environment.yaml", text))
                 .unwrap();
             let document = &captured.normalized().document;
-            let result = project_environment_document::decode(document, document.root()).unwrap();
-            assert_eq!(result.lock.as_deref(), Some("../uv.lock"));
-            let functions = result.functions.unwrap();
+            environment(document, None, Language::Python, &mut root).unwrap();
+            let linked = root.environment(Language::Python).unwrap();
+            assert_eq!(linked.file.as_ref().unwrap().text, "environment.yaml");
+            assert_eq!(linked.lock.as_ref().unwrap().text, "../uv.lock");
+            let functions = root.functions.as_ref().unwrap();
             assert_eq!(
                 functions
                     .iter()
-                    .map(|f| f.name.as_str())
+                    .map(|f| f.key.as_ref().unwrap().name.as_str())
                     .collect::<Vec<_>>(),
                 ["first", "second"]
             );
-            assert_eq!(
-                functions[0].declaration,
-                Declaration::Path("functions/first.yaml".into())
-            );
-            let Declaration::Inline(def) = &functions[1].declaration else {
+            let FunctionSource::File(path) = &functions[0].source else {
+                panic!("function file")
+            };
+            assert_eq!(path.text, "functions/first.yaml");
+            let FunctionSource::Inline(def) = &functions[1].source else {
                 panic!("inline definition")
             };
-            assert_eq!(def.name, "second");
-            assert_eq!(def.function, "project.constant");
+            assert_eq!(def.name.name, "second");
+            assert_eq!(
+                def.implementation(Language::Python).unwrap().callable.text,
+                "project.constant"
+            );
             assert_eq!(def.comparison_decimals, 4);
+            // The environment file's paths keep its own spelling.
+            assert_eq!(
+                root.paths
+                    .render(linked.lock.as_ref().unwrap().meta.path, Notation::V0_5),
+                "lock"
+            );
+            assert_eq!(
+                root.paths.render(functions[1].meta.path, Notation::V0_5),
+                "functions.second"
+            );
             assert_eq!(captured.source().bytes, text.as_bytes());
+        }
+        /// A project file, lowered with the shipped project schema.
+        fn project_root(text: &str) -> yamaa_core::ast::Project {
+            let captured = project_schema()
+                .prepare_structural(source("project.yaml", text))
+                .unwrap();
+            yamaa_core::front_end::v0_5::project::project(&captured.normalized().document, None)
+                .unwrap()
         }
 
         #[test]
-        fn project_decoder_keeps_environment_links_codelist_order_and_unread_submission_metadata() {
+        fn project_lowering_keeps_environment_links_codelist_order_and_submission_metadata() {
             use yamaa_core::{
-                project_document, project_environment_document::Declaration,
-                project_function::Language,
+                ast::CodelistSource, front_end::v0_5::project::project, project_function::Language,
             };
             let schema = project_schema();
             let text="schema_version: '1.0'\nenvironments: {python: python/environment.yaml, r: r/environment.yaml}\ncodelists:\n  - ../terminology.yaml\n  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: '2024-03-29'}\n    codelists: [{id: EXTERNAL, name: External, external: {dictionary: Dict, version: '1', href: '../not-read.xml'}}]\nstudy: {id: Study01, name: Study, description: Study, protocol_name: Protocol}\nadam: {standard: {name: ADaMIG, version: '1.3', status: Final}, specs: [adam/adsl.yaml], define: ../data/adam/define.xml, documents: [{id: adrg, kind: supplemental, link: 'docs/adrg.pdf', title: Guide}]}\n";
@@ -2019,55 +2067,56 @@ mod declaration {
                 .prepare_structural(source("project.yaml", text))
                 .unwrap();
             let document = &captured.normalized().document;
-            let result = project_document::decode(document, document.root()).unwrap();
-            assert_eq!(
-                result.environments.python.as_deref(),
-                Some("python/environment.yaml")
-            );
-            assert_eq!(result.environments.r.as_deref(), Some("r/environment.yaml"));
-            assert_eq!(
-                result.environments.get(Language::Python),
-                Some("python/environment.yaml")
-            );
-            assert_eq!(
-                result.environments.get(Language::R),
-                Some("r/environment.yaml")
-            );
+            let result = project(document, None).unwrap();
+            let file = |language| {
+                result
+                    .environment(language)
+                    .and_then(|environment| environment.file.as_ref())
+                    .map(|file| file.text.as_str())
+            };
+            assert_eq!(file(Language::Python), Some("python/environment.yaml"));
+            assert_eq!(file(Language::R), Some("r/environment.yaml"));
             assert_eq!(result.codelists.len(), 2);
-            assert_eq!(
-                result.codelists[0].declaration,
-                Declaration::Path("../terminology.yaml".into())
-            );
-            let Declaration::Inline(ct) = &result.codelists[1].declaration else {
+            let CodelistSource::File(path) = &result.codelists[0].source else {
+                panic!("codelist file")
+            };
+            assert_eq!(path.text, "../terminology.yaml");
+            let CodelistSource::Inline(ct) = &result.codelists[1].source else {
                 panic!("inline source")
             };
-            assert_eq!(ct.standard.as_ref().unwrap().version, "2024-03-29");
+            assert_eq!(ct.standard.as_ref().unwrap().version.text, "2024-03-29");
             assert_eq!(
-                ct.codelists[0].external.as_ref().unwrap().href.as_deref(),
-                Some("../not-read.xml")
+                ct.codelists[0]
+                    .external
+                    .as_ref()
+                    .unwrap()
+                    .href
+                    .as_ref()
+                    .unwrap()
+                    .text,
+                "../not-read.xml"
             );
-            let N::Sequence(entries) =
-                &document.nodes()[document.field(document.root(), "codelists").unwrap()]
-            else {
-                panic!("codelist sequence")
-            };
             assert_eq!(
                 result
                     .codelists
                     .iter()
-                    .map(|codelist| codelist.node)
+                    .map(|codelist| result.paths.render(codelist.meta.path, Notation::V0_5))
                     .collect::<Vec<_>>(),
-                *entries
+                ["codelists[0]", "codelists[1]"]
             );
-            // Study and section metadata stay in the document for submission composition.
-            assert!(document.field(document.root(), "study").is_some());
-            assert!(document.field(document.root(), "adam").is_some());
+            // The study and sections lower beside, for submission composition.
+            let declarations = result.submission.as_ref().unwrap();
+            assert_eq!(declarations.study.as_ref().unwrap().id.name, "Study01");
+            assert_eq!(declarations.sections[0].specs[0].text, "adam/adsl.yaml");
             assert_eq!(captured.source().bytes, text.as_bytes());
         }
 
         #[test]
-        fn environment_and_project_decoders_preserve_absent_versus_present_empty_sources() {
-            use yamaa_core::{project_document, project_environment_document};
+        fn environment_and_project_lowering_preserve_absent_versus_present_empty_sources() {
+            use yamaa_core::{
+                front_end::v0_5::project::{environment, project},
+                project_function::Language,
+            };
             let schema = environment_schema();
             for (text, present) in [
                 ("schema_version: '1.0'\n", false),
@@ -2077,11 +2126,13 @@ mod declaration {
                     .prepare_structural(source("environment.yaml", text))
                     .unwrap();
                 let document = &captured.normalized().document;
-                let result =
-                    project_environment_document::decode(document, document.root()).unwrap();
-                assert_eq!(result.functions.is_some(), present);
-                assert!(result.functions.into_iter().flatten().next().is_none());
-                assert!(result.lock.is_none());
+                let mut root = project_root(
+                    "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                );
+                environment(document, None, Language::Python, &mut root).unwrap();
+                assert_eq!(root.functions.is_some(), present);
+                assert!(root.functions.iter().flatten().next().is_none());
+                assert!(root.environment(Language::Python).unwrap().lock.is_none());
             }
             let schema = project_schema();
             for text in [
@@ -2092,17 +2143,19 @@ mod declaration {
                     .prepare_structural(source("project.yaml", text))
                     .unwrap();
                 let document = &captured.normalized().document;
-                let result = project_document::decode(document, document.root()).unwrap();
-                assert_eq!(result.environments, Default::default());
+                let result = project(document, None).unwrap();
+                assert!(result.environments.is_empty());
                 assert!(result.codelists.is_empty());
+                assert!(result.functions.is_none());
             }
         }
 
         #[test]
-        fn environment_and_project_decoders_collect_every_independent_inline_scalar_failure() {
+        fn environment_and_project_lowering_collect_every_independent_inline_scalar_failure() {
             use yamaa_core::json::Value as JsonValue;
             use yamaa_core::{
-                project_document, project_environment_document, project_function_document::Kind,
+                front_end::v0_5::project as lower, project_function::Language,
+                project_function_document::Kind,
             };
             let wide =
                 || JsonValue::Number("9223372036854775808".parse().expect("canonical integer"));
@@ -2119,9 +2172,13 @@ mod declaration {
             for (document, findings, expected, values) in [
                 (
                     environment_document,
-                    project_environment_document::decode(
+                    lower::environment(
                         environment_document,
-                        environment_document.root(),
+                        None,
+                        Language::Python,
+                        &mut project_root(
+                            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n",
+                        ),
                     )
                     .unwrap_err(),
                     vec![
@@ -2132,8 +2189,7 @@ mod declaration {
                 ),
                 (
                     project_document_arena,
-                    project_document::decode(project_document_arena, project_document_arena.root())
-                        .unwrap_err(),
+                    lower::project(project_document_arena, None).unwrap_err(),
                     vec![
                         (
                             "codelists[0].codelists[0].items[0].value",
@@ -2155,23 +2211,18 @@ mod declaration {
                     expected
                 );
                 assert!(findings.iter().all(|f| f.node < document.nodes().len()));
-                let projected = yamaa_core::project_environment_diagnostics::scalar_diagnostics(
-                    document, &findings,
-                )
-                .unwrap();
+                let projected =
+                    yamaa_core::project_environment_diagnostics::scalar_diagnostics(&findings)
+                        .unwrap();
                 assert_eq!(projected.len(), expected.len());
                 for (finding, value) in projected.iter().zip(values) {
                     assert_eq!(
                         (
                             finding.definition().phase,
                             finding.definition().condition,
-                            finding.definition().requirement
+                            finding.definition().rule
                         ),
-                        (
-                            "validation",
-                            "project_environment_invalid",
-                            Some("REQ-0695")
-                        )
+                        ("validation", "project_environment_invalid", Some("FUNC-2"))
                     );
                     assert_eq!(finding.context["value"], value);
                 }
@@ -2237,7 +2288,7 @@ mod declaration {
             }
         }
         fn issues(rows: Vec<Diagnostic>) -> Value {
-            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),"spec_paths":row.spec_paths,"context":row.context.clone()})).collect())
+            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase(),"condition":row.condition(),"rule":row.rule(),"spec_paths":row.spec_paths,"context":row.context.clone()})).collect())
         }
         fn original_locations(
             actual: &yamaa_adapters::specification_source::CapturedDocument,
@@ -2298,12 +2349,12 @@ mod declaration {
         fn live_root_full_reports_preserve_original_source_and_stop_before_every_dependency() {
             let schemas = candidate_schemas();
             for (text,expected) in [
-        ("schema_version: '99.0'\nparent: parent.yaml\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml]\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0281","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}])),
+        ("schema_version: '99.0'\nparent: parent.yaml\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml]\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}])),
         ("schema_version: '1.0'\nparent: base.yaml\nlanguage: python\nruntime: {language: python}\nversion: old\n",json!([
-            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["parent"],"context":{"field":"parent","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["language"],"context":{"field":"language","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["runtime"],"context":{"field":"runtime","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["version"],"context":{"field":"version","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["parent"],"context":{"field":"parent","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["language"],"context":{"field":"language","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["runtime"],"context":{"field":"runtime","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["version"],"context":{"field":"version","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}
         ])),
     ] {
         let entry=source(PROJECT,text);let bytes=entry.bytes.as_ptr();let identity=entry.identity.as_ptr();let mut port=Metadata::new(vec![]);
@@ -2377,8 +2428,8 @@ mod declaration {
             assert_eq!(
                 issues(diagnostics::schema_sources(&rejected).unwrap()),
                 json!([
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["language"],"context":{"field":"language","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["codelists"],"context":{"field":"codelists","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}}
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["language"],"context":{"field":"language","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["codelists"],"context":{"field":"codelists","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}}
                 ])
             );
         }
@@ -2563,8 +2614,8 @@ mod declaration {
             assert_eq!(
                 issues(diagnostics::schema_sources(&rejected).unwrap()),
                 json!([
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}}
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}}
                 ])
             );
         }
@@ -2662,7 +2713,7 @@ mod declaration {
             use yamaa_adapters::specification_diagnostics::capture_failure;
             let schemas = candidate_schemas();
             let root = "schema_version: 92233720368547758081234567890\n";
-            let expected:Value=yamaa_adapters::json_wire::decode("[{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}]").unwrap();
+            let expected:Value=yamaa_adapters::json_wire::decode("[{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"rule\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}]").unwrap();
             for (schema, identity) in [
                 (&schemas.environment, ENVIRONMENT),
                 (&schemas.project, PROJECT),
@@ -2691,9 +2742,9 @@ mod declaration {
             assert_eq!(
                 crate::support::findings(capture_failure(&error)),
                 json!([
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["<normalization>.schema_version"],"context":{"field":"schema_version","class":"function_definition_class"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class"}}
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.schema_version"],"context":{"field":"schema_version","class":"function_definition_class"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class"}}
                 ])
             );
         }
@@ -2759,7 +2810,7 @@ mod declaration {
             );
             assert_eq!(
                 issues(diagnostics::schema_sources(&rejected).unwrap()),
-                json!([{ "phase":"validation","condition":"unknown_field","requirement":"REQ-0285","spec_paths":["<normalization>.retired"],"context":{"field":"retired","class":"codelist_source_class","source":"held/bad-ct.yaml","entry":"study/project.yaml","environment_path":"codelists[0]"}}])
+                json!([{ "phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.retired"],"context":{"field":"retired","class":"codelist_source_class","source":"held/bad-ct.yaml","entry":"study/project.yaml","environment_path":"codelists[0]"}}])
             );
         }
     }
@@ -2859,12 +2910,12 @@ mod declaration {
             };
             match expected {
                 None => assert!(rows.is_empty(), "{name}: {rows:?}"),
-                Some((condition, requirement, path)) => {
+                Some((condition, rule, path)) => {
                     assert_eq!(rows.len(), 1, "{name}: {rows:?}");
                     let issue = &rows[0];
                     assert_eq!(issue.phase(), "validation");
                     assert_eq!(issue.condition(), condition);
-                    assert_eq!(issue.requirement(), Some(requirement));
+                    assert_eq!(issue.rule(), Some(rule));
                     assert_eq!(issue.spec_paths, [path]);
                     assert_eq!(
                         yamaa_core::json::Value::Object(issue.context.clone()),
@@ -2898,7 +2949,7 @@ mod declaration {
                 "negative-function-contract",
                 Some((
                     "invalid_function_argument",
-                    "REQ-0700",
+                    "FUNC-5",
                     "columns.RESULT.derivation.function.args",
                 )),
             );

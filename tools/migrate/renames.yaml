@@ -84,11 +84,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 636
-  changes: 67
+  entries: 638
+  changes: 69
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 21
+    new, decided: 23
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7172,6 +7172,32 @@ entries:
   ref: P-STD-1
   reason: Define-XML 2.1 and its schema admit Draft, Provisional and Final; today's list lacks Provisional.
     Additive.
+  field_kind: value
+  convert: {action: none}
+- id: new.spec.submission.role=closed
+  file_type: spec
+  path: columns[].submission.role
+  today: null
+  kind: new
+  proposed: 'column_role: Identifier, Topic, Timing, Grouping Qualifier, Result Qualifier, Synonym Qualifier,
+    Record Qualifier, Variable Qualifier or Rule'
+  decision: decided (D58)
+  ref: P-VOC-1
+  reason: Roles close to the nine SDTM v2.0 section 2.1 roles, held with the other CDISC vocabularies in
+    yaml/vocabulary/cdisc.yaml (SUB-9 changes from open). Every role the corpus writes is among them.
+  field_kind: value
+  convert: {action: none}
+- id: new.codelists.standard.name=closed
+  file_type: codelists
+  path: codelists[].standard.name
+  today: null
+  kind: new
+  proposed: 'standard_name: the eleven names of the Define-XML StandardName enumeration'
+  decision: decided (D58)
+  ref: P-VOC-1
+  reason: A terminology standard's name is closed where the file is read, not only when define.xml is generated
+    (finding F-11); it takes the vocabulary an implementation guide's name already takes. Every name the
+    corpus writes is CDISC/NCI.
   field_kind: value
   convert: {action: none}
 - id: new.spec.value_level.comparator

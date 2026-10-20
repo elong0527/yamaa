@@ -9,12 +9,11 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped public_define.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if(file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures",package="yamaa",mustWork=TRUE)
+host_fixture_root <- normalizePath("host-fixtures",winslash="/",mustWork=TRUE)
 source(file.path(host_fixture_root,"reader.R"),local=TRUE)
 source(file.path(host_fixture_root,"context.R"),local=TRUE)
 host_truth <- read_host_fixture(host_fixture_root,"public-define")
-fixtures <- system.file("define-fixtures", package = "yamaa", mustWork = TRUE)
+fixtures <- normalizePath("define-fixtures", winslash = "/", mustWork = TRUE)
 rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 fixture <- function(name, published = FALSE) {
   root <- tempfile("define-"); dir.create(root)
@@ -38,7 +37,7 @@ submission <- function(root, created = host_truth[["created"]], section = "sdtm"
 check_issues <- function(result, empty = TRUE) {
   frame <- result$issues
   stopifnot(is.data.frame(frame), identical(names(frame), fixture_strings(host_truth[["issue_columns"]])),
-    all(vapply(frame[c("phase", "condition", "requirement", "context")], is.character, logical(1))),
+    all(vapply(frame[c("phase", "condition", "rule", "context")], is.character, logical(1))),
     is.list(frame$spec_paths), all(vapply(frame$source_span, is.null, logical(1))),
     all(vapply(frame$operand_route, is.null, logical(1))))
   if (empty) stopifnot(nrow(frame) == 0L)
@@ -81,7 +80,7 @@ result <- submission(root, section = NULL); check_issues(result)
 held <- saved(result, root, c("dm.json", "define.xml"))
 for (name in names(held)) stopifnot(identical(held[[name]], rawfile(file.path(fixtures, "sdtm-dm-metadata/expected", name))))
 absent <- submission(root, section = "adam")
-stopifnot(identical(absent$issues$condition, "missing_required_field"), identical(absent$issues$requirement, "REQ-1337"),
+stopifnot(identical(absent$issues$condition, "missing_required_field"), identical(absent$issues$rule, "DEFINE-28"),
   identical(absent$issues$spec_paths, list("adam")), refused(absent))
 unlink(root, recursive = TRUE)
 
@@ -169,7 +168,7 @@ for (mode in c("original source", "value codelist", "metadata only", "arbitrary 
   }
   result <- submission(root)
   if (mode == "original source") {
-    stopifnot(any(result$issues$requirement == "REQ-0919" & result$issues$condition == "origin_source_not_admitted"), refused(result))
+    stopifnot(any(result$issues$rule == "SUB-15" & result$issues$condition == "origin_source_not_admitted"), refused(result))
   } else if (mode == "value codelist") {
     row <- which(result$issues$condition == "allowed_values_failed")
     stopifnot(length(row) == 1L, grepl('"codelist":"CL_GLUCOSE"', result$issues$context[row], fixed = TRUE),
@@ -229,7 +228,7 @@ for (case in list(
 
 root <- fixture("sdtm-dm-metadata")
 result <- submission(root)
-stopifnot("producer_contract_mismatch" %in% result$issues$condition, "REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "dm.json")), !file.exists(file.path(root, "define.xml")))
+stopifnot("producer_contract_mismatch" %in% result$issues$condition, "INPUT-11" %in% result$issues$rule, refused(result), !file.exists(file.path(root, "dm.json")), !file.exists(file.path(root, "define.xml")))
 metadata_only(root)
 result <- submission(root); check_issues(result)
 project <- file.path(root, "project.yaml")
@@ -245,7 +244,7 @@ error <- tryCatch(result$save(), yamaa_error = identity)
 stopifnot(inherits(error, "yamaa_error"), identical(error$issues, result$issues),
   !file.exists(file.path(root, "dm.json")), dir.exists(file.path(root, "define.xml")),
   identical(result$issues$phase, "engine"), identical(result$issues$condition, "engine_rejected"),
-  all(is.na(result$issues$requirement)), grepl("publication_target_admission", result$issues$context, fixed = TRUE),
+  all(is.na(result$issues$rule)), grepl("publication_target_admission", result$issues$context, fixed = TRUE),
   grepl('"code":"invalid_target"', result$issues$context, fixed = TRUE),
   grepl("cause", result$issues$context, fixed = TRUE))
 unlink(root, recursive = TRUE)
@@ -259,9 +258,19 @@ held <- saved(result, root, c("dm.json", "define.xml"))
 stopifnot(grepl(paste0('SourceSystemVersion="', version, '"'), rawToChar(held[["define.xml"]]), fixed = TRUE),
   grepl(paste0('"version": "', version, '"'), rawToChar(held[["dm.json"]]), fixed = TRUE))
 unlink(file.path(root, names(held)))
+# A terminology standard's name is closed where the project is read (CT-2),
+# before any document is composed.
 edit_lines(project, function(lines) gsub("name: CDISC/NCI", "name: InvalidStandard", lines, fixed = TRUE))
 result <- submission(root)
-stopifnot("REQ-1026" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot(identical(result$issues$condition, "value_not_permitted"), identical(result$issues$rule, "SCHEMA-12"),
+  identical(result$issues$spec_paths[[1L]], "codelists[0].standard.name"),
+  refused(result), !file.exists(file.path(root, "define.xml")))
+# A SAS format name longer than eight characters fails only against the
+# Define-XML schema's facet, as the document is generated.
+edit_lines(project, function(lines) gsub("format_name: $SEX", "format_name: $SEXCODELIST",
+  gsub("name: InvalidStandard", "name: CDISC/NCI", lines, fixed = TRUE), fixed = TRUE))
+result <- submission(root)
+stopifnot("DEFINE-25" %in% result$issues$rule, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
 root <- fixture("sdtm-dm-metadata", TRUE)
@@ -285,7 +294,7 @@ result <- submission(root)
 stopifnot("origin_document_missing" %in% result$issues$condition, refused(result), !file.exists(file.path(root, "dm.json")))
 writeLines(lines[lines != "    alias: C66734"], project)
 result <- submission(root)
-stopifnot("REQ-1004" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot("DEFINE-4" %in% result$issues$rule, refused(result), !file.exists(file.path(root, "define.xml")))
 unlink(root, recursive = TRUE)
 
 root <- fixture("sdtm-dm-metadata")
@@ -308,7 +317,7 @@ sex <- which(spec == "    derivation: DM_RAW.SEX"); stopifnot(length(sex) == 1L)
 writeLines(append(spec, c("    verifications:", "      - allowed_values:", "          values: [F, M, U]"), after = sex),
   file.path(root, "parents/base.yaml"))
 result <- submission(root)
-stopifnot("redundant_declaration" %in% result$issues$condition, "REQ-0955" %in% result$issues$requirement,
+stopifnot("redundant_declaration" %in% result$issues$condition, "CT-9" %in% result$issues$rule,
   refused(result), identical(rawfile(file.path(root, "artifacts/define.xml")), held[["define.xml"]]))
 unlink(root, recursive = TRUE)
 root <- fixture("sdtm-dm-metadata")
@@ -326,13 +335,13 @@ writeLines(spec, spec_path)
 csv <- readLines(file.path(fixtures, "sdtm-dm-metadata/expected/dm.csv"))
 writeLines(gsub("STUDYID,USUBJID", "USUBJID,STUDYID", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
-stopifnot("REQ-0535" %in% result$issues$requirement, refused(result))
+stopifnot("INPUT-11" %in% result$issues$rule, refused(result))
 writeLines(gsub("STUDYID", "WRONG", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
-stopifnot("REQ-0535" %in% result$issues$requirement, refused(result), !file.exists(file.path(root, "define.xml")))
+stopifnot("INPUT-11" %in% result$issues$rule, refused(result), !file.exists(file.path(root, "define.xml")))
 writeLines(gsub(",F,USA", ",Z,USA", csv, fixed = TRUE), file.path(root, "dm.csv"))
 result <- submission(root)
-rows <- result$issues[result$issues$requirement %in% "REQ-0957", , drop = FALSE]
+rows <- result$issues[result$issues$rule %in% "CT-7", , drop = FALSE]
 stopifnot(nrow(rows) == 1L, rows$phase == "verification", grepl('"value":"Z"', rows$context, fixed = TRUE),
   grepl("CATH-UCSD-0001", rows$context, fixed = TRUE), refused(result), !file.exists(file.path(root, "dm.json")))
 unlink(root, recursive = TRUE)
@@ -365,7 +374,7 @@ define_sentinel <- file.path(root, "define.xml")
 writeBin(charToRaw("original Define sentinel"), define_sentinel)
 previous_names <- sort(list.files(root, all.files = TRUE, no.. = TRUE))
 result <- submission(root)
-stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "transport_path_collision"), identical(result$issues$requirement, "REQ-1226"),
+stopifnot(identical(result$issues$phase, "validation"), identical(result$issues$condition, "transport_path_collision"), identical(result$issues$rule, "JSON-2"),
   identical(result$issues$spec_paths[[1L]], "sdtm.specs[1]"), grepl("dm.json", result$issues$context, fixed = TRUE), refused(result),
   identical(rawfile(sentinel), charToRaw("original publication sentinel")),
   identical(rawfile(define_sentinel), charToRaw("original Define sentinel")),
@@ -396,7 +405,7 @@ for (case in host_truth[["xml_text_cases"]]) {
     expected <- case[["issues"]][[i]]
     stopifnot(identical(result$issues$phase[[i]], expected[["phase"]]),
       identical(result$issues$condition[[i]], expected[["condition"]]),
-      identical(result$issues$requirement[[i]], expected[["requirement"]]),
+      identical(result$issues$rule[[i]], expected[["rule"]]),
       identical(result$issues$spec_paths[[i]], fixture_strings(expected[["spec_paths"]])),
       context_equal(jsonlite::fromJSON(result$issues$context[[i]], simplifyVector = FALSE), expected[["context"]]))
   }
@@ -426,7 +435,7 @@ for (case in manifest$cases) {
     want <- case$error
     stopifnot(nrow(result$issues) >= 1L, identical(result$issues$phase[[1L]], want$phase),
       identical(result$issues$condition[[1L]], want$condition),
-      identical(result$issues$requirement[[1L]], want$requirement),
+      identical(result$issues$rule[[1L]], want$rule),
       identical(result$issues$spec_paths[[1L]], fixture_strings(want$spec_paths)))
     context <- jsonlite::fromJSON(result$issues$context[[1L]], simplifyVector = FALSE)
     for (key in names(want$context)) stopifnot(identical(context[[key]], want$context[[key]]))

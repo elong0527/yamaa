@@ -1,8 +1,8 @@
 //! The one resolution lifecycle after composition: expand named windows,
 //! prune (LAYER-11), order (LAYER-13), normalize, expand strictly and admit
 //! the model. A spec that declares no `parent` is a composition of one layer
-//! (REQ-0614) and takes the same lifecycle, keeping its declaration order
-//! (REQ-0060); only a layered spec is ordered.
+//! (LAYER-1) and takes the same lifecycle, keeping its declaration order
+//! (COLUMN-5); only a layered spec is ordered.
 //!
 //! Pruning reads the AST. The expanded document is lowered once
 //! ([`lower_document`]); the live set is a fixpoint over [`Spec::reads`]
@@ -28,7 +28,7 @@ use std::collections::BTreeSet;
 /// How the surviving columns are ordered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Order {
-    /// Declaration order, for a spec without `parent` (REQ-0060).
+    /// Declaration order, for a spec without `parent` (COLUMN-5).
     Declared,
     /// Dependency order, the earliest declaration first (LAYER-13).
     Dependencies,
@@ -37,10 +37,10 @@ pub enum Order {
 /// A dependency finding of the order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Issue {
-    /// A derivation reads a name no column declares (REQ-0070).
+    /// A derivation reads a name no column declares (COLUMN-5).
     Unknown { column: String, dependency: String },
     /// The first cycle as a closed loop of column names, its last entry
-    /// repeating the first, and the derivation path of each member (REQ-0072).
+    /// repeating the first, and the derivation path of each member (COLUMN-6).
     Cycle {
         cycle: Vec<String>,
         paths: Vec<String>,
@@ -87,7 +87,7 @@ enum Kind {
     /// name keeps declarations live and orders them but is never an unknown
     /// dependency.
     Predicate,
-    /// An ODM item, which names its dataset before the first dot (REQ-1265).
+    /// An ODM item, which names its dataset before the first dot (NAME-7).
     Item,
 }
 
@@ -277,7 +277,7 @@ impl<'a> Live<'a> {
         }
         // Every column and intermediate that carries its own verification. A
         // complete rename-only intermediate also reaches its refusal
-        // (REQ-1248) when nothing reads it.
+        // (LOOKUP-4) when nothing reads it.
         for column in &spec.columns {
             if !column.checks.is_empty() {
                 self.columns.insert(column.name.name.clone());
@@ -415,7 +415,7 @@ impl<'a> Live<'a> {
 
     /// The columns a column's derivations read, through a live lookup's
     /// matching reads too, and those of them its own derivations name
-    /// outside a predicate, which an unknown column fails (REQ-0627).
+    /// outside a predicate, which an unknown column fails (LAYER-5).
     fn dependencies(&self, column: usize) -> Result<(BTreeSet<String>, BTreeSet<String>), Error> {
         let mut readings = Vec::new();
         for derivation in self.derivations(column) {
@@ -519,7 +519,7 @@ impl<'a> Live<'a> {
 
 /// Without a relation change or `require_match`, an intermediate whose
 /// absence answer is missing reads what the implicit join reads (LOOKUP-4).
-pub(crate) fn rename_only(item: &Intermediate) -> bool {
+fn rename_only(item: &Intermediate) -> bool {
     !matches!(
         item.key,
         Some(JoinKey::Columns { .. } | JoinKey::Pairs { .. })

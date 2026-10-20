@@ -21,7 +21,6 @@ column name.
 
 Fails: `duplicate_identifier`, `undeclared_column`.
 Evidence: `schema-structure`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::duplicate`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::undeclared`.
-Replaces: REQ-0062, REQ-0193, REQ-0210, REQ-0234, REQ-1047.
 
 A declared column that `output.columns` does not list is internal
 ([SPEC-7](specification.md#spec-7)). `output.order_by` orders the artifact's
@@ -41,7 +40,6 @@ invalid name when there is one.
 
 Fails: `duplicate_identifier`, `internal_column_in_keys`, `invalid_field_type`, `undeclared_column`.
 Evidence: `negative-keys-internal`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::internal-key`, `rust/crates/yamaa-adapters/tests/fixtures/preflight.tsv::declaration-order`.
-Replaces: REQ-0220.
 
 An empty list fails as `invalid_field_type`, an unknown column as
 `undeclared_column`, an internal column as `internal_column_in_keys` and a
@@ -60,7 +58,6 @@ offending rows.
 
 Fails: `duplicate_key`, `missing_key`.
 Evidence: `negative-output-duplicate`, `negative-output-missing-key`.
-Replaces: REQ-0221, REQ-0240.
 
 Key order is significant to [Lookup and joins](lookup.md), which
 joins on the output keys a right side also carries; those applicable keys are
@@ -115,7 +112,6 @@ it. `output.relative_to` selects the base for both paths under
 validation, reporting the specification.
 
 Evidence: `schema-inherited-output`, `schema-verification-log`.
-Replaces: REQ-0715, REQ-0759.
 
 `relative_to: entry` lets a shared output declaration publish separately for
 each study ([LAYER-5](inheritance.md#layer-5)).
@@ -132,7 +128,6 @@ profile is never inferred from file contents.
 
 Fails: `unknown_artifact_profile`.
 Evidence: `negative-output-transport`, `rust/crates/yamaa-adapters/tests/fixtures/output_declarations.tsv::profile`, `schema-parquet`.
-Replaces: REQ-0195, REQ-0716, REQ-0760, REQ-1233, REQ-1235, REQ-1237.
 
 | Extension | Profile | Container | Fixed exactly |
 |---|---|---|---|
@@ -164,7 +159,6 @@ under its column's mapping fails, reporting the column, the row's key and the
 value.
 
 Evidence: `schema-parquet`.
-Replaces: REQ-0719, REQ-0720, REQ-0721, REQ-0763, REQ-1234.
 
 The values are those of [Values](values.md),
 [Values](values.md) and [Values](values.md),
@@ -192,7 +186,6 @@ value's lifecycle, key validation and verification under
 Rows are not streamed to the target as they are constructed.
 
 Evidence: `rust/crates/yamaa-adapters/tests/execution_declarative_case_predicates.rs::case_predicate_multiplicity_retains_its_complete_report_and_blocks_publication`.
-Replaces: REQ-0239, REQ-0755.
 
 A conversion failure with no `unconvertible` on the result wrapper fails the
 run ([VALUE-3](values.md#value-3)), and no artifact is published; the failed
@@ -211,7 +204,6 @@ it was, removes its temporary file and produces no accepted artifact.
 
 Fails: `publication_failed`.
 Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`.
-Replaces: REQ-0752, REQ-0753, REQ-0754, REQ-0764.
 
 A failed atomic replacement fails and reports the target; the run produces no
 artifact and the previous one is unchanged.
@@ -252,7 +244,6 @@ report extension the mapping does not name fails validation as it does for
 
 Fails: `artifact_path_collision`, `unknown_artifact_profile`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/crates/yamaa-adapters/tests/project_scope.rs::unlinked_inputs_cycles_and_collisions_are_project_findings`, `rust/crates/yamaa-adapters/tests/file_producer_links.rs::a_consumer_may_not_write_a_file_of_the_producer_it_reads`.
-Replaces: REQ-0756, REQ-1180.
 
 Two spellings that resolve to the same file collide as well; the comparison
 uses the resolved locations without requiring either file or its parent to
@@ -275,7 +266,6 @@ replaces only its declared report file; it is the only file a failed run
 writes, and writing it accepts nothing.
 
 Evidence: `schema-verification-log`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/src/file_application.rs::actual_late_failures_retain_original_error_entered_prefix_and_retry`, `rust/crates/yamaa-adapters/src/file_application.rs::failed_build_report_keeps_original_failure_and_fresh_retry_prefix`.
-Replaces: REQ-0757, REQ-0758, REQ-1181.
 
 A successful publication therefore never exposes a new primary artifact
 without its completed report already visible. The run report
@@ -306,7 +296,6 @@ once, after the lifecycle, key validation and every verification; it never
 changes whether a run passes or warns, and evaluation is unchanged.
 
 Evidence: `schema-ordering`, `adam-adae-review-order`.
-Replaces: REQ-0222, REQ-0226.
 
 The dependency order of the [Column derivation](columns.md), a
 window's partitions and the neighbours `row_value` reads are fixed before
@@ -325,7 +314,6 @@ a completed row to order by.
 
 Fails: `duplicate_order_term`, `undeclared_column`.
 Evidence: `negative-order-repeated`, `negative-order-unknown-column`, `adam-adae-review-order`.
-Replaces: REQ-0223, REQ-0224.
 
 A working value the artifact does not publish is admissible, such as a numeric
 ordinal beside the text it labels, or a rank.

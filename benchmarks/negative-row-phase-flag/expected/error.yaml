@@ -2,7 +2,7 @@ phase: validation
 condition: phase_boundary
 spec_paths:
   - rows[0].derivations.ABLFL.flag.condition
-requirement: REQ-0069
+rule: COLUMN-4
 context:
   identifier: AVISITN
   row: systolic

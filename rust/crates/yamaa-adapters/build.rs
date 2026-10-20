@@ -26,5 +26,25 @@ fn main() {
         build.file(format!("{root}/{file}"));
     }
     build.compile("yamaa_readstat");
-    println!("cargo:rerun-if-changed={root}");
+    watch(std::path::Path::new(root));
+}
+
+/// Rerun when a ReadStat source file changes. Cargo compares a watched
+/// directory's own modification time too, and unpacking a source package
+/// gives directories the time of unpacking, so each file is watched instead:
+/// an R installation that shares the Cargo build of an earlier one from the
+/// same package then rebuilds nothing.
+#[cfg(feature = "readstat")]
+fn watch(path: &std::path::Path) {
+    if path.is_dir() {
+        let mut entries: Vec<_> = std::fs::read_dir(path)
+            .and_then(|entries| entries.map(|entry| Ok(entry?.path())).collect())
+            .expect("the ReadStat sources are readable");
+        entries.sort();
+        for entry in entries {
+            watch(&entry);
+        }
+    } else {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
 }

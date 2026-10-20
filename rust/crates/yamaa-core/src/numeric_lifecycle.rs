@@ -1,7 +1,7 @@
 //! Complete a compiled numeric result before a dependent consumer can read it.
 //!
 //! This application slice covers evaluate -> convert -> unconvertible replacement
-//! (REQ-0211-0214), not table execution, verification or specification decoding.
+//! (COLUMN-8), not table execution, verification or specification decoding.
 
 use crate::conversion::{convert, ConversionError};
 use crate::expression::{CompiledExpression, EvaluationError, Resolver};

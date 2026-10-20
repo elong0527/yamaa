@@ -114,7 +114,7 @@ def fixture_rows(name):
 # (#2676). Projecting here keeps the fixture the one source of truth: a row
 # missing a host field or carrying a field this projection does not know is
 # refused rather than silently narrowed.
-HOST_ISSUE_FIELDS = ("phase", "condition", "requirement", "spec_paths", "context")
+HOST_ISSUE_FIELDS = ("phase", "condition", "rule", "spec_paths", "context")
 ADAPTER_GEOMETRY_FIELDS = ("source_span", "operand_route")
 
 
@@ -203,9 +203,7 @@ def stage_text_extract_truth(destination: Path):
             quoting=csv.QUOTE_NONE,
             quotechar=None,
         )
-        writer.writerow(
-            ("case", "phase", "condition", "requirement", "spec_path", "context")
-        )
+        writer.writerow(("case", "phase", "condition", "rule", "spec_path", "context"))
         for name, value in capture.items():
             if "specification" not in value or name == "wide-group":
                 continue
@@ -229,7 +227,7 @@ def stage_text_extract_truth(destination: Path):
                         name,
                         finding["phase"],
                         finding["condition"],
-                        finding["requirement"],
+                        finding["rule"],
                         finding["spec_paths"][0],
                         json.dumps(
                             finding["context"], sort_keys=True, separators=(",", ":")
@@ -295,9 +293,7 @@ def stage_text_template_truth(destination: Path):
             quoting=csv.QUOTE_NONE,
             quotechar=None,
         )
-        writer.writerow(
-            ("case", "phase", "condition", "requirement", "spec_path", "context")
-        )
+        writer.writerow(("case", "phase", "condition", "rule", "spec_path", "context"))
         for name, value in capture.items():
             if "specification" not in value:
                 continue
@@ -321,7 +317,7 @@ def stage_text_template_truth(destination: Path):
                         name,
                         finding["phase"],
                         finding["condition"],
-                        finding["requirement"],
+                        finding["rule"],
                         finding["spec_paths"][0],
                         json.dumps(
                             finding["context"], sort_keys=True, separators=(",", ":")
@@ -337,7 +333,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "negative-impute-bad-month",
             "validation",
             "month_out_of_range",
-            "REQ-0608",
+            "TIME-10",
             "columns.ASTDT.derivation.impute.month",
             {"month": 15},
         ),
@@ -345,7 +341,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "negative-impute-unreachable-month",
             "validation",
             "month_not_permitted",
-            "REQ-0592",
+            "TIME-10",
             "columns.ASTDT.derivation.impute.month",
             {"month": 6},
         ),
@@ -353,7 +349,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "negative-impute-missing-month",
             "validation",
             "month_required",
-            "REQ-0592",
+            "TIME-10",
             "columns.ASTDT.derivation.impute.month",
             {"minimum_source_precision": "year"},
         ),
@@ -361,7 +357,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "negative-impute-day-rule",
             "validation",
             "value_not_permitted",
-            "REQ-0609",
+            "TIME-10",
             "columns.ASTDT.derivation.impute.day",
             {"value": "mid", "permitted": ["first", "last"]},
         ),
@@ -369,7 +365,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "negative-impute-bad-day",
             "impute",
             "invalid_calendar_date",
-            "REQ-0608",
+            "TIME-10",
             "columns.AENDT.derivation.impute",
             {
                 "value": "2023-04",
@@ -383,7 +379,7 @@ def stage_temporal_imputation_truth(destination: Path):
             "negative-date-conversion",
             "validation",
             "incompatible_input_type",
-            "REQ-0607",
+            "TIME-2",
             "columns.ASTDT2.derivation.to_date.source",
             {
                 "source": "ASTDT",
@@ -407,7 +403,7 @@ def stage_temporal_imputation_truth(destination: Path):
                 name,
                 finding["phase"],
                 finding["condition"],
-                finding["requirement"],
+                finding["rule"],
                 finding["spec_paths"][0],
                 finding["context"],
             )
@@ -426,16 +422,14 @@ def stage_temporal_imputation_truth(destination: Path):
             quoting=csv.QUOTE_NONE,
             quotechar=None,
         )
-        writer.writerow(
-            ("case", "phase", "condition", "requirement", "spec_path", "context")
-        )
-        for name, phase, condition, requirement, path, context in cases:
+        writer.writerow(("case", "phase", "condition", "rule", "spec_path", "context"))
+        for name, phase, condition, rule, path, context in cases:
             writer.writerow(
                 (
                     name,
                     phase,
                     condition,
-                    requirement,
+                    rule,
                     path,
                     json.dumps(context, sort_keys=True, separators=(",", ":")),
                 )
@@ -460,9 +454,7 @@ def stage_text_case_truth(destination: Path):
             quoting=csv.QUOTE_NONE,
             quotechar=None,
         )
-        writer.writerow(
-            ("case", "phase", "condition", "requirement", "spec_path", "context")
-        )
+        writer.writerow(("case", "phase", "condition", "rule", "spec_path", "context"))
         for name in TEXT_CASES[1:]:
             (finding,) = capture[name]
             context = dict(finding["context"])
@@ -480,7 +472,7 @@ def stage_text_case_truth(destination: Path):
                     name,
                     finding["phase"],
                     finding["condition"],
-                    finding["requirement"],
+                    finding["rule"],
                     finding["spec_paths"][0],
                     json.dumps(context, sort_keys=True, separators=(",", ":")),
                 )
@@ -534,7 +526,7 @@ def stage_text_pad_truth(destination: Path):
                 "index",
                 "phase",
                 "condition",
-                "requirement",
+                "rule",
                 "spec_paths",
                 "context",
             )
@@ -568,7 +560,7 @@ def stage_text_pad_truth(destination: Path):
                         index,
                         finding["phase"],
                         finding["condition"],
-                        finding["requirement"],
+                        finding["rule"],
                         json.dumps(finding["spec_paths"], separators=(",", ":")),
                         json.dumps(context, sort_keys=True, separators=(",", ":")),
                     )
@@ -644,7 +636,7 @@ def stage_flag_truth(destination: Path):
                 source, entry = context.pop("source"), context.pop("entry")
                 assert source == entry and source.endswith("/" + name + "/spec.yaml")
         columns = []
-        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+        for field in ("phase", "condition", "rule", "spec_paths", "context"):
             values = [row[field] for row in findings]
             if field == "spec_paths":
                 literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
@@ -685,7 +677,7 @@ def stage_flag_truth(destination: Path):
         entries.append(text(name) + "=list(" + ",".join(values) + ")")
     (destination / "flag-truth.R").write_text(
         "# Independent original CSV/findings/handlers; no candidate execution.\n"
-        "# Held: generic case REQ-0103/0189 and recursive report context PR1933.\n"
+        "# Held: generic case (NAME-3, FORMULA-9) and recursive report context PR1933.\n"
         "flag_truth <- list(\n" + ",\n".join(entries) + "\n)\n",
         encoding="ascii",
     )
@@ -731,7 +723,7 @@ def stage_intermediate_key_truth(destination: Path):
                 case["csv"], encoding="utf-8", newline="\n"
             )
         columns = []
-        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+        for field in ("phase", "condition", "rule", "spec_paths", "context"):
             values = [finding[field] for finding in case.get("findings", [])]
             if field == "spec_paths":
                 literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
@@ -820,7 +812,7 @@ def stage_row_intermediate_truth(destination: Path):
             encoding="ascii",
         )
         fields = []
-        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+        for field in ("phase", "condition", "rule", "spec_paths", "context"):
             values = [finding[field] for finding in findings]
             if field == "spec_paths":
                 literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
@@ -933,7 +925,7 @@ def stage_inheritance_replay(destination: Path):
                     dict(
                         phase="validation",
                         condition=finding["condition"],
-                        requirement=finding["requirement"],
+                        rule=finding["rule"],
                         spec_paths=[finding["path"]],
                         context=context,
                     )
@@ -1007,7 +999,7 @@ def stage_issue_frame_truth(destination: Path):
     entries = []
     for name, diagnostics in reports.items():
         columns = []
-        for field in ("phase", "condition", "requirement", "spec_paths", "context"):
+        for field in ("phase", "condition", "rule", "spec_paths", "context"):
             values = [row[field] for row in diagnostics]
             if field == "spec_paths":
                 literal = "list(" + ",".join(strings(paths) for paths in values) + ")"
@@ -1150,7 +1142,7 @@ def stage_source_selection_truth(
 
     def issues(rows):
         fields = []
-        for field in ("phase", "condition", "requirement", "context"):
+        for field in ("phase", "condition", "rule", "context"):
             values = [
                 text(json.dumps(row[field], sort_keys=True, separators=(",", ":")))
                 if field == "context"
@@ -1242,7 +1234,7 @@ def stage_completed_lookup_assertion_truth(destination: Path):
 
     def issues(rows):
         fields = []
-        for field in ("phase", "condition", "requirement", "context"):
+        for field in ("phase", "condition", "rule", "context"):
             values = [
                 text(json.dumps(row[field], sort_keys=True, separators=(",", ":")))
                 if field == "context"
@@ -1342,7 +1334,7 @@ def stage(destination: Path):
         / "rust/crates/yamaa-adapters/tests/fixtures/inheritance_preparation.tsv",
         destination / "inheritance-preparation.tsv",
     )
-    # Preserve historical reports exactly; requirement citations are baked into the fixture.
+    # Preserve historical reports exactly; rule citations are baked into the fixture.
     with (destination / "inheritance-preparation.tsv").open(
         encoding="ascii", newline=""
     ) as stream:
@@ -1443,9 +1435,7 @@ def stage(destination: Path):
             quoting=csv.QUOTE_NONE,
             quotechar=None,
         )
-        writer.writerow(
-            ("case", "phase", "condition", "requirement", "spec_path", "context")
-        )
+        writer.writerow(("case", "phase", "condition", "rule", "spec_path", "context"))
         for name, case in truth["cases"].items():
             if name in dispositions:
                 assert case["csv"] == dispositions[name]["historical_csv"]
@@ -1468,7 +1458,7 @@ def stage(destination: Path):
                         name,
                         finding["phase"],
                         finding["condition"],
-                        finding["requirement"],
+                        finding["rule"],
                         finding["spec_paths"][0],
                         json.dumps(
                             finding["context"], sort_keys=True, separators=(",", ":")

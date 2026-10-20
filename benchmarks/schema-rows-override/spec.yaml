@@ -42,7 +42,7 @@ columns:
     label: Baseline Height (cm)
 
   # The column default: every row template inherits this unless it names
-  # AVAL itself (REQ-0199).
+  # AVAL itself (SPEC-6).
   - name: AVAL
     type: float
     label: Analysis Value
@@ -60,8 +60,8 @@ rows:
       HEIGHTBL: {literal: null}
 
   # This template names AVAL, overriding the default for its rows only
-  # (REQ-0199). The override reads HEIGHTBL in this template's scope
-  # (REQ-1260): each weight record divides by its own subject's baseline
+  # (SPEC-6). The override reads HEIGHTBL in this template's scope
+  # (SPEC-6): each weight record divides by its own subject's baseline
   # height, and a missing height leaves the index blank.
   - id: derived_bmi
     dataset: VS

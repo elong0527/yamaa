@@ -1,8 +1,8 @@
 use crate::support::document::Tree;
+use crate::support::roots::{Codelist, CodelistType, Item, Source};
 use yamaa_core::{
     project_environment::{Draft, Environment, ExecutionEnvironment},
     project_function::Language,
-    project_terminology::{Codelist, DataType, Item, Source},
     schema::{Document, DocumentNode as N, SpecificationDocument},
     table::{Column, TableSchema},
     value::{ColumnType, Value},
@@ -33,7 +33,7 @@ pub fn spec(
         ("origin", m(vec![("type", t("Assigned"))])),
     ];
     if extra == Some("role") {
-        submission.push(("role", t("Result")));
+        submission.push(("role", t("Result Qualifier")));
     }
     let mut code = vec![
         ("name", t("CODE")),
@@ -112,7 +112,7 @@ pub fn environment(extensible: bool) -> ExecutionEnvironment {
                 codelists: vec![Codelist {
                     id: "SEX".into(),
                     name: "Sex".into(),
-                    data_type: DataType::Text,
+                    data_type: CodelistType::Text,
                     extensible,
                     alias: None,
                     format_name: None,
@@ -125,7 +125,8 @@ pub fn environment(extensible: bool) -> ExecutionEnvironment {
                     }]),
                     external: None,
                 }],
-            }],
+            }
+            .root()],
         },
     )
     .unwrap()

@@ -88,7 +88,7 @@ pub struct Condition {
     pub matched_key: Option<Vec<(String, Value)>>,
 }
 
-/// An execution bound: its resource, the limit and the requirement when
+/// An execution bound: its resource, the limit and the rule when
 /// known, and the paths or the source coordinate that own it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Limit {

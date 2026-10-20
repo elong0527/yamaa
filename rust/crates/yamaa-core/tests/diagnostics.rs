@@ -56,7 +56,7 @@ mod diagnostics {
                     vec!["input.SRC".into()],
                 );
                 assert_eq!(finding.definition().condition, "engine_rejected");
-                assert_eq!(finding.definition().requirement, None);
+                assert_eq!(finding.definition().rule, None);
                 assert_eq!(finding.spec_paths, ["input.SRC"]);
                 assert_eq!(
                     finding.context,
@@ -234,9 +234,9 @@ mod diagnostics {
                 (
                     publication.definition().phase,
                     publication.definition().condition,
-                    publication.definition().requirement
+                    publication.definition().rule
                 ),
-                ("output", "publication_failed", Some("REQ-0764"))
+                ("output", "publication_failed", Some("OUTPUT-8"))
             );
             assert_eq!(publication.spec_paths, ["output.path"]);
             assert_eq!(
@@ -263,11 +263,7 @@ mod diagnostics {
             ] {
                 let definition = finding.definition();
                 assert_eq!(
-                    (
-                        definition.phase,
-                        definition.condition,
-                        definition.requirement
-                    ),
+                    (definition.phase, definition.condition, definition.rule),
                     (phase, condition, None)
                 );
                 for &(name, value) in context {
@@ -275,31 +271,37 @@ mod diagnostics {
                 }
                 reached.insert(finding.code);
             }
-            for (expression, phase, condition, requirement) in [
-                ("MISSING", "validation", "unknown_field", "REQ-0443"),
-                ("TEXT", "validation", "incompatible_input_type", "REQ-0444"),
+            for (expression, phase, condition, rule) in [
+                ("MISSING", "validation", "unknown_field", "FORMULA-9"),
+                (
+                    "TEXT",
+                    "validation",
+                    "incompatible_input_type",
+                    "FORMULA-12",
+                ),
                 (
                     "9223372036854775807 + 1",
                     "derivation",
                     "integer_overflow",
-                    "REQ-0434",
+                    "VALUE-5",
                 ),
-                ("1 / 0", "derivation", "division_by_zero", "REQ-0430"),
-                ("SQRT(-1)", "derivation", "sqrt_of_negative", "REQ-0431"),
-                ("LN(0)", "derivation", "ln_of_nonpositive", "REQ-0432"),
-                ("POWER(-1, 0.5)", "derivation", "invalid_power", "REQ-0433"),
+                ("1 / 0", "derivation", "division_by_zero", "FORMULA-15"),
+                ("SQRT(-1)", "derivation", "sqrt_of_negative", "FORMULA-15"),
+                ("LN(0)", "derivation", "ln_of_nonpositive", "FORMULA-15"),
+                (
+                    "POWER(-1, 0.5)",
+                    "derivation",
+                    "invalid_power",
+                    "FORMULA-15",
+                ),
             ] {
                 let plan = compile_numeric(expression, "columns.X.compute").unwrap();
                 let error = plan.evaluate_number(&mut Bindings).unwrap_err();
                 let diagnostic = error.diagnostic().unwrap();
                 let definition = diagnostic.definition();
                 assert_eq!(
-                    (
-                        definition.phase,
-                        definition.condition,
-                        definition.requirement
-                    ),
-                    (phase, condition, Some(requirement))
+                    (definition.phase, definition.condition, definition.rule),
+                    (phase, condition, Some(rule))
                 );
                 assert_eq!(diagnostic.spec_paths, ["columns.X.compute"]);
                 assert_eq!(
@@ -308,25 +310,21 @@ mod diagnostics {
                 );
                 reached.insert(diagnostic.code);
             }
-            for (source, target, requirement) in [
-                (Value::Bool(true), ColumnType::Int, "REQ-0013"),
-                (Value::float(1.5), ColumnType::Int, "REQ-0021"),
+            for (source, target, rule) in [
+                (Value::Bool(true), ColumnType::Int, "VALUE-3"),
+                (Value::float(1.5), ColumnType::Int, "VALUE-7"),
                 (
                     Value::Str("2026-02-30".into()),
                     ColumnType::Date,
-                    "REQ-0601",
+                    "VALUE-15",
                 ),
             ] {
                 let error = convert(&source, target).unwrap_err();
                 let diagnostic = error.into_diagnostic("columns.X".into());
                 let definition = diagnostic.definition();
                 assert_eq!(
-                    (
-                        definition.phase,
-                        definition.condition,
-                        definition.requirement
-                    ),
-                    ("convert", "conversion_failed", Some(requirement))
+                    (definition.phase, definition.condition, definition.rule),
+                    ("convert", "conversion_failed", Some(rule))
                 );
                 assert_eq!(diagnostic.context["value"], JsonValue::from(source));
                 assert_eq!(diagnostic.spec_paths, ["columns.X"]);
@@ -334,47 +332,43 @@ mod diagnostics {
                 assert_eq!(diagnostic.operand_route, None);
                 reached.insert(diagnostic.code);
             }
-            for (cause, condition, requirement) in [
+            for (cause, condition, rule) in [
                 (
                     yamaa_core::resource::ResourceFailure::Missing,
                     "resource_path_missing",
-                    "REQ-0785",
+                    "FILE-7",
                 ),
                 (
                     yamaa_core::resource::ResourceFailure::NotRegularFile,
                     "resource_path_not_regular_file",
-                    "REQ-0785",
+                    "FILE-7",
                 ),
                 (
                     yamaa_core::resource::ResourceFailure::UriScheme,
                     "resource_path_uri_scheme",
-                    "REQ-0775",
+                    "FILE-5",
                 ),
                 (
                     yamaa_core::resource::ResourceFailure::Backslash,
                     "resource_path_not_normalized",
-                    "REQ-0776",
+                    "FILE-5",
                 ),
                 (
                     yamaa_core::resource::ResourceFailure::EmptySegment,
                     "resource_path_not_normalized",
-                    "REQ-0777",
+                    "FILE-5",
                 ),
                 (
                     yamaa_core::resource::ResourceFailure::Symlink,
                     "resource_path_symlink",
-                    "REQ-0783",
+                    "FILE-8",
                 ),
             ] {
                 let diagnostic = cause.diagnostic("SRC", "input/data.csv");
                 let definition = diagnostic.definition();
                 assert_eq!(
-                    (
-                        definition.phase,
-                        definition.condition,
-                        definition.requirement
-                    ),
-                    ("validation", condition, Some(requirement))
+                    (definition.phase, definition.condition, definition.rule),
+                    ("validation", condition, Some(rule))
                 );
                 assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);
                 assert_eq!(
@@ -395,7 +389,7 @@ mod diagnostics {
                 changed.definition().condition,
                 "resource_path_content_changed"
             );
-            assert_eq!(changed.definition().requirement, Some("REQ-0788"));
+            assert_eq!(changed.definition().rule, Some("FILE-10"));
             assert_eq!(changed.spec_paths, ["input.SRC.path"]);
             assert_eq!(
                 changed.context["path"],
@@ -421,9 +415,9 @@ mod diagnostics {
                 (
                     lock.definition().phase,
                     lock.definition().condition,
-                    lock.definition().requirement
+                    lock.definition().rule
                 ),
-                ("validation", "runtime_artifact_mismatch", Some("REQ-0697"))
+                ("validation", "runtime_artifact_mismatch", Some("FUNC-3"))
             );
             assert_eq!(lock.spec_paths, ["lock"]);
             assert_eq!(lock.context["package"], JsonValue::String("project".into()));
@@ -469,9 +463,9 @@ mod diagnostics {
                 (
                     diagnostic.definition().phase,
                     diagnostic.definition().condition,
-                    diagnostic.definition().requirement
+                    diagnostic.definition().rule
                 ),
-                ("verification", "not_missing_failed", Some("REQ-0375"))
+                ("verification", "not_missing_failed", Some("CHECK-5"))
             );
             assert_eq!(
                 diagnostic.spec_paths,
@@ -489,20 +483,20 @@ mod diagnostics {
             .diagnostic("unused".into(), "V".into())
             .is_none());
             reached.insert(diagnostic.code);
-            for (check, values, offending, condition, requirement) in [
+            for (check, values, offending, condition, rule) in [
                 (
                     yamaa_core::dataset::Check::Mandatory(None),
                     vec![Value::Int(1), Value::Missing, Value::Str(String::new())],
                     vec![1],
                     "not_missing_failed",
-                    "REQ-0885",
+                    "SUB-11",
                 ),
                 (
                     yamaa_core::dataset::Check::AllowedValues(vec![Value::Int(1)]),
                     vec![Value::Int(1), Value::Missing, Value::Int(2)],
                     vec![2],
                     "allowed_values_failed",
-                    "REQ-0376",
+                    "CHECK-6",
                 ),
                 (
                     yamaa_core::dataset::Check::Range {
@@ -512,7 +506,7 @@ mod diagnostics {
                     vec![Value::Int(i64::MAX), Value::Missing],
                     vec![0],
                     "range_failed",
-                    "REQ-0377",
+                    "CHECK-7",
                 ),
                 (
                     yamaa_core::dataset::Check::MaxLength(2),
@@ -523,7 +517,7 @@ mod diagnostics {
                     ],
                     vec![1],
                     "length_failed",
-                    "REQ-0378",
+                    "CHECK-8",
                 ),
                 (
                     yamaa_core::dataset::Check::DataType {
@@ -553,9 +547,9 @@ mod diagnostics {
                     (
                         diagnostic.definition().phase,
                         diagnostic.definition().condition,
-                        diagnostic.definition().requirement
+                        diagnostic.definition().rule
                     ),
-                    ("verification", condition, Some(requirement))
+                    ("verification", condition, Some(rule))
                 );
                 assert_eq!(diagnostic.spec_paths, ["columns.V.verifications[0]"]);
                 assert_eq!(diagnostic.context["column"], JsonValue::String("V".into()));
@@ -622,7 +616,7 @@ mod diagnostics {
                     (
                         diagnostic.definition().phase,
                         diagnostic.definition().condition,
-                        diagnostic.definition().requirement
+                        diagnostic.definition().rule
                     ),
                     ("verification", condition, Some("SUB-13"))
                 );
@@ -650,9 +644,9 @@ mod diagnostics {
                 (
                     diagnostic.definition().phase,
                     diagnostic.definition().condition,
-                    diagnostic.definition().requirement
+                    diagnostic.definition().rule
                 ),
-                ("verification", "matches_failed", Some("REQ-0379"))
+                ("verification", "matches_failed", Some("CHECK-9"))
             );
             assert_eq!(diagnostic.context.len(), 2);
             assert_eq!(
@@ -672,9 +666,9 @@ mod diagnostics {
                 (
                     diagnostic.definition().phase,
                     diagnostic.definition().condition,
-                    diagnostic.definition().requirement
+                    diagnostic.definition().rule
                 ),
-                ("validation", "invalid_regex", Some("REQ-0827"))
+                ("validation", "invalid_regex", Some("TEXT-6"))
             );
             assert_eq!(diagnostic.context.len(), 1);
             assert_eq!(diagnostic.context["pattern"], JsonValue::String("(".into()));
@@ -696,9 +690,9 @@ mod diagnostics {
                 (
                     diagnostic.definition().phase,
                     diagnostic.definition().condition,
-                    diagnostic.definition().requirement
+                    diagnostic.definition().rule
                 ),
-                ("validation", "incompatible_input_type", Some("REQ-0418"))
+                ("validation", "incompatible_input_type", Some("FORMULA-16"))
             );
             assert_eq!(
                 diagnostic.spec_paths,
@@ -742,9 +736,9 @@ mod diagnostics {
                 (
                     finding.definition().phase,
                     finding.definition().condition,
-                    finding.definition().requirement
+                    finding.definition().rule
                 ),
-                ("verification", "allowed_values_failed", Some("REQ-0957"))
+                ("verification", "allowed_values_failed", Some("CT-7"))
             );
             assert_eq!(finding.context["codelist"], JsonValue::String("SEX".into()));
             reached.insert(finding.code);
@@ -757,9 +751,9 @@ mod diagnostics {
                 (
                     extreme.definition().phase,
                     extreme.definition().condition,
-                    extreme.definition().requirement
+                    extreme.definition().rule
                 ),
-                ("validation", "incomparable_sources", Some("REQ-0324"))
+                ("validation", "incomparable_sources", Some("VALUE-19"))
             );
             assert_eq!(extreme.spec_paths, ["columns.RESULT.derivation.greatest"]);
             assert_eq!(
@@ -834,7 +828,7 @@ mod diagnostics {
             );
             assert_eq!(literal.definition().phase, "validation");
             assert_eq!(literal.definition().condition, "integer_overflow");
-            assert_eq!(literal.definition().requirement, Some("REQ-0014"));
+            assert_eq!(literal.definition().rule, Some("VALUE-5"));
         }
 
         #[test]
@@ -843,7 +837,7 @@ mod diagnostics {
             let diagnostic = convert(&Value::Str(digits.clone()), ColumnType::Int)
                 .unwrap_err()
                 .into_diagnostic("columns.X.unconvertible".into());
-            assert_eq!(diagnostic.definition().requirement, Some("REQ-0021"));
+            assert_eq!(diagnostic.definition().rule, Some("VALUE-7"));
             assert_eq!(diagnostic.context["from"], JsonValue::String("int".into()));
             assert_eq!(diagnostic.context["to"], JsonValue::String("int".into()));
             assert_eq!(

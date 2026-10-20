@@ -15,7 +15,7 @@ fn unknown(path: &str, name: &str) -> BindFinding {
 }
 
 /// Operand binding is shared with expressions; only predicate-name failures
-/// cite REQ-0189 here. Phase, type and relation failures keep their own owner.
+/// cite FORMULA-9 here. Phase, type and relation failures keep their own owner.
 pub(super) fn retain_reference_owner(
     findings: &mut [BindFinding],
     catalog: &Catalog,

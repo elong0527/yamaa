@@ -32,7 +32,7 @@ pub fn inheritance_dependency_diagnostics(issues: &[Issue]) -> Vec<Diagnostic> {
                     );
                     // The paths name the cycle's own derivations, as the flat
                     // compiler reports them; each path also resolves through
-                    // composed provenance to its contributing file (REQ-0651).
+                    // composed provenance to its contributing file (LAYER-12).
                     (C::ColumnDependencyCycle, paths.clone())
                 }
             };

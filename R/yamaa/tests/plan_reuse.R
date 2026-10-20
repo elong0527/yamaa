@@ -12,8 +12,8 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
   message("Skipped plan_reuse.R: its truth is JSON, and jsonlite, a suggested package, is not installed")
   quit(save = "no")
 }
-host_fixture_root <- if (file.exists("host-fixtures/reader.R")) "host-fixtures" else
-  system.file("host-fixtures", package = "yamaa", mustWork = TRUE)
+host_fixture_root <- normalizePath("host-fixtures", winslash = "/", mustWork = TRUE)
+projects <- normalizePath("project-base", winslash = "/", mustWork = TRUE)
 source(file.path(host_fixture_root, "reader.R"), local = TRUE)
 truth <- read_host_fixture(host_fixture_root, "plan-reuse")
 root <- tempfile("yamaa-plan-reuse-"); dir.create(root)
@@ -41,14 +41,14 @@ refused <- function(code) inherits(tryCatch({ force(code); NULL }, yamaa_error =
 # Issue rows as the shared parity truth holds them: context as canonical JSON
 # text, spans as doubles and routes as character.
 issue_rows <- function(frame) {
-  list(phase = frame$phase, condition = frame$condition, requirement = frame$requirement,
+  list(phase = frame$phase, condition = frame$condition, rule = frame$rule,
     spec_paths = frame$spec_paths, context = frame$context, source_span = frame$source_span,
     operand_route = frame$operand_route)
 }
 issue_truth <- function(expected) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  list(phase = text("phase"), condition = text("condition"), requirement = text("requirement"),
+  list(phase = text("phase"), condition = text("condition"), rule = text("rule"),
     spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
     context = enc2utf8(text("context")),
     source_span = lapply(expected, function(issue)
@@ -112,8 +112,7 @@ qualify_changed_specification <- function() {
 qualify_changed_specification()
 
 qualify_changed_function_contract <- function() {
-  studies <- system.file("project-base", package = "yamaa", mustWork = TRUE)
-  stopifnot(file.copy(file.path(studies, "base-round"), root, recursive = TRUE))
+  stopifnot(file.copy(file.path(projects, "base-round"), root, recursive = TRUE))
   case <- file.path(root, "base-round")
   spec <- yamaa_project(file.path(case, "project.yaml"))$spec("TEST")
   expected <- read_text(file.path(case, "expected", "test.csv"))

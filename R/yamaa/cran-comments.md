@@ -19,18 +19,18 @@ aarch64, macOS and Windows.
 the installed size. The notes, and why they remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
-  size of the tarball, about 11.4 MB. About 9.7 MB of it is
+  size of the tarball, about 11.5 MB. About 9.7 MB of it is
   `src/rust/vendor.tar.xz`, the Rust crates that the package compiles, which
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
   be requested for such bundled sources; we request a limit of 15 MB.
 - `checking installed package size ... NOTE` (R 4.4; R 4.6.1 and R-devel
-  report it as INFO): 32 to 36 MB on Linux, by Rust release. The shared
-  object, 23 to 27 MB, links the Rust engine statically: most of it is machine
-  code, and the symbols and the debug information of the Rust standard
-  library are kept, as the policy asks. The inputs that the package's tests
-  read are about 7.5 MB, in `inst/specification-original`,
-  `inst/grammar-original` and `inst/host-fixtures`.
+  report it as INFO): 24 to 28 MB on Linux, by Rust release, almost all of it
+  the shared object. The shared object, 23 to 27 MB, links the Rust engine
+  statically: most of it is machine code, and the symbols and the debug
+  information of the Rust standard library are kept, as the policy asks. The
+  inputs that the package's tests read are in `tests/`, which R does not
+  install.
 
 ## Rust
 
@@ -63,11 +63,17 @@ The package follows "Using Rust in CRAN packages":
   The Cargo home is below `src/rust/target`, which is removed after linking
   with the rest of the build tree, so the installation uses at most two jobs
   and writes nothing outside the build directory and the temporary directory.
+  The Makevars pass that directory to Cargo, so a `CARGO_TARGET_DIR` set for
+  other projects does not move the build; only `YAMAA_R_CARGO_TARGET_DIR`,
+  which the project's CI sets so that its installations share one Cargo
+  build, names another.
 - `Authors@R` credits the authors of the bundled crates and of the bundled
   ReadStat C sources as contributors and copyright holders. `inst/AUTHORS`
   lists each crate with the authors, license and repository that it declares,
   and the `Copyright` field names `inst/LICENSE-THIRD-PARTY.txt`, which
   reproduces the license, copyright and NOTICE texts of every bundled crate.
+  `inst/COMPONENTS.tsv` lists every bundled component, the ReadStat and zstd
+  C sources included, with its version, license, source and purpose.
 - The archive contains no binary executable code. `wit-bindgen`, a crate
   that only WebAssembly targets build, ships prebuilt WebAssembly objects;
   they are left out, and their C sources remain.

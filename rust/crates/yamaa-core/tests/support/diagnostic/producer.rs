@@ -14,14 +14,14 @@ fn first(result: Result<PreparedSpecification, PrepareError>) -> Diagnostic {
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    let check = |finding: Diagnostic, condition, requirement, paths: &[&str]| {
+    let check = |finding: Diagnostic, condition, rule, paths: &[&str]| {
         assert_eq!(
             (
                 finding.definition().phase,
                 finding.definition().condition,
-                finding.definition().requirement
+                finding.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, paths);
         assert_eq!(finding.source_span, None);
@@ -36,7 +36,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             links(&[link(&source)]),
         )),
         "redundant_field_type",
-        "REQ-0523",
+        "INPUT-6",
         &["input.SRC.types"],
     ));
     let invalid = document(
@@ -55,7 +55,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             links(&[link(&invalid)]),
         )),
         "invalid_producer_contract",
-        "REQ-0534",
+        "INPUT-10",
         &["input.SRC.schema.columns.ID.label"],
     ));
     let contract = producer_contract::prepare(&source).unwrap();
@@ -65,7 +65,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             .unwrap()
             .unwrap(),
         "producer_contract_mismatch",
-        "REQ-0535",
+        "INPUT-11",
         &["input.SRC.schema", "input.SRC.path"],
     ));
     reached

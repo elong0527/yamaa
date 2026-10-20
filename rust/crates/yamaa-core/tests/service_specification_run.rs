@@ -1376,9 +1376,9 @@ mod service {
                     assert_eq!(
                         (
                             findings[0].definition().condition,
-                            findings[0].definition().requirement
+                            findings[0].definition().rule
                         ),
-                        ("invalid_declaration", Some("REQ-0399"))
+                        ("invalid_declaration", Some("CHECK-4"))
                     );
                     assert_eq!(findings[0].spec_paths, ["verifications[0].row_count"]);
                     assert!(port.trace.borrow().is_empty());
@@ -1540,6 +1540,10 @@ mod service {
             )
             .unwrap()
         }
+        /// The project file, lowered as preparation lowers it.
+        fn project() -> yamaa_core::ast::Project {
+            yamaa_core::front_end::v0_5::project::project(&environment(), None).unwrap()
+        }
         struct Captured {
             document: Document,
             identity: String,
@@ -1579,7 +1583,7 @@ mod service {
                 original: Rc::new(()),
             };
             let held =
-                service::capture(&environment(), "original/environment.yaml", &mut port).unwrap();
+                service::capture(&project(), "original/environment.yaml", &mut port).unwrap();
             assert_eq!(held.inventory.names(), ["ADSL", "DM"]);
             assert_eq!(held.specifications.len(), 2);
             assert_eq!(
@@ -1599,7 +1603,7 @@ mod service {
                 original: Rc::clone(&original),
             };
             let Err(service::Error::Port { written, error }) =
-                service::capture(&environment(), "environment.yaml", &mut port)
+                service::capture(&project(), "environment.yaml", &mut port)
             else {
                 panic!("original capture failure")
             };

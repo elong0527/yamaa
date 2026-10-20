@@ -1,19 +1,21 @@
 //! Admission of one 1.x specification layer at the language version it
-//! declares, before parent traversal or composition (LAYER-4, P-VER-1).
+//! declares, before parent traversal or composition (LAYER-4, P-VER-1), and
+//! its normalization before it composes.
 
 use super::{
-    path_render, validation::unknown_field, Document, DocumentNode as N, SchemaContext as C,
-    SchemaDiagnostic, SchemaStructure, ValidationError,
+    path_render, spec_path, spec_path::SpecPath, validation::unknown_field, Document,
+    DocumentNode as N, NormalizationError, NormalizedDocument, SchemaContext as C,
+    SchemaDiagnostic, SchemaOrigin, SchemaSource, SchemaStructure, ValidationError,
 };
 use crate::diagnostic::ConditionCode;
 
 /// Root collections whose members compose by identifier; inside a member a
 /// layer defers requiredness to the resolved specification (LAYER-4).
-const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", "columns", "rows"];
+pub(super) const COLLECTIONS: [&str; 5] = ["input", "windows", "intermediates", "columns", "rows"];
 
 /// The keyed collections written as lists, and the field each member is
 /// identified by.
-const IDENTITIES: [(&str, &str); 3] =
+pub(super) const IDENTITIES: [(&str, &str); 3] =
     [("columns", "name"), ("rows", "id"), ("intermediates", "id")];
 
 impl SchemaStructure {
@@ -27,9 +29,12 @@ impl SchemaStructure {
     /// specification. Every other value a layer writes is checked where it is
     /// written: a root field replaces the value it inherits whole, so it is
     /// complete. YAML null is an ordinary value, admitted only where a field's
-    /// type admits it. Two members of one keyed collection must not share an
-    /// identifier (LAYER-4). Known fields are checked in schema order, then
-    /// unknown fields in written order.
+    /// type admits it: a value or expression field (P-NULL-1). Two members of
+    /// one keyed collection must not share an identifier (LAYER-4). Each
+    /// `clear` entry is a spec path, and no entry covers another; a fault
+    /// fails as `invalid_clear` at `clear[i]` (LAYER-9). Known fields are
+    /// checked in schema order, then unknown fields in written order. Paths
+    /// are written in the spec path notation (P-CLR-2).
     pub fn validate_layer(
         &self,
         input: &Document,
@@ -55,13 +60,17 @@ impl SchemaStructure {
                 continue;
             };
             let fragment = COLLECTIONS.contains(&field.name.as_str());
-            findings.extend(self.validate_descriptor(
+            let found = self.validate_versioned_descriptor(
                 field.descriptor,
                 input,
                 value,
                 &field.name,
                 fragment,
-            )?);
+            )?;
+            if found.is_empty() && field.name == "clear" {
+                findings.extend(clear_entries(input, value));
+            }
+            findings.extend(found);
         }
         for &(key, _) in entries {
             let known = matches!(&input.nodes()[key], N::Text(name)
@@ -71,7 +80,10 @@ impl SchemaStructure {
             }
             let label = path_render::label(input, key)?;
             let (path, later) = match &input.nodes()[key] {
-                N::Text(name) => (label.clone(), self.later_field(&class.name, name)),
+                N::Text(name) => (
+                    spec_path::join("", &label),
+                    self.later_field(&class.name, name),
+                ),
                 // An integer or Boolean name takes the bracketed path spelling.
                 _ => (format!("[{label}]"), None),
             };
@@ -101,7 +113,7 @@ fn repeated_identifiers(input: &Document) -> Vec<SchemaDiagnostic> {
             };
             if seen.contains(&name.as_str()) {
                 findings.push(SchemaDiagnostic {
-                    path: format!("{collection}.{name}.{identity}"),
+                    path: spec_path::join(&spec_path::join(collection, name), identity),
                     code: ConditionCode::SchemaLayerIdentifierRepeated,
                     context: vec![("identifier", C::Text(name.clone()))],
                 });
@@ -111,6 +123,105 @@ fn repeated_identifiers(input: &Document) -> Vec<SchemaDiagnostic> {
         }
     }
     findings
+}
+
+/// A finding about the entry `clear[index]` names, at that entry (LAYER-9):
+/// today's `invalid_clear`, whose context names the field the entry ends at.
+pub(super) fn invalid_clear(index: usize, field: &str) -> SchemaDiagnostic {
+    SchemaDiagnostic {
+        path: format!("clear[{index}]"),
+        code: ConditionCode::SchemaLayerInvalidClear,
+        context: vec![("field", C::Text(field.into()))],
+    }
+}
+
+/// The written faults of a layer's `clear` list, already checked to be a list
+/// of text: an entry outside the spec path notation, and an entry that a
+/// path before it covers or that covers a path before it, which names its own
+/// value or one beside another entry's (P-CLR-1).
+fn clear_entries(input: &Document, list: usize) -> Vec<SchemaDiagnostic> {
+    let N::Sequence(items) = &input.nodes()[list] else {
+        return Vec::new();
+    };
+    let mut findings = Vec::new();
+    let mut paths: Vec<SpecPath> = Vec::new();
+    for (index, &item) in items.iter().enumerate() {
+        let N::Text(written) = &input.nodes()[item] else {
+            continue;
+        };
+        let Some(path) = SpecPath::parse(written) else {
+            findings.push(invalid_clear(index, written));
+            continue;
+        };
+        if paths
+            .iter()
+            .any(|earlier| earlier.covers(&path) || path.covers(earlier))
+        {
+            findings.push(invalid_clear(index, path.last()));
+            continue;
+        }
+        paths.push(path);
+    }
+    findings
+}
+
+impl SchemaStructure {
+    /// Normalize one admitted 1.x layer, checked by
+    /// [`SchemaStructure::validate_layer`] against this same view, before it
+    /// composes (LAYER-4): shorthand is expanded in every field, so equivalent
+    /// spellings contribute the same value. A member of a keyed collection is
+    /// a fragment whose defaults wait for the resolved specification; every
+    /// other root field is complete, so its defaults apply here (LAYER-7).
+    /// YAML null stays the value it is. Root fields follow schema order.
+    pub fn normalize_versioned_layer(
+        &self,
+        input: &Document,
+    ) -> Result<NormalizedDocument, NormalizationError> {
+        let root = input.root();
+        let N::Mapping(entries) = &input.nodes()[root] else {
+            return Err(ValidationError::InvalidDescriptor.into());
+        };
+        let origin = |node| SchemaOrigin {
+            source: SchemaSource::Input,
+            node,
+            generated: false,
+        };
+        let mut nodes = Vec::new();
+        let mut origins = Vec::new();
+        let mut fields = Vec::new();
+        for field in &self.root_class().fields {
+            let Some(&(key, value)) = entries.iter().find(
+                |&&(key, _)| matches!(&input.nodes()[key], N::Text(name) if *name == field.name),
+            ) else {
+                continue;
+            };
+            let fragment = COLLECTIONS.contains(&field.name.as_str());
+            let normalized =
+                self.normalize_versioned_descriptor(field.descriptor, input, value, fragment)?;
+            let offset = nodes.len();
+            for node in normalized.document.nodes() {
+                nodes.push(match node {
+                    N::Sequence(items) => N::Sequence(items.iter().map(|n| n + offset).collect()),
+                    N::Mapping(items) => N::Mapping(
+                        items
+                            .iter()
+                            .map(|(k, v)| (k + offset, v + offset))
+                            .collect(),
+                    ),
+                    node => node.clone(),
+                });
+            }
+            origins.extend(normalized.origins);
+            nodes.push(N::Text(field.name.clone()));
+            origins.push(origin(key));
+            fields.push((nodes.len() - 1, offset + normalized.document.root()));
+        }
+        nodes.push(N::Mapping(fields));
+        origins.push(origin(root));
+        let document =
+            Document::new(nodes, origins.len() - 1).map_err(NormalizationError::Document)?;
+        Ok(NormalizedDocument { document, origins })
+    }
 }
 
 #[cfg(test)]

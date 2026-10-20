@@ -675,11 +675,12 @@ mod project {
         mod project_usecase {
             use super::*;
             use yamaa_core::{
+                ast,
                 function_signature::{LogicalSignature, ProjectFunctionIdentity},
                 project_environment::{
                     Draft, Environment, ExecutionEnvironment, LockKind, LockReference,
                 },
-                project_function::{Definition, Language},
+                project_function::Language,
                 schema::DocumentNode as N,
             };
             use yamaa_core::{
@@ -768,7 +769,7 @@ mod project {
                     ))
                 }
             }
-            fn environment(functions: Option<Vec<Definition>>) -> ExecutionEnvironment {
+            fn environment(functions: Option<Vec<ast::Function>>) -> ExecutionEnvironment {
                 let present = functions.is_some();
                 Environment::admit(
                     Language::Python,
@@ -785,7 +786,7 @@ mod project {
                 .unwrap()
                 .into_execution()
             }
-            fn definitions() -> Vec<Definition> {
+            fn definitions() -> Vec<ast::Function> {
                 vec![
                     function("unused").definition().clone(),
                     function("id").definition().clone(),
@@ -1284,7 +1285,7 @@ mod project {
                 (-1.23445, -1.2345, 4, true),
                 (1.23444, 1.2345, 4, false),
                 // The exact binary64 2.675 is 1.8e-14 below the scaled tie,
-                // inside REQ-0418's 2^-26 interval, so its copy is 2.68.
+                // inside FORMULA-16's 2^-26 interval, so its copy is 2.68.
                 (2.675, 2.67, 2, false),
                 (2.675, 2.68, 2, true),
                 (-2.675, -2.68, 2, true),
@@ -1362,6 +1363,7 @@ mod project {
     }
     mod project_lock_diagnostics {
         //! Lock reporting only borrows a completed native activation rejection.
+        use crate::support::roots::{Case, Definition, Parameter};
         use std::{cell::RefCell, rc::Rc};
         use yamaa_core::{
             diagnostic::{
@@ -1369,7 +1371,7 @@ mod project {
             },
             function_signature::{LogicalSignature, ProjectFunctionIdentity},
             project_environment::{LockKind, LockReference},
-            project_function::{Case, Definition, Function, Language, Parameter},
+            project_function::{Function, Language},
             value::{ColumnType, Value, ValueType},
         };
         use yamaa_core::{
@@ -1450,7 +1452,8 @@ mod project {
                             result: Value::Missing,
                         },
                     ],
-                },
+                }
+                .root(Language::Python),
             )
             .unwrap()
         }
@@ -1501,7 +1504,7 @@ mod project {
             };
             let first = lock_diagnostics(Some(origins), &original.findings).unwrap();
             assert_eq!(first.len(), 2);
-            assert_eq!(first[0].definition().requirement, Some("REQ-0697"));
+            assert_eq!(first[0].definition().rule, Some("FUNC-3"));
             assert_eq!(
                 lock_diagnostics(None, &original.findings),
                 Err(LockDiagnosticError::InvalidContext)
@@ -1518,11 +1521,10 @@ mod project {
         }
     }
     mod project_terminology {
+        use crate::support::roots::{Codelist, CodelistType, External, Item, Source, Standard};
         use yamaa_core::{
-            project_terminology::{
-                validate, BindingFinding, Catalogue, Codelist, DataType, External, Fault, Finding,
-                Item, Source, Standard,
-            },
+            ast::Codelists,
+            project_terminology::{validate, BindingFinding, Catalogue, Fault, Finding},
             value::{ColumnType, Value},
         };
         fn item(value: Value) -> Item {
@@ -1538,7 +1540,7 @@ mod project {
             Codelist {
                 id: "SEX".into(),
                 name: "Sex".into(),
-                data_type: DataType::Text,
+                data_type: CodelistType::Text,
                 extensible: false,
                 alias: None,
                 format_name: None,
@@ -1549,18 +1551,22 @@ mod project {
                 external: None,
             }
         }
-        fn source(list: Codelist) -> Source {
+        fn source(list: Codelist) -> Codelists {
             Source {
                 standard: None,
                 codelists: vec![list],
             }
+            .root()
         }
-        fn published(mut source: Source) -> Source {
-            source.standard = Some(Standard {
-                name: "CDISC/NCI".into(),
-                publishing_set: "SDTM".into(),
-                version: "2023-12-15".into(),
-            });
+        fn published(mut source: Codelists) -> Codelists {
+            source.standard = Some(
+                Standard {
+                    name: "CDISC/NCI".into(),
+                    publishing_set: "SDTM".into(),
+                    version: "2023-12-15".into(),
+                }
+                .root(),
+            );
             source
         }
 
@@ -1663,17 +1669,17 @@ mod project {
             let named = |data_type, format: Option<&str>| {
                 let mut list = list();
                 list.data_type = data_type;
-                if data_type != DataType::Text {
+                if data_type != CodelistType::Text {
                     list.items = Some(vec![item(Value::Int(1)), item(Value::Int(2))]);
                 }
                 list.format_name = format.map(String::from);
                 validate(&[source(list)])
             };
-            assert!(named(DataType::Text, None).is_empty());
-            assert!(named(DataType::Text, Some("$SEX")).is_empty());
+            assert!(named(CodelistType::Text, None).is_empty());
+            assert!(named(CodelistType::Text, Some("$SEX")).is_empty());
             for format in ["SEX", "S$EX", " $SEX"] {
                 assert_eq!(
-                    named(DataType::Text, Some(format)),
+                    named(CodelistType::Text, Some(format)),
                     vec![Finding {
                         source: 0,
                         codelist: 0,
@@ -1681,7 +1687,7 @@ mod project {
                     }]
                 );
             }
-            for data_type in [DataType::Integer, DataType::Float] {
+            for data_type in [CodelistType::Integer, CodelistType::Float] {
                 assert!(named(data_type, Some("NY")).is_empty());
                 assert!(named(data_type, None).is_empty());
             }
@@ -1689,7 +1695,7 @@ mod project {
         #[test]
         fn numeric_equality_is_exact_at_i64_and_binary64_boundaries() {
             let mut list = list();
-            list.data_type = DataType::Float;
+            list.data_type = CodelistType::Float;
             list.items = Some(vec![
                 item(Value::Int(9_007_199_254_740_993)),
                 item(Value::float(9_007_199_254_740_992.0)),
@@ -1767,10 +1773,10 @@ mod project {
             shape.items = None;
             assert_eq!(validate(&[source(shape)])[0].fault, Fault::InvalidShape);
             for (kind, value) in [
-                (DataType::Text, Value::Missing),
-                (DataType::Integer, Value::Bool(true)),
-                (DataType::Integer, Value::float(1.5)),
-                (DataType::Float, Value::Str("1".into())),
+                (CodelistType::Text, Value::Missing),
+                (CodelistType::Integer, Value::Bool(true)),
+                (CodelistType::Integer, Value::float(1.5)),
+                (CodelistType::Float, Value::Str("1".into())),
             ] {
                 let mut list = list();
                 list.data_type = kind;
@@ -1854,12 +1860,12 @@ mod project {
                 let record = &records[0];
                 assert_eq!(
                     (
-                        record.definition().requirement.unwrap(),
+                        record.definition().rule.unwrap(),
                         record.path.as_str(),
                         record.evaluated_count,
                         record.failed_count
                     ),
-                    ("REQ-0957", "columns.CODE.submission.codelist", 2, 1)
+                    ("CT-7", "columns.CODE.submission.codelist", 2, 1)
                 );
                 assert_eq!(record.offending_rows[0].values, [Value::Int(i64::MAX - 1)]);
                 assert_eq!(
@@ -1945,23 +1951,23 @@ mod project {
         }
         #[test]
         fn compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes() {
-            for (doc, condition, requirement, path) in [
+            for (doc, condition, rule, path) in [
                 (
                     spec("UNKNOWN", "str", None, false, None),
                     "unknown_codelist",
-                    "REQ-0953",
+                    "CT-1",
                     "columns.CODE.submission.codelist",
                 ),
                 (
                     spec("SEX", "int", None, false, None),
                     "codelist_type_mismatch",
-                    "REQ-0954",
+                    "CT-8",
                     "columns.CODE.submission.codelist",
                 ),
                 (
                     spec("SEX", "str", Some("F"), false, None),
                     "redundant_declaration",
-                    "REQ-0955",
+                    "CT-9",
                     "columns.CODE.verifications[0].allowed_values",
                 ),
             ] {
@@ -1976,9 +1982,9 @@ mod project {
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
                 assert_eq!(d.spec_paths, [path]);
             }
@@ -2184,13 +2190,9 @@ mod project {
                         (
                             diagnostic.definition().phase,
                             diagnostic.definition().condition,
-                            diagnostic.definition().requirement
+                            diagnostic.definition().rule
                         ),
-                        (
-                            "validation",
-                            "project_environment_missing",
-                            Some("REQ-0694")
-                        )
+                        ("validation", "project_environment_missing", Some("FUNC-1"))
                     );
                     assert_eq!(
                         diagnostic.context,
@@ -2289,18 +2291,18 @@ mod project {
                     "columns.C.derivation.function.args.x",
                 ]
             );
-            for (d, condition, requirement) in [
-                (&diagnostics[0], "unknown_project_function", "REQ-0698"),
-                (&diagnostics[1], "invalid_function_argument", "REQ-0700"),
-                (&diagnostics[2], "invalid_function_argument", "REQ-0700"),
+            for (d, condition, rule) in [
+                (&diagnostics[0], "unknown_project_function", "FUNC-4"),
+                (&diagnostics[1], "invalid_function_argument", "FUNC-5"),
+                (&diagnostics[2], "invalid_function_argument", "FUNC-5"),
             ] {
                 assert_eq!(
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
             }
             assert_eq!(
@@ -2393,10 +2395,7 @@ mod project {
                 })
                 .unwrap();
             assert!(matches!(finding.cause, FunctionCause::ArgumentType { .. }));
-            assert_eq!(
-                finding.diagnostic().definition().requirement,
-                Some("REQ-0700")
-            );
+            assert_eq!(finding.diagnostic().definition().rule, Some("FUNC-5"));
             assert_eq!(
                 finding.diagnostic().spec_paths,
                 ["columns.A.derivation.function.args.x"]
@@ -2425,7 +2424,7 @@ mod project {
                 assert_eq!(diagnostics.len(), 1);
                 let diagnostic = &diagnostics[0];
                 assert_eq!(diagnostic.definition().condition, "unknown_field");
-                assert_eq!(diagnostic.definition().requirement, Some("REQ-0103"));
+                assert_eq!(diagnostic.definition().rule, Some("NAME-3"));
                 assert_eq!(
                     diagnostic.spec_paths,
                     [format!("columns.{column}.derivation.function.args.x")]

@@ -1,7 +1,7 @@
 version: "1.0"
 
 expressions:
-    diff: # See REQ-1104.
+    diff: # See TIME-4.
         - type:
             type: temporal_type
             required: true
@@ -24,7 +24,7 @@ expressions:
             default: exclusive
             values: [exclusive, inclusive, between]
             description: Which endpoints the day count includes, defined only for dates with unit day (TIME-5).
-    impute: # See REQ-1105.
+    impute: # See TIME-8.
         - type:
             type: temporal_type
             required: true
@@ -59,7 +59,7 @@ expressions:
         - invalid:
             type: substitute_value
             description: Result when the source is text that cannot be read as collected date text, such as an ISO 8601 interval or duration (TIME-13).
-    precision: # See REQ-1106.
+    precision: # See TIME-7.
         - type:
             type: temporal_type
             required: true
@@ -85,12 +85,12 @@ expressions:
             type: bool
             default: true
             description: Whether the study collects seconds, so a time collected to the minute had its seconds imputed (TIME-18).
-    to_date: # See REQ-1107.
+    to_date: # See TIME-2.
         - source:
             type: variable
             required: true
             description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).
-    study_day: # See REQ-1108.
+    study_day: # See TIME-6.
         - date:
             type: variable
             required: true
@@ -99,7 +99,7 @@ expressions:
             type: variable
             required: true
             description: Reference start date, which is study day 1 (TIME-6).
-    to_epoch_day: # See REQ-1188.
+    to_epoch_day: # See TIME-3.
         - source:
             type: variable
             required: true
@@ -133,7 +133,7 @@ expressions:
             required: true
             description: Datetime whose time of day is returned as whole seconds since midnight (TIME-20).
 
-    shift: # See REQ-1298.
+    shift: # See TIME-14.
         - type:
             type: temporal_type
             required: true
@@ -152,7 +152,7 @@ expressions:
             type: str
             values: [second, minute, hour, day]
             description: Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).
-    duration_value: # See REQ-1301.
+    duration_value: # See TIME-17.
         - source:
             type: variable
             required: true

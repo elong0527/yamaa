@@ -262,7 +262,7 @@ mod diagnostics {
                     assert_eq!(actual.character, position, "{text}");
                     let d = failure.diagnostic(Field::Predicate, "filter", text, position);
                     assert_eq!(d.definition().condition, "invalid_expression");
-                    assert_eq!(d.definition().requirement, Some("REQ-0188"));
+                    assert_eq!(d.definition().rule, Some("FORMULA-1"));
                     assert_eq!(
                         d.context,
                         [
@@ -372,7 +372,7 @@ mod diagnostics {
                     finding,
                     "validation",
                     "odm_schema_field_ambiguous",
-                    "REQ-1275",
+                    "NAME-8",
                     "input.D.path",
                     vec![
                         ("dataset", text("D")),
@@ -447,9 +447,9 @@ mod diagnostics {
             #[test]
 
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
-                for (expression, requirement, character, detail) in [
-                    ("STR_CONTAINS(ID, '(')", "REQ-1244", 17, "pattern_byte"),
-                    ("ID = DATE '2026-02-30'", "REQ-0188", 10, "temporal_error"),
+                for (expression, rule, character, detail) in [
+                    ("STR_CONTAINS(ID, '(')", "FORMULA-8", 17, "pattern_byte"),
+                    ("ID = DATE '2026-02-30'", "FORMULA-1", 10, "temporal_error"),
                 ] {
                     let error = compile(
                         expression,
@@ -475,7 +475,7 @@ mod diagnostics {
                         expression,
                         position.character,
                     );
-                    assert_eq!(finding.definition().requirement, Some(requirement));
+                    assert_eq!(finding.definition().rule, Some(rule));
                     assert_eq!(
                         finding.context,
                         [
@@ -489,7 +489,7 @@ mod diagnostics {
                     assert_eq!(failure.syntax_diagnostic(), detail_before);
                     assert_eq!(message.as_ptr(), message_address);
                 }
-                // ESCAPE owns REQ-0191 under the one syntax condition.
+                // ESCAPE owns FORMULA-7 under the one syntax condition.
                 let yamaa_core::expression::CompileError::Invalid {
                     failure: failure @ yamaa_core::expression::Failure::InvalidEscape,
                     position,
@@ -509,7 +509,7 @@ mod diagnostics {
                     "ID LIKE '%' ESCAPE 'xx'",
                     position.character,
                 );
-                assert_eq!(finding.definition().requirement, Some("REQ-0191"));
+                assert_eq!(finding.definition().rule, Some("FORMULA-7"));
                 assert_eq!(
                     finding.context["position"],
                     V::Number(("19").parse().expect("canonical integer"))
@@ -786,7 +786,7 @@ mod diagnostics {
                                         [
                                             ("phase", Fact::Text("derivation")),
                                             ("condition", Fact::Text("function_call_failed")),
-                                            ("requirement", Fact::Text("REQ-0701")),
+                                            ("rule", Fact::Text("FUNC-8")),
                                             ("context", Fact::Object(diagnostic.context)),
                                         ]
                                         .into()
@@ -844,7 +844,7 @@ mod diagnostics {
                 let function = support::function("id");
                 let identity = ProjectFunctionIdentity {
                     name: "id".into(),
-                    call: function.definition().function.clone(),
+                    call: function.call().into(),
                 };
                 let definitions = [DefinitionSource {
                     function: &function,
@@ -865,7 +865,7 @@ mod diagnostics {
                 let Fact::Object(held) = &diagnostics[0].context["failure"] else {
                     panic!("nested borrowed diagnostic")
                 };
-                assert_eq!(held["requirement"], Fact::Text("REQ-0700"));
+                assert_eq!(held["rule"], Fact::Text("FUNC-5"));
                 let Fact::Object(context) = &held["context"] else {
                     panic!("nested invocation")
                 };
@@ -1071,7 +1071,7 @@ mod diagnostics {
                     findings[0].code,
                     ConditionCode::CodelistAllowedValuesRedundant
                 );
-                assert_eq!(findings[0].definition().requirement, Some("REQ-0955"));
+                assert_eq!(findings[0].definition().rule, Some("CT-9"));
                 assert_eq!(
                     findings[0].path,
                     "sdtm.specs[0].columns.VALUE.verifications[0].allowed_values"
@@ -1079,6 +1079,102 @@ mod diagnostics {
                 assert_eq!(
                     findings[0].context["stated_by"],
                     JsonValue::String("sdtm.specs[0].columns.VALUE.submission.codelist".into())
+                );
+            }
+            /// DEFINE-9 and DEFINE-10: a terminology standard's identifier is
+            /// `CT_` and its publishing set. Sources that cite one standard
+            /// share its definition, a source the document binds nothing from
+            /// cites none (CT-10), and another release under that publishing
+            /// set is refused at its own source instead of being numbered.
+            #[test]
+            fn sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused(
+            ) {
+                let source = |version: &str, list: &str| {
+                    rt::Source {
+                        standard: Some(rt::Standard {
+                            name: "CDISC/NCI".into(),
+                            publishing_set: "SDTM".into(),
+                            version: version.into(),
+                        }),
+                        codelists: vec![rt::Codelist {
+                            id: list.into(),
+                            name: format!("Independent list {list}"),
+                            data_type: rt::CodelistType::Text,
+                            extensible: false,
+                            alias: None,
+                            format_name: None,
+                            external: None,
+                            items: Some(vec![rt::Item {
+                                value: Value::Str("X".into()),
+                                decode: None,
+                                rank: None,
+                                alias: None,
+                                extended: false,
+                            }]),
+                        }],
+                    }
+                    .root()
+                };
+                let bound = |name: &str, list: &str| {
+                    let mut column = column(name);
+                    column.set(&["submission", "codelist"], Tree::text(list));
+                    column
+                };
+                let mut spec = specification();
+                spec.set(
+                    &["columns"],
+                    Tree::list(vec![bound("VALUE", "FIRST"), bound("OTHER", "SECOND")]),
+                );
+                spec.set(
+                    &["output", "columns"],
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("OTHER")]),
+                );
+                let compose = |sources| {
+                    one(
+                        project(),
+                        spec.clone(),
+                        &ct::Catalogue::admit(sources).unwrap(),
+                    )
+                };
+                let (cited, later) = ("2026-03-27", "2026-06-26");
+                let study = compose(vec![
+                    source(cited, "FIRST"),
+                    source(later, "UNBOUND"),
+                    source(cited, "SECOND"),
+                ])
+                .unwrap();
+                let xml = String::from_utf8(submission_xml::render(&study).unwrap()).unwrap();
+                assert_eq!(
+                    xml.matches("<def:Standard OID=\"STD.CT_SDTM\"").count(),
+                    1,
+                    "{xml}"
+                );
+                assert_eq!(
+                    xml.matches("def:StandardOID=\"STD.CT_SDTM\"").count(),
+                    2,
+                    "{xml}"
+                );
+                assert!(!xml.contains(later), "{xml}");
+                let findings = compose(vec![
+                    source(cited, "FIRST"),
+                    source(later, "UNBOUND"),
+                    source(later, "SECOND"),
+                ])
+                .unwrap_err();
+                assert_eq!(findings.len(), 1, "{findings:?}");
+                let definition = findings[0].definition();
+                assert_eq!(
+                    (definition.phase, definition.condition, definition.rule),
+                    (
+                        "validation",
+                        "duplicate_define_identifier",
+                        Some("DEFINE-10")
+                    )
+                );
+                assert_eq!(findings[0].path, "codelists[2].standard.publishing_set");
+                assert_eq!(
+                    findings[0].context,
+                    [("detail".into(), JsonValue::String("STD.CT_SDTM".into()))].into()
                 );
             }
             #[test]

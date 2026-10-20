@@ -262,7 +262,7 @@ class PublicDefine(unittest.TestCase):
                 if mode == "original source":
                     self.assertTrue(
                         any(
-                            row["requirement"] == "REQ-0919"
+                            row["rule"] == "SUB-15"
                             and row["condition"] == "origin_source_not_admitted"
                             for row in issues
                         ),
@@ -278,7 +278,7 @@ class PublicDefine(unittest.TestCase):
                         for row in issues
                         if row["condition"] == "allowed_values_failed"
                     )
-                    self.assertEqual(issue["requirement"], "REQ-0957")
+                    self.assertEqual(issue["rule"], "CT-7")
                     context = json.loads(issue["context"])
                     self.assertEqual(
                         (
@@ -301,7 +301,7 @@ class PublicDefine(unittest.TestCase):
 
     def test_lb_metadata_only_and_all_independent_value_admission_controls(self):
         entries = "sdtm.specs[0].columns.LBORRESU.submission.value_level"
-        for case, requirement, condition, suffix in [
+        for case, rule, condition, suffix in [
             ("valid", None, None, None),
             ("arbitrary row ID", None, None, None),
             ("membership", None, None, None),
@@ -364,7 +364,7 @@ class PublicDefine(unittest.TestCase):
                         yaml.safe_dump(overlay, sort_keys=False)
                     )
                 result = self.call(directory)
-                if requirement is None:
+                if rule is None:
                     self.assertEqual(result.issues.height, 0, result.issues)
                     written = self.save(result, directory, ["define.xml"])
                     xml = self.validate_xml(written["define.xml"])
@@ -381,7 +381,7 @@ class PublicDefine(unittest.TestCase):
                 else:
                     self.assertTrue(
                         any(
-                            row["requirement"] == requirement
+                            row["rule"] == rule
                             and row["condition"] == condition
                             and suffix in row["spec_paths"]
                             for row in result.issues.to_dicts()
@@ -427,10 +427,10 @@ class PublicDefine(unittest.TestCase):
         absent = self.call(directory, section="adam")
         self.assertEqual(
             [
-                (row["condition"], row["requirement"], row["spec_paths"])
+                (row["condition"], row["rule"], row["spec_paths"])
                 for row in absent.issues.to_dicts()
             ],
-            [("missing_required_field", "REQ-1337", ["adam"])],
+            [("missing_required_field", "DEFINE-28", ["adam"])],
         )
         self.refused(absent)
 
@@ -549,7 +549,7 @@ class PublicDefine(unittest.TestCase):
         self.assertIn(
             "producer_contract_mismatch", result.issues["condition"].to_list()
         )
-        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        self.assertIn("INPUT-11", result.issues["rule"].to_list())
         self.refused(result)
         self.metadata_only(directory)
         result = self.call(directory)
@@ -575,7 +575,7 @@ class PublicDefine(unittest.TestCase):
         self.assertTrue(caught.exception.issues.equals(result.issues))
         self.assertEqual(result.issues["phase"].to_list(), ["engine"])
         self.assertEqual(result.issues["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(result.issues["requirement"].to_list(), [None])
+        self.assertEqual(result.issues["rule"].to_list(), [None])
         context = json.loads(result.issues["context"][0])
         self.assertEqual(context["stage"], "publication_target_admission")
         self.assertEqual(context["code"], "invalid_target")
@@ -599,11 +599,28 @@ class PublicDefine(unittest.TestCase):
         )
         for name in written:
             (directory / name).unlink()
+        # A terminology standard's name is closed where the project is read
+        # (CT-2), before any document is composed.
         project.write_text(
             project.read_text().replace("name: CDISC/NCI", "name: InvalidStandard")
         )
         result = self.call(directory)
-        self.assertIn("REQ-1026", result.issues["requirement"].to_list())
+        self.assertEqual(result.issues["condition"].to_list(), ["value_not_permitted"])
+        self.assertEqual(result.issues["rule"].to_list(), ["SCHEMA-12"])
+        self.assertEqual(
+            result.issues["spec_paths"].to_list(), [["codelists[0].standard.name"]]
+        )
+        self.refused(result)
+        self.assertFalse((directory / "define.xml").exists())
+        # A SAS format name longer than eight characters fails only against
+        # the Define-XML schema's facet, as the document is generated.
+        project.write_text(
+            project.read_text()
+            .replace("name: InvalidStandard", "name: CDISC/NCI")
+            .replace("format_name: $SEX\n", "format_name: $SEXCODELIST\n")
+        )
+        result = self.call(directory)
+        self.assertIn("DEFINE-25", result.issues["rule"].to_list())
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
@@ -676,7 +693,7 @@ class PublicDefine(unittest.TestCase):
             yaml.safe_dump(document, sort_keys=False)
         )
         result = self.call(directory)
-        self.assertIn("REQ-1004", result.issues["requirement"].to_list())
+        self.assertIn("DEFINE-4", result.issues["rule"].to_list())
         self.refused(result)
         self.assertFalse((directory / "define.xml").exists())
 
@@ -717,7 +734,7 @@ class PublicDefine(unittest.TestCase):
         (directory / "parents/base.yaml").write_text(redundant)
         result = self.call(directory)
         self.assertIn("redundant_declaration", result.issues["condition"].to_list())
-        self.assertIn("REQ-0955", result.issues["requirement"].to_list())
+        self.assertIn("CT-9", result.issues["rule"].to_list())
         self.refused(result)
         self.assertEqual(
             (directory / "artifacts/define.xml").read_bytes(), written["define.xml"]
@@ -744,17 +761,15 @@ class PublicDefine(unittest.TestCase):
             csv.replace("STUDYID,USUBJID", "USUBJID,STUDYID")
         )
         result = self.call(directory)
-        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        self.assertIn("INPUT-11", result.issues["rule"].to_list())
         self.refused(result)
         (directory / "dm.csv").write_text(csv.replace("STUDYID", "WRONG"))
         result = self.call(directory)
-        self.assertIn("REQ-0535", result.issues["requirement"].to_list())
+        self.assertIn("INPUT-11", result.issues["rule"].to_list())
         self.refused(result)
         (directory / "dm.csv").write_text(csv.replace(",F,USA", ",Z,USA"))
         result = self.call(directory)
-        issue = result.issues.filter(result.issues["requirement"] == "REQ-0957").row(
-            0, named=True
-        )
+        issue = result.issues.filter(result.issues["rule"] == "CT-7").row(0, named=True)
         self.assertEqual(issue["phase"], "verification")
         context = json.loads(issue["context"])
         self.assertEqual(context["value"], "Z")
@@ -788,7 +803,7 @@ class PublicDefine(unittest.TestCase):
         self.assertEqual(
             result.issues["condition"].to_list(), ["transport_path_collision"]
         )
-        self.assertEqual(result.issues["requirement"].to_list(), ["REQ-1226"])
+        self.assertEqual(result.issues["rule"].to_list(), ["JSON-2"])
         self.assertEqual(result.issues["spec_paths"].to_list(), [["sdtm.specs[1]"]])
         self.assertIn("dm.json", result.issues["context"][0])
         self.refused(result)
@@ -883,7 +898,7 @@ class PublicDefine(unittest.TestCase):
                     first = result.issues.to_dicts()[0]
                     first["context"] = json.loads(first["context"])
                     want = case["error"]
-                    for key in ("phase", "condition", "spec_paths", "requirement"):
+                    for key in ("phase", "condition", "spec_paths", "rule"):
                         self.assertEqual(first[key], want[key])
                     for key, value in want.get("context", {}).items():
                         self.assertEqual(first["context"][key], value, key)

@@ -193,8 +193,7 @@ pub fn invocation<'a, 'e: 'a, E>(
 fn selection<'a, E>(definitions: &[DefinitionSource<'_>]) -> Result<(), Error<'a, E>> {
     let mut names = BTreeSet::new();
     for source in definitions {
-        let definition = source.function.definition();
-        if source.path.is_empty() || !names.insert(definition.name.as_str()) {
+        if source.path.is_empty() || !names.insert(source.function.name()) {
             return Err(Error::InvalidContext);
         }
     }
@@ -229,10 +228,9 @@ pub fn binding_diagnostics<'a, 'e, E>(
         .zip(details)
         .map(|(failure, host)| {
             let source = &definitions[failure.function];
-            let definition = source.function.definition();
             let mut context = [
-                ("function", Fact::Text(&definition.name)),
-                ("call", Fact::Text(&definition.function)),
+                ("function", Fact::Text(source.function.name())),
+                ("call", Fact::Text(source.function.call())),
             ]
             .into();
             host_context(&mut context, host.expect("preflighted ordinary facts"));
@@ -273,8 +271,8 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
         }
         match failure {
             TestFailure::Invocation { error, .. } => {
-                if error.identity.name != definition.name
-                    || error.identity.call != definition.function
+                if error.identity.name != source.function.name()
+                    || error.identity.call != source.function.call()
                 {
                     return Err(Error::InvalidContext);
                 }
@@ -302,12 +300,12 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
         let args = test
             .args
             .iter()
-            .map(|(name, value)| (name.as_str(), Fact::Scalar(value)))
+            .map(|(name, value)| (name.name.as_str(), Fact::Scalar(value)))
             .collect();
         let mut context: Context<'a> = [
-            ("function", Fact::Text(&definition.name)),
-            ("call", Fact::Text(&definition.function)),
-            ("case", Fact::Text(&test.id)),
+            ("function", Fact::Text(source.function.name())),
+            ("call", Fact::Text(source.function.call())),
+            ("case", Fact::Text(&test.id.text)),
             ("args", Fact::Object(args)),
             ("expected", Fact::Scalar(&test.result)),
             (
@@ -330,10 +328,7 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
                         [
                             ("phase", Fact::Text(mapping.phase)),
                             ("condition", Fact::Text(mapping.condition)),
-                            (
-                                "requirement",
-                                mapping.requirement.map_or(Fact::Null, Fact::Text),
-                            ),
+                            ("rule", mapping.rule.map_or(Fact::Null, Fact::Text)),
                             ("context", Fact::Object(held.context)),
                         ]
                         .into(),

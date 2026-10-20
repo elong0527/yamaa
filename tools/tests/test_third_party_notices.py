@@ -704,6 +704,36 @@ class LockedClosure(unittest.TestCase):
         ):
             self.assertIn(expected, errors)
 
+    def test_only_the_component_inventory_differs_between_the_hosts(self):
+        # Each host's packages carry the inventory of their own bundle, which
+        # tools.packaging.generate_component_inventory checks.
+        metadata = self.graph.metadata()
+        notices.write(metadata, LIBRARY)
+        self.project(
+            license="MIT AND Apache-2.0 AND Unicode-3.0",
+            files=(
+                "LICENSE.txt",
+                "LICENSE-THIRD-PARTY.txt",
+                "LICENSE-YAML.txt",
+                notices.INVENTORY,
+            ),
+        )
+        self.assertEqual(
+            notices.check(metadata, LIBRARY)[1],
+            ["python/COMPONENTS.tsv: listed in license-files but missing"],
+        )
+        (notices.PYTHON / notices.INVENTORY).write_text("name\npyo3\n")
+        (notices.R_INST / notices.INVENTORY).write_text("name\nextendr-api\n")
+        self.assertEqual(notices.check(metadata, LIBRARY)[1], [])
+        (notices.R_INST / "LICENSE-YAML.txt").write_text("changed\n")
+        self.assertEqual(
+            notices.check(metadata, LIBRARY)[1],
+            [
+                "R/yamaa/inst/LICENSE-YAML.txt: must be identical to "
+                "python/LICENSE-YAML.txt"
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,12 +56,6 @@ impl Declaration {
     pub(super) fn path(&self) -> &str {
         &self.path
     }
-    pub(super) fn donor_fields(&self) -> impl Iterator<Item = &str> {
-        self.lower
-            .iter()
-            .chain(self.upper.iter())
-            .map(String::as_str)
-    }
     /// A range states at least one bound (LOOKUP-9).
     pub(super) fn bounds_finding(&self, owner: Owner<'_>) -> Option<Diagnostic> {
         (self.lower.is_none() && self.upper.is_none())

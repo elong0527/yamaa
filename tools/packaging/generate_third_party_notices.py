@@ -34,6 +34,10 @@ from tools.paths import ROOT, WORKSPACE
 
 NOTICES = "LICENSE-THIRD-PARTY.txt"
 PROJECT_LICENSE = "LICENSE.txt"
+# The component inventory, a package notice whose Python and R copies differ:
+# tools/packaging/generate_component_inventory.py writes each from its host's
+# trimmed lock and checks both.
+INVENTORY = "COMPONENTS.tsv"
 # The Python project lists the package notices; the R package installs the
 # same files from inst/.
 PYTHON = ROOT / "python"
@@ -894,7 +898,9 @@ def check_copies(project):
         python_copy, r_copy = PYTHON / name, R_INST / name
         if not python_copy.is_file():
             errors.append(f"python/{name}: listed in license-files but missing")
-        elif not r_copy.is_file() or r_copy.read_bytes() != python_copy.read_bytes():
+        elif name != INVENTORY and (
+            not r_copy.is_file() or r_copy.read_bytes() != python_copy.read_bytes()
+        ):
             errors.append(f"R/yamaa/inst/{name}: must be identical to python/{name}")
     for directory, relative in ((PYTHON, "python"), (R_INST, "R/yamaa/inst")):
         for path in sorted(directory.glob("LICENSE*")):

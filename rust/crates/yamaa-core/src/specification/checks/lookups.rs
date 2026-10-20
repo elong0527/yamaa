@@ -50,14 +50,69 @@ pub(in crate::specification) fn self_findings(spec: &Spec) -> Vec<PreflightFindi
     findings
 }
 
+/// The fields a row driver intermediate writes that it may not declare
+/// (ROW-2), in this order. Each counts once written, whatever its value; a
+/// `no_match` counts even when written null. Binding refuses the same list.
+/// `item` is the intermediate's document node: the tree keeps no written
+/// empty list or map, or a written `require_match: false`, so the checks a
+/// written field decides read the document the tree was lowered from.
+pub(in crate::specification) fn driver_prohibited(d: &Document, item: usize) -> Vec<&'static str> {
+    [
+        "key",
+        "between",
+        "order_by",
+        "keep",
+        "no_match",
+        "require_match",
+    ]
+    .into_iter()
+    .filter(|&field| match field {
+        "no_match" => d.field(item, field).is_some(),
+        _ => present(d, item, field),
+    })
+    .collect()
+}
+
+/// Without a relation change or `require_match`, an intermediate whose
+/// absence answer is missing, by default or as `no_match: {literal: null}`,
+/// reads what the implicit join reads (LOOKUP-4). A written field changes
+/// the relation even when it is empty, such as `derivations: {}`.
+fn rename_only(d: &Document, item: usize) -> bool {
+    let changes_relation = [
+        "key",
+        "between",
+        "filter",
+        "order_by",
+        "keep",
+        "columns",
+        "derivations",
+        "verifications",
+    ]
+    .iter()
+    .any(|field| present(d, item, field));
+    !changes_relation
+        && !requires_match(d, item)
+        && d.field(item, "no_match")
+            .filter(|&node| !matches!(d.nodes()[node], N::Null))
+            .is_none_or(|node| missing_literal(d, node))
+}
+
 /// Declaration failures that precede source access and key-type binding:
 /// identifier collisions, the dataset read, empty and repeated keys, a
 /// rename-only lookup, two absence policies, and an unpaired selection.
-pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<PreflightFinding> {
+/// `items` are the intermediates' document nodes, in written order.
+pub(in crate::specification) fn admission_findings(
+    spec: &Spec,
+    d: &Document,
+    items: &[usize],
+) -> Result<Vec<PreflightFinding>, PrepareError> {
     let mut findings = Vec::new();
     let mut identifiers = BTreeMap::<&str, String>::new();
     let inputs = |name: &str| spec.inputs.iter().any(|input| input.name.name == name);
-    for (index, item) in spec.intermediates.iter().enumerate() {
+    if items.len() != spec.intermediates.len() {
+        return Err(PrepareError::Internal);
+    }
+    for ((index, item), &node) in spec.intermediates.iter().enumerate().zip(items) {
         let path = format!("intermediates[{index}]");
         let name = item.id.name.as_str();
         let dataset = item.dataset.name.as_str();
@@ -114,26 +169,31 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
                 }
             }
         }
-        if crate::resolution::rename_only(item) {
+        if rename_only(d, node) {
             let mut finding = LookupFinding::new(&path, C::IntermediateRenameOnly);
             finding.text("intermediate", name);
             finding.text("dataset", dataset);
             findings.push(PreflightFinding::Scalar(finding.diagnostic()));
         }
         // Asserting a match and answering its absence are two absence policies.
-        if item.require_match && item.absent.is_some() {
+        if requires_match(d, node) && present(d, node, "no_match") {
             findings.push(PreflightFinding::Scalar(lookup::absence_conflict(
                 format!("{path}.no_match"),
                 format!("{path}.require_match"),
                 Owner::Intermediate(name),
             )));
         }
-        // An `order_by` with no term orders nothing, so a `keep` beside it has no
-        // order to choose by, as for a source's selection (LOOKUP-10).
+        // A written `order_by` needs a `keep`, even when it has no term; an
+        // `order_by` with no term orders nothing, so a `keep` beside it has
+        // no order to choose by, as for a source's selection (LOOKUP-10).
         let ordered = !item.order_by.is_empty();
         for (declared, missing, unpaired) in [
-            ("order_by", "keep", ordered && item.keep.is_none()),
-            ("keep", "order_by", item.keep.is_some() && !ordered),
+            (
+                "order_by",
+                "keep",
+                present(d, node, "order_by") && !present(d, node, "keep"),
+            ),
+            ("keep", "order_by", present(d, node, "keep") && !ordered),
         ] {
             if unpaired {
                 findings.push(PreflightFinding::Scalar(lookup::selection_unpaired(
@@ -145,13 +205,23 @@ pub(in crate::specification) fn admission_findings(spec: &Spec) -> Vec<Preflight
             }
         }
     }
-    findings
+    Ok(findings)
 }
 
 /// The input whose records build every row template's rows: a template's
 /// input, or the input its driver intermediate reads. A driver intermediate
-/// declares no relation of its own (ROW-2).
-pub(in crate::specification) fn common_driver(spec: &Spec) -> Result<&str, PrepareError> {
+/// declares no relation of its own (ROW-2): each field it writes that it may
+/// not declare refuses it, as binding refuses it.
+pub(in crate::specification) fn common_driver<'s>(
+    spec: &'s Spec,
+    d: &Document,
+) -> Result<&'s str, PrepareError> {
+    let items = d
+        .field(d.root(), "intermediates")
+        .filter(|&id| !matches!(d.nodes()[id], N::Null))
+        .map(|id| sequence(d, id))
+        .transpose()?
+        .unwrap_or(&[]);
     let mut common = None;
     for (index, template) in spec.rows.templates.iter().enumerate() {
         // Preflight has already refused a template without a driver.
@@ -160,28 +230,13 @@ pub(in crate::specification) fn common_driver(spec: &Spec) -> Result<&str, Prepa
         let name = if input(name) {
             name
         } else {
-            let item = spec
+            let (item, &node) = spec
                 .intermediates
                 .iter()
-                .find(|item| item.id.name == name)
+                .zip(items)
+                .find(|(item, _)| item.id.name == name)
                 .ok_or(PrepareError::Internal)?;
-            let mut prohibited = [
-                (
-                    "key",
-                    matches!(
-                        item.key,
-                        Some(JoinKey::Columns { .. } | JoinKey::Pairs { .. })
-                    ),
-                ),
-                ("between", item.between.is_some()),
-                ("order_by", !item.order_by.is_empty()),
-                ("keep", item.keep.is_some()),
-                ("no_match", item.absent.is_some()),
-                ("require_match", item.require_match),
-            ]
-            .into_iter()
-            .filter_map(|(field, declared)| declared.then_some(field))
-            .collect::<Vec<_>>();
+            let mut prohibited = driver_prohibited(d, node);
             if !input(&item.dataset.name) {
                 prohibited.push("dataset");
             }

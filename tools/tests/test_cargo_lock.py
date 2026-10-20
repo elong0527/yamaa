@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -366,6 +367,11 @@ class BundleArchiveTests(unittest.TestCase):
                     ValueError, f"in the dist profile, which {name} builds with"
                 ):
                     self.check(dict(entries, **{name: dist}))
+                linked = entries[name] + b"PKG_LIBS += -Wl,-s\n"
+                with self.assertRaisesRegex(
+                    ValueError, f"{name}: -Wl,-s strips the shared object at R's"
+                ):
+                    self.check(dict(entries, **{name: linked}))
                 with self.assertRaisesRegex(
                     ValueError, f"the R package is missing {name}"
                 ):
@@ -454,12 +460,186 @@ class RBuildSymbolsTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     self.check(**arguments)
 
+    def test_a_crlf_template_continues_its_cargo_command(self):
+        # make reads CRLF as LF, so the setting on the first line reaches Cargo.
+        makevars = self.makevars(environment="CARGO_PROFILE_RELEASE_STRIP=symbols ")
+        with self.assertRaisesRegex(ValueError, "the cargo build command sets strip"):
+            guard.check_r_symbols(
+                "yamaa", "", "", {"src/Makevars.in": makevars.replace("\n", "\r\n")}
+            )
+
     def test_one_cargo_build_selects_one_profile(self):
         with self.assertRaisesRegex(ValueError, "expected one cargo build command"):
             guard.check_r_symbols("yamaa", "", "", {"src/Makevars.in": "all:\n"})
         with self.assertRaisesRegex(ValueError, "selects more than one profile"):
             self.check(selection="--release --profile dist")
         self.assertEqual(guard.makevars_profile("x", self.makevars("")), "dev")
+
+
+class RLinkStepTests(unittest.TestCase):
+    """R's linker links the engine's static library into the shared object, so
+    its link step, not Cargo, is where the Makevars could strip it."""
+
+    def test_the_checkout_templates_strip_nothing_at_the_link_step(self):
+        for name in guard.R_MAKEVARS:
+            with self.subTest(name=name):
+                guard.check_r_link(
+                    name, (guard.R_PACKAGE / name).read_text(encoding="utf-8")
+                )
+
+    def test_comment_lines_other_commands_and_make_strip_are_admitted(self):
+        guard.check_r_link(
+            "src/Makevars.in",
+            # make continues a comment line that ends in a backslash.
+            "# Nothing strips the shared object: no strip, -s or -Wl,-S, \\\n"
+            "  nor PKG_LIBS += -s\n"
+            "PKG_LIBS = $(strip $(RUST_LIB)) -Wl,-soname,yamaa.so -Wl,-rpath,x\n"
+            "define LIBS\n"
+            "-lm\n"
+            "endef\n"
+            "rust_clean: $(SHLIB)\n"
+            # A rule stays open through blank and comment lines, so the
+            # tab-led lines after them are its recipe.
+            "\n"
+            "# Link the target.\n"
+            "\t# strip $(SHLIB)\n"
+            "\tln -s target link\n"
+            # Other tools' commands that strip nothing.
+            "\tinstall -d dir && ln -s target dir/link\n"
+            "\tobjcopy -O binary $(SHLIB) yamaa.bin\n",
+        )
+
+    def test_each_way_to_strip_at_the_link_step_refuses(self):
+        recipe = "rust_clean: $(SHLIB)\n\t"
+        for text, problem in (
+            # A command in a recipe: strip, or R's own $(STRIP_SHARED_LIB).
+            (recipe + "strip --strip-debug $(SHLIB)\n", "a recipe runs strip;"),
+            (recipe + "$(STRIP_SHARED_LIB) $(SHLIB)\n", "a recipe runs $(STRIP_"),
+            # An option in PKG_LIBS or PKG_LDFLAGS, or in a variable they read.
+            ("PKG_LIBS = $(RUST_LIB) -s\n", "-s strips"),
+            ('PKG_LIBS = "$(RUST_LIB)" "-s"\n', "-s strips"),
+            ("PKG_LIBS = $(RUST_LIB) -Wl,-s\n", "-Wl,-s strips"),
+            ("PKG_LIBS = $(RUST_LIB) -Wl,--strip-all\n", "-Wl,--strip-all strips"),
+            ("PKG_LDFLAGS = --strip-debug\n", "--strip-debug strips"),
+            ("PKG_LDFLAGS = -Wl,-O1,-S\n", "-Wl,-O1,-S strips"),
+            ("PKG_LIBS = $(RUST_LIB) -Xlinker -x\n", "-x strips"),
+            ("LINK = -Wl,--discard-all\nPKG_LIBS = $(LINK)\n", "-Wl,--discard-all"),
+            ("PKG_LIBS = $(RUST_LIB) \\\n\t-s\n", "-s strips"),
+            ("override LDFLAGS += -Wl,-s\n", "-Wl,-s strips"),
+            # make's $(strip ...) is admitted, but not an option inside it.
+            ("PKG_LIBS = $(strip -s)\n", "-s strips"),
+            ("PKG_LIBS = $(strip -Wl,-s)\n", "-Wl,-s strips"),
+            # An option among a make function's arguments, or in quotes.
+            ("PKG_LIBS = $(if $(DEBUG),,-s)\n", "$(DEBUG),,-s strips"),
+            ("PKG_LIBS = $(if $(DEBUG),,-Wl,-x)\n", "$(DEBUG),,-Wl,-x strips"),
+            ('PKG_LIBS = $(strip "-s")\n', "-s strips"),
+            ('PKG_LIBS = $(shell echo "-Wl,-s")\n', "-Wl,-s strips"),
+            ('PKG_LIBS = -Wl,"-s"\n', "-Wl,-s strips"),
+            # A linker option strips whatever a recipe links too.
+            (recipe + "$(SHLIB_LINK) -o $(SHLIB) -Wl,-s\n", "a recipe runs -Wl,-s;"),
+            # Recipe tools that strip without the word strip.
+            (recipe + "objcopy -g $(SHLIB)\n", "a recipe runs objcopy -g;"),
+            (recipe + "$(OBJCOPY) -S $(SHLIB)\n", "a recipe runs $(OBJCOPY) -S;"),
+            (
+                recipe + "@x86_64-w64-mingw32-objcopy -x $(SHLIB)\n",
+                "a recipe runs @x86_64-w64-mingw32-objcopy -x;",
+            ),
+            (recipe + "objcopy --discard-all $(SHLIB)\n", "a recipe runs objcopy --"),
+            (recipe + "install -s $(SHLIB) yamaa.so\n", "a recipe runs install -s;"),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+        with self.assertRaises(ValueError) as caught:
+            guard.check_r_link("src/Makevars.in", "PKG_LIBS = $(RUST_LIB) -Wl,-s\n")
+        self.assertEqual(
+            str(caught.exception),
+            "src/Makevars.in: -Wl,-s strips the shared object at R's link step; "
+            "the R package keeps its symbols, as CRAN's Repository Policy asks",
+        )
+
+    def test_a_tab_led_line_is_a_recipe_only_in_an_open_rule(self):
+        # make reads any other tab-led line as an ordinary line, so an
+        # assignment there reaches R's link.
+        for text, problem in (
+            ("PKG_LIBS = $(RUST_LIB)\n\tPKG_LIBS += -Wl,-s\n", "-Wl,-s strips"),
+            (
+                "PKG_LIBS = $(RUST_LIB)\nifeq ($(OS),Darwin)\n"
+                "\tPKG_LIBS += -Wl,-x\nendif\n",
+                "-Wl,-x strips",
+            ),
+            ("\tPKG_LIBS += -s\nall: $(SHLIB)\n", "-s strips"),
+            ("all: $(SHLIB)\nPKG_LIBS = -lm\n\tPKG_LIBS += -Wl,-s\n", "-Wl,-s strips"),
+            # A define body is a variable's value, even after a line of it that
+            # looks like a rule.
+            ("define OPTS\n\t-Wl,-s\nendef\nPKG_LIBS = $(OPTS)\n", "-Wl,-s strips"),
+            (
+                "define OPTS\nx: y\n\t-s\nendef\nPKG_LIBS = $(strip $(OPTS))\n",
+                "-s strips",
+            ),
+            # A rule that one branch opens is not open in the other, and a
+            # target-specific variable opens none.
+            (
+                "ifeq ($(OS),Darwin)\nextra: $(SHLIB)\nelse\n\tPKG_LIBS += -s\nendif\n",
+                "-s strips",
+            ),
+            ("$(SHLIB): X = 1\n\tPKG_LIBS += -s\n", "-s strips"),
+            # make reads CRLF as LF, so the line continues.
+            ("PKG_LIBS = $(RUST_LIB) -Xlinker \\\r\n\t-x\r\n", "-x strips"),
+            # The shell runs the line after a recipe comment's backslash, and
+            # joins a recipe's other lines without a space.
+            (
+                "rust_clean: $(SHLIB)\n\t# tidy \\\n\tstrip $(SHLIB)\n",
+                "a recipe runs strip;",
+            ),
+            (
+                "rust_clean: $(SHLIB)\n\t$(SHLIB_LINK) -Xlinker \\\n\t-x\n",
+                "a recipe runs -x;",
+            ),
+            (
+                "rust_clean: $(SHLIB)\n\t$(SHLIB_LINK) -Wl,\\\n\t-s\n",
+                "a recipe runs -Wl,-s;",
+            ),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+
+    def test_comments_and_continuations_end_where_make_ends_them(self):
+        for text, problem in (
+            # A colon in a directive's trailing comment, as in a URL, opens no
+            # rule, so the tab-led line after it is an assignment.
+            (
+                "ifeq ($(OS),Windows_NT)\n\texport FOO # see: https://example.org\n"
+                "\tPKG_LIBS += -s\nendif\n",
+                "-s strips",
+            ),
+            (
+                "ifeq ($(OS),Windows_NT)\n\tunexport MAKEFLAGS # see: https://example.org\n"
+                "\tPKG_LIBS += -s\nendif\n",
+                "-s strips",
+            ),
+            ("$(info building) # note: x\n\tPKG_LIBS += -s\n", "-s strips"),
+            # make continues a line only after an odd number of backslashes.
+            ("# end \\\\\nPKG_LIBS += -Wl,-s\n", "-Wl,-s strips"),
+            ("post: $(SHLIB)\n# end \\\\\n\tstrip $(SHLIB)\n", "a recipe runs strip;"),
+            ("post: $(SHLIB)\n\techo done \\\\\nPKG_LIBS += -s\n", "-s strips"),
+        ):
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(
+                    ValueError, "^" + re.escape(f"src/Makevars.in: {problem}")
+                ):
+                    guard.check_r_link("src/Makevars.in", text)
+        # An escaped # and a rule line's comment leave its rule open, and three
+        # backslashes continue a comment.
+        guard.check_r_link(
+            "src/Makevars.in",
+            "link\\#1: $(SHLIB) # note: y\n\tln -s a b\n# end \\\\\\\nPKG_LIBS += -s\n",
+        )
 
 
 if __name__ == "__main__":

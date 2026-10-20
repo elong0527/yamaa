@@ -43,11 +43,11 @@ impl Failure {
         self.diagnostic_code().definition().condition
     }
     /// The rule owning the finding.
-    pub fn requirement(&self) -> &'static str {
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("expression findings have a normative requirement")
+            .rule
+            .expect("expression findings have a normative rule")
     }
     /// The construct, function or reducers a finding names.
     fn facts(&self, context: &mut Context) {
@@ -63,6 +63,19 @@ impl Failure {
                 context.insert("function".into(), text(function));
                 if let Some(count) = argument_count {
                     context.insert("argument_count".into(), V::from(*count));
+                } else {
+                    let hint = match function.to_ascii_uppercase().as_str() {
+                        "COALESCE" => Some("use the first_available expression"),
+                        "GREATEST" => Some("use the greatest expression"),
+                        "LEAST" => Some("use the least expression"),
+                        "ROUND" | "ROUND_HALF_AWAY_FROM_ZERO" => {
+                            Some("use the round_half_away_from_zero operation")
+                        }
+                        _ => None,
+                    };
+                    if let Some(hint) = hint {
+                        context.insert("hint".into(), text(hint));
+                    }
                 }
             }
             Self::NestedReduction { outer, inner } => {
@@ -186,11 +199,11 @@ impl Condition {
     pub fn condition(&self) -> &'static str {
         self.diagnostic_code().definition().condition
     }
-    pub fn requirement(&self) -> &'static str {
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("expression conditions have a normative requirement")
+            .rule
+            .expect("expression conditions have a normative rule")
     }
     /// A comparison's facts name its operands' types; a numeric operand's
     /// facts carry the expression and the failing operation's values.

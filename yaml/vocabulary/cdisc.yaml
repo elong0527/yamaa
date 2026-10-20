@@ -1,0 +1,96 @@
+# The closed CDISC vocabularies a specification and a project file are read
+# against: dataset classes and subclasses (SUB-4), standard names (DEFINE-6,
+# CT-2), origin types and sources (SUB-14) and column roles (SUB-9).
+#
+# `version` is the newest language version whose values this file lists, and
+# each value's `since` is the version that admitted it. A vocabulary grows
+# only by adding values; a value is never removed in 1.x.
+#
+# Each vocabulary names the schema type that spells it in yaml/ and yaml/v1/,
+# which must list exactly its values. One that names a Define-XML
+# `enumeration` must equal that simple type of the Define-XML schema bundled
+# at rust/tests/schemas/define/2.1/define-enumerations.xsd, whose release
+# `source` names. `python -m tools.validation.check_cdisc_vocabulary` checks
+# both.
+version: "1.0"
+source:
+  define_xml: "2.1.11"
+  terminology: "2026-03-27"
+vocabularies:
+  dataset_class:
+    type: dataset_class_name
+    enumeration: ItemGroupClass
+    values:
+      - {value: ADAM OTHER, since: "1.0"}
+      - {value: BASIC DATA STRUCTURE, since: "1.0"}
+      - {value: DEVICE LEVEL ANALYSIS DATASET, since: "1.0"}
+      - {value: EVENTS, since: "1.0"}
+      - {value: FINDINGS, since: "1.0"}
+      - {value: FINDINGS ABOUT, since: "1.0"}
+      - {value: INTERVENTIONS, since: "1.0"}
+      - {value: MEDICAL DEVICE BASIC DATA STRUCTURE, since: "1.0"}
+      - {value: MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, since: "1.0"}
+      - {value: OCCURRENCE DATA STRUCTURE, since: "1.0"}
+      - {value: REFERENCE DATA STRUCTURE, since: "1.0"}
+      - {value: RELATIONSHIP, since: "1.0"}
+      - {value: SPECIAL PURPOSE, since: "1.0"}
+      - {value: STUDY REFERENCE, since: "1.0"}
+      - {value: SUBJECT LEVEL ANALYSIS DATASET, since: "1.0"}
+      - {value: TRIAL DESIGN, since: "1.0"}
+  dataset_subclass:
+    type: dataset_subclass_name
+    enumeration: ItemGroupSubClass
+    values:
+      - {value: ADVERSE EVENT, since: "1.0"}
+      - {value: MEDICAL DEVICE TIME-TO-EVENT, since: "1.0"}
+      - {value: NON-COMPARTMENTAL ANALYSIS, since: "1.0"}
+      - {value: POPULATION PHARMACOKINETIC ANALYSIS, since: "1.0"}
+      - {value: TIME-TO-EVENT, since: "1.0"}
+  standard_name:
+    type: standard_name
+    enumeration: StandardName
+    values:
+      - {value: ADaMIG, since: "1.0"}
+      - {value: ADaMIG-MD, since: "1.0"}
+      - {value: BIMO, since: "1.0"}
+      - {value: CDISC/NCI, since: "1.0"}
+      - {value: SDTMIG, since: "1.0"}
+      - {value: SDTMIG-AP, since: "1.0"}
+      - {value: SDTMIG-MD, since: "1.0"}
+      - {value: SENDIG, since: "1.0"}
+      - {value: SENDIG-AR, since: "1.0"}
+      - {value: SENDIG-DART, since: "1.0"}
+      - {value: SENDIG-GENETOX, since: "1.0"}
+  origin_type:
+    type: origin_type
+    enumeration: OriginType
+    values:
+      - {value: Assigned, since: "1.0"}
+      - {value: Collected, since: "1.0"}
+      - {value: Derived, since: "1.0"}
+      - {value: Not Available, since: "1.0"}
+      - {value: Other, since: "1.0"}
+      - {value: Predecessor, since: "1.0"}
+      - {value: Protocol, since: "1.0"}
+  origin_source:
+    type: origin_source
+    enumeration: OriginSource
+    values:
+      - {value: Investigator, since: "1.0"}
+      - {value: Sponsor, since: "1.0"}
+      - {value: Subject, since: "1.0"}
+      - {value: Vendor, since: "1.0"}
+  # The Define-XML schema leaves ItemRef/@Role open; SDTM v2.0 section 2.1
+  # publishes these nine, which SENDIG 3.1.1 section 2.4 also uses.
+  role:
+    type: column_role
+    values:
+      - {value: Identifier, since: "1.0"}
+      - {value: Topic, since: "1.0"}
+      - {value: Timing, since: "1.0"}
+      - {value: Grouping Qualifier, since: "1.0"}
+      - {value: Result Qualifier, since: "1.0"}
+      - {value: Synonym Qualifier, since: "1.0"}
+      - {value: Record Qualifier, since: "1.0"}
+      - {value: Variable Qualifier, since: "1.0"}
+      - {value: Rule, since: "1.0"}

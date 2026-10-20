@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.SEVTOT.derivation.aggregate.expr
-requirement: REQ-0510
+rule: FORMULA-23
 context:
   source: ASEV
   expected: numeric

@@ -18,11 +18,11 @@ composition of one layer and is resolved, pruned and validated on the same
 terms.
 
 Evidence: `schema-inheritance`, `schema-inherited-output`.
-Replaces: REQ-0614, REQ-0615, REQ-0616.
 
 A field is present when its mapping key is written, including when its value
-is null. Absence inherits; a written value replaces or merges, and a null
-clears, under [LAYER-5](#layer-5) to [LAYER-9](#layer-9). The resolver keeps
+is null, the missing value. Absence inherits, and a written value replaces or
+merges under [LAYER-5](#layer-5) to [LAYER-8](#layer-8); only a layer's
+`clear` removes an inherited value ([LAYER-9](#layer-9)). The resolver keeps
 the provenance of every contributed value, down to the leaf a layer wrote,
 while it works. Provenance is diagnostic state, not a field of the resolved
 specification; for a relative path it also records the declaring layer and
@@ -41,14 +41,13 @@ resolved, are one layer.
 
 Fails: `invalid_parent_path`, `parent_not_found`.
 Evidence: `negative-remote-parent`, `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_malformed_parent_spelling_is_refused_as_written_on_every_route`.
-Replaces: REQ-0617, REQ-0618, REQ-0619, REQ-0653, REQ-0654.
 
 A URL, URI, empty path or other non-local reference fails with
 `invalid_parent_path`, reporting the declaring file and its `parent`. A
 missing, unreadable or non-regular parent fails with `parent_not_found`,
-reporting the declaring file and path. A `parent` written as null is absent:
-the layer has no parent, and an entry file whose `parent` is null is a
-composition of one layer.
+reporting the declaring file and path. `parent` is a path, so YAML null is not
+a parent: it fails as `invalid_field_type` ([LAYER-9](#layer-9)), and a layer
+without a parent omits the field.
 
 A non-empty local `parent` keeps the written form of every declared path
 ([FILE-4](reference/files.md#file-4), [FILE-5](reference/files.md#file-5)).
@@ -69,7 +68,6 @@ is a cycle.
 
 Fails: `inheritance_cycle`.
 Evidence: `schema-inheritance`, `negative-cyclic-parent`.
-Replaces: REQ-0620, REQ-0621, REQ-0655.
 
 For a study entry whose parent is a compound layer whose parent is an
 organization layer, the contribution order is
@@ -95,7 +93,6 @@ collection in one layer must not share an identifier.
 
 Fails: `unsupported_language_version`, `unexpected_file_type`, `duplicate_identifier`, `schema_version_mismatch`.
 Evidence: `negative-version-mismatch`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::each_layer_is_admitted_at_its_own_version_and_the_chain_needs_the_newest`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_parent_naming_an_unread_version_or_another_type_fails_at_parent`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_layer_is_a_fragment_and_a_single_layer_is_complete`, `rust/crates/yamaa-adapters/tests/declaration_language_header.rs::a_0_5_chain_refuses_a_1_x_parent_at_the_parent_naming_it`.
-Replaces: REQ-0622, REQ-0623, REQ-0624, REQ-0626, REQ-0656, REQ-0658, REQ-0659.
 
 Requiredness is deferred for every root field and at every depth inside a
 member of `input`, `intermediates`, `columns`, `rows` and `windows`. An entry
@@ -130,12 +127,13 @@ appends in contribution order, and a matching identifier keeps its first
 position and merges with the member it inherits under [LAYER-6](#layer-6).
 
 Evidence: `schema-inherited-output`, `schema-inherited-input`.
-Replaces: REQ-0627, REQ-0628, REQ-0629, REQ-0631, REQ-0642.
 
 | Root field | Composes |
 |---|---|
-| `schema_version` | must be identical in every layer |
+| `yamaa` | the newest version any layer declares ([LAYER-4](#layer-4)) |
+| `type` | `spec` in every layer |
 | `parent` | traversal instruction; never contributed |
+| `clear` | applied before the layer's own fields; never contributed ([LAYER-9](#layer-9)) |
 | `input` | by dataset identifier |
 | `intermediates` | by `id` |
 | `columns` | by `name` |
@@ -164,7 +162,6 @@ list by replacement. A value of a different kind replaces what it inherits,
 and a field the member does not inherit is taken whole.
 
 Evidence: `schema-column-composition`, `schema-inherited-input`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::recursive_patches_keep_positions_merge_mappings_replace_lists_and_defer_defaults`.
-Replaces: REQ-0625, REQ-0630.
 
 | Kind | Composes by |
 |---|---|
@@ -194,7 +191,7 @@ field that no layer supplies fails on the resolved specification, and a later
 layer that never mentions a field cannot replace an earlier value with the
 field's default.
 
-Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/schema_references.rs::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`.
+Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_composition_materializes_defaults_once_and_keeps_written_provenance`, `rust/crates/yamaa-core/tests/schema_references.rs::keyed_member_fragments_defer_nested_requiredness_but_root_values_do_not`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_cleared_field_takes_its_default_again_and_its_path_its_base`.
 
 A whole root field is a complete value in the layer that writes it, so its
 requiredness and defaults apply there. A default fills a field the composed
@@ -211,39 +208,71 @@ layer can change one setting, such as `order_by`, and keep the others. Every
 reference, inherited or not, uses the final composed definition.
 
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_contract_vectors.rs::complete_window_model_merges_parent_definition_with_child_fields_and_schema_defaults`.
-Replaces: REQ-1254.
 
 A window name is not a variable or dataset dependency. A setting the composed
-definition omits takes its ordinary window meaning. Root `windows: null` clears
-the collection under [LAYER-9](#layer-9); an individual definition cannot be
-null. A named reference and an inline window are different kinds, so replacing
+definition omits takes its ordinary window meaning. A layer clears the
+inherited collection by listing `windows` in `clear` under
+[LAYER-9](#layer-9), and an inherited setting by listing its path; an
+individual definition, a keyed member, is never cleared or null. A named reference and an inline window are different kinds, so replacing
 one with the other replaces the complete `window` value.
 
 <a id="layer-9"></a>
 
-### LAYER-9. YAML null makes a field absent, removing any value it inherits
+### LAYER-9. YAML null is the missing value, and a layer clears an inherited field only by listing it in `clear`
 
-YAML null written for a field or a mapping entry makes it absent: where a value
-is inherited, at any depth composition reaches, the null removes it, and
-anywhere else, including a first declaration, the field is simply absent.
-Clearing a required field, an identity field or `schema_version` fails.
-`{literal: null}` is the literal missing value, not a clear. There is no
-separate remove or drop construct.
+YAML null is the missing value wherever a value or an expression may be
+missing, and it never removes anything. A layer clears an inherited value only
+by listing its spec path in the root field `clear`; composition removes the
+value before the layer's own fields compose, and a field with a schema default
+takes it again. A path that names nothing the layer inherits, a required or
+identity field, `yamaa`, `type` or a keyed member fails as `invalid_clear`.
 
 Fails: `invalid_clear`.
-Evidence: `schema-inheritance-clear`, `negative-property-clear`.
-Replaces: REQ-0632, REQ-0633, REQ-0634, REQ-0660.
+Evidence: `schema-inheritance-clear`, `negative-property-clear`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_removes_what_the_layer_inherits_before_its_own_fields_compose`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_that_names_what_it_cannot_clear_fails_at_its_entry`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::a_clear_list_is_spec_paths_none_covering_another`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::yaml_null_is_the_missing_value_and_never_removes_anything`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::yaml_null_is_refused_outside_value_and_expression_fields`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::the_converted_schema_inheritance_clear_resolves_as_its_source`, `rust/crates/yamaa-adapters/tests/declaration_layer_composition.rs::the_converted_negative_property_clear_fails_as_its_source_at_clear_0`, `rust/crates/yamaa-core/src/schema/spec_path.rs::a_clear_path_names_keys_by_segment_or_quoted_text`.
 
-The rule holds in every specification, whether or not it declares a `parent`,
-and at every depth: inside a member, a whole root field or a list item. A layer
-can therefore remove one key of an inherited mapping or one field of an
-inherited class and keep the rest; a field whose schema has a default takes
-that default again under [LAYER-7](#layer-7). A keyed member itself is never
-null, and a list item or a registry payload is a value: the expression
-`literal: null` is the missing value, and a handler, flag value, mapping entry
-or function argument substitutes the missing value as `{literal: null}`
-([COLUMN-10](columns.md#column-10)). `invalid_clear` reports the field and
-contributing file.
+`clear` is a root field, written after `parent`, that lists spec paths:
+
+```yaml
+clear:
+  - columns.AVAL.verifications
+  - columns.DCSREAS.derivation.mapping.dict.PD
+  - columns.RACEN.derivation.mapping.dict['NOT REPORTED']
+  - rows.collected-occurrence.filter
+  - intermediates.DEATHEV.absent
+  - input.ADSL.require_match
+  - metadata.scope
+```
+
+A path is written in the notation diagnostics use: a root field, then `.key`
+for a key made of letters, digits, `_` and `-`, and `['key']` for any other
+key, with `'` written twice. Keyed members are named by identity, as
+[LAYER-5](#layer-5) composes them: `input` and `windows` members by key,
+`columns` by `name`, and `intermediates` and `rows` by `id`. A list replaces
+whole ([LAYER-6](#layer-6)), so a path never holds a list index, and `$`, the
+root, appears only in diagnostics. A value written through a shorthand is named
+through it, as its layer wrote it: `columns.DCSREAS.derivation.mapping.dict.PD`
+names an entry of a mapping derivation written bare.
+
+Each layer's clears apply to the value it inherits before its own fields
+compose, so clearing a mapping and writing it in one layer replaces the mapping
+instead of merging with it. A cleared field with a schema default takes the
+default again under [LAYER-7](#layer-7), and a value that came from a default
+is not inherited. A path that names a value the layer does not inherit, a
+required field, the identity field of a keyed member, `yamaa`, `type`, a keyed
+member itself or a registry keyword without its owning field fails as
+`invalid_clear`, and so does a path outside the notation or a path written
+beside one of its prefixes in the same list. A finding about a clear is
+reported at `clear[i]`, its context naming the field the path ends at.
+Composition consumes `clear` as it consumes `parent`, and the resolved
+specification holds neither ([LAYER-14](#layer-14)).
+
+A null a layer writes is a value of its field: a handler, flag value, mapping
+entry or function argument written as YAML null substitutes the missing value
+([COLUMN-10](columns.md#column-10)), and `derivation: null` derives missing.
+Null is admitted only where a value or an expression may be missing: in a
+structure, identifier, path, name, enumeration, Boolean or number field it
+fails as `invalid_field_type`, and a keyed member, a list item and a root
+collection are never null.
 
 <a id="layer-10"></a>
 
@@ -257,7 +286,6 @@ path relative to the entry file, preserving the location it names.
 
 Fails: `parent_on_another_share`.
 Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_respells_layers_on_the_entry_root_relative_to_the_entry`, `rust/crates/yamaa-adapters/src/file_metadata.rs::rebase_writes_a_location_on_another_root_whole_and_never_climbs_to_it`, `rust/crates/yamaa-adapters/src/file_metadata.rs::a_layer_on_another_share_is_refused_with_its_path_and_both_roots`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_drive_reads_its_input_beside_itself`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_parent_on_another_share_is_refused_rather_than_read_from_the_entry_root`.
-Replaces: REQ-0635, REQ-0636, REQ-0637.
 
 If the platform cannot express that location relative to the entry file, the
 canonical absolute local path is written. A location beside a layer on a
@@ -285,8 +313,6 @@ semantic roots and removes the rest, whether or not the entry file declares a
 intermediate that carries its own verification, every row template, and the
 dataset `base` names.
 
-Replaces: REQ-0638, REQ-0639, REQ-0640.
-
 Definitions do not make themselves live. From the roots the resolver follows
 every semantic reference recursively: variables in derivations and row
 derivations, filters, grouping and ordering, the closed expression languages,
@@ -310,7 +336,6 @@ that owns it, naming the entry specification and the contributing file and
 field of each implicated value.
 
 Fails: `missing_required_field`.
-Replaces: REQ-0641, REQ-0651, REQ-0657, REQ-0661.
 
 A declaration left out of `output.columns` remains as an internal column when a
 derivation or verification uses it. A resolved specification to which no layer
@@ -325,8 +350,6 @@ After pruning, each column is ordered after every column its derivation
 reads. When more than one column can come next, the one with the earliest
 contribution position comes first, which keeps an ancestor's independent
 columns before its descendants'. `output.columns` is never reordered.
-
-Replaces: REQ-0643, REQ-0644.
 
 A derivation that reads an undeclared column, or that reads itself directly or
 through other columns, fails under the
@@ -344,8 +367,7 @@ lists columns in the order of [LAYER-13](#layer-13), and keeps root and member
 fields in schema order. Conformance compares its YAML data tree, not its
 layout.
 
-Replaces: REQ-0645, REQ-0646, REQ-0647, REQ-0648, REQ-0649, REQ-0650,
-REQ-0652.
-
 A free-form mapping whose owning field was replaced whole keeps the order of
-the contribution that supplied it.
+the contribution that supplied it. Composition consumes a layer's `clear` as
+it consumes `parent` ([LAYER-9](#layer-9)), so the resolved specification
+holds no `clear`, and `yamaa` records the newest version any layer declares.

@@ -5,7 +5,7 @@
 pub(super) const MODULES: &[(&str, &str)] = &[
     ("schema.yaml", r#"version: "1.0"
 
-# See REQ-1045.
+# See SPEC-1.
 
 includes:
     - schema_shared.yaml
@@ -49,7 +49,7 @@ root_class:
     - windows:
         type: "dict[identifier, window_spec]"
         required: false
-        description: See REQ-1251.
+        description: See WINDOW-1.
     - intermediates:
         type: "list[intermediate_class]"
         required: false
@@ -148,7 +148,7 @@ record_between_class:
         required: false
         description: Donor-record field whose value is an inclusive upper bound; omit for no upper bound (LOOKUP-9).
 
-# See REQ-0251.
+# See SCHEMA-5.
 match_key_range_fields:
     - key: {type: match_key}
     - fields_from: match_range_fields
@@ -176,7 +176,7 @@ column_class:
         type: str
         required: false
         description: Descriptive text carried with the column for a reader of the dataset.
-    # See REQ-1260.
+    # See SPEC-6.
     - derivation:
         type: derivation
         required: false
@@ -211,11 +211,11 @@ row_class:
         type: predicate
         required: false
         description: Predicate gating each driver record's candidate row for an ungrouped row template, or completed candidate groups for a grouped row template (ROW-3, ROW-4).
-    # See REQ-0199.
+    # See SPEC-6.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
-        description: Columns this row template derives, whose coverage across row templates follows REQ-0200.
+        description: Columns this row template derives, whose coverage across row templates follows SPEC-5.
 
 variable:
     type: str
@@ -224,7 +224,7 @@ variable:
 
 match_key:
     type: [match_key_columns, "dict[identifier, match_value]"]
-    description: See REQ-0115.
+    description: See LOOKUP-5.
 
 match_key_columns:
     type: "list[identifier]"
@@ -232,7 +232,7 @@ match_key_columns:
 
 match_value:
     type: [variable, expression]
-    description: See REQ-1259.
+    description: See LOOKUP-6.
 
 dataset_source:
     type: [project_path, dataset_class]
@@ -265,7 +265,7 @@ dataset_class:
         required: false
         default: missing
         values: [missing, present]
-        description: See REQ-1158.
+        description: See INPUT-9.
     - ordinal:
         type: identifier
         required: false
@@ -314,7 +314,7 @@ handled_expression_class:
     - value: {type: expression, required: true}
     - unconvertible: {type: substitute_value, required: false}
 
-# See REQ-1185.
+# See LOOKUP-15.
 intermediate_derivation:
     type: [untyped_intermediate_derivation, intermediate_binding_class]
 
@@ -334,10 +334,10 @@ expression:
 "#),
     ("schema_expression_aggregate.yaml", r#"version: "1.0"
 
-# See REQ-1091.
+# See FORMULA-17.
 
 expressions:
-# See REQ-1092.
+# See FORMULA-17.
     aggregate:
         type: [aggregate_expression, aggregate_class]
 
@@ -378,13 +378,13 @@ aggregate_expression:
     ("schema_expression_core.yaml", r#"version: "1.0"
 
 expressions:
-    source: # See REQ-1093.
+    source: # See EXPR-4.
         type: [variable, source_binding_class]
         description: Copies a named source or derived variable (EXPR-4).
-    literal: # See REQ-1094.
+    literal: # See EXPR-4.
         type: literal_value
         description: Returns the declared scalar value unchanged (EXPR-4).
-    first_available: # See REQ-1095.
+    first_available: # See EXPR-9.
         - sources:
             type: "list[filtered_source]"
             required: true
@@ -392,20 +392,20 @@ expressions:
         - missing:
             type: substitute_value
             description: Value returned when every source is missing; missing when absent (EXPR-9).
-    greatest: # See REQ-1096.
+    greatest: # See EXPR-10.
         - sources:
             type: "list[variable]"
             required: true
             description: Mutually comparable variables to inspect (EXPR-10).
-    least: # See REQ-1097.
+    least: # See EXPR-10.
         - sources:
             type: "list[variable]"
             required: true
             description: Mutually comparable variables to inspect (EXPR-10).
-    case: # See REQ-1098.
+    case: # See EXPR-7.
         type: "list[case_item_class]"
         description: Ordered when/then items with an optional trailing otherwise (EXPR-7).
-    flag: # See REQ-1256.
+    flag: # See EXPR-8.
         type: [predicate, flag_class]
         description: A one-predicate flag derivation; a bare predicate string is the condition with the default values (EXPR-8).
 
@@ -447,7 +447,7 @@ filtered_source:
 keep_policy:
     type: str
     values: [first, last]
-    description: See REQ-0119.
+    description: See LOOKUP-10.
 
 order_by_term:
     type: [variable, order_term_class]
@@ -494,7 +494,7 @@ case_result:
     ("schema_expression_date.yaml", r#"version: "1.0"
 
 expressions:
-    diff: # See REQ-1104.
+    diff: # See TIME-4.
         - type:
             type: temporal_type
             required: true
@@ -517,7 +517,7 @@ expressions:
             default: exclusive
             values: [exclusive, inclusive, between]
             description: Which endpoints the day count includes, defined only for dates with unit day (TIME-5).
-    impute: # See REQ-1105.
+    impute: # See TIME-8.
         - type:
             type: temporal_type
             required: true
@@ -552,7 +552,7 @@ expressions:
         - invalid:
             type: substitute_value
             description: Result when the source is text that cannot be read as collected date text, such as an ISO 8601 interval or duration (TIME-13).
-    precision: # See REQ-1106.
+    precision: # See TIME-7.
         - type:
             type: temporal_type
             required: true
@@ -578,12 +578,12 @@ expressions:
             type: bool
             default: true
             description: Whether the study collects seconds, so a time collected to the minute had its seconds imputed (TIME-18).
-    to_date: # See REQ-1107.
+    to_date: # See TIME-2.
         - source:
             type: variable
             required: true
             description: Datetime whose calendar date is returned, or ISO 8601 date or datetime text whose date part is returned (TIME-2).
-    study_day: # See REQ-1108.
+    study_day: # See TIME-6.
         - date:
             type: variable
             required: true
@@ -592,7 +592,7 @@ expressions:
             type: variable
             required: true
             description: Reference start date, which is study day 1 (TIME-6).
-    to_epoch_day: # See REQ-1188.
+    to_epoch_day: # See TIME-3.
         - source:
             type: variable
             required: true
@@ -626,7 +626,7 @@ expressions:
             required: true
             description: Datetime whose time of day is returned as whole seconds since midnight (TIME-20).
 
-    shift: # See REQ-1298.
+    shift: # See TIME-14.
         - type:
             type: temporal_type
             required: true
@@ -645,7 +645,7 @@ expressions:
             type: str
             values: [second, minute, hour, day]
             description: Elapsed unit of the amount, where a day is 86400 seconds; declared exactly when type is datetime (TIME-14).
-    duration_value: # See REQ-1301.
+    duration_value: # See TIME-17.
         - source:
             type: variable
             required: true
@@ -677,7 +677,7 @@ time_rule:
     ("schema_expression_mapping.yaml", r#"version: "1.0"
 
 expressions:
-    mapping: # See REQ-1110.
+    mapping: # See EXPR-11.
         - source:
             type: filtered_source
             required: true
@@ -696,7 +696,7 @@ expressions:
         - unmapped:
             type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
-    cut: # See REQ-1118.
+    cut: # See EXPR-13.
 
         - source:
             type: filtered_source
@@ -720,15 +720,15 @@ expressions:
 "#),
     ("schema_expression_numeric.yaml", r#"version: "1.0"
 
-# See REQ-1121.
+# See FORMULA-27.
 
 expressions:
-    compute: # See REQ-1119.
+    compute: # See FORMULA-27.
         - expr:
             type: numeric_expression
             required: true
             description: Numeric expression over named variables in the compute field of the expression language (FORMULA-27).
-    round_half_away_from_zero: # See REQ-1172.
+    round_half_away_from_zero: # See FORMULA-16.
         - source:
             type: variable
             required: true
@@ -745,22 +745,22 @@ numeric_expression:
 "#),
     ("schema_expression_odm.yaml", r#"version: "1.0"
 
-# See REQ-1265.
+# See NAME-7.
 
 expressions:
-    odm: # See REQ-1265.
+    odm: # See NAME-7.
         type: [odm_item, odm_class]
         description: One collected item read from the row's ODM scope; a bare string is the item (NAME-7).
 
 odm_item:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$'
-    description: See REQ-1265.
+    description: See NAME-7.
 
 odm_oid:
     type: str
     pattern: '^[!-~]+$'
-    description: See REQ-1271.
+    description: See NAME-12.
 
 odm_class:
     - item:
@@ -783,16 +783,16 @@ odm_class:
     ("schema_expression_str.yaml", r#"version: "1.0"
 
 expressions:
-    str_pad: # See REQ-1261.
+    str_pad: # See TEXT-2.
         - source:
             type: variable
             required: true
-            description: See REQ-1261.
+            description: See TEXT-2.
         - width:
             type: int
             required: true
-            description: See REQ-1261.
-    str_extract: # See REQ-1111.
+            description: See TEXT-2.
+    str_extract: # See TEXT-10.
         - source:
             type: variable
             required: true
@@ -811,7 +811,7 @@ expressions:
         - no_match:
             type: substitute_value
             description: Value returned when the pattern does not match the source (TEXT-10).
-    str_replace: # See REQ-1322.
+    str_replace: # See TEXT-11.
         - source:
             type: variable
             required: true
@@ -827,10 +827,10 @@ expressions:
         - missing:
             type: substitute_value
             description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-11).
-    str_template: # See REQ-1113.
+    str_template: # See TEXT-4.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling (TEXT-4).
-    str_case: # See REQ-1114.
+    str_case: # See TEXT-5.
         - source:
             type: variable
             required: true
@@ -859,11 +859,11 @@ str_template_class:
 "#),
     ("schema_expression_window.yaml", r#"version: "1.0"
 
-# See REQ-1129.
+# See WINDOW-3.
 
 window_selection:
     type: [identifier, window_spec]
-    description: See REQ-1251.
+    description: See WINDOW-1.
 
 window_spec:
     - group_by:
@@ -877,11 +877,11 @@ window_spec:
         description: Predicate selecting rows (WINDOW-4).
 
 expressions:
-    row_number: # See REQ-1123.
+    row_number: # See WINDOW-6.
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-6).
-    rank: # See REQ-1124.
+    rank: # See WINDOW-6.
         - method:
             type: str
             default: competition
@@ -890,7 +890,7 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-6).
-    row_value: # See REQ-1125.
+    row_value: # See WINDOW-7.
         - source:
             type: variable
             required: true
@@ -902,7 +902,7 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-7).
-    locf: # See REQ-1239.
+    locf: # See WINDOW-8.
         - source:
             type: variable
             required: true
@@ -914,7 +914,7 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and optional row selection (WINDOW-8).
-    baseline_flag: # See REQ-1127.
+    baseline_flag: # See WINDOW-9.
         - date:
             type: variable
             required: true
@@ -941,7 +941,7 @@ expressions:
     ("schema_function.yaml", r#"version: "1.0"
 
 expressions:
-    function: # See REQ-1085.
+    function: # See FUNC-4.
         - name:
             type: identifier
             required: true
@@ -965,7 +965,7 @@ function_arg:
 "#),
     ("schema_metadata.yaml", r#"version: "1.0"
 
-# See REQ-1148.
+# See SUB-1.
 
 submission_dataset_class:
     - has_no_data:
@@ -1045,10 +1045,9 @@ submission_metadata_fields:
         required: false
         description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
-        type: str
+        type: column_role
         required: false
-        min_length: 1
-        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+        description: Role the column plays in its dataset (SUB-9).
     - data_type:
         type: define_data_type
         required: false
@@ -1087,7 +1086,7 @@ submission_metadata_fields:
         required: false
         description: Sponsor comment carried with the column definition.
 
-# See REQ-1157.
+# See SUB-20.
 
 submission_origin_class:
     - type:
@@ -1199,6 +1198,12 @@ core_designation:
     values: [Req, Exp, Perm, Cond]
     description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by family (SUB-10).
 
+column_role:
+    type: str
+    values: [Identifier, Topic, Timing, Grouping Qualifier, Result Qualifier,
+        Synonym Qualifier, Record Qualifier, Variable Qualifier, Rule]
+    description: One of the nine roles the SDTM model publishes (SUB-9).
+
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
@@ -1241,7 +1246,7 @@ dataset_subclass_name:
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
-# See REQ-1150.
+# See VALUE-1.
 
 column_type:
     type: str
@@ -1345,10 +1350,10 @@ dataset_verifications:
         - when:
             type: predicate
             required: false
-            description: See REQ-0383.
+            description: See CHECK-12.
         - require: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
-    row_count: # See REQ-1152.
+    row_count: # See CHECK-13.
         - id: {type: verification_id, required: false}
         - group_by: {type: "list[variable]", required: false}
         - filter: {type: predicate, required: false}
@@ -1438,9 +1443,8 @@ codelist_source_class:
     description: Codelists this source declares (CT-1).
 terminology_standard_class:
 - name:
-    type: str
+    type: standard_name
     required: true
-    min_length: 1
     description: Name of the published terminology (CT-2).
 - publishing_set:
     type: str
@@ -1686,7 +1690,7 @@ document_class:
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
-# See REQ-1150.
+# See VALUE-1.
 
 column_type:
     type: str
@@ -1852,7 +1856,7 @@ function_test_class:
 "#),
     ("schema_shared.yaml", r#"version: "1.0"
 
-# See REQ-1150.
+# See VALUE-1.
 
 column_type:
     type: str
@@ -2821,10 +2825,9 @@ submission_role_fields:
         required: false
         description: Whether every completed value must be present, resolved from keys, declaration and class (SUB-10) and enforced (SUB-11).
     - role:
-        type: str
+        type: column_role
         required: false
-        min_length: 1
-        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+        description: Role the column plays in its dataset (SUB-9).
 
 submission_metadata_fields:
     - fields_from: submission_role_fields
@@ -2987,6 +2990,12 @@ core_designation:
     values: [Req, Exp, Perm, Cond]
     description: Required, expected, conditionally required, or permissible in the dataset's standard, admitted by model (SUB-10).
 
+column_role:
+    type: str
+    values: [Identifier, Topic, Timing, Grouping Qualifier, Result Qualifier,
+        Synonym Qualifier, Record Qualifier, Variable Qualifier, Rule]
+    description: One of the nine roles the SDTM model publishes (SUB-9).
+
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
@@ -3143,12 +3152,6 @@ language_tag:
     type: str
     pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
     description: Language tag carried by every generated translated text.
-
-standard_name:
-    type: str
-    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
-        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
-    description: Standard name, in the exact case Define-XML 2.1 publishes.
 
 submission_section_class:
     - specs:
@@ -3643,9 +3646,8 @@ codelist_source_class:
 
 terminology_standard_class:
     - name:
-        type: str
+        type: standard_name
         required: true
-        min_length: 1
         description: Name of the published terminology (CT-2).
     - publishing_set:
         type: str
@@ -3736,6 +3738,12 @@ external_codelist_class:
         required: false
         min_length: 1
         description: Location the dictionary is published at.
+
+standard_name:
+    type: str
+    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
+        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
+    description: Standard name, in the exact case Define-XML 2.1 publishes.
 "#),
     ("schema_verification.yaml", r#"version: "1.0"
 

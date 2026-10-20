@@ -1,4 +1,5 @@
 //! Study dataset-name vocabulary from original normalized metadata only.
+use crate::ast;
 use crate::schema::{Document, DocumentNode as N};
 use std::collections::BTreeSet;
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -53,27 +54,19 @@ pub fn requested(document: &Document) -> bool {
                 .any(|entry| enabled(entry.node))
     })
 }
-/// Select only authored section specifications. Full Define/family admission is
-/// deliberately left with its existing composition use case (REQ-0908).
-pub fn references(document: &Document) -> Result<Vec<&str>, MetadataError> {
-    let locations = crate::submission_document::locate(document, document.root())
+/// Select only the specifications each section lists, in written order.
+/// Full Define/family admission is deliberately left with its existing
+/// composition use case (SUB-23).
+pub fn references(project: &ast::Project) -> Result<Vec<&str>, MetadataError> {
+    let declarations = project
+        .submission
+        .as_ref()
         .map_err(|_| MetadataError::Shape)?;
-    let mut references = Vec::new();
-    for &(_, section) in locations.sections() {
-        let specs = document
-            .field(section, "specs")
-            .ok_or(MetadataError::Shape)?;
-        let N::Sequence(specs) = &document.nodes()[specs] else {
-            return Err(MetadataError::Shape);
-        };
-        for &spec in specs {
-            let N::Text(written) = &document.nodes()[spec] else {
-                return Err(MetadataError::Shape);
-            };
-            references.push(written.as_str());
-        }
-    }
-    Ok(references)
+    Ok(declarations
+        .sections
+        .iter()
+        .flat_map(|section| section.specs.iter().map(|spec| spec.text.as_str()))
+        .collect())
 }
 
 pub trait Ports {
@@ -99,11 +92,11 @@ pub struct Captured<S> {
     pub specifications: Vec<S>,
 }
 pub fn capture<P: Ports>(
-    environment: &Document,
+    project: &ast::Project,
     declaring: &str,
     port: &mut P,
 ) -> Result<Captured<P::Specification>, Error<P::Error>> {
-    let references = references(environment).map_err(Error::Metadata)?;
+    let references = references(project).map_err(Error::Metadata)?;
     let mut specifications = Vec::new();
     for written in references {
         let specification = port

@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - columns.SEX.verifications
-requirement: REQ-0287
+rule: SCHEMA-12
 context:
   expected: list
   actual: mapping

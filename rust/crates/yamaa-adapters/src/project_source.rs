@@ -6,7 +6,7 @@ pub use application::{
 use std::sync::Arc;
 use yamaa_core::project_preparation as application;
 use yamaa_core::{
-    project_environment::Environment, project_function::Language, project_function_document,
+    ast, project_environment::Environment, project_function::Language, project_function_document,
 };
 pub type CaptureFailure<E> = application::CaptureFailure<E, CapturedDocument, Error>;
 pub type SourceFailure<E> = application::SourceFailure<E, CapturedDocument, Error>;
@@ -24,6 +24,8 @@ pub struct ProjectSchemas {
 
 #[derive(Debug)]
 pub struct PreparedEnvironment {
+    /// The project file lowered, with the environment file the host reads.
+    pub project: ast::Project,
     pub origins: SourceOrigins,
     pub root: CapturedDocument,
     pub environment_file: Option<CapturedDocument>,
@@ -35,6 +37,7 @@ pub struct PreparedEnvironment {
 /// execution metadata. Construction performs no recapture or activation.
 #[derive(Debug)]
 pub struct OwnedEnvironment {
+    project: Option<ast::Project>,
     origins: SourceOrigins,
     /// The project file path as preparation was given it.
     written: Option<String>,
@@ -50,6 +53,7 @@ pub struct OwnedEnvironment {
 /// capability. This contains no replacement definitions or activation state.
 #[derive(Debug)]
 pub struct CapturedEnvironment {
+    project: Option<ast::Project>,
     inventory_documents: Vec<crate::specification_source::PreparedDocument>,
     origins: SourceOrigins,
     written: Option<String>,
@@ -59,6 +63,10 @@ pub struct CapturedEnvironment {
     lock: Option<LockCapture>,
 }
 impl CapturedEnvironment {
+    /// The project file lowered, with the environment file the host reads.
+    pub fn project(&self) -> Option<&ast::Project> {
+        self.project.as_ref()
+    }
     pub fn inventory_documents(&self) -> &[crate::specification_source::PreparedDocument] {
         &self.inventory_documents
     }
@@ -91,6 +99,7 @@ impl CapturedEnvironment {
 impl PreparedEnvironment {
     pub fn into_owned(self) -> OwnedEnvironment {
         OwnedEnvironment {
+            project: Some(self.project),
             origins: self.origins,
             written: None,
             root: Some(self.root),
@@ -106,6 +115,7 @@ impl PreparedEnvironment {
 impl OwnedEnvironment {
     pub(crate) fn without_environment(host: Language) -> Self {
         Self {
+            project: None,
             origins: SourceOrigins {
                 functions: Vec::new(),
                 codelists: Vec::new(),
@@ -149,6 +159,7 @@ impl OwnedEnvironment {
         (
             self.environment,
             CapturedEnvironment {
+                project: self.project,
                 inventory_documents: self.inventory_documents,
                 origins: self.origins,
                 written: self.written,
@@ -161,6 +172,10 @@ impl OwnedEnvironment {
     }
     pub fn origins(&self) -> &SourceOrigins {
         &self.origins
+    }
+    /// The project file lowered, with the environment file the host reads.
+    pub fn project(&self) -> Option<&ast::Project> {
+        self.project.as_ref()
     }
     /// The caller-supplied project file.
     pub fn root(&self) -> &CapturedDocument {
@@ -245,6 +260,7 @@ pub(crate) fn adapt_preparation<E>(
 ) -> Result<PreparedEnvironment, Failure<E>> {
     match result {
         Ok(prepared) => Ok(PreparedEnvironment {
+            project: prepared.project,
             origins: prepared.origins,
             root: prepared.root,
             environment_file: prepared.environment_file,

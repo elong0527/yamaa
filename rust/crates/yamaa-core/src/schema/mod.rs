@@ -14,8 +14,10 @@ mod model;
 mod normalization;
 mod path_render;
 mod printable_data;
+mod spec_path;
 mod type_expression;
 mod validation;
+mod versioned_composition;
 mod versioned_layer;
 mod windows;
 
@@ -48,7 +50,10 @@ pub use normalization::{
 pub use path_render::{
     quoted_diagnostic_text, scalar_diagnostic_label, DIAGNOSTIC_UNICODE_VERSION,
 };
+pub(crate) use spec_path::SpecPath;
 pub use type_expression::{TypeError, TypeExpression, TypeNode, TypeResource};
 pub use validation::{DefaultDiagnostics, SchemaContext, SchemaDiagnostic, ValidationError};
+pub use versioned_composition::VersionedCompositionError;
+pub(crate) use versioned_composition::{shorthand_key, written_path};
 
 pub use windows::{ExpandedWindows, WindowReference};
