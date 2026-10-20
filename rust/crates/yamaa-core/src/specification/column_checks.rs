@@ -1,46 +1,90 @@
 //! Static column-check payload admission with findings deferred to column execution.
 use super::*;
 use crate::{
+    ast::{ColumnCheck, ColumnCheckKind, Constant, Literal},
     conversion::convert,
     dataset::Check,
     diagnostic::ConditionCode,
     value::{compare_present, Value},
 };
 
+/// Read one written scalar, as the document's literal leaves are read.
+fn constant(value: &Literal, path: &str) -> Result<Value, PrepareError> {
+    Ok(match value {
+        Literal::Missing => Value::Missing,
+        Literal::Text(value) => Value::Str(value.clone()),
+        Literal::Bool(value) => Value::Bool(*value),
+        Literal::Float(value) => Value::float(*value),
+        Literal::Int(value) => Value::Int(value.parse().map_err(|_| {
+            PrepareError::Invalid(vec![PreflightFinding::IntegerLiteralOverflow {
+                path: path.into(),
+                value: value.clone(),
+            }])
+        })?),
+        Literal::Date(_) | Literal::DateTime(_) | Literal::Unsupported => {
+            return Err(PrepareError::Unsupported(vec![UnsupportedFeature {
+                operation: "literal".into(),
+                path: path.into(),
+            }]))
+        }
+    })
+}
+
+/// The label a listed value takes in a finding: quoted text, or the scalar
+/// as the schema's diagnostics write it.
+fn label(value: &Literal) -> Option<String> {
+    let scalar = match value {
+        Literal::Text(text) => return Some(crate::schema::quoted_diagnostic_text(text)),
+        Literal::Missing => N::Null,
+        Literal::Bool(value) => N::Boolean(*value),
+        Literal::Int(text) => N::Integer(text.clone()),
+        Literal::Float(value) => N::Float(*value),
+        Literal::Date(_) | Literal::DateTime(_) | Literal::Unsupported => return None,
+    };
+    crate::schema::scalar_diagnostic_label(&scalar)
+}
+
+/// A range bound as written: none when omitted, `Err` when not a number.
+fn range_bound(
+    bound: Option<&Constant>,
+    path: &str,
+) -> Result<Result<Option<Value>, ()>, PrepareError> {
+    let Some(bound) = bound else {
+        return Ok(Ok(None));
+    };
+    let value = constant(&bound.value, path)?;
+    Ok(if matches!(value, Value::Int(_) | Value::Float(_)) {
+        Ok(Some(value))
+    } else {
+        Err(())
+    })
+}
+
 pub(super) fn prepare(
-    d: &Document,
-    op: &str,
-    payload: usize,
+    check: &ColumnCheck,
     path: &str,
     kind: ColumnType,
 ) -> Result<Check, PrepareError> {
     let invalid = |code, reason: String| Check::InvalidDeclaration { code, reason };
-    let kind_name = match kind {
-        ColumnType::Str => "str",
-        ColumnType::Int => "int",
-        ColumnType::Float => "float",
-        ColumnType::Date => "date",
-        ColumnType::DateTime => "datetime",
-    };
+    let kind_name = kind.name();
     let wrong_type = || {
         invalid(
             ConditionCode::VerificationColumnType,
             format!("a {kind_name} column does not admit this verification"),
         )
     };
-    match op {
-        "not_missing" => Ok(Check::NotMissing),
-        "matches" => {
-            let pattern = text(d, field(d, payload, "pattern")?)?;
+    match &check.kind {
+        ColumnCheckKind::NotMissing => Ok(Check::NotMissing),
+        ColumnCheckKind::Matches(pattern) => {
             if kind != ColumnType::Str {
                 return Ok(wrong_type());
             }
-            match crate::portable_regex::Pattern::compile(pattern) {
+            match crate::portable_regex::Pattern::compile(&pattern.text) {
                 Ok(pattern) => Ok(Check::Matches(pattern)),
                 Err(crate::portable_regex::CompileError::Invalid { .. }) => Ok(
                     Check::InvalidDiagnostic(crate::dataset_checks::invalid_pattern_diagnostic(
                         format!("{path}.pattern"),
-                        pattern.into(),
+                        pattern.text.clone(),
                     )),
                 ),
                 Err(crate::portable_regex::CompileError::Limit { resource, limit }) => {
@@ -53,9 +97,7 @@ pub(super) fn prepare(
                 }
             }
         }
-        "allowed_values" => {
-            let entries = sequence(d, field(d, payload, "values")?)?;
-
+        ColumnCheckKind::AllowedValues(entries) => {
             if entries.is_empty() {
                 return Ok(invalid(
                     ConditionCode::VerificationDeclarationRequired,
@@ -64,22 +106,15 @@ pub(super) fn prepare(
             }
             let mut accepted = Vec::new();
             let mut finding = None;
-            for (index, &id) in entries.iter().enumerate() {
-                let item_path = format!("{path}.values[{index}]");
-                let value = literal(d, id, &item_path)?;
+            for (index, entry) in entries.iter().enumerate() {
+                let value = constant(&entry.value, &format!("{path}.values[{index}]"))?;
                 match convert(&value, kind) {
                     Ok(value) if !matches!(value, Value::Missing) => accepted.push(value),
                     _ => {
-                        let label = match &d.nodes()[id] {
-                            N::Text(text) => crate::schema::quoted_diagnostic_text(text),
-                            node => {
-                                // Admitted documents contain finite scalar leaves.
-                                // Invalid carriers belong to schema admission, not
-                                // an unimplemented verification operation.
-                                crate::schema::scalar_diagnostic_label(node)
-                                    .ok_or(PrepareError::Internal)?
-                            }
-                        };
+                        // Admitted documents contain finite scalar leaves.
+                        // Invalid carriers belong to schema admission, not
+                        // an unimplemented verification operation.
+                        let label = label(&entry.value).ok_or(PrepareError::Internal)?;
                         if finding.is_none() {
                             finding = Some(invalid(
                                 ConditionCode::VerificationColumnType,
@@ -91,23 +126,10 @@ pub(super) fn prepare(
             }
             Ok(finding.unwrap_or(Check::AllowedValues(accepted)))
         }
-        "range" => {
+        ColumnCheckKind::Range { min, max } => {
             // Scan both raw bounds even if the column kind or earlier bound is invalid.
-            let bound = |name| -> Result<Result<Option<Value>, ()>, PrepareError> {
-                let Some(id) = d
-                    .field(payload, name)
-                    .filter(|&id| !matches!(d.nodes()[id], N::Null))
-                else {
-                    return Ok(Ok(None));
-                };
-                let value = literal(d, id, &format!("{path}.{name}"))?;
-                if !matches!(value, Value::Int(_) | Value::Float(_)) {
-                    return Ok(Err(()));
-                }
-                Ok(Ok(Some(value)))
-            };
-            let min = bound("min")?;
-            let max = bound("max")?;
+            let min = range_bound(min.as_ref(), &format!("{path}.min"))?;
+            let max = range_bound(max.as_ref(), &format!("{path}.max"))?;
             if !matches!(kind, ColumnType::Int | ColumnType::Float) {
                 return Ok(wrong_type());
             }
@@ -133,8 +155,8 @@ pub(super) fn prepare(
             }
             Ok(Check::Range { min, max })
         }
-        "max_length" => {
-            let max = literal(d, field(d, payload, "max")?, &format!("{path}.max"))?;
+        ColumnCheckKind::MaxLength(max) => {
+            let max = constant(&max.value, &format!("{path}.max"))?;
             if kind != ColumnType::Str {
                 return Ok(wrong_type());
             }
@@ -151,6 +173,8 @@ pub(super) fn prepare(
                 PrepareError::limit("verification_length", usize::MAX, None, None)
             })?))
         }
-        _ => Err(PrepareError::Internal),
+        // A known operation whose payload is outside the language; an
+        // unknown one was refused with the declaration vocabulary.
+        ColumnCheckKind::Unsupported(_) => Err(PrepareError::Internal),
     }
 }

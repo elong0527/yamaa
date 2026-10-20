@@ -179,6 +179,18 @@ impl Spec {
     pub fn render(&self, path: PathId, notation: Notation) -> String {
         self.paths.render(path, notation)
     }
+    /// The notation this spec's diagnostics cite paths in: today's for a
+    /// 0.5 file, P-CLR-2's for a 1.0 file.
+    pub fn notation(&self) -> Notation {
+        match self.header.surface {
+            Surface::V0_5 => Notation::V0_5,
+            Surface::V1 { .. } => Notation::V1,
+        }
+    }
+    /// A node's path as this spec's diagnostics cite it.
+    pub fn cite(&self, meta: Meta) -> String {
+        self.render(meta.path, self.notation())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -383,7 +395,8 @@ pub enum DatasetCheckKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RowCount {
-    pub group_by: Vec<Named>,
+    /// `None` when omitted; a written empty list is refused.
+    pub group_by: Option<Vec<Named>>,
     pub filter: Option<ExprId>,
     pub when: Option<ExprId>,
     pub min: Option<Constant>,

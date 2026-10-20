@@ -1124,7 +1124,8 @@ fn compose_values(
             continue;
         }
         let entries = values::entries(doc, base.node);
-        let static_findings = values::admit(&entries, name, |where_column| {
+        let written = entries.iter().map(|entry| (entry.id, &entry.clause));
+        let static_findings = values::admit(written, name, |where_column| {
             let declared = columns.iter().find(|c| c.name.value == where_column)?;
             Some(values::Declared {
                 output: output_columns.iter().any(|c| c == where_column),

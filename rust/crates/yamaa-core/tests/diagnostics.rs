@@ -443,6 +443,7 @@ mod diagnostics {
             reached.extend(preflight::output_reached());
             reached.extend(grammar::reached());
             reached.extend(inheritance::reached());
+            reached.extend(language::reached());
             reached.extend(grammar::predicate_reached());
             reached.extend(predicate_evaluation::reached());
             reached.extend(binding::reached());

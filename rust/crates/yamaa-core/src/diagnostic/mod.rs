@@ -231,6 +231,13 @@ conditions! {
     SchemaInvalidOperationCount => ("validation", "invalid_operation_count", Some("REQ-0286")),
     SchemaUnknownOperation => ("validation", "unknown_operation", Some("REQ-0286")),
     SchemaVersionMismatch => ("validation", "schema_version_mismatch", Some("REQ-0281")),
+    // The 1.x header (SCHEMA-2, LAYER-4, P-VER-1): a file a call reads, the file a
+    // referencing field names, and a parent layer.
+    HeaderLanguageVersion => ("validation", "unsupported_language_version", Some("SCHEMA-2")),
+    HeaderFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
+    ReferenceLanguageVersion => ("validation", "unsupported_language_version", Some("SCHEMA-2")),
+    ReferenceFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
+    SchemaUnknownFieldSince => ("validation", "unknown_field", Some("SCHEMA-2")),
     SchemaBareDerivationScalar => ("validation", "bare_derivation_scalar", Some("REQ-0320")),
     SchemaRedundantLongForm => ("validation", "redundant_long_form", Some("SCHEMA-15")),
     SchemaCaseItems => ("validation", "invalid_field_type", Some("REQ-0339")),
@@ -265,6 +272,8 @@ conditions! {
     InheritanceCycle => ("validation", "inheritance_cycle", Some("REQ-0655")),
     InheritanceParentVersion => ("validation", "schema_version_mismatch", Some("REQ-0656")),
     InheritanceEntryVersion => ("validation", "schema_version_mismatch", Some("REQ-0245")),
+    InheritanceParentLanguageVersion => ("validation", "unsupported_language_version", Some("LAYER-4")),
+    InheritanceParentFileType => ("validation", "unexpected_file_type", Some("LAYER-4")),
     PreflightUndeclaredRowColumn => ("validation", "undeclared_column", Some("REQ-0202")),
     PreflightDuplicateRowDefault => ("validation", "duplicate_derivation", Some("REQ-1260")),
     PreflightMissingRowDerivation => ("validation", "missing_derivation", Some("REQ-0200")),

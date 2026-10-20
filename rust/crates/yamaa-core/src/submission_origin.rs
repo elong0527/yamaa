@@ -1,8 +1,10 @@
 //! What a column's derivation proves about its declared origin. The derivation
 //! refutes an origin and never supplies one (SUB-19), and a Predecessor names
-//! the column it copies (SUB-16, SUB-20). Shared by the domain build and by
-//! composition; no study, host or data access.
+//! the column it copies (SUB-16, SUB-20). Shared by the domain build, which
+//! reads the typed tree, and by composition, which still reads each
+//! specification's document; no study, host or data access.
 use crate::{
+    ast::{self, ExprId, ExprKind, ScalarOp, Slot},
     expression::{self, NodeKind, Reducer},
     schema::{Document, DocumentNode as N},
     specification_submission_document::OriginType,
@@ -105,6 +107,28 @@ impl Reads {
             computing,
         }
     }
+    /// The same names, read from the typed tree.
+    pub(crate) fn of_spec(spec: &ast::Spec) -> Self {
+        let inputs: BTreeSet<String> = spec
+            .inputs
+            .iter()
+            .map(|input| input.name.name.clone())
+            .collect();
+        let mut plain = BTreeSet::new();
+        let mut computing = BTreeSet::new();
+        for item in &spec.intermediates {
+            if inputs.contains(&item.dataset.name) && item.bindings.is_empty() {
+                plain.insert(item.id.name.clone());
+            } else {
+                computing.insert(item.id.name.clone());
+            }
+        }
+        Self {
+            inputs,
+            plain,
+            computing,
+        }
+    }
     /// A read that looks no record up through a named intermediate that
     /// computes: a plain lookup copies a stored value, as a bare read does.
     fn bare(&self, name: &str) -> bool {
@@ -172,6 +196,11 @@ fn pivot(document: &Document, payload: usize) -> Option<String> {
             text(document, document.field(payload, "expr")?)?
         }
     };
+    only(expr)
+}
+
+/// The variable an aggregate formula pivots: exactly `ONLY(<variable>)`.
+fn only(expr: &str) -> Option<String> {
     let parsed = expression::parse(expr).ok()?;
     let root = parsed.ungroup(parsed.root());
     let NodeKind::Reduction {
@@ -301,6 +330,113 @@ fn nested(document: &Document, node: usize, reads: &Reads, strict: bool) -> bool
     }
 }
 
+/// The variable a reference or a structured source of the typed tree reads.
+fn variable_of(spec: &ast::Spec, expr: ExprId) -> Option<&str> {
+    let reference = match &spec.expr(expr).kind {
+        ExprKind::Source(read) => read.variable,
+        _ => expr,
+    };
+    match &spec.expr(reference).kind {
+        ExprKind::Ref(name) => Some(name.as_str()),
+        _ => None,
+    }
+}
+
+/// The one variable an aggregate of the typed tree pivots, as [`pivot`]
+/// reads it from a document.
+fn pivot_of(spec: &ast::Spec, aggregate: &ast::Aggregate) -> Option<String> {
+    if !aggregate.bindings.is_empty() {
+        return None;
+    }
+    match &spec.expr(aggregate.expr).kind {
+        ExprKind::Formula(formula) => only(&formula.text.text),
+        _ => None,
+    }
+}
+
+/// [`classify`] over a derivation of the typed tree.
+pub(crate) fn classify_expr(spec: &ast::Spec, expr: ExprId, reads: &Reads) -> DerivationKind {
+    let bare = |name: Option<&str>| match name {
+        Some(name) if reads.bare(name) => DerivationKind::Source,
+        _ => DerivationKind::Computed,
+    };
+    match &spec.expr(expr).kind {
+        ExprKind::Literal(_) => DerivationKind::Literal,
+        ExprKind::Odm(_) => DerivationKind::Source,
+        ExprKind::Ref(_) | ExprKind::Source(_) => bare(variable_of(spec, expr)),
+        // A pivot of long records to their one value reads it as stored.
+        ExprKind::Aggregate(aggregate) => bare(pivot_of(spec, aggregate).as_deref()),
+        _ if recode_expr(spec, expr, reads, false) => DerivationKind::Recode,
+        _ => DerivationKind::Computed,
+    }
+}
+
+/// [`recode`] over a derivation of the typed tree.
+fn recode_expr(spec: &ast::Spec, expr: ExprId, reads: &Reads, strict: bool) -> bool {
+    let reads_variable =
+        |expr: ExprId| variable_of(spec, expr).is_some_and(|name| reads.reads(name, strict));
+    match &spec.expr(expr).kind {
+        ExprKind::Scalar { op, operands, .. } => match op {
+            ScalarOp::Mapping { .. }
+            | ScalarOp::StrCase { .. }
+            | ScalarOp::StrPad { .. }
+            | ScalarOp::StrReplace { .. }
+            | ScalarOp::StrExtract { .. }
+            | ScalarOp::ToDate => operands
+                .iter()
+                .find(|operand| operand.slot == Slot::Source)
+                .is_some_and(|operand| reads_variable(operand.expr)),
+            // An ISO 8601 assembly of collected date parts.
+            ScalarOp::Dtc => {
+                !operands.is_empty() && operands.iter().all(|operand| reads_variable(operand.expr))
+            }
+            ScalarOp::StrTemplate { template } => {
+                StringTemplate::new(template.clone(), "origin".into(), None).is_ok_and(|parsed| {
+                    parsed.declaration_diagnostic().is_none()
+                        && parsed
+                            .identifiers()
+                            .iter()
+                            .all(|name| reads.reads(name, strict))
+                })
+            }
+            _ => false,
+        },
+        ExprKind::FirstAvailable { sources, .. } => {
+            !sources.is_empty() && sources.iter().all(|&source| reads_variable(source))
+        }
+        ExprKind::Case(arms) => {
+            !arms.is_empty()
+                && arms.iter().all(|arm| {
+                    let condition =
+                        arm.condition
+                            .is_none_or(|condition| match &spec.expr(condition).kind {
+                                ExprKind::Formula(formula) => expression::parse(&formula.text.text)
+                                    .is_ok_and(|parsed| {
+                                        parsed.identifiers().all(|name| reads.input(name))
+                                    }),
+                                _ => false,
+                            });
+                    condition && nested_expr(spec, arm.result, reads, true)
+                })
+        }
+        _ => false,
+    }
+}
+
+/// [`nested`] over an expression of the typed tree.
+fn nested_expr(spec: &ast::Spec, expr: ExprId, reads: &Reads, strict: bool) -> bool {
+    match &spec.expr(expr).kind {
+        ExprKind::Literal(_) | ExprKind::Odm(_) => true,
+        ExprKind::Ref(_) | ExprKind::Source(_) => {
+            variable_of(spec, expr).is_some_and(|name| reads.reads(name, strict))
+        }
+        ExprKind::Aggregate(aggregate) => {
+            pivot_of(spec, aggregate).is_some_and(|name| reads.reads(&name, strict))
+        }
+        _ => recode_expr(spec, expr, reads, strict),
+    }
+}
+
 /// The column a Predecessor description names (SUB-16): `<dataset>.<column>`,
 /// optionally followed by ` where ` and a condition written for reviewers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -383,6 +519,34 @@ pub(crate) fn copies(
         return Err(CopyFailure::Source);
     }
     if predecessor.selected && source.and_then(|s| document.field(s, "filter")).is_none() {
+        return Err(CopyFailure::Filter);
+    }
+    Ok(())
+}
+
+/// [`copies`] over a derivation of the typed tree.
+pub(crate) fn copies_expr(
+    spec: &ast::Spec,
+    expr: ExprId,
+    predecessor: &Predecessor<'_>,
+    reads: &Reads,
+) -> Result<(), CopyFailure> {
+    let filtered = match &spec.expr(expr).kind {
+        ExprKind::Source(read) => read.filter.is_some(),
+        _ => false,
+    };
+    let named = match &spec.expr(expr).kind {
+        ExprKind::Ref(_) | ExprKind::Source(_) => variable_of(spec, expr),
+        _ => None,
+    }
+    .and_then(|name| name.split_once('.'));
+    // A plain lookup is a bare read, but it reads no predecessor dataset.
+    if named != Some((predecessor.dataset, predecessor.column))
+        || !reads.inputs.contains(predecessor.dataset)
+    {
+        return Err(CopyFailure::Source);
+    }
+    if predecessor.selected && !filtered {
         return Err(CopyFailure::Filter);
     }
     Ok(())
