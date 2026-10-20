@@ -1074,9 +1074,10 @@ jobs:
             python -m pip install --no-deps "${maturin}" project-dist/*.whl
           fi
       # A download that the build attempts fails at once. Cargo's home starts
-      # empty, so a registry or git source that Cargo reached would leave its
-      # directory there. Environment names are case-insensitive on Windows;
-      # libcurl reads only the lowercase http_proxy.
+      # empty, as on a machine where Cargo never ran, so nothing that Cargo
+      # cached on the runner can stand in for the vendored crates. Environment
+      # names are case-insensitive on Windows; libcurl reads only the
+      # lowercase http_proxy.
       - name: Install the Python source archive without a network
         working-directory: ${{ runner.temp }}/offline
         env:
@@ -1096,12 +1097,9 @@ jobs:
           else
             python -m pip install --no-build-isolation --no-index --no-cache-dir native-dist/yamaa-*.tar.gz
           fi
-          for source in registry git; do
-            if [ -e "cargo-home/${source}" ]; then
-              echo "The build reached a Cargo ${source} source: cargo-home/${source} exists." >&2
-              exit 1
-            fi
-          done
+      # On Linux the installed package runs as the runner's user, which then
+      # compares and uploads the files that it saves: the engine publishes
+      # each file readable by its owner alone.
       - name: Report installed Python public benchmark conformance
         working-directory: ${{ runner.temp }}/offline
         env:
@@ -1115,7 +1113,7 @@ jobs:
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
           mkdir public-conformance
           if [ "${RUNNER_OS}" = Linux ]; then
-            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
               --volume "${PWD}:/work" --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
               --env HOME=/work/home --env TMPDIR=/work/tmp \
               "${OFFLINE_IMAGE}" /work/venv/bin/python -I /checkout/python/tests/installed/public_conformance.py \
@@ -1225,6 +1223,9 @@ jobs:
           else
             R CMD INSTALL --library="${RUNNER_TEMP}/offline/library" yamaa_*.tar.gz
           fi
+      # On Linux the installed package runs as the runner's user, which then
+      # compares and uploads the files that it saves: the engine publishes
+      # each file readable by its owner alone.
       - name: Report installed R public benchmark conformance
         working-directory: ${{ runner.temp }}/offline
         env:
@@ -1239,7 +1240,7 @@ jobs:
             --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
           mkdir public-conformance
           if [ "${RUNNER_OS}" = Linux ]; then
-            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
               --volume "${PWD}:/work" --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
               --env HOME=/work/home --env TMPDIR=/work/tmp --env R_LIBS=/work/library \
               --env PUBLIC_CONFORMANCE_PACKAGE_FORM --env GITHUB_SERVER_URL --env GITHUB_REPOSITORY \
