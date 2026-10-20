@@ -761,7 +761,7 @@ def _rust_group(stream, index):
     previous = tokens[index - 1].text if index else ""
     before = (
         previous == "+"
-        or (previous == "=" and tokens[index - 2].text == "+")
+        or (previous == "=" and index >= 2 and tokens[index - 2].text == "+")
         or (call and frame.name in RUST_PUSH_METHODS)
     )
     behind = after < len(tokens) and tokens[after].text == "+"
@@ -1311,27 +1311,25 @@ def r_extraction(text):
         return None
 
     used = set()
-    templates = set()
     for frame_index, frame in enumerate(stream.frames):
         if frame.kind != "call" or frame.close is None:
             continue
         if frame.name == "c":
             group = _r_vector(stream, frame)
-        elif frame.name in R_INTERPOLATING and frame.parent not in templates:
+        elif frame.name in R_INTERPOLATING:
             group = _r_paste(stream, frame)
         else:
             continue
         if group is None:
             continue
+        # Every string inside the call belongs to the group, a nested
+        # template's parts included.
         used.update(
             index
             for index in range(frame.open, frame.close)
-            if tokens[index].kind == "str" and stream.frame_of[index] == frame_index
+            if tokens[index].kind == "str"
         )
-        if group.interpolated:
-            # A template's own parts are listed with it, not again.
-            templates.add(frame_index)
-        elif frame.parent is not None:
+        if not group.interpolated and frame.parent is not None:
             group.name = hint(
                 frame.parent, stream.frames[frame.parent].arg_of(frame.open)
             )

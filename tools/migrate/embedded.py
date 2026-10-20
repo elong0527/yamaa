@@ -369,7 +369,7 @@ class Source:
             if group.name and not group.interpolated and group.role == "value"
         ]
         done = set()
-        for case in {group.scope for group in documents if not group.name}:
+        for case in sorted({group.scope for group in documents if not group.name}):
             inside = [group for group in named if group.scope[: len(case)] == case]
             members = [
                 group
@@ -381,16 +381,15 @@ class Source:
                 for group in inside
                 if group.name.endswith(".csv")
             }
-            names = {}
+            names, clash = {}, False
             for group in members:
                 name = file_name(group.name or f"{group.label or 'document'}.yaml")
-                kind = classify(Path(name), parse(self.readable(group)))
-                if kind != "environment" and name not in names:
-                    names[name] = group
+                if classify(Path(name), parse(self.readable(group))) == "environment":
+                    continue  # converted alone: a test source gains no function file (D8)
+                clash = clash or name in names
+                names[name] = group
             chosen = set(names.values())
-            if len(chosen) != len(members) or done & chosen:
-                continue
-            if len(names) < 2 and not inputs:
+            if clash or done & chosen or (len(names) < 2 and not inputs):
                 continue
             texts = {name: self.readable(group) for name, group in names.items()}
             try:

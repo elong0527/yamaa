@@ -257,6 +257,7 @@ class RTests(unittest.TestCase):
             'writeLines(c("schema_version: \'1.0\'", "domain: TEST", "keys: [ID]",\n'
             '  "intermediates:", "  - {id: FIRST, dataset: SRC, no_match: {literal: null}}"), "spec.yaml")\n'
             'writeLines(c("schema_version: \'1.0\'", paste0("domain: ", name)), path)\n'
+            'writeLines(c("a", paste0("{literal: 1}", x)), path)\n'
         )
         converted, result = run("t.R", source)
         lines = converted.splitlines()
@@ -266,8 +267,8 @@ class RTests(unittest.TestCase):
             )
         )
         self.assertIn('"  - {id: FIRST, dataset: SRC}"', lines[1])
-        self.assertEqual(lines[2], source.splitlines()[2])
-        self.assertEqual([note.line for note in notes(result, "interpolated")], [3])
+        self.assertEqual(lines[2:], source.splitlines()[2:])
+        self.assertEqual([note.line for note in notes(result, "interpolated")], [3, 4])
         (group,) = [
             group
             for group in sources.r_extraction(converted).groups
@@ -315,6 +316,21 @@ class FixtureTests(unittest.TestCase):
         self.assertIn("clear:\n  - intermediates.LOOK.absent", written["spec"])
         self.assertEqual(written["spec_paths"], ["intermediates.LOOK.absent"])
         self.assertEqual(converted, json.dumps({"cases": [written]}, indent=2) + "\n")
+
+    def test_an_environment_in_a_case_converts_alone(self):
+        environment = "schema_version: '1.0'\nlock: uv.lock\nfunctions: {}\n"
+        case = {
+            "spec": LOOKUP,
+            "inputs": {"src.csv": "ID,V\n1,2\n"},
+            "files": {"environment.yaml": environment},
+        }
+        converted, result = run(
+            "cases.json", json.dumps({"case": case}, indent=2) + "\n"
+        )
+        written = json.loads(converted)["case"]
+        self.assertIn("key: [ID]", written["spec"])
+        self.assertEqual(written["files"]["environment.yaml"], environment)
+        self.assertEqual({note.kind for note in result.notes}, {"D8"})
 
     def test_a_json_specification_keeps_its_layout(self):
         spec = values(SPEC)
@@ -458,8 +474,10 @@ class CorpusTests(unittest.TestCase):
             if other.name and other.scope[: len(group.scope)] == group.scope:
                 if other.name.endswith(".csv"):
                     inputs[embedded.file_name(other.name)] = other.text
-                elif embedded.parse(other.text) is not None:
-                    documents[embedded.file_name(other.name)] = other.text
+                elif (root := embedded.parse(other.text)) is not None:
+                    written = embedded.file_name(other.name)
+                    if embedded.classify(Path(written), root) != "environment":
+                        documents[written] = other.text
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for written, content in {**inputs, **documents}.items():
