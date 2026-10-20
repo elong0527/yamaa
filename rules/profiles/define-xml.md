@@ -579,8 +579,8 @@ order already presents them in it, and a second ordering could disagree.
 A codelist declaring `alias` carries an `Alias` child with
 `Context="nci:ExtCodeID"` after its items. The `ExternalCodeList` child carries
 `Dictionary`, `Version`, and `href` when declared. `SASFormatName` carries
-`format_name` as declared, and a `text` codelist's begins with `$`
-([CT-12](terminology.md#ct-12)).
+`format_name` as declared, which begins with `$` exactly when the codelist is
+`text` ([CT-12](terminology.md#ct-12)).
 
 <a id="define-21"></a>
 

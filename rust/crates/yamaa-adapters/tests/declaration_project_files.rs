@@ -1221,6 +1221,59 @@ mod declaration {
             }
         }
 
+        /// CT-12 holds on the 1.0 surface as on the 0.5 one: a codelist's
+        /// `format_name` begins with `$` exactly when the codelist is `text`,
+        /// whether the project file declares the source inline or lists a
+        /// codelist file, and the failure is reported where it is written.
+        #[test]
+        fn a_format_name_whose_dollar_sign_disagrees_with_its_data_type_fails_where_written() {
+            let study = Study::new();
+            let project = study.identity("project.yaml");
+            let codelists = study.identity("ct.yaml");
+            study.write(
+                "project.yaml",
+                &PROJECT.replace(
+                    "codelists: [ct.yaml]",
+                    "codelists:\n  - codelists: [{id: SEX, name: Sex, format_name: SEXF, items: [{value: F}, {value: M}]}]\n  - ct.yaml",
+                ),
+            );
+            study.write(
+                "ct.yaml",
+                "yamaa: \"1.0\"\ntype: codelists\ncodelists:\n  - {id: AGEGR1N, name: Age group, data_type: integer, format_name: $AGEGRN, items: [{value: 1}, {value: 2}]}\n  - {id: DOSE, name: Dose, data_type: float, format_name: DOSEF, items: [{value: 2.5}]}\n",
+            );
+            assert_eq!(
+                rows(&study.issues(Language::Python)),
+                [
+                    row(
+                        "value_not_permitted",
+                        "CT-12",
+                        "codelists[0].codelists[0].format_name",
+                        json!({
+                            "codelist": "SEX",
+                            "value": "SEXF",
+                            "data_type": "text",
+                            "source": project,
+                            "entry": project,
+                            "environment_path": "codelists[0]",
+                        }),
+                    ),
+                    row(
+                        "value_not_permitted",
+                        "CT-12",
+                        "codelists[0].format_name",
+                        json!({
+                            "codelist": "AGEGR1N",
+                            "value": "$AGEGRN",
+                            "data_type": "integer",
+                            "source": codelists,
+                            "entry": project,
+                            "environment_path": "codelists[1]",
+                        }),
+                    ),
+                ]
+            );
+        }
+
         /// Activation of the project's one function, refusing as told.
         #[derive(Default)]
         struct Activation {
