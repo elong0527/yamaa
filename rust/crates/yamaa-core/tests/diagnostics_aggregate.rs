@@ -1081,6 +1081,102 @@ mod diagnostics {
                     JsonValue::String("sdtm.specs[0].columns.VALUE.submission.codelist".into())
                 );
             }
+            /// DEFINE-9 and DEFINE-10: a terminology standard's identifier is
+            /// `CT_` and its publishing set. Sources that cite one standard
+            /// share its definition, a source the document binds nothing from
+            /// cites none (CT-10), and another release under that publishing
+            /// set is refused at its own source instead of being numbered.
+            #[test]
+            fn sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused(
+            ) {
+                let source = |version: &str, list: &str| {
+                    rt::Source {
+                        standard: Some(rt::Standard {
+                            name: "CDISC/NCI".into(),
+                            publishing_set: "SDTM".into(),
+                            version: version.into(),
+                        }),
+                        codelists: vec![rt::Codelist {
+                            id: list.into(),
+                            name: format!("Independent list {list}"),
+                            data_type: rt::CodelistType::Text,
+                            extensible: false,
+                            alias: None,
+                            format_name: None,
+                            external: None,
+                            items: Some(vec![rt::Item {
+                                value: Value::Str("X".into()),
+                                decode: None,
+                                rank: None,
+                                alias: None,
+                                extended: false,
+                            }]),
+                        }],
+                    }
+                    .root()
+                };
+                let bound = |name: &str, list: &str| {
+                    let mut column = column(name);
+                    column.set(&["submission", "codelist"], Tree::text(list));
+                    column
+                };
+                let mut spec = specification();
+                spec.set(
+                    &["columns"],
+                    Tree::list(vec![bound("VALUE", "FIRST"), bound("OTHER", "SECOND")]),
+                );
+                spec.set(
+                    &["output", "columns"],
+                    Tree::list(vec![Tree::text("VALUE"), Tree::text("OTHER")]),
+                );
+                let compose = |sources| {
+                    one(
+                        project(),
+                        spec.clone(),
+                        &ct::Catalogue::admit(sources).unwrap(),
+                    )
+                };
+                let (cited, later) = ("2026-03-27", "2026-06-26");
+                let study = compose(vec![
+                    source(cited, "FIRST"),
+                    source(later, "UNBOUND"),
+                    source(cited, "SECOND"),
+                ])
+                .unwrap();
+                let xml = String::from_utf8(submission_xml::render(&study).unwrap()).unwrap();
+                assert_eq!(
+                    xml.matches("<def:Standard OID=\"STD.CT_SDTM\"").count(),
+                    1,
+                    "{xml}"
+                );
+                assert_eq!(
+                    xml.matches("def:StandardOID=\"STD.CT_SDTM\"").count(),
+                    2,
+                    "{xml}"
+                );
+                assert!(!xml.contains(later), "{xml}");
+                let findings = compose(vec![
+                    source(cited, "FIRST"),
+                    source(later, "UNBOUND"),
+                    source(later, "SECOND"),
+                ])
+                .unwrap_err();
+                assert_eq!(findings.len(), 1, "{findings:?}");
+                let definition = findings[0].definition();
+                assert_eq!(
+                    (definition.phase, definition.condition, definition.rule),
+                    (
+                        "validation",
+                        "duplicate_define_identifier",
+                        Some("DEFINE-10")
+                    )
+                );
+                assert_eq!(findings[0].path, "codelists[2].standard.publishing_set");
+                assert_eq!(
+                    findings[0].context,
+                    [("detail".into(), JsonValue::String("STD.CT_SDTM".into()))].into()
+                );
+            }
             #[test]
 
             fn transport_refuses_oversized_geometry_before_reading_cells() {
