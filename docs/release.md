@@ -19,6 +19,11 @@ open gates live in GitHub issues and pull requests, not here.
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
   checks with R-devel, R-release and R 4.4 and the minimum Rust. The floor
   follows an audit of the R C API that the binding calls.
+- R source builds with R 4.6.1 on Linux aarch64. There, with the network
+  disabled, native qualification builds and installs the R source package
+  that a release publishes and runs the conformance corpus with it: its
+  `native-offline-source` job. No `R CMD check --as-cran` runs on aarch64,
+  and no lane there uses R 4.4 or the minimum Rust.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49),
   free-threaded Python, musl and R binary packages are not supported. R is
   distributed as a GitHub source tarball, and from 1.0.0 on CRAN, as
@@ -580,9 +585,11 @@ wheel in its `.dist-info/licenses/` directory, the Python source archive at its
 root, and the R source package in `inst/`, which R installs at the package
 root. `LICENSE.txt` is the project's MIT license. `LICENSE-THIRD-PARTY.txt`
 reproduces the license, copyright and NOTICE texts of every third-party crate
-in the normal and build dependency closure of the shipped Python and R
-binding crates, for every platform, and names the license relied on where a
-crate offers a choice. It also reproduces the notice that the Rust project
+in the normal and build dependency closure of its host's binding crate, for
+every platform, and names the license relied on where a crate offers a
+choice: the Python packages' copy covers the Python binding's crates, and the
+R package's copy the R binding's, which are exactly the crates that the R
+source package bundles. It also reproduces the notice that the Rust project
 ships for the standard library of the pinned toolchain,
 `share/doc/rust/COPYRIGHT-library.html`, because the native extension links
 that library. `LICENSE-READSTAT.txt`,
@@ -594,14 +601,17 @@ field names these files. The Python License-Expression,
 project, the crates linked into the wheels and the standard library, which is
 relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
-`tools.packaging.generate_third_party_notices` generates the crate notices
-from `rust/Cargo.lock` and the standard library section from the toolchain
-that `rust/rust-toolchain.toml` pins, and it derives that expression. The
-repository check fails when the locked graph gains or loses a crate without a
-matching notice entry, when `rustc` in `rust/` is not the pinned toolchain, and
-when the committed section differs from that toolchain's notice.
-Native qualification and the release selector require every wheel and source
-package to carry each notice unchanged.
+`tools.packaging.generate_third_party_notices` generates each host's crate
+notices from `rust/Cargo.lock` and the standard library section from the
+toolchain that `rust/rust-toolchain.toml` pins, and it derives that
+expression from the Python binding's linked crates. The repository check
+fails when a binding's locked graph gains or loses a crate without a matching
+notice entry in its host's copy, when `rustc` in `rust/` is not the pinned
+toolchain, and when the committed section differs from that toolchain's
+notice. Staging the R source package fails while its notices name a crate
+that it does not bundle, or miss one that it does. Native qualification and
+the release selector require every wheel and source package to carry its own
+host's notices unchanged.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the
@@ -610,21 +620,27 @@ with the notices. It lists every package of the host's trimmed lock,
 including the crates that only build scripts and procedural macros use and
 those that no supported target compiles, and the C code that those crates
 compile from sources that they carry: ReadStat in `yamaa-adapters` and the
-zstd library that `zstd-sys` bundles. It is tab-separated text with a header
-row and one row per component, giving its name and version; its license, the
-SPDX expression that a crate's manifest declares, with Cargo's legacy `/`
-written as `OR`, or the C code's upstream license; its source, `crates.io`
-or the component's directory in this repository, with the upstream
-repository and commit of vendored code, or the crate that bundles it; and its
-purpose, from `tools/packaging/crate_purposes.toml` for a crate or from
-`tools/packaging/generate_component_inventory.py` for the C code. It records
-no digests. Packages that pip or R install beside yamaa, such as Polars, are
-not among its components. `tools.packaging.generate_component_inventory`
-writes both inventories, and the repository check and native qualification
-fail while one differs from what its host's trimmed lock, the crates'
-manifests, the purposes and the vendored sources' provenance give. The
-package notice checks require each package to carry its own host's inventory
-unchanged.
+zstd library that `zstd-sys` bundles. The wheels' inventory also lists
+`rust-std`, the Rust standard library of the pinned toolchain that builds
+them, which they link. A source archive links the standard library of
+whatever toolchain builds it, so the Python source archive carries the
+wheels' inventory without that row, and the R inventory has none. Each
+inventory is tab-separated text with a header row and one row per component,
+giving its name and version; its license, the SPDX expression that a crate's
+manifest declares, with Cargo's legacy `/` written as `OR`, or the upstream
+license of the C code or the standard library; its source, `crates.io` or
+the component's directory in this repository, with the upstream repository and
+commit of vendored code, the crate that bundles it, or the Rust repository at
+the release's tag; and its purpose, from `tools/packaging/crate_purposes.toml`
+for a crate or from `tools/packaging/generate_component_inventory.py` for the
+C code and the standard library. It records no digests. Packages that pip or
+R install beside yamaa, such as Polars, are not among its components.
+`tools.packaging.generate_component_inventory` writes both inventories, and
+the repository check and native qualification fail while one differs from
+what its host's trimmed lock, the crates' manifests, the purposes, the
+vendored sources' provenance and the pinned toolchain give. The package
+notice checks require each package to carry its own host's inventory
+unchanged, the Python source archive's without the standard library row.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary

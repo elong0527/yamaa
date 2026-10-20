@@ -19,6 +19,7 @@ import yaml
 from tools.ci import publish_release as publisher
 from tools.ci import release_assets
 from tools.ci import select_release_artifacts as release
+from tools.packaging import generate_component_inventory as inventory
 from tools.packaging import release_identity
 from tools.packaging.release_identity import Identity
 from tools.paths import ROOT
@@ -163,7 +164,14 @@ def example_name(asset, identity):
 def downloads(root, identity=IDENTITY):
     """Write each release artifact as the native run uploads it."""
     licenses = {name: (ROOT / "python" / name).read_bytes() for name in NOTICES}
-    # The R package's notices are the same, apart from its component inventory.
+    # The Python source archive's inventory leaves out the standard library
+    # that the wheels link.
+    wheels = licenses[inventory.NAME].decode("utf-8")
+    sdist_licenses = dict(
+        licenses, **{inventory.NAME: inventory.source_inventory(wheels).encode()}
+    )
+    # The R package's notices are the same, apart from its third-party notices
+    # and component inventory, which list its own crates.
     r_licenses = {name: (ROOT / "R/yamaa/inst" / name).read_bytes() for name in NOTICES}
     python, r = identity.python, identity.r
     metadata = f"Metadata-Version: 2.4\nName: yamaa\nVersion: {python}\n\n".encode()
@@ -190,7 +198,7 @@ def downloads(root, identity=IDENTITY):
                     f"yamaa-{python}/rust/vendor/saphyr-parser/LICENSE": b"vendored\n",
                     **{
                         f"yamaa-{python}/{name}": payload
-                        for name, payload in licenses.items()
+                        for name, payload in sdist_licenses.items()
                     },
                 },
             )

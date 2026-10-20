@@ -192,11 +192,18 @@ class Graph:
 
 
 def shipped_graph(root):
-    """Two shipped roots with linked, build-only, macro-only and dev-only crates."""
+    """Two shipped roots with linked, build-only, macro-only and dev-only crates;
+    each root also links a crate that the other does not."""
     graph = Graph(root)
     python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
     r = graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
     core = graph.crate("yamaa-core", "0.4.0", "MIT AND Unicode-3.0", member=True)
+    extendr = graph.crate(
+        "extendr-api",
+        "0.9.0",
+        "BSD-3-Clause",
+        {"LICENSE": BSD.replace("Example, Inc.", "extendr")},
+    )
     arrow = graph.crate(
         "arrow",
         "57.3.0",
@@ -247,6 +254,7 @@ def shipped_graph(root):
     graph.depend(python, pyo3)
     graph.depend(python, builder, kind="build")
     graph.depend(r, core)
+    graph.depend(r, extendr)
     graph.depend(r, tester, kind="dev")
     graph.depend(core, arrow)
     graph.depend(core, derive)
@@ -445,28 +453,39 @@ class LockedClosure(unittest.TestCase):
 
     def test_closure_follows_shipped_edges_and_linked_closure_skips_build_tools(self):
         metadata = self.graph.metadata()
+        shared = [
+            "arrow",
+            "derive",
+            "flatbuffers",
+            "tiny-keccak",
+            "yamaa-saphyr-parser",
+        ]
+        # Each binding's closure, without the other binding's crates or the R
+        # binding's dev-dependency.
+        for crate, own in (
+            ("yamaa-python", ["cc", "pyo3", "windows-sys"]),
+            ("yamaa-r", ["extendr-api"]),
+        ):
+            with self.subTest(crate=crate):
+                self.assertEqual(
+                    [
+                        package["name"]
+                        for package in notices.third_party(metadata, crate)
+                    ],
+                    sorted(shared + own),
+                )
+        linked = notices.dependency_closure(metadata, "yamaa-python", linked=True)
         self.assertEqual(
-            [package["name"] for package in notices.third_party(metadata)],
-            [
-                "arrow",
-                "cc",
-                "derive",
-                "flatbuffers",
-                "pyo3",
-                "tiny-keccak",
-                "windows-sys",
-                "yamaa-saphyr-parser",
-            ],
-        )
-        linked = notices.dependency_closure(metadata, linked=True)
-        self.assertEqual(
-            self.names(linked) - {"yamaa-python", "yamaa-r", "yamaa-core"},
+            self.names(linked) - {"yamaa-python", "yamaa-core"},
             {"arrow", "flatbuffers", "pyo3", "windows-sys", "yamaa-saphyr-parser"},
         )
+        with self.assertRaisesRegex(ValueError, "the shipped crate yamaa-cli once"):
+            notices.dependency_closure(metadata, "yamaa-cli")
 
     def test_texts_follow_the_relied_license_and_fall_back_to_spdx(self):
         selected = {
-            notice.name: notice for notice in notices.notices_for(self.graph.metadata())
+            notice.name: notice
+            for notice in notices.notices_for(self.graph.metadata(), "yamaa-python")
         }
         pyo3 = selected["pyo3"]
         self.assertEqual(pyo3.relied, ("MIT",))
@@ -483,11 +502,12 @@ class LockedClosure(unittest.TestCase):
             [name for name, _ in parser.texts],
             ["LICENSE", "LICENSES/ChenYuheng-MIT", "LICENSES/Ethiraric-MIT"],
         )
+        # The R binding's BSD-3-Clause crate is not linked into the wheels.
         self.assertEqual(
             notices.license_expression(self.graph.metadata(), selected.values()),
             "MIT AND Apache-2.0 AND Unicode-3.0",
         )
-        rendered = notices.render(list(selected.values()), LIBRARY)
+        rendered = notices.render(list(selected.values()), LIBRARY, "python")
         # pyo3 and cc ship the same text: it prints once, under both crates.
         self.assertEqual(rendered.count("Copyright (c) 2020 PyO3"), 1)
         self.assertIn("cc 1.7.0 (LICENSE-MIT), pyo3 0.27.2 (LICENSE-MIT)", rendered)
@@ -538,10 +558,10 @@ class LockedClosure(unittest.TestCase):
             },
         )
         graph.depend(python, zstd)
-        (notice,) = notices.notices_for(graph.metadata())
+        (notice,) = notices.notices_for(graph.metadata(), "yamaa-python")
         self.assertEqual(notice.relied, ("BSD-3-Clause",))
         self.assertEqual([name for name, _ in notice.texts], ["zstd/LICENSE"])
-        rendered = notices.render([notice], LIBRARY)
+        rendered = notices.render([notice], LIBRARY, "python")
         self.assertIn("Copyright (c) 2016 Meta Platforms, Inc.", rendered)
         self.assertNotIn("GNU GENERAL PUBLIC LICENSE", rendered)
 
@@ -585,14 +605,15 @@ class LockedClosure(unittest.TestCase):
         graph.depend(python, lending)
         graph.depend(python, borrowing)
         selected = {
-            notice.name: notice for notice in notices.notices_for(graph.metadata())
+            notice.name: notice
+            for notice in notices.notices_for(graph.metadata(), "yamaa-python")
         }
         self.assertEqual(
             selected["alloc-stdlib"].texts,
             (("LICENSE of alloc-no-stdlib 2.0.4", BSD.replace("Example", "Dropbox")),),
         )
         self.assertEqual(selected["alloc-stdlib"].fallbacks, ())
-        rendered = notices.render(list(selected.values()), LIBRARY)
+        rendered = notices.render(list(selected.values()), LIBRARY, "python")
         self.assertIn("    Texts: [1] LICENSE of alloc-no-stdlib 2.0.4\n", rendered)
         self.assertIn(
             "[1] Shipped by: alloc-no-stdlib 2.0.4 (LICENSE),\n"
@@ -602,16 +623,16 @@ class LockedClosure(unittest.TestCase):
         self.assertNotIn("<owner>", rendered)
         graph.packages[borrowing]["repository"] = "https://github.com/example/other"
         with self.assertRaisesRegex(ValueError, "must ship once, from the same"):
-            notices.notices_for(graph.metadata())
+            notices.notices_for(graph.metadata(), "yamaa-python")
         graph.packages[borrowing]["repository"] = repository
         directory = Path(graph.packages[borrowing]["manifest_path"]).parent
         (directory / "LICENSE").write_text(BSD)
         with self.assertRaisesRegex(ValueError, "drop it from SHARED_TEXTS"):
-            notices.notices_for(graph.metadata())
+            notices.notices_for(graph.metadata(), "yamaa-python")
 
     def test_the_standard_library_section_follows_the_locked_crates(self):
-        notice = notices.notices_for(self.graph.metadata())
-        rendered = notices.render(notice, LIBRARY)
+        notice = notices.notices_for(self.graph.metadata(), "yamaa-python")
+        rendered = notices.render(notice, LIBRARY, "python")
         crates, _, rest = rendered.partition(
             "\nRust standard library\n---------------------\n"
         )
@@ -648,18 +669,26 @@ class LockedClosure(unittest.TestCase):
             notices.check(metadata, changed)[1],
             [
                 f"{relative}/LICENSE-THIRD-PARTY.txt: differs from the notices "
-                "generated from rust/Cargo.lock and the Rust 1.99.1 toolchain"
-                for relative in ("python", "R/yamaa/inst")
+                f"generated for {crate} from rust/Cargo.lock and the Rust 1.99.1 "
+                "toolchain"
+                for relative, crate in (
+                    ("python", "yamaa-python"),
+                    ("R/yamaa/inst", "yamaa-r"),
+                )
             ],
         )
         gained = self.graph.crate("snap", "1.1.2", "BSD-3-Clause", {"COPYING": BSD})
         self.graph.depend("yamaa-core@0.4.0", gained)
         errors = notices.check(self.graph.metadata(), LIBRARY)[1]
-        self.assertIn(
-            "python/LICENSE-THIRD-PARTY.txt: no entry for snap 1.1.2, which the "
-            "locked graph ships",
-            errors,
-        )
+        for relative, crate in (
+            ("python", "yamaa-python"),
+            ("R/yamaa/inst", "yamaa-r"),
+        ):
+            self.assertIn(
+                f"{relative}/LICENSE-THIRD-PARTY.txt: no entry for snap 1.1.2, which "
+                f"the locked graph of {crate} ships",
+                errors,
+            )
         self.assertIn(
             "python/pyproject.toml: license must be 'MIT AND Apache-2.0 AND "
             "BSD-3-Clause AND Unicode-3.0' to cover the linked crates, not "
@@ -674,13 +703,67 @@ class LockedClosure(unittest.TestCase):
         errors = notices.check(self.graph.metadata(), LIBRARY)[1]
         self.assertIn(
             "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: lists arrow 57.3.0, which the "
-            "locked graph no longer ships",
+            "locked graph of yamaa-r does not ship",
             errors,
         )
         self.assertIn(
             "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: differs from the notices "
-            "generated from rust/Cargo.lock and the Rust 1.99.1 toolchain",
+            "generated for yamaa-r from rust/Cargo.lock and the Rust 1.99.1 "
+            "toolchain",
             errors,
+        )
+
+    def test_each_host_lists_only_the_crates_of_its_binding(self):
+        metadata = self.graph.metadata()
+        selected = notices.write(metadata, LIBRARY)
+        python = (notices.PYTHON / "LICENSE-THIRD-PARTY.txt").read_text()
+        r = (notices.R_INST / "LICENSE-THIRD-PARTY.txt").read_text()
+        shared = {
+            ("arrow", "57.3.0"),
+            ("derive", "1.0.0"),
+            ("flatbuffers", "25.12.19"),
+            ("tiny-keccak", "2.0.2"),
+            ("yamaa-saphyr-parser", "0.2.1"),
+        }
+        python_only = {("cc", "1.7.0"), ("pyo3", "0.27.2"), ("windows-sys", "0.61.2")}
+        self.assertEqual(notices.committed_entries(python), shared | python_only)
+        self.assertEqual(
+            notices.committed_entries(r), shared | {("extendr-api", "0.9.0")}
+        )
+        self.assertEqual(
+            {host: len(found) for host, found in selected.items()},
+            {"python": 8, "r": 6},
+        )
+        for text, packages, crate in (
+            (python, "The yamaa Python wheels link", "yamaa-python"),
+            (r, "The installed yamaa R package links", "yamaa-r"),
+        ):
+            flat = " ".join(text.split())
+            self.assertIn(f"{packages} third-party Rust crates", flat)
+            self.assertIn(f"closure of the shipped crate {crate}, for every", flat)
+            # Both hosts link the standard library and reproduce its notice.
+            self.assertIn("Crate: vex-sdk 0.27.1\n", text)
+        # Only the copy whose crates ship a text reproduces it.
+        self.assertNotIn("Copyright (c) 2020 PyO3", r)
+        self.assertNotIn("Copyright (c) 2016 extendr", python)
+        # An R package copy that names the Python binding's crates is stale.
+        (notices.R_INST / "LICENSE-THIRD-PARTY.txt").write_text(python)
+        lists = (
+            "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: lists {}, which the locked "
+            "graph of yamaa-r does not ship"
+        )
+        self.assertEqual(
+            notices.check(metadata, LIBRARY)[1],
+            [
+                "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: no entry for extendr-api "
+                "0.9.0, which the locked graph of yamaa-r ships",
+                lists.format("cc 1.7.0"),
+                lists.format("pyo3 0.27.2"),
+                lists.format("windows-sys 0.61.2"),
+                "R/yamaa/inst/LICENSE-THIRD-PARTY.txt: differs from the notices "
+                "generated for yamaa-r from rust/Cargo.lock and the Rust 1.99.1 "
+                "toolchain",
+            ],
         )
 
     def test_package_copies_must_match_their_sources(self):
@@ -704,11 +787,16 @@ class LockedClosure(unittest.TestCase):
         ):
             self.assertIn(expected, errors)
 
-    def test_only_the_component_inventory_differs_between_the_hosts(self):
-        # Each host's packages carry the inventory of their own bundle, which
-        # tools.packaging.generate_component_inventory checks.
+    def test_only_the_notices_and_the_component_inventory_differ_between_hosts(self):
+        # Each host's packages carry the notices and the inventory of their own
+        # crates; tools.packaging.generate_component_inventory checks the
+        # inventories.
         metadata = self.graph.metadata()
         notices.write(metadata, LIBRARY)
+        self.assertNotEqual(
+            (notices.PYTHON / "LICENSE-THIRD-PARTY.txt").read_bytes(),
+            (notices.R_INST / "LICENSE-THIRD-PARTY.txt").read_bytes(),
+        )
         self.project(
             license="MIT AND Apache-2.0 AND Unicode-3.0",
             files=(

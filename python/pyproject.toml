@@ -12,8 +12,9 @@ requires-python = ">=3.12"
 # also link Apache-2.0, BSD-3-Clause and Zlib crates.
 # tools.packaging.generate_third_party_notices derives this expression.
 license = "MIT AND Apache-2.0 AND BSD-3-Clause AND Unicode-3.0 AND Zlib"
-# The component inventory, COMPONENTS.tsv, ships beside the notices; the R
-# package's copy lists the R bundle's components instead.
+# LICENSE-THIRD-PARTY.txt and the component inventory, COMPONENTS.tsv, list
+# the Python binding's components; the R package's copies list the R
+# binding's. The source archive's inventory leaves out the wheels' rust-std.
 license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt", "LICENSE-UNICODE.txt", "LICENSE-READSTAT.txt", "LICENSE-YAML.txt", "COMPONENTS.tsv"]
 authors = [
   { name = "Yilong Zhang", email = "elong0527@gmail.com" },

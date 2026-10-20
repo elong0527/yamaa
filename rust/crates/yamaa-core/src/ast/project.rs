@@ -5,9 +5,11 @@
 //! environment file per host language; the one its host reads is lowered
 //! into the host's project root: its lock into that language's entry of
 //! [`Project::environments`] and its definitions into
-//! [`Project::functions`], where a 1.0 project writes them itself. An
-//! inline definition or codelist source is a root of its own, with its own
-//! arena, inside its declaration.
+//! [`Project::functions`]. A 1.0 project writes both itself: `functions`
+//! lists function files, each naming its own function with a callable for
+//! each host language, and `environments.<host>.lock` holds each host's lock
+//! (D8). An inline definition or codelist source is a root of its own, with
+//! its own arena, inside its declaration.
 //!
 //! Values are held as the engine reads them: a front end converts each
 //! written scalar of a definition or a codelist and reports one it cannot,
@@ -67,10 +69,12 @@ pub struct SubmissionRefused;
 pub struct HostEnvironment {
     pub language: Language,
     /// 0.5: the environment file the language key names, relative to the
-    /// project file. Its lock and function paths resolve from that file.
+    /// project file. Its lock and function paths resolve from that file. A
+    /// 1.0 project has no environment file.
     pub file: Option<Text>,
     /// The packaging lock the installed called packages are verified
-    /// against (FUNC-3); in 0.5 the linked environment file's `lock`.
+    /// against (FUNC-3): in 1.0 `environments.<host>.lock`, relative to the
+    /// project file; in 0.5 the linked environment file's `lock`.
     pub lock: Option<Text>,
     pub meta: Meta,
 }
@@ -79,7 +83,7 @@ pub struct HostEnvironment {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDeclaration {
     /// The logical name a 0.5 environment file keys the definition by; a
-    /// function file names its own function.
+    /// function file, which a 1.0 project lists, names its own function.
     pub key: Option<Named>,
     pub source: FunctionSource,
     pub meta: Meta,
@@ -89,7 +93,8 @@ pub struct FunctionDeclaration {
 pub enum FunctionSource {
     /// A definition written in place, as a 0.5 environment file may.
     Inline(Box<Function>),
-    /// A function file, relative to the file that declares it.
+    /// A function file, relative to the file that declares it: the 0.5
+    /// environment file, or the 1.0 project file.
     File(Text),
 }
 
@@ -112,7 +117,7 @@ pub enum CodelistSource {
 /// in a 0.5 environment file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Function {
-    /// A function file's own header; a 0.5 definition has none.
+    /// A 1.0 function file's own header; a 0.5 definition has none.
     pub header: Option<Header>,
     pub name: Named,
     pub description: Text,
@@ -122,8 +127,9 @@ pub struct Function {
     pub may_return_missing: bool,
     /// Decimal places at which numeric test results are compared (FUNC-13).
     pub comparison_decimals: i64,
-    /// The callable each host language binds (FUNC-8). A 0.5 definition
-    /// writes one, for the language of the environment file declaring it.
+    /// The callable each host language binds (FUNC-8): a 1.0 function file
+    /// writes one for `python`, `r` or both, and a 0.5 definition one, for
+    /// the language of the environment file declaring it.
     pub implementations: Vec<Implementation>,
     /// Activation runs these before any study data is read (FUNC-11).
     pub tests: Vec<FunctionTest>,
@@ -174,7 +180,8 @@ pub struct FunctionTest {
 /// project file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Codelists {
-    /// A codelist file's own header; 0.5 sources have none.
+    /// A 1.0 codelist file's own header; a source written in a project
+    /// file, and every 0.5 source, has none.
     pub header: Option<Header>,
     /// The published terminology the codelists are drawn from; a source
     /// without one is sponsor-defined (CT-2).
@@ -319,6 +326,8 @@ pub struct ImplementationGuide {
 pub enum GuideStatus {
     Draft,
     Final,
+    /// Admitted by a 1.0 project file only (P-STD-1); no 0.5 form.
+    Provisional,
 }
 
 impl GuideStatus {
@@ -327,6 +336,7 @@ impl GuideStatus {
         match self {
             Self::Draft => "Draft",
             Self::Final => "Final",
+            Self::Provisional => "Provisional",
         }
     }
 }
