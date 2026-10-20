@@ -103,6 +103,10 @@ tables in `tools/packaging/generate_third_party_notices.py`.
 Run `make help` at the repository root for prerequisites, configuration variables
 and supported targets. Its inventory is the command reference. Set
 `CARGO_TARGET_DIR` when separate worktrees need independent Rust build output.
+The R package's build ignores it: `make test-r` installs the package twice,
+each time building the engine inside the package, unless
+`YAMAA_R_CARGO_TARGET_DIR` names an absolute directory for both installations
+to share, as CI's `r` job does.
 After Rust changes, rerun `make setup`: it rebuilds the Python extension whenever
 a file listed under `tool.uv.cache-keys` in `python/pyproject.toml` changes.
 

@@ -503,18 +503,26 @@ CRAN's guidance asks. It looks for `cargo` and `rustc` on the PATH and then in
 versions in the installation log before compilation starts, and otherwise
 stops with installation advice. On Windows it also requires the GNU target.
 It writes `src/Makevars` or `src/Makevars.win` from their `.in` templates with
-the paths it checked, and on macOS the deployment target. The Makevars unpack
-the archive below `src/rust/target`, give Cargo a home there whose
-configuration, `src/rust/vendor-config.toml`, replaces crates.io with the
-unpacked crates, and run `cargo build --locked --offline -j 2` with
+the paths it checked, the target directory, and on macOS the deployment
+target. The Makevars unpack the archive below `src/rust/target`, give Cargo a
+home there whose configuration, `src/rust/vendor-config.toml`, replaces
+crates.io with the unpacked crates, and run
+`cargo build --locked --offline -j 2` with
 `MAKEFLAGS` cleared: Cargo otherwise joins the jobserver of a parallel make
 (GNU make 4.4 passes it to every command) and runs as many jobs as make
 allows. The installation therefore reads nothing from the network, runs at
 most two jobs and writes nothing outside the build tree and the temporary
-directory. The Makevars build the release profile, which strips nothing, so
-the shared object keeps its symbols: CRAN's Repository Policy asks a package
-not to remove diagnostic information such as symbols in shared objects.
-`check_cargo_lock` refuses an R source package whose build would strip.
+directory. The recipe passes the target directory to Cargo, so a
+`CARGO_TARGET_DIR` set for other projects does not move the build. Only
+`YAMAA_R_CARGO_TARGET_DIR`, an absolute directory that `configure` reads,
+moves Cargo's build, its home and the unpacked crates there, where the next
+installation reuses them. CI's `r` job points it at the Rust cache that the job
+restores, so the installation in `R CMD check` reuses the build of the one
+before it; CRAN, users and the native R lanes leave it unset. The Makevars
+build the release profile, which strips nothing, so the shared object keeps
+its symbols: CRAN's Repository Policy asks a package not to remove diagnostic
+information such as symbols in shared objects. `check_cargo_lock` refuses an
+R source package whose build would strip.
 
 CRAN's policy admits no binary executable code in a source package, and
 neither package carries any: the vendoring script leaves out the prebuilt

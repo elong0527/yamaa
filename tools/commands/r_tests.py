@@ -1,6 +1,12 @@
-"""Build, install and check the R package as CRAN does, in a fresh external directory."""
+"""Build, install and check the R package as CRAN does, in a fresh external directory.
+
+The package is installed twice, by R CMD INSTALL and by R CMD check. When
+YAMAA_R_CARGO_TARGET_DIR names a directory, as in CI's r job, both build the
+engine there, and the second must find the first one's build complete.
+"""
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -10,6 +16,9 @@ from tools.commands.check_r import check
 from tools.packaging.check_cargo_lock import check_bundle_archive
 from tools.paths import ROOT
 from tools.staging.stage_r_package import stage
+
+# The line that Cargo prints for each crate that it compiles.
+COMPILING = re.compile(r"^\s*Compiling (\S+) v", re.MULTILINE)
 
 
 def install(work):
@@ -57,6 +66,27 @@ def install(work):
     return archives[0], environment
 
 
+def check_shared_build(log):
+    """Refuse an installation log in which Cargo compiled a crate.
+
+    `log` is the 00install.out of the installation in R CMD check, which
+    shares YAMAA_R_CARGO_TARGET_DIR with the R CMD INSTALL of the same package
+    before it.
+    """
+    crates = COMPILING.findall(log)
+    if crates:
+        raise RuntimeError(
+            "R CMD check's installation compiled "
+            + ", ".join(crates)
+            + " again instead of reusing the build in YAMAA_R_CARGO_TARGET_DIR: "
+            "a build script may watch a directory, whose time unpacking sets, or "
+            "an environment variable that differs between the installations"
+        )
+    print(
+        "R CMD check's installation reused the engine build in YAMAA_R_CARGO_TARGET_DIR"
+    )
+
+
 def main():
     # The package's configure step runs in R, so its tests run here, beside
     # the package check, rather than with the Python tests.
@@ -76,6 +106,9 @@ def main():
         work = Path(directory)
         archive, environment = install(work)
         check(archive, work / "check", environment)
+        if os.environ.get("YAMAA_R_CARGO_TARGET_DIR"):
+            (log,) = (work / "check").glob("*.Rcheck/00install.out")
+            check_shared_build(log.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

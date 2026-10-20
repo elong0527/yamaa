@@ -1,7 +1,7 @@
 # The shared Rust engine builds as a static library linked into yamaa.so.
 # configure writes this file as src/Makevars with the Cargo and rustc that
-# tools/configure.R found, checked and reported, and on macOS the deployment
-# target for the C code that crates compile.
+# tools/configure.R found, checked and reported, the target directory, and on
+# macOS the deployment target for the C code that crates compile.
 #
 # CRAN's Repository Policy and its guidance for packages that use Rust shape
 # this build. Cargo reads the locked crates from rust/vendor.tar.xz, never the
@@ -12,11 +12,18 @@
 # The package carries no rust-toolchain.toml, so the build uses the caller's
 # toolchain, and RUSTUP_AUTO_INSTALL=0 stops rustup from installing a
 # toolchain that such a file in a parent directory names.
+#
+# The target directory is rust/target. The recipe passes it to Cargo, so a
+# CARGO_TARGET_DIR that the caller sets for other projects does not move the
+# build. Only YAMAA_R_CARGO_TARGET_DIR, which configure reads, names another:
+# an absolute directory where Cargo then builds, keeps its home and unpacks
+# the crates, and which the cleanup leaves for the next installation to reuse,
+# one installation at a time. The project's CI points it at its Rust cache.
 # Paths are relative to this directory, where make and Cargo run.
 CARGO = @CARGO@
 RUSTC = @RUSTC@
 CARGO_ENV = @CARGO_ENV@
-CARGO_TARGET_DIR = rust/target
+CARGO_TARGET_DIR = @CARGO_TARGET_DIR@
 CARGO_HOME_DIR = $(CARGO_TARGET_DIR)/cargo-home
 RUST_LIB = $(CARGO_TARGET_DIR)/release/libyamaa_r.a
 PKG_LIBS = $(RUST_LIB)
