@@ -210,6 +210,20 @@ class PypiComparison(unittest.TestCase):
     def test_a_version_pypi_does_not_serve_fails(self):
         services = Services(CANDIDATE, release(CANDIDATE), None)
         self.assertEqual(self.failure(services), "PyPI serves no yamaa 1.0.0rc2")
+        # Any other refusal is PyPI's own error, not a missing version.
+        unavailable = urllib.error.HTTPError(
+            check.PYPI_VERSION.format(version=CANDIDATE.python),
+            503,
+            "Service Unavailable",
+            None,
+            None,
+        )
+        with (
+            patch.object(check, "fetch", side_effect=unavailable),
+            self.assertRaises(urllib.error.HTTPError) as caught,
+        ):
+            check.pypi_files(CANDIDATE.python)
+        self.assertEqual(caught.exception.code, 503)
 
     def test_a_listing_of_another_shape_fails(self):
         name = list(packages(CANDIDATE))[0]
