@@ -13,7 +13,9 @@
 # absolute, and UNTAR_DIR, for untar(), is relative by default, so that no
 # path of the build tree enters the R expression. Unless that variable is
 # set, ISOLATION_ENV and ISOLATION_CONFIG keep Cargo's build directory in the
-# target directory and run no rustc wrapper, as in Makevars.in.
+# target directory and run no rustc wrapper, as in Makevars.in. ISOLATION_ENV
+# names that directory relatively too, because Cargo reads the build
+# directory as a template.
 RUST_TARGET = x86_64-pc-windows-gnu
 CARGO = @CARGO@
 RUSTC = @RUSTC@

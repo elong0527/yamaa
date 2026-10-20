@@ -175,7 +175,11 @@ target_directories <- function(windows) {
 # - The build directory is the target directory, Cargo's default. The
 #   variable outranks every configuration file. Cargo refuses an empty build
 #   directory, and an older Cargo, which does not know the key, warns about a
-#   --config value for it.
+#   --config value for it. It is rust/target, relative to src/ on Windows
+#   too: current Cargo reads the value as a template, so a { or } in an
+#   absolute path, such as R's temporary directory, would stop Cargo or name
+#   another directory. Cargo joins a relative value to the directory where it
+#   runs only after reading it.
 # - An empty RUSTC_WRAPPER or RUSTC_WORKSPACE_WRAPPER runs no wrapper; only
 #   the variable itself overrides one that the caller sets. The empty
 #   --config values outrank the configuration keys and their CARGO_BUILD_
@@ -191,7 +195,7 @@ isolation <- function() {
   c(
     ISOLATION_ENV = paste(
       "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=",
-      'CARGO_BUILD_BUILD_DIR="$(CARGO_TARGET_DIR)"'
+      "CARGO_BUILD_BUILD_DIR=rust/target"
     ),
     ISOLATION_CONFIG = paste(
       "--config \"build.rustc-wrapper=''\"",
