@@ -433,7 +433,7 @@ class PublicEnvironment(unittest.TestCase):
         for name in tuple(TRUTH["inherited_source_files"]):
             Path(name).unlink()
         Path("shared/data.csv").write_text("ID\n8\n")
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save(), [Path("outputs/held.csv").resolve().as_posix()])
         self.assertEqual(Path("outputs/held.csv").read_bytes(), b"ID\n7\n")
         self.assertEqual(self.report(result)["source_reads"], before["source_reads"])
 
@@ -459,7 +459,7 @@ class PublicEnvironment(unittest.TestCase):
         self.assertTrue(result.issues.is_empty(), result.issues)
         self.assertEqual(result.output["ID"].to_list(), [7])
         self.assertFalse(Path(output).exists())
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save()[-1], Path(output).resolve().as_posix())
         self.assertEqual(Path(output).read_bytes(), b"ID\n7\n")
         Path(output).unlink()
         # A configured data root and a parent file must never rescue the absent
@@ -523,7 +523,9 @@ class PublicEnvironment(unittest.TestCase):
                 self.assertEqual(result.output["ID"].to_list(), ["01"])
                 self.assertTrue(self.report(result)["verifications"])
                 self.assertFalse(Path("outputs/ids.csv").exists())
-                self.assertIsNone(result.save())
+                self.assertEqual(
+                    result.save()[-1], Path("outputs/ids.csv").resolve().as_posix()
+                )
                 self.assertEqual(Path("outputs/ids.csv").read_bytes(), b"ID\n01\n")
                 Path("outputs/ids.csv").unlink()
         Path("project/project.yaml").write_text(
@@ -611,7 +613,9 @@ class PublicEnvironment(unittest.TestCase):
         before = self.report(result)
         self.assertEqual(before["artifacts"], [])
         self.assertFalse((self.directory / "rounded.csv").exists())
-        self.assertIsNone(result.save())
+        self.assertEqual(
+            result.save()[-1], (self.directory / "rounded.csv").resolve().as_posix()
+        )
         self.assertEqual((self.directory / "rounded.csv").read_bytes(), expected)
         self.assertEqual(
             self.report(result)["artifacts"][0]["content"].encode(), expected
@@ -629,7 +633,9 @@ class PublicEnvironment(unittest.TestCase):
         result = spec.run()
         self.assertTrue(result.issues.is_empty(), result.issues)
         expected = TRUTH["maximum_precision_csv"].encode("utf-8")
-        self.assertIsNone(result.save())
+        self.assertEqual(
+            result.save()[-1], (self.directory / "rounded.csv").resolve().as_posix()
+        )
         self.assertEqual((self.directory / "rounded.csv").read_bytes(), expected)
         (self.directory / "rounded.csv").unlink()
         for precision in TRUTH["invalid_csv_precision"]:
@@ -732,7 +738,9 @@ class PublicEnvironment(unittest.TestCase):
                     )
                     self.assertEqual(before["artifacts"], [])
                     self.assertFalse((case / expected.name).exists())
-                    self.assertIsNone(result.save())
+                    self.assertEqual(
+                        result.save()[-1], (case / expected.name).resolve().as_posix()
+                    )
                     self.assertEqual(
                         (case / expected.name).read_bytes(), expected.read_bytes()
                     )
@@ -741,7 +749,9 @@ class PublicEnvironment(unittest.TestCase):
                         after["artifacts"][0]["content"].encode(), expected.read_bytes()
                     )
                     (case / expected.name).unlink()
-                self.assertIsNone(runs.save())
+                self.assertEqual(
+                    runs.save()[-1], (case / expected.name).resolve().as_posix()
+                )
                 self.assertEqual(
                     (case / expected.name).read_bytes(), expected.read_bytes()
                 )
@@ -768,7 +778,7 @@ class PublicEnvironment(unittest.TestCase):
         self.assertEqual(self.report(result)["activation"]["lock"], "not_requested")
         self.assertTrue(self.report(result)["activation"]["tests"])
         expected = next((case / "expected").glob("*.csv"))
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save()[-1], (case / expected.name).resolve().as_posix())
         self.assertEqual((case / expected.name).read_bytes(), expected.read_bytes())
 
     def test_negative_static_issue_is_exact_and_never_imports_code_or_reads_data(self):
@@ -985,7 +995,9 @@ class PublicEnvironment(unittest.TestCase):
                 result = self.project(case).spec("TEST").run()
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["RESULT"].to_list(), [9.0])
-                self.assertIsNone(result.save())
+                self.assertEqual(
+                    result.save()[-1], (case / "test.csv").resolve().as_posix()
+                )
                 self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,9\n")
 
     def test_original_interrupt_survives_activation_in_spec_and_project_runs(self):
@@ -1031,7 +1043,7 @@ class PublicEnvironment(unittest.TestCase):
         result = self.project(case).spec("TEST").run()
         self.assertTrue(result.issues.is_empty(), result.issues)
         self.assertEqual(result.output["RESULT"].to_list(), [4.0])
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save()[-1], (case / "test.csv").resolve().as_posix())
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,4\n")
 
     def test_opaque_host_error_is_retained_independently_of_issue_format(self):
@@ -1195,7 +1207,7 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
             [row["function"] for row in observed["activation"]["bindings"]],
             ["project_value"],
         )
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save()[-1], (case / "output.csv").resolve().as_posix())
         self.assertEqual(
             (case / "output.csv").read_bytes(),
             b"ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n",
@@ -1255,7 +1267,9 @@ output: {{path: output.csv, columns: [ID, VALUE]}}
             self.assertEqual(
                 [row["function"] for row in activation["bindings"]], ["project_value"]
             )
-            self.assertIsNone(result.save())
+            self.assertEqual(
+                result.save()[-1], (case / "output.csv").resolve().as_posix()
+            )
             self.assertEqual((case / "output.csv").read_bytes(), csv)
             self.assertEqual(self.report(result)["activation"], activation)
 
@@ -1295,7 +1309,7 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
         self.assertEqual(
             [row["function"] for row in activation["bindings"]], ["project_value"]
         )
-        self.assertIsNone(result.save())
+        self.assertEqual(result.save()[-1], (case / "output.csv").resolve().as_posix())
         self.assertEqual(
             (case / "output.csv").read_bytes(),
             b"ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n",

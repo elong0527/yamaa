@@ -275,12 +275,14 @@ artifact: it replaces, in run order, the report file of every specification
 that ran and declares one, then fails with every run's findings.
 
 Fails: `artifact_path_collision`, `nothing_to_save`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::every_target_is_validated_before_the_first_file_is_written`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `rust/crates/yamaa-adapters/tests/project_scope.rs::the_preflight_refuses_two_results_that_write_one_file`, `rust/crates/yamaa-adapters/tests/project_scope.rs::report_only_saves_write_the_report_file_and_no_primary_artifact`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::every_target_is_validated_before_the_first_file_is_written`, `rust/crates/yamaa/tests/project_operations.rs::a_file_that_cannot_be_staged_stops_the_save_before_any_target_is_replaced`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `rust/crates/yamaa-adapters/tests/project_scope.rs::the_preflight_refuses_two_results_that_write_one_file`, `rust/crates/yamaa-adapters/tests/project_scope.rs::report_only_saves_write_the_report_file_and_no_primary_artifact`.
 
 Locations compare as [OUTPUT-9](../output.md#output-9) compares the two
 paths of one specification, two spellings of one file included. Each
 specification orders its own files as [OUTPUT-10](../output.md#output-10)
-states. A failure while replacing one file stops the publication there: the
+states. Every file is staged beside its target before the first target is
+replaced, so a file that cannot be staged stops the save with no target
+replaced. A failure while replacing one file stops the publication there: the
 files already replaced remain, and no later target is touched. A project run
 that built no specification has nothing to save, and saving it fails with
 `nothing_to_save`.
@@ -299,11 +301,13 @@ those of its sections in that order. Saving publishes the sections in that
 order; the first section whose publication fails stops the save.
 
 Fails: `nothing_to_save`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_later_section_whose_target_cannot_be_written_saves_nothing`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
 
-Saving first compares the targets of every section: two sections that name
-one file fail the save before any file is written. A section whose own target
-cannot be admitted is left to its own publication, which reports and records
-that failure. A submission that composed no section has nothing to save, and
-saving it fails with `nothing_to_save`. Each section publishes its transport
-files before its document under [JSON-14](dataset-json.md#json-14).
+Saving first admits and compares the targets of every section it publishes: a
+target that cannot be written, or two sections that name one file, fail the
+save before any file is written, and the section that holds the target reports
+and records that failure. A section that did not compose publishes nothing and
+stops the save at its turn, after the sections before it. A submission that
+composed no section has nothing to save, and saving it fails with
+`nothing_to_save`. Each section publishes its transport files before its
+document under [JSON-14](dataset-json.md#json-14).

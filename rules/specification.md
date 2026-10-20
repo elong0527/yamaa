@@ -78,7 +78,7 @@ schema description states its meaning.
 Every declared column must be derived. A column with no derivation anywhere
 fails validation, reporting the column name; an implementation must not fall
 back to, or infer, a same-named source variable. A column whose value is
-intentionally absent is still derived: it is written `literal: null` rather
+intentionally absent is still derived: it is written `derivation: null` rather
 than left without a derivation.
 
 Fails: `missing_derivation`.

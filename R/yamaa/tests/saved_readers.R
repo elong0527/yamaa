@@ -1,5 +1,10 @@
 # Independent reader controls run on the installed package, never a source import.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The readers are arrow and jsonlite at the versions that DESCRIPTION suggests,
 # and the truth is JSON. A suggested package may not be installed, so without
 # them the file is skipped.
@@ -76,11 +81,11 @@ check_submission <- function(directory, profile, empty) {
   }
   stopifnot(nrow(document$issues) == 0L)
   unlink(file.path(directory, c("spec.yaml", "project.yaml", paste0("output.", profile))))
-  stopifnot(is.null(document$save()))
+  stopifnot(returns_paths(document$save()))
   saved <- rawfile(file.path(directory, "test.json"))
   # A repeated save rewrites the held bytes, so a changed file is restored.
   writeBin(charToRaw("sentinel"), file.path(directory, "test.json"))
-  stopifnot(is.null(document$save()),
+  stopifnot(returns_paths(document$save()),
             identical(rawfile(file.path(directory, "test.json")), saved))
   # bigint_as_char is required: R doubles cannot carry every signed-i64 value.
   data <- jsonlite::fromJSON(rawToChar(saved), simplifyVector = FALSE, bigint_as_char = TRUE)
@@ -148,11 +153,11 @@ run_saved_readers <- function() {
     stopifnot(!file.exists(output))
     original <- rawfile(entry)
     unlink(file.path(directory, c("spec.yaml", "input.csv")))
-    stopifnot(is.null(built$save()))
+    stopifnot(returns_paths(built$save()))
     saved <- rawfile(output)
     for (attempt in 1:2) {
       if (profile == "csv") check_csv(saved, empty) else check_parquet(saved, empty)
-      stopifnot(is.null(built$save()), identical(rawfile(output), saved))
+      stopifnot(returns_paths(built$save()), identical(rawfile(output), saved))
     }
     writeBin(original, entry)
     check_submission(directory, profile, empty)

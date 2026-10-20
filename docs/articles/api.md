@@ -100,8 +100,11 @@ columns:
   directory, and every file it was compiled from is unchanged. Otherwise it
   compiles again. Every `run()` reads the input data afresh. A copied,
   pickled or restored object starts with nothing kept.
-* `save()` writes the dataset to `output.path` and the run report to
-  `output.report`.
+* `save()` writes the run report to `output.report`, then the dataset to
+  `output.path`, and returns the absolute paths it wrote, in that order (R
+  returns them invisibly). A failed run writes only its run report, then
+  raises `yamaa.Error` (in R, signals `yamaa_error`) with the run's issues;
+  the error's `paths` lists what the save wrote first.
 
 === "R"
 
@@ -111,7 +114,7 @@ columns:
     run$output    # generated dataset
     run$issues    # identified errors
     run$report    # run report
-    run$save()    # save dataset and run report
+    run$save()    # save run report and dataset; returns their paths
     ```
 
 === "Python"
@@ -122,7 +125,7 @@ columns:
     run.output    # generated dataset
     run.issues    # identified errors
     run.report    # run report
-    run.save()    # save dataset and run report
+    run.save()    # save run report and dataset; returns their paths
     ```
 
 ## Check a specification without data
@@ -277,6 +280,9 @@ specification's dataset without linking it through `schema`.
 or `"send"`, in dependency order. Without a name, it builds every section. As
 with `spec()`, a later `run()` reuses what earlier runs of the same project
 object compiled, and compiles again any specification whose files changed.
+Its `save()` writes each specification's run report and dataset in run order,
+or only the run reports when any specification failed, and returns the paths it
+wrote. It checks every target before it writes anything.
 
 === "R"
 
@@ -311,6 +317,8 @@ every section that names `define`. Each specification it covers needs
 benchmark shows. With `datasets: json` or `datasets: xpt` in a section, it also
 writes each saved dataset as one Dataset-JSON or SAS Transport version 5 file
 next to define.xml.
+Its `save()` writes each section's transport files, then its define.xml, and
+returns the paths it wrote.
 
 === "R"
 

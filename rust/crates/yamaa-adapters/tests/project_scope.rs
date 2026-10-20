@@ -1,6 +1,7 @@
 #![cfg(feature = "yaml")]
 //! Project-scope contracts in the adapters: listed names, run-scope plans,
-//! held producer artifacts, report-only saves and the whole-scope preflight.
+//! held producer artifacts, report-only saves and the preflight of one save
+//! across results.
 use std::{
     fs,
     path::PathBuf,
@@ -13,7 +14,8 @@ use yamaa_adapters::{
     file_application::{self, Domain},
     file_resources::HeldArtifacts,
     file_workflow,
-    project_scope::{Preflight, Project},
+    project_scope::Project,
+    publication::{self, Cause},
     specification_report::Identity,
     specification_run::NoActivation,
 };
@@ -418,25 +420,34 @@ fn report_only_saves_write_the_report_file_and_no_primary_artifact() {
 
 #[test]
 fn the_preflight_refuses_two_results_that_write_one_file() {
+    // The files one save of `results` writes, each result's report alone
+    // when it is marked so, in order.
+    fn files<'a>(results: &[(&'a Domain, bool)]) -> Vec<publication::File<'a>> {
+        results
+            .iter()
+            .flat_map(|(result, report_only)| result.plan(*report_only).unwrap().unwrap().0)
+            .collect()
+    }
     let study = study();
     study.write("sdtm/ae.yaml", spec("AE", RAW, "../out/dm.csv"));
     let dm = domain(&study, "sdtm/dm.yaml");
     let ae = domain(&study, "sdtm/ae.yaml");
-    let mut preflight = Preflight::new();
-    preflight.admit_domain(&dm, false).unwrap();
-    let refused = preflight.admit_domain(&ae, false).unwrap_err();
-    assert!(!refused.is_empty());
+    // AE's report is DM's report: the third file names the first's target.
+    let refused = publication::stage(&files(&[(&dm, false), (&ae, false)]))
+        .err()
+        .unwrap();
+    assert!(matches!(refused.cause, Cause::Collision { earlier: 0 }));
+    assert_eq!((refused.file, refused.committed), (2, 0));
     // Report files alone do not collide.
     study.write("sdtm/ae.yaml", spec("AE", RAW, "../out/ae.csv"));
     let ae = domain(&study, "sdtm/ae.yaml");
-    let mut preflight = Preflight::new();
-    preflight.admit_domain(&dm, true).unwrap();
-    preflight.admit_domain(&ae, true).unwrap();
     // ADSL fails without DM's saved artifact; only its report file is a
     // target, and it names its own location.
     let adsl = domain(&study, "adam/adsl.yaml");
     assert!(adsl.output().is_none());
-    preflight.admit_domain(&adsl, false).unwrap();
+    publication::stage(&files(&[(&dm, true), (&ae, true), (&adsl, false)]))
+        .unwrap()
+        .abort();
     // A result whose report file is one already admitted is refused.
     study.write(
         "sdtm/ae.yaml",
@@ -446,6 +457,9 @@ fn the_preflight_refuses_two_results_that_write_one_file() {
         ),
     );
     let ae = domain(&study, "sdtm/ae.yaml");
-    assert!(preflight.admit_domain(&ae, true).is_err());
+    let refused = publication::stage(&files(&[(&dm, true), (&adsl, false), (&ae, true)]))
+        .err()
+        .unwrap();
+    assert!(matches!(refused.cause, Cause::Collision { earlier: 1 }));
     assert_eq!(fs::read_dir(study.0.join("out")).unwrap().count(), 0);
 }

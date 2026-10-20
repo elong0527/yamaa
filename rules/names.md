@@ -115,15 +115,14 @@ built the row.
 
 <a id="name-5"></a>
 
-### NAME-5. A `variable` field names one variable, and every other plain string is literal
+### NAME-5. A `variable` field names exactly one variable, never an expression
 
 An operand field typed `variable` accepts a concise source variable or a
-constructed output variable; an operation cannot place an arbitrary nested
-expression in it, and operations compose through a named derived column. A
-`string_template` placeholder is a variable reference whose complete name
-binds as a `variable` field name, and text outside placeholders is literal.
-Plain strings outside fields typed `variable` are literal under
-[Values](values.md).
+constructed output variable; an operation cannot place a nested expression in
+it, and operations compose through a named derived column. A `string_template`
+placeholder binds its complete name as a `variable` field does, and text
+outside placeholders is literal. Whether a plain string in any other field is
+a name or text follows from its field's kind ([EXPR-5](expressions.md#expr-5)).
 
 Evidence: `negative-variable-nested`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
 

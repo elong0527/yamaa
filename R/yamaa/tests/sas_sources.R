@@ -1,5 +1,10 @@
 # Installed public SAS input controls with independently authored typed truth.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -148,7 +153,7 @@ run_sas_sources <- function() {
       !file.exists(file.path(paths$root, "result.csv")))
     result <- run(paths$spec)
     assert_output(result, case)
-    stopifnot(is.null(result$save()))
+    stopifnot(returns_paths(result$save()))
     if (!is.null(case$csv)) stopifnot(identical(read_bytes(file.path(paths$root, "result.csv")), charToRaw(enc2utf8(case$csv))))
   }
 
@@ -178,7 +183,7 @@ run_sas_sources <- function() {
     stopifnot(nrow(check(paths$spec)$issues) == 0L)
     result <- run(paths$spec)
     assert_output(result, case)
-    stopifnot(is.null(result$save()), file.exists(file.path(paths$root, "result.csv")))
+    stopifnot(returns_paths(result$save()), file.exists(file.path(paths$root, "result.csv")))
   }
 
   for (case in truth$static_refusals) {
@@ -207,7 +212,7 @@ run_sas_sources <- function() {
   unlink(c(paths$source, paths$spec))
   gc()
   for (i in seq_len(2L)) {
-    stopifnot(is.null(result$save()), identical(result$output, held),
+    stopifnot(returns_paths(result$save()), identical(result$output, held),
       identical(read_bytes(file.path(paths$root, "result.csv")), charToRaw(enc2utf8(case$csv))))
   }
   rm(result)

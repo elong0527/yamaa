@@ -300,16 +300,14 @@ impl Build {
     pub fn run_report(&self) -> Option<&Table>;
     pub fn run_report_bytes(&self) -> Option<&[u8]>;
     pub fn report(&self) -> &Report;
-    pub fn save(&mut self) -> Result<SaveOutcome, Error>;
+    pub fn save(&mut self) -> Result<Vec<String>, Failure>;  // the paths written
 }
 
 pub struct DefineBuild { /* owned attempt state */ }
 impl DefineBuild {
     pub fn report(&self) -> &Report;
-    pub fn save(&mut self) -> Result<SaveOutcome, Error>;
+    pub fn save(&mut self) -> Result<Vec<String>, Failure>;  // the paths written
 }
-
-pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 ```
 
 - `EngineOptions`, `Request`, `DefineRequest` and `RunRequest` are
@@ -323,8 +321,13 @@ pub enum SaveOutcome { Saved, NothingToSave }  // #[non_exhaustive]
 - `build` mirrors today's `Result<Domain, Failure>`: a rejected build returns
   `Error::Rejected(Report)`; a successful `Build` carries the same output,
   run report and observations as today's `Domain`.
-- `save` is a method on the build handle, as `Domain::save` is today; it is
-  the only mutating operation and publishes through the resolver.
+- `save` is the one save every result shares: `Run`, `ProjectRun` and
+  `Submission` save their outcome through it, and a build handle saves as an
+  outcome of one member. It plans every file, opens and stages all of them,
+  then commits them in publication order and returns their absolute paths with
+  forward slashes (a caller's resolver names each by its target reference). A
+  refusal is a `Failure` carrying its issues and the paths written before it.
+  It is the only mutating operation and publishes through the resolver.
 - `define` mirrors `file_define::Define::prepare` plus its save step.
 - Every operation reads through the engine's resolver: checks, builds,
   plans, project reads, `define`, `resolve_specification` and `read_odm`.

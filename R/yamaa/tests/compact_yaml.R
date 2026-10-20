@@ -1,6 +1,11 @@
 # Installed compact flow verification parity and refusal controls (#2196), and
 # the raw NUL refusal (#3125).
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 
 check <- function(path) yamaa_spec(path)$check()
 run <- function(path) yamaa_spec(path)$run()
@@ -34,7 +39,7 @@ run_compact_yaml <- function() {
     stopifnot(nrow(check(spec)$issues) == 0L)
     built <- run(spec)
     stopifnot(nrow(built$issues) == 0L, identical(built$output$ID, c("a", "b", "c")),
-              is.null(built$save()))
+              returns_paths(built$save()))
     output <- file.path(root, "out.csv")
     stopifnot(identical(readBin(output, "raw", file.info(output)$size),
                         charToRaw("ID\na\nb\nc\n")))

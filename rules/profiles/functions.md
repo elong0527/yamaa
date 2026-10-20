@@ -194,19 +194,29 @@ a name in every host language the file implements.
 
 <a id="func-6"></a>
 
-### FUNC-6. A call argument is a named variable or a scalar literal leaf, never an expression
+### FUNC-6. A call argument is one leaf of the expression grammar, never a composed expression
 
-A call argument is one of: a named variable, written as a plain string; an
-`int`, `float`, `bool` or missing YAML scalar; a string literal written as
-`{literal: text}`; a date literal written as `{date: YYYY-MM-DD}`; or a
-datetime literal written as `{datetime: YYYY-MM-DDThh:mm[:ss]}`. The temporal
-text must be a [Values](../values.md) value. No argument may
-contain another expression.
+A call argument is one expression leaf: a bare name for a variable, quoted
+text, a YAML number or Boolean, YAML null for missing, or a `DATE` or
+`DATETIME` literal whose text is a [Values](../values.md) value. No argument
+may contain an operator, a function call or another expression, and a name
+resolves under [FORMULA-9](../formulas.md#formula-9).
 
-Evidence: `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
+Fails: `invalid_function_argument`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_function_argument_is_one_leaf_and_any_other_text_fails`, `schema-functions`, `schema-non-finite`, `rust/crates/yamaa-core/tests/project_execution.rs::retired_fields_and_malformed_literals_are_complete_static_findings`.
 
-A calculation needed by a function is first declared as an internal column and
-then passed by name, preserving its visible dependency.
+An argument is an expression field ([EXPR-5](../expressions.md#expr-5)):
+`weight: WEIGHTKG` passes a variable, `unit: "'kg'"` text,
+`on: "DATE '2024-01-01'"` a date and `none: null` the missing value. Text that
+is no single leaf, such as `"WEIGHTKG * 2"`, `"ABS(WEIGHTKG)"` or `"TRUE"`,
+fails validation as `invalid_function_argument` at the argument, its context
+naming the function and the argument, with `cause: expression`. A calculation
+needed by a function is first declared as an internal column and then passed
+by name, preserving its visible dependency.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a string literal is written `{literal: text}`, a
+date `{date: YYYY-MM-DD}` and a datetime `{datetime: YYYY-MM-DDThh:mm[:ss]}`.
 
 <a id="func-7"></a>
 

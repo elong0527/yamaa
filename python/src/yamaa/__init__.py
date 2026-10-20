@@ -24,11 +24,12 @@ __all__ = ["Error", "__version__", "lint", "project", "read_odm", "spec"]
 
 
 class Error(Exception):
-    """A yamaa operation could not complete; `issues` says why."""
+    """A yamaa operation could not complete; `issues` says why, and `paths` lists the files a refused save wrote first."""
 
-    def __init__(self, message: str, issues: _pl.DataFrame):
+    def __init__(self, message: str, issues: _pl.DataFrame, paths: list[str]):
         super().__init__(message)
         self.issues = issues
+        self.paths = paths
 
 
 def _call(function, *args):
@@ -37,7 +38,9 @@ def _call(function, *args):
     except _native._Error as error:
         # The binding sets the refusal's attributes on the native
         # exception, so they are read as dynamic attributes.
-        raise Error(str(error), _table(getattr(error, "issues"))) from None
+        raise Error(
+            str(error), _table(getattr(error, "issues")), getattr(error, "paths")
+        ) from None
 
 
 class Check:
@@ -68,9 +71,9 @@ class Run:
         """What the run read, counted and checked."""
         return _optional_table(self._native.report())
 
-    def save(self) -> None:
-        """Write the declared report file and the output dataset."""
-        _call(self._native.save)
+    def save(self) -> list[str]:
+        """Write the declared report file, then the output dataset; return the paths written."""
+        return _call(self._native.save)
 
 
 class MemberRun:
@@ -124,8 +127,9 @@ class ProjectRun:
     def report(self) -> _pl.DataFrame:
         return _table(self._native.report())
 
-    def save(self) -> None:
-        _call(self._native.save)
+    def save(self) -> list[str]:
+        """Write each report file, then each output unless a run failed; return the paths written."""
+        return _call(self._native.save)
 
 
 class Submission:
@@ -138,8 +142,9 @@ class Submission:
     def issues(self) -> _pl.DataFrame:
         return _table(self._native.issues())
 
-    def save(self) -> None:
-        _call(self._native.save)
+    def save(self) -> list[str]:
+        """Write each section's transport files, then its define.xml; return the paths written."""
+        return _call(self._native.save)
 
 
 class Spec(_Lazy):

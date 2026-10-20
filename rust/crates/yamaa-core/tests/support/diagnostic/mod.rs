@@ -4,6 +4,7 @@ pub mod binding;
 pub mod csv;
 pub mod dataset;
 pub mod declarative_flags;
+pub mod front_end;
 pub mod grammar;
 pub mod inheritance;
 pub mod intermediate_ranges;

@@ -3,6 +3,11 @@
 # own entry, and project functions, codelists and locks reach a specification
 # only through yamaa_project(path)$spec(name) or $run().
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The truth is JSON, and jsonlite, which reads it, is a suggested package:
 # where it is not installed, the file is skipped.
 if (!requireNamespace("jsonlite", quietly = TRUE)) {
@@ -186,7 +191,7 @@ qualify_functions_without_packaging_lock <- function() {
     stopifnot(nrow(result$issues) == 0L, is.data.frame(result$output),
       grepl('"lock":"not_requested"', evidence, fixed = TRUE),
       grepl('"outcome":"passed"', evidence, fixed = TRUE),
-      is.null(result$save()), identical(rawfile(basename(expected)), rawfile(expected)))
+      returns_paths(result$save()), identical(rawfile(basename(expected)), rawfile(expected)))
   }
   cat("public R functions without a packaging lock keep conformance and saved bytes\n")
 }
@@ -211,10 +216,10 @@ for (name in "base-round") {
     stopifnot(grepl('"lock":"verified"', before, fixed = TRUE),
               grepl('"outcome":"passed"', before, fixed = TRUE),
               grepl('"artifacts":[]', before, fixed = TRUE), !file.exists(artifact))
-    stopifnot(is.null(result$save()), identical(rawfile(artifact), rawfile(expected)))
+    stopifnot(returns_paths(result$save()), identical(rawfile(artifact), rawfile(expected)))
     unlink(artifact)
   }
-  stopifnot(is.null(runs$save()), identical(rawfile(artifact), rawfile(expected)))
+  stopifnot(returns_paths(runs$save()), identical(rawfile(artifact), rawfile(expected)))
   cat(name, "public project exact base R CSV and repeated activation passed\n")
 }
 name <- "negative-function-contract"
@@ -326,7 +331,7 @@ for (context in fixture_strings(host_truth[["quota_modes"]])) {
   writeLines(text, 'spec.yaml')
   result <- yamaa_project('project.yaml')$spec('TEST')$run()
   stopifnot(nrow(result$issues) == 0L, identical(result$output$RESULT, 9),
-    is.null(result$save()), identical(rawfile('test.csv'), charToRaw('ID,RESULT\n01,9\n')))
+    returns_paths(result$save()), identical(rawfile('test.csv'), charToRaw('ID,RESULT\n01,9\n')))
 }
 precision_dir <- file.path(work, "csv-precision"); dir.create(precision_dir)
 setwd(precision_dir)
@@ -352,7 +357,7 @@ rounded <- refuse_activation(spec$run())
 stopifnot(nrow(rounded$issues) == 0L,
   identical(rounded$output$VALUE, c(0.125, -0.125, 2.675, -0.004, 1.234, 2.345, NA_real_, 25)),
   identical(rounded$output$DOUBLE, c(0.25, -0.25, 5.35, -0.008, 2.468, 4.69, NA_real_, 50)),
-  !file.exists("rounded.csv"), is.null(rounded$save()), identical(rawfile("rounded.csv"), expected))
+  !file.exists("rounded.csv"), returns_paths(rounded$save()), identical(rawfile("rounded.csv"), expected))
 unlink("rounded.csv")
 ordinary <- precision_study(NULL)$run()
 stopifnot(nrow(ordinary$issues) == 0L, identical(ordinary$output, rounded$output))
@@ -360,7 +365,7 @@ spec <- precision_study(host_truth[["csv_precision_maximum"]])
 writeLines(c("ID,VALUE,INT", "1,0.125,7"), "input.csv")
 maximum <- spec$run()
 expected <- fixture_bytes(host_truth[["maximum_precision_csv"]])
-stopifnot(nrow(maximum$issues) == 0L, is.null(maximum$save()), identical(rawfile("rounded.csv"), expected))
+stopifnot(nrow(maximum$issues) == 0L, returns_paths(maximum$save()), identical(rawfile("rounded.csv"), expected))
 unlink("rounded.csv")
 for (precision in fixture_strings(host_truth[["invalid_csv_precision"]])) {
   spec <- precision_study(precision)
@@ -474,7 +479,7 @@ stopifnot(nrow(checked$issues) == 0L, nrow(held$issues) == 0L,
   !grepl("yamaa-project.yaml", observations(held), fixed = TRUE))
 unlink(fixture_strings(host_truth[["inherited_source_files"]]))
 writeLines(c("ID", "8"), "shared/data.csv")
-stopifnot(is.null(held$save()), identical(rawfile("outputs/held.csv"), charToRaw("ID\n7\n")))
+stopifnot(returns_paths(held$save()), identical(rawfile("outputs/held.csv"), charToRaw("ID\n7\n")))
 writeLines(c("ID", "7"), "shared/data.csv")
 source <- paste0(normalizePath("shared", winslash = "/"), "/../shared/./data.csv")
 output <- paste0(normalizePath("outputs", winslash = "/"), "/absolute.csv")
@@ -484,7 +489,7 @@ local_document <- function(input) c("schema_version: '1.0'", "domain: TEST", "ke
 writeLines(local_document(source), "entry/spec.yaml")
 absolute <- yamaa_spec("entry/spec.yaml")$run()
 stopifnot(nrow(absolute$issues) == 0L, identical(absolute$output$ID, 7),
-  !file.exists(output), is.null(absolute$save()), identical(rawfile(output), charToRaw("ID\n7\n")))
+  !file.exists(output), returns_paths(absolute$save()), identical(rawfile(output), charToRaw("ID\n7\n")))
 unlink(output)
 writeLines(c("version: '1.0'", "data_roots: [shared]"), "yamaa-project.yaml")
 writeLines(c("ID", "999"), "data.csv")
@@ -520,7 +525,7 @@ for (written in c("../terminology/ids.yaml", normalizePath("terminology/ids.yaml
   result <- spec$run()
   stopifnot(nrow(checked$issues) == 0L, nrow(result$issues) == 0L,
     identical(result$output$ID, "01"), grepl('"verifications":[{', observations(result), fixed = TRUE),
-    !file.exists("outputs/ids.csv"), is.null(result$save()), identical(rawfile("outputs/ids.csv"), charToRaw("ID\n01\n")))
+    !file.exists("outputs/ids.csv"), returns_paths(result$save()), identical(rawfile("outputs/ids.csv"), charToRaw("ID\n01\n")))
   unlink("outputs/ids.csv")
 }
 writeLines(c("schema_version: '1.0'", "codelists: [ids.yaml]", "sdtm: {specs: [../entry/spec.yaml]}"),
@@ -604,7 +609,7 @@ qualify_aggregate_callback <- function() {
   stopifnot(nrow(result$issues) == 0L,
     identical(result$output$ID, c(1, 1, 2)),
     identical(result$output$N, c(10, 30, 40)),
-    identical(result$output$VALUE, c(20, 60, 40)), is.null(result$save()),
+    identical(result$output$VALUE, c(20, 60, 40)), returns_paths(result$save()),
     identical(rawToChar(rawfile("output.csv")), "ID,N,VALUE\n1,10,20\n1,30,60\n2,40,40\n"))
   writeLines(sub(", order_by: [SRC.ID], keep: first", "", spec, fixed = TRUE), "spec.yaml")
   unlink("input.csv")
@@ -633,7 +638,7 @@ qualify_row_callback_joins <- function() {
     expected_value <- if (driver == "SRC") c(50, 40, NA_real_) else c(20, 10)
     expected_csv <- if (driver == "SRC") "ID,VALUE\n1,50\n2,40\n3,\n" else "ID,VALUE\n2,20\n1,10\n"
     stopifnot(nrow(result$issues) == 0L, identical(result$output$ID, expected_id),
-      identical(result$output$VALUE, expected_value), is.null(result$save()),
+      identical(result$output$VALUE, expected_value), returns_paths(result$save()),
       identical(rawToChar(rawfile("output.csv")), expected_csv))
   }
   cat("public R row callbacks join primary and secondary source records by completed keys\n")
@@ -655,7 +660,7 @@ qualify_intermediate_callback <- function() {
     "  - {name: VALUE, type: float, derivation: DON.VALUE}", "output: {path: output.csv, columns: [ID, N, VALUE]}"), "spec.yaml")
   result <- project$spec("TEST")$run()
   stopifnot(nrow(result$issues)==0L, identical(result$output$N,c(10,30,40)),
-    identical(result$output$VALUE,c(10,10,40)), is.null(result$save()),
+    identical(result$output$VALUE,c(10,10,40)), returns_paths(result$save()),
     identical(rawToChar(rawfile("output.csv")), "ID,N,VALUE\n1,10,10\n1,30,10\n2,40,40\n"))
   cat("public R intermediate callbacks preserve prior values and selected donor field types\n")
 }

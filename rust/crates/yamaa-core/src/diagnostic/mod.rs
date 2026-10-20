@@ -177,6 +177,7 @@ conditions! {
     CodelistFormatNamePrefix => ("validation", "value_not_permitted", Some("CT-12")),
     UnknownProjectFunction => ("validation", "unknown_project_function", Some("FUNC-4")),
     InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("FUNC-5")),
+    FunctionArgumentLeaf => ("validation", "invalid_function_argument", Some("FUNC-6")),
     RuntimeFunctionArgument => ("derivation", "invalid_function_argument", Some("FUNC-5")),
     RuntimeFunctionCallFailed => ("derivation", "function_call_failed", Some("FUNC-8")),
     RuntimeFunctionResult => ("derivation", "invalid_function_result", Some("FUNC-9")),
@@ -510,6 +511,7 @@ conditions! {
     WindowZeroOffset => ("validation", "zero_offset", Some("WINDOW-7")),
     WindowOrderRequired => ("validation", "window_order_by_required", Some("WINDOW-5")),
     WindowOrderForbidden => ("validation", "window_order_by_forbidden", Some("WINDOW-5")),
+    WindowBaselineOrder => ("validation", "value_not_permitted", Some("WINDOW-5")),
     WindowRepeatedGroup => ("validation", "invalid_field_type", Some("WINDOW-3")),
     WindowBaselineInputType => ("validation", "incompatible_input_type", Some("VALUE-2")),
     // A column-level window's read of a driver that some row template does

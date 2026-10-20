@@ -160,7 +160,9 @@ class PublicPortableMath(unittest.TestCase):
         self.assertEqual(
             struct.pack(">d", result.output["ROUNDED"][0]).hex(), rounded_bits
         )
-        self.assertIsNone(result.save())
+        self.assertEqual(
+            result.save(), [(self.root / "result.csv").resolve().as_posix()]
+        )
         self.assertEqual((self.root / "result.csv").read_bytes(), csv)
         specification["verifications"] = [
             {
