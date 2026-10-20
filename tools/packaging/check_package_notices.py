@@ -5,9 +5,12 @@ them in its .dist-info/licenses directory, the Python source archive at its
 root and the R source archive in inst/, from which R installs them. Each copy
 must equal its host's copy in the checkout byte for byte: python/ for the
 Python packages and R/yamaa/inst/ for the R source archive. The two hosts'
-copies are the same, apart from COMPONENTS.tsv, the component inventory that
-tools/packaging/generate_component_inventory.py writes from each host's
-trimmed lock.
+copies are the same, apart from LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv,
+which list each host's own crates and components:
+tools/packaging/generate_third_party_notices.py and
+tools/packaging/generate_component_inventory.py write them. The Python source
+archive's COMPONENTS.tsv is the wheels' without its rust-std row, the Rust
+standard library that the wheels link (source_inventory in the latter).
 """
 
 import argparse
@@ -16,6 +19,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+from tools.packaging import generate_component_inventory as inventory
 from tools.packaging import release_identity
 from tools.paths import ROOT
 
@@ -72,7 +76,11 @@ def check_archive(path, root=ROOT):
     copies, members = notice_members(path.name, identity, notices)
     payloads = read_members(path, set(members.values()))
     for notice, member in members.items():
-        if payloads.get(member) != (root / copies / notice).read_bytes():
+        expected = (root / copies / notice).read_bytes()
+        if notice == inventory.NAME and path.name == f"yamaa-{identity.python}.tar.gz":
+            text = inventory.source_inventory(expected.decode("utf-8"))
+            expected = text.encode("utf-8")
+        if payloads.get(member) != expected:
             raise ValueError(
                 f"{path.name}: required notice differs or is missing: {member}"
             )

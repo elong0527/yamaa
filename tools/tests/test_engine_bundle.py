@@ -367,11 +367,25 @@ class StagingTests(unittest.TestCase):
             self.assertEqual(wheel["strip"], "symbols")
             for profile in (wheel, profiles["release"]):
                 self.assertNotIn("panic", profile)
+            # The archive's inventory is the wheels' without the standard
+            # library that they link.
+            inventory = "COMPONENTS.tsv"
             for name in ("README.md", *pyproject["project"]["license-files"]):
-                self.assertEqual(
-                    (destination / name).read_bytes(),
-                    (ROOT / "python" / name).read_bytes(),
-                )
+                if name != inventory:
+                    self.assertEqual(
+                        (destination / name).read_bytes(),
+                        (ROOT / "python" / name).read_bytes(),
+                    )
+            wheels = (ROOT / "python" / inventory).read_bytes().decode("utf-8")
+            self.assertIn("\nrust-std\t", wheels)
+            self.assertEqual(
+                (destination / inventory).read_bytes().decode("utf-8"),
+                "".join(
+                    line
+                    for line in wheels.splitlines(keepends=True)
+                    if not line.startswith("rust-std\t")
+                ),
+            )
             self.assertTrue((destination / "src/yamaa/__init__.py").is_file())
             project = Path(directory) / "project"
             project.mkdir()
