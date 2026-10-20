@@ -942,6 +942,37 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
     );
 }
 
+/// Every member runs through the engine's one host-functions port. An engine
+/// configured without project functions runs a specification alone through
+/// an empty port, and refuses a member with a project before it reads data,
+/// since a project's functions need a host.
+#[test]
+fn an_engine_without_functions_runs_a_specification_alone_and_refuses_a_project_member() {
+    let study = study();
+    let bare = Engine::new(EngineOptions::new(
+        HostLanguage::Python,
+        "project-test".into(),
+        "0".into(),
+    ));
+    let token = CancellationToken::new();
+    let dm = study.path("sdtm/dm.yaml");
+    let alone = bare.spec_run(&dm, None, &token).unwrap();
+    assert_eq!(alone.issues().rows(), 0);
+    assert_eq!(alone.status(), Status::Succeeded);
+    assert_eq!(alone.output().unwrap().rows(), 2);
+    let member = bare.spec_run(&dm, Some(&study.project()), &token).unwrap();
+    assert_eq!(member.status(), Status::Failed);
+    assert!(member.output().is_none());
+    assert!(member.report().is_none());
+    let found = rows(&member.issues());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].condition, "unsupported_operation");
+    assert_eq!(
+        found[0].context.get("operation"),
+        Some(&text("environment"))
+    );
+}
+
 fn define_study() -> Study {
     let study = Study::new();
     let fixture =
