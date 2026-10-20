@@ -206,14 +206,9 @@ impl<'a> Phases<'a> {
     /// (NAME-7), and each key column an aggregate pairs with the row's
     /// same-named value.
     fn row_reads(&self, root: ExprId) -> Vec<&'a str> {
-        self.row_reads_except(root, None)
-    }
-
-    fn row_reads_except(&self, root: ExprId, except: Option<ExprId>) -> Vec<&'a str> {
         let spec = self.spec;
         let mut names = Vec::new();
         let mut items = BTreeSet::new();
-        items.extend(except);
         spec.walk(root, Scope::Row, |at, scope| {
             match &spec.expr(at).kind {
                 ExprKind::Ref(name) if scope == Scope::Row && !items.contains(&at) => {
@@ -288,11 +283,10 @@ impl<'a> Phases<'a> {
 
     /// The columns `root` needs before it completes in the row phase: the
     /// columns each lookup it reads matches on, then the columns it reads.
-    /// A derivation that is itself a structured source reads its range value
-    /// with a match value's availability (LOOKUP-2): a column the value reads
-    /// must already be in the row phase, and the read does not bring its
-    /// default in. Nested in a `case`, a structured source's range value is
-    /// read as any other.
+    /// A structured source's range value is one of those reads wherever the
+    /// source is written, so a row-local default it names completes in the
+    /// row phase (SPEC-6), and a default it names that is not row local
+    /// leaves the reading default not row local either.
     fn needs(&self, root: ExprId) -> Vec<usize> {
         let mut needs = Vec::new();
         for read in self.all_reads(root, Scope::Row) {
@@ -300,12 +294,8 @@ impl<'a> Phases<'a> {
                 self.matches(index, &mut Vec::new(), &mut needs);
             }
         }
-        let range = match &self.spec.expr(root).kind {
-            ExprKind::Source(source) => source.between.as_ref().map(|between| between.value),
-            _ => None,
-        };
         needs.extend(
-            self.row_reads_except(root, range)
+            self.row_reads(root)
                 .into_iter()
                 .filter_map(|name| self.output(name)),
         );
@@ -769,40 +759,48 @@ mod tests {
         assert_eq!(sets, [vec![0, 1, 4], vec![0, 1, 4]]);
     }
 
-    #[test]
-    fn a_structured_source_reads_its_own_range_value_with_match_availability() {
-        let structured = || {
-            op(
-                "source",
-                Tree::map(vec![
-                    ("variable", Tree::text("PERIODS.PERIOD")),
-                    (
-                        "between",
-                        Tree::map(vec![
-                            ("value", Tree::text("DAY")),
-                            ("lower", Tree::text("FIRST")),
-                            ("upper", Tree::text("LAST")),
-                        ]),
-                    ),
-                ]),
-            )
-        };
-        let nested = op(
+    /// A structured source of `PERIODS.PERIOD` whose range value is `value`.
+    fn structured(value: &str) -> Tree {
+        op(
+            "source",
+            Tree::map(vec![
+                ("variable", Tree::text("PERIODS.PERIOD")),
+                (
+                    "between",
+                    Tree::map(vec![
+                        ("value", Tree::text(value)),
+                        ("lower", Tree::text("FIRST")),
+                        ("upper", Tree::text("LAST")),
+                    ]),
+                ),
+            ]),
+        )
+    }
+    /// A `case` whose one branch is `result`.
+    fn otherwise(result: Tree) -> Tree {
+        op(
             "case",
-            Tree::list(vec![Tree::map(vec![("otherwise", structured())])]),
-        );
+            Tree::list(vec![Tree::map(vec![("otherwise", result)])]),
+        )
+    }
+
+    #[test]
+    fn a_structured_source_s_range_value_brings_its_default_into_the_row_phase() {
         let rows = Tree::list(vec![
             row(
                 "own",
                 vec![
                     ("ID", source("SRC.ID")),
-                    ("PERIOD", derivation(structured())),
+                    ("PERIOD", derivation(structured("DAY"))),
                 ],
                 vec![],
             ),
             row(
                 "nested",
-                vec![("ID", source("SRC.ID")), ("PERIOD", derivation(nested))],
+                vec![
+                    ("ID", source("SRC.ID")),
+                    ("PERIOD", derivation(otherwise(structured("DAY")))),
+                ],
                 vec![],
             ),
         ]);
@@ -811,8 +809,53 @@ mod tests {
             vec![("input", inputs(&["SRC", "PERIODS"])), ("rows", rows)],
         )
         .unwrap();
-        // The derivation's own range value does not bring DAY into the row
-        // phase; the same value inside a `case` does.
-        assert_eq!(sets, [vec![0, 2], vec![0, 1, 2]]);
+        // The range value is read as any other read (SPEC-6), whether the
+        // structured source is the derivation itself or a `case` branch: DAY
+        // completes in the row phase of both templates.
+        assert_eq!(sets, [vec![0, 1, 2], vec![0, 1, 2]]);
+    }
+
+    #[test]
+    fn a_structured_source_whose_range_value_reads_a_window_is_not_row_local() {
+        let window = derivation(op(
+            "row_number",
+            Tree::map(vec![(
+                "window",
+                Tree::map(vec![("order_by", Tree::list(vec![Tree::text("ID")]))]),
+            )]),
+        ));
+        let rows = Tree::list(vec![row(
+            "only",
+            vec![
+                ("ID", source("SRC.ID")),
+                ("OWN", literal("1")),
+                ("NESTED", literal("2")),
+            ],
+            vec![],
+        )]);
+        let Err(PrepareError::Invalid(findings)) = phases(
+            vec![
+                column("NUMBER", "int", window),
+                column("OWN", "int", derivation(structured("NUMBER"))),
+                column("NESTED", "int", derivation(otherwise(structured("NUMBER")))),
+            ],
+            vec![("input", inputs(&["SRC", "PERIODS"])), ("rows", rows)],
+        ) else {
+            panic!("refused");
+        };
+        let refused = findings
+            .iter()
+            .map(|finding| match finding {
+                PreflightFinding::DuplicateRowDefault {
+                    column,
+                    not_row_local,
+                    ..
+                } => (column.as_str(), not_row_local.as_str()),
+                _ => panic!("{finding:?}"),
+            })
+            .collect::<Vec<_>>();
+        // Each default reads the window through its range value, so neither
+        // is row local, and the template replaces neither (SPEC-6).
+        assert_eq!(refused, [("OWN", "window"), ("NESTED", "window")]);
     }
 }
