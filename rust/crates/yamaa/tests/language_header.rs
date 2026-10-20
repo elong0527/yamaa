@@ -212,6 +212,38 @@ fn lint_reads_a_1_0_file() {
     assert_eq!(lint.files(), 1);
 }
 
+/// D67 on a public run (D102): in 0.5 `absent` answers a variable the input
+/// does not hold; the same column written for 1.0, as the converter writes
+/// it, fails at the read, since there `absent` answers only a lookup that
+/// finds no record (NAME-3).
+#[test]
+fn absent_answers_a_variable_the_input_does_not_hold_only_in_0_5() {
+    let study = Study::new();
+    study.write("raw.csv", "USUBJID\nP1\n");
+    let spec = |header: &str| {
+        format!(
+            "{header}domain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\ncolumns:\n  - {{name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}}\n  - {{name: V, type: int, label: Value, derivation: {{source: {{variable: RAW.UNKNOWN, absent: 7}}}}}}\noutput: {{path: dm.csv, columns: [USUBJID, V]}}\n"
+        )
+    };
+    let path = study.path("spec.yaml");
+    let engine = engine();
+    let token = CancellationToken::new();
+    study.write("spec.yaml", &spec("schema_version: '1.0'\n"));
+    let mut run = engine.spec_run(&path, None, &token).unwrap();
+    assert_eq!(rows(&run.issues()), []);
+    run.save().unwrap();
+    assert_eq!(study.read("dm.csv"), b"USUBJID,V\nP1,7\n");
+    study.write("spec.yaml", &spec("yamaa: \"1.0\"\ntype: spec\n"));
+    let issues = rows(&engine.spec_run(&path, None, &token).unwrap().issues());
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "unknown_field");
+    assert_eq!(rule.as_deref(), Some("NAME-3"));
+    assert_eq!(paths, &["columns.V.derivation.source"]);
+    assert_eq!(context["identifier"], Value::String("RAW.UNKNOWN".into()));
+}
+
 /// The `unsupported_operation` refusals of a check of `spec`, with `project`.
 fn refusals(study: &Study, spec: &str, project: Option<&str>) -> Vec<(String, Vec<String>)> {
     let project = project.map(|project| study.path(project));
