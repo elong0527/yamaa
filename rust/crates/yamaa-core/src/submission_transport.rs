@@ -3,6 +3,7 @@
 //! XPT-8). Nothing here executes a specification or encodes a byte.
 use crate::json::Value as JsonValue;
 use crate::{
+    application_issue::{Fault, Stage},
     diagnostic::ConditionCode,
     limits::Limits,
     project_environment::Submission,
@@ -172,13 +173,8 @@ pub fn admit<T: TableAccess>(study: &Study, dataset: &Dataset, table: &T) -> Res
     let path = format!("datasets.{}.transport", dataset.id);
     let transport = study.transport();
     let xpt = transport == Some(Transport::Xpt);
-    Limits::table(table.row_count(), dataset.columns.len()).map_err(|error| {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            &path,
-            &error.to_string(),
-        )
-    })?;
+    Limits::table(table.row_count(), dataset.columns.len())
+        .map_err(|bound| Finding::limit(&path, Stage::Define, Fault::ResourceLimit, bound))?;
     validate_artifact(study, dataset, table)?;
     for row in 0..table.row_count() {
         for column in 0..dataset.columns.len() {

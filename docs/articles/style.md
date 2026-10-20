@@ -2,41 +2,50 @@
 
 This guide fixes one written form of a yamaa specification, so every
 specification in a project reads the same way. Each departure from it is a
-style finding. A style finding is advice, not a validation diagnostic: it has
-no phase and no condition, and a specification with style findings stays valid
-and runs exactly as its canonical form does. The layout and spelling departures
-leave the parsed value unchanged: field order has no execution meaning, and
-block and flow collections parse to the same value. The authoring lints name a
-rewrite that keeps the derivation's behavior. The [rules](rules.md) define what a specification means; this guide
-only fixes how it is written.
+lint finding. A lint finding is advice, not a validation diagnostic: it has
+no phase and no condition, and a specification with lint findings stays valid
+and runs exactly as its canonical form does. The layout departures leave the
+parsed value unchanged: field order has no execution meaning, and block and
+flow collections parse to the same value. The authoring lints name a rewrite
+that keeps the derivation's behavior. The [rules](rules.md) define what a
+specification means; this guide only fixes how it is written.
 
 ## Running the check
 
-Install the optional `style` extra before running the checker. From a source
-checkout, run `python -m pip install './python[style]'`. Development setup with
-`make setup` already includes its dependencies through the `test` extra.
+`lint()` checks specification files against this guide in both packages:
 
-```bash
-python -m yamaa.style study/adsl.yaml study/adae.yaml
-python -m yamaa.style study/
-python -m yamaa.style --fix study/adsl.yaml
-python -m yamaa.style --ignore line_width study/
-```
+=== "R"
+
+    ```r
+    findings <- yamaa_lint(c("study/adsl.yaml", "study/adae.yaml"))
+    findings <- yamaa_lint("study/")
+    remaining <- yamaa_lint("study/adsl.yaml", fix = TRUE)
+    ```
+
+=== "Python"
+
+    ```python
+    findings = yamaa.lint(["study/adsl.yaml", "study/adae.yaml"])
+    findings = yamaa.lint("study/")
+    remaining = yamaa.lint("study/adsl.yaml", fix=True)
+    ```
 
 The check reads each specification file as its author wrote it, before any
-inherited layer is resolved. It reports each finding with the file, the
-one-based line and column where the departure starts, the finding name and a
-message:
+inherited layer is resolved. It returns a table with one row per finding: the
+file's absolute path with forward slashes, the one-based line and column where
+the departure starts, the finding name, the spec path of the departure (`$`
+for the root) and a message.
 
-```text
-study/adsl.yaml:17:1: blank_lines remove the second blank line
-```
+| file | line | column | finding | spec_path | message |
+| --- | --- | --- | --- | --- | --- |
+| `/study/adsl.yaml` | 17 | 1 | `blank_lines` | `$` | remove the second blank line |
 
-A directory expands to the specification files beneath it. `--select` and
-`--ignore` take comma-separated finding names. The exit status is 0 when no
-finding remains, 1 when findings remain and 2 when a file cannot be read or
-parsed. Repository validation reports every finding in a benchmark
-specification as a failure; elsewhere the check runs when a project runs it.
+A directory expands to the specification files beneath it, in sorted path
+order; rows follow the files, then line, column and finding. A file that
+cannot be read or parsed, or a directory that cannot be listed, refuses the
+call with the issue that says why, and nothing is written. Repository
+validation reports every finding in a benchmark specification as a failure;
+elsewhere the check runs when a project runs it.
 
 ## Field order
 
@@ -119,14 +128,15 @@ A literal expression is written as the single-line flow mapping
 `{literal: X}`, wherever it appears: a `case` branch `then` or `otherwise`
 result, a `derivation` value, a row-template value or any other position. The
 block form, with the parent key on its own line and `literal: X` nested beneath
-it, parses identically but is reported as `literal_form`.
+it, parses identically. The check reports no spelling of a literal, since the
+1.0 language retires `{literal: X}`.
 
-A value has one spelling in the language itself, so the style check names
+A value has one spelling in the language itself, so the check names
 none of the shorthand spellings. A plain source is the bare string wherever
 the source shorthand applies, a field that takes several values is a list even
 for one, and a long form that holds only the field its shorthand fills, such
 as `{source: X}` in a `derivation` or `aggregate: {expr: E}`, fails validation
-as `redundant_long_form` rather than standing as a style finding.
+as `redundant_long_form` rather than standing as a lint finding.
 
 ## Authoring lints
 
@@ -182,7 +192,7 @@ A simple named intermediate equivalent to the implicit join is reported as
 with an explicit `key` that restates exactly the output `keys`, reads what
 `DATASET.COLUMN` already reads. The check reports the intermediate's `id` and
 suggests reading the input dataset directly. An omitted `key` fails validation
-as `rename_only_intermediate` instead and is never a style finding.
+as `rename_only_intermediate` instead and is never a lint finding.
 `require_match: true` requires a match the implicit join cannot state, and an
 input declaring `require_match: true` makes its implicit join fail where the
 intermediate answers, so neither is reported. Any other `no_match` literal, a
@@ -218,7 +228,7 @@ columns:
 
 ## Fixes
 
-`--fix` changes how the lines of a file are laid out, never the written text of
+`fix` changes how the lines of a file are laid out, never the written text of
 a value. It may:
 
 - move a field, with the comments written directly above it, into field order;
@@ -234,15 +244,16 @@ A fix is kept only when all of these hold for the fixed file:
 - it carries the same comment lines;
 - it does not change when it is fixed again.
 
-Otherwise the file stays as written and the finding stays reported. A
-`literal_form` finding changes the spelling of a value, and its author
-corrects it. A `repeated_row_derivation`, `redundant_intermediate` or
-`missing_label` finding rewrites the specification's value while keeping its
-derivation behavior, and its author corrects it; no fix is offered.
+Otherwise the file stays as written and the finding stays reported. A fixed
+file is replaced atomically, keeping its permissions; these named files are
+the only files the check writes. A `repeated_row_derivation`,
+`redundant_intermediate` or `missing_label` finding rewrites the
+specification's value while keeping its derivation behavior, and its author
+corrects it; no fix is offered.
 
 ## Suppression
 
-A comment `# yamaa-style: allow <name>, ... -- <reason>` written directly above
+A comment `# yamaa-lint: allow <name>, ... -- <reason>` written directly above
 a field or an entry suppresses the named findings reported within that field or
 entry. Other comments may stand between the suppression and the field, and the
 suppression states a reason. A suppression that names no finding, names an
@@ -251,7 +262,7 @@ unknown finding or gives no reason suppresses nothing and is itself reported as
 
 ```yaml
 columns:
-  # yamaa-style: allow line_width -- the code list is quoted verbatim
+  # yamaa-lint: allow line_width -- the code list is quoted verbatim
   - name: ARM
     type: str
 ```

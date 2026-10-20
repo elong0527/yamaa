@@ -279,13 +279,18 @@ fn a_dtc_part_after_the_year_is_read_only_when_reached() {
 
 #[test]
 fn a_failed_resolution_check_is_an_internal_bind_rejection() {
-    use yamaa_adapters::{specification_diagnostics::failure, specification_run::Error};
+    use yamaa_adapters::{
+        specification_diagnostics::{failure, Rejection},
+        specification_run::Error,
+    };
+    use yamaa_core::application_issue::{rejected, Fault, Stage};
     use yamaa_core::{dataset::ResolutionError, specification::BindError};
     let reply = failure(
         &Error::Bind(BindError::Resolution(ResolutionError::Capacity)),
         None,
     );
-    assert!(reply.contains(r#""status":"rejected""#), "{reply}");
-    assert!(reply.contains(r#""stage":"bind""#), "{reply}");
-    assert!(reply.contains(r#""code":"internal""#), "{reply}");
+    assert_eq!(
+        reply,
+        Rejection::Fault(rejected(Stage::Bind, Fault::Internal))
+    );
 }

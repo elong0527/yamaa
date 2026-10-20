@@ -1148,9 +1148,10 @@ mod declaration {
                 bytes,
             }
         }
+        /// The report rows of a refused inherited preparation's findings.
         fn outcome(error: InheritanceError<Payload>) -> Value {
-            match specification_diagnostics::inheritance_failure(error) {
-                Ok(s) => yamaa_adapters::json_wire::decode(&s).unwrap(),
+            match specification_diagnostics::inheritance_failure_ref(&error) {
+                Ok(rejection) => crate::support::findings(rejection),
                 Err(_) => panic!("semantic report"),
             }
         }
@@ -1174,9 +1175,11 @@ mod declaration {
                     Err(e) => e,
                     Ok(_) => panic!("invalid independent original"),
                 };
+                let expected = yamaa_adapters::json_wire::decode(fields[4]).unwrap();
+                assert_eq!(expected["outcome"]["status"], "invalid", "{}", fields[0]);
                 assert_eq!(
                     outcome(error),
-                    yamaa_adapters::json_wire::decode(fields[4]).unwrap(),
+                    expected["outcome"]["diagnostics"],
                     "{}",
                     fields[0]
                 );
@@ -1291,9 +1294,19 @@ mod declaration {
                 Err(e) => e,
                 Ok(_) => panic!(),
             };
+            let rejection = match specification_diagnostics::inheritance_failure_ref(&error) {
+                Ok(rejection) => rejection,
+                Err(_) => panic!("bounded report"),
+            };
+            assert!(matches!(
+                rejection,
+                specification_diagnostics::Rejection::Limit(_)
+            ));
             assert_eq!(
-                outcome(error),
-                json!({"protocol":"specification/prototype","outcome":{"status":"resource_limit","stage":"capture","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
+                crate::support::rows(&rejection.into_issues()),
+                [
+                    json!({"phase":"engine","condition":"engine_rejected","requirement":null,"spec_paths":[],"context":{"stage":"capture","code":"resource_limit","phase":"yaml_decode","resource":"spec_bytes","limit":yamaa_core::limits::Limits::SPEC_BYTES,"actual":yamaa_core::limits::Limits::SPEC_BYTES + 1}})
+                ]
             );
             assert_eq!(host.calls.len(), 2);
             let mut host = new_host(parent);
@@ -1604,10 +1617,10 @@ mod declaration {
                     &mut missing,
                 )
                 .unwrap_err();
-                let report = specification_diagnostics::inheritance_failure(error).unwrap();
+                let report = specification_diagnostics::inheritance_failure_ref(&error).unwrap();
                 assert_eq!(
-                    yamaa_adapters::json_wire::decode(&report).unwrap(),
-                    json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":[{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}]}})
+                    crate::support::findings(report),
+                    json!([{"phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":parent_names[0],"source":entry.to_str().unwrap()}}])
                 );
                 assert_eq!(
                     missing.events,
@@ -1927,14 +1940,8 @@ mod declaration {
                         panic!("a required field cannot be cleared")
                     };
                     let report = outcome(error);
-                    assert_eq!(
-                        report["outcome"]["diagnostics"][0]["condition"],
-                        "invalid_clear"
-                    );
-                    assert_eq!(
-                        report["outcome"]["diagnostics"][0]["spec_paths"][0],
-                        "columns.ID.type"
-                    );
+                    assert_eq!(report[0]["condition"], "invalid_clear");
+                    assert_eq!(report[0]["spec_paths"][0], "columns.ID.type");
                 }
             }
         }
@@ -2077,8 +2084,7 @@ mod declaration {
                 )
                 .unwrap_err();
                 let actual = outcome(error);
-                assert_eq!(actual["outcome"]["status"], "invalid", "{name}");
-                let diagnostics = actual["outcome"]["diagnostics"].as_array().unwrap();
+                let diagnostics = actual.as_array().unwrap();
                 assert_eq!(diagnostics.len(), 1, "{name}: {diagnostics:?}");
                 let diagnostic = &diagnostics[0];
                 assert_eq!(diagnostic["phase"], "validation", "{name}");
@@ -2263,7 +2269,8 @@ mod declaration {
             sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::json;
-        use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+        use yamaa_adapters::{file_application, specification_report::Identity};
+        use yamaa_core::diagnostic::Diagnostic;
         use yamaa_core::domain_entry::Request;
         use yamaa_core::json::Value;
 
@@ -2279,7 +2286,7 @@ mod declaration {
                 fs::create_dir(&path).unwrap();
                 Self(path)
             }
-            fn check(&self, intermediate: Value) -> Vec<Issue> {
+            fn check(&self, intermediate: Value) -> Vec<Diagnostic> {
                 let document = json!({
                     "schema_version":"1.0", "domain":"OUT", "base":"DS",
                     "keys":["STUDYID","USUBJID"],
@@ -2343,13 +2350,13 @@ mod declaration {
                 "verifications":[{"unique":{"columns":["STUDYID"]}}]
             }));
             assert_eq!(issues.len(), 1, "{issues:?}");
-            assert_eq!(issues[0].condition, "redundant_long_form");
+            assert_eq!(issues[0].condition(), "redundant_long_form");
             assert_eq!(
                 issues[0].spec_paths,
                 ["intermediates.DS_EOS.verifications[0].unique"]
             );
             assert_eq!(
-                issues[0].context,
+                yamaa_core::json::Value::Object(issues[0].context.clone()),
                 json!({"field":"columns","shorthand":"[\"STUDYID\"]"})
             );
         }
@@ -2372,8 +2379,8 @@ mod declaration {
                     yamaa_adapters::json_wire::encode(&verification)
                 );
                 assert!(
-                    issues.iter().all(|issue| issue.phase == "validation"
-                        && issue.condition != "resource_path_missing"
+                    issues.iter().all(|issue| issue.phase() == "validation"
+                        && issue.condition() != "resource_path_missing"
                         && issue
                             .spec_paths
                             .iter()
@@ -2391,7 +2398,7 @@ mod declaration {
                 "id":"DS_EOS", "dataset":"DS", "verification":{"unique":["USUBJID"]}
             }));
             assert_eq!(issues.len(), 1);
-            assert_eq!(issues[0].condition, "unknown_field");
+            assert_eq!(issues[0].condition(), "unknown_field");
             assert_eq!(issues[0].spec_paths, ["intermediates.DS_EOS.verification"]);
         }
 
@@ -2437,10 +2444,7 @@ mod declaration {
             .unwrap()
         }
         fn outcome(error: &Error) -> Value {
-            yamaa_adapters::json_wire::decode(&capture_failure(error)).unwrap()
-        }
-        fn invalid(diagnostics: Value) -> Value {
-            json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":diagnostics}})
+            crate::support::findings(capture_failure(error))
         }
         struct NoParents;
         impl InheritancePort for NoParents {
@@ -2535,7 +2539,7 @@ mod declaration {
             let decoded = decode_yaml(text.as_bytes()).unwrap();
             assert_eq!(captured.document(), Some(&decoded.document));
             let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"REQ-0281\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
-            assert_eq!(outcome(&error), invalid(json!([expected])));
+            assert_eq!(outcome(&error), json!([expected]));
             // Output names both columns so pruning (REQ-0638) keeps them live
             // and strict window expansion still reports their unknown windows.
             let text="schema_version: '1.0'\ninput: {}\nkeys: []\noutput: {columns: [Z, A]}\ncolumns:\n  - {name: Z, type: int, derivation: {value: {row_number: {window: SECOND}}}}\n  - {name: A, type: int, derivation: {value: {row_number: {window: FIRST}}}}\n";
@@ -2556,10 +2560,10 @@ mod declaration {
             assert_ne!(normalized, &decode_yaml(text.as_bytes()).unwrap().document);
             assert_eq!(
                 outcome(&error),
-                invalid(json!([
+                json!([
                     {"phase":"validation","condition":"unknown_window","requirement":"REQ-1253","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
                     {"phase":"validation","condition":"unknown_window","requirement":"REQ-1253","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
-                ]))
+                ])
             );
         }
 
@@ -2578,11 +2582,11 @@ mod declaration {
             assert_eq!(captured.source().bytes.as_ptr(), pointer);
             assert_eq!(
                 outcome(&error),
-                invalid(json!([
+                json!([
                     {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
                     {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.path"],"context":{"reason":"Field required"}},
                     {"phase":"validation","condition":"model_contract_mismatch","requirement":"REQ-0285","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
-                ]))
+                ])
             );
         }
 
@@ -2711,11 +2715,12 @@ mod declaration {
                         "root.yaml",
                     )
                 }
+                /// The report rows of a native rejection's findings.
                 fn report(&self, text: &str) -> Value {
                     let Err(error) = self.prepare(text) else {
                         panic!("native rejection")
                     };
-                    yamaa_adapters::json_wire::decode(&error.into_message()).unwrap()
+                    crate::support::preparation_findings(error)
                 }
             }
             impl Drop for Study {
@@ -2737,10 +2742,10 @@ mod declaration {
                 for (parent, actual) in [("7", "int"), ("[]", "sequence")] {
                     assert_eq!(
                         study.report(&format!("{VALID}parent: {parent}\n")),
-                        invalid(json!([{
+                        json!([{
                             "phase":"validation","condition":"invalid_field_type","requirement":"REQ-0287","spec_paths":["parent"],
                             "context":{"expected":"path","actual":actual,"source":study.identity("entry/root.yaml"),"entry":study.identity("entry/root.yaml")}
-                        }]))
+                        }])
                     );
                 }
             }
@@ -2753,15 +2758,15 @@ mod declaration {
                         "{}parent: absent.yaml\n",
                         VALID.replace("'1.0'", "'99.0'")
                     )),
-                    invalid(json!([{
+                    json!([{
                         "phase":"validation","condition":"schema_version_mismatch","requirement":"REQ-0245","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":root,"entry":root}
-                    }]))
+                    }])
                 );
                 assert_eq!(
                     study.report(&format!("{VALID}parent: absent.yaml\n")),
-                    invalid(json!([{
+                    json!([{
                         "phase":"validation","condition":"parent_not_found","requirement":"REQ-0654","spec_paths":["parent"],"context":{"path":"absent.yaml","source":root}
-                    }]))
+                    }])
                 );
                 fs::write(
                     study.0.join("parent/base.yaml"),
@@ -2770,9 +2775,9 @@ mod declaration {
                 .unwrap();
                 assert_eq!(
                     study.report(&format!("{VALID}parent: ../parent/base.yaml\n")),
-                    invalid(json!([{
+                    json!([{
                         "phase":"validation","condition":"pattern_mismatch","requirement":"REQ-0287","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":study.identity("parent/base.yaml"),"entry":root}
-                    }]))
+                    }])
                 );
             }
             #[test]
@@ -2823,10 +2828,7 @@ mod declaration {
                 );
                 assert_eq!(prepared.capture_reads(), 4);
                 assert_eq!(prepared.run().source().path, "../parent/never-read.csv");
-                assert_eq!(
-                    yamaa_adapters::specification_check::issues(prepared.run()).unwrap(),
-                    "[]"
-                );
+                assert!(yamaa_adapters::specification_check::issues(prepared.run()).is_empty());
                 assert!(!study.0.join("parent/never-read.csv").exists());
                 assert!(!study.0.join("parent/never-written.csv").exists());
             }

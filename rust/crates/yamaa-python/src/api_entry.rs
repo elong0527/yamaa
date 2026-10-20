@@ -179,6 +179,16 @@ pub fn _read_odm(
         .map_err(|error| raise_error(py, "cannot read ODM", error))
 }
 
+/// The lint table of every file `paths` names, fixing them first when `fix`
+/// is true; a file that cannot be read or admitted raises `_Error`.
+#[pyfunction]
+#[pyo3(signature=(paths, fix=false))]
+pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<ArrowTable> {
+    yamaa::lint(&paths, fix)
+        .map(|table| ArrowTable::from(&table))
+        .map_err(|failure| raise(py, failure))
+}
+
 fn project_poisoned() -> PyErr {
     pyo3::exceptions::PyRuntimeError::new_err("project handle is in use or poisoned")
 }

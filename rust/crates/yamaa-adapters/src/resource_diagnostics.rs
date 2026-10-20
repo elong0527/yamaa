@@ -1,6 +1,7 @@
 //! Typed resource policies retain their applied bounds and authored owners.
 use crate::{csv_source::TextTableError, specification_run::Error};
-use yamaa_core::json::Value;
+use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{
     dataset::{ExecutionError, Resource},
     specification::SourceDeclaration,
@@ -27,24 +28,18 @@ impl Refusal {
             spec_paths,
         }
     }
-    pub fn diagnostic(&self, stage: &str, code: &str) -> yamaa_core::diagnostic::Diagnostic {
+    pub fn diagnostic(&self, stage: Stage, fault: Fault) -> Diagnostic {
         yamaa_core::application_issue::resource_rejected(
             stage,
-            code,
+            fault,
             self.resource,
             self.limit,
             self.actual,
             self.spec_paths.clone(),
         )
     }
-    pub fn issues(&self, stage: &str, code: &str) -> Vec<crate::issue_rows::Issue> {
-        vec![
-            crate::issue_rows::Issue::from_core(self.diagnostic(stage, code))
-                .expect("resource finding"),
-        ]
-    }
-    pub(crate) fn value(&self, stage: &str, code: &str) -> Value {
-        crate::specification_diagnostics::portable_diagnostic(self.diagnostic(stage, code))
+    pub fn issues(&self, stage: Stage, fault: Fault) -> Vec<Diagnostic> {
+        vec![self.diagnostic(stage, fault)]
     }
 }
 pub(crate) fn resource_name(resource: Resource) -> &'static str {
@@ -184,7 +179,7 @@ pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusa
 pub(crate) fn source_findings(
     error: &Error,
     source: &SourceDeclaration,
-) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
+) -> Result<Option<Vec<Diagnostic>>, crate::source_diagnostics::SourceProjectionError> {
     let mut pending = vec![(source, error)];
     let mut findings = Vec::new();
     while let Some((source, error)) = pending.pop() {
@@ -193,7 +188,7 @@ pub(crate) fn source_findings(
         } else if let Error::Sources(errors) = error {
             pending.extend(errors.iter().rev().map(|(source, error)| (source, error)));
         } else if let Some(refusal) = self::source(error, source) {
-            findings.push(refusal.value("ingest", "source_limit"));
+            findings.push(refusal.diagnostic(Stage::Ingest, Fault::SourceLimit));
         } else {
             return Ok(None);
         }
@@ -215,47 +210,41 @@ pub(crate) fn run_limit<E>(
     ))
 }
 
+/// The refusal of one execution bound, naming its source when it has one.
 pub(crate) fn outcome(
-    value: &Value,
+    bound: &crate::dataset_result::Limit,
     sources: &[SourceDeclaration],
     driver_index: usize,
 ) -> Option<Refusal> {
-    let resource = match value["resource"].as_str()? {
-        "rows" => "rows",
-        "cells" => "cells",
-        "columns" => "columns",
-        "sources" => "sources",
-        "output_rows" => "output_rows",
-        "output_cells" => "output_cells",
-        "output_columns" => "output_columns",
-        "table_rows" => "table_rows",
-        "table_cells" => "table_cells",
-        _ => return None,
-    };
-    let limit = value["limit"].as_str()?.parse().ok()?;
-    let actual = value["required"].as_str().and_then(|v| v.parse().ok());
-    let mut paths = match value["spec_paths"].as_array() {
-        Some(v) => v
-            .iter()
-            .map(|path| path.as_str().map(str::to_owned))
-            .collect::<Option<Vec<_>>>()?,
-        None => Vec::new(),
-    };
-    if let Some(source_index) = value.get("source_index") {
-        paths = vec![source_path(
-            sources,
-            driver_index,
-            usize::try_from(source_index.as_u64()?).ok()?,
-        )?];
+    let resource = bound.resource;
+    if !matches!(
+        resource,
+        "rows"
+            | "cells"
+            | "columns"
+            | "sources"
+            | "output_rows"
+            | "output_cells"
+            | "output_columns"
+            | "table_rows"
+            | "table_cells"
+    ) {
+        return None;
+    }
+    let limit = bound.limit?;
+    let mut paths = bound.spec_paths.clone();
+    if let Some(source_index) = bound.source_index {
+        paths = vec![source_path(sources, driver_index, source_index)?];
     } else if paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
         paths = input_paths(sources);
     }
-    Some(Refusal::new(resource, limit, actual, paths))
+    Some(Refusal::new(resource, limit, bound.required, paths))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yamaa_core::json::Value;
     #[test]
     fn source_resource_fallback_preserves_complete_context_and_nested_findings() {
         let value = "x".repeat(2_000_000);
@@ -268,7 +257,7 @@ mod tests {
         ));
         let findings = source_findings(&error, &input()).unwrap().unwrap();
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0]["context"]["value"], value);
+        assert_eq!(findings[0].context["value"], value);
         let mut error = Error::Source(TextTableError::Csv(
             crate::csv_source::parse(b"").unwrap_err(),
         ));
@@ -305,19 +294,17 @@ mod tests {
         assert_eq!(refusal.limit, 10_000_000);
         assert_eq!(refusal.actual, Some(10_000_001));
         assert_eq!(refusal.spec_paths, ["input.XW"]);
-        let projected: Value = crate::json_wire::decode(
-            &crate::specification_diagnostics::failure(&failure, Some(&declaration)),
-        )
-        .unwrap();
-        assert_eq!(projected["outcome"]["stage"], "ingest");
-        assert_eq!(projected["outcome"]["code"], "sas_limit");
-        assert_eq!(projected["outcome"]["resource"], "table_rows");
-        assert_eq!(projected["outcome"]["limit"], 10_000_000);
-        assert_eq!(projected["outcome"]["actual"], 10_000_001);
-        assert_eq!(
-            projected["outcome"]["spec_paths"],
-            crate::json!(["input.XW"])
-        );
+        let crate::specification_diagnostics::Rejection::Fault(projected) =
+            crate::specification_diagnostics::failure(&failure, Some(&declaration))
+        else {
+            panic!("a fixed source bound is an engine fault");
+        };
+        assert_eq!(projected.context["stage"], "ingest");
+        assert_eq!(projected.context["code"], "sas_limit");
+        assert_eq!(projected.context["resource"], "table_rows");
+        assert_eq!(projected.context["limit"], 10_000_000);
+        assert_eq!(projected.context["actual"], 10_000_001);
+        assert_eq!(projected.spec_paths, ["input.XW"]);
     }
 
     #[test]
@@ -335,13 +322,17 @@ mod tests {
             };
             let projected = execution(&error, &sources, 1).unwrap();
             assert_eq!(projected.spec_paths, [format!("input.{owner}")]);
-            let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
-            assert_eq!(encoded["source_index"], source_index);
-            assert_eq!(outcome(&encoded, &sources, 1), Some(projected));
+            let crate::dataset_result::Outcome::Limit(bound) =
+                crate::dataset_result::semantic_condition(&error).unwrap()
+            else {
+                panic!("a source bound is a limit outcome");
+            };
+            assert_eq!(bound.source_index, Some(source_index));
+            assert_eq!(outcome(&bound, &sources, 1), Some(projected));
         }
     }
     #[test]
-    fn intermediate_table_limits_survive_the_execution_outcome_wire_round_trip() {
+    fn intermediate_table_limits_keep_their_bounds_through_the_execution_outcome() {
         use core::convert::Infallible;
         use yamaa_core::{
             limits::Limits, table_grouping::GroupingError, table_reduction::TableReductionError,
@@ -361,15 +352,17 @@ mod tests {
                     identity: None,
                 },
             ] {
-                let encoded = crate::dataset_result::semantic_condition(&error).unwrap();
-                let wire = crate::json_wire::encode(&encoded);
-                let decoded: Value = crate::json_wire::decode(&wire).unwrap();
+                let crate::dataset_result::Outcome::Limit(bound) =
+                    crate::dataset_result::semantic_condition(&error).unwrap()
+                else {
+                    panic!("a table bound is a limit outcome");
+                };
                 let expected = Refusal::new(limit.resource, limit.limit, limit.actual, Vec::new());
-                assert_eq!(decoded["resource"], limit.resource);
-                assert_eq!(decoded["limit"], limit.limit.to_string());
-                assert_eq!(decoded["required"], limit.actual.unwrap().to_string());
+                assert_eq!(bound.resource, limit.resource);
+                assert_eq!(bound.limit, Some(limit.limit));
+                assert_eq!(bound.required, limit.actual);
                 assert_eq!(execution(&error, &sources, 0), Some(expected.clone()));
-                assert_eq!(outcome(&decoded, &sources, 0), Some(expected));
+                assert_eq!(outcome(&bound, &sources, 0), Some(expected));
             }
         }
     }
@@ -392,11 +385,11 @@ mod tests {
                 refusal,
                 Refusal::new(resource, limit, Some(actual), vec!["input.XW".into()])
             );
-            let value = refusal.value("ingest", "source_limit");
-            assert_eq!(value["context"]["resource"], resource);
-            assert_eq!(value["context"]["limit"], crate::json!(limit));
-            assert_eq!(value["context"]["actual"], crate::json!(actual));
-            assert_eq!(value["spec_paths"], crate::json!(["input.XW"]));
+            let finding = refusal.diagnostic(Stage::Ingest, Fault::SourceLimit);
+            assert_eq!(finding.context["resource"], resource);
+            assert_eq!(finding.context["limit"], Value::from(limit));
+            assert_eq!(finding.context["actual"], Value::from(actual));
+            assert_eq!(finding.spec_paths, ["input.XW"]);
         }
     }
 }

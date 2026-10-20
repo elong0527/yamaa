@@ -1127,7 +1127,7 @@ mod service {
 
             for (stage, code, phase, requirement) in [
                 (
-                    P::TargetAdmission,
+                    P::TargetAdmission(yamaa_core::application_issue::Fault::InvalidTarget),
                     ConditionCode::ApplicationRejected,
                     "engine",
                     None,
@@ -1153,11 +1153,14 @@ mod service {
                     ("cause".into(), C::String("opaque original cause".into())),
                 ]
                 .into();
-                if stage == P::TargetAdmission {
-                    expected.insert(
-                        "stage".into(),
-                        C::String("publication_target_admission".into()),
-                    );
+                if let P::TargetAdmission(_) = stage {
+                    // A refused target is an engine fault: its stage and closed code.
+                    for (key, value) in [
+                        ("stage", "publication_target_admission"),
+                        ("code", "invalid_target"),
+                    ] {
+                        expected.insert(key.into(), C::String(value.into()));
+                    }
                 }
                 assert_eq!(finding.context, expected);
                 assert_eq!(finding.source_span, None);

@@ -10,7 +10,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
 struct Fixture(PathBuf);
@@ -28,7 +29,7 @@ impl Fixture {
         fs::write(root.join("adsl.csv"), ADSL).unwrap();
         Self(root)
     }
-    fn run(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn run(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
         file_application::domain(
@@ -62,7 +63,7 @@ impl Fixture {
         let domain = self.run().unwrap();
         let issues = domain.issues();
         assert!(!issues.is_empty(), "the run succeeded");
-        issues[0].as_value()
+        yamaa_adapters::report_storage::diagnostic_value(&issues[0])
     }
 }
 impl Drop for Fixture {

@@ -11,7 +11,8 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use yamaa_adapters::{file_application, issue_rows::Issue, specification_report::Identity};
+use yamaa_adapters::{file_application, specification_report::Identity};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::{domain_entry::Request, json::Value};
 
 struct Fixture(PathBuf);
@@ -28,7 +29,7 @@ impl Fixture {
         fs::write(root.join("input.csv"), input).unwrap();
         Self(root)
     }
-    fn domain(&self) -> Result<file_application::Domain, Vec<Issue>> {
+    fn domain(&self) -> Result<file_application::Domain, Vec<Diagnostic>> {
         let specification = self.0.join("spec.yaml");
         let specification = specification.to_str().unwrap();
         file_application::domain(
@@ -65,9 +66,10 @@ impl Fixture {
             Err(issues) => issues,
         };
         assert!(!self.0.join("out.csv").exists());
-        let [issue] = <[Issue; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
-        yamaa_adapters::json!({"phase": issue.phase, "condition": issue.condition,
-            "requirement": issue.requirement, "spec_paths": issue.spec_paths,
+        let [issue] =
+            <[Diagnostic; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
+        yamaa_adapters::json!({"phase": issue.phase(), "condition": issue.condition(),
+            "requirement": issue.requirement(), "spec_paths": issue.spec_paths,
             "context": issue.context.clone()})
     }
 }

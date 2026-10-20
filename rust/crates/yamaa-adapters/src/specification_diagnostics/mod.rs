@@ -1,81 +1,83 @@
-//! Portable compiler/ingestion diagnostics. This layer only represents findings;
-//! it does not select a phase, bind a name, evaluate a formula or read a table.
-use crate::json;
+//! Compiler and ingestion refusals as typed diagnostic records. This layer only
+//! represents findings; it does not select a phase, bind a name, evaluate a
+//! formula or read a table.
 use crate::{
     csv_source::{self, TextTableError},
     specification_run::Error,
 };
+use yamaa_core::application_issue::{self as issue, Fault, Stage};
+use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::Value;
-use yamaa_core::specification::{
-    BindError, BindFinding, PreflightFinding, PrepareError, SourceDeclaration,
-};
+use yamaa_core::specification::{BindError, PrepareError, SourceDeclaration};
 
-pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Value>> {
+/// A refused preparation, typed from the failure site to the issues it
+/// reports. Callers that keep only some refusals choose by variant, never by
+/// reading a reply.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Rejection {
+    /// Language findings, in authored order.
+    Invalid(Vec<Diagnostic>),
+    /// Authored vocabulary the engine does not support, one issue per use.
+    Unsupported(Vec<Diagnostic>),
+    /// An engine fault: its stage and closed code, with the bound it hit
+    /// when it hit one.
+    Fault(Diagnostic),
+    /// A bound a preparation pass hit; its context names the pass as `phase`.
+    Limit(Diagnostic),
+}
+
+impl Rejection {
+    /// The issues the refusal reports, in order.
+    pub fn into_issues(self) -> Vec<Diagnostic> {
+        match self {
+            Self::Invalid(issues) | Self::Unsupported(issues) => issues,
+            Self::Fault(issue) | Self::Limit(issue) => vec![issue],
+        }
+    }
+}
+
+pub(crate) fn fault(stage: Stage, fault: Fault) -> Rejection {
+    Rejection::Fault(issue::rejected(stage, fault))
+}
+
+/// The bound one preparation pass, named `phase`, hit.
+pub(crate) fn bound(
+    stage: Stage,
+    phase: &str,
+    resource: &str,
+    limit: usize,
+    actual: Option<usize>,
+) -> Rejection {
+    let mut finding = issue::resource_rejected(
+        stage,
+        Fault::ResourceLimit,
+        resource,
+        limit,
+        actual,
+        Vec::new(),
+    );
+    finding
+        .context
+        .insert("phase".into(), Value::String(phase.into()));
+    Rejection::Limit(finding)
+}
+
+pub(crate) fn binding(error: &BindError, source: &SourceDeclaration) -> Option<Vec<Diagnostic>> {
     let BindError::Invalid(findings) = error else {
         return None;
     };
     let mut diagnostics = Vec::new();
     for finding in findings {
-        diagnostics.extend(binding_finding(finding, source)?);
+        diagnostics.extend(finding.diagnostics(source)?);
     }
     Some(diagnostics)
 }
-fn binding_finding(error: &BindFinding, source: &SourceDeclaration) -> Option<Vec<Value>> {
-    Some(
-        error
-            .diagnostics(source)?
-            .into_iter()
-            .map(portable_diagnostic)
-            .collect(),
-    )
-}
-/// Represent the core-owned finding without assigning semantic vocabulary here.
-fn preparing(error: &PreflightFinding) -> Value {
-    portable_diagnostic(error.diagnostic())
-}
 
-/// The original-document report shape retains ordinary JSON context values.
-/// Geometry recorded on the core diagnostic (source span and operand route)
-/// is carried through this projection onto the S1 record shape instead of
-/// being discarded; diagnostics without geometry keep the previous bytes.
-pub(crate) fn portable_diagnostic(finding: yamaa_core::diagnostic::Diagnostic) -> Value {
-    let definition = finding.definition();
-    let yamaa_core::diagnostic::Diagnostic {
-        spec_paths,
-        context,
-        source_span,
-        operand_route,
-        ..
-    } = finding;
-    portable_definition(definition, spec_paths, context, source_span, operand_route)
-}
-/// Findings projected from a definition alone (for example submission
-/// findings, whose causes have not joined the closed cause registry) record
-/// no geometry of their own; callers that have geometry pass it through
-/// instead of discarding it. Serialization assigns no semantic vocabulary.
-pub(crate) fn portable_definition(
-    definition: yamaa_core::diagnostic::Definition,
-    paths: Vec<String>,
-    context: yamaa_core::diagnostic::Context,
-    source_span: Option<yamaa_core::expression::SourceSpan>,
-    operand_route: Option<Vec<String>>,
-) -> Value {
-    crate::issue_rows::Issue {
-        phase: definition.phase.into(),
-        condition: definition.condition.into(),
-        requirement: definition.requirement.map(str::to_owned),
-        spec_paths: paths,
-        context: context.into(),
-        source_span,
-        operand_route,
-    }
-    .as_value()
-}
 /// Project complete retained compiler and codec findings without repeating source reads.
 pub fn findings(
     error: &Error,
     source: Option<&SourceDeclaration>,
-) -> Result<Option<Vec<Value>>, crate::source_diagnostics::SourceProjectionError> {
+) -> Result<Option<Vec<Diagnostic>>, crate::source_diagnostics::SourceProjectionError> {
     match error {
         Error::Sources(_)
         | Error::ParquetSource(_)
@@ -85,104 +87,106 @@ pub fn findings(
         | Error::Ordinal(_)
         | Error::OdmFields(_)
         | Error::OdmValues(_)
-        | Error::ProducerMetadata(_) => Ok(crate::source_diagnostics::findings(error, source)?
-            .map(|findings| findings.into_iter().map(portable_diagnostic).collect())),
-        Error::Prepare(PrepareError::Invalid(errors)) => {
-            Ok(Some(errors.iter().map(preparing).collect()))
-        }
+        | Error::ProducerMetadata(_) => crate::source_diagnostics::findings(error, source),
+        Error::Prepare(PrepareError::Invalid(errors)) => Ok(Some(
+            errors.iter().map(|error| error.diagnostic()).collect(),
+        )),
         Error::Bind(error) => Ok(source.and_then(|source| binding(error, source))),
         _ => Ok(None),
     }
 }
 
-/// Experimental host boundary reply. Semantic findings stay separate from
-/// unsupported vocabulary and resource/internal rejection; no Debug text leaks.
-/// This envelope is not the final whole-run conformance report.
-pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> String {
-    let projected = findings(error, source);
-    let outcome = if let Err(error) = projected {
-        let code = match error {
-            crate::source_diagnostics::SourceProjectionError::InvalidContext => {
-                "diagnostic_context"
-            }
-        };
-        json!({"status":"rejected","stage":"ingest","code":code})
-    } else if let Ok(Some(diagnostics)) = projected {
-        json!({"status":"invalid","diagnostics":diagnostics})
-    } else if let Some(refusal) = match error {
+/// The refusal of one compiler, codec, binding or execution failure. Semantic
+/// findings stay separate from unsupported vocabulary and from resource and
+/// internal faults; no Debug text leaks.
+pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
+    match findings(error, source) {
+        Err(crate::source_diagnostics::SourceProjectionError::InvalidContext) => {
+            return self::fault(Stage::Ingest, Fault::DiagnosticContext)
+        }
+        Ok(Some(diagnostics)) => return Rejection::Invalid(diagnostics),
+        Ok(None) => {}
+    }
+    let refusal = match error {
         Error::ResourceLimit(refusal) => Some(refusal.clone()),
         _ => source.and_then(|source| crate::resource_diagnostics::source(error, source)),
-    } {
-        let code = match error {
-            Error::Source(TextTableError::Csv(_)) => "csv_limit",
-            Error::Source(TextTableError::Table(_)) => "table_limit",
-            Error::ParquetSource(_) => "parquet_limit",
-            Error::SasSource(_) => "sas_limit",
-            _ => "source_limit",
-        };
-        let mut outcome = json!({"status":"rejected","stage":"ingest","code":code,"resource":refusal.resource,"limit":refusal.limit,"spec_paths":refusal.spec_paths});
-        if let Some(actual) = refusal.actual {
-            outcome["actual"] = json!(actual);
-        }
-        outcome
-    } else if let Error::Prepare(PrepareError::Unsupported(features)) = error {
-        json!({"status":"unsupported","features":features.iter().map(|f| json!({"operation":f.operation,"spec_path":f.path})).collect::<Vec<_>>()})
-    } else if let Error::Prepare(error) = error {
-        preparation_outcome(error)
-    } else {
-        let (stage, code) = match error {
-            Error::Prepare(_) => unreachable!("preparation errors handled above"),
-            Error::Source(TextTableError::Csv(csv_source::Error::Limit { .. })) => {
-                ("ingest", "csv_limit")
-            }
-            Error::Source(TextTableError::Table(crate::arrow_table::TableError::Limit {
-                ..
-            })) => ("ingest", "table_limit"),
-            Error::Source(_) => ("ingest", "internal"),
-            Error::TypedSource(_) => ("ingest", "source_boundary"),
-            Error::ParquetSource(crate::parquet_source::Error::ResourceLimit { .. }) => {
-                ("ingest", "parquet_limit")
-            }
-            Error::ParquetSource(crate::parquet_source::Error::ReaderUnavailable) => {
-                ("ingest", "parquet_reader_unavailable")
-            }
-            Error::ParquetSource(crate::parquet_source::Error::Unavailable { .. }) => {
-                ("ingest", "parquet_codec_unavailable")
-            }
-            Error::ParquetSource(_) => ("ingest", "parquet_boundary"),
-            Error::SasSource(crate::sas_source::Error::Limit { .. }) => ("ingest", "sas_limit"),
-            Error::SasSource(crate::sas_source::Error::Unavailable) => {
-                ("ingest", "sas_reader_unavailable")
-            }
-            Error::SasSource(_) => ("ingest", "sas_boundary"),
-            Error::Ordinal(_) => ("ingest", "source_ordinal_boundary"),
-            Error::Bind(BindError::Catalog(_)) => ("bind", "reference_catalog"),
-            Error::Bind(BindError::DependencyPolicy(_)) => ("bind", "dependency_policy"),
-            Error::Bind(BindError::SourceCount) => ("bind", "source_count"),
-            Error::Bind(BindError::InvalidDiagnostic) => ("bind", "diagnostic_context"),
-            Error::Bind(_) => ("bind", "internal"),
-            Error::Execution(error) if error.is_internal() => ("execute", "internal"),
-            Error::Execution(_) => ("execute", "execution_boundary"),
-            Error::ResourceLimit(_) => ("ingest", "source_limit"),
-            Error::Sources(_) => ("ingest", "source_collection_boundary"),
-            Error::OdmFields(_) | Error::OdmValues(_) => ("ingest", "odm_projection_boundary"),
-            Error::ProducerContract(_) => ("ingest", "producer_contract"),
-            Error::ProducerMetadata(_) => ("ingest", "producer_metadata"),
-        };
-        json!({"status":"rejected","stage":stage,"code":code})
     };
-    crate::json_wire::encode(&json!({"protocol":"specification/prototype","outcome":outcome}))
+    if let Some(refusal) = refusal {
+        let code = match error {
+            Error::Source(TextTableError::Csv(_)) => Fault::CsvLimit,
+            Error::Source(TextTableError::Table(_)) => Fault::TableLimit,
+            Error::ParquetSource(_) => Fault::ParquetLimit,
+            Error::SasSource(_) => Fault::SasLimit,
+            _ => Fault::SourceLimit,
+        };
+        return Rejection::Fault(refusal.diagnostic(Stage::Ingest, code));
+    }
+    if let Error::Prepare(PrepareError::Unsupported(features)) = error {
+        return Rejection::Unsupported(
+            features
+                .iter()
+                .map(|feature| issue::unsupported(&feature.operation, Some(&feature.path)))
+                .collect(),
+        );
+    }
+    if let Error::Prepare(error) = error {
+        return preparation(error);
+    }
+    let (stage, code) = match error {
+        Error::Prepare(_) => unreachable!("preparation errors handled above"),
+        Error::Source(TextTableError::Csv(csv_source::Error::Limit { .. })) => {
+            (Stage::Ingest, Fault::CsvLimit)
+        }
+        Error::Source(TextTableError::Table(crate::arrow_table::TableError::Limit { .. })) => {
+            (Stage::Ingest, Fault::TableLimit)
+        }
+        Error::Source(_) => (Stage::Ingest, Fault::Internal),
+        Error::TypedSource(_) => (Stage::Ingest, Fault::SourceBoundary),
+        Error::ParquetSource(crate::parquet_source::Error::ResourceLimit { .. }) => {
+            (Stage::Ingest, Fault::ParquetLimit)
+        }
+        Error::ParquetSource(crate::parquet_source::Error::ReaderUnavailable) => {
+            (Stage::Ingest, Fault::ParquetReaderUnavailable)
+        }
+        Error::ParquetSource(crate::parquet_source::Error::Unavailable { .. }) => {
+            (Stage::Ingest, Fault::ParquetCodecUnavailable)
+        }
+        Error::ParquetSource(_) => (Stage::Ingest, Fault::ParquetBoundary),
+        Error::SasSource(crate::sas_source::Error::Limit { .. }) => {
+            (Stage::Ingest, Fault::SasLimit)
+        }
+        Error::SasSource(crate::sas_source::Error::Unavailable) => {
+            (Stage::Ingest, Fault::SasReaderUnavailable)
+        }
+        Error::SasSource(_) => (Stage::Ingest, Fault::SasBoundary),
+        Error::Ordinal(_) => (Stage::Ingest, Fault::SourceOrdinalBoundary),
+        Error::Bind(BindError::Catalog(_)) => (Stage::Bind, Fault::ReferenceCatalog),
+        Error::Bind(BindError::DependencyPolicy(_)) => (Stage::Bind, Fault::DependencyPolicy),
+        Error::Bind(BindError::SourceCount) => (Stage::Bind, Fault::SourceCount),
+        Error::Bind(BindError::InvalidDiagnostic) => (Stage::Bind, Fault::DiagnosticContext),
+        Error::Bind(_) => (Stage::Bind, Fault::Internal),
+        Error::Execution(error) if error.is_internal() => (Stage::Execute, Fault::Internal),
+        Error::Execution(_) => (Stage::Execute, Fault::ExecutionBoundary),
+        Error::ResourceLimit(_) => (Stage::Ingest, Fault::SourceLimit),
+        Error::Sources(_) => (Stage::Ingest, Fault::SourceCollectionBoundary),
+        Error::OdmFields(_) | Error::OdmValues(_) => (Stage::Ingest, Fault::OdmProjectionBoundary),
+        Error::ProducerContract(_) => (Stage::Ingest, Fault::ProducerContract),
+        Error::ProducerMetadata(_) => (Stage::Ingest, Fault::ProducerMetadata),
+    };
+    self::fault(stage, code)
 }
 
 /// The same compiler failure facts are used by plain and environment routes.
-pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
+pub(crate) fn preparation(error: &PrepareError) -> Rejection {
     if let PrepareError::Limit(limit) = error {
-        let mut outcome = json!({"status":"rejected","stage":"prepare","code":"compiler_limit",
-            "resource":limit.resource,"limit":limit.limit,"spec_paths":limit.spec_paths});
-        if let Some(actual) = limit.actual {
-            outcome["actual"] = json!(actual);
-        }
-        return outcome;
+        return Rejection::Fault(issue::resource_rejected(
+            Stage::Prepare,
+            Fault::CompilerLimit,
+            limit.resource,
+            limit.limit,
+            limit.actual,
+            limit.spec_paths.clone(),
+        ));
     }
     if let PrepareError::Numeric {
         path,
@@ -194,101 +198,108 @@ pub(crate) fn preparation_outcome(error: &PrepareError) -> Value {
             },
     } = error
     {
-        return json!({"status":"rejected","stage":"prepare","code":"numeric_policy",
-            "resource":"semantic_depth","limit":limit,"spec_paths":[path]});
+        return Rejection::Fault(issue::resource_rejected(
+            Stage::Prepare,
+            Fault::NumericPolicy,
+            "semantic_depth",
+            *limit,
+            None,
+            vec![path.clone()],
+        ));
     }
-    let code = match error {
-        PrepareError::Numeric { .. } => "numeric_policy",
-        PrepareError::OutputSchema(_) => "output_schema",
-        _ => "internal",
-    };
-    json!({"status":"rejected","stage":"prepare","code":code})
-}
-pub(crate) fn compiler_failure(error: &PrepareError) -> crate::file_application::Failure {
-    crate::file_application::preparation_failure(crate::json_wire::encode(
-        &json!({"protocol":"specification/prototype","outcome":preparation_outcome(error)}),
-    ))
+    fault(
+        Stage::Prepare,
+        match error {
+            PrepareError::Numeric { .. } => Fault::NumericPolicy,
+            PrepareError::OutputSchema(_) => Fault::OutputSchema,
+            _ => Fault::Internal,
+        },
+    )
 }
 
-fn capture_response(outcome: Value) -> String {
-    crate::yaml_diagnostics::encode_outcome("specification/prototype", outcome)
+pub(super) fn decoder_limit(limit: &yamaa_core::limits::LimitExceeded, stage: Stage) -> Rejection {
+    bound(
+        stage,
+        "yaml_decode",
+        limit.resource,
+        limit.limit,
+        limit.actual,
+    )
 }
-pub(super) fn decoder_limit(limit: &yamaa_core::limits::LimitExceeded, stage: &str) -> Value {
-    let mut outcome = json!({"status":"resource_limit","stage":stage,"phase":"yaml_decode",
-        "resource":limit.resource,"limit":limit.limit});
-    if let Some(actual) = limit.actual {
-        outcome["actual"] = json!(actual);
-    }
-    outcome
-}
+
 /// Preparation exposes semantic context, never an arbitrary dump of source bytes.
 /// Findings resolve against the retained schema/pass input or the shared YAML decoder.
-pub fn capture_failure(error: &crate::specification_source::Error) -> String {
+pub fn capture_failure(error: &crate::specification_source::Error) -> Rejection {
     use crate::specification_source::Error;
-    if let Error::Limit(limit) = error {
-        let mut outcome = json!({"status":"resource_limit","stage":"capture","phase":"capture",
-            "resource":limit.resource,"limit":limit.limit});
-        if let Some(actual) = limit.actual {
-            outcome["actual"] = json!(actual);
+    use crate::yaml_decode::DecodeFailure;
+    match error {
+        Error::Limit(limit) => {
+            return bound(
+                Stage::Capture,
+                "capture",
+                limit.resource,
+                limit.limit,
+                limit.actual,
+            )
         }
-        return capture_response(outcome);
-    }
-    if let Error::Decode {
-        error: crate::yaml_decode::DecodeFailure::Limit(limit),
-        ..
-    } = error
-    {
-        return capture_response(decoder_limit(limit, "capture"));
-    }
-    if let Error::Dependencies(error) = error {
-        if let Ok(outcome) = crate::schema_outcomes::inheritance_dependencies(error.clone()) {
-            return capture_response(outcome);
-        }
-    }
-    let resource = match error {
-        Error::Normalize(error) => crate::schema_outcomes::normalization(error.clone()).ok(),
-        Error::Validation(error) => crate::schema_outcomes::validation(*error).ok(),
-        _ => None,
-    };
-    if let Some(mut outcome) = resource.filter(|outcome| outcome["status"] == "resource_limit") {
-        outcome["stage"] = json!("capture");
-        return capture_response(outcome);
-    }
-    if let Error::Decode { identity, error } = error {
-        if let Some(diagnostics) = crate::yaml_diagnostics::capture_diagnostics(error, identity) {
-            return capture_response(json!({"status":"invalid","diagnostics":diagnostics}));
-        }
-    }
-    if let Error::Findings(captured) = error {
-        return match captured_schema::findings(captured) {
-            Ok(diagnostics) => {
-                capture_response(json!({"status":"invalid","diagnostics":diagnostics}))
-            }
-            Err(error) => {
-                let code = match error {
-                    captured_schema::Error::InvalidContext => "diagnostic_context",
-                };
-                capture_response(json!({"status":"rejected","stage":"capture","code":code}))
-            }
-        };
-    }
-    let code = match error {
-        Error::Limit(_) => unreachable!("handled physical capture refusal"),
         Error::Decode {
-            error: crate::yaml_decode::DecodeFailure::Unavailable,
+            error: DecodeFailure::Limit(limit),
             ..
-        } => "yaml_reader_unavailable",
-        Error::Decode { .. } => "yaml_decode",
-        Error::Bundle(_) => "schema_bundle",
-        Error::Normalize(_) => "normalization",
-        Error::Dependencies(_) => "dependencies",
-        Error::Validation(_) => "validation_policy",
-        Error::Findings(_) => unreachable!("handled captured findings"),
-        Error::InheritanceRequired => "inheritance_required",
-        Error::VersionedRootRequired => "versioned_root_required",
-        Error::UnknownClass(_) => "unknown_class",
-    };
-    capture_response(json!({"status":"rejected","stage":"capture","code":code}))
+        } => return decoder_limit(limit, Stage::Capture),
+        // A dependency refusal keeps the preparation stage it reports.
+        Error::Dependencies(error) => {
+            if let Ok(rejection) =
+                crate::schema_outcomes::inheritance_dependencies(error.clone(), Stage::Prepare)
+            {
+                return rejection;
+            }
+        }
+        Error::Normalize(error) => {
+            if let Ok(rejection @ Rejection::Limit(_)) =
+                crate::schema_outcomes::normalization(error.clone(), Stage::Capture)
+            {
+                return rejection;
+            }
+        }
+        Error::Validation(error) => {
+            if let Ok(rejection) = crate::schema_outcomes::validation(*error, Stage::Capture) {
+                return rejection;
+            }
+        }
+        Error::Decode { identity, error } => {
+            if let Some(diagnostics) = crate::yaml_diagnostics::capture_diagnostics(error, identity)
+            {
+                return Rejection::Invalid(diagnostics);
+            }
+        }
+        Error::Findings(captured) => {
+            return match captured_schema::findings(captured) {
+                Ok(diagnostics) => Rejection::Invalid(diagnostics),
+                Err(captured_schema::Error::InvalidContext) => {
+                    fault(Stage::Capture, Fault::DiagnosticContext)
+                }
+            };
+        }
+        _ => {}
+    }
+    fault(
+        Stage::Capture,
+        match error {
+            Error::Limit(_) | Error::Findings(_) => unreachable!("handled capture refusal"),
+            Error::Decode {
+                error: DecodeFailure::Unavailable,
+                ..
+            } => Fault::YamlReaderUnavailable,
+            Error::Decode { .. } => Fault::YamlDecode,
+            Error::Bundle(_) => Fault::SchemaBundle,
+            Error::Normalize(_) => Fault::Normalization,
+            Error::Dependencies(_) => Fault::Dependencies,
+            Error::Validation(_) => Fault::ValidationPolicy,
+            Error::InheritanceRequired => Fault::InheritanceRequired,
+            Error::VersionedRootRequired => Fault::VersionedRootRequired,
+            Error::UnknownClass(_) => Fault::UnknownClass,
+        },
+    )
 }
 
 pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
@@ -303,7 +314,6 @@ pub(crate) fn type_name(kind: yamaa_core::value::ColumnType) -> &'static str {
 }
 
 mod inherited;
-pub use inherited::failure as inheritance_failure;
 pub use inherited::failure_ref as inheritance_failure_ref;
 
 mod captured_schema;
@@ -313,7 +323,7 @@ pub(crate) use captured_schema::Error as CapturedProjectionError;
 pub(crate) fn captured_findings(
     captured: &crate::specification_source::CapturedFindings,
     source_context: &[(&str, &str)],
-) -> Result<Vec<Value>, CapturedProjectionError> {
+) -> Result<Vec<Diagnostic>, CapturedProjectionError> {
     captured_schema::schema_findings(
         captured.schema().structure(),
         captured.document(),
@@ -325,6 +335,28 @@ pub(crate) fn captured_findings(
 #[cfg(test)]
 mod resource_refusal_tests {
     use super::*;
+
+    fn limit_context(
+        stage: &str,
+        phase: &str,
+        resource: &str,
+        limit: usize,
+        actual: Option<usize>,
+    ) -> yamaa_core::diagnostic::Context {
+        let mut context: yamaa_core::diagnostic::Context = [
+            ("stage".into(), Value::String(stage.into())),
+            ("code".into(), Value::String("resource_limit".into())),
+            ("phase".into(), Value::String(phase.into())),
+            ("resource".into(), Value::String(resource.into())),
+            ("limit".into(), Value::from(limit)),
+        ]
+        .into();
+        if let Some(actual) = actual {
+            context.insert("actual".into(), Value::from(actual));
+        }
+        context
+    }
+
     #[test]
     fn capture_preserves_fixed_decoder_and_normalization_refusals() {
         use crate::specification_source::Error;
@@ -368,20 +400,22 @@ mod resource_refusal_tests {
                 Limits::SEMANTIC_DEPTH,
             ),
         ] {
-            let value: Value = crate::json_wire::decode(&capture_failure(&error)).unwrap();
-            let outcome = &value["outcome"];
-            assert_eq!(outcome["status"], "resource_limit");
-            assert_eq!(outcome["stage"], "capture");
-            assert_eq!(outcome["phase"], phase);
-            assert_eq!(outcome["resource"], resource);
-            assert_eq!(outcome["limit"], bound);
-            if resource == "spec_bytes" {
-                assert_eq!(outcome["actual"], Limits::SPEC_BYTES + 1);
-            } else {
-                assert!(outcome.get("actual").is_none());
-            }
+            let Rejection::Limit(finding) = capture_failure(&error) else {
+                panic!("a capture bound is a limit refusal");
+            };
+            assert_eq!(
+                finding.code,
+                yamaa_core::diagnostic::ConditionCode::ApplicationRejected
+            );
+            assert!(finding.spec_paths.is_empty());
+            let actual = (resource == "spec_bytes").then_some(Limits::SPEC_BYTES + 1);
+            assert_eq!(
+                finding.context,
+                limit_context("capture", phase, resource, bound, actual)
+            );
         }
     }
+
     #[test]
     fn numeric_preparation_keeps_fixed_semantic_depth_and_authored_path() {
         let expression = format!("{}1{}", "(".repeat(129), ")".repeat(129));
@@ -390,12 +424,15 @@ mod resource_refusal_tests {
             error: yamaa_core::expression::parse(&expression).unwrap_err(),
         };
         assert_eq!(
-            preparation_outcome(&error),
-            json!({
-                "status":"rejected", "stage":"prepare", "code":"numeric_policy",
-                "resource":"semantic_depth", "limit":128,
-                "spec_paths":["columns.VALUE.derivation.compute.expr"]
-            })
+            preparation(&error),
+            Rejection::Fault(issue::resource_rejected(
+                Stage::Prepare,
+                Fault::NumericPolicy,
+                "semantic_depth",
+                128,
+                None,
+                vec!["columns.VALUE.derivation.compute.expr".into()],
+            ))
         );
     }
 }

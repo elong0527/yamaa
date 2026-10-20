@@ -1,4 +1,5 @@
-//! Resource outcomes for typed schema preparation. Semantic findings use issue_rows.
+//! Resource refusals of typed schema preparation. Semantic findings stay
+//! diagnostic records; a stage is the caller's.
 #[derive(Debug)]
 pub(crate) enum Error {
     Internal,
@@ -7,13 +8,10 @@ pub(crate) enum Error {
 }
 // Stable outcomes keep language findings, policy refusal and transport defects separate.
 
-use crate::json;
-use yamaa_core::json::Value;
+use crate::specification_diagnostics::{bound, fault, Rejection};
+use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::{portable_regex, schema::*};
 
-pub(crate) fn limit(phase: &str, resource: &str, limit: usize) -> Value {
-    json!({"status":"resource_limit","phase":phase,"resource":resource,"limit":limit})
-}
 fn regex_resource(resource: portable_regex::Resource) -> &'static str {
     use portable_regex::Resource::*;
     match resource {
@@ -26,12 +24,16 @@ fn document_resource(resource: DocumentResource) -> &'static str {
         DocumentResource::Depth => "yaml_depth",
     }
 }
-pub(crate) fn document(error: DocumentError) -> Result<Value, Error> {
+fn limit(stage: Stage, phase: &str, resource: &str, limit: usize) -> Rejection {
+    bound(stage, phase, resource, limit, None)
+}
+pub(crate) fn document(error: DocumentError, stage: Stage) -> Result<Rejection, Error> {
     match error {
         DocumentError::Limit {
             resource,
             limit: maximum,
         } => Ok(limit(
+            stage,
             "decoded_document",
             document_resource(resource),
             maximum,
@@ -39,13 +41,14 @@ pub(crate) fn document(error: DocumentError) -> Result<Value, Error> {
         _ => Err(Error::InvalidDocument),
     }
 }
-pub(crate) fn validation(error: ValidationError) -> Result<Value, Error> {
+pub(crate) fn validation(error: ValidationError, stage: Stage) -> Result<Rejection, Error> {
     Ok(match error {
         ValidationError::Type(TypeError::Invalid { .. }) => return Err(Error::InvalidQuery),
         ValidationError::Type(TypeError::Limit {
             resource,
             limit: maximum,
         }) => limit(
+            stage,
             "type",
             match resource {
                 TypeResource::Depth => "semantic_depth",
@@ -53,12 +56,14 @@ pub(crate) fn validation(error: ValidationError) -> Result<Value, Error> {
             maximum,
         ),
         ValidationError::InvalidDescriptor => return Err(Error::InvalidQuery),
-        ValidationError::Depth { limit: maximum } => limit("validation", "semantic_depth", maximum),
+        ValidationError::Depth { limit: maximum } => {
+            limit(stage, "validation", "semantic_depth", maximum)
+        }
     })
 }
-pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
+pub(crate) fn normalization(error: NormalizationError, stage: Stage) -> Result<Rejection, Error> {
     Ok(match error {
-        NormalizationError::Validation(error) => return validation(error),
+        NormalizationError::Validation(error) => return validation(error, stage),
         NormalizationError::Invalid(_) | NormalizationError::Defaults(_) => {
             return Err(Error::Internal)
         }
@@ -66,6 +71,7 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
             resource,
             limit: maximum,
         } => limit(
+            stage,
             "normalization",
             match resource {
                 NormalizationResource::Depth => "semantic_depth",
@@ -75,9 +81,16 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
         NormalizationError::Document(DocumentError::Limit {
             resource,
             limit: maximum,
-        }) => limit("normalized_document", document_resource(resource), maximum),
+        }) => limit(
+            stage,
+            "normalized_document",
+            document_resource(resource),
+            maximum,
+        ),
+        // A mapping key that is not a scalar reports the projection fault of
+        // the preparation stage it has always reported.
         NormalizationError::Document(DocumentError::NonScalarKey) => {
-            json!({"status":"unsupported","feature":"normalized_mapping_key"})
+            fault(Stage::Prepare, Fault::IssueProjection)
         }
         NormalizationError::Document(_) => return Err(Error::Internal),
     })
@@ -85,18 +98,14 @@ pub(crate) fn normalization(error: NormalizationError) -> Result<Value, Error> {
 /// Dependency discovery never turns a resource refusal into a missing edge.
 pub(crate) fn inheritance_dependencies(
     error: yamaa_core::resolution::Error,
-) -> Result<Value, Error> {
+    stage: Stage,
+) -> Result<Rejection, Error> {
     use yamaa_core::expression::{CompileError, Context, Resource};
     use yamaa_core::resolution::Error as E;
     Ok(match error {
-        E::Invalid(issues) => {
-            let findings = yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues);
-            let translated = findings
-                .into_iter()
-                .map(crate::specification_diagnostics::portable_diagnostic)
-                .collect::<Vec<_>>();
-            json!({"status":"invalid","diagnostics":translated})
-        }
+        E::Invalid(issues) => Rejection::Invalid(
+            yamaa_core::diagnostic::inheritance_dependency_diagnostics(&issues),
+        ),
         // An expression field's own boundary, or its regular-expression literal's.
         E::Limit {
             context,
@@ -114,10 +123,14 @@ pub(crate) fn inheritance_dependencies(
                 Context::Derivation => "derivation",
             };
             match resource {
-                Resource::Depth => {
-                    limit(&format!("inheritance_{field}"), "semantic_depth", maximum)
-                }
+                Resource::Depth => limit(
+                    stage,
+                    &format!("inheritance_{field}"),
+                    "semantic_depth",
+                    maximum,
+                ),
                 Resource::Regex(resource) => limit(
+                    stage,
                     &format!("inheritance_{field}_regex"),
                     regex_resource(resource),
                     maximum,
@@ -125,6 +138,6 @@ pub(crate) fn inheritance_dependencies(
             }
         }
         E::Limit { .. } => return Err(Error::Internal),
-        E::Document(error) => return normalization(NormalizationError::Document(error)),
+        E::Document(error) => return normalization(NormalizationError::Document(error), stage),
     })
 }

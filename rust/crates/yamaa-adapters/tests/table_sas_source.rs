@@ -984,9 +984,11 @@ mod table {
             assert!(matches!(error, Error::Invalid("deleted_records")));
             let error = yamaa_adapters::specification_run::Error::SasSource(error);
             assert_eq!(
-                yamaa_adapters::specification_diagnostics::findings(&error, Some(&source))
-                    .unwrap()
-                    .unwrap(),
+                crate::support::rows(
+                    &yamaa_adapters::specification_diagnostics::findings(&error, Some(&source))
+                        .unwrap()
+                        .unwrap()
+                ),
                 [yamaa_adapters::json!({
                     "phase": "ingest",
                     "condition": "source_sas_invalid",
@@ -1762,15 +1764,12 @@ mod table {
         fn assert_complete(error: &Error, source: &SourceDeclaration, expected: &Value) {
             let wanted = expected.as_array().unwrap();
             assert_eq!(
-                projection::findings(error, Some(source)).unwrap().unwrap(),
+                crate::support::rows(&projection::findings(error, Some(source)).unwrap().unwrap()),
                 *wanted
             );
-            let failure: Value =
-                yamaa_adapters::json_wire::decode(&projection::failure(error, Some(source)))
-                    .unwrap();
             assert_eq!(
-                failure,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":wanted}})
+                crate::support::findings(projection::failure(error, Some(source))),
+                *expected
             );
         }
 
@@ -1980,8 +1979,8 @@ mod table {
                 ["input.FIRST.path", "input.LAST.path"]
             );
             let portable = projection::findings(&error, None).unwrap().unwrap();
-            assert_eq!(portable[1]["context"]["stored_type"], *stored_type);
-            assert_eq!(portable[1]["context"]["field"], *field);
+            assert_eq!(portable[1].context["stored_type"], *stored_type);
+            assert_eq!(portable[1].context["field"], *field);
             assert_eq!(
                 (
                     field.as_ptr(),
@@ -2003,11 +2002,12 @@ mod table {
                 source_diagnostics::findings(&semantic, None),
                 Err(source_diagnostics::SourceProjectionError::InvalidContext)
             );
-            let failure: Value =
-                yamaa_adapters::json_wire::decode(&projection::failure(&semantic, None)).unwrap();
             assert_eq!(
-                failure,
-                json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"diagnostic_context"}})
+                projection::failure(&semantic, None),
+                projection::Rejection::Fault(yamaa_core::application_issue::rejected(
+                    yamaa_core::application_issue::Stage::Ingest,
+                    yamaa_core::application_issue::Fault::DiagnosticContext,
+                ))
             );
             let declaration = source("SRC", "source.csv");
             for error in [
@@ -2041,12 +2041,12 @@ mod table {
                     (declaration.clone(), error),
                 ]);
                 assert_eq!(source_diagnostics::findings(&collected, None), Ok(None));
-                let failure: Value =
-                    yamaa_adapters::json_wire::decode(&projection::failure(&collected, None))
-                        .unwrap();
                 assert_eq!(
-                    failure["outcome"],
-                    json!({"status":"rejected","stage":"ingest","code":"source_collection_boundary"})
+                    projection::failure(&collected, None),
+                    projection::Rejection::Fault(yamaa_core::application_issue::rejected(
+                        yamaa_core::application_issue::Stage::Ingest,
+                        yamaa_core::application_issue::Fault::SourceCollectionBoundary,
+                    ))
                 );
             }
             assert_eq!(
@@ -2078,12 +2078,10 @@ mod table {
             assert_eq!(diagnostics.len(), 2);
             let portable = projection::findings(&error, None).unwrap().unwrap();
             assert_eq!(portable.len(), 2);
-            assert_eq!(portable[1]["context"]["value"], original);
-            let failure: Value =
-                yamaa_adapters::json_wire::decode(&projection::failure(&error, None)).unwrap();
+            assert_eq!(portable[1].context["value"], original);
             assert_eq!(
-                failure,
-                json!({"protocol":"specification/prototype","outcome":{"status":"invalid","diagnostics":portable}})
+                projection::failure(&error, None),
+                projection::Rejection::Invalid(portable)
             );
             let Error::Sources(errors) = &error else {
                 panic!("retained collection")
@@ -2199,11 +2197,12 @@ mod table {
             ]);
             assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
             assert_eq!(source_diagnostics::findings(&error, None), Ok(None));
-            let failure: Value =
-                yamaa_adapters::json_wire::decode(&projection::failure(&error, None)).unwrap();
             assert_eq!(
-                failure["outcome"],
-                json!({"status":"rejected","stage":"ingest","code":"source_collection_boundary"})
+                projection::failure(&error, None),
+                projection::Rejection::Fault(yamaa_core::application_issue::rejected(
+                    yamaa_core::application_issue::Stage::Ingest,
+                    yamaa_core::application_issue::Fault::SourceCollectionBoundary,
+                ))
             );
             let Error::Sources(children) = &error else {
                 panic!()
@@ -2233,11 +2232,12 @@ mod table {
                 (source("LATE", "late.parquet"), opaque()),
             ]);
             assert_eq!(source_diagnostics::findings(&held, None), Ok(None));
-            let failure: Value =
-                yamaa_adapters::json_wire::decode(&projection::failure(&held, None)).unwrap();
             assert_eq!(
-                failure,
-                json!({"protocol":"specification/prototype","outcome":{"status":"rejected","stage":"ingest","code":"source_collection_boundary"}})
+                projection::failure(&held, None),
+                projection::Rejection::Fault(yamaa_core::application_issue::rejected(
+                    yamaa_core::application_issue::Stage::Ingest,
+                    yamaa_core::application_issue::Fault::SourceCollectionBoundary,
+                ))
             );
             let Error::Sources(children) = &held else {
                 panic!("retained collection")
