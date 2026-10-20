@@ -1340,9 +1340,10 @@ mod file {
         }
 
         #[test]
-        fn hard_link_aliases_are_separate_snapshots_each_verified_at_its_own_path() {
-            // A snapshot's key is the canonical path the walk reached, never
-            // a numeric file identity: each hard link is its own snapshot.
+        fn hard_link_aliases_share_a_snapshot_and_each_is_verified_at_its_own_path() {
+            // A snapshot's key is the canonical path the walk reached; the
+            // physical file it reports is a hint that binds a hard link to
+            // the held snapshot of the same file (FILE-9).
             let study = Study::new();
             let first = study.path("project/spec/a");
             let second = study.path("additional/b");
@@ -1351,13 +1352,12 @@ mod file {
             let mut resources = study.resources();
             let (a, _) = resources.capture("a").unwrap();
             let (b, created) = resources.capture("b").unwrap();
-            assert!(created && !std::sync::Arc::ptr_eq(&a, &b));
-            assert_eq!(a.as_ref(), b.as_ref());
+            assert!(!created && std::sync::Arc::ptr_eq(&a, &b));
             fs::remove_file(&first).unwrap();
             fs::write(&first, b"changed!").unwrap();
             assert_eq!(resources.capture("a"), Err(Error::Changed));
             assert_eq!(resources.capture("b").unwrap(), (b, false));
-            assert_eq!(resources.capture_reads(), 2);
+            assert_eq!(resources.capture_reads(), 1);
         }
 
         #[cfg(unix)]
@@ -1506,7 +1506,9 @@ mod file {
         }
 
         #[test]
-        fn a_changed_snapshot_stays_failed_for_its_path_while_a_new_path_captures_fresh_bytes() {
+        fn a_file_rewritten_after_one_name_was_captured_is_a_change_under_its_other_names() {
+            // FILE-9: two names of one physical file never observe different
+            // bytes, so a rewrite between their captures is a change.
             let study = Study::new();
             fs::write(study.path("project/spec/a"), b"original").unwrap();
             fs::hard_link(study.path("project/spec/a"), study.path("project/spec/c")).unwrap();
@@ -1514,12 +1516,16 @@ mod file {
             let (first, _) = resources.capture("a").unwrap();
             fs::write(study.path("project/spec/a"), b"changed!").unwrap();
             assert_eq!(resources.capture("a"), Err(Error::Changed));
+            assert_eq!(resources.capture("c"), Err(Error::Changed));
+            assert_eq!(first.as_ref(), b"original");
+            assert_eq!(resources.capture_reads(), 1);
+            // Once no held name reaches the file, another name of it captures
+            // its current bytes as a snapshot of its own.
+            fs::remove_file(study.path("project/spec/a")).unwrap();
             let (next, created) = resources.capture("c").unwrap();
             assert!(created);
             assert_eq!(next.as_ref(), b"changed!");
-            assert_eq!(first.as_ref(), b"original");
-            assert_eq!(resources.capture_reads(), 2);
-            assert_eq!(resources.capture("a"), Err(Error::Changed));
+            assert_eq!(resources.capture("a"), Err(Error::Missing));
             assert!(!resources.capture("c").unwrap().1);
         }
 

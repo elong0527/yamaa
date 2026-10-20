@@ -142,6 +142,7 @@ conditions! {
     CodelistPartialItemField => ("validation", "codelist_partial_item_field", Some("REQ-0951")),
     CodelistExtensionNotAdmitted => ("validation", "codelist_extension_not_admitted", Some("REQ-0952")),
     CodelistExtendedAlias => ("validation", "codelist_extended_alias", Some("CT-6")),
+    CodelistFormatNamePrefix => ("validation", "value_not_permitted", Some("CT-12")),
     UnknownProjectFunction => ("validation", "unknown_project_function", Some("REQ-0698")),
     InvalidFunctionArgument => ("validation", "invalid_function_argument", Some("REQ-0700")),
     RuntimeFunctionArgument => ("derivation", "invalid_function_argument", Some("REQ-0700")),

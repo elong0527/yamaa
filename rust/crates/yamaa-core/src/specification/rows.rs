@@ -18,25 +18,9 @@ use crate::{
 #[derive(Debug)]
 enum RowOperation {
     Shared(cases::Branch),
-    ProjectFunction { call: usize, returns: ColumnType },
+    ProjectFunction { call: usize },
     Output(String),
     Source(String),
-}
-impl RowOperation {
-    /// EXPR-14: the row derivation's result type; a bare source has its
-    /// variable's type.
-    fn result_type(
-        &self,
-        input: &dyn Fn(&str) -> crate::result_type::ResultType,
-    ) -> crate::result_type::ResultType {
-        match self {
-            Self::Shared(branch) => branch.operation.result_type(input),
-            &Self::ProjectFunction { call, returns } => {
-                Operation::ProjectFunction { call, returns }.result_type(input)
-            }
-            Self::Output(name) | Self::Source(name) => input(name),
-        }
-    }
 }
 #[derive(Debug)]
 struct RowDeclaration {
@@ -149,12 +133,13 @@ fn declaration(
     let operation = match op {
         "function" if project.is_some() => {
             let project = project.unwrap();
+            // The tree types the call by the return its definition declares.
+            project
+                .returns
+                .get(&payload)
+                .ok_or(PrepareError::Internal)?;
             RowOperation::ProjectFunction {
                 call: *project.nodes.get(&payload).ok_or(PrepareError::Internal)?,
-                returns: *project
-                    .returns
-                    .get(&payload)
-                    .ok_or(PrepareError::Internal)?,
             }
         }
         "function" if project.is_none() => return Err(unsupported("function", &path)),
@@ -674,6 +659,7 @@ fn bind_assignment(
     declarations_reported: bool,
     project: Option<&crate::project_calls::ProjectCalls>,
     output: &TableSchema,
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[crate::dataset::SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
@@ -749,6 +735,7 @@ fn bind_assignment(
             declarations_reported,
             output,
             project,
+            tree,
             named,
             secondary,
             intermediates,
@@ -819,14 +806,12 @@ fn bind_assignment(
     // VALUE-24 once per column: a default shared by several templates states
     // one derivation.
     if expression.is_some() && findings.len() == start && declaration.handler.is_none() {
-        let input =
-            |name: &str| static_types::result_type(name, named, catalog, secondary, intermediates);
+        let captured = types::CapturedTypes::new(named, catalog, secondary, intermediates);
+        let result = tree.result_type(declaration.value, ast::Scope::Row, &captured)?;
         let column = &output.columns()[declaration.column];
-        if let Some(finding) = result_types::conversion_finding(
-            &format!("columns.{}", column.name),
-            declaration.operation.result_type(&input),
-            column.kind,
-        ) {
+        if let Some(finding) =
+            types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
+        {
             if !findings
                 .iter()
                 .any(|prior| matches!(prior, BindFinding::Scalar(prior) if *prior == finding))
@@ -958,7 +943,8 @@ fn bind_template_filter(
         predicate
             .map(|plan| {
                 BoundPredicate::new_contextual(
-                    static_types::typed(plan, named, row_catalog, secondary, intermediates),
+                    types::CapturedTypes::new(named, row_catalog, secondary, intermediates)
+                        .typed(plan),
                     bindings,
                     Vec::new(),
                 )
@@ -1030,6 +1016,7 @@ fn bind_template(
     source: &TableSchema,
     name: &str,
     keys: &[usize],
+    tree: &types::Tree,
     named: &intermediates::Declarations,
     secondary: &[crate::dataset::SecondarySource],
     intermediates: &[Option<crate::dataset::Intermediate>],
@@ -1187,6 +1174,7 @@ fn bind_template(
             declarations_reported,
             project,
             output,
+            tree,
             named,
             secondary,
             intermediates,
@@ -1952,6 +1940,7 @@ impl Rows {
                 source,
                 name,
                 keys,
+                &prepared.tree,
                 named,
                 &secondary,
                 &intermediates,
@@ -2070,6 +2059,7 @@ impl Rows {
                     false,
                     project,
                     output,
+                    &prepared.tree,
                     named,
                     &secondary,
                     &intermediates,
@@ -2276,7 +2266,8 @@ impl Rows {
         &self,
         output: &TableSchema,
         primary: &str,
-        input: &dyn Fn(&str) -> crate::result_type::ResultType,
+        tree: &types::Tree,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
         self.declaration_findings(primary, findings)?;
@@ -2290,21 +2281,15 @@ impl Rows {
         {
             let start = findings.len();
             if let RowOperation::Shared(branch) = &declaration.operation {
-                static_checks::derivation_types(&branch.operation, input, findings);
+                static_checks::derivation_types(&branch.operation, tree, declared, findings)?;
+            }
+            if declaration.handler.is_some() || findings.len() != start {
+                continue;
             }
             let column = &output.columns()[declaration.column];
-            if let Some(finding) = declaration
-                .handler
-                .is_none()
-                .then(|| {
-                    result_types::conversion_finding(
-                        &format!("columns.{}", column.name),
-                        declaration.operation.result_type(input),
-                        column.kind,
-                    )
-                })
-                .flatten()
-                .filter(|_| findings.len() == start)
+            let result = tree.result_type(declaration.value, ast::Scope::Row, declared)?;
+            if let Some(finding) =
+                types::conversion_finding(&format!("columns.{}", column.name), result, column.kind)
             {
                 if !findings
                     .iter()
@@ -2686,9 +2671,10 @@ mod tests {
         ])
         .unwrap();
         let mut findings = Vec::new();
-        let extraction = str_extract::Prepared::new(&document, &output, &mut findings).unwrap();
+        let declared = types::DeclaredTypes::default();
+        let extraction = str_extract::Prepared::new(&document, &declared, &mut findings).unwrap();
         let string_templates =
-            str_template::Prepared::new(&document, &output, &mut findings).unwrap();
+            str_template::Prepared::new(&document, &output, &declared, &mut findings).unwrap();
         assert!(findings.is_empty());
         let intermediates = intermediates::Declarations::default();
         Rows::prepare(

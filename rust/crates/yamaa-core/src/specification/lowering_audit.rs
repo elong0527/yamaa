@@ -9,9 +9,9 @@ use crate::front_end::v0_5::Lowered;
 impl PreparedSpecification {
     /// Loud in debug builds: a disagreement is a lowering defect, while
     /// binding still reads the document.
-    pub(super) fn audit_lowering(self, lowered: &Lowered) -> Self {
+    pub(super) fn audit_lowering(self) -> Self {
         if cfg!(debug_assertions) {
-            let mismatches = self.lowering_mismatches(lowered);
+            let mismatches = self.lowering_mismatches(self.tree.lowered());
             assert!(
                 mismatches.is_empty(),
                 "the lowered tree disagrees with the compiler:\n{}",

@@ -175,6 +175,7 @@ pub(super) fn declaration_findings(
     d: &Document,
     columns: &[usize],
     output: &TableSchema,
+    declared: &types::DeclaredTypes<'_>,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<(), PrepareError> {
     #[allow(clippy::too_many_arguments)]
@@ -182,11 +183,17 @@ pub(super) fn declaration_findings(
         d: &Document,
         value: usize,
         path: &str,
-        output: &TableSchema,
+        declared: &types::DeclaredTypes<'_>,
         findings: &mut Vec<PreflightFinding>,
         depth: usize,
         rows: bool,
     ) -> Result<(), PrepareError> {
+        // With row templates a bare name's phase is binding's to decide.
+        let kind = |name: &str| {
+            (name.contains('.') || !rows)
+                .then(|| declared.operand(name).column_type())
+                .flatten()
+        };
         if depth > crate::limits::Limits::SEMANTIC_DEPTH {
             return Err(PrepareError::limit(
                 "semantic_depth",
@@ -201,17 +208,7 @@ pub(super) fn declaration_findings(
                 let path = format!("{path}.{op}");
                 match prepare(d, payload, op, &path, None, None, &mut Vec::new()) {
                     Ok(operation) => {
-                        let kind = if rows {
-                            None
-                        } else {
-                            output
-                                .columns()
-                                .iter()
-                                .find(|item| item.name == operation.source())
-                                .map(|item| item.kind)
-                        }
-                        .or(temporal::declared_source_type(d, operation.source())?);
-                        if let Some(kind) = kind {
+                        if let Some(kind) = kind(operation.source()) {
                             if !operation.accepts(kind) {
                                 let actual = match kind {
                                     ColumnType::Str => "str",
@@ -226,18 +223,8 @@ pub(super) fn declaration_findings(
                             }
                         }
                         for (field, name) in operation.operands().skip(1) {
-                            let kind = if rows {
-                                None
-                            } else {
-                                output
-                                    .columns()
-                                    .iter()
-                                    .find(|item| item.name == name)
-                                    .map(|item| item.kind)
-                            }
-                            .or(temporal::declared_source_type(d, name)?);
                             if let Some(kind) =
-                                kind.filter(|&kind| !operation.accepts_operand(kind))
+                                kind(name).filter(|&kind| !operation.accepts_operand(kind))
                             {
                                 let actual = match kind {
                                     ColumnType::Str => "str",
@@ -268,7 +255,7 @@ pub(super) fn declaration_findings(
                     d,
                     child,
                     &format!("{path}.case[{index}].{name}"),
-                    output,
+                    declared,
                     findings,
                     depth + 1,
                     rows,
@@ -288,7 +275,7 @@ pub(super) fn declaration_findings(
                 d,
                 value,
                 &format!("columns.{}.derivation", output.columns()[index].name),
-                output,
+                declared,
                 findings,
                 0,
                 rows,
@@ -307,7 +294,7 @@ pub(super) fn declaration_findings(
                             d,
                             value,
                             &format!("rows[{index}].derivations.{}", text(d, name)?),
-                            output,
+                            declared,
                             findings,
                             0,
                             true,
@@ -322,7 +309,7 @@ pub(super) fn declaration_findings(
             d,
             value,
             path,
-            output,
+            declared,
             findings,
             0,
             present(d, d.root(), "rows"),

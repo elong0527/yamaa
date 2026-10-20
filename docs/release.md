@@ -226,9 +226,9 @@ The scanners match locked registry packages by name and version, so they do
 not cover vendored source or native libraries bundled inside a package. These
 components are tracked by hand:
 
-- `saphyr-parser` 0.2.1 with the reviewed compact-flow patch, vendored as
-  `yamaa-saphyr-parser`, a path dependency in `rust/vendor/saphyr-parser`.
-  #2583 replaces it with a published release.
+- `saphyr-parser` 0.2.1 with the reviewed compact-flow patch and 0.2.2's raw
+  NUL fix, vendored as `yamaa-saphyr-parser`, a path dependency in
+  `rust/vendor/saphyr-parser`. #2583 replaces it with a published release.
 - The ReadStat 1.1.9 SAS reader subset in
   `rust/crates/yamaa-adapters/vendor/readstat`, with the later upstream fixes
   that its README lists through the review baseline it records.

@@ -497,6 +497,21 @@ impl Resources {
     ) -> Result<(Arc<[u8]>, bool), Error> {
         self.capture_as(Some(declaring), written, Kind::Metadata)
     }
+    /// The caller's own file `name` in the selected entry directory, opened
+    /// for reading; see [`FileResolver::open_named`]. Only the local file
+    /// resolver opens a file.
+    pub(crate) fn open_named(&self, name: &str) -> Result<std::fs::File, Error> {
+        let file = self.file.as_ref().ok_or(Error::InvalidPath)?;
+        file.open_named(&self.store.base, name)
+            .map_err(Error::from_failure)
+    }
+    /// The caller's own file `name` in the selected entry directory, captured
+    /// under `maximum` bytes; see [`FileResolver::capture_named`].
+    pub(crate) fn capture_named(&self, name: &str, maximum: usize) -> Result<Arc<[u8]>, Error> {
+        let file = self.file.as_ref().ok_or(Error::InvalidPath)?;
+        file.capture_named(&self.store.base, name, maximum)
+            .map_err(|failure| Error::from_capture(failure, Kind::Input, maximum))
+    }
     /// Keep the same path authority and captures for data declared by this
     /// entry: the identity its resolver gave it.
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {
@@ -628,8 +643,10 @@ mod identity_cache_tests {
         assert!(resources.capture("a").unwrap().1);
         // The filesystem may give a new file the device and inode of a
         // removed one. Snapshots are keyed by the canonical path the walk
-        // reached, never by a numeric identity, so equal bytes at the new
-        // path are a fresh capture and the removed path stays missing.
+        // reached; a physical identity binds a held snapshot only while the
+        // held path still reaches that file. The removed path reaches
+        // nothing, so equal bytes at the new path are a fresh capture and the
+        // removed path stays missing.
         std::fs::remove_file(dir.0.join("a")).unwrap();
         std::fs::write(dir.0.join("c"), b"same bytes").unwrap();
         assert!(resources.capture("c").unwrap().1);
@@ -771,11 +788,13 @@ mod physical_capture_tests {
             resources.captured_sources().next().unwrap().1,
             before.as_ref()
         );
-        // A hard link is another canonical path: its own snapshot, verified
-        // at its own path.
+        // A hard link reaches the same physical file: it binds the held
+        // snapshot and is verified at its own path.
         std::fs::hard_link(fixture.0.join("source.yaml"), fixture.0.join("other.yaml")).unwrap();
-        assert!(resources.capture_metadata("other.yaml").unwrap().1);
-        assert_eq!(resources.capture_reads(), 2);
+        let (linked, new) = resources.capture_metadata("other.yaml").unwrap();
+        assert!(!new);
+        assert!(Arc::ptr_eq(&before, &linked));
+        assert_eq!(resources.capture_reads(), 1);
         std::fs::remove_file(fixture.0.join("other.yaml")).unwrap();
         std::fs::write(fixture.0.join("other.yaml"), b"changed alias").unwrap();
         assert_eq!(
@@ -791,6 +810,82 @@ mod physical_capture_tests {
             resources.captured_sources().next().unwrap().1,
             before.as_ref()
         );
+    }
+}
+
+#[cfg(test)]
+mod hard_link_tests {
+    use super::*;
+    use std::io::Write;
+
+    struct Directory(std::path::PathBuf);
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    fn directory(name: &str) -> Directory {
+        let path = std::env::temp_dir().join(format!("yamaa-{name}-{}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        Directory(crate::canonical_path::canonicalize(path).unwrap())
+    }
+    /// Rewrite the file `path` names in place, keeping its physical file.
+    fn rewrite(path: &std::path::Path, bytes: &[u8]) {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(path)
+            .unwrap();
+        file.write_all(bytes).unwrap();
+    }
+
+    /// FILE-9: two hard links name one physical file, so a rewrite between
+    /// their captures is a change, not a second snapshot with other bytes.
+    #[test]
+    fn a_hard_link_rewritten_between_captures_is_a_change() {
+        let dir = directory("hard-link-rewrite");
+        let root = dir.0.to_str().unwrap();
+        std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
+        std::fs::hard_link(dir.0.join("a.csv"), dir.0.join("b.csv")).unwrap();
+        for (rewritten, replacement) in [("a.csv", &b"ID\n2\n"[..]), ("b.csv", b"ID\n22\n")] {
+            std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
+            let mut resources = Resources::new(root, root, &[]).unwrap();
+            let (first, new) = resources.capture("a.csv").unwrap();
+            assert!(new);
+            rewrite(&dir.0.join(rewritten), replacement);
+            assert_eq!(resources.capture("b.csv"), Err(Error::Changed));
+            assert_eq!(first.as_ref(), b"ID\n1\n");
+            assert_eq!(resources.capture_reads(), 1);
+        }
+        // Unchanged, the second link binds the held snapshot.
+        std::fs::write(dir.0.join("a.csv"), b"ID\n3\n").unwrap();
+        let mut resources = Resources::new(root, root, &[]).unwrap();
+        let (first, _) = resources.capture("a.csv").unwrap();
+        let (second, new) = resources.capture("b.csv").unwrap();
+        assert!(!new);
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(resources.capture_reads(), 1);
+    }
+
+    /// A held name that no longer reaches the file it was captured from
+    /// lends that file's identity to nothing: a replaced link is another
+    /// file, read as its own snapshot.
+    #[test]
+    fn a_link_replaced_by_another_file_is_its_own_snapshot() {
+        let dir = directory("hard-link-replaced");
+        let root = dir.0.to_str().unwrap();
+        std::fs::write(dir.0.join("a.csv"), b"ID\n1\n").unwrap();
+        std::fs::hard_link(dir.0.join("a.csv"), dir.0.join("b.csv")).unwrap();
+        let mut resources = Resources::new(root, root, &[]).unwrap();
+        resources.capture("a.csv").unwrap();
+        // `a.csv` now names a new file; `b.csv` still names the original.
+        std::fs::remove_file(dir.0.join("a.csv")).unwrap();
+        std::fs::write(dir.0.join("a.csv"), b"ID\n2\n").unwrap();
+        rewrite(&dir.0.join("b.csv"), b"ID\n3\n");
+        let (second, new) = resources.capture("b.csv").unwrap();
+        assert!(new);
+        assert_eq!(second.as_ref(), b"ID\n3\n");
+        assert_eq!(resources.capture_reads(), 2);
     }
 }
 

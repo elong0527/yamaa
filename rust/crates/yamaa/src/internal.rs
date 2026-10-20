@@ -78,10 +78,9 @@ impl yamaa_adapters::host_resources::Resolver for ResolverBridge {
             })
             .map(
                 |reply: ResolverReply| yamaa_adapters::host_resources::Reply {
-                    reference: reply.reference,
                     bytes: reply.bytes,
                     frame: reply.frame.map(crate::table::InputFrame::into_adapter),
-                    location: None,
+                    ..yamaa_adapters::host_resources::Reply::reference(reply.reference)
                 },
             )
             .map_err(|failure: ResolverFailure| {

@@ -23,7 +23,7 @@ publish = false
 yamaa = { path = "../../crates/yamaa", default-features = false, features = ["yaml"] }
 
 [dev-dependencies]
-# Gives the parser's own controls (the test target below) their crate. Cargo
+# Gives the parser's own controls (the test targets below) their crate. Cargo
 # unifies this path with the one yamaa-adapters declares into one package,
 # which tests/graph.rs checks.
 yamaa-saphyr-parser = { path = "../../vendor/saphyr-parser" }
@@ -33,3 +33,8 @@ serde_json = "1.0.145"
 [[test]]
 name = "compact_flow_pairs"
 path = "../../vendor/saphyr-parser/tests/compact_flow_pairs.rs"
+
+# Its raw NUL controls from upstream 0.2.2 (#3125), compiled unchanged.
+[[test]]
+name = "raw_nul"
+path = "../../vendor/saphyr-parser/tests/raw_nul.rs"

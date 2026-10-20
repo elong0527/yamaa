@@ -3,7 +3,8 @@
 //! Each surface has its own front end under [`crate::front_end`] (today's
 //! in `v0_5`; the 1.0 front end comes with #3030 Phase 1). Each lowers into
 //! these nodes, and every analysis reads them through the one traversal in
-//! [`traversal`]. There is no IO here and there are no YAML types:
+//! [`traversal`] and types them with the one result-type table,
+//! [`result_type`]. There is no IO here and there are no YAML types:
 //! positions arrive as plain numbers.
 //!
 //! Every node carries a [`Meta`]: its structured spec path, which one
@@ -13,6 +14,7 @@
 mod expr;
 mod path;
 pub mod traversal;
+mod types;
 
 pub use expr::{
     Aggregate, Arm, Between, Binding, Closed, DayRule, Dictionary, Direction, Expr, ExprId,
@@ -22,6 +24,7 @@ pub use expr::{
 };
 pub use path::{Notation, PathId, Paths, Segment};
 pub use traversal::{Children, Filtered, Ordered, Owner, Read, Role, Scope, Site, Step};
+pub use types::{result_type, Table, TypeEnv};
 
 use crate::value::ColumnType;
 

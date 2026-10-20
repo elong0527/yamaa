@@ -1,0 +1,9 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - codelists[0].codelists[0].format_name
+requirement: CT-12
+context:
+  codelist: SEX
+  value: SEX
+  data_type: text
