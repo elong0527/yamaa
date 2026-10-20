@@ -420,16 +420,16 @@ fn applicable(spec: &Spec, fields: &[String]) -> Vec<String> {
 /// records build the rows `owner` derives or filters, which a read of
 /// another input joins from (LOOKUP-1, NAME-4). `None` for a site whose
 /// reads never join, such as a lookup's own declarations.
-fn drivers<'a>(spec: &'a Spec, owner: Owner) -> Option<Vec<&'a str>> {
-    let base = spec
-        .rows
-        .base
-        .as_ref()
-        .map(|base| base.name.as_str())
-        .or_else(|| match spec.inputs.as_slice() {
-            [only] => Some(only.name.name.as_str()),
-            _ => None,
-        });
+fn drivers(spec: &Spec, owner: Owner) -> Option<Vec<&str>> {
+    let base =
+        spec.rows
+            .base
+            .as_ref()
+            .map(|base| base.name.as_str())
+            .or(match spec.inputs.as_slice() {
+                [only] => Some(only.name.name.as_str()),
+                _ => None,
+            });
     let templates = &spec.rows.templates;
     let driver = |template: usize| {
         templates[template]

@@ -4,6 +4,7 @@
 //! read of an input without `key` fails at the read. The same declarations
 //! lowered by the 0.5 front end infer the applicable output keys.
 use super::*;
+use crate::diagnostic::ConditionCode as Code;
 use crate::test_document::Tree;
 
 fn text(value: &str) -> Tree {
@@ -170,11 +171,7 @@ fn context(pairs: &[(&str, &str)]) -> crate::diagnostic::Context {
 fn a_read_of_an_input_without_key_has_no_applicable_keys() {
     let prepared = prepare(spec(None, vec![column("AGE", "int", "DM.AGE")], vec![])).unwrap();
     let [diagnostic] = refused(&prepared).try_into().unwrap();
-    let definition = diagnostic.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        ("validation", "no_applicable_keys", Some("LOOKUP-5"))
-    );
+    assert_eq!(diagnostic.code, Code::LookupNoApplicableKeys);
     assert_eq!(diagnostic.spec_paths, ["columns.AGE.derivation.source"]);
     assert_eq!(
         diagnostic.context,
@@ -191,22 +188,12 @@ fn a_read_of_an_input_without_key_has_no_applicable_keys() {
 #[test]
 fn every_declared_key_column_is_stored_and_has_a_current_row_value() {
     for (key, code, identifier) in [
-        (
-            "SUBJID",
-            crate::diagnostic::ConditionCode::LookupDonorKeyReference,
-            "DM.SUBJID",
-        ),
-        (
-            "DOSE",
-            crate::diagnostic::ConditionCode::LookupMatchValueReference,
-            "DOSE",
-        ),
+        ("SUBJID", Code::LookupDonorKeyReference, "DM.SUBJID"),
+        ("DOSE", Code::LookupMatchValueReference, "DOSE"),
     ] {
         let tree = spec(Some(&[key]), vec![column("AGE", "int", "DM.AGE")], vec![]);
         let [diagnostic] = refused(&prepare(tree).unwrap()).try_into().unwrap();
         assert_eq!(diagnostic.code, code, "{key}");
-        assert_eq!(diagnostic.definition().condition, "unknown_field");
-        assert_eq!(diagnostic.definition().rule, Some("LOOKUP-5"));
         assert_eq!(diagnostic.spec_paths, ["columns.AGE.derivation.source"]);
         assert_eq!(diagnostic.context, context(&[("identifier", identifier)]));
     }
@@ -233,7 +220,7 @@ fn a_keyless_qualified_aggregate_matches_on_the_input_s_key() {
     assert_eq!(join_keys(&plan), [1]);
     let prepared = prepare(spec(None, vec![total()], vec![])).unwrap();
     let [diagnostic] = refused(&prepared).try_into().unwrap();
-    assert_eq!(diagnostic.definition().condition, "no_applicable_keys");
+    assert_eq!(diagnostic.code, Code::LookupNoApplicableKeys);
     assert_eq!(
         diagnostic.spec_paths,
         ["columns.TOTAL.derivation.aggregate"]
@@ -270,11 +257,7 @@ fn an_intermediate_read_as_a_lookup_requires_its_key() {
         )],
     );
     let [diagnostic] = unprepared(tree.clone()).try_into().unwrap();
-    let definition = diagnostic.definition();
-    assert_eq!(
-        (definition.phase, definition.condition, definition.rule),
-        ("validation", "missing_required_field", Some("LOOKUP-3"))
-    );
+    assert_eq!(diagnostic.code, Code::IntermediateKeyRequired);
     assert_eq!(diagnostic.spec_paths, ["intermediates.NAMES.key"]);
     assert_eq!(
         diagnostic.context,
@@ -287,10 +270,7 @@ fn an_intermediate_read_as_a_lookup_requires_its_key() {
             .iter()
             .map(|finding| (finding.path.as_str(), finding.code))
             .collect::<Vec<_>>(),
-        [(
-            "intermediates.NAMES.key",
-            crate::diagnostic::ConditionCode::IntermediateKeyRequired
-        )]
+        [("intermediates.NAMES.key", Code::IntermediateKeyRequired)]
     );
 }
 
@@ -319,10 +299,7 @@ fn an_intermediate_keyed_as_its_input_only_renames_it() {
     let [diagnostic] = unprepared(tree(&["STUDYID", "USUBJID"]))
         .try_into()
         .unwrap();
-    assert_eq!(
-        diagnostic.definition().condition,
-        "rename_only_intermediate"
-    );
+    assert_eq!(diagnostic.code, Code::IntermediateRenameOnly);
     assert_eq!(diagnostic.spec_paths, ["intermediates.CODED"]);
     assert_eq!(
         diagnostic.context,
@@ -341,8 +318,7 @@ fn an_intermediate_keyed_as_its_input_only_renames_it() {
 fn an_input_key_names_each_column_once() {
     let empty = spec(Some(&[]), vec![column("AGE", "int", "DM.AGE")], vec![]);
     let [diagnostic] = unprepared(empty).try_into().unwrap();
-    assert_eq!(diagnostic.definition().condition, "invalid_field_type");
-    assert_eq!(diagnostic.definition().rule, Some("LOOKUP-5"));
+    assert_eq!(diagnostic.code, Code::LookupEmptyKey);
     assert_eq!(diagnostic.spec_paths, ["input.DM.key"]);
     assert_eq!(
         diagnostic.context,
@@ -354,7 +330,7 @@ fn an_input_key_names_each_column_once() {
         vec![],
     );
     let [diagnostic] = unprepared(repeated).try_into().unwrap();
-    assert_eq!(diagnostic.definition().condition, "invalid_field_type");
+    assert_eq!(diagnostic.code, Code::IntermediateRepeatedKey);
     assert_eq!(diagnostic.spec_paths, ["input.DM.key[1]"]);
     assert_eq!(
         diagnostic.context,
@@ -405,19 +381,13 @@ fn a_row_template_s_join_matches_the_driver_on_the_declared_key() {
     let [diagnostic] = refused(&prepare(tree(&["SUBJID"])).unwrap())
         .try_into()
         .unwrap();
-    assert_eq!(
-        diagnostic.code,
-        crate::diagnostic::ConditionCode::LookupDonorKeyReference
-    );
+    assert_eq!(diagnostic.code, Code::LookupDonorKeyReference);
     assert_eq!(diagnostic.spec_paths, ["rows.src.derivations.AGE.source"]);
     assert_eq!(diagnostic.context, context(&[("identifier", "DM.SUBJID")]));
     let [diagnostic] = refused(&prepare(tree(&["DOSE"])).unwrap())
         .try_into()
         .unwrap();
-    assert_eq!(
-        diagnostic.code,
-        crate::diagnostic::ConditionCode::LookupMatchValueReference
-    );
+    assert_eq!(diagnostic.code, Code::LookupMatchValueReference);
     assert_eq!(diagnostic.context, context(&[("identifier", "DOSE")]));
 }
 
@@ -467,10 +437,7 @@ fn a_row_driver_read_as_a_lookup_is_refused_at_its_key() {
     let [diagnostic] = diagnostics.as_slice() else {
         panic!("one refusal: {diagnostics:?}");
     };
-    assert_eq!(
-        diagnostic.code,
-        crate::diagnostic::ConditionCode::IntermediateKeyRequired
-    );
+    assert_eq!(diagnostic.code, Code::IntermediateKeyRequired);
     assert_eq!(diagnostic.spec_paths, ["intermediates.KEPT.key"]);
 }
 
@@ -532,9 +499,7 @@ fn a_declared_key_s_columns_order_the_join_s_reader() {
     let forward = prepared
         .check_declaration_diagnostics()
         .into_iter()
-        .filter(|diagnostic| {
-            diagnostic.code == crate::diagnostic::ConditionCode::ColumnForwardReference
-        })
+        .filter(|diagnostic| diagnostic.code == Code::ColumnForwardReference)
         .collect::<Vec<_>>();
     let [diagnostic] = forward.as_slice() else {
         panic!("one forward reference: {forward:?}");
@@ -559,8 +524,5 @@ fn a_declared_key_s_columns_order_the_join_s_reader() {
         .flat_map(|finding| finding.diagnostics(prepared.source()).unwrap())
         .map(|diagnostic| diagnostic.code)
         .collect::<Vec<_>>();
-    assert_eq!(
-        bound,
-        [crate::diagnostic::ConditionCode::ColumnForwardReference]
-    );
+    assert_eq!(bound, [Code::ColumnForwardReference]);
 }

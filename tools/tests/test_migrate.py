@@ -590,7 +590,7 @@ class KeyTests(unittest.TestCase):
             "output:\n  path: cm.csv\n  columns: [USUBJID, CMSEQ]\n"
             "intermediates:\n  - id: CODED\n    dataset: CODING\n"
             "    no_match: {literal: null}\n"
-            "  - id: KEPT\n    dataset: DICT\n    filter: \"DICT.X = 1\"\n"
+            '  - id: KEPT\n    dataset: DICT\n    filter: "DICT.X = 1"\n'
             "columns:\n  - {name: USUBJID, type: str, derivation: CM.USUBJID}\n"
             "  - {name: CMSEQ, type: int, derivation: CM.CMSEQ}\n"
         )

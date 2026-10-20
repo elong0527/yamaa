@@ -29,9 +29,7 @@ from tools.migrate.text import compose, value_of
 IDENTITY = {"intermediates": "id", "columns": "name", "rows": "id"}
 KEYED_MAPS = ("input", "windows")
 # A qualified name, or a reduction's whole record, `DATASET.*` (FORMULA-18).
-QUALIFIED = re.compile(
-    r"[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)+|\.\*)"
-)
+QUALIFIED = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:(?:\.[A-Za-z_][A-Za-z0-9_]*)+|\.\*)")
 NAME_TYPES = frozenset(
     {
         "variable",

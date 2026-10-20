@@ -129,15 +129,12 @@ struct Live<'a> {
 
 impl<'a> Live<'a> {
     fn new(spec: &'a Spec) -> Self {
-        let base = spec
-            .rows
-            .base
-            .as_ref()
-            .map(|base| base.name.as_str())
-            .or_else(|| match spec.inputs.as_slice() {
+        let base = spec.rows.base.as_ref().map(|base| base.name.as_str()).or(
+            match spec.inputs.as_slice() {
                 [only] => Some(only.name.name.as_str()),
                 _ => None,
-            });
+            },
+        );
         let mut drivers = spec.rows.templates.iter().map(|template| {
             template
                 .driver
