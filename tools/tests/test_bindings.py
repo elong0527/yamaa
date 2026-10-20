@@ -44,7 +44,7 @@ class BindingsTests(unittest.TestCase):
         self.assertTrue(all(len(line) <= 88 for line in wrapped[:-1]))
 
     def test_every_issue_view_is_an_arrow_table_with_no_row_alias(self):
-        # The Rust facade builds the seven-column issues table; no host
+        # The Rust facade builds the twelve-column issues table; no host
         # projects a private issue record.
         definition = generator._load_definition()
         stub = generator._render_pyi(definition)

@@ -82,25 +82,42 @@ domain_observations <- function(result) yamaa:::.run_observations(result)
 # yamaa_error with the run's own issues: a failed run's, or a successful run's
 # refused publication.
 saved <- function(result) returns_paths(result$save())
-save_refused <- function(result,message) {
-  failure <- tryCatch({result$save();NULL},error=identity)
-  inherits(failure,"yamaa_error") && identical(conditionMessage(failure),message) &&
-    identical(failure$issues,result$issues)
+# D39's error text: `cannot save <subject>`, then the first issue's line,
+# `<message> [<condition>, <rule>]`, and the count of the other issues.
+issue_line <- function(issues) {
+  rule <- issues$rule[[1L]]
+  line <- sprintf("%s [%s]", issues$message[[1L]],
+    if (is.na(rule)) issues$condition[[1L]] else paste(issues$condition[[1L]], rule, sep = ", "))
+  others <- nrow(issues) - 1L
+  if (others > 0L) line <- sprintf("%s (and %d more %s)", line, others, if (others == 1L) "issue" else "issues")
+  line
 }
-failed_save <- function(result) save_refused(result,"cannot save a failed run; see issues")
-refused_save <- function(result) save_refused(result,"nothing was saved; see issues")
-# Every public issues table has the authored finding fields first, then the
-# source geometry columns. Truth compares the fields it authors.
-issue_columns <- c("phase","condition","rule","spec_paths","context","source_span","operand_route")
+save_refused <- function(result) {
+  failure <- tryCatch({result$save();NULL},error=identity)
+  inherits(failure,"yamaa_error") && identical(failure$issues,result$issues) &&
+    startsWith(conditionMessage(failure),"cannot save ") &&
+    endsWith(conditionMessage(failure),paste0(": ",issue_line(failure$issues)))
+}
+failed_save <- save_refused
+refused_save <- save_refused
+# Every public issues table has the twelve columns of D28; the authored
+# finding fields come among them in column order. Truth compares the fields
+# it authors.
+issue_columns <- c("severity","phase","condition","rule","spec_paths","file","line","column","message",
+  "context","source_span","operand_route")
 authored_columns <- fixture_strings(host_truth[["issue_columns"]])
-stopifnot(identical(issue_columns[seq_along(authored_columns)],authored_columns))
+in_column_order <- function(fields) identical(fields,issue_columns[issue_columns %in% fields])
+stopifnot(in_column_order(authored_columns))
 source(file.path(root,"issue-frame-truth.R"),local=TRUE)
 check_issue_frame <- function(actual,expected) {
   fields <- names(expected)
   stopifnot(is.data.frame(actual),identical(names(actual),issue_columns),all(authored_columns %in% fields),
-    identical(fields,issue_columns[seq_along(fields)]))
+    in_column_order(fields))
   stopifnot(nrow(actual)==length(expected$phase),identical(lapply(actual[fields],identity),expected))
-  stopifnot(all(vapply(actual[c("phase","condition","rule","context")],is.character,logical(1))),
+  stopifnot(all(vapply(actual[c("severity","phase","condition","rule","file","message","context")],
+      is.character,logical(1))),
+    all(vapply(actual[c("line","column")],is.double,logical(1))),
+    all(actual$severity=="error"),all(nzchar(actual$message)),
     all(vapply(actual[c("spec_paths","source_span","operand_route")],is.list,logical(1))))
 }
 # One run report replaces the retired verification and warning logs: every
@@ -282,9 +299,11 @@ stopifnot(identical(refused$names,character()),identical(names(refused$report),r
   identical(refused$issues$context,paste0('{"cause":"missing","path":',
     json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-project.yaml")),'}')),
   identical(refused$issues,absent$check()$issues),
-  save_refused(refused,"the project run was refused; see issues"))
+  save_refused(refused))
 unread <- tryCatch(absent$spec("TEST"),error=identity)
-stopifnot(inherits(unread,"yamaa_error"),identical(conditionMessage(unread),"cannot read the project; see issues"),
+stopifnot(inherits(unread,"yamaa_error"),identical(conditionMessage(unread),paste0("cannot select TEST: ",
+    "environment needs an environment file for this host that is not declared or cannot be read ",
+    "[project_environment_missing, FUNC-1]")),
   identical(unread$issues,refused$issues))
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument <- tryCatch(yamaa_spec(NULL)$run(),error=identity)

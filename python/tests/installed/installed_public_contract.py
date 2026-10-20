@@ -8,6 +8,7 @@ import importlib.util
 import inspect
 import json
 import math
+import os
 import shutil
 import tempfile
 import unittest
@@ -34,7 +35,12 @@ ISSUE_TYPES = [
     pl.String,
     pl.String,
     pl.String,
+    pl.String,
     pl.List(pl.String),
+    pl.String,
+    pl.Int64,
+    pl.Int64,
+    pl.String,
     pl.String,
     pl.List(pl.Int64),
     pl.List(pl.String),
@@ -64,31 +70,52 @@ def public_names(value):
     return sorted(name for name in dir(value) if not name.startswith("_"))
 
 
-def unknown_member(available):
-    """The one issue of a project run asked for ADSL, which it did not build;
-    `available` is the canonical JSON of the names it has."""
+def error_text(key, path=None):
+    """D39's error text the fixture authors under `key`, naming `path`."""
+    text = MESSAGES[key]
+    return text if path is None else text.replace("{path}", os.fspath(path))
+
+
+def issue_row(message, **fields):
+    """One issue row with the twelve columns of D28 (#3030): an error with
+    no location yet (#3262)."""
     return {
-        "phase": "validation",
-        "condition": "unknown_specification_name",
-        "rule": "PROJECT-6",
-        "spec_paths": [],
-        "context": '{"available":' + available + ',"name":"ADSL"}',
+        "severity": "error",
+        "phase": fields["phase"],
+        "condition": fields["condition"],
+        "rule": fields["rule"],
+        "spec_paths": fields.get("spec_paths", []),
+        "file": None,
+        "line": None,
+        "column": None,
+        "message": message,
+        "context": fields["context"],
         "source_span": None,
         "operand_route": None,
     }
+
+
+def unknown_member(available):
+    """The one issue of a project run asked for ADSL, which it did not build;
+    `available` is the canonical JSON of the names it has."""
+    return issue_row(
+        "the project has no specification named ADSL",
+        phase="validation",
+        condition="unknown_specification_name",
+        rule="PROJECT-6",
+        context='{"available":' + available + ',"name":"ADSL"}',
+    )
 
 
 def nothing_to_save(rule):
     """The one issue of a save with nothing to write, under `rule`."""
-    return {
-        "phase": "output",
-        "condition": "nothing_to_save",
-        "rule": rule,
-        "spec_paths": [],
-        "context": "{}",
-        "source_span": None,
-        "operand_route": None,
-    }
+    return issue_row(
+        "there is nothing to save",
+        phase="output",
+        condition="nothing_to_save",
+        rule=rule,
+        context="{}",
+    )
 
 
 def arguments(function):
@@ -105,13 +132,15 @@ class PublicContract(unittest.TestCase):
         (self.root / "input.csv").write_bytes(INPUT)
 
     def issues(self, result):
-        """The one findings view: seven typed columns, context as JSON text."""
+        """The one findings view: twelve typed columns, context as JSON text."""
         frame = result.issues
         self.assertIsInstance(frame, pl.DataFrame)
         self.assertEqual(frame.columns, TRUTH["issue_columns"])
         self.assertEqual(frame.dtypes, ISSUE_TYPES)
         for row in frame.to_dicts():
+            self.assertEqual(row["severity"], "error")
             self.assertTrue(row["condition"])
+            self.assertTrue(row["message"])
             self.assertIsInstance(json.loads(row["context"]), dict)
             span = row["source_span"]
             if span is not None:
@@ -243,7 +272,8 @@ class PublicContract(unittest.TestCase):
         self.assertFalse((self.root / "output.csv").exists())
 
     def test_missing_specification_is_an_issue_and_failed_save_raises(self):
-        spec = yamaa.spec(self.root / "absent.yaml")
+        absent = self.root / "absent.yaml"
+        spec = yamaa.spec(absent)
         checked = self.issues(spec.check())
         self.assertEqual(checked["condition"].to_list(), ["engine_rejected"])
         self.assertEqual(
@@ -256,12 +286,13 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(self.issues(run).equals(checked))
         for _ in range(2):
             error = self.refusal(run.save)
-            self.assertEqual(str(error), MESSAGES["failed_run_save"])
+            # A run whose file was not read names the path as given.
+            self.assertEqual(str(error), error_text("missing_run_save", absent))
             self.assertEqual(error.paths, [])
             self.assertTrue(error.issues.equals(checked))
             self.assertTrue(run.issues.equals(checked))
         error = self.refusal(spec.resolve)
-        self.assertEqual(str(error), MESSAGES["resolve"])
+        self.assertEqual(str(error), error_text("resolve", absent))
         self.assertTrue(error.issues.equals(checked))
         self.assertFalse((self.root / "output.csv").exists())
 
@@ -391,7 +422,7 @@ class PublicContract(unittest.TestCase):
         # back unchanged and the stale output is never touched.
         for _ in range(2):
             error = self.refusal(result.save)
-            self.assertEqual(str(error), MESSAGES["failed_run_save"])
+            self.assertEqual(str(error), error_text("failed_run_save"))
             self.assertEqual(error.paths, paths_of(self.root / "checks.csv"))
             self.assertEqual(error.issues.to_dicts(), issues)
             self.assertEqual(result.issues.to_dicts(), issues)
@@ -597,7 +628,7 @@ class PublicContract(unittest.TestCase):
         # The project report stacks its members' reports in run order.
         self.assertTrue(runs.report.equals(member.report))
         error = self.refusal(lambda: runs["ADSL"])
-        self.assertEqual(str(error), MESSAGES["unknown_member"])
+        self.assertEqual(str(error), error_text("unknown_member"))
         self.assertEqual(error.issues.to_dicts(), [unknown_member('["TEST"]')])
         # Membership and iteration go by name, like indexing.
         self.assertIn("TEST", runs)
@@ -606,12 +637,12 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(project.run("adam").names, ["TEST"])
         self.assertEqual(project.run("sdtm").names, [])
         # A run or a submission that built nothing has nothing to save.
-        for result, message, rule in (
+        for result, key, rule in (
             (project.run("sdtm"), "empty_project_run_save", "PROJECT-12"),
             (project.submission(), "empty_submission_save", "PROJECT-13"),
         ):
             error = self.refusal(result.save)
-            self.assertEqual(str(error), MESSAGES[message])
+            self.assertEqual(str(error), error_text(key, case / "project.yaml"))
             self.assertEqual(error.paths, [])
             self.assertEqual(error.issues.to_dicts(), [nothing_to_save(rule)])
         self.assertFalse((case / "test.csv").exists())
@@ -709,9 +740,10 @@ class PublicContract(unittest.TestCase):
         self.assertEqual((case / "held.csv").read_bytes(), expected)
 
     def test_project_refusals_are_issues_and_unknown_sections_raise(self):
-        project = yamaa.project(self.root / "absent-project.yaml")
+        absent = self.root / "absent-project.yaml"
+        project = yamaa.project(absent)
         error = self.refusal(lambda: project.spec("TEST"))
-        self.assertEqual(str(error), MESSAGES["unread_project"])
+        self.assertEqual(str(error), error_text("unread_project"))
         unread = error.issues.to_dicts()
         self.assertEqual(
             [(row["condition"], row["spec_paths"]) for row in unread],
@@ -726,32 +758,32 @@ class PublicContract(unittest.TestCase):
         self.assertTrue(runs.report.is_empty())
         self.assertEqual(public_names(runs), TRUTH["members"]["project_run"])
         error = self.refusal(runs.save)
-        self.assertEqual(str(error), MESSAGES["refused_project_run_save"])
+        self.assertEqual(str(error), error_text("refused_project_run_save", absent))
         self.assertEqual(error.issues.to_dicts(), unread)
         error = self.refusal(lambda: runs["ADSL"])
-        self.assertEqual(str(error), MESSAGES["no_member_built"])
+        self.assertEqual(str(error), error_text("no_member_built"))
         self.assertEqual(error.issues.to_dicts(), [unknown_member("[]")])
         submission = project.submission("sdtm", created="2026-09-11T00:00:00")
         self.assertEqual(public_names(submission), TRUTH["members"]["submission"])
         self.assertEqual(self.issues(submission).to_dicts(), unread)
         for _ in range(2):
             error = self.refusal(submission.save)
-            self.assertEqual(str(error), MESSAGES["refused_submission_save"])
+            self.assertEqual(str(error), error_text("refused_submission_save", absent))
             self.assertTrue(error.issues.equals(submission.issues))
         for name in TRUTH["read_only_views"]["project_run"]:
             with self.subTest(name=name), self.assertRaises(AttributeError):
                 setattr(runs, name, None)
         with self.assertRaises(AttributeError):
             submission.issues = None
-        for call, message in (
-            (lambda: project.run("bogus"), MESSAGES["unknown_section_run"]),
+        for call, expected in (
+            (lambda: project.run("bogus"), error_text("unknown_section_run")),
             (
                 lambda: project.submission("bogus"),
-                MESSAGES["unknown_section_submission"],
+                error_text("unknown_section_submission"),
             ),
         ):
             error = self.refusal(call)
-            self.assertEqual(str(error), message)
+            self.assertEqual(str(error), expected)
             (row,) = error.issues.to_dicts()
             self.assertEqual(
                 (row["phase"], row["condition"]), ("engine", "engine_rejected")
@@ -1061,7 +1093,7 @@ class Resolve(unittest.TestCase):
         spec.unlink()
         with self.assertRaises(yamaa.Error) as caught:
             handle.resolve()
-        self.assertEqual(str(caught.exception), MESSAGES["resolve"])
+        self.assertEqual(str(caught.exception), error_text("resolve", spec))
         self.assertEqual(
             caught.exception.issues["condition"].to_list(), ["engine_rejected"]
         )

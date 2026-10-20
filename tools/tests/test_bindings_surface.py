@@ -196,7 +196,7 @@ class GrammarTests(unittest.TestCase):
 
     def test_the_condition_column_may_name_the_registry(self):
         columns = self.definition["tables"]["issues"]["columns"]
-        self.assertEqual(columns[1]["values"], surface.REGISTRY_VALUES)
+        self.assertEqual(columns[2]["values"], surface.REGISTRY_VALUES)
         self.assertTrue((generator.ROOT / surface.REGISTRY_VALUES).is_file())
 
     def test_records_follow_the_field_grammar_of_the_draft(self):
@@ -290,7 +290,9 @@ class ManifestTests(unittest.TestCase):
         lines = surface.manifest_lines(generator._load_definition())
         self.assertIn("values.phase.validation", lines)
         self.assertIn("values.report_outcome.violated", lines)
-        self.assertIn("tables.issues.columns[0]: phase: str, values phase", lines)
+        self.assertIn("tables.issues.columns[0]: severity: str, values severity", lines)
+        self.assertIn("tables.issues.columns[1]: phase: str, values phase", lines)
+        self.assertIn("tables.issues.columns[8]: message: str", lines)
         self.assertIn("tables.report.columns[10]: COUNT: optional<int>", lines)
         self.assertIn("tables.odm_items.columns[29]: SourceOrdinal: int", lines)
         self.assertEqual(len(lines), len(set(lines)))

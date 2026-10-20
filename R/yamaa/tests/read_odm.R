@@ -65,9 +65,11 @@ for (refusal in truth[["refusals"]]) {
     if (identical(name, "archive_member")) value else as.numeric(value)
   })
   names(options) <- names(refusal[["options"]])
-  error <- tryCatch(do.call(yamaa_read_odm, c(list(source_path(refusal[["document"]])), options)),
-    yamaa_error = identity)
-  prefix <- paste0("cannot read ODM: ODM read failure (", refusal[["code"]], "): ")
+  source <- source_path(refusal[["document"]])
+  error <- tryCatch(do.call(yamaa_read_odm, c(list(source), options)), yamaa_error = identity)
+  # D39: the call names the source as given; a reader failure carries no
+  # issue, so its own text follows.
+  prefix <- paste0("cannot read ", source, ": ODM read failure (", refusal[["code"]], "): ")
   # A reader failure is not a specification finding.
   stopifnot(inherits(error, "yamaa_error"), startsWith(conditionMessage(error), prefix),
     is.data.frame(error$issues), identical(names(error$issues), issue_columns),

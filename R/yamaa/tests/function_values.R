@@ -50,8 +50,10 @@ refused <- function(result, condition, rule, reason) {
     identical(result$issues$rule, rule),
     !has_jsonlite || identical(reasons(result$issues), reason))
   failure <- tryCatch(result$save(), error = identity)
+  # D39: the run names its dataset, then its one issue.
   stopifnot(inherits(failure, "yamaa_error"),
-    identical(conditionMessage(failure), "cannot save a failed run; see issues"),
+    identical(conditionMessage(failure),
+      sprintf("cannot save TEST: %s [%s, %s]", result$issues$message, condition, rule)),
     identical(failure$issues, result$issues))
 }
 # The project's one specification, run with the project's functions.
