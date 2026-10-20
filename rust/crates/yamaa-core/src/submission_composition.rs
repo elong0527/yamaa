@@ -1,6 +1,8 @@
 //! Shared submission composition over admitted metadata. No study or host ports.
 use crate::{
+    application_issue::{self, Fault, Stage},
     diagnostic::{ConditionCode, Definition},
+    limits::LimitExceeded,
     project_environment::Submission,
     project_terminology as ct,
     schema::{Document, DocumentNode as N},
@@ -27,6 +29,37 @@ impl Finding {
             path: path.into(),
             context: [("detail".into(), crate::json::Value::String(detail.into()))].into(),
         }
+    }
+    /// An engine refusal keeps its closed classification alongside its detail.
+    pub fn rejected(stage: Stage, fault: Fault, path: &str, detail: &str) -> Self {
+        let diagnostic = application_issue::rejected(stage, fault);
+        let mut finding = Self {
+            code: diagnostic.code,
+            path: path.into(),
+            context: diagnostic.context,
+        };
+        finding.context.insert("detail".into(), detail.into());
+        finding
+    }
+    /// Preserve a resource boundary's typed size facts, including overflow.
+    pub fn resource_rejected(stage: Stage, fault: Fault, path: &str, error: LimitExceeded) -> Self {
+        let diagnostic = application_issue::resource_rejected(
+            stage,
+            fault,
+            error.resource,
+            error.limit,
+            error.actual,
+            Vec::new(),
+        );
+        let mut finding = Self {
+            code: diagnostic.code,
+            path: path.into(),
+            context: diagnostic.context,
+        };
+        finding
+            .context
+            .insert("detail".into(), error.to_string().into());
+        finding
     }
 }
 pub struct Input<'a> {

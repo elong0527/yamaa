@@ -6,6 +6,7 @@
 //! and the output-byte boundary.
 use std::io::{self, Write};
 use yamaa_core::{
+    application_issue::{Fault, Stage},
     diagnostic::ConditionCode,
     limits::{LimitExceeded, Limits},
     submission_composition::Finding,
@@ -48,15 +49,7 @@ struct Writer<'a> {
 }
 impl Write for Writer<'_> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        let required = self.output.len().checked_add(bytes.len());
-        let actual = required.ok_or_else(|| {
-            io::Error::other(LimitExceeded {
-                resource: "output_bytes",
-                limit: Limits::OUTPUT_BYTES,
-                actual: None,
-            })
-        })?;
-        Limits::output_bytes(actual).map_err(io::Error::other)?;
+        Limits::output_extension(self.output.len(), bytes.len()).map_err(io::Error::other)?;
         self.output.extend_from_slice(bytes);
         Ok(bytes.len())
     }
@@ -65,19 +58,27 @@ impl Write for Writer<'_> {
     }
 }
 impl Writer<'_> {
-    fn failure(&self, cause: impl std::fmt::Display) -> Finding {
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
-            self.path,
-            &cause.to_string(),
-        )
+    fn failure(&self, cause: io::Error) -> Finding {
+        if let Some(limit) = cause
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<LimitExceeded>())
+        {
+            Finding::resource_rejected(Stage::Output, Fault::OutputLimit, self.path, *limit)
+        } else {
+            Finding::rejected(
+                Stage::Output,
+                Fault::OutputProjection,
+                self.path,
+                &cause.to_string(),
+            )
+        }
     }
     fn text(&mut self, text: &str) -> Result<(), Finding> {
         self.write_all(text.as_bytes())
             .map_err(|error| self.failure(error))
     }
     fn string(&mut self, text: &str) -> Result<(), Finding> {
-        serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error))
+        serde_json::to_writer(&mut *self, text).map_err(|error| self.failure(error.into()))
     }
     fn cell(&mut self, value: ValueRef<'_>) -> Result<(), Finding> {
         match value {
@@ -194,6 +195,48 @@ pub fn render<T: TableAccess>(
 mod tests {
     use super::*;
     use yamaa_core::value::{FiniteFloat, Value};
+
+    #[test]
+    fn json_serialization_preserves_the_typed_output_boundary() {
+        struct Refused(LimitExceeded);
+        impl Write for Refused {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Err(io::Error::other(self.0))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let writer = Writer {
+            output: Vec::new(),
+            path: "datasets.DM.transport",
+        };
+        for actual in [Some(Limits::OUTPUT_BYTES + 1), None] {
+            let error = LimitExceeded {
+                resource: "output_bytes",
+                limit: Limits::OUTPUT_BYTES,
+                actual,
+            };
+            let wrapped = serde_json::to_writer(Refused(error), "escaped \"text\"").unwrap_err();
+            let finding = writer.failure(wrapped.into());
+            assert_eq!(finding.code, ConditionCode::ApplicationRejected);
+            assert_eq!(finding.definition().requirement, None);
+            assert_eq!(finding.path, "datasets.DM.transport");
+            assert_eq!(finding.context["stage"], "output");
+            assert_eq!(finding.context["code"], "output_limit");
+            assert_eq!(finding.context["resource"], "output_bytes");
+            assert_eq!(finding.context["limit"], Limits::OUTPUT_BYTES);
+            assert_eq!(
+                finding.context.get("actual"),
+                actual.map(yamaa_core::json::Value::from).as_ref()
+            );
+        }
+        let other = writer.failure(io::Error::other("opaque projection failure"));
+        assert_eq!(other.context["stage"], "output");
+        assert_eq!(other.context["code"], "output_projection");
+        assert_eq!(other.context["detail"], "opaque projection failure");
+        assert!(!other.context.contains_key("resource"));
+    }
 
     #[test]
     fn streamed_cells_preserve_exact_json_and_full_width_scalar_spelling() {

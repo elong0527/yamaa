@@ -1154,6 +1154,7 @@ mod service {
                 ]
                 .into();
                 if stage == P::TargetAdmission {
+                    expected.insert("code".into(), C::String("invalid_target".into()));
                     expected.insert(
                         "stage".into(),
                         C::String("publication_target_admission".into()),

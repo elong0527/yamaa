@@ -159,8 +159,9 @@ fn published_csv_failure<E, PE>(
     }
     published_source_failure(
         error.finding(dataset, written),
-        Finding::cause(
-            ConditionCode::ApplicationRejected,
+        Finding::rejected(
+            Stage::Define,
+            Fault::SourceBoundary,
             written,
             "published CSV admission",
         ),
@@ -858,28 +859,25 @@ pub fn publication_diagnostic(
     stage: PublicationFailure,
     cause: String,
 ) -> Diagnostic {
-    let code = match stage {
-        PublicationFailure::TargetAdmission => ConditionCode::ApplicationRejected,
-        PublicationFailure::Publication => ConditionCode::OutputPublicationFailed,
+    let mut diagnostic = match stage {
+        PublicationFailure::TargetAdmission => crate::application_issue::rejected(
+            Stage::PublicationTargetAdmission,
+            Fault::InvalidTarget,
+        ),
+        PublicationFailure::Publication => Diagnostic {
+            code: ConditionCode::OutputPublicationFailed,
+            spec_paths: Vec::new(),
+            context: Default::default(),
+            source_span: None,
+            operand_route: None,
+        },
     };
-    let mut context: crate::diagnostic::Context = [
+    diagnostic.spec_paths = vec!["define".into()];
+    diagnostic.context.extend([
         (String::from("artifact"), JsonValue::from(index)),
         (String::from("cause"), JsonValue::String(cause)),
-    ]
-    .into();
-    if stage == PublicationFailure::TargetAdmission {
-        context.insert(
-            "stage".into(),
-            JsonValue::String(Stage::PublicationTargetAdmission.as_str().into()),
-        );
-    }
-    Diagnostic {
-        code,
-        spec_paths: vec!["define".into()],
-        context,
-        source_span: None,
-        operand_route: None,
-    }
+    ]);
+    diagnostic
 }
 
 impl<E: std::fmt::Debug, PE: std::fmt::Debug> std::fmt::Display for SaveFailure<E, PE> {

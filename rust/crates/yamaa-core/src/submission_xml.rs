@@ -1,5 +1,6 @@
 //! Deterministic UTF-8 Define-XML for the shared admitted column metadata profile.
 use crate::{
+    application_issue::{Fault, Stage},
     diagnostic::ConditionCode,
     limits::Limits,
     project_terminology as ct, specification_submission_document as s,
@@ -89,17 +90,18 @@ impl Element {
     }
     fn write(&self, level: usize, out: &mut String) -> Result<(), Finding> {
         let append = |out: &mut String, text: &str| -> Result<(), Finding> {
-            if out
-                .len()
-                .checked_add(text.len())
-                .is_none_or(|n| Limits::output_bytes(n).is_err())
-            {
-                return Err(Finding::cause(
-                    crate::diagnostic::ConditionCode::ApplicationRejected,
+            Limits::output_extension(out.len(), text.len()).map_err(|error| {
+                let mut finding = Finding::resource_rejected(
+                    Stage::Output,
+                    Fault::OutputLimit,
                     &self.path,
-                    "render_byte_limit",
-                ));
-            }
+                    error,
+                );
+                finding
+                    .context
+                    .insert("detail".into(), "render_byte_limit".into());
+                finding
+            })?;
             out.push_str(text);
             Ok(())
         };
