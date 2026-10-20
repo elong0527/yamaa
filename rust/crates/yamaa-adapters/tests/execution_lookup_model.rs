@@ -703,10 +703,7 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
          S,S-2,2,\n"
     );
     // An aggregate is not row local, so it completes only in the column phase.
-    let fixture = Fixture::new(
-        &specification("{aggregate: \"MIN(AE.ASTDT)\"}"),
-        &inputs,
-    );
+    let fixture = Fixture::new(&specification("{aggregate: \"MIN(AE.ASTDT)\"}"), &inputs);
     let failure = fixture.failure();
     assert_eq!(
         (
