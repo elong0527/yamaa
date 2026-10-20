@@ -836,7 +836,7 @@ fn row_count_check<'a, E>(
 
 /// Partition rows by columns in first-occurrence order: missing values
 /// compare equal, text is exact, temporal precision and float zero signs do
-/// not affect equality (REQ-0037/0038/0065).
+/// not affect equality (ROW-4).
 pub(super) fn partition(
     frame: &Frame,
     columns: &[usize],

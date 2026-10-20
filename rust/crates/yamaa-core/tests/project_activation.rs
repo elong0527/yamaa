@@ -1782,19 +1782,19 @@ mod project {
                 panic!("complete rejection")
             };
             assert_eq!(findings.len(), 3);
-            for (finding, condition, requirement) in [
-                (&findings[0], "unknown_codelist", "REQ-0953"),
-                (&findings[1], "codelist_type_mismatch", "REQ-0954"),
-                (&findings[2], "redundant_declaration", "REQ-0955"),
+            for (finding, condition, rule) in [
+                (&findings[0], "unknown_codelist", "CT-1"),
+                (&findings[1], "codelist_type_mismatch", "CT-8"),
+                (&findings[2], "redundant_declaration", "CT-9"),
             ] {
                 let d = finding.diagnostic();
                 assert_eq!(
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
                 assert_eq!(d.context["column"], JsonValue::String("VALUE".into()));
             }
@@ -1913,9 +1913,9 @@ mod project {
                 (
                     finding.definition().phase,
                     finding.definition().condition,
-                    finding.definition().requirement
+                    finding.definition().rule
                 ),
-                ("verification", "allowed_values_failed", Some("REQ-0957"))
+                ("verification", "allowed_values_failed", Some("CT-7"))
             );
         }
         #[test]
@@ -2071,7 +2071,7 @@ mod project {
             let mut wrong = record(&rows, &values);
             wrong.code = ConditionCode::VerificationAllowedValuesFailed;
             assert_eq!(wrong.code.definition().condition, "allowed_values_failed");
-            assert_eq!(wrong.code.definition().requirement, Some("REQ-0376"));
+            assert_eq!(wrong.code.definition().rule, Some("CHECK-6"));
             assert!(matches!(
                 diagnostics(&compiled, &[record(&rows, &values), wrong],),
                 Err(Error::InvalidObservation)

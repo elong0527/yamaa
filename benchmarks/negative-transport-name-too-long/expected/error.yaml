@@ -2,7 +2,7 @@ phase: validation
 condition: sas_name_too_long
 spec_paths:
   - sdtm.specs[0].columns.ETHNICITY.submission
-requirement: REQ-1023
+rule: DEFINE-22
 context:
   name: ETHNICITY
   pattern: ^[A-Z][A-Z0-9_]{0,7}$

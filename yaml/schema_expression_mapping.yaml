@@ -1,7 +1,7 @@
 version: "1.0"
 
 expressions:
-    mapping: # See REQ-1110.
+    mapping: # See EXPR-11.
         - source:
             type: filtered_source
             required: true
@@ -20,7 +20,7 @@ expressions:
         - unmapped:
             type: substitute_value
             description: Value returned when the source is present but has no dictionary entry; without it, such a source fails (EXPR-11).
-    cut: # See REQ-1118.
+    cut: # See EXPR-13.
 
         - source:
             type: filtered_source

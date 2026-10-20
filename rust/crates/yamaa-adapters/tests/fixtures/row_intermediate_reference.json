@@ -938,7 +938,7 @@
           "spec_paths": [
             "rows[0].derivations.ROWV.source"
           ],
-          "requirement": "REQ-0125",
+          "rule": "LOOKUP-11",
           "context": {
             "identifier": "P.ABSENT"
           }
@@ -957,7 +957,7 @@
           "spec_paths": [
             "input.SRC.path"
           ],
-          "requirement": "REQ-0785",
+          "rule": "FILE-7",
           "context": {
             "dataset": "SRC",
             "path": "src.csv"
@@ -969,7 +969,7 @@
           "spec_paths": [
             "input.DONOR.path"
           ],
-          "requirement": "REQ-0785",
+          "rule": "FILE-7",
           "context": {
             "dataset": "DONOR",
             "path": "donor.csv"
@@ -1181,7 +1181,7 @@
           "spec_paths": [
             "rows[1].dataset"
           ],
-          "requirement": "REQ-0034",
+          "rule": "ROW-1",
           "context": {
             "row": "high",
             "dataset": "ABSENT"
@@ -1201,7 +1201,7 @@
           "spec_paths": [
             "rows[1].dataset"
           ],
-          "requirement": "REQ-0034",
+          "rule": "ROW-1",
           "context": {
             "row": "high",
             "dataset": null
@@ -1224,7 +1224,7 @@
           "spec_paths": [
             "intermediates[0]"
           ],
-          "requirement": "LOOKUP-24",
+          "rule": "LOOKUP-24",
           "context": {
             "intermediate": "P",
             "dataset": "DONOR",
@@ -1294,7 +1294,7 @@
           "spec_paths": [
             "intermediates[0]"
           ],
-          "requirement": "REQ-0127",
+          "rule": "LOOKUP-10",
           "context": {
             "intermediate": "P",
             "dataset": "DONOR",
@@ -1353,7 +1353,7 @@
           "spec_paths": [
             "columns.ROWV"
           ],
-          "requirement": "REQ-0013",
+          "rule": "VALUE-3",
           "context": {
             "from": "str",
             "to": "int",
@@ -1390,7 +1390,7 @@
           "spec_paths": [
             "intermediates[0].key.K.str_pad.width"
           ],
-          "requirement": "REQ-1261",
+          "rule": "TEXT-2",
           "context": {
             "expected": "a positive integer width"
           }
@@ -1409,7 +1409,7 @@
           "spec_paths": [
             "input.SRC.path"
           ],
-          "requirement": "REQ-0785",
+          "rule": "FILE-7",
           "context": {
             "dataset": "SRC",
             "path": "src.csv"
@@ -1421,7 +1421,7 @@
           "spec_paths": [
             "input.DONOR.path"
           ],
-          "requirement": "REQ-0785",
+          "rule": "FILE-7",
           "context": {
             "dataset": "DONOR",
             "path": "donor.csv"
@@ -1574,7 +1574,7 @@
           "spec_paths": [
             "columns.AVAL.derivation"
           ],
-          "requirement": "REQ-1260",
+          "rule": "SPEC-6",
           "context": {
             "column": "AVAL",
             "rows": [
@@ -1629,7 +1629,7 @@
     {
       "phase": "planning",
       "condition": "unsupported_operation",
-      "requirement": null,
+      "rule": null,
       "spec_paths": [
         "intermediates[0].verifications"
       ],
@@ -1640,7 +1640,7 @@
     {
       "phase": "planning",
       "condition": "unsupported_operation",
-      "requirement": null,
+      "rule": null,
       "spec_paths": [
         "intermediates[1].derivations"
       ],
@@ -1651,7 +1651,7 @@
     {
       "phase": "planning",
       "condition": "unsupported_operation",
-      "requirement": null,
+      "rule": null,
       "spec_paths": [
         "intermediates[1]"
       ],
@@ -1662,7 +1662,7 @@
     {
       "phase": "planning",
       "condition": "unsupported_operation",
-      "requirement": null,
+      "rule": null,
       "spec_paths": [
         "columns.ENDPOINT.derivation.source"
       ],
@@ -1673,7 +1673,7 @@
     {
       "phase": "planning",
       "condition": "unsupported_operation",
-      "requirement": null,
+      "rule": null,
       "spec_paths": [
         "columns.EOTFL.derivation.flag"
       ],

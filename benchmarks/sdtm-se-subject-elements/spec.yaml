@@ -8,13 +8,13 @@ input:
   ODM: input/odm.csv
 base: ODM
 
-# One output row per key combination (REQ-0042): the ODM base has one record
+# One output row per key combination (ROW-8): the ODM base has one record
 # per subject, study event and item, so each subject's study events -- the
 # elements they entered -- give the rows. The ODM extract carries each
 # element's trial-design attributes (IT.TE.*/IT.TA.*) and the dosing dates
 # (IT.EX.*) on every event, so each SE record derives from its own ODM
 # context. DM is a subject-level table; a DM.* read joins implicitly on the
-# keys DM shares with the output (REQ-0150: STUDYID, USUBJID).
+# keys DM shares with the output (LOOKUP-1: STUDYID, USUBJID).
 
 output:
   path: se.csv

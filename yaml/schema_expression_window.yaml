@@ -1,10 +1,10 @@
 version: "1.0"
 
-# See REQ-1129.
+# See WINDOW-3.
 
 window_selection:
     type: [identifier, window_spec]
-    description: See REQ-1251.
+    description: See WINDOW-1.
 
 window_spec:
     - group_by:
@@ -18,11 +18,11 @@ window_spec:
         description: Predicate selecting rows (WINDOW-4).
 
 expressions:
-    row_number: # See REQ-1123.
+    row_number: # See WINDOW-6.
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-6).
-    rank: # See REQ-1124.
+    rank: # See WINDOW-6.
         - method:
             type: str
             default: competition
@@ -31,7 +31,7 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-6).
-    row_value: # See REQ-1125.
+    row_value: # See WINDOW-7.
         - source:
             type: variable
             required: true
@@ -43,7 +43,7 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and row selection for the window (WINDOW-7).
-    locf: # See REQ-1239.
+    locf: # See WINDOW-8.
         - source:
             type: variable
             required: true
@@ -55,7 +55,7 @@ expressions:
         - window:
             type: window_selection
             description: Partition, ordering and optional row selection (WINDOW-8).
-    baseline_flag: # See REQ-1127.
+    baseline_flag: # See WINDOW-9.
         - date:
             type: variable
             required: true

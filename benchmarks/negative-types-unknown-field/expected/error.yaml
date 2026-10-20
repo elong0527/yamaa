@@ -2,7 +2,7 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - input.EX.types.EXDOSEN
-requirement: REQ-0532
+rule: INPUT-6
 context:
   dataset: EX
   field: EXDOSEN

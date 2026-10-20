@@ -161,8 +161,8 @@ impl Finding {
             _ => None,
         }
     }
-    pub fn requirement(&self) -> Option<&'static str> {
-        self.scalar_rule().map(ScalarSubmissionRule::requirement)
+    pub fn rule(&self) -> Option<&'static str> {
+        self.scalar_rule().map(ScalarSubmissionRule::rule)
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

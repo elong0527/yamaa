@@ -65,7 +65,7 @@ def unknown_member(available):
     return {
         "phase": "validation",
         "condition": "unknown_specification_name",
-        "requirement": "REQ-1339",
+        "rule": "PROJECT-6",
         "spec_paths": [],
         "context": '{"available":' + available + ',"name":"ADSL"}',
         "source_span": None,
@@ -78,7 +78,7 @@ def nothing_to_save(rule):
     return {
         "phase": "output",
         "condition": "nothing_to_save",
-        "requirement": rule,
+        "rule": rule,
         "spec_paths": [],
         "context": "{}",
         "source_span": None,
@@ -350,8 +350,8 @@ class PublicContract(unittest.TestCase):
         result = yamaa.spec(self.spec).run()
         issues = self.issues(result).to_dicts()
         self.assertEqual(
-            [(row["phase"], row["condition"], row["requirement"]) for row in issues],
-            [("verification", "range_failed", "REQ-0377")],
+            [(row["phase"], row["condition"], row["rule"]) for row in issues],
+            [("verification", "range_failed", "CHECK-7")],
         )
         self.assertEqual(
             json.loads(issues[0]["context"]),
@@ -373,7 +373,7 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(checks["OUTCOME"].to_list(), ["violated", "violated"])
         self.assertEqual(checks["COUNT"].to_list(), [1, 1])
         self.assertEqual(checks["TOTAL"].to_list(), [3, 3])
-        self.assertEqual(checks["RULE"].to_list(), ["REQ-0377", "REQ-0377"])
+        self.assertEqual(checks["RULE"].to_list(), ["CHECK-7", "CHECK-7"])
         truth = report.to_dicts()
         report[0, "OUTCOME"] = "changed"
         self.spec.unlink()
@@ -768,11 +768,11 @@ class PublicContract(unittest.TestCase):
         )
         (row,) = self.issues(yamaa.spec(self.spec).check()).to_dicts()
         self.assertEqual(
-            (row["phase"], row["condition"], row["requirement"], row["spec_paths"]),
+            (row["phase"], row["condition"], row["rule"], row["spec_paths"]),
             (
                 "validation",
                 "integer_overflow",
-                "REQ-0014",
+                "VALUE-5",
                 ["columns.N.derivation.literal"],
             ),
         )
@@ -936,12 +936,12 @@ class Resolve(unittest.TestCase):
             yamaa.spec(source).resolve()
         self.assertEqual(
             caught.exception.issues.select(
-                "condition", "requirement", "spec_paths", "context"
+                "condition", "rule", "spec_paths", "context"
             ).rows(),
             [
                 (
                     "unknown_project_function",
-                    "REQ-0698",
+                    "FUNC-4",
                     ["columns.V.derivation.function.name"],
                     '{"function":"text"}',
                 )

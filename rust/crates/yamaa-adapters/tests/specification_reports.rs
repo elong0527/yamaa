@@ -561,7 +561,7 @@ mod execution {
                         } else {
                             ("AE", "input/ae.csv")
                         };
-                        let diagnostics = json!([{"phase":"validation","condition":condition,"requirement":"REQ-0785","spec_paths":[format!("input.{dataset}.path")],"context":{"dataset":dataset,"path":path}}]);
+                        let diagnostics = json!([{"phase":"validation","condition":condition,"rule":"FILE-7","spec_paths":[format!("input.{dataset}.path")],"context":{"dataset":dataset,"path":path}}]);
                         let mut reads = vec![];
                         if fail_at == 1 {
                             reads.push(json!({"base_directory":".","path":"input/dm.csv","outcome":"captured","condition":null,"snapshots_created":usize::from(!cached)}));
@@ -752,7 +752,7 @@ mod execution {
                     .unwrap();
                     assert_eq!(
                         report["diagnostics"],
-                        yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"REQ-0785","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":written}}])
+                        yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","rule":"FILE-7","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":written}}])
                     );
                 }
             }
@@ -1036,7 +1036,7 @@ mod execution {
                     let count = if input.len() == 3 { 0 } else { 2 };
                     assert_eq!(
                         report["diagnostics"],
-                        json!([{"phase":"verification", "condition":"row_count_failed", "requirement":"REQ-0385", "spec_paths":["verifications[1].row_count"], "context":{"count":count,"failure_count":1,"keys":[{}]}}])
+                        json!([{"phase":"verification", "condition":"row_count_failed", "rule":"CHECK-13", "spec_paths":["verifications[1].row_count"], "context":{"count":count,"failure_count":1,"keys":[{}]}}])
                     );
                     assert_eq!(
                         report["verifications"][1]["failure"]["log_context"]["count"],

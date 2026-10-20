@@ -19,7 +19,6 @@ conversion. Dataset verifications run after all column work, output-key
 validation, and column verifications finish.
 
 Evidence: `schema-verification-log`, `negative-single-verification`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`.
-Replaces: REQ-0371, REQ-0372.
 
 A column's `verifications` and the dataset's `verifications` are each a list
 of checks, and a single check is written as a one-item list. A check written
@@ -40,7 +39,6 @@ later column checks, key validation, and dataset checks, collecting warning
 violations in that order.
 
 Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `schema-row-count-fractions`.
-Replaces: REQ-0373, REQ-0389, REQ-0390, REQ-0406.
 
 An `error` stops the run at the stage of [COLUMN-1](columns.md#column-1) that
 evaluates it. Warning findings before a later error do not make the failed run
@@ -63,7 +61,6 @@ the path.
 
 Fails: `invalid_declaration`, `duplicate_identifier`.
 Evidence: `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`.
-Replaces: REQ-0374, REQ-0398.
 
 A duplicate declared `id` within one dataset verification list, one column's
 verification list, or one intermediate's verification list fails. The same ID
@@ -82,7 +79,6 @@ fails, and so does an unknown column in `unique`, `all_or_none`, `assert`, or
 
 Fails: `invalid_declaration`, `unknown_field`.
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`, `rust/crates/yamaa-adapters/tests/fixtures/completed_lookup_assertions.json`.
-Replaces: REQ-0397, REQ-0399, REQ-0404, REQ-0405.
 
 ## Column verifications
 
@@ -98,7 +94,6 @@ keys and fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
 Evidence: `negative-not-missing-age`, `rust/crates/yamaa-adapters/tests/fixtures/original_not_missing.json`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::VerificationNotMissingRedundant`.
-Replaces: REQ-0375.
 
 The redundant finding reports the verification's path and, in `stated_by`,
 the key's position in `keys`. A column whose submission metadata resolves
@@ -115,7 +110,6 @@ strings.
 
 Fails: `allowed_values_failed`.
 Evidence: `negative-invalid-sex`, `rust/crates/yamaa-adapters/tests/fixtures/original_column_values.json`.
-Replaces: REQ-0376.
 
 <a id="check-7"></a>
 
@@ -127,7 +121,6 @@ bound is required.
 
 Fails: `range_failed`.
 Evidence: `negative-implausible-age`, `schema-adsl-age-quality`, `schema-verification-log`.
-Replaces: REQ-0377.
 
 <a id="check-8"></a>
 
@@ -141,7 +134,6 @@ than of the value.
 
 Fails: `length_failed`, `invalid_declaration`.
 Evidence: `negative-usubjid-length`, `rust/crates/yamaa-adapters/tests/fixtures/static_verification_checks.json`.
-Replaces: REQ-0378, REQ-0380, REQ-0400.
 
 The scalar count rather than bytes or UTF-16 units is also the unit
 [Schema language](reference/schema-language.md) uses for `min_length`, so a
@@ -160,7 +152,6 @@ that reads it, and whether a match must span the whole value.
 
 Fails: `matches_failed`.
 Evidence: `negative-sex-code`, `rust/crates/yamaa-adapters/tests/fixtures/original_column_matches.json`.
-Replaces: REQ-0379.
 
 ## Dataset verifications
 
@@ -176,7 +167,6 @@ to be present and unique, and fails validation.
 
 Fails: `unique_failed`, `redundant_declaration`.
 Evidence: `negative-unique-duplicate`, `negative-unique-repeats-keys`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`.
-Replaces: REQ-0381.
 
 Write an unnamed check as `unique: [SITEID, SUBJID]`. The mapping form
 `unique: {columns: [SITEID, SUBJID], id: site-subject}` also admits an
@@ -199,7 +189,6 @@ non-missing.
 
 Fails: `all_or_none_failed`, `invalid_declaration`.
 Evidence: `negative-paired-dates`, `negative-sdtm-lb-unit-conversion`, `rust/crates/yamaa-adapters/tests/fixtures/original_all_or_none.json`.
-Replaces: REQ-0382, REQ-0401.
 
 An `all_or_none` with fewer than two distinct columns fails.
 
@@ -215,7 +204,6 @@ when `when` is `TRUE`, `require` must be `TRUE`, and when `when` is `FALSE` or
 
 Fails: `assert_failed`.
 Evidence: `negative-adeg-rrr`, `negative-strata-mismatch`, `rust/crates/yamaa-adapters/tests/fixtures/original_assertions.json`.
-Replaces: REQ-0383, REQ-0384.
 
 With `when` declared, `when` and `require` are both evaluated for every output
 row. This verification covers row-wise rules that lack a more specific
@@ -236,7 +224,6 @@ number of unfiltered rows in the group, or the whole artifact without
 
 Fails: `row_count_failed`.
 Evidence: `schema-row-count-fractions`, `schema-verification-log`.
-Replaces: REQ-0385, REQ-0387, REQ-1152.
 
 `filter` is a [Formulas](formulas.md) predicate over one
 constructed output row; `FALSE` and `UNKNOWN` do not count, as `filter` means
@@ -274,7 +261,6 @@ Without `group_by`, the whole output is one group, bound when any row satisfies
 
 Fails: `row_count_failed`, `invalid_declaration`.
 Evidence: `negative-adlb-two-baselines`, `negative-count-unnamed`, `schema-row-count-fractions`.
-Replaces: REQ-0386, REQ-0388, REQ-0402, REQ-0403, REQ-1154.
 
 `row_count` counts constructed output rows. [Values](values.md)
 defines equality for strings, and missing values group as
@@ -317,7 +303,6 @@ adjacent row, a partition or its history up to the current row, or a derived
 property at coarser keys or from an upstream specification.
 
 Evidence: `negative-pr-after-cr`.
-Replaces: REQ-0367, REQ-0368.
 
 - **The adjacent row.** `row_value` under [Windows](windows.md)
   places another row's value on the row and `assert` compares the two. An
@@ -346,7 +331,6 @@ verification over the finished artifact does not. An intermediate declaring
 read carried by a key column or a `not_missing` column does the same.
 
 Evidence: `sdtm-suppmh-linkage`.
-Replaces: REQ-0369, REQ-0370.
 
 The claim that every parent record has a supplemental record is not an
 artifact property, and no verification here can state it. A specification that
@@ -368,7 +352,6 @@ never an accepted artifact.
 
 Fails: `missing_report`.
 Evidence: `schema-adsl-age-quality`, `schema-verification-log`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `python/tests/installed/installed_run_report.py::test_fatal_check_saves_only_the_report_and_keeps_original_issues`, `rust/crates/yamaa-adapters/tests/specification_sources.rs::verification_declarations_preserve_completed_prefix_and_phase_precedence`.
-Replaces: REQ-0391, REQ-0396, REQ-1173, REQ-1177, REQ-1179.
 
 A specification declaring a `warning` without `output.report` fails validation
 with `missing_report`. A specification whose checks are all `error` may omit
@@ -408,7 +391,6 @@ evaluated column or dataset verification in execution order. An intermediate's
 verifications have no row, and a check a stopped run never reached has none.
 
 Evidence: `schema-verification-log`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::failed_runs_report_the_prefix_they_reached_and_no_columns`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`.
-Replaces: REQ-0393, REQ-1175.
 
 `SPEC_PATH` names each row's stable specification item and is unique within
 the report:
@@ -450,7 +432,6 @@ gives it no value for. The report carries no version and no timestamp: the
 same specification and inputs give the same report bytes.
 
 Evidence: `schema-verification-log`, `schema-parquet`, `schema-adsl-age-quality`, `schema-row-count-fractions`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::date_and_time_data_types_check_each_completed_value_against_their_form`.
-Replaces: REQ-0392, REQ-1174, REQ-1176.
 
 | Column | Type | Value |
 |---|---|---|
@@ -545,7 +526,6 @@ ASCII by JSON's short escapes where one exists and lower-case `\\u`
 hexadecimal escapes otherwise.
 
 Evidence: `schema-verification-log`, `schema-adsl-age-quality`, `rust/crates/yamaa-adapters/src/run_report.rs::governed_projection_preserves_ascii_details_and_all_keys`.
-Replaces: REQ-0394.
 
 A scalar above `U+FFFF` is its JSON surrogate-pair escape. `KEYS` is an array
 holding one object per offending row, its output keys by name, or per
@@ -567,7 +547,6 @@ and `COUNT` no greater than `TOTAL` where both exist. A malformed report is an
 execution defect, not a finding it can record.
 
 Evidence: `rust/crates/yamaa-core/tests/relations_reference_scope.rs::verification_rejects_any_row_that_breaks_the_contract`.
-Replaces: REQ-0395, REQ-1178.
 
 The rows correspond one to one with what the executor evaluated: the declared
 inputs, the row templates, the handler paths it registered, the declared output

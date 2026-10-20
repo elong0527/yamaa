@@ -263,7 +263,7 @@ as its source, into the facade's imported diagnostic and result types. The
 version/feature facts become owned structured context. The generated mapping
 does not call an incompatible native record decoder or infer registry fields
 in handwritten host code.
-This uses the registry's `ApplicationRejected` identity, null requirement and
+This uses the registry's `ApplicationRejected` identity, null rule and
 absent span/route; it does not define another diagnostic code or record shape.
 Failure is raised as `InterfaceError` in Python or `yamaa_interface_error` in R,
 carrying that imported record. These are new generated-boundary errors, not
@@ -298,7 +298,7 @@ handshake even if both packages report the same release version.
 
 Diagnostic, result and plan records come exclusively from the `records` import.
 The generator projects their named fields into both hosts. It must retain the
-owner's code/phase/requirement/severity mapping, diagnostic and path ordering,
+owner's code/phase/rule/severity mapping, diagnostic and path ordering,
 structured context, and absent-versus-present span/route rules. No host sorts,
 deduplicates, caps or reconstructs findings from message strings. Context and
 record values own their text, arrays, objects and exact numbers. Integers wider
@@ -314,7 +314,7 @@ Semantic failures are imported diagnostic/result records, including failed
 builds with retained evidence. Invalid arguments, expired/wrong-kind handles,
 busy or poisoned owners, conversion failures and caught native panics are typed
 boundary refusals using the shared `ApplicationRejected` classification; they
-do not invent a language requirement. Native unwinds and R longjmps must not
+do not invent a language rule. Native unwinds and R longjmps must not
 cross the host boundary. Ordinary callback exceptions/conditions stay rooted on
 their originating attempt. Formatting a secondary error must not replace that
 original object.

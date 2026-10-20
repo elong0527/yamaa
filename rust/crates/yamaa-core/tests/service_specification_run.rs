@@ -1376,9 +1376,9 @@ mod service {
                     assert_eq!(
                         (
                             findings[0].definition().condition,
-                            findings[0].definition().requirement
+                            findings[0].definition().rule
                         ),
-                        ("invalid_declaration", Some("REQ-0399"))
+                        ("invalid_declaration", Some("CHECK-4"))
                     );
                     assert_eq!(findings[0].spec_paths, ["verifications[0].row_count"]);
                     assert!(port.trace.borrow().is_empty());

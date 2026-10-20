@@ -327,7 +327,7 @@ fn datetime_from_seconds(seconds: i64, precision: Precision) -> Option<DateTime>
     .ok()
 }
 /// Resolve the binary64 amount in seconds to whole seconds with the language's
-/// one rounding (REQ-0418) at zero places, then add it to the exact source.
+/// one rounding (FORMULA-16) at zero places, then add it to the exact source.
 /// The source second never affects the rounding. Bound before converting: an
 /// admitted magnitude has at most twelve integer digits.
 fn rounded_target(base: i64, delta: f64) -> Option<i64> {

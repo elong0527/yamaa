@@ -1,14 +1,14 @@
 version: "1.0"
 
-# See REQ-1121.
+# See FORMULA-27.
 
 expressions:
-    compute: # See REQ-1119.
+    compute: # See FORMULA-27.
         - expr:
             type: numeric_expression
             required: true
             description: Numeric expression over named variables in the compute field of the expression language (FORMULA-27).
-    round_half_away_from_zero: # See REQ-1172.
+    round_half_away_from_zero: # See FORMULA-16.
         - source:
             type: variable
             required: true

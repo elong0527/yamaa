@@ -57,7 +57,7 @@ impl Fixture {
                     format!(
                         "{} {:?} {:?} {:?}",
                         issue.condition(),
-                        issue.requirement(),
+                        issue.rule(),
                         issue.spec_paths,
                         issue.context
                     )

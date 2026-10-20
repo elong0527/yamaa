@@ -2,7 +2,7 @@ phase: validation
 condition: conversion_failed
 spec_paths:
   - columns.ASTDY
-requirement: VALUE-24
+rule: VALUE-24
 context:
   from: int
   to: date

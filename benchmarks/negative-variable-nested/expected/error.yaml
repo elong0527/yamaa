@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - columns.COUNTRY.derivation.str_case.source
-requirement: REQ-0287
+rule: SCHEMA-12
 context:
   expected: variable
   actual: mapping

@@ -76,14 +76,14 @@ Two composition rules keep dependencies visible: operands are named
 variables, not nested expressions (bind a value to a column, then
 reference the name), and nesting is permitted in exactly two places
 (`case` branches and lookup `key` match values, which may be expressions
-under REQ-1259).
+under LOOKUP-6).
 
 ## What the schema does not do
 
 The schema never defines behavior. It says that `cut` takes `breaks`,
 `labels`, and `missing`; the
 [derivation contracts](rules.md) say what `cut` computes and when it
-fails. Schema descriptions link to their owning requirement and add no
+fails. Schema descriptions link to their owning rule and add no
 new meaning.
 
 That split is the whole reading order: the schema tells you what you

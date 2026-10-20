@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use crate::temporal::{Date, DateTime};
 
-/// A float which cannot carry NaN or infinity into a consumer (REQ-0006).
+/// A float which cannot carry NaN or infinity into a consumer (VALUE-4).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FiniteFloat(f64);
 
@@ -44,7 +44,7 @@ impl ValueType {
     }
 }
 
-/// Column types deliberately exclude bool (REQ-0002).
+/// Column types deliberately exclude bool (VALUE-1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnType {
     Str,

@@ -47,7 +47,7 @@ contract: regex
 contract_version: "3.0.0"
 portable_contract:
   grammar: "ECMA-262 Pattern with the Unicode flag set, without lookahead, lookbehind, backreferences, property escapes or flags; group names are ASCII identifiers"
-  normalization: "REQ-0822 through REQ-0826: ASCII-only \\d, \\w and \\b, the ECMA-262 \\s set, scalar dot without line terminators, end-only $, \\u{...} expansion, and rejection of lookaround, backreferences, (?P<...>), inline flags, \\p{...} and malformed escapes"
+  normalization: "TEXT-6 to TEXT-8: ASCII-only \\d, \\w and \\b, the ECMA-262 \\s set, scalar dot without line terminators, end-only $, \\u{...} expansion, and rejection of lookaround, backreferences, (?P<...>), inline flags, \\p{...} and malformed escapes"
   matching: "leftmost-first in linear time; a capture inside a repetition keeps its last entered iteration, and an empty iteration past the minimum count ends the repetition"
 cases:
   - id: ascii-digit-class-rejects-arabic-indic-digit

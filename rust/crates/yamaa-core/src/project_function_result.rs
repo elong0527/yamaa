@@ -1,5 +1,5 @@
 //! Compare temporary conformance copies without changing the runtime result.
-//! REQ-0692 quantizes both copies with the language's one rounding (REQ-0418).
+//! FUNC-13 quantizes both copies with the language's one rounding (FORMULA-16).
 use crate::{decimal_rounding::rounded_magnitude, value::Value};
 use num_bigint::BigUint;
 

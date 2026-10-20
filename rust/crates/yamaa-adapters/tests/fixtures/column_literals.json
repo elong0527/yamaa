@@ -175,7 +175,7 @@
             "to": "int"
           },
           "phase": "validation",
-          "requirement": "VALUE-24",
+          "rule": "VALUE-24",
           "spec_paths": [
             "columns.VALUE"
           ]
@@ -195,7 +195,7 @@
                 "to": "int"
               },
               "phase": "validation",
-              "requirement": "VALUE-24",
+              "rule": "VALUE-24",
               "spec_paths": [
                 "columns.VALUE"
               ]
@@ -267,7 +267,7 @@
             "value": 1.5
           },
           "phase": "convert",
-          "requirement": "REQ-0021",
+          "rule": "VALUE-7",
           "spec_paths": [
             "columns.VALUE"
           ]
@@ -293,7 +293,7 @@
                 "value": 1.5
               },
               "phase": "convert",
-              "requirement": "REQ-0021",
+              "rule": "VALUE-7",
               "spec_paths": [
                 "columns.VALUE"
               ]
@@ -365,7 +365,7 @@
             "value": "2026-02-30"
           },
           "phase": "convert",
-          "requirement": "REQ-0601",
+          "rule": "VALUE-15",
           "spec_paths": [
             "columns.VALUE"
           ]
@@ -391,7 +391,7 @@
                 "value": "2026-02-30"
               },
               "phase": "convert",
-              "requirement": "REQ-0601",
+              "rule": "VALUE-15",
               "spec_paths": [
                 "columns.VALUE"
               ]

@@ -95,10 +95,10 @@ mod declaration {
             &issues[0]
         }
 
-        fn refused(issue: &Issue, requirement: &str, path: &str, context: Value) {
+        fn refused(issue: &Issue, rule: &str, path: &str, context: Value) {
             assert_eq!(issue.phase(), "validation");
             assert_eq!(issue.condition(), "unsupported_language_version");
-            assert_eq!(issue.requirement(), Some(requirement));
+            assert_eq!(issue.rule(), Some(rule));
             assert_eq!(issue.spec_paths, [path]);
             assert_eq!(Value::Object(issue.context.clone()), context);
         }
@@ -652,7 +652,7 @@ mod declaration {
                 finding.code,
                 ConditionCode::InheritanceParentLanguageVersion
             );
-            assert_eq!(finding.definition().requirement, Some("LAYER-4"));
+            assert_eq!(finding.definition().rule, Some("LAYER-4"));
             assert_eq!(finding.spec_paths, ["parent"]);
             assert_eq!(
                 Value::Object(finding.context.into_iter().collect()),
@@ -852,7 +852,7 @@ mod declaration {
                     ConditionCode::ReferenceLanguageVersion,
                     "{field}"
                 );
-                assert_eq!(finding.definition().requirement, Some("SCHEMA-2"));
+                assert_eq!(finding.definition().rule, Some("SCHEMA-2"));
                 assert_eq!(finding.spec_paths, [field]);
                 assert_eq!(
                     Value::Object(finding.context.into_iter().collect()),

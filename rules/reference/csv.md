@@ -17,7 +17,6 @@ the last, so every artifact ends with it. `U+000D` is never written as part of
 a terminator; it appears only inside a quoted field that contains one.
 
 Evidence: `schema-text-functions`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
-Replaces: REQ-0722, REQ-0723, REQ-0724, REQ-0765.
 
 [Values](../values.md) owns the text being encoded. Writing a
 byte-order mark, a `U+000D` record terminator, or a quoting that differs from
@@ -34,7 +33,6 @@ per header name in the same order. An artifact with no rows is the header
 record and its terminator alone.
 
 Evidence: `schema-ordering`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::header_only_and_projection_order_are_exact`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-0725, REQ-0726, REQ-0727.
 
 An artifact with no rows is not empty: the columns exist whether or not a row
 does.
@@ -50,7 +48,6 @@ its text is written twice. Nothing else is escaped: a quoted field carries its
 newlines, delimiters and every other scalar exactly.
 
 Evidence: `adam-adsl-investigator-comment`, `adam-adcm-atc-classes`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`.
-Replaces: REQ-0728, REQ-0729, REQ-0730.
 
 A writer that quotes a field this condition leaves bare, or leaves bare a field
 this condition quotes, does not conform even if ordinary readers accept its
@@ -67,7 +64,6 @@ pair: [INPUT-8](../inputs.md#input-8) reads an empty field as
 missing whether it was bare or quoted.
 
 Evidence: `schema-str-replace`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::exact_quoting_preserves_empty_missing_whitespace_unicode_and_line_characters`, `python/tests/installed/installed_saved_readers.py::test_public_held_saves_cover_every_type_and_empty_table`.
-Replaces: REQ-0731.
 
 A collected empty string written here therefore returns as missing if the
 artifact is later read as a delimited source.
@@ -94,7 +90,6 @@ the shortest round-tripping digits in positional notation, with a trailing
 `.0` omitted. That conversion has no exponent.
 
 Evidence: `adam-adlb-bds`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::scalar_output_uses_exact_integer_and_shortest_positional_float_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::retired_python_scalar_text_and_calendar_edges_keep_exact_csv_bytes`.
-Replaces: REQ-0732, REQ-0733.
 
 | Column type | Text written |
 |---|---|
@@ -119,7 +114,6 @@ mapping resolves to `parquet`.
 
 Fails: `invalid_field_type`, `decimals_not_applicable`.
 Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::output_precision_rejection_follows_original_execution_failure_and_denies_publication`, `rust/crates/yamaa-adapters/tests/execution_aggregate_record_operations.rs::csv_precision_range_is_validated_for_empty_and_non_float_outputs_in_both_hosts`.
-Replaces: REQ-0744, REQ-0762.
 
 An invalid value fails with `invalid_field_type`. A declaration on a `parquet`
 path fails with `decimals_not_applicable`: a display precision that cannot
@@ -137,7 +131,6 @@ greater than zero. A value keeps its declared width whether or not its digits
 require it: at `n` of 4, an integral 25 is written `25.0000`.
 
 Evidence: `adam-adlb-reported-precision`, `negative-transport-display-decimals`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::large_precision_uses_the_exact_fraction_and_retains_all_declared_zeros`.
-Replaces: REQ-0745.
 
 The fixed-point text is the artifact's presentation, and nothing the
 specification computes sees it ([CSV-8](#csv-8)); a reader of the artifact
@@ -159,7 +152,6 @@ order term sees a rounded value, and changing `output.decimals` cannot change
 whether a run passes or which rows it produces.
 
 Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::whole_result_keeps_unrounded_derivation_and_prepares_exact_saved_bytes_once`, `python/tests/installed/installed_public_environment.py::test_csv_precision_changes_saved_bytes_only_and_preserves_derived_values`.
-Replaces: REQ-0746.
 
 <a id="csv-9"></a>
 
@@ -173,7 +165,6 @@ written directly, and a value that rounds to zero is written without a sign.
 No host rounding or formatting routine may be assumed to do this.
 
 Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs::precision_serializes_float_projection_only_and_preserves_missing_and_empty_text`.
-Replaces: REQ-0747, REQ-0748, REQ-0749, REQ-0750, REQ-0766.
 
 The difference is observable:
 
@@ -203,7 +194,6 @@ under a machine default. A byte-order mark is rejected rather than skipped.
 
 Fails: `invalid_text`, `source_byte_order_mark`.
 Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::defects_have_exact_priority_and_coordinates`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::bom`.
-Replaces: REQ-0836, REQ-0837, REQ-0853.
 
 Ill-formed encoded bytes fail with [Values](../values.md)'s
 `invalid_text`, reporting the record and field the reader had reached. A
@@ -221,7 +211,6 @@ else, including inside a quoted field, it fails rather than joining the value.
 
 Fails: `source_carriage_return`.
 Evidence: `adam-advs-windows`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_admitted_terminators_and_header_only_schema_are_exact`, `rust/crates/yamaa-adapters/tests/fixtures/csv_profile_diagnostics.json::quoted-cr`.
-Replaces: REQ-0833, REQ-0834, REQ-0835, REQ-0838, REQ-0843.
 
 A writer controls its bytes and emits one spelling, while a reader receives a
 study file as stored. The admitted spellings are a record terminated by
@@ -244,7 +233,6 @@ terminator.
 
 Fails: `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`.
 Evidence: `negative-source-unterminated-quote`, `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_nonconforming_csv_has_exact_coordinates`.
-Replaces: REQ-0839, REQ-0840, REQ-0841, REQ-0842, REQ-0844.
 
 Nothing is trimmed. A space beside a delimiter is a character of the field,
 and a reader that removes it changes a collected value. A quoted field with no
@@ -266,7 +254,6 @@ valid.
 
 Fails: `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`.
 Evidence: `negative-source-extra-field`, `negative-source-field-duplicate`, `negative-source-unnamed-field`.
-Replaces: REQ-0845, REQ-0846, REQ-0847.
 
 A record with more or fewer fields than the header fails. Padding a short
 record and discarding a long record's surplus are not implementation options.
@@ -284,7 +271,6 @@ transport detail the reader does not report:
 and never sees an empty string.
 
 Evidence: `adam-adsl-investigator-comment`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::retired_python_quoted_and_bare_empty_records_keep_order`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::collected_text_and_missing_remain_lossless`.
-Replaces: REQ-0850.
 
 <a id="csv-15"></a>
 
@@ -298,7 +284,6 @@ not repair a rejected file by skipping a mark, trimming a field, padding a
 record, renaming a duplicate name or normalizing a terminator inside a value.
 
 Evidence: `negative-source-na-age`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::retired_python_missing_looking_text_is_never_inferred_as_missing`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::discarded_ragged_rows_preserve_complete_syntax_and_header_priority`.
-Replaces: REQ-0848, REQ-0849, REQ-0854.
 
 [Inputs](../inputs.md) fixes what a stored field means,
 including that no text spells absence.
@@ -315,7 +300,6 @@ lists.
 
 Fails: `source_profile_unknown`, `source_byte_order_mark`, `source_header_absent`, `source_field_name_empty`, `source_field_name_duplicate`, `source_record_width`, `source_quote_unterminated`, `source_quote_in_bare_field`, `source_text_after_quote`, `source_carriage_return`.
 Evidence: `negative-source-unterminated-quote`, `negative-source-unnamed-field`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::every_csv_cause_retains_the_complete_independent_context`.
-Replaces: REQ-0851.
 
 | Condition | Rejects |
 |---|---|

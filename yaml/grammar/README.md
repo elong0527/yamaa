@@ -24,7 +24,7 @@ reducers, reserved words and comparison operators into independent acceptance
 boundaries in every context. Installed
 Python and R public suites put the same texts into real specification fields;
 later binding failures remain separate from grammar decisions. Empty expression
-fields fail public schema admission under REQ-0287 before reaching the parser.
+fields fail public schema admission under SCHEMA-12 before reaching the parser.
 The expression fields of the `derivation` context belong to 1.0 files, which
 the engine does not read yet, so until it does the installed suites replay the
 other three contexts and the typed core replays all four.

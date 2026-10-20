@@ -30,13 +30,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             p::columns(vec![], 0).unwrap_err(),
             "source_parquet_invalid",
-            "REQ-1038",
+            "PARQUET-5",
             vec![],
         ),
         (
             p::columns(vec![field("")], 1).unwrap_err(),
             "source_field_name_empty",
-            "REQ-1039",
+            "PARQUET-6",
             vec![(
                 "field",
                 V::Number(("1").parse().expect("canonical integer")),
@@ -45,13 +45,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             p::columns(vec![field("I"), field("I")], 2).unwrap_err(),
             "source_field_name_duplicate",
-            "REQ-1039",
+            "PARQUET-6",
             vec![("field", text("I"))],
         ),
         (
             p::columns(vec![field("I"), nested], 2).unwrap_err(),
             "source_field_type_unsupported",
-            "REQ-1040",
+            "PARQUET-7",
             vec![
                 ("field", text("S")),
                 ("stored_type", text("struct<left: int64, right: string>")),
@@ -60,7 +60,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             p::temporal(ColumnType::DateTime, i64::MAX, "DT", 2).unwrap_err(),
             "source_field_value_invalid",
-            "REQ-1041",
+            "PARQUET-9",
             vec![
                 ("field", text("DT")),
                 ("row", V::Number(("2").parse().expect("canonical integer"))),
@@ -69,12 +69,12 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
     ];
     let mut reached = BTreeSet::new();
-    for (error, condition, requirement, extra) in errors {
+    for (error, condition, rule, extra) in errors {
         let finding = error.finding("SRC", "data.parquet").diagnostic();
         let def = finding.definition();
         assert_eq!(
-            (def.phase, def.condition, def.requirement),
-            ("ingest", condition, Some(requirement))
+            (def.phase, def.condition, def.rule),
+            ("ingest", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, ["input.SRC.path"]);
         let expected: Context = [("dataset", text("SRC")), ("path", text("data.parquet"))]

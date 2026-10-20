@@ -54,9 +54,9 @@ impl ProfileCause {
     }
 }
 impl Error {
-    pub fn requirement(&self) -> Option<&'static str> {
+    pub fn rule(&self) -> Option<&'static str> {
         match self {
-            Self::Profile { cause, .. } => cause.code().definition().requirement,
+            Self::Profile { cause, .. } => cause.code().definition().rule,
             Self::Limit { .. } => None,
         }
     }

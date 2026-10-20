@@ -1,7 +1,7 @@
 #![cfg(feature = "yaml")]
 //! A driver field read outside the groups of a grouped row template fails as
 //! `ungrouped_driver_field` before any data is read: in the template under
-//! REQ-0067 and at column level under REQ-0107. The finding's `dataset` names
+//! ROW-5 and at column level under NAME-4. The finding's `dataset` names
 //! the driver that the read qualifies, which is the grouped template's own
 //! input or named intermediate. It need not be the input behind the first row
 //! template's driver. At column level only the grouped templates over the
@@ -71,7 +71,7 @@ impl Fixture {
                 yamaa_adapters::json!({
                     "phase": issue.phase(),
                     "condition": issue.condition(),
-                    "requirement": issue.requirement(),
+                    "rule": issue.rule(),
                     "spec_paths": issue.spec_paths,
                     "context": issue.context.clone()
                 })
@@ -91,11 +91,11 @@ const HOME: &str = "USUBJID,VSDY,SYSBP\nS1,8,130\nS1,8,126\n";
 // The intermediate keeps S1's two serious events, which form one group.
 const AE: &str = "USUBJID,AESEQ,AESER,AETERM\nS1,1,Y,HEADACHE\nS1,2,Y,DIZZINESS\nS1,3,N,NAUSEA\n";
 
-fn ungrouped_driver_field(requirement: &str, path: &str, context: Value) -> Vec<Value> {
+fn ungrouped_driver_field(rule: &str, path: &str, context: Value) -> Vec<Value> {
     vec![yamaa_adapters::json!({
         "phase": "validation",
         "condition": "ungrouped_driver_field",
-        "requirement": requirement,
+        "rule": rule,
         "spec_paths": [path],
         "context": context
     })]
@@ -145,7 +145,7 @@ fn later_grouped_template_names_its_own_input() {
         let fixture = Fixture::new(&vitals(", VSSTRESN: CLINIC.SYSBP", home, ""));
         assert_eq!(
             fixture.issues(),
-            ungrouped_driver_field("REQ-0067", path, context.clone()),
+            ungrouped_driver_field("ROW-5", path, context.clone()),
             "{home}"
         );
     }
@@ -163,7 +163,7 @@ fn column_derivation_completed_by_a_later_template_names_its_input() {
     assert_eq!(
         fixture.issues(),
         ungrouped_driver_field(
-            "REQ-0067",
+            "ROW-5",
             "columns.VSSTRESN.derivation.source",
             yamaa_adapters::json!({"identifier": "HOME.SYSBP", "row": "home", "dataset": "HOME"}),
         )
@@ -204,7 +204,7 @@ fn column_window_over_a_template_grouped_by_another_driver_names_the_drivers() {
         vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "WINDOW-11",
+            "rule": "WINDOW-11",
             "spec_paths": ["columns.VSSTRESN.derivation.row_number.window.order_by[0]"],
             "context": {
                 "identifier": "CLINIC.SYSBP",
@@ -243,7 +243,7 @@ fn grouped_intermediate_driver_is_named_rather_than_its_input() {
     assert_eq!(
         Fixture::new(&serious(", R: SER.AETERM", "")).issues(),
         ungrouped_driver_field(
-            "REQ-0067",
+            "ROW-5",
             "rows[0].derivations.R.source",
             yamaa_adapters::json!({"identifier": "SER.AETERM", "row": "subjects", "dataset": "SER"}),
         )
@@ -255,7 +255,7 @@ fn column_read_of_a_grouped_intermediate_driver_names_the_intermediate() {
     assert_eq!(
         Fixture::new(&serious("", ", derivation: SER.AETERM")).issues(),
         ungrouped_driver_field(
-            "REQ-0107",
+            "NAME-4",
             "columns.R.derivation.source",
             yamaa_adapters::json!({"identifier": "SER.AETERM", "dataset": "SER"}),
         )

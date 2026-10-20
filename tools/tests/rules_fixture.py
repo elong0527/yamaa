@@ -1,4 +1,4 @@
-"""A small repository with one card file and one legacy contract, for rule tests."""
+"""A small repository with two card files, for rule tests."""
 
 from pathlib import Path
 
@@ -8,14 +8,14 @@ INDEX = """\
 ## Principles
 
 **P1. Layers are ordered.** Layers compose in one order. Enforced by
-[LAYER-1](inheritance.md#layer-1) and [REQ-0001](values/types.md#req-0001).
+[LAYER-1](inheritance.md#layer-1) and [TYPE-1](values/types.md#type-1).
 
 ## Rule files
 
 | File | Prefix | Covers |
 | --- | --- | --- |
 | [Inheritance](inheritance.md) | LAYER | Resolve inherited layers. |
-| [Types](values/types.md) | REQ | Define column types. |
+| [Types](values/types.md) | TYPE | Define column types. |
 
 ## Terminology
 
@@ -37,9 +37,8 @@ Each layer's parents are visited left to right, depth first, and then the
 layer itself.
 
 Fails: `inheritance_cycle`.
-Evidence: `schema-inheritance`, `rules/values/types.md::column`.
-Replaces: REQ-0002,
-REQ-0003.
+Evidence: `schema-inheritance`,
+`rules/values/types.md::column`.
 
 A cycle reports its path. A null clears under [LAYER-2](#layer-2).
 
@@ -48,29 +47,27 @@ A cycle reports its path. A null clears under [LAYER-2](#layer-2).
 ### LAYER-2. A null clears an inherited field
 
 A null written over an inherited field clears it; see
-[REQ-0001](values/types.md#req-0001).
+[TYPE-1](values/types.md#type-1).
 """
 
-CONTRACT = """\
----
-id: values/types
-title: Types
-status: normative
----
-
+TYPES = """\
 # Types
 
-## Requirements
+## Columns
 
-<a id="req-0001"></a>
+<a id="type-1"></a>
 
-**REQ-0001.** A column has one type.
+### TYPE-1. A column has one type
 
-## Error conditions
+A column has one type.
 
-<a id="req-0004"></a>
+<a id="type-2"></a>
 
-**REQ-0004.** A failed conversion fails with `conversion_failed`.
+### TYPE-2. A failed conversion fails
+
+A value that does not convert to its column's type fails.
+
+Fails: `conversion_failed`.
 """
 
 CONDITIONS = """\
@@ -84,7 +81,7 @@ conditions:
 FILES = {
     "rules/README.md": INDEX,
     "rules/inheritance.md": CARDS,
-    "rules/values/types.md": CONTRACT,
+    "rules/values/types.md": TYPES,
     "rules/reference/glossary.md": "# Glossary\n\nInformative terms.\n",
     "yaml/conditions.yaml": CONDITIONS,
     "benchmarks/schema-inheritance/README.md": "# Schema inheritance\n",

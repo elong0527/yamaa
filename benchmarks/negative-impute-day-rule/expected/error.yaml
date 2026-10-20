@@ -2,7 +2,7 @@ phase: validation
 condition: value_not_permitted
 spec_paths:
   - columns.ASTDT.derivation.impute.day
-requirement: REQ-0609
+rule: TIME-10
 context:
   value: mid
   permitted: [first, last]

@@ -14,7 +14,7 @@
 //! reproduces the first failure in base-record order, its diagnostic
 //! identity and the handler counts before it. A unit whose effects include
 //! host callbacks runs in row mode from the start, so callbacks keep their
-//! logical row order (REQ-0685).
+//! logical row order (FUNC-8).
 use super::execution::{
     CheckRecord, Dataset, Execution, ExecutionAttempt, ExecutionError, ExecutionEvent,
     ExecutionPhase, Resource, TemplateRows,

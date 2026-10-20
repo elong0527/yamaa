@@ -85,7 +85,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 /// One `unknown_field` finding at a key pair that names `identifier` (LOOKUP-5).
@@ -93,7 +93,7 @@ fn refused(path: &str, identifier: &str) -> Result<String, Vec<Value>> {
     Err(vec![yamaa_adapters::json!({
         "phase": "validation",
         "condition": "unknown_field",
-        "requirement": "LOOKUP-5",
+        "rule": "LOOKUP-5",
         "spec_paths": [path],
         "context": {"identifier": identifier}
     })])
@@ -104,7 +104,7 @@ fn unsupported(operation: &str, path: &str) -> Vec<Value> {
     vec![yamaa_adapters::json!({
         "phase": "planning",
         "condition": "unsupported_operation",
-        "requirement": null,
+        "rule": null,
         "spec_paths": [path],
         "context": {"operation": operation}
     })]

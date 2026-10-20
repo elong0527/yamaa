@@ -88,7 +88,7 @@ class VerificationObservation(Observation):
     spec_path: str
     check: str
     target: str | None
-    requirement: str
+    rule: str
     verification_id: str | None
     severity: str
     evaluated_count: int
@@ -141,13 +141,13 @@ class ArtifactObservation(_FrozenModel):
     types: tuple[str, ...]
     row_count: int = Field(ge=0)
     # The CSV profile contract's complete bytes split on the U+000A terminator
-    # REQ-0723 writes. A missing value and a quoted empty string render
+    # CSV-1 writes. A missing value and a quoted empty string render
     # differently and are kept apart here; `content` below decides equality
     # so that a newline inside a quoted field cannot make this split the
     # deciding view. A parquet artifact carries one JSON document per
-    # record instead: REQ-0742 denies parquet a byte guarantee, so its
-    # comparison runs over what the bytes read back as (REQ-0740), and JSON
-    # keeps a missing value null rather than the empty string.
+    # record instead: PARQUET-4 denies parquet a byte guarantee, so its
+    # comparison runs over what the bytes read back as, and JSON keeps a
+    # missing value null rather than the empty string.
     records: tuple[str, ...]
     byte_length: int = Field(ge=0)
     # The rendered text of a CSV artifact, which is what a comparison
@@ -184,7 +184,7 @@ class DiagnosticObservation(_FrozenModel):
     phase: str = Field(min_length=1)
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str | None
+    rule: str | None
     context: dict[str, JsonValue]
     source_span: SourceSpanObservation | None = None
     operand_route: tuple[str, ...] | None = None
@@ -209,7 +209,7 @@ class UnsupportedObservation(_FrozenModel):
 
 
 class HandlerObservation(_FrozenModel):
-    """How often one declared handler path fired, zero included (REQ-0361)."""
+    """How often one declared handler path fired, zero included (COLUMN-14)."""
 
     spec_path: str = Field(min_length=1)
     handler: str = Field(min_length=1)
@@ -283,8 +283,8 @@ def _records(payload: bytes) -> tuple[str, ...]:
 def _parquet_records(frame: pl.DataFrame) -> tuple[str, ...]:
     """Render one parquet artifact's logical content as canonical records.
 
-    REQ-0742 denies parquet a byte guarantee, so the comparison REQ-0740
-    requires runs over what the bytes read back as: the same field names in
+    PARQUET-4 denies parquet a byte guarantee and requires the comparison to
+    run over what the bytes read back as: the same field names in
     the same order, the same logical types, the same rows in the same order,
     the same nulls, and the same values. One JSON document per record keeps
     every value distinct from its text rendering: a missing value is null
@@ -379,8 +379,8 @@ def _artifact_findings(
 
     A CSV artifact compares byte for byte under the csv profile's byte
     guarantee; when the records agree but the bytes do not, the bytes decide.
-    A parquet artifact has no byte guarantee (REQ-0742), so its comparison is
-    the logical one REQ-0740 requires: the committed bytes are read back
+    A parquet artifact has no byte guarantee, so its comparison is the
+    logical one PARQUET-4 requires: the committed bytes are read back
     through the closed parquet profile and compared on field names in order,
     logical types, row order, nulls, and values, never as bytes.
     """
@@ -500,13 +500,13 @@ def _negative_findings(
             )
         )
 
-    if "requirement" in contract and contract["requirement"] != observed.requirement:
+    if "rule" in contract and contract["rule"] != observed.rule:
         findings.append(
             _finding(
-                "diagnostic.requirement",
-                f"{report.example}: requirement",
-                contract["requirement"],
-                observed.requirement,
+                "diagnostic.rule",
+                f"{report.example}: rule",
+                contract["rule"],
+                observed.rule,
             )
         )
 
@@ -579,7 +579,7 @@ def compare_example(
     order, a missing value, and a quoted empty string are compared as
     rendered, and the artifact verdict is the complete bytes.
 
-    REQ-0361 requires a run to report every declared handler path. The counts
+    COLUMN-14 requires a run to report every declared handler path. The counts
     themselves become a comparison only when a caller states them, because
     no example commits them yet; #101's cross-runtime comparator is where R
     and Python counts meet.

@@ -18,7 +18,7 @@ handled_expression_class:
     - value: {type: expression, required: true}
     - unconvertible: {type: substitute_value, required: false}
 
-# See REQ-1185.
+# See LOOKUP-15.
 intermediate_derivation:
     type: [untyped_intermediate_derivation, intermediate_binding_class]
 

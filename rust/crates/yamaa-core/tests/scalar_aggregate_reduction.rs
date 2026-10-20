@@ -149,8 +149,7 @@ mod scalar {
                     Err(error) => {
                         assert_eq!(error.phase(), "derivation", "{id}");
                         assert_eq!(error.expression, expression, "{id}");
-                        let mut text =
-                            format!("error:{}:{}", error.condition(), error.requirement());
+                        let mut text = format!("error:{}:{}", error.condition(), error.rule());
                         if let ArithmeticErrorKind::IntegerOverflow { value } = error.kind {
                             text.push_str(&format!(":{value}"));
                         }
@@ -225,7 +224,7 @@ mod scalar {
             assert_eq!(convert(&leading_zeros, ColumnType::Int), Ok(Value::Int(1)));
             let integer = "9".repeat(5000);
             let error = convert(&Value::Str(integer.clone()), ColumnType::Int).unwrap_err();
-            assert_eq!(error.requirement(), "REQ-0021");
+            assert_eq!(error.rule(), "VALUE-7");
             assert_eq!(error.value.as_number().unwrap().as_str(), integer);
             assert_eq!(error.source_type(), Some(ValueType::Int));
         }
@@ -307,7 +306,7 @@ mod scalar {
                                 format!("datetime:{}", error.value.as_str().unwrap())
                             }
                         };
-                        format!("error:{}:{context}", error.requirement())
+                        format!("error:{}:{context}", error.rule())
                     }
                 };
                 assert_eq!(actual, fields[3], "{}", fields[0]);
@@ -420,7 +419,7 @@ mod scalar {
             ] {
                 for target in [ColumnType::Int, ColumnType::Float] {
                     let error = convert(&Value::Str(text.into()), target).unwrap_err();
-                    assert_eq!(error.requirement(), "REQ-0013", "{text}");
+                    assert_eq!(error.rule(), "VALUE-3", "{text}");
                 }
             }
         }
@@ -550,7 +549,7 @@ mod scalar {
             assert_eq!(error.code, ConditionCode::DeclarativeRoundingInput);
             assert_eq!(error.definition().phase, "validation");
             assert_eq!(error.definition().condition, "incompatible_input_type");
-            assert_eq!(error.definition().requirement, Some("REQ-0418"));
+            assert_eq!(error.definition().rule, Some("FORMULA-16"));
             assert_eq!(
                 error.spec_paths,
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.source"]
@@ -677,7 +676,7 @@ mod scalar {
                 .unwrap_err();
             assert_eq!(diagnostic.definition().phase, "validation");
             assert_eq!(diagnostic.definition().condition, "incompatible_input_type");
-            assert_eq!(diagnostic.definition().requirement, Some("REQ-0606"));
+            assert_eq!(diagnostic.definition().rule, Some("TIME-1"));
             assert_eq!(
                 diagnostic.spec_paths,
                 ["columns.DTHDY.derivation.study_day.date"]
@@ -1106,7 +1105,7 @@ mod scalar {
                 };
                 let error = both.apply_bounds(completed, lower, upper).unwrap_err();
                 assert_eq!(error.definition().condition, "incompatible_input_type");
-                assert_eq!(error.definition().requirement, Some("REQ-0606"));
+                assert_eq!(error.definition().rule, Some("TIME-1"));
                 assert_eq!(
                     error.spec_paths,
                     [format!("columns.DATE.derivation.impute.{field}")]
@@ -1199,7 +1198,7 @@ mod scalar {
                     .unwrap();
                 let error = op.source_value(ValueRef::Str("0000-01")).unwrap_err();
                 assert_eq!(error.definition().condition, "invalid_date_text");
-                assert_eq!(error.definition().requirement, Some("REQ-0588"));
+                assert_eq!(error.definition().rule, Some("TIME-13"));
                 assert_eq!(error.spec_paths, [path]);
                 assert_eq!(
                     error.context,
@@ -1839,11 +1838,7 @@ mod scalar {
 
         /// Check portable condition metadata and encode exact failure-specific context.
         fn encoded_condition(condition: &Condition) -> String {
-            let mut result = format!(
-                "error:{}:{}",
-                condition.condition(),
-                condition.requirement()
-            );
+            let mut result = format!("error:{}:{}", condition.condition(), condition.rule());
             match condition {
                 Condition::NumericUnknownField { identifier } => {
                     assert_eq!(condition.phase(), "validation");
@@ -1871,7 +1866,7 @@ mod scalar {
 
         /// Encode a refusal found before any value is read.
         fn encoded_refusal(failure: &Failure) -> String {
-            format!("error:{}:{}", failure.condition(), failure.requirement())
+            format!("error:{}:{}", failure.condition(), failure.rule())
         }
 
         fn route_text(route: &[Step]) -> String {
@@ -2500,13 +2495,13 @@ mod scalar {
                     error: Failure(Box::new(37))
                 }
             );
-            for (condition, name, requirement) in [
+            for (condition, name, rule) in [
                 (
                     Condition::UnknownField {
                         identifier: "a".into(),
                     },
                     "unknown_field",
-                    "REQ-0189",
+                    "FORMULA-9",
                 ),
                 (
                     Condition::IncompatiblePair {
@@ -2514,24 +2509,20 @@ mod scalar {
                         right: ValueType::Int,
                     },
                     "incompatible_input_type",
-                    "REQ-0190",
+                    "FORMULA-5",
                 ),
                 (
                     Condition::ExpectedText {
                         actual: ValueType::Float,
                     },
                     "incompatible_input_type",
-                    "REQ-0190",
+                    "FORMULA-5",
                 ),
-                (Condition::DanglingEscape, "invalid_expression", "REQ-0191"),
+                (Condition::DanglingEscape, "invalid_expression", "FORMULA-7"),
             ] {
                 assert_eq!(
-                    (
-                        condition.phase(),
-                        condition.condition(),
-                        condition.requirement()
-                    ),
-                    ("validation", name, requirement)
+                    (condition.phase(), condition.condition(), condition.rule()),
+                    ("validation", name, rule)
                 );
             }
         }
@@ -2825,7 +2816,7 @@ mod scalar {
         }
     }
     mod predicate_contains {
-        //! Independent REQ-1244 truth, error ordering and linear-time matching.
+        //! Independent FORMULA-8 truth, error ordering and linear-time matching.
         use crate::support::dataset::{predicate_text, Node, Scalar};
         use yamaa_core::{
             expression::{
@@ -2918,7 +2909,7 @@ mod scalar {
                     let condition = Condition::ContainsExpectedText { actual };
                     assert_eq!(error.kind, ErrorKind::Condition(condition.clone()));
                     assert_eq!(condition.condition(), "incompatible_input_type");
-                    assert_eq!(condition.requirement(), "REQ-1244");
+                    assert_eq!(condition.rule(), "FORMULA-8");
                     assert_eq!(error.spec_path, "rows[0].filter");
                     assert_eq!(
                         error.route,
@@ -3093,7 +3084,7 @@ mod scalar {
                     Err(ReductionError::IncompatibleInputType { argument, actual }) => {
                         assert_eq!(borrowed[argument].value_type(), Some(actual));
                         format!(
-                            "error:incompatible_input_type:REQ-0510:{}",
+                            "error:incompatible_input_type:FORMULA-23:{}",
                             format!("{actual:?}").to_lowercase()
                         )
                     }
@@ -3104,11 +3095,7 @@ mod scalar {
                         let ArithmeticErrorKind::IntegerOverflow { value } = error.kind else {
                             panic!("unexpected failure")
                         };
-                        format!(
-                            "error:{}:{}:{value}",
-                            error.condition(),
-                            error.requirement()
-                        )
+                        format!("error:{}:{}:{value}", error.condition(), error.rule())
                     }
                     other => panic!("unexpected result: {other:?}"),
                 };

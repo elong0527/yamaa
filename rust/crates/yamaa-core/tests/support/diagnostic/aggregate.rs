@@ -34,7 +34,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "invalid_field_type", Some("LOOKUP-5"))
     );
@@ -70,9 +70,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            (expected, "aggregate_multiple_records", Some("REQ-0501"))
+            (expected, "aggregate_multiple_records", Some("FORMULA-20"))
         );
         let mut context = [
             ("expr".into(), text("ONLY(D.V)")),
@@ -104,7 +104,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 identifier: "V",
             },
             "aggregate_identifier_not_grouped",
-            "REQ-0503",
+            "FORMULA-22",
             vec![
                 ("expr", text("V + SUM(D.N)")),
                 ("dataset", text("D")),
@@ -119,7 +119,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 types: &types,
             },
             "incomparable_sources",
-            "REQ-0511",
+            "FORMULA-23",
             vec![
                 ("expr", text("MAX(D.V)")),
                 ("sources", V::Array(vec![text("D.V")])),
@@ -133,7 +133,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 relations: &relations,
             },
             "mixed_relations",
-            "REQ-0504",
+            "LOOKUP-18",
             vec![
                 ("expr", text("SUM(D.N) + V")),
                 ("relations", V::Array(vec![text("D"), text("<output>")])),
@@ -146,7 +146,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 cause: Cause::OutputNeedsGroups,
             },
             "invalid_aggregate_context",
-            "REQ-0507",
+            "LOOKUP-19",
             vec![
                 ("expr", text("SUM(V)")),
                 ("reason", text("an output-row reduction declares group_by")),
@@ -159,7 +159,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 cause: Cause::QualifiedGroupNotOutputKey,
             },
             "invalid_aggregate_context",
-            "REQ-0470",
+            "LOOKUP-19",
             vec![
                 ("expr", text("SUM(D.N)")),
                 (
@@ -175,7 +175,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 cause: Cause::RowNoKeys,
             },
             "invalid_aggregate_context",
-            "REQ-0142",
+            "LOOKUP-5",
             vec![
                 ("expr", text("SUM(D.N)")),
                 (
@@ -191,7 +191,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 cause: Cause::UngroupedRow,
             },
             "invalid_aggregate_context",
-            "REQ-0329",
+            "LOOKUP-18",
             vec![
                 ("expr", text("SUM(D.N)")),
                 (
@@ -248,15 +248,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
     ];
-    for (cause, condition, requirement, context) in cases {
+    for (cause, condition, rule, context) in cases {
         let diagnostic = cause.diagnostic().unwrap();
         assert_eq!(
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(
             diagnostic.context,
@@ -300,12 +300,12 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
         )])
     };
     let mut reached = BTreeSet::new();
-    for (bindings, code, condition, requirement) in [
+    for (bindings, code, condition, rule) in [
         (
             vec![],
             ConditionCode::AggregateDeriveDeclaration,
             "invalid_derive_step",
-            "REQ-1189",
+            "LOOKUP-22",
         ),
         (
             vec![binding(T::map(vec![(
@@ -314,7 +314,7 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
             )]))],
             ConditionCode::AggregateDeriveRelation,
             "invalid_derive_step",
-            "REQ-1191",
+            "LOOKUP-22",
         ),
         (
             vec![binding(T::map(vec![(
@@ -323,7 +323,7 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
             )]))],
             ConditionCode::AggregateDeriveVariable,
             "unknown_derive_variable",
-            "REQ-1189",
+            "LOOKUP-22",
         ),
     ] {
         let document = specification(bindings);
@@ -341,9 +341,9 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert!(diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"));
         reached.insert(diagnostic.code);
@@ -399,9 +399,9 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
-        ("validation", "invalid_derive_step", Some("REQ-1242"))
+        ("validation", "invalid_derive_step", Some("LOOKUP-22"))
     );
     assert_eq!(diagnostic.context["intermediate"], text("CAP"));
     reached.insert(diagnostic.code);

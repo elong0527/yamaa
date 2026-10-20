@@ -6,14 +6,14 @@ pub(crate) use yamaa_core::json::Value as JsonValue;
 pub fn reached() -> BTreeSet<ConditionCode> {
     let cycle = vec!["entry".into(), "base".into(), "entry".into()];
     let mut reached = BTreeSet::new();
-    for (cause, condition, requirement, path, context) in [
+    for (cause, condition, rule, path, context) in [
         (
             F::InvalidParent {
                 declaring: "child",
                 path: "https://remote/base",
             },
             "invalid_parent_path",
-            "REQ-0653",
+            "LAYER-2",
             "parent",
             vec![
                 ("reason", "remote_reference"),
@@ -27,7 +27,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 path: "../missing.yaml",
             },
             "parent_not_found",
-            "REQ-0654",
+            "LAYER-2",
             "parent",
             vec![("path", "../missing.yaml"), ("source", "child")],
         ),
@@ -54,7 +54,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 returns_to_entry: true,
             },
             "inheritance_cycle",
-            "REQ-0655",
+            "LAYER-3",
             "parent",
             vec![
                 ("reason", "parent_chain_returns_to_entry"),
@@ -70,7 +70,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 is_entry: false,
             },
             "schema_version_mismatch",
-            "REQ-0656",
+            "LAYER-4",
             "parent",
             vec![
                 ("source", "base"),
@@ -88,7 +88,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 is_entry: true,
             },
             "schema_version_mismatch",
-            "REQ-0245",
+            "SCHEMA-2",
             "schema_version",
             vec![
                 ("source", "entry"),
@@ -103,9 +103,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 finding.definition().phase,
                 finding.definition().condition,
-                finding.definition().requirement
+                finding.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, [path]);
         for (key, value) in context {
@@ -133,9 +133,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             dependency.definition().phase,
             dependency.definition().condition,
-            dependency.definition().requirement
+            dependency.definition().rule
         ),
-        ("validation", "unknown_reference", Some("REQ-0070"))
+        ("validation", "unknown_reference", Some("COLUMN-5"))
     );
     assert_eq!(dependency.spec_paths, ["columns.VALUE.derivation"]);
     assert_eq!(

@@ -1,5 +1,5 @@
 #![cfg(feature = "yaml")]
-//! A named lookup is read only by rows that actually read it (REQ-1264).
+//! A named lookup is read only by rows that actually read it (LOOKUP-12).
 //! Listing the column whose derivation reads the lookup in `keys` must not
 //! make suppressed candidates read it: a candidate the row template's
 //! `filter` discards never becomes a row, so an intermediate declaring
@@ -177,7 +177,7 @@ fn assert_unmatched_key(fixture: &Fixture) {
     assert!(
         domain.issues().iter().any(|issue| {
             let value = yamaa_adapters::report_storage::diagnostic_value(issue);
-            value["condition"] == "unmatched_key" && value["requirement"] == "LOOKUP-24"
+            value["condition"] == "unmatched_key" && value["rule"] == "LOOKUP-24"
         }),
         "{:?}",
         domain.issues()

@@ -118,7 +118,7 @@ pub(crate) struct StoredTable {
     pub(crate) rows: Arc<RawValue>,
 }
 
-/// The report's form of one diagnostic: phase, condition, requirement,
+/// The report's form of one diagnostic: phase, condition, rule,
 /// paths and context, with `source_span` and `operand_route` only when
 /// recorded, so an absent span stays distinct from a zero-width one.
 pub fn diagnostic_value(diagnostic: &Diagnostic) -> Value {
@@ -130,10 +130,10 @@ pub fn diagnostic_value(diagnostic: &Diagnostic) -> Value {
         Value::String(definition.condition.into()),
     );
     object.insert(
-        "requirement".into(),
+        "rule".into(),
         definition
-            .requirement
-            .map_or(Value::Null, |requirement| Value::String(requirement.into())),
+            .rule
+            .map_or(Value::Null, |rule| Value::String(rule.into())),
     );
     object.insert(
         "spec_paths".into(),

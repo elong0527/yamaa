@@ -3,7 +3,7 @@ condition: value_level_overlap
 spec_paths:
   - columns.AVAL.submission.value_level.BP.where
   - columns.AVAL.submission.value_level.DIABP.where
-requirement: SUB-12
+rule: SUB-12
 context:
   column: AVAL
   entries: [BP, DIABP]

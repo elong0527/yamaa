@@ -97,7 +97,7 @@ as `core`, `codelist`, `length`, or `comment`.
 | Excel spec | yamaa | Notes |
 |---|---|---|
 | Dataset Name | `domain` | One dataset per spec |
-| Dataset Label / Class / Structure | `submission.label` / `submission.class` / `submission.structure` | Governed dataset metadata, written under `submission:`; reserved in `metadata:`, which rejects them with `reserved_metadata_key` (REQ-0910) |
+| Dataset Label / Class / Structure | `submission.label` / `submission.class` / `submission.structure` | Governed dataset metadata, written under `submission:`; reserved in `metadata:`, which rejects them with `reserved_metadata_key` (SUB-2) |
 | Key Variables | `keys` | Non-missing and unique are enforced |
 | Sort Order (submission sort) | `output.order_by` | A presentation order applied after every check |
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |
@@ -318,7 +318,7 @@ What changed:
   stated in an Excel spec -- **into the formula**. Division by zero is a
   failure, so it has to be stated.
 - **"rounded to 1 decimal" translates to `round_half_away_from_zero`** (with
-  `digits: 1`) -- the one rounding the language provides (REQ-1172). Use it
+  `digits: 1`) -- the one rounding the language provides (FORMULA-16). Use it
   when the rounded value is what you store and validate; when only the
   *display* is rounded (a TFL or listing), leave the stored value unrounded
   and declare `submission.display_format` instead.

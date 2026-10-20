@@ -2,7 +2,7 @@ phase: verification
 condition: row_count_failed
 spec_paths:
   - verifications[0].row_count
-requirement: REQ-0385
+rule: CHECK-13
 context:
   failure_count: 2
   keys:

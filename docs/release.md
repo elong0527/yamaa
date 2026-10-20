@@ -607,7 +607,7 @@ owns decoding behavior.
   output and in project function calls, raising on an integer beyond 2^53 or
   text containing NUL. R has no exact-value classes.
 - Report every finding in one issues table, built in Rust and identical in
-  both hosts: `phase`, `condition`, `requirement`, `spec_paths`, `context` as
+  both hosts: `phase`, `condition`, `rule`, `spec_paths`, `context` as
   canonical JSON text, and the optional `source_span` and `operand_route`. No
   host interprets conditions, and there are no separate diagnostic records.
 - Give each run one run report, written to `output.report`, in place of the
@@ -619,7 +619,7 @@ owns decoding behavior.
   link types a stored artifact from its producing specification and never runs
   it; callers build and save producers before their consumers.
 - Keep normative diagnostics registry-owned, including the reviewed
-  `unsupported_operation` and `engine_rejected` null-requirement exceptions.
+  `unsupported_operation` and `engine_rejected` null-rule exceptions.
   Cut breaks remain finite and strictly ascending; signed-i64 predicate
   overflow, CSV empty-string refusal, greatest/least first-source ties and
   row-filter behavior follow the normative rules and expected benchmark data.
@@ -687,7 +687,7 @@ give the installation commands.
 ## Resource refusals
 
 In the shared engine, a fixed resource boundary produces `engine_rejected` with
-a null requirement and its authored specification paths. The context retains the lifecycle stage, the
+a null rule and its authored specification paths. The context retains the lifecycle stage, the
 boundary's code, its resource name and integer limit, and the observed `actual`
 size when available. Compiler boundaries use `compiler_limit`; physical capture,
 preparation and execution boundaries retain their corresponding resource code

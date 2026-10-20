@@ -219,7 +219,7 @@ mod tests {
             let wrapped = serde_json::to_writer(Refused(error), "escaped \"text\"").unwrap_err();
             let finding = writer.failure(wrapped.into());
             assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-            assert_eq!(finding.definition().requirement, None);
+            assert_eq!(finding.definition().rule, None);
             assert_eq!(finding.path, "datasets.DM.transport");
             assert_eq!(finding.context["stage"], "define");
             assert_eq!(finding.context["code"], "output_limit");

@@ -421,7 +421,7 @@ impl Catalog {
         self.datasets.get(name).map(|dataset| dataset.index)
     }
 
-    /// Resolve bare outputs or a dataset plus its exact stored suffix (REQ-0103/1265).
+    /// Resolve bare outputs or a dataset plus its exact stored suffix (NAME-3 and NAME-7).
     /// A dotted suffix is a field only when literally present; it is never an ODM path.
     pub fn bind(&self, name: &str) -> Option<Binding> {
         if let Some((qualifier, field)) = name.split_once('.') {
@@ -448,7 +448,7 @@ impl Catalog {
     /// Check one bare reference in unknown-name, phase, then expected-type order.
     /// `available` is absent during column derivation and lists available output
     /// declarations during row construction. Candidate datasets only affect the
-    /// qualified spelling suggested for an unresolved bare name (REQ-0106).
+    /// qualified spelling suggested for an unresolved bare name (NAME-3).
     pub fn validate_output(
         &self,
         name: &str,

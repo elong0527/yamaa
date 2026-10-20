@@ -263,8 +263,8 @@ impl Finding {
         self.scalar_rule
     }
     /// Compatibility view of the original optional scalar citation.
-    pub fn requirement(&self) -> Option<&'static str> {
-        self.scalar_rule.map(ScalarSubmissionRule::requirement)
+    pub fn rule(&self) -> Option<&'static str> {
+        self.scalar_rule.map(ScalarSubmissionRule::rule)
     }
 }
 /// Every class keeps its original normalized mapping order as occurrence facts.

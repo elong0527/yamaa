@@ -3,7 +3,7 @@
 //! A selector read in template A promotes the key column whose derivation
 //! reads a named lookup for A only. A suppressed candidate in template B
 //! must not read that lookup before its filter, so an intermediate without
-//! `no_match` must not fail `unmatched_key` for it (REQ-1264), while A
+//! `no_match` must not fail `unmatched_key` for it (LOOKUP-12), while A
 //! still completes its keys.
 use std::{
     fs,

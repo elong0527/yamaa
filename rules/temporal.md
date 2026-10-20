@@ -23,7 +23,6 @@ another type fails rather than converting, and a temporal value never enters
 
 Fails: `incompatible_input_type`, `missing_required_field`, `unknown_field`.
 Evidence: `negative-study-day-datetime`, `negative-date-diff-endpoints`, `negative-epoch-day-non-date`, `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs::temporal_reached`.
-Replaces: REQ-0309, REQ-0337, REQ-0590, REQ-0591, REQ-0606, REQ-0611.
 
 | Operation | Inputs |
 |---|---|
@@ -68,7 +67,6 @@ as invalid date text.
 
 Fails: `incompatible_input_type`, `invalid_date_text`, `interval_or_duration_text`.
 Evidence: `negative-date-conversion`, `schema-to-date-partial`, `adam-adae-post-dose-window`, `schema-birth-date`, `rust/crates/yamaa-core/tests/temporal_date_text.rs`, `rust/crates/yamaa-adapters/tests/execution_date_text_reads.rs`.
-Replaces: REQ-0593, REQ-0607, REQ-1107.
 
 `2025-03-04T08` gives `2025-03-04`, and `2025-03` gives missing. A known date
 before an unknown time gives that date, so `2025-03-04T-:30` gives
@@ -99,7 +97,6 @@ through `to_date` or `impute`.
 
 Fails: `incompatible_input_type`.
 Evidence: `schema-derive-date-epoch`, `negative-epoch-day-non-date`.
-Replaces: REQ-1187, REQ-1188.
 
 A per-record derivation converts dates once, and aggregates reduce the
 resulting integers; date logic never enters reduction.
@@ -144,7 +141,6 @@ before `end`, each anniversary's day clamped to its month's length. With
 
 Fails: `value_not_permitted`, `incompatible_input_type`.
 Evidence: `adam-adsl-analysis-age`, `adam-adsl-duration`, `sdtm-dm-age`, `adam-adpc-relative-times`, `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`.
-Replaces: REQ-0594, REQ-0595, REQ-0596, REQ-0597, REQ-1104, REQ-1299.
 
 A `unit` the declared type does not count in fails with `value_not_permitted`
 where the specification is read: `type: date` counts in `day`, `week`, `month`
@@ -183,7 +179,6 @@ seen.
 
 Fails: `value_not_permitted`.
 Evidence: `negative-date-diff-units`, `adam-adsl-crossover-periods`, `adam-adtte-os`.
-Replaces: REQ-0598, REQ-0613.
 
 `exclusive` is the default. The failure names the offending `bounds` value and
 the permitted value `exclusive`. Like every validation failure, no handler
@@ -199,7 +194,6 @@ date on or after the reference counts forward from 1, and an earlier date
 counts back from -1. A missing date or reference yields a missing result.
 
 Evidence: `sdtm-vs-study-day`, `schema-birth-date`, `adam-adsl-randomization`.
-Replaces: REQ-1108.
 
 ## Collected dates and times
 
@@ -218,7 +212,6 @@ its collected precision.
 
 Fails: `incompatible_input_type`.
 Evidence: `sdtm-ae-partial-dates`, `sdtm-dm-age`, `schema-birth-date`, `adam-adpc-relative-times`, `rust/crates/yamaa-adapters/tests/fixtures/temporal_imputation_reference.json`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
-Replaces: REQ-0578, REQ-0580, REQ-0581, REQ-0582, REQ-1106, REQ-1183, REQ-1326, REQ-1327, REQ-1329.
 
 ```text
 collected := Y [ "-" M [ "-" D [ "T" h [ ":" m [ ":" s ] ] ] ] ]
@@ -309,7 +302,6 @@ collected precision.
 
 Fails: `incompatible_input_type`.
 Evidence: `adam-adae-partial-dates`, `adam-adae-partial-times`, `adam-adsl-alive-date`, `schema-birth-date`, `schema-impute-text-with-time`, `schema-imputation-flags`.
-Replaces: REQ-0579, REQ-0583, REQ-0584, REQ-0587, REQ-1105, REQ-1109, REQ-0589, REQ-1182, REQ-1184, REQ-1328.
 
 `time: first` supplies hour `00`, minute `00` and second `00`, and `time: last`
 supplies `23`, `59` and `59`: the earliest or latest civil moment the collected
@@ -362,7 +354,6 @@ so crossed bounds give `not_after`, and each crossing is counted. A source that
 needed no completion is never moved, and bounds never make a result missing.
 
 Evidence: `adam-adae-partial-dates`, `adam-adcm-end-date-bound`, `schema-impute-crossed-bounds`, `rust/crates/yamaa-core/tests/scalar_aggregate_reduction.rs::datetime_bounds_move_only_supplied_time_fields`.
-Replaces: REQ-0585, REQ-0586, REQ-0610, REQ-1323, REQ-1324, REQ-1325.
 
 For example, `2025-03` completed to `2025-03-31` under a `not_after` of
 `2025-03-12` gives `2025-03-12`. Under a `not_after` of `2025-02-10`, a day
@@ -393,7 +384,6 @@ rejected where the specification is read, before any data is seen.
 
 Fails: `month_required`, `month_not_permitted`, `day_required`, `day_not_permitted`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`.
 Evidence: `negative-impute-missing-month`, `negative-impute-unreachable-month`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_imputation.rs`.
-Replaces: REQ-0592, REQ-0608, REQ-0609.
 
 A specification carries no rule the precision policy leaves unreachable. An
 absent required `month` fails with `month_required`, and a `month` beside a
@@ -422,7 +412,6 @@ otherwise, unless `invalid` declares a literal substitute.
 
 Fails: `invalid_date_text`, `interval_or_duration_text`.
 Evidence: `schema-impute-fallback`, `negative-impute-bad-source`, `negative-precision-bad-source`, `negative-impute-datetime-text`, `negative-precision-datetime-text`, `negative-impute-interval`, `rust/crates/yamaa-core/tests/fixtures/collected_date_text.tsv`.
-Replaces: REQ-0588.
 
 Both counts are reported like handler counts under
 [COLUMN-14](columns.md#column-14), zero included. The fallback is read only
@@ -462,7 +451,6 @@ added exactly. The result keeps the source's collected precision.
 
 Fails: `incompatible_input_type`, `conversion_failed`.
 Evidence: `adam-adsl-period-dates`, `adam-adae-post-dose-window`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/tests/host-fixtures/cases.json`.
-Replaces: REQ-1298, REQ-1300.
 
 `days` is a signed integer literal or integer variable; a negative count moves
 backward. `minute`, `hour` and `day` admit integer or float amounts; integer
@@ -492,7 +480,6 @@ years and calendar months are invalid.
 
 Fails: `incompatible_input_type`, `invalid_duration_text`.
 Evidence: `adam-adex-infusion-duration`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_arithmetic.rs`, `rust/crates/yamaa-core/tests/scalar_sqrt.rs::duration_value_reads_signed_fractional_and_week_forms_exactly`, `rust/tests/host-fixtures/cases.json`.
-Replaces: REQ-1301.
 
 `PT1M` is one minute; `P1M` is a calendar month and is invalid. A week is seven
 days and a day is 86400 seconds. A missing source returns missing without

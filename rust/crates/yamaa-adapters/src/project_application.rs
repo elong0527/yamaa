@@ -456,7 +456,7 @@ mod resource_tests {
                         .definition()
                         .condition
                 );
-                assert_eq!(rows[0].requirement(), None);
+                assert_eq!(rows[0].rule(), None);
                 assert_eq!(rows[0].spec_paths, ["$"]);
                 assert_eq!(Value::Object(rows[0].context.clone()), context);
             }
@@ -514,7 +514,7 @@ mod resource_tests {
                     .definition()
                     .condition
             );
-            assert_eq!(rows[0].requirement(), None);
+            assert_eq!(rows[0].rule(), None);
             assert_eq!(Value::Object(rows[0].context.clone()), context, "{error:?}");
         }
         // A classified link failure keeps its authored validation finding.
@@ -559,7 +559,7 @@ mod resource_tests {
                 .definition()
                 .condition
         );
-        assert_eq!(issue.requirement(), None);
+        assert_eq!(issue.rule(), None);
         assert_eq!(
             Value::Object(issue.context.clone()),
             crate::json!({

@@ -2,7 +2,7 @@ phase: validation
 condition: incomparable_range_types
 spec_paths:
   - intermediates[0].between
-requirement: LOOKUP-9
+rule: LOOKUP-9
 context:
   intermediate: EPOCHDEF
   value_type: date

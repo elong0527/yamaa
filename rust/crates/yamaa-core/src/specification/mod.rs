@@ -91,7 +91,7 @@ pub enum PrepareError {
     #[error("specification internal")]
     Internal,
 }
-/// Maximum declared CSV display precision under REQ-0744.
+/// Maximum declared CSV display precision under CSV-6.
 pub const MAX_OUTPUT_DECIMALS: u8 = 18;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -135,7 +135,7 @@ pub enum PreflightFinding {
     DuplicateRowDefault {
         column: String,
         rows: Vec<String>,
-        /// Why the column-level derivation is not row-local (REQ-1260): the
+        /// Why the column-level derivation is not row-local (SPEC-6): the
         /// root cause kind, such as `aggregate`, `lookup`, `window` or
         /// `named_intermediate`.
         not_row_local: String,
@@ -704,7 +704,7 @@ fn prepare_output_declarations(
         .collect::<Result<Vec<_>, _>>()?;
     let output_path = declared.path.text.clone();
     // Retain the complete integer for output-declaration diagnostics, even
-    // when it exceeds REQ-0744's range. Build validation retains its existing
+    // when it exceeds CSV-6's range. Build validation retains its existing
     // post-verification phase; saved-file size is admitted at publication.
     let output_decimals = declared
         .decimals

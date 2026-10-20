@@ -316,7 +316,7 @@ class StagingTests(unittest.TestCase):
             self.assertEqual(check_cargo_lock.check_bundle_archive(built), ("r", kept))
 
     def test_shared_specification_inputs_keep_both_preparation_copies(self):
-        """Both copies retain the fixture-owned facts and requirement citations."""
+        """Both copies retain the fixture-owned facts and rule citations."""
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "specification-original"
             specification.stage(destination)

@@ -190,7 +190,7 @@ mod execution {
                                 "error:{}:{}:{}",
                                 condition.phase(),
                                 condition.condition(),
-                                condition.requirement()
+                                condition.rule()
                             )
                         }
                         NumericLifecycleError::Conversion { spec_path, error } => {
@@ -200,7 +200,7 @@ mod execution {
                                 "error:{}:{}:{}",
                                 error.phase(),
                                 error.condition(),
-                                error.requirement()
+                                error.rule()
                             )
                         }
                         NumericLifecycleError::HandlerConversion {
@@ -217,7 +217,7 @@ mod execution {
                                 "error:{}:{}:{}",
                                 replacement.phase(),
                                 replacement.condition(),
-                                replacement.requirement()
+                                replacement.rule()
                             )
                         }
                         NumericLifecycleError::Accounting { .. } => {

@@ -4,7 +4,7 @@ The five function studies share ordinary installed Python and R packages.
 Each study's `project.yaml` links its Python and R environment files, whose
 function metadata is explicit; there is no artifact loader or separate
 contract/conformance format. Every positive expected CSV is the original truth.
-The negative study independently specifies a missing required argument (REQ-0700).
+The negative study independently specifies a missing required argument (FUNC-5).
 
 From the repository root, install the Python package and its project programs:
 

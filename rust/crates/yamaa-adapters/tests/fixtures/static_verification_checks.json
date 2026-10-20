@@ -9,7 +9,7 @@
           "reason": "allowed_values requires values"
         },
         "phase": "validation",
-        "requirement": "REQ-0397",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].allowed_values"
         ]
@@ -26,7 +26,7 @@
           "reason": "listed value None is not a int value"
         },
         "phase": "validation",
-        "requirement": "REQ-0404",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].allowed_values"
         ]
@@ -43,7 +43,7 @@
           "reason": "listed value 'bad' is not a int value"
         },
         "phase": "validation",
-        "requirement": "REQ-0404",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].allowed_values"
         ]
@@ -60,7 +60,7 @@
           "reason": "range requires one bound"
         },
         "phase": "validation",
-        "requirement": "REQ-0399",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].range"
         ]
@@ -77,7 +77,7 @@
           "reason": "range min exceeds max"
         },
         "phase": "validation",
-        "requirement": "REQ-0399",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].range"
         ]
@@ -94,7 +94,7 @@
           "reason": "a str column does not admit this verification"
         },
         "phase": "validation",
-        "requirement": "REQ-0404",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].range"
         ]
@@ -111,7 +111,7 @@
           "reason": "max_length max is at least one"
         },
         "phase": "validation",
-        "requirement": "REQ-0400",
+        "rule": "CHECK-8",
         "spec_paths": [
           "columns.V.verifications[0].max_length"
         ]
@@ -128,7 +128,7 @@
           "reason": "a int column does not admit this verification"
         },
         "phase": "validation",
-        "requirement": "REQ-0404",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].max_length"
         ]
@@ -145,7 +145,7 @@
           "reason": "allowed_values requires values"
         },
         "phase": "validation",
-        "requirement": "REQ-0397",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].allowed_values"
         ]
@@ -172,7 +172,7 @@
           "pattern": "é("
         },
         "phase": "validation",
-        "requirement": "REQ-0827",
+        "rule": "TEXT-6",
         "spec_paths": [
           "columns.V.verifications[0].matches.pattern"
         ]
@@ -189,7 +189,7 @@
           "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
         },
         "phase": "validation",
-        "requirement": "REQ-0398",
+        "rule": "CHECK-3",
         "spec_paths": [
           "columns.V.verifications[1].not_missing"
         ]
@@ -206,7 +206,7 @@
           "reason": "range requires one bound"
         },
         "phase": "validation",
-        "requirement": "REQ-0399",
+        "rule": "CHECK-4",
         "spec_paths": [
           "columns.V.verifications[0].range"
         ]
@@ -217,7 +217,7 @@
           "reason": "row_count requires one bound"
         },
         "phase": "validation",
-        "requirement": "REQ-0399",
+        "rule": "CHECK-4",
         "spec_paths": [
           "verifications[0].row_count"
         ]
@@ -234,7 +234,7 @@
           "pattern": "("
         },
         "phase": "validation",
-        "requirement": "REQ-0827",
+        "rule": "TEXT-6",
         "spec_paths": [
           "columns.V.verifications[0].matches.pattern"
         ]

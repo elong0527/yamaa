@@ -263,7 +263,7 @@ impl BindFinding {
                         ]),
                     ),
                     // A row derivation reads a column this template leaves to the
-                    // column phase (REQ-0069), as a bare row read reports it.
+                    // column phase (COLUMN-4), as a bare row read reports it.
                     reference_binding::Diagnostic::PhaseBoundary { .. } => (
                         C::RowDependencyPhaseBoundary,
                         context([

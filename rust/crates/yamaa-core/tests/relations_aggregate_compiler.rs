@@ -237,7 +237,7 @@ mod relations {
                         columns: vec![1, 2, 1],
                     },
                     "dependency_cycle",
-                    "REQ-0072",
+                    "COLUMN-6",
                     "operation",
                     vec![1, 2, 1],
                 ),
@@ -247,14 +247,14 @@ mod relations {
                         dependency: 2,
                     },
                     "forward_reference",
-                    "REQ-0071",
+                    "COLUMN-5",
                     "operation",
                     vec![0, 2],
                 ),
                 (
                     Diagnostic::MissingKeyDerivation { column: 2 },
                     "key_dependency",
-                    "REQ-0074",
+                    "COLUMN-7",
                     "declaration",
                     vec![2],
                 ),
@@ -264,20 +264,20 @@ mod relations {
                         dependency: 0,
                     },
                     "key_dependency",
-                    "REQ-0074",
+                    "COLUMN-7",
                     "expression",
                     vec![2, 0],
                 ),
             ];
-            for (diagnostic, condition, requirement, location, columns) in cases {
+            for (diagnostic, condition, rule, location, columns) in cases {
                 assert_eq!(
                     (
                         diagnostic.condition(),
-                        diagnostic.requirement(),
+                        diagnostic.rule(),
                         diagnostic.location(),
                         diagnostic.columns()
                     ),
-                    (condition, requirement, location, columns)
+                    (condition, rule, location, columns)
                 );
             }
         }
@@ -485,7 +485,7 @@ mod relations {
             let condition = Condition::ContainsExpectedText {
                 actual: ValueType::Int,
             };
-            assert_eq!(condition.requirement(), "REQ-1244");
+            assert_eq!(condition.rule(), "FORMULA-8");
             let error: EvaluationError<()> = EvaluationError {
                 spec_path: "flag.condition".into(),
                 expression: "original".into(),
@@ -495,7 +495,7 @@ mod relations {
             };
             let diagnostic = yamaa_core::dataset::flag_condition_diagnostic(&error).unwrap();
             assert_eq!(diagnostic.code, C::PredicateInputType);
-            assert_eq!(diagnostic.definition().requirement, Some("REQ-0190"));
+            assert_eq!(diagnostic.definition().rule, Some("FORMULA-5"));
             assert_eq!(diagnostic.operand_route, Some(vec!["Value".into()]));
         }
         #[test]
@@ -806,12 +806,7 @@ mod relations {
             findings
                 .iter()
                 .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-                .map(|d| {
-                    (
-                        d.code.definition().requirement.unwrap().to_string(),
-                        d.spec_paths,
-                    )
-                })
+                .map(|d| (d.code.definition().rule.unwrap().to_string(), d.spec_paths))
                 .collect()
         }
         #[test]
@@ -866,24 +861,21 @@ mod relations {
                 }
                 expected.extend([
                     (
-                        "REQ-1261".into(),
+                        "TEXT-2".into(),
                         vec![format!("intermediates[0].key.{field}.str_pad.width")],
                     ),
                     (
                         "LOOKUP-5".into(),
                         vec![format!("intermediates[0].key.{field}")],
                     ),
-                    (
-                        "REQ-0103".into(),
-                        vec!["columns.V.derivation.source".into()],
-                    ),
+                    ("NAME-3".into(), vec!["columns.V.derivation.source".into()]),
                 ]);
                 assert_eq!(actual, expected);
             }
             assert_eq!(
                 finding_ids(Tree::map(vec![("K", pad("SRC.N", "0"))])),
                 [(
-                    "REQ-1261".into(),
+                    "TEXT-2".into(),
                     vec!["intermediates[0].key.K.str_pad.width".into()]
                 )]
             );
@@ -1184,7 +1176,7 @@ mod relations {
             }
         }
 
-        /// REQ-0125 expectations come from authored visibility, not generated runtime results.
+        /// LOOKUP-11 expectations come from authored visibility, not generated runtime results.
         #[test]
         fn stored_derived_and_self_visibility() {
             let catalog = catalog();

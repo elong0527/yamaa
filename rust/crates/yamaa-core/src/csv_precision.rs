@@ -1,4 +1,4 @@
-//! CSV display rounding under REQ-0745/0747/0748, after execution gates.
+//! CSV display rounding under CSV-7 and CSV-9, after execution gates.
 use num_bigint::BigUint;
 
 use crate::{decimal_rounding::rounded_magnitude, value::FiniteFloat};
@@ -8,7 +8,7 @@ use crate::{decimal_rounding::rounded_magnitude, value::FiniteFloat};
 pub struct Limit;
 
 /// Format the exact binary64 value at `digits` places with the language's one
-/// rounding (REQ-0418): ties, and near ties within 2^-26 of a scaled tie, go
+/// rounding (FORMULA-16): ties, and near ties within 2^-26 of a scaled tie, go
 /// away from zero. The rounded decimal integer is written directly, never
 /// rounded back to binary64, and a value that rounds to zero has no sign.
 /// Every finite binary64 has at most 1,074 exact fractional decimal places;

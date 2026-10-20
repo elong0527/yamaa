@@ -222,7 +222,7 @@ class CompletePublicTruth(unittest.TestCase):
                 "phase": "validation",
                 "condition": "undeclared_column",
                 "spec_paths": ["output.columns"],
-                "requirement": "REQ-test",
+                "rule": "OUTPUT-2",
                 "context": {"column": "UNRELATED"},
             }
         )

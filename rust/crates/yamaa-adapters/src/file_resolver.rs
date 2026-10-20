@@ -96,8 +96,8 @@ impl FileResolver {
         ))
     }
     /// The project file a caller passes is a caller path like the entry
-    /// (REQ-1331): its existing parent is selected once, and the caller's own
-    /// spelling of that directory keeps its authority (REQ-0781). A project
+    /// (PROJECT-1): its existing parent is selected once, and the caller's own
+    /// spelling of that directory keeps its authority (FILE-7). A project
     /// operation names each listed specification by its canonical identity,
     /// so without this root the caller's spelling of the project file, such
     /// as the macOS `/var` alias of `/private/var`, lies outside the entry

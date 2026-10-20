@@ -47,7 +47,7 @@ mod schema {
                 )
             );
             assert_eq!(findings[1].definition().condition, "dependency_cycle");
-            assert_eq!(findings[1].definition().requirement, Some("REQ-0072"));
+            assert_eq!(findings[1].definition().rule, Some("COLUMN-6"));
             assert!(findings
                 .iter()
                 .all(|finding| finding.source_span.is_none() && finding.operand_route.is_none()));
@@ -188,16 +188,16 @@ mod schema {
             assert_eq!(
                 findings
                     .iter()
-                    .map(|finding| (finding.scalar_rule(), finding.requirement()))
+                    .map(|finding| (finding.scalar_rule(), finding.rule()))
                     .collect::<Vec<_>>(),
                 [
-                    (Some(Rule::DefineId), Some("REQ-1068")),
-                    (Some(Rule::StandardName), Some("REQ-1074")),
+                    (Some(Rule::DefineId), Some("DEFINE-9")),
+                    (Some(Rule::StandardName), Some("DEFINE-6")),
                     (None, None),
-                    (Some(Rule::Identifier), Some("REQ-1046")),
+                    (Some(Rule::Identifier), Some("SPEC-2")),
                     (None, None),
-                    (Some(Rule::Href), Some("REQ-1070")),
-                    (Some(Rule::Language), Some("REQ-1073")),
+                    (Some(Rule::Href), Some("DEFINE-13")),
+                    (Some(Rule::Language), Some("DEFINE-21")),
                 ]
             );
             assert_eq!(findings[2].node, define);
@@ -262,17 +262,17 @@ mod schema {
             assert_eq!(
                 findings
                     .iter()
-                    .map(|finding| (finding.scalar_rule(), finding.requirement()))
+                    .map(|finding| (finding.scalar_rule(), finding.rule()))
                     .collect::<Vec<_>>(),
                 [
-                    (Some(Rule::DatasetClass), Some("REQ-1146")),
-                    (Some(Rule::DatasetSubclass), Some("REQ-1147")),
-                    (Some(Rule::Identifier), Some("REQ-1046")),
-                    (Some(Rule::Core), Some("REQ-1141")),
-                    (Some(Rule::DataType), Some("REQ-1145")),
-                    (Some(Rule::OriginType), Some("REQ-1142")),
-                    (Some(Rule::OriginSource), Some("REQ-1143")),
-                    (Some(Rule::MethodType), Some("REQ-1144")),
+                    (Some(Rule::DatasetClass), Some("SUB-4")),
+                    (Some(Rule::DatasetSubclass), Some("SUB-4")),
+                    (Some(Rule::Identifier), Some("SPEC-2")),
+                    (Some(Rule::Core), Some("SUB-10")),
+                    (Some(Rule::DataType), Some("SUB-6")),
+                    (Some(Rule::OriginType), Some("SUB-14")),
+                    (Some(Rule::OriginSource), Some("SUB-14")),
+                    (Some(Rule::MethodType), Some("SUB-21")),
                     (None, None),
                 ]
             );
@@ -1335,10 +1335,10 @@ mod schema {
                     .map(|d| (
                         d.path.as_str(),
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ))
                     .collect::<Vec<_>>(),
-                vec![("output", "invalid_clear", Some("REQ-0660"))]
+                vec![("output", "invalid_clear", Some("LAYER-9"))]
             );
             check(
                 &result.document,
@@ -2208,7 +2208,7 @@ mod schema {
                         finding.phase,
                         finding.path,
                         finding.condition,
-                        finding.requirement,
+                        finding.rule,
                         finding.context.collect(),
                     )
                 })
@@ -2240,7 +2240,7 @@ mod schema {
                         "validation",
                         "value",
                         "value_not_permitted",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![
                             ("value", V::Text("bad\"\nλ")),
                             (
@@ -2255,7 +2255,7 @@ mod schema {
                         "validation",
                         "value",
                         "pattern_mismatch",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![
                             ("value", V::Text("bad\"\nλ")),
                             ("pattern", V::Text("^OK$")),
@@ -2267,7 +2267,7 @@ mod schema {
                         "validation",
                         "value",
                         "minimum_length",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![
                             ("minimum", V::Integer(BIG)),
                             ("source", V::Text("held/parent.yaml")),
@@ -2314,7 +2314,7 @@ mod schema {
                     "validation",
                     "items",
                     "invalid_size",
-                    Some("REQ-0287"),
+                    Some("SCHEMA-12"),
                     vec![("size", V::Integer(BIG))]
                 )]
             );
@@ -2340,7 +2340,7 @@ mod schema {
                         "validation",
                         "root_class.value.default",
                         "value_not_permitted",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![
                             ("value", V::Text("bad\"\nλ")),
                             (
@@ -2353,14 +2353,14 @@ mod schema {
                         "validation",
                         "root_class.value.default",
                         "pattern_mismatch",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![("value", V::Text("bad\"\nλ")), ("pattern", V::Text("^OK$")),]
                     ),
                     (
                         "validation",
                         "root_class.value.default",
                         "minimum_length",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![("minimum", V::Integer(BIG))]
                     ),
                 ]
@@ -2412,7 +2412,7 @@ mod schema {
                         "validation",
                         "scalar",
                         "pattern_mismatch",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![
                             ("value", expected),
                             ("count", V::Count(usize::MAX)),
@@ -2444,7 +2444,7 @@ mod schema {
                         "validation",
                         "kind",
                         "pattern_mismatch",
-                        Some("REQ-0287"),
+                        Some("SCHEMA-12"),
                         vec![("value", V::Text(value)), ("layer", V::Text(layer))]
                     )]
                 );
@@ -2540,7 +2540,7 @@ mod schema {
                     "validation",
                     "value",
                     "value_not_permitted",
-                    Some("REQ-0287"),
+                    Some("SCHEMA-12"),
                     vec![
                         ("value", V::Text("OK")),
                         ("permitted", V::TextList(&["forbidden".into()]))
@@ -2609,7 +2609,7 @@ mod schema {
                     "validation",
                     "p",
                     "invalid_field_type",
-                    Some("REQ-0287"),
+                    Some("SCHEMA-12"),
                     vec![("k", V::Text("v"))]
                 )]
             );

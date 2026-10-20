@@ -1,13 +1,13 @@
 version: "1.0"
 
 expressions:
-    source: # See REQ-1093.
+    source: # See EXPR-4.
         type: [variable, source_binding_class]
         description: Copies a named source or derived variable (EXPR-4).
-    literal: # See REQ-1094.
+    literal: # See EXPR-4.
         type: literal_value
         description: Returns the declared scalar value unchanged (EXPR-4).
-    first_available: # See REQ-1095.
+    first_available: # See EXPR-9.
         - sources:
             type: "list[filtered_source]"
             required: true
@@ -15,20 +15,20 @@ expressions:
         - missing:
             type: substitute_value
             description: Value returned when every source is missing; missing when absent (EXPR-9).
-    greatest: # See REQ-1096.
+    greatest: # See EXPR-10.
         - sources:
             type: "list[variable]"
             required: true
             description: Mutually comparable variables to inspect (EXPR-10).
-    least: # See REQ-1097.
+    least: # See EXPR-10.
         - sources:
             type: "list[variable]"
             required: true
             description: Mutually comparable variables to inspect (EXPR-10).
-    case: # See REQ-1098.
+    case: # See EXPR-7.
         type: "list[case_item_class]"
         description: Ordered when/then items with an optional trailing otherwise (EXPR-7).
-    flag: # See REQ-1256.
+    flag: # See EXPR-8.
         type: [predicate, flag_class]
         description: A one-predicate flag derivation; a bare predicate string is the condition with the default values (EXPR-8).
 
@@ -70,7 +70,7 @@ filtered_source:
 keep_policy:
     type: str
     values: [first, last]
-    description: See REQ-0119.
+    description: See LOOKUP-10.
 
 order_by_term:
     type: [variable, order_term_class]

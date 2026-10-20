@@ -2,7 +2,7 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - intermediates[0].key
-requirement: LOOKUP-5
+rule: LOOKUP-5
 context:
   identifier: UNIT
   intermediate: REFRANGE

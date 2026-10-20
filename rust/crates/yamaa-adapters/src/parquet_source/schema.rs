@@ -57,7 +57,7 @@ fn normalize_field(field: &Field, hint: Option<&Field>) -> Field {
                 _ => unreachable!(),
             }
         }
-        // A dictionary is a layout of its value type (REQ-1032): its values
+        // A dictionary is a layout of its value type (PARQUET-7): its values
         // normalize as a field of that type does, so a dictionary of date64
         // reads as a date, as a plain date64 hint does.
         DataType::Dictionary(index, value) => {

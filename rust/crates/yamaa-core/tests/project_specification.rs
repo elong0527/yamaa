@@ -81,7 +81,7 @@ mod project {
             fields.push(("filter".into(), Tree::text("SEQ > 1")));
             let spec = specification_with_rows(vec![("SEQ", "int", literal(0))], vec![template]);
             let prepared = PreparedSpecification::prepare(&spec).unwrap();
-            // Grouped filters gate completed groups under REQ-1056.
+            // Grouped filters gate completed groups under ROW-1.
             assert!(prepared.bind(&source()).is_ok());
         }
 
@@ -255,7 +255,7 @@ mod project {
                     [format!("columns.{column}.derivation")]
                 );
                 assert_eq!(diagnostic.definition().condition, "duplicate_derivation");
-                assert_eq!(diagnostic.definition().requirement, Some("REQ-1260"));
+                assert_eq!(diagnostic.definition().rule, Some("SPEC-6"));
                 assert_eq!(
                     diagnostic.context["rows"],
                     JsonValue::Array(vec![
@@ -519,7 +519,7 @@ mod project {
             for (finding, column) in findings.iter().zip(["B", "C"]) {
                 let diagnostic = finding.diagnostic();
                 assert_eq!(diagnostic.definition().condition, "phase_boundary");
-                assert_eq!(diagnostic.definition().requirement, Some("REQ-0069"));
+                assert_eq!(diagnostic.definition().rule, Some("COLUMN-4"));
                 assert_eq!(
                     diagnostic.spec_paths,
                     [format!("rows[0].derivations.{column}.function.args.x")]
@@ -700,7 +700,7 @@ mod project {
                             "{findings:?}"
                         );
                         if overridden {
-                            // REQ-1260 names why the column-level derivation cannot
+                            // SPEC-6 names why the column-level derivation cannot
                             // be a row default: it is a window derivation.
                             let duplicate = findings
                                 .iter()
@@ -772,9 +772,9 @@ mod project {
                     (
                         diagnostic.definition().phase,
                         diagnostic.definition().condition,
-                        diagnostic.definition().requirement
+                        diagnostic.definition().rule
                     ),
-                    ("validation", "phase_boundary", Some("REQ-0069"))
+                    ("validation", "phase_boundary", Some("COLUMN-4"))
                 );
                 assert_eq!(
                     diagnostic.spec_paths,

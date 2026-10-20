@@ -73,7 +73,7 @@ mod tests {
         .unwrap();
         assert_eq!(value["phase"], expected["phase"]);
         assert_eq!(value["condition"], expected["condition"]);
-        assert_eq!(value["requirement"], expected["requirement"]);
+        assert_eq!(value["rule"], expected["rule"]);
         assert_eq!(value["context"], expected["context"]);
         assert_eq!(
             crate::json_wire::encode(&value["context"]["value_count"]),

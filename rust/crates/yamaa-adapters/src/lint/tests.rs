@@ -1173,7 +1173,7 @@ fn lint_faults_keep_their_existing_codes_and_resource_facts() {
         assert_eq!(diagnostics.len(), 1);
         let diagnostic = &diagnostics[0];
         assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
-        assert_eq!(diagnostic.requirement(), None);
+        assert_eq!(diagnostic.rule(), None);
         assert!(diagnostic.spec_paths.is_empty());
         assert_eq!(Value::Object(diagnostic.context.clone()), context);
         assert_eq!(diagnostic.source_span, None);

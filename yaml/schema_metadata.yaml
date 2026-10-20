@@ -1,6 +1,6 @@
 version: "1.0"
 
-# See REQ-1148.
+# See SUB-1.
 
 submission_dataset_class:
     - has_no_data:
@@ -122,7 +122,7 @@ submission_metadata_fields:
         required: false
         description: Sponsor comment carried with the column definition.
 
-# See REQ-1157.
+# See SUB-20.
 
 submission_origin_class:
     - type:

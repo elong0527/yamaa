@@ -1,4 +1,4 @@
-//! COUNT and ordered SUM/MEAN over collected arguments (REQ-0477/0479/0480/0492).
+//! COUNT and ordered SUM/MEAN over collected arguments (FORMULA-18, FORMULA-19 and FORMULA-24).
 
 use crate::{
     numeric::{binary, ArithmeticError, BinaryOperator, Number},
@@ -23,7 +23,7 @@ impl NumericReducer {
 }
 
 /// Caller retains expression/source/path context. Argument indices include missing
-/// values. IncompatibleInputType maps to validation/REQ-0510; arithmetic retains
+/// values. IncompatibleInputType maps to validation/FORMULA-23; arithmetic retains
 /// the scalar diagnostic. CountOverflow is a capacity failure, not language truth.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ReductionError {

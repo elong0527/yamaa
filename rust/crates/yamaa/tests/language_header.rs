@@ -63,8 +63,7 @@ fn rows(table: &Table) -> Vec<(String, Option<String>, Vec<String>, Value)> {
                 .unwrap()
                 .clone()
         };
-        let (condition, requirement, context) =
-            (text("condition"), text("requirement"), text("context"));
+        let (condition, rule, context) = (text("condition"), text("rule"), text("context"));
         let paths = batch
             .column_by_name("spec_paths")
             .unwrap()
@@ -77,7 +76,7 @@ fn rows(table: &Table) -> Vec<(String, Option<String>, Vec<String>, Value)> {
             let values = values.as_any().downcast_ref::<StringArray>().unwrap();
             rows.push((
                 condition.value(row).to_owned(),
-                (!requirement.is_null(row)).then(|| requirement.value(row).to_owned()),
+                (!rule.is_null(row)).then(|| rule.value(row).to_owned()),
                 (0..values.len())
                     .map(|i| values.value(i).to_owned())
                     .collect(),
@@ -92,9 +91,9 @@ fn rows(table: &Table) -> Vec<(String, Option<String>, Vec<String>, Value)> {
 fn refused(table: &Table) {
     let rows = rows(table);
     assert_eq!(rows.len(), 1, "{rows:?}");
-    let (condition, requirement, paths, context) = &rows[0];
+    let (condition, rule, paths, context) = &rows[0];
     assert_eq!(condition, "unsupported_language_version");
-    assert_eq!(requirement.as_deref(), Some("SCHEMA-2"));
+    assert_eq!(rule.as_deref(), Some("SCHEMA-2"));
     assert_eq!(paths, &["yamaa"]);
     assert_eq!(context["version"], Value::String("1.0".into()));
     assert_eq!(context["language_versions"], Value::Array(Vec::new()));
@@ -164,9 +163,9 @@ fn a_0_5_project_refuses_a_1_x_specification_it_lists() {
             .issues(),
     );
     assert_eq!(rows.len(), 1, "{rows:?}");
-    let (condition, requirement, paths, context) = &rows[0];
+    let (condition, rule, paths, context) = &rows[0];
     assert_eq!(condition, "unsupported_language_version");
-    assert_eq!(requirement.as_deref(), Some("SCHEMA-2"));
+    assert_eq!(rule.as_deref(), Some("SCHEMA-2"));
     assert_eq!(paths, &["yamaa"]);
     assert_eq!(context["entry"], Value::String(study.path("dm.yaml")));
 }

@@ -74,7 +74,7 @@ fn finish(
     findings: &mut Vec<BindFinding>,
 ) -> Result<Option<Expression>, BindError> {
     if expression.is_none() {
-        // Bare output names have the text-operation requirement; qualified names
+        // Bare output names have the text-operation rule; qualified names
         // retain their original resource/reference-scope owner and complete facts.
         if !source.contains('.') {
             for finding in &mut findings[start..] {

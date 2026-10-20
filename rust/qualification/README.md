@@ -69,13 +69,13 @@ the R runner needs base R and the installed package.
 The plan also generates two metamorphic variants of each entry, built by the
 same runners on staged copies and judged by the comparator against the entry's
 own build rather than against `expected/`: an empty child
-(`{schema_version: "1.0", parent: <entry>}`, REQ-0627) must reproduce its
+(`{schema_version: "1.0", parent: <entry>}`, LAYER-5) must reproduce its
 parent, and for eligible positive entries (no `rows`, no `parent`, at least
 two key columns reading one input field or a literal) a JSON control copy and
 a copy with the key columns moved to the front in reverse key order must agree
-(REQ-0060, REQ-0062, REQ-0220). Positive variants must report no issues with
+(COLUMN-5, OUTPUT-1, OUTPUT-2). Positive variants must report no issues with
 equal output and log tables; negative variants must report the same first
-issue (phase, condition, requirement and spec paths). Known differences are
+issue (phase, condition, rule and spec paths). Known differences are
 declared in the case's `benchmark.yaml` under `conformance.metamorphic`,
 linked to a tracking issue or marked permanent with a by-design reason. A
 temporary difference that stops occurring fails the run as stale; an

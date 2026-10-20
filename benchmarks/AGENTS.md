@@ -336,8 +336,7 @@ and has these fields:
 - `phase`: the evaluation phase that rejects the run;
 - `condition`: a stable snake-case name for the failed condition;
 - `spec_paths`: one or more specification locations implicated in the failure;
-- `requirement`: the numbered rule requirement the benchmark pins, such as
-  `REQ-0472`;
+- `rule`: the rule card the benchmark pins, such as `LOOKUP-9`;
 - `context`: optional structured facts such as the dataset, offending keys,
   value, match count, or verification ID.
 

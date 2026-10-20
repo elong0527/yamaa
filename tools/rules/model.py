@@ -2,10 +2,8 @@
 
 Rule files are ``rules/**/*.md`` except the index (``rules/README.md``), the
 informative glossary and the reference pages the docs build generates. A rule
-file is either a card file, whose rules are cards headed ``### PREFIX-N.
-Title``, or a legacy contract, whose requirements are ``**REQ-NNNN.**``
-blocks. The index opens with the principles and lists every rule file with its
-prefix in the Rule files table; legacy contracts are listed with ``REQ``.
+file holds cards headed ``### PREFIX-N. Title``. The index opens with the
+principles and lists every rule file with its prefix in the Rule files table.
 
 Parsing never fails on malformed rules. :mod:`tools.rules.check` reports what
 is malformed; other tools read the identities they need.
@@ -19,17 +17,16 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-LEGACY_PREFIX = "REQ"
-METADATA_LABELS = ("Fails", "Evidence", "Replaces")
+METADATA_LABELS = ("Fails", "Evidence")
 # Rules-relative pages under rules/ that hold no rules.
 INDEX = "README.md"
 INFORMATIVE = frozenset({"reference/glossary.md"})
 # Rendered from rules/ and yaml/ on every docs build; never committed.
-REQUIREMENT_INDEX = "reference/requirements.md"
+RULE_INDEX = "reference/rule-index.md"
 SCHEMA_FIELDS = "reference/schema-fields.md"
 SCHEMA_FIELDS_V1 = "reference/schema-fields-v1.md"
 RULES_SUMMARY = "reference/rules-summary.md"
-GENERATED_PAGES = (REQUIREMENT_INDEX, SCHEMA_FIELDS, SCHEMA_FIELDS_V1, RULES_SUMMARY)
+GENERATED_PAGES = (RULE_INDEX, SCHEMA_FIELDS, SCHEMA_FIELDS_V1, RULES_SUMMARY)
 # Directories that hold build output, environments or caches, never sources.
 SKIPPED_DIRECTORIES = frozenset(
     {
@@ -54,8 +51,6 @@ SKIPPED_PATHS = frozenset(
     | {f"rules/{page}" for page in GENERATED_PAGES}
 )
 
-LEGACY_ID = r"REQ-\d{4,}"
-LEGACY_DEFINITION = re.compile(rf"^\*\*(?P<id>{LEGACY_ID})\.\*\*")
 CARD_HEADING = re.compile(
     r"^###\s+(?P<id>(?P<prefix>[A-Z]+)-(?P<number>\d+))(?P<dot>\.?)"
     r"(?:\s+(?P<title>.*?))?\s*$"
@@ -96,8 +91,7 @@ def prose_lines(text, *, code=False):
 
     Front matter and fenced blocks become empty lines and HTML comments become
     spaces, so line numbers and columns stay true. A fence may open after prose
-    on its own line, as a legacy grammar block does after its requirement
-    marker; that prose remains. Inline code spans become spaces unless
+    on its line; that prose remains. Inline code spans become spaces unless
     ``code`` is true.
     """
     front = FRONT_MATTER.match(text)
@@ -295,7 +289,7 @@ class Heading:
 
 @dataclass(frozen=True)
 class Metadata:
-    """One ``Fails:``, ``Evidence:`` or ``Replaces:`` entry of a card.
+    """One ``Fails:`` or ``Evidence:`` entry of a card.
 
     An entry may wrap; ``line`` and ``end`` are its first and last lines.
     """
@@ -351,22 +345,6 @@ class Card:
     def evidence(self):
         return self.names("Evidence")
 
-    @property
-    def replaces(self):
-        return self.names("Replaces")
-
-
-@dataclass(frozen=True)
-class Requirement:
-    """A legacy ``**REQ-NNNN.**`` block, defined until its contract converts."""
-
-    id: str
-    file: str
-    line: int
-    anchor: str | None
-    section: str | None
-    text: str
-
 
 @dataclass(frozen=True)
 class RuleFile:
@@ -376,17 +354,7 @@ class RuleFile:
     front_matter: str | None
     headings: tuple[Heading, ...]
     cards: tuple[Card, ...]
-    requirements: tuple[Requirement, ...]
     stray_headings: tuple[Heading, ...]
-
-    @property
-    def kind(self):
-        """``cards``, ``legacy``, ``mixed`` or ``empty``."""
-        if self.cards and self.requirements:
-            return "mixed"
-        if self.cards:
-            return "cards"
-        return "legacy" if self.requirements else "empty"
 
 
 @dataclass(frozen=True)
@@ -509,7 +477,7 @@ def _parse_card(path, raw, masked, heading_index, end, topic):
 
 
 def parse_file(path, text):
-    """Parse one rule file's cards and legacy requirement blocks."""
+    """Parse one rule file's cards."""
     raw = text.splitlines()
     masked = prose_lines(text, code=True)
     front = FRONT_MATTER.match(text)
@@ -546,38 +514,6 @@ def parse_file(path, text):
         for item in headings
         if item.level == 3 and not CARD_HEADING.match(masked[item.line - 1])
     )
-    markers = [
-        index for index, line in enumerate(masked) if LEGACY_DEFINITION.match(line)
-    ]
-    requirements = []
-    for position, index in enumerate(markers):
-        anchor, anchor_index = _previous_anchor(masked, index)
-        stops = [line for line in (item.line - 1 for item in headings) if line > index]
-        if position + 1 < len(markers):
-            following = markers[position + 1]
-            _, following_anchor = _previous_anchor(masked, following)
-            stops.append(following if following_anchor is None else following_anchor)
-        end = min(stops, default=len(raw))
-        marker = LEGACY_DEFINITION.match(masked[index])
-        body = [raw[index][marker.end() :].strip(), *raw[index + 1 : end]]
-        section = next(
-            (
-                item.text
-                for item in reversed(headings)
-                if item.level == 2 and item.line - 1 < index
-            ),
-            None,
-        )
-        requirements.append(
-            Requirement(
-                id=marker["id"],
-                file=path,
-                line=index + 1,
-                anchor=anchor,
-                section=section,
-                text="\n".join(body).strip(),
-            )
-        )
     return RuleFile(
         path=path,
         text=text,
@@ -585,7 +521,6 @@ def parse_file(path, text):
         front_matter=front[0] if front else None,
         headings=tuple(headings),
         cards=tuple(cards),
-        requirements=tuple(requirements),
         stray_headings=stray_headings,
     )
 
@@ -692,42 +627,23 @@ class RuleSet:
             self.listing, self.listing_problems = parse_listing(readme)
             self.principles = parse_principles(readme)
         self.cards = {}
-        self.requirements = {}
-        self.replaced = {}
         for rule_file in files.values():
             for card in rule_file.cards:
                 self.cards.setdefault(card.id, card)
-            for requirement in rule_file.requirements:
-                self.requirements.setdefault(requirement.id, requirement)
-        for card in self.all_cards():
-            for identifier in card.replaces:
-                self.replaced.setdefault(identifier, card)
         declared = {row.prefix for row in self.listing or ()}
         declared |= {card.prefix for card in self.all_cards()}
         self.prefixes = frozenset(
-            prefix
-            for prefix in declared
-            if re.fullmatch(r"[A-Z]+", prefix) and prefix != LEGACY_PREFIX
+            prefix for prefix in declared if re.fullmatch(r"[A-Z]+", prefix)
         )
-        alternatives = [LEGACY_ID]
-        if self.prefixes:
-            names = "|".join(sorted(self.prefixes, key=lambda item: (-len(item), item)))
-            alternatives.append(rf"(?:{names})-\d+")
-        pattern = "|".join(alternatives)
-        self.citation = re.compile(rf"\b(?:{pattern})\b")
-        self.identifier = re.compile(rf"(?:{pattern})")
+        names = "|".join(sorted(self.prefixes, key=lambda item: (-len(item), item)))
+        # Without a prefix no text cites a rule: the pattern never matches.
+        pattern = rf"(?:{names})-\d+" if names else r"(?!)"
+        self.citation = re.compile(rf"\b{pattern}\b")
+        self.identifier = re.compile(pattern)
 
     def all_cards(self):
         """Every card in file order, repeated IDs included."""
         return [card for item in self.files.values() for card in item.cards]
-
-    def all_requirements(self):
-        """Every legacy block in file order, repeated IDs included."""
-        return [
-            requirement
-            for item in self.files.values()
-            for requirement in item.requirements
-        ]
 
     def ordered_files(self):
         """Rule files in index order, then any unlisted file by path."""
@@ -737,21 +653,17 @@ class RuleSet:
         ]
 
     def identifiers(self):
-        """Every ID a citation may name: legacy, card and replaced IDs."""
-        return set(self.requirements) | set(self.cards) | set(self.replaced)
+        """Every ID a citation may name: the card IDs."""
+        return set(self.cards)
 
     def resolve(self, identifier):
-        """The card or legacy requirement an ID names, through ``Replaces``."""
-        return (
-            self.requirements.get(identifier)
-            or self.cards.get(identifier)
-            or self.replaced.get(identifier)
-        )
+        """The card an ID names, or None."""
+        return self.cards.get(identifier)
 
     def location(self, identifier):
         """The rules-relative file and anchor that define an ID, or None."""
-        rule = self.resolve(identifier)
-        return None if rule is None else (rule.file, rule.id.lower())
+        card = self.resolve(identifier)
+        return None if card is None else (card.file, card.id.lower())
 
     def citations(self, text):
         """Yield ``(line, column, id)`` for every rule ID cited in a text."""

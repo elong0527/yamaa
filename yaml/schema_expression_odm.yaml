@@ -1,21 +1,21 @@
 version: "1.0"
 
-# See REQ-1265.
+# See NAME-7.
 
 expressions:
-    odm: # See REQ-1265.
+    odm: # See NAME-7.
         type: [odm_item, odm_class]
         description: One collected item read from the row's ODM scope; a bare string is the item (NAME-7).
 
 odm_item:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*\.[!-~]+$'
-    description: See REQ-1265.
+    description: See NAME-7.
 
 odm_oid:
     type: str
     pattern: '^[!-~]+$'
-    description: See REQ-1271.
+    description: See NAME-12.
 
 odm_class:
     - item:

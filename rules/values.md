@@ -18,7 +18,6 @@ is a rule change, never an implementation option.
 
 Fails: `value_not_permitted`.
 Evidence: `negative-ambiguous-type`, `rust/crates/yamaa-core/tests/schema_references.rs`.
-Replaces: REQ-0001, REQ-0002, REQ-0012, REQ-1150.
 
 `str` follows [VALUE-11](#value-11) to [VALUE-12](#value-12), `int` and
 `float` follow [VALUE-5](#value-5) to [VALUE-10](#value-10), and `date` and
@@ -47,7 +46,6 @@ completed derivation result, at the conversion stage of the
 
 Fails: `incompatible_input_type`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`, `rust/crates/yamaa-adapters/tests/fixtures/correlated_aggregates.json`.
-Replaces: REQ-0004, REQ-0323.
 
 <a id="value-3"></a>
 
@@ -63,7 +61,6 @@ representation or silently substitutes missing.
 
 Fails: `conversion_failed`.
 Evidence: `negative-number-below-limit`, `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.json`.
-Replaces: REQ-0009, REQ-0010, REQ-0011, REQ-0013.
 
 The source is the value's runtime type and the destination is the column's
 declared type. Identity preserves the value. A Boolean fails conversion to
@@ -134,7 +131,6 @@ consumer observes a non-finite float, and no artifact or canonical value
 spells one.
 
 Evidence: `schema-non-finite`, `rust/crates/yamaa-adapters/tests/memory_resolver_benchmarks.rs`.
-Replaces: REQ-0006, REQ-0007, REQ-0008, REQ-1149.
 
 The boundaries are exactly these:
 
@@ -180,7 +176,6 @@ written in an expression or as any other runtime literal. An `int` result of
 
 Fails: `integer_overflow`.
 Evidence: `negative-integer-overflow`, `rust/crates/yamaa-adapters/tests/fixtures/integer_literal_overflow.json`, `rust/crates/yamaa-core/tests/fixtures/arithmetic.tsv`.
-Replaces: REQ-0014, REQ-0434.
 
 An out-of-range literal never introduces an arbitrary-width integer value.
 Runtime literals include derivation and replacement literals,
@@ -205,7 +200,6 @@ a conversion failure under [VALUE-3](#value-3).
 
 Fails: `conversion_failed`.
 Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `negative-source-na-age`.
-Replaces: REQ-0015, REQ-0020.
 
 <a id="value-7"></a>
 
@@ -220,7 +214,6 @@ before column conversion.
 
 Fails: `conversion_failed`.
 Evidence: `negative-conversion-fractional`, `rust/crates/yamaa-core/tests/fixtures/numeric_lifecycle.tsv`.
-Replaces: REQ-0016, REQ-0021.
 
 <a id="value-8"></a>
 
@@ -234,7 +227,6 @@ written in positional notation without an exponent, and an integral `float`
 omits the trailing `.0`.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
-Replaces: REQ-0017, REQ-0018.
 
 Shortest chooses the significant digits, not the character count. Artifact
 serialization under the [CSV profile](reference/csv.md) uses the same canonical
@@ -252,7 +244,6 @@ comparison rounds a temporary copy the same way; neither changes a value the
 specification uses.
 
 Evidence: `adam-adlb-reported-precision`, `rust/crates/yamaa-core/tests/source_csv_precision.rs::ties_and_near_ties_round_away_from_zero_with_independent_text`.
-Replaces: REQ-0019, REQ-0435.
 
 Floating-point results are not exact decimals: `POWER(x, 2)` and `x * x` may
 differ in the last place, and a specification cannot round the difference
@@ -271,7 +262,6 @@ integer division. `SQRT`, `POWER`, `EXP`, `LN`, `CEIL`, `FLOOR` and `TRUNC`
 return `float`.
 
 Evidence: `schema-numeric-functions`, `rust/crates/yamaa-core/tests/fixtures/numeric_math.tsv`, `rust/crates/yamaa-core/tests/fixtures/numeric_integral.tsv`, `rust/crates/yamaa-adapters/tests/intermediate_result_kinds.rs::nullif_widens_its_int_result_when_the_float_argument_is_missing`.
-Replaces: REQ-0420, REQ-0421, REQ-0422, REQ-0423, REQ-0424.
 
 The quotient is the binary64 quotient of the widened operands, including when
 both operands are `int`. Above `2^53` it need not equal the exact integer
@@ -313,7 +303,6 @@ point fails with `invalid_text` at its entry boundary.
 
 Fails: `invalid_text`.
 Evidence: `negative-source-bad-encoding`, `rust/crates/yamaa-core/tests/support/diagnostic/yaml_source.rs`.
-Replaces: REQ-0022, REQ-0023, REQ-0029, REQ-0030.
 
 Surrogate code points are invalid. Ill-formed encoded values are rejected,
 never replaced, skipped or decoded by a machine default, and no host default
@@ -332,7 +321,6 @@ positions; identity comparisons perform no casing, folding, normalization,
 locale tailoring or compatibility mapping.
 
 Evidence: `schema-text-functions`, `yaml/conformance/regex.yaml`.
-Replaces: REQ-0024, REQ-0025, REQ-0027, REQ-0028.
 
 Canonically equivalent sequences remain distinct. The language has no
 normalization operation; a specification that needs normalized data receives
@@ -358,7 +346,6 @@ value. Every combination of fields in the ranges below names one day or civil
 moment, and every day or moment in range has one combination.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
-Replaces: REQ-0539, REQ-0540, REQ-0541, REQ-0542, REQ-0543, REQ-0559.
 
 | Field | Range | In `date` | In `datetime` |
 |---|---|---|---|
@@ -388,7 +375,6 @@ value, under [TIME-14](temporal.md#time-14). A study that collects sub-second
 times keeps the collected text in a `str` column.
 
 Evidence: `negative-datetime-zones`, `adam-adae-post-dose-window`.
-Replaces: REQ-0555, REQ-0560, REQ-0561, REQ-0563, REQ-0564, REQ-0565, REQ-0612.
 
 Whole seconds are exact in both hosts, which fixes how a host represents a
 temporal value:
@@ -417,7 +403,6 @@ temporal column, it is a conversion failure under [VALUE-3](#value-3).
 
 Fails: `conversion_failed`.
 Evidence: `negative-date-incomplete`, `negative-datetime-zones`, `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
-Replaces: REQ-0549, REQ-0550, REQ-0551, REQ-0552, REQ-0553, REQ-0554, REQ-0599, REQ-0600, REQ-0601, REQ-0602, REQ-0603.
 
 ```text
 date     := YYYY "-" MM "-" DD
@@ -475,7 +460,6 @@ Where a value came from fixes its collected precision, and every field finer
 than it was supplied.
 
 Evidence: `schema-birth-date`, `adam-adae-partial-dates`, `adam-adae-partial-times`, `schema-impute-fallback`, `schema-imputation-flags`.
-Replaces: REQ-0544, REQ-0545, REQ-0546, REQ-0547, REQ-0548.
 
 | Origin | Collected precision |
 |---|---|
@@ -519,7 +503,6 @@ project setting. Canonical text is not the collected text, and it carries no
 collected precision.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`, `rust/crates/yamaa-adapters/tests/table_arrow_table.rs`.
-Replaces: REQ-0003, REQ-0566, REQ-0567, REQ-0568, REQ-0569, REQ-0570.
 
 A `str` column derived from a temporal value and the artifact's rendering of
 that value therefore never disagree; [VALUE-8](#value-8) fixes the same
@@ -560,7 +543,6 @@ explicit units and input contracts.
 
 Fails: `conversion_failed`.
 Evidence: `rust/crates/yamaa-core/tests/fixtures/conversion.tsv`.
-Replaces: REQ-0576, REQ-0577, REQ-0604.
 
 ## Comparison and order
 
@@ -578,7 +560,6 @@ an operand.
 
 Fails: `incompatible_input_type`, `incomparable_sources`.
 Evidence: `negative-greatest-mixed`, `negative-least-mixed`, `rust/crates/yamaa-adapters/tests/fixtures/intermediate_key_reference.json`.
-Replaces: REQ-0005, REQ-0324, REQ-0605.
 
 So `9007199254740993` and `9007199254740992.0` are unequal everywhere.
 Collected temporal precision changes neither a value's
@@ -608,7 +589,6 @@ depend on normalization, case folding, locale, collation, character names,
 script properties, encoded bytes or UTF-16 code units.
 
 Evidence: `schema-text-functions`, `schema-ordering`.
-Replaces: REQ-0026.
 
 Predicates, ordering terms, `greatest`, `least` and aggregate `MIN` and `MAX`
 use this order. Their owning operations define missing placement or empty
@@ -626,7 +606,6 @@ part in a comparison: a value completed from a year and a month compares as
 the day it names.
 
 Evidence: `adam-adsl-alive-date`, `adam-adcm-end-date-bound`, `sdtm-dm-dates`.
-Replaces: REQ-0571, REQ-0572, REQ-0573, REQ-0574.
 
 No value carries a zone, so a comparison cannot be between a civil time and an
 instant. A completed date names a day; a value completed from a year and a
@@ -657,7 +636,6 @@ order. A term is a bare variable or a mapping declaring `variable`,
 under either direction.
 
 Evidence: `schema-ordering`, `adam-adae-review-order`, `adam-adae-serious-sequence`, `schema-baseline-tie-break`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::windows_and_presentation_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::source_and_lookup_selection_sort_an_undeclared_missing_value_lowest`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
-Replaces: REQ-0297, REQ-0298, REQ-0299, REQ-0300, REQ-0301, REQ-0302, REQ-0312, REQ-1102, REQ-1103.
 
 The bare form is a [Schema language](reference/schema-language.md) shorthand
 union, whichever operation declares the list, and a mapping holding only
@@ -701,4 +679,3 @@ runs over the same input. A specification may declare an additional term to
 break a tie.
 
 Evidence: `schema-ordering`, `rust/crates/yamaa-adapters/tests/execution_value_semantics.rs::output_order_sorts_every_type_places_missing_by_nulls_and_keeps_ties_in_construction_order`.
-Replaces: REQ-0225.

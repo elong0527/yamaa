@@ -24,7 +24,7 @@ pub enum Resource {
     Size,
 }
 
-/// Invalid syntax owns REQ-0827; a resource refusal never masquerades as it.
+/// Invalid syntax owns TEXT-6; a resource refusal never masquerades as it.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum CompileError {
     #[error("regex invalid: byte={byte:?}, reason={reason:?}")]

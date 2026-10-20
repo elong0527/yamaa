@@ -1,16 +1,16 @@
 version: "1.0"
 
 expressions:
-    str_pad: # See REQ-1261.
+    str_pad: # See TEXT-2.
         - source:
             type: variable
             required: true
-            description: See REQ-1261.
+            description: See TEXT-2.
         - width:
             type: int
             required: true
-            description: See REQ-1261.
-    str_extract: # See REQ-1111.
+            description: See TEXT-2.
+    str_extract: # See TEXT-10.
         - source:
             type: variable
             required: true
@@ -29,7 +29,7 @@ expressions:
         - no_match:
             type: substitute_value
             description: Value returned when the pattern does not match the source (TEXT-10).
-    str_replace: # See REQ-1322.
+    str_replace: # See TEXT-11.
         - source:
             type: variable
             required: true
@@ -45,10 +45,10 @@ expressions:
         - missing:
             type: substitute_value
             description: Value returned when the source is missing; without it, a missing source gives missing (TEXT-11).
-    str_template: # See REQ-1113.
+    str_template: # See TEXT-4.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling (TEXT-4).
-    str_case: # See REQ-1114.
+    str_case: # See TEXT-5.
         - source:
             type: variable
             required: true

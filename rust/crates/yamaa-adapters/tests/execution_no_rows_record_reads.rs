@@ -90,7 +90,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 const SOURCE: &str = "ID,VAL,X\n1,3,a\n1,5,\n2,4,c\n";
@@ -210,7 +210,7 @@ fn a_key_that_reads_other_records_fails_before_data() {
         vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "key_dependency",
-            "requirement": "COLUMN-7",
+            "rule": "COLUMN-7",
             "spec_paths": [format!("columns.{column}.derivation.{operation}")],
             "context": {"column": column, "operation": operation}
         })]
@@ -249,7 +249,7 @@ fn a_key_that_reads_other_records_fails_before_data() {
         Err(vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "key_dependency",
-            "requirement": "COLUMN-7",
+            "rule": "COLUMN-7",
             "spec_paths": ["columns.SEX.derivation.case[0].then.odm"],
             "context": {"column": "SEX", "operation": "odm"}
         })])

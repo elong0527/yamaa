@@ -2,7 +2,7 @@ phase: validation
 condition: ungrouped_driver_field
 spec_paths:
   - intermediates[0].key
-requirement: REQ-0067
+rule: ROW-5
 context:
   identifier: EX.SITEID
   intermediate: RANDOMIZED

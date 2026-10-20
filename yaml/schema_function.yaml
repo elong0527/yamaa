@@ -1,7 +1,7 @@
 version: "1.0"
 
 expressions:
-    function: # See REQ-1085.
+    function: # See FUNC-4.
         - name:
             type: identifier
             required: true

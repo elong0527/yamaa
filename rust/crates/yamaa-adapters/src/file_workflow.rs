@@ -380,7 +380,7 @@ mod root_read_tests {
         let definition =
             yamaa_core::diagnostic::ConditionCode::ProjectEnvironmentMissing.definition();
         assert_eq!(issues[0].condition(), definition.condition);
-        assert_eq!(issues[0].requirement(), definition.requirement);
+        assert_eq!(issues[0].rule(), definition.rule);
         assert_eq!(
             yamaa_core::json::Value::Object(issues[0].context.clone()),
             crate::json!({"cause":"unreadable", "path":path})
