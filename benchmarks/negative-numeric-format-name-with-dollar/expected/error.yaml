@@ -1,0 +1,9 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - codelists[0].codelists[0].format_name
+rule: CT-12
+context:
+  codelist: AGEGR1N
+  value: $AGEGRN
+  data_type: integer

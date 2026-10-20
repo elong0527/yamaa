@@ -1,0 +1,17 @@
+schema_version: '1.0'
+codelists:
+  - codelists:
+      - id: AGEGR1N
+        name: Pooled Age Group 1 (N)
+        data_type: integer
+        # The age group codes are numbers, so the format a reader applies to
+        # them is a numeric format; this name begins with the dollar sign that
+        # marks a character format.
+        format_name: $AGEGRN
+        items:
+          - {value: 1, decode: '<65'}
+          - {value: 2, decode: '65-80'}
+          - {value: 3, decode: '>80'}
+adam:
+  specs:
+  - spec.yaml

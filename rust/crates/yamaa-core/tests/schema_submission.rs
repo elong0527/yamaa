@@ -2251,12 +2251,35 @@ mod schema {
                 "internal column" => vec![entry("GLUC", "LBNAM", &["GLUC"], "Vendor"), creat],
                 "numeric column" => vec![entry("GLUC", "LBSEQ", &["1"], "Vendor"), creat],
                 "own column" => vec![entry("GLUC", "LBORRESU", &["mg/dL"], "Vendor"), creat],
-                "codelist misspelt" => vec![
+                "codelist misspelt" | "entry codelist only" => vec![
                     entry("GLUC", "LBTESTCD", &["GLUC", "GLUCOSE"], "Vendor"),
+                    creat,
+                ],
+                // UGLUC and UCREAT are urine test codes, and only UGLUC is
+                // an item of the urine list.
+                "codelist union" => vec![
+                    entry("GLUC", "LBTESTCD", &["GLUC", "UGLUC"], "Vendor"),
+                    creat,
+                ],
+                "codelist union misspelt" => vec![
+                    entry(
+                        "GLUC",
+                        "LBTESTCD",
+                        &["GLUCOSE", "GLUC", "UGLUC", "UCREAT"],
+                        "Vendor",
+                    ),
                     creat,
                 ],
                 _ => vec![gluc, creat],
             }
+        }
+        /// Whether the test codes declare an entry of their own, binding the
+        /// project's urine list on urine rows.
+        fn urine_entry(case: &str) -> bool {
+            matches!(
+                case,
+                "codelist union" | "codelist union misspelt" | "entry codelist only"
+            )
         }
         fn specification(case: &str) -> Document {
             let mut a = Arena::default();
@@ -2316,6 +2339,15 @@ mod schema {
                 if name == "LBTESTCD" && case.starts_with("codelist") {
                     let codelist = a.text("LBTESTCD");
                     metadata.push(("codelist", codelist));
+                }
+                if name == "LBTESTCD" && urine_entry(case) {
+                    let id = a.text("URINE");
+                    let specimens = a.strings(&["URINE"]);
+                    let clause = a.map(vec![("LBSPEC", specimens)]);
+                    let codelist = a.text("URINE");
+                    let entry = a.map(vec![("id", id), ("where", clause), ("codelist", codelist)]);
+                    let entries = a.node(N::Sequence(vec![entry]));
+                    metadata.push(("value_level", entries));
                 }
                 if name == "LBORRESU" {
                     let mut entries = Vec::new();
@@ -2630,13 +2662,15 @@ mod schema {
             // admitted; the build fails a row both select.
             assert!(compose(&specification("conjunction")).is_ok());
         }
-        /// SUB-12: composition refuses a where value that the where column's
-        /// codelists do not admit at that where column, as the domain build
-        /// does; an external dictionary admits every value.
+        /// SUB-12: composition refuses where values that the where column's
+        /// codelists do not admit at that where column, naming them in
+        /// declared order, as the domain build does. Those codelists are its
+        /// own and those its own entries bind; an external dictionary, or a
+        /// where column without a codelist of its own, admits every value.
         #[test]
         fn where_values_outside_the_where_columns_codelists_fail_composition() {
             use crate::support::roots as rt;
-            use yamaa_core::{ast::CodelistType, value::Value};
+            use yamaa_core::{ast::CodelistType, json::Value as J, value::Value};
             let catalogue = |external: bool| {
                 let item = |code: &str| rt::Item {
                     value: Value::Str(code.into()),
@@ -2645,52 +2679,76 @@ mod schema {
                     alias: None,
                     extended: false,
                 };
+                let list = |id: &str, name: &str| rt::Codelist {
+                    id: id.into(),
+                    name: name.into(),
+                    data_type: CodelistType::Text,
+                    extensible: false,
+                    alias: None,
+                    format_name: None,
+                    items: None,
+                    external: None,
+                };
+                let mut tests = list("LBTESTCD", "Laboratory test codes");
+                if external {
+                    tests.external = Some(rt::External {
+                        dictionary: "LOINC".into(),
+                        version: "2.77".into(),
+                        href: None,
+                    });
+                } else {
+                    tests.items = Some(vec![item("GLUC"), item("CREAT"), item("ALB")]);
+                }
+                let mut urine = list("URINE", "Urine test codes");
+                urine.items = Some(vec![item("UGLUC")]);
                 Catalogue::admit(vec![rt::Source {
                     standard: None,
-                    codelists: vec![rt::Codelist {
-                        id: "LBTESTCD".into(),
-                        name: "Laboratory test codes".into(),
-                        data_type: CodelistType::Text,
-                        extensible: false,
-                        alias: None,
-                        format_name: None,
-                        items: (!external).then(|| vec![item("GLUC"), item("CREAT"), item("ALB")]),
-                        external: external.then(|| rt::External {
-                            dictionary: "LOINC".into(),
-                            version: "2.77".into(),
-                            href: None,
-                        }),
-                    }],
+                    codelists: vec![tests, urine],
                 }
                 .root()])
                 .unwrap()
             };
-            assert!(compose_with(&specification("codelist"), &catalogue(false)).is_ok());
-            let findings =
-                compose_with(&specification("codelist misspelt"), &catalogue(false)).unwrap_err();
-            assert_eq!(findings.len(), 1, "{findings:?}");
-            let finding = &findings[0];
-            assert_eq!(
-                (finding.definition().condition, finding.definition().rule),
-                ("value_level_where_invalid", Some("SUB-12"))
-            );
-            assert_eq!(
-                finding.path,
-                "sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"
-            );
-            for (key, value) in [
-                ("column", "LBORRESU"),
-                ("entry", "GLUC"),
-                ("reason", "not_in_codelist"),
-                ("where_column", "LBTESTCD"),
-            ] {
+            let refused = |case: &str, values: &[&str]| {
+                let findings = compose_with(&specification(case), &catalogue(false)).unwrap_err();
+                assert_eq!(findings.len(), 1, "{case}: {findings:?}");
+                let finding = &findings[0];
                 assert_eq!(
-                    finding.context[key],
-                    yamaa_core::json::Value::String(value.into()),
-                    "{key}"
+                    (finding.definition().condition, finding.definition().rule),
+                    ("value_level_where_invalid", Some("SUB-12")),
+                    "{case}"
                 );
-            }
+                assert_eq!(
+                    finding.path,
+                    "sdtm.specs[0].columns.LBORRESU.submission.value_level.GLUC.where.LBTESTCD"
+                );
+                let text = |value: &str| J::String(value.into());
+                assert_eq!(
+                    finding.context,
+                    [
+                        ("column", text("LBORRESU")),
+                        ("detail", text("not_in_codelist")),
+                        ("entry", text("GLUC")),
+                        ("reason", text("not_in_codelist")),
+                        ("values", J::Array(values.iter().map(|v| text(v)).collect())),
+                        ("where_column", text("LBTESTCD")),
+                    ]
+                    .into_iter()
+                    .map(|(key, value)| (key.into(), value))
+                    .collect(),
+                    "{case}"
+                );
+            };
+            assert!(compose_with(&specification("codelist"), &catalogue(false)).is_ok());
+            refused("codelist misspelt", &["GLUCOSE"]);
             assert!(compose_with(&specification("codelist misspelt"), &catalogue(true)).is_ok());
+            // The urine list that an entry of the test codes binds admits
+            // UGLUC beside the test codes' own list; a value neither admits
+            // is refused, each in the order the clause lists it.
+            assert!(compose_with(&specification("codelist union"), &catalogue(false)).is_ok());
+            refused("codelist union misspelt", &["GLUCOSE", "UCREAT"]);
+            // Without a codelist of their own, the test codes' other rows hold
+            // any value, so no listed value is refused.
+            assert!(compose_with(&specification("entry codelist only"), &catalogue(false)).is_ok());
         }
         #[test]
         fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {

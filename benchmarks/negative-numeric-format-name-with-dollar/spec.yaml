@@ -1,0 +1,30 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  ADSL_RAW: input/adsl_raw.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGEGR1N]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ADSL_RAW.USUBJID
+
+  - name: AGEGR1N
+    type: int
+    label: Pooled Age Group 1 (N)
+    derivation: ADSL_RAW.AGEGR1N
+    submission:
+      codelist: AGEGR1N
+      origin:
+        type: Predecessor
+        description: ADSL_RAW.AGEGR1N

@@ -1159,9 +1159,18 @@ fn compose_values(
                     id.to_owned(),
                     vec![("entry", text(id))],
                 ),
-                values::Finding::Where { id, column, fault } => {
+                values::Finding::Where {
+                    id,
+                    column,
+                    ref fault,
+                } => {
                     let mut context = vec![("entry", text(id)), ("reason", text(fault.reason()))];
                     context.extend(column.map(|column| ("where_column", text(column))));
+                    // The refused where values, in declared order.
+                    context.extend(fault.values().map(|refused| {
+                        let refused = refused.iter().map(|value| text(value)).collect();
+                        ("values", crate::json::Value::Array(refused))
+                    }));
                     (
                         ConditionCode::SubmissionValueWhereInvalid,
                         column.map_or_else(
