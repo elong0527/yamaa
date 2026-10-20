@@ -59,11 +59,11 @@ def compact(value, *, sort_keys=True):
     )
 
 
-def issue(condition, requirement, spec_paths, context, phase="validation"):
+def issue(condition, rule, spec_paths, context, phase="validation"):
     return {
         "phase": phase,
         "condition": condition,
-        "requirement": requirement,
+        "rule": rule,
         "spec_paths": spec_paths,
         "context": compact(context),
         "source_span": None,
@@ -390,7 +390,7 @@ class PublicEnvironment(unittest.TestCase):
             )
             rows = spec.check().issues.to_dicts()
             self.assertEqual(
-                [(r["condition"], r["requirement"], r["spec_paths"]) for r in rows],
+                [(r["condition"], r["rule"], r["spec_paths"]) for r in rows],
                 [("redundant_field_type", "INPUT-6", ["input.P.types.ID"])],
             )
         for name in tuple(TRUTH["unread_graph_files"]):
@@ -642,7 +642,7 @@ class PublicEnvironment(unittest.TestCase):
             self.assertEqual(
                 failed.issues["condition"].to_list(), ["invalid_field_type"]
             )
-            self.assertEqual(failed.issues["requirement"].to_list(), ["CSV-6"])
+            self.assertEqual(failed.issues["rule"].to_list(), ["CSV-6"])
             self.assertEqual(
                 failed.issues["spec_paths"].to_list(), [["output.decimals"]]
             )
@@ -657,7 +657,7 @@ class PublicEnvironment(unittest.TestCase):
     def test_csv_precision_validation_and_prior_failure_preserve_public_save_gates(
         self,
     ):
-        for precision, output, condition, requirement, context in (
+        for precision, output, condition, rule, context in (
             (
                 "-9223372036854775809",
                 "rounded.csv",
@@ -679,7 +679,7 @@ class PublicEnvironment(unittest.TestCase):
             result = self.precision_study(precision, output).run()
             self.assertIsNone(result.output)
             self.assertEqual(result.issues["condition"].to_list(), [condition])
-            self.assertEqual(result.issues["requirement"].to_list(), [requirement])
+            self.assertEqual(result.issues["rule"].to_list(), [rule])
             self.assertEqual(json.loads(result.issues["context"][0]), context)
             self.assertEqual(self.report(result)["diagnostics"][0]["context"], context)
             with self.assertRaises(yamaa.Error):
@@ -927,7 +927,7 @@ class PublicEnvironment(unittest.TestCase):
             host, "verify_versions", side_effect=AssertionError("activation")
         ):
             rows = project.spec("TEST").check().issues.to_dicts()
-        self.assertEqual({row["requirement"] for row in rows}, {"FUNC-5", "CT-1"})
+        self.assertEqual({row["rule"] for row in rows}, {"FUNC-5", "CT-1"})
 
     def test_approved_math_is_identical_in_root_row_and_nested_case_compute(self):
         expression = {"compute": {"expr": "EXP(0) + LN(1) + POWER(2, 3)"}}
@@ -1123,7 +1123,7 @@ class PublicEnvironment(unittest.TestCase):
         with no_activation():
             (row,) = project.check().issues.to_dicts()
         self.assertEqual(
-            (row["condition"], row["requirement"], row["spec_paths"]),
+            (row["condition"], row["rule"], row["spec_paths"]),
             ("unknown_field", "SCHEMA-13", ["language"]),
         )
         self.assertEqual(
@@ -1209,8 +1209,7 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
             issues = project.spec("TEST").check().issues.to_dicts()
         self.assertTrue(
             any(
-                row["condition"] == "invalid_derive_step"
-                and row["requirement"] == "LOOKUP-22"
+                row["condition"] == "invalid_derive_step" and row["rule"] == "LOOKUP-22"
                 for row in issues
             ),
             issues,

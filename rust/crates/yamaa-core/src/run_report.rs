@@ -249,7 +249,7 @@ pub fn handler_target(path: &str) -> Option<&str> {
 /// The registered condition a counted handler answers, decided by its name and
 /// the operation that declares it (the path segment before the name): the
 /// condition that operation raises when the handler is not declared. The
-/// handler's citation is that condition's registered requirement. A handler
+/// handler's citation is that condition's registered rule. A handler
 /// name or operation outside the counted vocabulary has none.
 pub fn handler_condition(path: &str, handler: &str) -> Option<ConditionCode> {
     use crate::numeric_lifecycle::HandlerKind as H;
@@ -466,8 +466,7 @@ pub fn prepare(facts: &Facts) -> Result<Vec<Vec<PreparedCell>>, Error> {
             Some(&handler.name),
             None,
             handler_target(&handler.path),
-            handler_condition(&handler.path, &handler.name)
-                .and_then(|code| code.definition().requirement),
+            handler_condition(&handler.path, &handler.name).and_then(|code| code.definition().rule),
             None,
             None,
             None,

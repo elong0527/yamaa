@@ -138,8 +138,8 @@ impl Finding {
         }
     }
     /// Compatibility view of the original optional scalar citation.
-    pub fn requirement(&self) -> Option<&'static str> {
-        self.scalar_rule().map(ScalarSubmissionRule::requirement)
+    pub fn rule(&self) -> Option<&'static str> {
+        self.scalar_rule().map(ScalarSubmissionRule::rule)
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

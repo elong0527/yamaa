@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_expression
 spec_paths:
   - columns.ELDFL.derivation.flag.condition
-requirement: FORMULA-1
+rule: FORMULA-1
 context:
   predicate: "AGE >> 65"
   position: 5

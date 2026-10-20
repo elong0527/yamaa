@@ -645,7 +645,7 @@
             "identifier": "ID"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -665,7 +665,7 @@
                 "identifier": "ID"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-8",
+              "rule": "LOOKUP-8",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -814,7 +814,7 @@
             "identifier": "OTHER.F"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -834,7 +834,7 @@
                 "identifier": "OTHER.F"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-8",
+              "rule": "LOOKUP-8",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -982,7 +982,7 @@
             "identifier": "SRC.ABSENT"
           },
           "phase": "validation",
-          "requirement": "NAME-3",
+          "rule": "NAME-3",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -1001,7 +1001,7 @@
                 "identifier": "SRC.ABSENT"
               },
               "phase": "validation",
-              "requirement": "NAME-3",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -1150,7 +1150,7 @@
             "predicate": "SRC.F ="
           },
           "phase": "validation",
-          "requirement": "FORMULA-1",
+          "rule": "FORMULA-1",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -1170,7 +1170,7 @@
                 "predicate": "SRC.F ="
               },
               "phase": "validation",
-              "requirement": "FORMULA-1",
+              "rule": "FORMULA-1",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -1318,7 +1318,7 @@
             "identifier": "ID"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -1337,7 +1337,7 @@
                 "identifier": "ID"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-8",
+              "rule": "LOOKUP-8",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -1485,7 +1485,7 @@
             "identifier": "ID"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -1504,7 +1504,7 @@
                 "identifier": "ID"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-8",
+              "rule": "LOOKUP-8",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -2072,7 +2072,7 @@
             "identifier": "SRC.ABSENT"
           },
           "phase": "validation",
-          "requirement": "NAME-3",
+          "rule": "NAME-3",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -2091,7 +2091,7 @@
                 "identifier": "SRC.ABSENT"
               },
               "phase": "validation",
-              "requirement": "NAME-3",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]
@@ -2239,7 +2239,7 @@
             "identifier": "SRC.ABSENT"
           },
           "phase": "validation",
-          "requirement": "NAME-3",
+          "rule": "NAME-3",
           "spec_paths": [
             "columns.V.derivation.source.filter"
           ]
@@ -2258,7 +2258,7 @@
                 "identifier": "SRC.ABSENT"
               },
               "phase": "validation",
-              "requirement": "NAME-3",
+              "rule": "NAME-3",
               "spec_paths": [
                 "columns.V.derivation.source.filter"
               ]

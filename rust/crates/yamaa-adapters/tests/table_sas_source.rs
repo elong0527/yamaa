@@ -992,7 +992,7 @@ mod table {
                 [yamaa_adapters::json!({
                     "phase": "ingest",
                     "condition": "source_sas_invalid",
-                    "requirement": "SAS-7",
+                    "rule": "SAS-7",
                     "spec_paths": ["input.SRC.path"],
                     "context": {
                         "dataset": "SRC",
@@ -1840,7 +1840,7 @@ mod table {
         #[cfg(feature = "parquet")]
         fn independently_authored_parquet_schemas_keep_exact_spelling_and_raw_value() {
             let declaration = source("SRC", "held.parquet");
-            for (fixture, condition, requirement, extra) in [
+            for (fixture, condition, rule, extra) in [
                 ("", "source_parquet_invalid", "PARQUET-5", json!({})),
                 (
                     "mixed-empty",
@@ -1893,7 +1893,7 @@ mod table {
                     &error,
                     &declaration,
                     &json!([{"phase":"ingest","condition":condition,
-            "requirement":requirement,"spec_paths":["input.SRC.path"],"context":context}]),
+            "rule":rule,"spec_paths":["input.SRC.path"],"context":context}]),
                 );
             }
         }

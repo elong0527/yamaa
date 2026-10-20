@@ -7,9 +7,9 @@ condition its card states. A registered condition needs no core cause or
 separate disposition record; the vocabulary and the core registry are the only
 sources. These are static ownership checks, not a claim that every registered
 condition has executable release coverage.
-Condition and requirement literals outside the canonical registry, the generated
-shipped schema and private unit tests are refused. A requirement is a card ID,
-read from the shared rules model.
+Condition and rule literals outside the canonical registry, the generated
+shipped schema and private unit tests are refused. A rule is a card ID, read
+from the shared rules model.
 A condition written as a literal must also name a registered condition: the
 value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
@@ -99,7 +99,7 @@ SPACE = re.compile(r"\s*")
 
 
 def cause_pattern(rules) -> re.Pattern:
-    """One registry cause; its requirement is a card ID, or None."""
+    """One registry cause; its rule is a card ID, or None."""
     return re.compile(
         r'\s*(\w+) => \("([a-z_]+)", "([a-z_]+)", '
         rf'(Some\("(?:{rules.identifier.pattern})"\)|None)\),\s*'
@@ -601,20 +601,20 @@ def embedded_json_strings(source: str) -> list[str]:
 
 
 def diagnostic_literals(
-    source: str, registered: dict[str, set[str]], requirement: re.Pattern
+    source: str, registered: dict[str, set[str]], rule: re.Pattern
 ) -> dict[int, list[str]]:
     """Keep exact Rust strings or JSON values with diagnostic spellings."""
     found = {}
     for line, literal in rust_literals(source):
         candidates = (
             [literal]
-            if requirement.fullmatch(literal) or literal in registered
+            if rule.fullmatch(literal) or literal in registered
             else embedded_json_strings(literal)
         )
         selected = [
             value
             for value in candidates
-            if requirement.fullmatch(value) or value in registered
+            if rule.fullmatch(value) or value in registered
         ]
         if selected:
             found.setdefault(line, []).extend(selected)
@@ -714,7 +714,7 @@ def citation_error(name: str, condition: str, cited: str, rules) -> str | None:
     """Why a cause's citation names no card stating its condition, or None.
 
     The cited card's Fails line must name the condition. An ID that names
-    nothing is reported where literals are checked, as an undefined requirement.
+    nothing is reported where literals are checked, as an undefined rule.
     """
     card = rules.cards.get(cited)
     if card is None or condition in card.fails:
@@ -753,21 +753,21 @@ def registry_errors(
             )
             continue
         count += 1
-        name, phase, condition, requirement = cause.groups()
-        if requirement == "None":
+        name, phase, condition, rule = cause.groups()
+        if rule == "None":
             used_nulls.add((condition, phase))
             if (condition, phase) not in nullable:
                 errors.append(
-                    f"core diagnostic registry:{name}: null requirement is not "
+                    f"core diagnostic registry:{name}: null rule is not "
                     f"normatively permitted for {condition} at {phase}"
                 )
         elif (condition, phase) in nullable:
             errors.append(
                 f"core diagnostic registry:{name}: implementation condition "
-                f"{condition} at {phase} must retain a null requirement"
+                f"{condition} at {phase} must retain a null rule"
             )
         else:
-            cited = requirement.removeprefix('Some("').removesuffix('")')
+            cited = rule.removeprefix('Some("').removesuffix('")')
             error = citation_error(name, condition, cited, rules)
             if error is not None:
                 errors.append(error)
@@ -804,21 +804,17 @@ def violations(root: Path) -> list[str]:
         registry_errors(root, registered, nullable, cause_pattern(rules), rules)
     )
     errors.extend(rule_vocabulary_errors(root, registered))
-    requirement = rules.identifier
+    rule = rules.identifier
     test_files = test_module_files(sources)
     for path in sources:
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
         source = path.read_text(encoding="utf-8")
         test_only = private_unit_test_source(root, Path(relative))
-        for number, literals in diagnostic_literals(
-            source, registered, requirement
-        ).items():
+        for number, literals in diagnostic_literals(source, registered, rule).items():
             for identifier in literals:
-                if requirement.fullmatch(identifier) and identifier not in defined:
-                    errors.append(
-                        f"{relative}:{number}: undefined requirement {identifier}"
-                    )
+                if rule.fullmatch(identifier) and identifier not in defined:
+                    errors.append(f"{relative}:{number}: undefined rule {identifier}")
             if (
                 Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
                 or test_only

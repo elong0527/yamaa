@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.ASTTM.derivation.time_of_day.source
-requirement: TIME-20
+rule: TIME-20
 context:
   source: AE.AESTDTC
   expected: datetime

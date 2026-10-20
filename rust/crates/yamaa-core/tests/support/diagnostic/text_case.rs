@@ -21,11 +21,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let Error::Diagnostic(diagnostic) = operation.apply(ValueRef::Int(1)).unwrap_err();
     let definition = diagnostic.definition();
     assert_eq!(
-        (
-            definition.phase,
-            definition.condition,
-            definition.requirement
-        ),
+        (definition.phase, definition.condition, definition.rule),
         ("validation", "incompatible_input_type", Some("TEXT-1"))
     );
     assert_eq!(

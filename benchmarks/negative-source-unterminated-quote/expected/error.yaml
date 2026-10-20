@@ -2,7 +2,7 @@ phase: ingest
 condition: source_quote_unterminated
 spec_paths:
   - input.DM.path
-requirement: CSV-16
+rule: CSV-16
 context:
   dataset: DM
   path: input/dm.csv

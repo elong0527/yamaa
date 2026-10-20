@@ -7,8 +7,8 @@ One run reads the shared rules model (:mod:`tools.rules.model`) and checks:
 - cards: anchor, prefix, unique ID, title, statement length, the ``Fails`` and
   ``Evidence`` lines, and the verification checks the verification rules
   define;
-- every rule ID cited anywhere in the repository, and the requirement each
-  negative benchmark expects, names a card, and no retired ``REQ-NNNN`` ID is
+- every rule ID cited anywhere in the repository, and the rule each negative
+  benchmark expects, names a card, and no retired ``REQ-NNNN`` ID is
   cited outside the records that keep them;
 - relative markdown links name an existing file and anchor, and a link whose
   text is a rule ID targets that rule;
@@ -445,12 +445,12 @@ def citation_errors(root, rules):
             contract = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, yaml.YAMLError):
             continue  # The repository validator reports unreadable fixtures.
-        if not isinstance(contract, dict) or contract.get("requirement") is None:
-            continue  # Schema-phase failures may carry no requirement.
-        cited = contract["requirement"]
+        if not isinstance(contract, dict) or contract.get("rule") is None:
+            continue  # Schema-phase failures may carry no rule.
+        cited = contract["rule"]
         if not isinstance(cited, str) or rules.identifier.fullmatch(cited) is None:
             errors.append(
-                f"{path.relative_to(root).as_posix()}: requirement must be a card ID"
+                f"{path.relative_to(root).as_posix()}: rule must be a card ID"
             )
     return errors
 

@@ -10,7 +10,7 @@
         "function": "SUM"
       },
       "phase": "validation",
-      "requirement": "FORMULA-13",
+      "rule": "FORMULA-13",
       "spec_paths": [
         "columns.AVALTOT.derivation.compute.expr"
       ]
@@ -30,7 +30,7 @@
             "function": "SUM"
           },
           "phase": "validation",
-          "requirement": "FORMULA-13",
+          "rule": "FORMULA-13",
           "spec_paths": [
             "columns.AVALTOT.derivation.compute.expr"
           ]

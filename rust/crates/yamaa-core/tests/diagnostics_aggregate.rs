@@ -262,7 +262,7 @@ mod diagnostics {
                     assert_eq!(actual.character, position, "{text}");
                     let d = failure.diagnostic(Field::Predicate, "filter", text, position);
                     assert_eq!(d.definition().condition, "invalid_expression");
-                    assert_eq!(d.definition().requirement, Some("FORMULA-1"));
+                    assert_eq!(d.definition().rule, Some("FORMULA-1"));
                     assert_eq!(
                         d.context,
                         [
@@ -445,7 +445,7 @@ mod diagnostics {
             #[test]
 
             fn original_context_projection_admits_all_fields_and_retains_rich_parser_facts() {
-                for (expression, requirement, character, detail) in [
+                for (expression, rule, character, detail) in [
                     ("STR_CONTAINS(ID, '(')", "FORMULA-8", 17, "pattern_byte"),
                     ("ID = DATE '2026-02-30'", "FORMULA-1", 10, "temporal_error"),
                 ] {
@@ -473,7 +473,7 @@ mod diagnostics {
                         expression,
                         position.character,
                     );
-                    assert_eq!(finding.definition().requirement, Some(requirement));
+                    assert_eq!(finding.definition().rule, Some(rule));
                     assert_eq!(
                         finding.context,
                         [
@@ -507,7 +507,7 @@ mod diagnostics {
                     "ID LIKE '%' ESCAPE 'xx'",
                     position.character,
                 );
-                assert_eq!(finding.definition().requirement, Some("FORMULA-7"));
+                assert_eq!(finding.definition().rule, Some("FORMULA-7"));
                 assert_eq!(
                     finding.context["position"],
                     V::Number(("19").parse().expect("canonical integer"))
@@ -784,7 +784,7 @@ mod diagnostics {
                                         [
                                             ("phase", Fact::Text("derivation")),
                                             ("condition", Fact::Text("function_call_failed")),
-                                            ("requirement", Fact::Text("FUNC-8")),
+                                            ("rule", Fact::Text("FUNC-8")),
                                             ("context", Fact::Object(diagnostic.context)),
                                         ]
                                         .into()
@@ -863,7 +863,7 @@ mod diagnostics {
                 let Fact::Object(held) = &diagnostics[0].context["failure"] else {
                     panic!("nested borrowed diagnostic")
                 };
-                assert_eq!(held["requirement"], Fact::Text("FUNC-5"));
+                assert_eq!(held["rule"], Fact::Text("FUNC-5"));
                 let Fact::Object(context) = &held["context"] else {
                     panic!("nested invocation")
                 };
@@ -1069,7 +1069,7 @@ mod diagnostics {
                     findings[0].code,
                     ConditionCode::CodelistAllowedValuesRedundant
                 );
-                assert_eq!(findings[0].definition().requirement, Some("CT-9"));
+                assert_eq!(findings[0].definition().rule, Some("CT-9"));
                 assert_eq!(
                     findings[0].path,
                     "sdtm.specs[0].columns.VALUE.verifications[0].allowed_values"

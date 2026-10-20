@@ -75,7 +75,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 const HEAD: &str = "schema_version: '1.0'\ndomain: OUT\nkeys: [ID]\n\
@@ -100,7 +100,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
          rows:\n  - id: grouped\n    group_by: [SRC.ID]\n    derivations:\n      ID: SRC.ID\n\
          \x20     LOW: {{aggregate: 'MIN(SRC.VAL)'}}\n"
     );
-    for (specification, path, requirement, row) in [
+    for (specification, path, rule, row) in [
         (
             &row,
             "rows[0].derivations.SEQ.row_number.window.order_by[0]",
@@ -125,7 +125,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "ungrouped_driver_field",
-                "requirement": requirement,
+                "rule": rule,
                 "spec_paths": [path],
                 "context": context
             })
@@ -183,7 +183,7 @@ fn grouped_windows_read_only_group_keys_of_the_driver() {
             vec![yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "unknown_field",
-                "requirement": "NAME-3",
+                "rule": "NAME-3",
                 "spec_paths": [path],
                 "context": {"identifier": "SRC.MISSING"}
             })]

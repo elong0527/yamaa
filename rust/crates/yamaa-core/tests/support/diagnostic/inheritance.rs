@@ -6,7 +6,7 @@ pub(crate) use yamaa_core::json::Value as JsonValue;
 pub fn reached() -> BTreeSet<ConditionCode> {
     let cycle = vec!["entry".into(), "base".into(), "entry".into()];
     let mut reached = BTreeSet::new();
-    for (cause, condition, requirement, path, context) in [
+    for (cause, condition, rule, path, context) in [
         (
             F::InvalidParent {
                 declaring: "child",
@@ -86,9 +86,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 finding.definition().phase,
                 finding.definition().condition,
-                finding.definition().requirement
+                finding.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, [path]);
         for (key, value) in context {
@@ -116,7 +116,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             dependency.definition().phase,
             dependency.definition().condition,
-            dependency.definition().requirement
+            dependency.definition().rule
         ),
         ("validation", "unknown_reference", Some("COLUMN-5"))
     );

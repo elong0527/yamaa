@@ -78,7 +78,7 @@ pub fn reached() -> std::collections::BTreeSet<C> {
         &plan.evaluate_truth(&mut IntPort).unwrap_err(),
     )
     .unwrap();
-    assert_eq!(finding.definition().requirement, Some("FORMULA-5"));
+    assert_eq!(finding.definition().rule, Some("FORMULA-5"));
     reached.insert(finding.code);
     assert_eq!(
         reached,

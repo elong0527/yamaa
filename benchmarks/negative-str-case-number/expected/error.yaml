@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.SITE.derivation.str_case.source
-requirement: TEXT-1
+rule: TEXT-1
 context:
   source: SITENUM
   expected: str

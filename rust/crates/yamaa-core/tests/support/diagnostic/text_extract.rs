@@ -85,11 +85,11 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
     ];
-    for (finding, phase, condition, requirement, path, context) in cases {
+    for (finding, phase, condition, rule, path, context) in cases {
         let def = finding.definition();
         assert_eq!(
-            (def.phase, def.condition, def.requirement),
-            (phase, condition, Some(requirement))
+            (def.phase, def.condition, def.rule),
+            (phase, condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, [path]);
         assert_eq!(

@@ -130,7 +130,7 @@ pub fn reached() -> BTreeSet<C> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
             ("validation", "conversion_failed", Some("VALUE-24"))
         );

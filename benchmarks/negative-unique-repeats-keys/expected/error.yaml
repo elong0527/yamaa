@@ -2,7 +2,7 @@ phase: validation
 condition: redundant_declaration
 spec_paths:
   - verifications[0].unique
-requirement: CHECK-10
+rule: CHECK-10
 context:
   columns: [STUDYID, USUBJID]
   stated_by: keys

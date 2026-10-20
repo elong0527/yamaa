@@ -11,7 +11,7 @@
     {
       "phase": "validation",
       "condition": "unknown_field",
-      "requirement": "LOOKUP-8",
+      "rule": "LOOKUP-8",
       "spec_paths": [
         "columns.AGE.derivation.source.filter"
       ],
@@ -31,7 +31,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.AGE.derivation.source.filter"
           ],

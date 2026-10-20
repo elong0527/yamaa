@@ -147,18 +147,14 @@ fn check(
     d: Diagnostic,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     path: &str,
     context: Vec<(&str, V)>,
 ) -> ConditionCode {
     let definition = d.definition();
     assert_eq!(
-        (
-            definition.phase,
-            definition.condition,
-            definition.requirement
-        ),
-        (phase, condition, Some(requirement))
+        (definition.phase, definition.condition, definition.rule),
+        (phase, condition, Some(rule))
     );
     assert_eq!(d.spec_paths, [path]);
     assert_eq!(
@@ -394,7 +390,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
     ];
     let mut reached = extra_codes;
-    for (fields, driver, condition, requirement, path, context) in cases {
+    for (fields, driver, condition, rule, path, context) in cases {
         let diagnostic = match PreparedSpecification::prepare(&model(fields, driver)) {
             Ok(prepared) => {
                 let BindError::Invalid(mut findings) =
@@ -424,7 +420,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             diagnostic,
             "validation",
             condition,
-            requirement,
+            rule,
             path,
             context,
         ));

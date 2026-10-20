@@ -101,16 +101,12 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
     let mut reached: BTreeSet<_> = findings
         .iter()
         .zip(expected)
-        .map(|(finding, (condition, requirement, path, fields))| {
+        .map(|(finding, (condition, rule, path, fields))| {
             let diagnostic = finding.diagnostic();
             let definition = diagnostic.definition();
             assert_eq!(
-                (
-                    definition.phase,
-                    definition.condition,
-                    definition.requirement
-                ),
-                ("validation", condition, Some(requirement))
+                (definition.phase, definition.condition, definition.rule),
+                ("validation", condition, Some(rule))
             );
             assert_eq!(diagnostic.spec_paths, [path]);
             assert_eq!(
@@ -122,7 +118,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             diagnostic.code
         })
         .collect();
-    for (precision, path, condition, requirement, context) in [
+    for (precision, path, condition, rule, context) in [
         (
             "-9223372036854775809",
             "result.csv",
@@ -174,12 +170,8 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
         let diagnostic = findings[0].diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            ("validation", condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_paths, ["output.decimals"]);
         assert_eq!(
@@ -238,7 +230,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
             ("validation", condition, Some("OUTPUT-12"))
         );
@@ -286,7 +278,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "phase_boundary", Some("ROW-9"))
     );
@@ -309,7 +301,7 @@ pub(crate) fn output_reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "ordinal_field_collision", Some("INPUT-4"))
     );
@@ -336,16 +328,12 @@ fn check(fields: Vec<(&str, Tree)>, expected: Vec<Expected<'_>>) -> BTreeSet<Con
     };
     assert_eq!(findings.len(), expected.len());
     let mut reached = BTreeSet::new();
-    for (finding, (condition, requirement, paths, context)) in findings.iter().zip(expected) {
+    for (finding, (condition, rule, paths, context)) in findings.iter().zip(expected) {
         let diagnostic = finding.diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            ("validation", condition, requirement)
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", condition, rule)
         );
         assert_eq!(diagnostic.spec_paths, paths);
         assert_eq!(
@@ -480,7 +468,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             vec![("dataset", text("SRC")), ("declared", text("ordinal"))],
         )],
     ));
-    for (path, policy, condition, requirement, spec_path, fields) in [
+    for (path, policy, condition, rule, spec_path, fields) in [
         (
             "input.txt",
             "missing",
@@ -511,7 +499,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 vec![column("ID", Some(source()))],
                 vec![Tree::text("ID")],
             ),
-            vec![(condition, Some(requirement), vec![spec_path], fields)],
+            vec![(condition, Some(rule), vec![spec_path], fields)],
         ));
     }
     for (path, encoding) in [
@@ -539,7 +527,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             )],
         ));
     }
-    for (report, condition, requirement, paths, context) in [
+    for (report, condition, rule, paths, context) in [
         (
             "result.csv",
             "artifact_path_collision",
@@ -577,10 +565,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .find(|(name, _)| *name == "output")
             .unwrap()
             .1 = Tree::map(output);
-        log_codes.extend(check(
-            fields,
-            vec![(condition, Some(requirement), paths, context)],
-        ));
+        log_codes.extend(check(fields, vec![(condition, Some(rule), paths, context)]));
     }
     let mut fields = base(
         "TEST",
@@ -987,15 +972,11 @@ pub(crate) fn temporal_reached() -> BTreeSet<ConditionCode> {
     ];
     assert_eq!(findings.len(), expected.len(), "{findings:?}");
     let mut reached = BTreeSet::new();
-    for (diagnostic, (requirement, condition, path, context)) in findings.iter().zip(expected) {
+    for (diagnostic, (rule, condition, path, context)) in findings.iter().zip(expected) {
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            ("validation", condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_paths, [path]);
         assert_eq!(

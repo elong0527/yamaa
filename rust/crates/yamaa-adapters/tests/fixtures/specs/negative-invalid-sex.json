@@ -14,7 +14,7 @@
       "spec_paths": [
         "columns.SEX.verifications[0].allowed_values"
       ],
-      "requirement": "CHECK-6",
+      "rule": "CHECK-6",
       "context": {
         "column": "SEX",
         "failure_count": 3,
@@ -48,7 +48,7 @@
           "spec_paths": [
             "columns.SEX.verifications[0].allowed_values"
           ],
-          "requirement": "CHECK-6",
+          "rule": "CHECK-6",
           "context": {
             "column": "SEX",
             "failure_count": 3,
@@ -182,7 +182,7 @@
       "spec_path": "columns.SEX.verifications[0].allowed_values",
       "check": "allowed_values",
       "target": "SEX",
-      "requirement": "CHECK-6",
+      "rule": "CHECK-6",
       "verification_id": null,
       "severity": "error",
       "evaluated_count": 6,
@@ -192,7 +192,7 @@
         "spec_paths": [
           "columns.SEX.verifications[0].allowed_values"
         ],
-        "requirement": "CHECK-6",
+        "rule": "CHECK-6",
         "context": {
           "column": "SEX",
           "failure_count": 3,

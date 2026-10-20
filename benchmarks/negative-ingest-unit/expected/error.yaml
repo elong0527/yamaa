@@ -2,7 +2,7 @@ phase: ingest
 condition: field_parse_failed
 spec_paths:
   - input.EX.types.EXDOSE
-requirement: INPUT-7
+rule: INPUT-7
 context:
   dataset: EX
   field: EXDOSE

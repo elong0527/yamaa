@@ -1501,7 +1501,7 @@ mod project {
             };
             let first = lock_diagnostics(Some(origins), &original.findings).unwrap();
             assert_eq!(first.len(), 2);
-            assert_eq!(first[0].definition().requirement, Some("FUNC-3"));
+            assert_eq!(first[0].definition().rule, Some("FUNC-3"));
             assert_eq!(
                 lock_diagnostics(None, &original.findings),
                 Err(LockDiagnosticError::InvalidContext)
@@ -1854,7 +1854,7 @@ mod project {
                 let record = &records[0];
                 assert_eq!(
                     (
-                        record.definition().requirement.unwrap(),
+                        record.definition().rule.unwrap(),
                         record.path.as_str(),
                         record.evaluated_count,
                         record.failed_count
@@ -1945,7 +1945,7 @@ mod project {
         }
         #[test]
         fn compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes() {
-            for (doc, condition, requirement, path) in [
+            for (doc, condition, rule, path) in [
                 (
                     spec("UNKNOWN", "str", None, false, None),
                     "unknown_codelist",
@@ -1976,9 +1976,9 @@ mod project {
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
                 assert_eq!(d.spec_paths, [path]);
             }
@@ -2184,13 +2184,9 @@ mod project {
                         (
                             diagnostic.definition().phase,
                             diagnostic.definition().condition,
-                            diagnostic.definition().requirement
+                            diagnostic.definition().rule
                         ),
-                        (
-                            "validation",
-                            "project_environment_missing",
-                            Some("FUNC-1")
-                        )
+                        ("validation", "project_environment_missing", Some("FUNC-1"))
                     );
                     assert_eq!(
                         diagnostic.context,
@@ -2289,7 +2285,7 @@ mod project {
                     "columns.C.derivation.function.args.x",
                 ]
             );
-            for (d, condition, requirement) in [
+            for (d, condition, rule) in [
                 (&diagnostics[0], "unknown_project_function", "FUNC-4"),
                 (&diagnostics[1], "invalid_function_argument", "FUNC-5"),
                 (&diagnostics[2], "invalid_function_argument", "FUNC-5"),
@@ -2298,9 +2294,9 @@ mod project {
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
             }
             assert_eq!(
@@ -2393,10 +2389,7 @@ mod project {
                 })
                 .unwrap();
             assert!(matches!(finding.cause, FunctionCause::ArgumentType { .. }));
-            assert_eq!(
-                finding.diagnostic().definition().requirement,
-                Some("FUNC-5")
-            );
+            assert_eq!(finding.diagnostic().definition().rule, Some("FUNC-5"));
             assert_eq!(
                 finding.diagnostic().spec_paths,
                 ["columns.A.derivation.function.args.x"]
@@ -2425,7 +2418,7 @@ mod project {
                 assert_eq!(diagnostics.len(), 1);
                 let diagnostic = &diagnostics[0];
                 assert_eq!(diagnostic.definition().condition, "unknown_field");
-                assert_eq!(diagnostic.definition().requirement, Some("NAME-3"));
+                assert_eq!(diagnostic.definition().rule, Some("NAME-3"));
                 assert_eq!(
                     diagnostic.spec_paths,
                     [format!("columns.{column}.derivation.function.args.x")]

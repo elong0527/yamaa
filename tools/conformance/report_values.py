@@ -88,7 +88,7 @@ class VerificationObservation(Observation):
     spec_path: str
     check: str
     target: str | None
-    requirement: str
+    rule: str
     verification_id: str | None
     severity: str
     evaluated_count: int
@@ -184,7 +184,7 @@ class DiagnosticObservation(_FrozenModel):
     phase: str = Field(min_length=1)
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str | None
+    rule: str | None
     context: dict[str, JsonValue]
     source_span: SourceSpanObservation | None = None
     operand_route: tuple[str, ...] | None = None
@@ -500,13 +500,13 @@ def _negative_findings(
             )
         )
 
-    if "requirement" in contract and contract["requirement"] != observed.requirement:
+    if "rule" in contract and contract["rule"] != observed.rule:
         findings.append(
             _finding(
-                "diagnostic.requirement",
-                f"{report.example}: requirement",
-                contract["requirement"],
-                observed.requirement,
+                "diagnostic.rule",
+                f"{report.example}: rule",
+                contract["rule"],
+                observed.rule,
             )
         )
 

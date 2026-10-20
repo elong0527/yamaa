@@ -77,7 +77,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
     ];
     let mut reached = BTreeSet::new();
-    for (expression, condition, requirement, fields, route) in causes {
+    for (expression, condition, rule, fields, route) in causes {
         let error = match expression {
             "FALSE AND UNKNOWN = 1" => plan(expression).evaluate_truth(&mut Absent),
             _ => plan(expression).evaluate_truth(&mut Typed),
@@ -88,16 +88,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 d.definition().phase,
                 d.definition().condition,
-                d.definition().requirement
+                d.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         let ErrorKind::Condition(c) = &error.kind else {
             panic!("language condition")
         };
         assert_eq!(
-            (c.phase(), c.condition(), c.requirement()),
-            ("validation", condition, requirement)
+            (c.phase(), c.condition(), c.rule()),
+            ("validation", condition, rule)
         );
         assert_eq!(d.spec_paths, ["rows[2].filter"]);
         assert_eq!(

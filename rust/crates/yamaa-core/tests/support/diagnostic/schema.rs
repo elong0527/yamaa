@@ -61,7 +61,7 @@ fn check(
     code: ConditionCode,
     path: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
 ) {
     let found = findings
         .iter()
@@ -69,8 +69,8 @@ fn check(
         .unwrap_or_else(|| panic!("missing {code:?}: {findings:?}"));
     let def = found.definition();
     assert_eq!(
-        (def.phase, def.condition, def.requirement),
-        ("validation", condition, Some(requirement))
+        (def.phase, def.condition, def.rule),
+        ("validation", condition, Some(rule))
     );
     assert_eq!(found.path, path);
     assert!(!found.context.is_empty());
@@ -140,7 +140,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .validate_document(&document(T::map(vec![])))
         .unwrap();
     assert_eq!(ordinary[0].code, SchemaMissingRequiredField);
-    assert_eq!(ordinary[0].definition().requirement, Some("SCHEMA-13"));
+    assert_eq!(ordinary[0].definition().rule, Some("SCHEMA-13"));
 
     // A written long form holding only its shorthand's field restates it; the
     // resolved, canonical document holds that long form and is not refused.

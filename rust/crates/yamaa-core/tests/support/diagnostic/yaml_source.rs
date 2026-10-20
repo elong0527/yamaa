@@ -12,7 +12,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         offset: 1,
     }];
     let mut reached = BTreeSet::new();
-    for (failure, condition, requirement, path) in [
+    for (failure, condition, rule, path) in [
         (
             Failure::NonAscii { line: 1, column: 4 },
             "non_ascii_source",
@@ -41,12 +41,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         let diagnostic = &result[0];
         let definition = diagnostic.code.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            ("validation", condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_path, path);
         if diagnostic.code == ConditionCode::SourceNonAscii {

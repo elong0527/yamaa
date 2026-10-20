@@ -2,7 +2,7 @@
 
 use crate::value::{ColumnType, FiniteFloat, Value, ValueType};
 
-/// The requirement owning a conversion failure, separate from arithmetic.
+/// The rule owning a conversion failure, separate from arithmetic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConversionReason {
     IncompatibleOrInvalidText,
@@ -37,12 +37,12 @@ impl ConversionError {
         "unconvertible"
     }
 
-    /// Return the requirement that owns this conversion failure.
-    pub fn requirement(&self) -> &'static str {
+    /// Return the rule that owns this conversion failure.
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("numeric and conversion causes have a normative requirement")
+            .rule
+            .expect("numeric and conversion causes have a normative rule")
     }
 
     /// Preserve the parsed source kind independently of its JSON representation.

@@ -95,7 +95,7 @@ mod scalar {
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -210,7 +210,7 @@ mod scalar {
                 let issue = issue_json(&issues[0]);
                 assert_eq!(issue["phase"], "validation");
                 assert_eq!(issue["condition"], "conversion_failed");
-                assert_eq!(issue["requirement"], "VALUE-24");
+                assert_eq!(issue["rule"], "VALUE-24");
                 assert_eq!(
                     issue["spec_paths"],
                     yamaa_adapters::json!(["columns.RESULT"])
@@ -233,7 +233,7 @@ mod scalar {
 
         #[test]
         fn csv_text_regex_declarations_are_reported_without_source_capture() {
-            for (expression, suffix, condition, requirement) in [
+            for (expression, suffix, condition, rule) in [
         (
             "{str_extract: {source: SRC.TEXT, pattern: 'a)|(b'}}",
             "str_extract.pattern",
@@ -289,7 +289,7 @@ mod scalar {
             );
             assert_eq!(checked.len(), 1, "{expression}: {checked:?}");
             assert_eq!(checked[0].condition(), condition);
-            assert_eq!(checked[0].requirement(), Some(requirement));
+            assert_eq!(checked[0].rule(), Some(rule));
             assert_eq!(checked[0].spec_paths, [format!("columns.RESULT.derivation.{suffix}")]);
             assert_eq!(attempt(&fixture).err().unwrap(), checked);
             assert!(!fixture.0.join("output.csv").exists());
@@ -307,7 +307,7 @@ mod scalar {
             let issues = attempt(&fixture).err().unwrap();
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition(), "incompatible_input_type");
-            assert_eq!(issues[0].requirement(), Some("TEXT-1"));
+            assert_eq!(issues[0].rule(), Some("TEXT-1"));
             assert_eq!(
                 issues[0].spec_paths,
                 ["columns.RESULT.derivation.str_extract.source"]
@@ -388,7 +388,7 @@ mod scalar {
             assert!(result.output().is_none());
             assert_eq!(result.issues().len(), 1);
             assert_eq!(result.issues()[0].condition(), "multiple_matches");
-            assert_eq!(result.issues()[0].requirement(), Some("LOOKUP-10"));
+            assert_eq!(result.issues()[0].rule(), Some("LOOKUP-10"));
             assert_eq!(result.issues()[0].spec_paths, ["rows[0].filter"]);
             let context = yamaa_core::json::Value::Object(result.issues()[0].context.clone());
             assert_eq!(context["match_count"], 2);
@@ -500,7 +500,7 @@ mod scalar {
                 issues
                     .iter()
                     .any(|issue| issue.condition() == "unknown_field"
-                        && issue.requirement() == Some("FORMULA-9")
+                        && issue.rule() == Some("FORMULA-9")
                         && issue.spec_paths == ["rows[0].derivations.VALUE.compute.expr"]),
                 "{issues:?}"
             );
@@ -529,7 +529,7 @@ mod scalar {
                     issues
                         .iter()
                         .any(|issue| issue.condition() == "unknown_field"
-                            && issue.requirement() == Some("FORMULA-9")
+                            && issue.rule() == Some("FORMULA-9")
                             && issue.spec_paths == [path]),
                     "{issues:?}"
                 );

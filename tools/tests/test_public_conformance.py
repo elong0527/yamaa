@@ -262,13 +262,13 @@ class PublicConformance(unittest.TestCase):
 
     def test_negative_uses_first_issue_and_context_subset_without_reference(self):
         (self.case / "expected/error.yaml").write_text(
-            "phase: derivation\ncondition: test_failure\nspec_paths: [columns.VALUE]\nrequirement: REQ-test\ncontext: {keys: [{ID: 2}]}\n"
+            "phase: derivation\ncondition: test_failure\nspec_paths: [columns.VALUE]\nrule: REQ-test\ncontext: {keys: [{ID: 2}]}\n"
         )
         issue = {
             "phase": "derivation",
             "condition": "test_failure",
             "spec_paths": ["columns.VALUE"],
-            "requirement": "REQ-test",
+            "rule": "REQ-test",
             "context": {"keys": [{"ID": 2}], "extra": "retained"},
         }
         self.build.update(issues=[issue], saved=False, tables={"output": None})
@@ -282,13 +282,13 @@ class PublicConformance(unittest.TestCase):
         (self.case / "expected/error.yaml").write_text(
             "phase: validation\ncondition: dependency_cycle\n"
             "spec_paths: [columns.A.derivation, columns.B.derivation]\n"
-            "requirement: COLUMN-6\ncontext: {cycle: [A, B, A]}\n"
+            "rule: COLUMN-6\ncontext: {cycle: [A, B, A]}\n"
         )
         cycle = {
             "phase": "validation",
             "condition": "dependency_cycle",
             "spec_paths": ["columns.A.derivation", "columns.B.derivation"],
-            "requirement": "COLUMN-6",
+            "rule": "COLUMN-6",
             "context": {"cycle": ["A", "B", "A"]},
         }
         # Original c7b88a4f reports this independent forward reference beside
@@ -298,7 +298,7 @@ class PublicConformance(unittest.TestCase):
             "phase": "validation",
             "condition": "forward_reference",
             "spec_paths": ["columns.C.derivation"],
-            "requirement": "COLUMN-5",
+            "rule": "COLUMN-5",
             "context": {"column": "C", "dependency": "B"},
         }
         self.build.update(
@@ -825,7 +825,7 @@ class PublicConformance(unittest.TestCase):
                 {
                     "phase": "validation",
                     "condition": "invalid_clear",
-                    "requirement": "LAYER-9",
+                    "rule": "LAYER-9",
                     "spec_paths": ["intermediates.X.no_match"],
                     "context": {},
                 }

@@ -107,7 +107,7 @@ mod temporal_date_text {
         assert_eq!(failure.spec_paths, [PATH]);
         let definition = failure.code.definition();
         assert_eq!(
-            (definition.phase, definition.requirement),
+            (definition.phase, definition.rule),
             ("impute", Some("TIME-13"))
         );
     }
@@ -228,11 +228,7 @@ mod temporal_date_text {
             };
             let definition = failure.code.definition();
             assert_eq!(
-                (
-                    definition.phase,
-                    definition.condition,
-                    definition.requirement
-                ),
+                (definition.phase, definition.condition, definition.rule),
                 ("impute", "invalid_date_text", Some("TIME-19")),
                 "{values:?}"
             );
@@ -253,7 +249,7 @@ mod temporal_date_text {
         };
         let definition = failure.code.definition();
         assert_eq!(
-            (definition.condition, definition.requirement),
+            (definition.condition, definition.rule),
             ("incompatible_input_type", Some("TIME-19"))
         );
     }
@@ -287,7 +283,7 @@ mod temporal_date_text {
         };
         let definition = failure.code.definition();
         assert_eq!(
-            (definition.condition, definition.requirement),
+            (definition.condition, definition.rule),
             ("incompatible_input_type", Some("TIME-20"))
         );
         assert_eq!(

@@ -172,7 +172,7 @@ pub(crate) fn reached_finding(
     code: ConditionCode,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
 ) {
     let finding = findings
         .iter()
@@ -180,12 +180,8 @@ pub(crate) fn reached_finding(
         .unwrap_or_else(|| panic!("missing {code:?}: {findings:?}"));
     let definition = finding.definition();
     assert_eq!(
-        (
-            definition.phase,
-            definition.condition,
-            definition.requirement
-        ),
-        (phase, condition, Some(requirement))
+        (definition.phase, definition.condition, definition.rule),
+        (phase, condition, Some(rule))
     );
     assert!(!finding.path.is_empty());
     assert!(finding.context.contains_key("detail"));
@@ -250,7 +246,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let empty = ct::Catalogue::admit(vec![]).unwrap();
     assert!(one(project(), specification(), &empty).is_ok());
-    for (code, condition, requirement, change) in [
+    for (code, condition, rule, change) in [
         (
             SubmissionMetadataMissing,
             "submission_metadata_missing",
@@ -333,12 +329,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "SUB-8",
             16,
         ),
-        (
-            SubmissionKeyMandatory,
-            "value_not_permitted",
-            "SUB-10",
-            17,
-        ),
+        (SubmissionKeyMandatory, "value_not_permitted", "SUB-10", 17),
         (
             SubmissionUnknownDocument,
             "unknown_document",
@@ -621,14 +612,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             _ => unreachable!(),
         }
         let findings = one(project, spec, &lists).unwrap_err();
-        reached_finding(
-            &mut reached,
-            &findings,
-            code,
-            "validation",
-            condition,
-            requirement,
-        );
+        reached_finding(&mut reached, &findings, code, "validation", condition, rule);
         if change == 31 {
             assert_eq!(findings.len(), 1, "{findings:?}");
             assert_eq!(findings[0].path, "sdtm.specs[0].output.decimals");
@@ -725,7 +709,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ("method", Tree::text("Independent algorithm")),
         ]
     };
-    for (code, condition, requirement, entries, path) in [
+    for (code, condition, rule, entries, path) in [
         (
             SubmissionValueWhereInvalid,
             "value_level_where_invalid",
@@ -763,14 +747,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ),
     ] {
         let findings = one(project(), value_spec(entries), &empty).unwrap_err();
-        reached_finding(
-            &mut reached,
-            &findings,
-            code,
-            "validation",
-            condition,
-            requirement,
-        );
+        reached_finding(&mut reached, &findings, code, "validation", condition, rule);
         let finding = findings.iter().find(|f| f.code == code).unwrap();
         assert_eq!(finding.path, path);
         if code == SubmissionValueOriginRefuted {
@@ -840,7 +817,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     ] {
         assert_eq!(findings[0].context[key], JsonValue::String(value.into()));
     }
-    for (code, condition, requirement, change) in [
+    for (code, condition, rule, change) in [
         (
             SubmissionStandardFamily,
             "unknown_standard_family",
@@ -932,14 +909,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             "2026-09-30T00:00:00",
         )
         .unwrap_err();
-        reached_finding(
-            &mut reached,
-            &findings,
-            code,
-            "validation",
-            condition,
-            requirement,
-        );
+        reached_finding(&mut reached, &findings, code, "validation", condition, rule);
     }
     let mut spec = specification();
     *spec.at(&["columns", "0", "label"]) = Tree::text("A\tB");
@@ -1093,7 +1063,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "held paths"
     )
     .is_ok());
-    for (relation, code, condition, requirement) in [
+    for (relation, code, condition, rule) in [
         (
             TargetRelation::ArtifactOutsidePackage,
             DefineArtifactOutsidePackage,
@@ -1134,7 +1104,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             code,
             "validation",
             condition,
-            requirement,
+            rule,
         );
     }
     reached

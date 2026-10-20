@@ -269,7 +269,7 @@ mod file {
             use yamaa_adapters::{file_application, specification_report::Identity};
             use yamaa_core::domain_entry::Request;
             let study = Study::new();
-            for (written, requirement) in [
+            for (written, rule) in [
                 ("input\\x.csv", "FILE-5"),
                 ("C:\\input.csv", "FILE-5"),
                 ("input//x.csv", "FILE-5"),
@@ -318,7 +318,7 @@ mod file {
                         let issue = &issues[0];
                         assert_eq!(issue.phase(), "validation");
                         assert_eq!(issue.condition(), "resource_path_not_normalized");
-                        assert_eq!(issue.requirement(), Some(requirement));
+                        assert_eq!(issue.rule(), Some(rule));
                         assert_eq!(issue.spec_paths, ["input.SRC.path"]);
                         assert_eq!(
                             yamaa_core::json::Value::Object(issue.context.clone()),
@@ -345,7 +345,7 @@ mod file {
                 study.0.join("entry/link.csv"),
             )
             .unwrap();
-            for (written, condition, requirement) in [
+            for (written, condition, rule) in [
                 (
                     "https://example.invalid/source.csv",
                     "resource_path_uri_scheme",
@@ -382,7 +382,7 @@ mod file {
                 assert_eq!(issues.len(), 1);
                 assert_eq!(issues[0].phase(), "validation");
                 assert_eq!(issues[0].condition(), condition);
-                assert_eq!(issues[0].requirement(), Some(requirement));
+                assert_eq!(issues[0].rule(), Some(rule));
                 assert_eq!(issues[0].spec_paths, ["input.SRC.path"]);
                 assert_eq!(
                     yamaa_core::json::Value::Object(issues[0].context.clone()),
@@ -810,7 +810,7 @@ mod file {
             assert!(
                 run.issues()
                     .iter()
-                    .any(|i| i.requirement() == Some("SUB-15")
+                    .any(|i| i.rule() == Some("SUB-15")
                         && i.condition() == "origin_source_not_admitted"),
                 "{:?}",
                 run.issues()
@@ -900,7 +900,7 @@ mod file {
                     .map(|issue| {
                         yamaa_adapters::json!({
                             "phase": issue.phase(), "condition": issue.condition(),
-                            "requirement": issue.requirement(), "spec_paths": issue.spec_paths,
+                            "rule": issue.rule(), "spec_paths": issue.spec_paths,
                             "context": issue.context.clone()
                         })
                     })
@@ -910,7 +910,7 @@ mod file {
                     .map(|(field, detail)| {
                         yamaa_adapters::json!({
                             "phase": "validation", "condition": "missing_required_field",
-                            "requirement": "DEFINE-28", "spec_paths": [field],
+                            "rule": "DEFINE-28", "spec_paths": [field],
                             "context": {"detail": detail}
                         })
                     })
@@ -1024,7 +1024,7 @@ mod file {
                         None,
                     );
                     let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
-                "phase": issue.phase(), "condition": issue.condition(), "requirement": issue.requirement(),
+                "phase": issue.phase(), "condition": issue.condition(), "rule": issue.rule(),
                 "spec_paths": issue.spec_paths,
                 "context": issue.context.clone()
             })).collect();
@@ -1132,7 +1132,7 @@ mod file {
             let refusal = run
                 .issues()
                 .iter()
-                .find(|issue| issue.requirement() == Some("SUB-27"))
+                .find(|issue| issue.rule() == Some("SUB-27"))
                 .unwrap_or_else(|| panic!("{:?}", run.issues()));
             assert_eq!(refusal.condition(), "value_not_permitted");
             assert_eq!(refusal.spec_paths, ["sdtm.specs[0].columns.VSDTM.type"]);
@@ -1176,7 +1176,7 @@ mod file {
             };
             assert!(run.issues().iter().any(|i| i.phase() == "engine"
                 && i.condition() == "engine_rejected"
-                && i.requirement().is_none()
+                && i.rule().is_none()
                 && text(i, "stage").as_deref() == Some("publication_target_admission")
                 && text(i, "code").as_deref() == Some("invalid_target")));
             assert!(matches!(
@@ -1224,7 +1224,7 @@ mod file {
             let issue = &result.issues()[0];
             assert_eq!(issue.phase(), "validation");
             assert_eq!(issue.condition(), "transport_path_collision");
-            assert_eq!(issue.requirement(), Some("JSON-2"));
+            assert_eq!(issue.rule(), Some("JSON-2"));
             assert_eq!(issue.spec_paths, ["sdtm.specs[1]"]);
             assert!(yamaa_adapters::json_wire::encode_object(&issue.context).contains("dm.json"));
             let reads = result.capture_reads();
@@ -1335,7 +1335,7 @@ mod file {
                 .issues()
                 .iter()
                 .any(|i| i.condition() == "artifact_outside_document"
-                    && i.requirement() == Some("DEFINE-16")));
+                    && i.rule() == Some("DEFINE-16")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("package").exists());
             // REQ1230 assigns a stale output contract to REQ0535, before JSON schema.
@@ -1351,7 +1351,7 @@ mod file {
                 .issues()
                 .iter()
                 .any(|i| i.condition() == "producer_contract_mismatch"
-                    && i.requirement() == Some("INPUT-11")));
+                    && i.rule() == Some("INPUT-11")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // A missing declared field is the same contract cause, before typed CSV
@@ -1361,7 +1361,7 @@ mod file {
             assert!(run
                 .issues()
                 .iter()
-                .any(|issue| issue.requirement() == Some("INPUT-11")));
+                .any(|issue| issue.rule() == Some("INPUT-11")));
             assert!(run.save().is_err());
             assert!(!temp.0.join("define.xml").exists());
             // REQ0957 preserves the verification phase, offending value and row key.
@@ -1370,7 +1370,7 @@ mod file {
             let issue = run
                 .issues()
                 .iter()
-                .find(|i| i.requirement() == Some("CT-7"))
+                .find(|i| i.rule() == Some("CT-7"))
                 .unwrap();
             assert_eq!(issue.phase(), "verification");
             let context = yamaa_core::json::Value::Object(issue.context.clone());
@@ -1422,7 +1422,7 @@ mod file {
         }
         #[test]
         fn independent_metadata_refutations_preserve_shared_conditions_and_zero_writes() {
-            for (from, to, condition, requirement) in [
+            for (from, to, condition, rule) in [
                 (
                     "derivation: DM_RAW.SEX\n",
                     "derivation: DM_RAW.SEX\n    verifications:\n      - allowed_values:\n          values: [F, M, U]\n",
@@ -1451,7 +1451,7 @@ mod file {
                 let mut result = temp.run("2026-09-11T00:00:00");
                 assert!(
                     result.issues().iter().any(|i| i.condition() == condition
-                        && i.requirement() == Some(requirement)),
+                        && i.rule() == Some(rule)),
                     "{:?}",
                     result.issues()
                 );
@@ -1542,7 +1542,7 @@ mod file {
                     assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
                     let issue = &run.issues()[0];
                     assert_eq!(
-                        (issue.phase(), issue.condition(), issue.requirement()),
+                        (issue.phase(), issue.condition(), issue.rule()),
                         ("validation", "origin_document_missing", Some("SUB-17"))
                     );
                     assert_eq!(issue.spec_paths, [format!("sdtm.specs[0].columns.{path}")]);
@@ -1706,7 +1706,7 @@ mod file {
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             let issue = &run.issues()[0];
             assert_eq!(
-                (issue.phase(), issue.condition(), issue.requirement()),
+                (issue.phase(), issue.condition(), issue.rule()),
                 ("validation", "predecessor_label_mismatch", Some("SUB-20"))
             );
             assert_eq!(issue.spec_paths, ["adam.specs[0].columns.USUBJID.label"]);
@@ -1720,7 +1720,7 @@ mod file {
             let (_, run) = cross_section(STUDY_ADLB, &published.replace(",LB\n", ",XX\n"), true);
             assert_eq!(run.issues().len(), 1, "{:?}", run.issues());
             assert_eq!(
-                (run.issues()[0].condition(), run.issues()[0].requirement()),
+                (run.issues()[0].condition(), run.issues()[0].rule()),
                 ("allowed_values_failed", Some("CT-11"))
             );
             assert_eq!(run.issues()[0].context["value"], "XX");

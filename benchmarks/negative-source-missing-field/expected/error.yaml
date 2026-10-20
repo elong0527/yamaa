@@ -2,7 +2,7 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - columns.AGE.derivation.source.filter
-requirement: LOOKUP-8
+rule: LOOKUP-8
 context:
   identifier: USUBJID
   dataset: ODM

@@ -81,7 +81,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> yamaa_core::json::Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn row_operands_reading_a_column_phase_column_report_its_phase_boundary() {
             vec![yamaa_adapters::json!({
                 "phase": "validation",
                 "condition": "phase_boundary",
-                "requirement": "COLUMN-4",
+                "rule": "COLUMN-4",
                 "spec_paths": [path],
                 "context": {
                     "identifier": "SEQ",
@@ -170,7 +170,7 @@ fn a_lookup_matching_on_a_column_phase_column_reports_its_phase_boundary() {
         vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "phase_boundary",
-            "requirement": "LOOKUP-2",
+            "rule": "LOOKUP-2",
             "spec_paths": paths,
             "context": {
                 "identifier": "SEQ",

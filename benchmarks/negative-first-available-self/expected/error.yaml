@@ -2,6 +2,6 @@ phase: validation
 condition: dependency_cycle
 spec_paths:
   - columns.SEVAL.derivation.first_available
-requirement: COLUMN-6
+rule: COLUMN-6
 context:
   cycle: [SEVAL, SEVAL]

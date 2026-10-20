@@ -2,7 +2,7 @@ phase: verification
 condition: matches_failed
 spec_paths:
   - columns.SEX.verifications[0].matches
-requirement: CHECK-9
+rule: CHECK-9
 context:
   column: SEX
   failure_count: 1

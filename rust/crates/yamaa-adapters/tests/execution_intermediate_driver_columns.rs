@@ -253,11 +253,7 @@ fn grouped_intermediate_driver_reads_its_group_key() {
 fn grouped_driver_field_outside_the_groups_fails_validation() {
     let issue = Fixture::new(&grouped("SER.AETERM")).issue();
     assert_eq!(
-        (
-            issue.condition(),
-            issue.requirement(),
-            issue.spec_paths.as_slice()
-        ),
+        (issue.condition(), issue.rule(), issue.spec_paths.as_slice()),
         (
             "ungrouped_driver_field",
             Some("NAME-4"),
@@ -353,11 +349,7 @@ fn grouped_intermediate_rows_read_only_its_group_keys() {
     // serious events.
     let issue = Fixture::new(&grouped_mixed("SER.AETERM", "all")).issue();
     assert_eq!(
-        (
-            issue.condition(),
-            issue.requirement(),
-            issue.spec_paths.as_slice()
-        ),
+        (issue.condition(), issue.rule(), issue.spec_paths.as_slice()),
         (
             "ungrouped_driver_field",
             Some("NAME-4"),

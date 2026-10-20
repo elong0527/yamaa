@@ -187,7 +187,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             .find(|d| d.definition().condition == "invalid_intermediate_driver")
             .unwrap();
         assert_eq!(d.definition().phase, "validation");
-        assert_eq!(d.definition().requirement, Some("ROW-2"));
+        assert_eq!(d.definition().rule, Some("ROW-2"));
         assert_eq!(d.spec_paths, ["rows[0].dataset"]);
         assert_eq!(d.context["intermediate"], JsonValue::String("CAP".into()));
         assert_eq!(
@@ -196,7 +196,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         );
         reached.insert(d.code);
     }
-    for (derive, condition, requirement, context, intermediate) in [
+    for (derive, condition, rule, context, intermediate) in [
         (
             T::List(vec![]),
             "invalid_derive_step",
@@ -248,10 +248,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ));
         let d = ds
             .into_iter()
-            .find(|d| {
-                d.definition().condition == condition
-                    && d.definition().requirement == Some(requirement)
-            })
+            .find(|d| d.definition().condition == condition && d.definition().rule == Some(rule))
             .unwrap();
         assert_eq!(d.definition().phase, "validation");
         for (key, text) in context {
@@ -259,7 +256,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         }
         reached.insert(d.code);
     }
-    for (grouped, requirement) in [(false, "FORMULA-9"), (true, "FORMULA-9")] {
+    for (grouped, rule) in [(false, "FORMULA-9"), (true, "FORMULA-9")] {
         let ds = findings(document(
             T::map(vec![(
                 "compute",
@@ -270,7 +267,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ));
         let d = ds
             .into_iter()
-            .find(|d| d.definition().requirement == Some(requirement))
+            .find(|d| d.definition().rule == Some(rule))
             .unwrap();
         assert_eq!(d.definition().condition, "unknown_field");
         assert_eq!(d.definition().phase, "validation");

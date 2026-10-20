@@ -14,7 +14,7 @@
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -24,7 +24,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -77,7 +77,7 @@
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -87,7 +87,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -140,7 +140,7 @@
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -150,7 +150,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -214,7 +214,7 @@
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -224,7 +224,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -277,7 +277,7 @@
           "check": "assert",
           "evaluated_count": 3,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -287,7 +287,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -337,7 +337,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -350,7 +350,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -376,7 +376,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -403,7 +403,7 @@
         {
           "phase": "validation",
           "condition": "incompatible_input_type",
-          "requirement": "FORMULA-5",
+          "rule": "FORMULA-5",
           "spec_paths": [
             "verifications[0].assert.when"
           ],
@@ -418,7 +418,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -444,7 +444,7 @@
         {
           "phase": "validation",
           "condition": "incompatible_input_type",
-          "requirement": "FORMULA-5",
+          "rule": "FORMULA-5",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -473,7 +473,7 @@
         {
           "phase": "verification",
           "condition": "assert_failed",
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "spec_paths": [
             "verifications[0].assert"
           ],
@@ -496,7 +496,7 @@
           "failure": {
             "phase": "verification",
             "condition": "assert_failed",
-            "requirement": "CHECK-12",
+            "rule": "CHECK-12",
             "context": {
               "failure_count": 1,
               "keys": [
@@ -525,7 +525,7 @@
               }
             ]
           },
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -535,7 +535,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -561,7 +561,7 @@
           "check": "assert",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -571,7 +571,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -616,7 +616,7 @@
           "check": "assert",
           "evaluated_count": 4,
           "failure": null,
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "error",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -626,7 +626,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -707,7 +707,7 @@
         {
           "phase": "join",
           "condition": "unmatched_key",
-          "requirement": "LOOKUP-24",
+          "rule": "LOOKUP-24",
           "spec_paths": [
             "intermediates[0]"
           ],
@@ -746,7 +746,7 @@
         {
           "phase": "join",
           "condition": "unmatched_key",
-          "requirement": "LOOKUP-24",
+          "rule": "LOOKUP-24",
           "spec_paths": [
             "intermediates[0]"
           ],
@@ -785,7 +785,7 @@
         {
           "phase": "join",
           "condition": "unmatched_key",
-          "requirement": "LOOKUP-24",
+          "rule": "LOOKUP-24",
           "spec_paths": [
             "intermediates[0]"
           ],
@@ -824,7 +824,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[1].assert.require"
           ],
@@ -837,7 +837,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[1].assert.require"
           ],
@@ -853,7 +853,7 @@
           "failure": {
             "phase": "verification",
             "condition": "unique_failed",
-            "requirement": "CHECK-10",
+            "rule": "CHECK-10",
             "spec_paths": [
               "verifications[0].unique"
             ],
@@ -906,7 +906,7 @@
               }
             ]
           },
-          "requirement": "CHECK-10",
+          "rule": "CHECK-10",
           "severity": "error",
           "spec_path": "verifications[0].unique",
           "target": null,
@@ -934,7 +934,7 @@
           "failure": {
             "phase": "verification",
             "condition": "assert_failed",
-            "requirement": "CHECK-12",
+            "rule": "CHECK-12",
             "spec_paths": [
               "verifications[0].assert"
             ],
@@ -981,7 +981,7 @@
               }
             ]
           },
-          "requirement": "CHECK-12",
+          "rule": "CHECK-12",
           "severity": "warning",
           "spec_path": "verifications[0].assert",
           "target": null,
@@ -991,7 +991,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[1].row_count",
           "target": null,
@@ -1041,7 +1041,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -1068,7 +1068,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.require"
           ],
@@ -1095,7 +1095,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.when"
           ],
@@ -1122,7 +1122,7 @@
         {
           "phase": "validation",
           "condition": "unknown_field",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "verifications[0].assert.when"
           ],

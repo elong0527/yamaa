@@ -145,7 +145,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -302,7 +302,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -313,7 +313,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.LATER.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -324,7 +324,7 @@
           "check": "row_count",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-13",
+          "rule": "CHECK-13",
           "severity": "error",
           "spec_path": "verifications[0].row_count",
           "specification": "spec.yaml",
@@ -481,7 +481,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -514,7 +514,7 @@
             "verification_id": "v-present"
           },
           "phase": "verification",
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "spec_paths": [
             "columns.V.verifications[0].not_missing"
           ]
@@ -540,7 +540,7 @@
                 "verification_id": "v-present"
               },
               "phase": "verification",
-              "requirement": "CHECK-5",
+              "rule": "CHECK-5",
               "spec_paths": [
                 "columns.V.verifications[0].not_missing"
               ]
@@ -635,13 +635,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-5",
+            "rule": "CHECK-5",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].not_missing"
             ]
           },
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -746,7 +746,7 @@
           "check": "not_missing",
           "evaluated_count": 0,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -779,7 +779,7 @@
             "verification_id": "v-present"
           },
           "phase": "verification",
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "spec_paths": [
             "columns.V.verifications[0].not_missing"
           ]
@@ -805,7 +805,7 @@
                 "verification_id": "v-present"
               },
               "phase": "verification",
-              "requirement": "CHECK-5",
+              "rule": "CHECK-5",
               "spec_paths": [
                 "columns.V.verifications[0].not_missing"
               ]
@@ -900,13 +900,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-5",
+            "rule": "CHECK-5",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].not_missing"
             ]
           },
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -939,7 +939,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.LATER"
           ]
@@ -965,7 +965,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.LATER"
               ]
@@ -1033,7 +1033,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -1059,7 +1059,7 @@
             "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
           },
           "phase": "validation",
-          "requirement": "CHECK-3",
+          "rule": "CHECK-3",
           "spec_paths": [
             "columns.V.verifications[1].not_missing"
           ]
@@ -1078,7 +1078,7 @@
                 "reason": "verification id 'same' repeats columns.V.verifications[0].not_missing"
               },
               "phase": "validation",
-              "requirement": "CHECK-3",
+              "rule": "CHECK-3",
               "spec_paths": [
                 "columns.V.verifications[1].not_missing"
               ]
@@ -1173,13 +1173,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-5",
+            "rule": "CHECK-5",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].not_missing"
             ]
           },
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -1212,7 +1212,7 @@
             "verification_id": "one"
           },
           "phase": "verification",
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "spec_paths": [
             "columns.V.verifications[0].not_missing"
           ]
@@ -1230,7 +1230,7 @@
             "verification_id": "two"
           },
           "phase": "verification",
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "spec_paths": [
             "columns.V.verifications[1].not_missing"
           ]
@@ -1256,7 +1256,7 @@
                 "verification_id": "one"
               },
               "phase": "verification",
-              "requirement": "CHECK-5",
+              "rule": "CHECK-5",
               "spec_paths": [
                 "columns.V.verifications[0].not_missing"
               ]
@@ -1274,7 +1274,7 @@
                 "verification_id": "two"
               },
               "phase": "verification",
-              "requirement": "CHECK-5",
+              "rule": "CHECK-5",
               "spec_paths": [
                 "columns.V.verifications[1].not_missing"
               ]
@@ -1369,13 +1369,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-5",
+            "rule": "CHECK-5",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].not_missing"
             ]
           },
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -1413,13 +1413,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-5",
+            "rule": "CHECK-5",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[1].not_missing"
             ]
           },
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[1].not_missing",
           "specification": "spec.yaml",
@@ -1576,7 +1576,7 @@
           "check": "allowed_values",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-6",
+          "rule": "CHECK-6",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].allowed_values",
           "specification": "spec.yaml",
@@ -1733,7 +1733,7 @@
           "check": "allowed_values",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-6",
+          "rule": "CHECK-6",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].allowed_values",
           "specification": "spec.yaml",
@@ -1766,7 +1766,7 @@
             "verification_id": "value-rule"
           },
           "phase": "verification",
-          "requirement": "CHECK-6",
+          "rule": "CHECK-6",
           "spec_paths": [
             "columns.V.verifications[0].allowed_values"
           ]
@@ -1792,7 +1792,7 @@
                 "verification_id": "value-rule"
               },
               "phase": "verification",
-              "requirement": "CHECK-6",
+              "rule": "CHECK-6",
               "spec_paths": [
                 "columns.V.verifications[0].allowed_values"
               ]
@@ -1887,13 +1887,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-6",
+            "rule": "CHECK-6",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].allowed_values"
             ]
           },
-          "requirement": "CHECK-6",
+          "rule": "CHECK-6",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].allowed_values",
           "specification": "spec.yaml",
@@ -1919,7 +1919,7 @@
             "reason": "allowed_values requires values"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].allowed_values"
           ]
@@ -1938,7 +1938,7 @@
                 "reason": "allowed_values requires values"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].allowed_values"
               ]
@@ -1999,7 +1999,7 @@
             "reason": "listed value None is not a int value"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].allowed_values"
           ]
@@ -2018,7 +2018,7 @@
                 "reason": "listed value None is not a int value"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].allowed_values"
               ]
@@ -2100,7 +2100,7 @@
             "reason": "listed value 'bad' is not a int value"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].allowed_values"
           ]
@@ -2119,7 +2119,7 @@
                 "reason": "listed value 'bad' is not a int value"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].allowed_values"
               ]
@@ -2208,7 +2208,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.V"
           ]
@@ -2234,7 +2234,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.V"
               ]
@@ -2313,7 +2313,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.LATER"
           ]
@@ -2339,7 +2339,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.LATER"
               ]
@@ -2407,7 +2407,7 @@
           "check": "allowed_values",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-6",
+          "rule": "CHECK-6",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].allowed_values",
           "specification": "spec.yaml",
@@ -2564,7 +2564,7 @@
           "check": "range",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-7",
+          "rule": "CHECK-7",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].range",
           "specification": "spec.yaml",
@@ -2600,7 +2600,7 @@
             "verification_id": "value-rule"
           },
           "phase": "verification",
-          "requirement": "CHECK-7",
+          "rule": "CHECK-7",
           "spec_paths": [
             "columns.V.verifications[0].range"
           ]
@@ -2629,7 +2629,7 @@
                 "verification_id": "value-rule"
               },
               "phase": "verification",
-              "requirement": "CHECK-7",
+              "rule": "CHECK-7",
               "spec_paths": [
                 "columns.V.verifications[0].range"
               ]
@@ -2733,13 +2733,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-7",
+            "rule": "CHECK-7",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].range"
             ]
           },
-          "requirement": "CHECK-7",
+          "rule": "CHECK-7",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].range",
           "specification": "spec.yaml",
@@ -2896,7 +2896,7 @@
           "check": "range",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-7",
+          "rule": "CHECK-7",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].range",
           "specification": "spec.yaml",
@@ -2929,7 +2929,7 @@
             "verification_id": "value-rule"
           },
           "phase": "verification",
-          "requirement": "CHECK-7",
+          "rule": "CHECK-7",
           "spec_paths": [
             "columns.V.verifications[0].range"
           ]
@@ -2955,7 +2955,7 @@
                 "verification_id": "value-rule"
               },
               "phase": "verification",
-              "requirement": "CHECK-7",
+              "rule": "CHECK-7",
               "spec_paths": [
                 "columns.V.verifications[0].range"
               ]
@@ -3050,13 +3050,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-7",
+            "rule": "CHECK-7",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].range"
             ]
           },
-          "requirement": "CHECK-7",
+          "rule": "CHECK-7",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].range",
           "specification": "spec.yaml",
@@ -3082,7 +3082,7 @@
             "reason": "range requires one bound"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].range"
           ]
@@ -3101,7 +3101,7 @@
                 "reason": "range requires one bound"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].range"
               ]
@@ -3162,7 +3162,7 @@
             "reason": "range min exceeds max"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].range"
           ]
@@ -3181,7 +3181,7 @@
                 "reason": "range min exceeds max"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].range"
               ]
@@ -3242,7 +3242,7 @@
             "reason": "a str column does not admit this verification"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].range"
           ]
@@ -3261,7 +3261,7 @@
                 "reason": "a str column does not admit this verification"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].range"
               ]
@@ -3453,7 +3453,7 @@
           "check": "max_length",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-8",
+          "rule": "CHECK-8",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].max_length",
           "specification": "spec.yaml",
@@ -3490,7 +3490,7 @@
             "verification_id": "value-rule"
           },
           "phase": "verification",
-          "requirement": "CHECK-8",
+          "rule": "CHECK-8",
           "spec_paths": [
             "columns.V.verifications[0].max_length"
           ]
@@ -3520,7 +3520,7 @@
                 "verification_id": "value-rule"
               },
               "phase": "verification",
-              "requirement": "CHECK-8",
+              "rule": "CHECK-8",
               "spec_paths": [
                 "columns.V.verifications[0].max_length"
               ]
@@ -3626,13 +3626,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-8",
+            "rule": "CHECK-8",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].max_length"
             ]
           },
-          "requirement": "CHECK-8",
+          "rule": "CHECK-8",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].max_length",
           "specification": "spec.yaml",
@@ -3789,7 +3789,7 @@
           "check": "max_length",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-8",
+          "rule": "CHECK-8",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].max_length",
           "specification": "spec.yaml",
@@ -3815,7 +3815,7 @@
             "reason": "max_length max is at least one"
           },
           "phase": "validation",
-          "requirement": "CHECK-8",
+          "rule": "CHECK-8",
           "spec_paths": [
             "columns.V.verifications[0].max_length"
           ]
@@ -3834,7 +3834,7 @@
                 "reason": "max_length max is at least one"
               },
               "phase": "validation",
-              "requirement": "CHECK-8",
+              "rule": "CHECK-8",
               "spec_paths": [
                 "columns.V.verifications[0].max_length"
               ]
@@ -3895,7 +3895,7 @@
             "reason": "a int column does not admit this verification"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].max_length"
           ]
@@ -3914,7 +3914,7 @@
                 "reason": "a int column does not admit this verification"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].max_length"
               ]
@@ -4106,7 +4106,7 @@
           "check": "matches",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -4139,7 +4139,7 @@
             "verification_id": "value-rule"
           },
           "phase": "verification",
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "spec_paths": [
             "columns.V.verifications[0].matches"
           ]
@@ -4165,7 +4165,7 @@
                 "verification_id": "value-rule"
               },
               "phase": "verification",
-              "requirement": "CHECK-9",
+              "rule": "CHECK-9",
               "spec_paths": [
                 "columns.V.verifications[0].matches"
               ]
@@ -4260,13 +4260,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-9",
+            "rule": "CHECK-9",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].matches"
             ]
           },
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -4423,7 +4423,7 @@
           "check": "matches",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -4528,7 +4528,7 @@
           "check": "matches",
           "evaluated_count": 0,
           "failure": null,
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -4685,7 +4685,7 @@
           "check": "matches",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -4711,7 +4711,7 @@
             "pattern": "(?=b)b"
           },
           "phase": "validation",
-          "requirement": "TEXT-6",
+          "rule": "TEXT-6",
           "spec_paths": [
             "columns.V.verifications[0].matches.pattern"
           ]
@@ -4730,7 +4730,7 @@
                 "pattern": "(?=b)b"
               },
               "phase": "validation",
-              "requirement": "TEXT-6",
+              "rule": "TEXT-6",
               "spec_paths": [
                 "columns.V.verifications[0].matches.pattern"
               ]
@@ -4812,7 +4812,7 @@
             "pattern": "(.)\\1"
           },
           "phase": "validation",
-          "requirement": "TEXT-6",
+          "rule": "TEXT-6",
           "spec_paths": [
             "columns.V.verifications[0].matches.pattern"
           ]
@@ -4831,7 +4831,7 @@
                 "pattern": "(.)\\1"
               },
               "phase": "validation",
-              "requirement": "TEXT-6",
+              "rule": "TEXT-6",
               "spec_paths": [
                 "columns.V.verifications[0].matches.pattern"
               ]
@@ -4913,7 +4913,7 @@
             "pattern": "("
           },
           "phase": "validation",
-          "requirement": "TEXT-6",
+          "rule": "TEXT-6",
           "spec_paths": [
             "columns.V.verifications[0].matches.pattern"
           ]
@@ -4932,7 +4932,7 @@
                 "pattern": "("
               },
               "phase": "validation",
-              "requirement": "TEXT-6",
+              "rule": "TEXT-6",
               "spec_paths": [
                 "columns.V.verifications[0].matches.pattern"
               ]
@@ -5004,7 +5004,7 @@
             "pattern": "(?P<code>b)"
           },
           "phase": "validation",
-          "requirement": "TEXT-6",
+          "rule": "TEXT-6",
           "spec_paths": [
             "columns.V.verifications[0].matches.pattern"
           ]
@@ -5023,7 +5023,7 @@
                 "pattern": "(?P<code>b)"
               },
               "phase": "validation",
-              "requirement": "TEXT-6",
+              "rule": "TEXT-6",
               "spec_paths": [
                 "columns.V.verifications[0].matches.pattern"
               ]
@@ -5095,7 +5095,7 @@
             "pattern": "("
           },
           "phase": "validation",
-          "requirement": "TEXT-6",
+          "rule": "TEXT-6",
           "spec_paths": [
             "columns.V.verifications[0].matches.pattern"
           ]
@@ -5114,7 +5114,7 @@
                 "pattern": "("
               },
               "phase": "validation",
-              "requirement": "TEXT-6",
+              "rule": "TEXT-6",
               "spec_paths": [
                 "columns.V.verifications[0].matches.pattern"
               ]
@@ -5175,7 +5175,7 @@
             "reason": "a int column does not admit this verification"
           },
           "phase": "validation",
-          "requirement": "CHECK-4",
+          "rule": "CHECK-4",
           "spec_paths": [
             "columns.V.verifications[0].matches"
           ]
@@ -5194,7 +5194,7 @@
                 "reason": "a int column does not admit this verification"
               },
               "phase": "validation",
-              "requirement": "CHECK-4",
+              "rule": "CHECK-4",
               "spec_paths": [
                 "columns.V.verifications[0].matches"
               ]
@@ -5262,7 +5262,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.V"
           ]
@@ -5288,7 +5288,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.V"
               ]
@@ -5367,7 +5367,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.LATER"
           ]
@@ -5393,7 +5393,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.LATER"
               ]
@@ -5451,7 +5451,7 @@
           "check": "matches",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -5484,7 +5484,7 @@
             "value": "bad"
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "columns.V"
           ]
@@ -5510,7 +5510,7 @@
                 "value": "bad"
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "columns.V"
               ]
@@ -5582,7 +5582,7 @@
             "pattern": "("
           },
           "phase": "validation",
-          "requirement": "TEXT-6",
+          "rule": "TEXT-6",
           "spec_paths": [
             "columns.V.verifications[0].matches.pattern"
           ]
@@ -5601,7 +5601,7 @@
                 "pattern": "("
               },
               "phase": "validation",
-              "requirement": "TEXT-6",
+              "rule": "TEXT-6",
               "spec_paths": [
                 "columns.V.verifications[0].matches.pattern"
               ]
@@ -5673,7 +5673,7 @@
             "reason": "verification id 'same' repeats columns.V.verifications[0].matches"
           },
           "phase": "validation",
-          "requirement": "CHECK-3",
+          "rule": "CHECK-3",
           "spec_paths": [
             "columns.V.verifications[1].matches"
           ]
@@ -5692,7 +5692,7 @@
                 "reason": "verification id 'same' repeats columns.V.verifications[0].matches"
               },
               "phase": "validation",
-              "requirement": "CHECK-3",
+              "rule": "CHECK-3",
               "spec_paths": [
                 "columns.V.verifications[1].matches"
               ]
@@ -5750,7 +5750,7 @@
           "check": "matches",
           "evaluated_count": 1,
           "failure": null,
-          "requirement": "CHECK-9",
+          "rule": "CHECK-9",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].matches",
           "specification": "spec.yaml",
@@ -5897,7 +5897,7 @@
           "check": "not_missing",
           "evaluated_count": 2,
           "failure": null,
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",
@@ -5930,7 +5930,7 @@
             "verification_id": "v-present"
           },
           "phase": "verification",
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "spec_paths": [
             "columns.V.verifications[0].not_missing"
           ]
@@ -5956,7 +5956,7 @@
                 "verification_id": "v-present"
               },
               "phase": "verification",
-              "requirement": "CHECK-5",
+              "rule": "CHECK-5",
               "spec_paths": [
                 "columns.V.verifications[0].not_missing"
               ]
@@ -6041,13 +6041,13 @@
               }
             ],
             "phase": "verification",
-            "requirement": "CHECK-5",
+            "rule": "CHECK-5",
             "severity": "error",
             "spec_paths": [
               "columns.V.verifications[0].not_missing"
             ]
           },
-          "requirement": "CHECK-5",
+          "rule": "CHECK-5",
           "severity": "error",
           "spec_path": "columns.V.verifications[0].not_missing",
           "specification": "spec.yaml",

@@ -421,7 +421,7 @@ pub struct Diagnostic {           // #[non_exhaustive]
     pub severity: Severity,       // Error | Warning
     pub phase: String,            // stage that produced the record
     pub code: String,             // stable condition code, e.g. `unknown_field`
-    pub requirement: Option<String>,
+    pub rule: Option<String>,     // the rule card the condition cites
     pub spec_path: Vec<String>,   // ordered path segments
     pub context: DiagnosticContext,
     pub source_span: Option<SourceSpan>,     // byte span in the expression
@@ -433,7 +433,7 @@ pub struct Report { pub diagnostics: Vec<Diagnostic> }  // #[non_exhaustive]
 
 This is the public form of core's `yamaa_core::diagnostic::Diagnostic`, the one
 record from the failure site to this edge: the registry names its phase,
-condition and requirement, and it carries spec paths, structured context and
+condition and rule, and it carries spec paths, structured context and
 optional geometry. `DiagnosticContext` is
 a structured value map, not a formatted string: `ContextValue` keeps integer
 tokens exact (`Int`, `Uint`, or `Wide` with the decimal spelling of a token

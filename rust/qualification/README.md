@@ -75,7 +75,7 @@ two key columns reading one input field or a literal) a JSON control copy and
 a copy with the key columns moved to the front in reverse key order must agree
 (COLUMN-5, OUTPUT-1, OUTPUT-2). Positive variants must report no issues with
 equal output and log tables; negative variants must report the same first
-issue (phase, condition, requirement and spec paths). Known differences are
+issue (phase, condition, rule and spec paths). Known differences are
 declared in the case's `benchmark.yaml` under `conformance.metamorphic`,
 linked to a tracking issue or marked permanent with a by-design reason. A
 temporary difference that stops occurring fails the run as stale; an

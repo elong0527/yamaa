@@ -559,7 +559,7 @@ mod schema {
             assert_eq!(diagnostics[1].spec_paths, ["columns.X.derivation"]);
             for (diagnostic, expected) in diagnostics.iter().zip(["A", "Z"]) {
                 assert_eq!(diagnostic.definition().condition, "unknown_reference");
-                assert_eq!(diagnostic.definition().requirement, Some("COLUMN-5"));
+                assert_eq!(diagnostic.definition().rule, Some("COLUMN-5"));
                 assert_eq!(
                     diagnostic.context["dependency"],
                     yamaa_core::json::Value::String(expected.into())
@@ -968,12 +968,12 @@ mod schema {
         fn finding(
             path: &str,
             condition: &'static str,
-            requirement: &'static str,
+            rule: &'static str,
             context: Vec<(&'static str, C)>,
         ) -> SchemaDiagnostic {
             SchemaDiagnostic {
                 path: path.into(),
-                code: match (condition, requirement) {
+                code: match (condition, rule) {
                     ("schema_version_mismatch", "LAYER-4") => {
                         yamaa_core::diagnostic::ConditionCode::SchemaLayerVersionMismatch
                     }
@@ -2135,13 +2135,13 @@ mod schema {
             assert_eq!(
                 result
                     .iter()
-                    .map(|d| d.definition().requirement)
+                    .map(|d| d.definition().rule)
                     .collect::<Vec<_>>(),
                 [Some("VALUE-1"), Some("SCHEMA-12"), Some("SCHEMA-12")]
             );
             let result = validate(&schema, "kind", V::boolean(true), false);
             assert_eq!(findings(&result), [("kind", "invalid_field_type")]);
-            assert_eq!(result[0].definition().requirement, Some("SCHEMA-12"));
+            assert_eq!(result[0].definition().rule, Some("SCHEMA-12"));
             assert!(validate(
                 &schema,
                 "number",
@@ -2236,7 +2236,7 @@ mod schema {
                     ("shorthand", C::InputValue(1)),
                 ]
             );
-            assert_eq!(restated[0].definition().requirement, Some("SCHEMA-15"));
+            assert_eq!(restated[0].definition().rule, Some("SCHEMA-15"));
             assert_eq!(
                 findings(&validate(&schema, "derive", V::map(vec![]), false)),
                 [("derive", "invalid_operation_count")]
@@ -2252,7 +2252,7 @@ mod schema {
             );
             let result = validate(&schema, "derive", V::integer("4"), false);
             assert_eq!(findings(&result), [("derive", "bare_derivation_scalar")]);
-            assert_eq!(result[0].definition().requirement, Some("EXPR-5"));
+            assert_eq!(result[0].definition().rule, Some("EXPR-5"));
         }
 
         fn case_bundle(registry: &'static str) -> SchemaStructure {
@@ -2367,11 +2367,7 @@ mod schema {
                         .map(|d| {
                             let definition = d.definition();
                             assert_eq!(
-                                (
-                                    definition.phase,
-                                    definition.condition,
-                                    definition.requirement
-                                ),
+                                (definition.phase, definition.condition, definition.rule),
                                 ("validation", "invalid_field_type", Some("EXPR-7"))
                             );
                             let [("expected", C::Text(text))] = d.context.as_slice() else {
@@ -2392,9 +2388,7 @@ mod schema {
             );
             assert!(!result.is_empty());
             assert!(
-                result
-                    .iter()
-                    .all(|d| d.definition().requirement != Some("EXPR-7")),
+                result.iter().all(|d| d.definition().rule != Some("EXPR-7")),
                 "{result:?}"
             );
             // The rule belongs to the expression registry's case, not to a like-named entry.

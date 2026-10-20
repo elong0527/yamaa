@@ -21,7 +21,7 @@ The [contract index](../rules/README.md#rule-files) organizes the language by se
 
 Schemas own structure, defaults, and structural constraints. Indexed contracts
 own shared and operation-local behavior. Schema descriptions link to the owning
-requirement. Examples demonstrate those contracts without redefining them.
+rule. Examples demonstrate those contracts without redefining them.
 
 Closed grammars are defined once in [grammar/](grammar/README.md). Their
 contract blocks are generated views checked against those files; R and Python

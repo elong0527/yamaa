@@ -25,7 +25,7 @@ ROOT = Path(__file__).with_name("specification-original")
 CASES = tuple(TRUTH["original_case_names"])
 # The public issues table: the five fields the authored findings state, then
 # the expression geometry, which no finding here authors.
-FIELDS = ("phase", "condition", "requirement", "spec_paths", "context")
+FIELDS = ("phase", "condition", "rule", "spec_paths", "context")
 ISSUE_COLUMNS = [*FIELDS, "source_span", "operand_route"]
 
 
@@ -376,7 +376,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             {
                 "phase": "ingest",
                 "condition": "source_field_value_invalid",
-                "requirement": "PARQUET-9",
+                "rule": "PARQUET-9",
                 "spec_paths": ["input.FIRST.path"],
                 "context": {
                     "dataset": "FIRST",
@@ -389,7 +389,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             {
                 "phase": "ingest",
                 "condition": "source_field_name_duplicate",
-                "requirement": "PARQUET-6",
+                "rule": "PARQUET-6",
                 "spec_paths": ["input.SECOND.path"],
                 "context": {
                     "dataset": "SECOND",
@@ -448,7 +448,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             {
                 "phase": "validation",
                 "condition": "redundant_field_type",
-                "requirement": "INPUT-6",
+                "rule": "INPUT-6",
                 "spec_paths": ["input.LB.types.LBSTRESN"],
                 "context": {"dataset": "LB", "field": "LBSTRESN", "type": "float"},
             }
@@ -476,7 +476,7 @@ class ParquetOriginalOutput(unittest.TestCase):
             ],
             "output": {"path": "output.csv", "columns": ["ID"]},
         }
-        for name, condition, requirement, context in (
+        for name, condition, rule, context in (
             ("utf8", "source_parquet_invalid", "PARQUET-5", {}),
             (
                 "utf8-bool",
@@ -539,7 +539,7 @@ class ParquetOriginalOutput(unittest.TestCase):
                     {
                         "phase": "ingest",
                         "condition": condition,
-                        "requirement": requirement,
+                        "rule": rule,
                         "spec_paths": ["input.SRC.path"],
                         "context": dict(dataset="SRC", path="input.parquet", **context),
                     }
@@ -724,7 +724,7 @@ class PublicDomains(unittest.TestCase):
             {
                 "phase": "validation",
                 "condition": "incompatible_input_type",
-                "requirement": "FORMULA-5",
+                "rule": "FORMULA-5",
                 "spec_paths": ["intermediates[0].filter"],
                 "context": {"left_type": "int", "right_type": "str"},
             }
@@ -861,7 +861,7 @@ class PublicDomains(unittest.TestCase):
                     any(
                         row["phase"] == expected["phase"]
                         and row["condition"] == expected["condition"]
-                        and row["requirement"] == expected["requirement"]
+                        and row["rule"] == expected["rule"]
                         and row["spec_paths"] == [expected["spec_path"]]
                         for row in frame.select(FIELDS).to_dicts()
                     ),
@@ -1035,12 +1035,12 @@ class PublicDomains(unittest.TestCase):
                 (negative / "expected" / "error.yaml").read_text(),
                 "phase: validation\ncondition: incompatible_input_type\nspec_paths:\n"
                 "  - columns.RNDVAL.derivation.round_half_away_from_zero.source\n"
-                "requirement: FORMULA-16\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n",
+                "rule: FORMULA-16\ncontext:\n  source: SEX\n  expected: numeric\n  actual: str\n",
             )
             expected_issue = {
                 "phase": "validation",
                 "condition": "incompatible_input_type",
-                "requirement": "FORMULA-16",
+                "rule": "FORMULA-16",
                 "spec_paths": [
                     "columns.RNDVAL.derivation.round_half_away_from_zero.source"
                 ],
@@ -1135,7 +1135,7 @@ class PublicDomains(unittest.TestCase):
                 condition = (
                     "value_not_permitted" if bounds else "incompatible_input_type"
                 )
-                requirement = "TIME-5" if bounds else "TIME-1"
+                rule = "TIME-5" if bounds else "TIME-1"
                 context = (
                     {"value": "inclusive", "permitted": ["exclusive"]}
                     if bounds
@@ -1148,12 +1148,12 @@ class PublicDomains(unittest.TestCase):
                 )
                 self.assertEqual(
                     (case / "expected/error.yaml").read_text(),
-                    f"phase: validation\ncondition: {condition}\nspec_paths:\n  - {path}\nrequirement: {requirement}\ncontext:\n{context_yaml}",
+                    f"phase: validation\ncondition: {condition}\nspec_paths:\n  - {path}\nrule: {rule}\ncontext:\n{context_yaml}",
                 )
                 expected_issue = {
                     "phase": "validation",
                     "condition": condition,
-                    "requirement": requirement,
+                    "rule": rule,
                     "spec_paths": [path],
                     "context": context,
                 }
@@ -1231,9 +1231,7 @@ class PublicDomains(unittest.TestCase):
                 case = Path(directory) / finding["case"]
                 shutil.copytree(ROOT / "cases" / finding["case"], case)
                 entry = case / "spec.yaml"
-                expected = {
-                    key: finding[key] for key in ("phase", "condition", "requirement")
-                }
+                expected = {key: finding[key] for key in ("phase", "condition", "rule")}
                 expected.update(
                     spec_paths=[finding["spec_path"]],
                     context=json.loads(finding["context"]),
@@ -1311,9 +1309,7 @@ class PublicDomains(unittest.TestCase):
                 case = root / finding["case"]
                 shutil.copytree(ROOT / "cases" / finding["case"], case)
                 shutil.rmtree(case / "input")
-                expected = {
-                    key: finding[key] for key in ("phase", "condition", "requirement")
-                }
+                expected = {key: finding[key] for key in ("phase", "condition", "rule")}
                 expected.update(
                     spec_paths=[finding["spec_path"]],
                     context=json.loads(finding["context"]),
@@ -1395,7 +1391,7 @@ columns:
                     {
                         "phase": "validation",
                         "condition": "ordinal_field_collision",
-                        "requirement": "INPUT-4",
+                        "rule": "INPUT-4",
                         "spec_paths": ["input.SRC.ordinal"],
                         "context": {"dataset": "SRC", "field": "REC"},
                     }
@@ -1479,7 +1475,7 @@ columns:
                 {
                     "phase": "validation",
                     "condition": "invalid_field_type",
-                    "requirement": "SCHEMA-12",
+                    "rule": "SCHEMA-12",
                     "spec_paths": ["columns.IDVARVAL.derivation.str_pad.width"],
                     "context": {"expected": "int", "actual": "str"},
                 }
@@ -1987,7 +1983,7 @@ columns:
                     (
                         r["phase"],
                         r["condition"],
-                        r["requirement"],
+                        r["rule"],
                         r["spec_paths"],
                         json.dumps(
                             r["context"],
@@ -2008,7 +2004,7 @@ columns:
                     {
                         "phase": pl.String,
                         "condition": pl.String,
-                        "requirement": pl.String,
+                        "rule": pl.String,
                         "spec_paths": pl.List(pl.String),
                         "context": pl.String,
                         "source_span": pl.List(pl.Int64),
@@ -2160,7 +2156,7 @@ columns:
             {
                 "phase": "validation",
                 "condition": "project_environment_missing",
-                "requirement": "FUNC-1",
+                "rule": "FUNC-1",
                 "spec_paths": ["environment"],
                 "context": json.dumps(
                     {
@@ -2264,7 +2260,7 @@ columns:
                         {
                             "phase": "validation",
                             "condition": "phase_boundary",
-                            "requirement": "LOOKUP-7",
+                            "rule": "LOOKUP-7",
                             "spec_paths": ["rows[0].derivations.SECTION.source"],
                             "context": {
                                 "identifier": "P.K",
@@ -2294,11 +2290,11 @@ columns:
                 dict(
                     phase=phase,
                     condition=condition,
-                    requirement=requirement,
+                    rule=rule,
                     spec_paths=paths,
                     context=json.loads(context),
                 )
-                for phase, condition, requirement, paths, context in result.issues.select(
+                for phase, condition, rule, paths, context in result.issues.select(
                     FIELDS
                 ).rows()
             ]
@@ -2368,7 +2364,7 @@ columns:
                     {
                         "phase": "validation",
                         "condition": condition,
-                        "requirement": "LOOKUP-4"
+                        "rule": "LOOKUP-4"
                         if condition == "rename_only_intermediate"
                         else "LOOKUP-10",
                         "spec_paths": ["intermediates[0]"],
@@ -2520,11 +2516,11 @@ columns:
                 dict(
                     phase=phase,
                     condition=condition,
-                    requirement=requirement,
+                    rule=rule,
                     spec_paths=paths,
                     context=json.loads(context),
                 )
-                for phase, condition, requirement, paths, context in result.issues.select(
+                for phase, condition, rule, paths, context in result.issues.select(
                     FIELDS
                 ).rows()
             ]
@@ -2534,7 +2530,7 @@ columns:
                     {
                         "phase": "validation",
                         "condition": "unknown_field",
-                        "requirement": "LOOKUP-7",
+                        "rule": "LOOKUP-7",
                         "spec_paths": ["intermediates[0].filter"],
                         "context": {"identifier": "SRC.CUT", "intermediate": "P"},
                     }
@@ -2633,7 +2629,7 @@ columns:
                     dispositions[name]["classification"],
                     "historical_private_reference_defect",
                 )
-                self.assertEqual(dispositions[name]["requirement"], "LOOKUP-8")
+                self.assertEqual(dispositions[name]["rule"], "LOOKUP-8")
                 self.assertEqual(case["csv"], dispositions[name]["historical_csv"])
                 self.assertEqual(
                     (

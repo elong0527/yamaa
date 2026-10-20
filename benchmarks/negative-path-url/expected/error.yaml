@@ -2,7 +2,7 @@ phase: validation
 condition: resource_path_uri_scheme
 spec_paths:
   - input.LBREF.path
-requirement: FILE-5
+rule: FILE-5
 context:
   dataset: LBREF
   path: https://reference.example.org/limits/lbref.csv

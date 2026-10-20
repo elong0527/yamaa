@@ -12,7 +12,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         (
             d.definition().phase,
             d.definition().condition,
-            d.definition().requirement
+            d.definition().rule
         ),
         ("validation", "invalid_field_type", Some("TEXT-2"))
     );

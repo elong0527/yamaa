@@ -2,6 +2,6 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - columns.NTEAE.derivation.aggregate.between.value
-requirement: LOOKUP-9
+rule: LOOKUP-9
 context:
   identifier: EXF.TRTSDT

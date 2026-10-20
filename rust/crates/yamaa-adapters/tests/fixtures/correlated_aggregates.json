@@ -528,7 +528,7 @@
             ]
           },
           "phase": "validation",
-          "requirement": "LOOKUP-18",
+          "rule": "LOOKUP-18",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -551,7 +551,7 @@
                 ]
               },
               "phase": "validation",
-              "requirement": "LOOKUP-18",
+              "rule": "LOOKUP-18",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -645,7 +645,7 @@
             "identifier": "SRC.V"
           },
           "phase": "validation",
-          "requirement": "FORMULA-22",
+          "rule": "FORMULA-22",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -666,7 +666,7 @@
                 "identifier": "SRC.V"
               },
               "phase": "validation",
-              "requirement": "FORMULA-22",
+              "rule": "FORMULA-22",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -759,7 +759,7 @@
             "reason": "an output-row reduction declares group_by"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-19",
+          "rule": "LOOKUP-19",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -779,7 +779,7 @@
                 "reason": "an output-row reduction declares group_by"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-19",
+              "rule": "LOOKUP-19",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -872,7 +872,7 @@
             "reason": "a qualified reduction groups on columns of 'SRC'"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-18",
+          "rule": "LOOKUP-18",
           "spec_paths": [
             "columns.V.derivation.aggregate.group_by"
           ]
@@ -892,7 +892,7 @@
                 "reason": "a qualified reduction groups on columns of 'SRC'"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-18",
+              "rule": "LOOKUP-18",
               "spec_paths": [
                 "columns.V.derivation.aggregate.group_by"
               ]
@@ -984,7 +984,7 @@
             "identifier": "SRC.ABSENT"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-5",
+          "rule": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate.expr"
           ]
@@ -1003,7 +1003,7 @@
                 "identifier": "SRC.ABSENT"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate.expr"
               ]
@@ -1095,7 +1095,7 @@
             "identifier": "ABSENT"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-5",
+          "rule": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate.expr"
           ]
@@ -1114,7 +1114,7 @@
                 "identifier": "ABSENT"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate.expr"
               ]
@@ -1208,7 +1208,7 @@
             "source": "ID"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-9",
+          "rule": "LOOKUP-9",
           "spec_paths": [
             "columns.V.derivation.aggregate.expr"
           ]
@@ -1229,7 +1229,7 @@
                 "source": "ID"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-9",
+              "rule": "LOOKUP-9",
               "spec_paths": [
                 "columns.V.derivation.aggregate.expr"
               ]
@@ -1322,7 +1322,7 @@
             "expected": "at least one match pair"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-5",
+          "rule": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -1342,7 +1342,7 @@
                 "expected": "at least one match pair"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -1435,7 +1435,7 @@
             "expected": "at least one match pair"
           },
           "phase": "validation",
-          "requirement": "LOOKUP-5",
+          "rule": "LOOKUP-5",
           "spec_paths": [
             "columns.V.derivation.aggregate"
           ]
@@ -1455,7 +1455,7 @@
                 "expected": "at least one match pair"
               },
               "phase": "validation",
-              "requirement": "LOOKUP-5",
+              "rule": "LOOKUP-5",
               "spec_paths": [
                 "columns.V.derivation.aggregate"
               ]
@@ -1834,7 +1834,7 @@
             "row": "total"
           },
           "phase": "row_construction",
-          "requirement": "FORMULA-20",
+          "rule": "FORMULA-20",
           "spec_paths": [
             "rows[0].derivations.R.aggregate"
           ]
@@ -1860,7 +1860,7 @@
                 "row": "total"
               },
               "phase": "row_construction",
-              "requirement": "FORMULA-20",
+              "rule": "FORMULA-20",
               "spec_paths": [
                 "rows[0].derivations.R.aggregate"
               ]
@@ -1964,7 +1964,7 @@
             "row": "total"
           },
           "phase": "derivation",
-          "requirement": "FORMULA-20",
+          "rule": "FORMULA-20",
           "spec_paths": [
             "columns.Q.derivation.aggregate"
           ]
@@ -1995,7 +1995,7 @@
                 "row": "total"
               },
               "phase": "derivation",
-              "requirement": "FORMULA-20",
+              "rule": "FORMULA-20",
               "spec_paths": [
                 "columns.Q.derivation.aggregate"
               ]

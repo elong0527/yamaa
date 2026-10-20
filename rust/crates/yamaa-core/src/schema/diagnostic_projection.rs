@@ -96,7 +96,7 @@ pub struct ResolvedSchemaDiagnostic<'a> {
     pub phase: &'static str,
     pub path: &'a str,
     pub condition: &'static str,
-    pub requirement: Option<&'static str>,
+    pub rule: Option<&'static str>,
     pub context: SchemaDiagnosticContext<'a>,
 }
 pub struct SchemaDiagnosticContext<'a> {
@@ -156,7 +156,7 @@ impl<'a> SchemaDiagnosticReport<'a> {
                 phase: finding.definition().phase,
                 path: &finding.path,
                 condition: finding.definition().condition,
-                requirement: finding.definition().requirement,
+                rule: finding.definition().rule,
                 context: SchemaDiagnosticContext {
                     schema,
                     document,

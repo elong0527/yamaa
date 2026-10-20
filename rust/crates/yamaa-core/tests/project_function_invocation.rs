@@ -145,14 +145,14 @@ mod project {
         fn failure(f: InvocationFailure<Payload>) -> String {
             assert_eq!(f.identity, identity());
             assert_eq!(f.phase(), "derivation");
-            let (condition, requirement) = match &f.kind {
+            let (condition, rule) = match &f.kind {
                 FailureKind::UnknownArguments(_)
                 | FailureKind::MissingRequired { .. }
                 | FailureKind::ArgumentType { .. } => ("invalid_function_argument", "FUNC-5"),
                 FailureKind::CallFailed(_) => ("function_call_failed", "FUNC-8"),
                 _ => ("invalid_function_result", "FUNC-9"),
             };
-            assert_eq!((f.condition(), f.requirement()), (condition, requirement));
+            assert_eq!((f.condition(), f.rule()), (condition, rule));
             match f.kind {
                 FailureKind::UnknownArguments(names) => {
                     format!("error:unknown:{}", names.join(","))
@@ -519,7 +519,7 @@ mod project {
                 assert_eq!(
                     (
                         findings[0].definition().condition,
-                        findings[0].definition().requirement
+                        findings[0].definition().rule
                     ),
                     ("redundant_field_type", Some("INPUT-6"))
                 );
@@ -572,11 +572,7 @@ mod project {
             assert_eq!(findings[0].spec_paths, ["input.SRC.schema"]);
             let definition = findings[0].definition();
             assert_eq!(
-                (
-                    definition.phase,
-                    definition.condition,
-                    definition.requirement
-                ),
+                (definition.phase, definition.condition, definition.rule),
                 ("validation", "invalid_producer_contract", Some("INPUT-10")),
             );
             assert_eq!(findings[0].context.len(), 2);
@@ -612,7 +608,7 @@ mod project {
             );
             assert!(findings
                 .iter()
-                .all(|f| f.definition().requirement == Some("INPUT-10")));
+                .all(|f| f.definition().rule == Some("INPUT-10")));
             assert_eq!(
                 findings[2].context["declarations"],
                 V::Number(("0").parse().expect("canonical integer"))
@@ -653,10 +649,7 @@ mod project {
             ] {
                 let finding = contract.validate_header("SRC", &actual).unwrap().unwrap();
                 assert_eq!(
-                    (
-                        finding.definition().condition,
-                        finding.definition().requirement
-                    ),
+                    (finding.definition().condition, finding.definition().rule),
                     ("producer_contract_mismatch", Some("INPUT-11"))
                 );
                 assert_eq!(finding.spec_paths, ["input.SRC.schema", "input.SRC.path"]);

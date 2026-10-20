@@ -2,7 +2,7 @@ phase: validation
 condition: ungrouped_driver_field
 spec_paths:
   - rows[0].derivations.DOSEORD.row_number.window.order_by[0]
-requirement: ROW-5
+rule: ROW-5
 context:
   identifier: EX.EXSTDTC
   row: subject

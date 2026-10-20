@@ -163,8 +163,8 @@ pub fn unsupported(operation: &str, path: Option<&str>) -> Diagnostic {
     }
 }
 
-/// An engine fault: the stage that refused and its closed code. No
-/// requirement is fabricated.
+/// An engine fault: the stage that refused and its closed code. No rule
+/// is fabricated.
 pub fn rejected(stage: Stage, fault: Fault) -> Diagnostic {
     Diagnostic {
         code: ConditionCode::ApplicationRejected,
@@ -187,7 +187,7 @@ pub fn rejected(stage: Stage, fault: Fault) -> Diagnostic {
 }
 
 /// A policy refusal names its exhausted capacity without inventing a language
-/// requirement. The caller supplies only admitted, typed resource facts.
+/// rule. The caller supplies only admitted, typed resource facts.
 pub fn resource_rejected(
     stage: Stage,
     fault: Fault,
@@ -261,7 +261,7 @@ mod tests {
             for &fault in Fault::ALL {
                 let finding = rejected(stage, fault);
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
-                assert_eq!(finding.requirement(), None);
+                assert_eq!(finding.rule(), None);
                 assert!(finding.spec_paths.is_empty());
                 assert_eq!(
                     finding.context,

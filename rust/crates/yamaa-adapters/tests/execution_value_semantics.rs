@@ -86,7 +86,7 @@ impl Drop for Fixture {
 }
 
 fn issue(issue: &Diagnostic) -> Value {
-    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+    yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
 }
 
 /// One record per ID. Each column holds a high value on 1, a low value on 3
@@ -186,7 +186,7 @@ fn unique_counts_missing_values_as_one_repeated_combination() {
         Err(vec![yamaa_adapters::json!({
             "phase": "verification",
             "condition": "unique_failed",
-            "requirement": "CHECK-10",
+            "rule": "CHECK-10",
             "spec_paths": ["verifications[0].unique"],
             "context": {"columns": ["X"], "failure_count": 1, "keys": [{"ID": 1}, {"ID": 2}]},
         })])
@@ -248,7 +248,7 @@ fn a_conversion_failure_reports_only_the_keys_its_row_has_completed() {
             Err(vec![yamaa_adapters::json!({
                 "phase": "convert",
                 "condition": "conversion_failed",
-                "requirement": "VALUE-3",
+                "rule": "VALUE-3",
                 "spec_paths": ["columns.VALUE"],
                 "context": context,
             })]),
@@ -282,7 +282,7 @@ fn a_literal_converts_only_in_the_rows_that_hold_it() {
                 [yamaa_adapters::json!({
                     "phase": "convert",
                     "condition": "conversion_failed",
-                    "requirement": "VALUE-3",
+                    "rule": "VALUE-3",
                     "spec_paths": ["columns.VALUE"],
                     "context": {"from": "str", "to": "float", "value": "TOTAL"},
                 })],
@@ -329,7 +329,7 @@ fn a_key_reads_one_value_by_exact_equality_and_keeps_its_first_representation() 
         Err(vec![yamaa_adapters::json!({
             "phase": "derivation",
             "condition": "multiple_values_per_key",
-            "requirement": "COLUMN-2",
+            "rule": "COLUMN-2",
             "spec_paths": ["columns.I.derivation.source"],
             "context": {"identifier": "SRC.I", "value_count": 2, "keys": [{"ID": 1}]},
         })])

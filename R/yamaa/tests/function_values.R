@@ -38,11 +38,11 @@ wrapped <- function(record = function(arguments) NULL, when = function(x) FALSE,
 rawfile <- function(path) readBin(path, "raw", n = file.info(path)$size)
 reasons <- function(issues) vapply(issues$context, function(context)
   jsonlite::fromJSON(context, simplifyVector = FALSE)$reason, "", USE.NAMES = FALSE)
-refused <- function(result, condition, requirement, reason) {
+refused <- function(result, condition, rule, reason) {
   stopifnot(is.null(result$output), nrow(result$issues) == 1L,
     identical(result$issues$phase, "derivation"),
     identical(result$issues$condition, condition),
-    identical(result$issues$requirement, requirement),
+    identical(result$issues$rule, rule),
     !has_jsonlite || identical(reasons(result$issues), reason))
   failure <- tryCatch(result$save(), error = identity)
   stopifnot(inherits(failure, "yamaa_error"),

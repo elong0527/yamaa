@@ -51,7 +51,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         panic!("real catalogue faults")
     };
     let mut reached = BTreeSet::new();
-    for (finding, condition, requirement) in findings
+    for (finding, condition, rule) in findings
         .iter()
         .zip([
             ("unknown_codelist", "CT-1"),
@@ -65,9 +65,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         reached.insert(diagnostic.code);
     }

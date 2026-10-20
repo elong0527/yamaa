@@ -3,6 +3,6 @@ condition: conflicting_absence_policy
 spec_paths:
   - intermediates[0].no_match
   - intermediates[0].require_match
-requirement: LOOKUP-24
+rule: LOOKUP-24
 context:
   intermediate: REFRANGE

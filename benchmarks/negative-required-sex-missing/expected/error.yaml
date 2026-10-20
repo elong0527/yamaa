@@ -2,7 +2,7 @@ phase: verification
 condition: not_missing_failed
 spec_paths:
   - columns.SEX.submission.core
-requirement: SUB-11
+rule: SUB-11
 context:
   column: SEX
   failure_count: 1

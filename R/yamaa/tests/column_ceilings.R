@@ -197,7 +197,7 @@ run_column_ceilings <- function() {
       refused <- operation(spec)
       assert_refusal(refused, TRUE)
       issue <- route_issues(refused$issues, spec, project)
-      stopifnot(nrow(issue) == 1L, is.na(issue$requirement),
+      stopifnot(nrow(issue) == 1L, is.na(issue$rule),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE),
         grepl('"actual":1025', issue$context, fixed = TRUE),
         grepl('"limit":1024', issue$context, fixed = TRUE))
@@ -211,7 +211,7 @@ run_column_ceilings <- function() {
     for (operation in operations(project)) {
       issue <- route_issues(operation(spec)$issues, spec, project)
       stopifnot(nrow(issue) == 1L, identical(issue$condition, "incompatible_input_type"),
-        identical(issue$requirement, "TEXT-1"),
+        identical(issue$rule, "TEXT-1"),
         !grepl("incomplete_checks_from", issue$context, fixed = TRUE))
     }
     stopifnot(!file.exists(file.path(case_root, "out.csv")))
@@ -246,7 +246,7 @@ run_column_ceilings <- function() {
       for (operation in operations(project)) {
         issue <- route_issues(operation(spec)$issues, spec, project)
         stopifnot(nrow(issue) == 1L, identical(issue$phase, "engine"),
-          identical(issue$condition, "engine_rejected"), is.na(issue$requirement),
+          identical(issue$condition, "engine_rejected"), is.na(issue$rule),
           identical(issue$spec_paths, list(spec_path)), identical(issue$context, expected))
       }
     }
@@ -280,7 +280,7 @@ run_column_ceilings <- function() {
       issue$context <- sub(identified, ',"expected":"1.0"}', issue$context)
       stopifnot(nrow(issue) == 1L, identical(issue$phase, "validation"),
         identical(issue$condition, "schema_version_mismatch"),
-        identical(issue$requirement, "SCHEMA-2"),
+        identical(issue$rule, "SCHEMA-2"),
         identical(issue$spec_paths, list("schema_version")), identical(issue$context, expected))
     }
   }

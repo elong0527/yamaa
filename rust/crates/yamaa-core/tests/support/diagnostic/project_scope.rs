@@ -20,25 +20,18 @@ fn texts(values: &[&str]) -> Value {
 fn check(
     finding: &Diagnostic,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     paths: &[&str],
     context: &[(&str, Value)],
 ) -> ConditionCode {
-    check_at(
-        finding,
-        "validation",
-        condition,
-        requirement,
-        paths,
-        context,
-    )
+    check_at(finding, "validation", condition, rule, paths, context)
 }
 
 fn check_at(
     finding: &Diagnostic,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     paths: &[&str],
     context: &[(&str, Value)],
 ) -> ConditionCode {
@@ -46,9 +39,9 @@ fn check_at(
         (
             finding.definition().phase,
             finding.definition().condition,
-            finding.definition().requirement
+            finding.definition().rule
         ),
-        (phase, condition, Some(requirement))
+        (phase, condition, Some(rule))
     );
     assert_eq!(finding.spec_paths, paths);
     assert_eq!(

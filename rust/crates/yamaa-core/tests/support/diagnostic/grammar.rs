@@ -14,17 +14,13 @@ pub(crate) fn check(
     finding: Diagnostic,
     expression: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     fields: Vec<(&str, V)>,
 ) -> ConditionCode {
     let definition = finding.definition();
     assert_eq!(
-        (
-            definition.phase,
-            definition.condition,
-            definition.requirement
-        ),
-        ("validation", condition, Some(requirement))
+        (definition.phase, definition.condition, definition.rule),
+        ("validation", condition, Some(rule))
     );
     assert_eq!(finding.spec_paths, ["columns.VALUE.derivation.expr"]);
     let mut expected: Context = fields.into_iter().map(|(k, v)| (k.into(), v)).collect();
@@ -39,7 +35,7 @@ pub(crate) fn check(
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let path = "columns.VALUE.derivation.expr";
     let mut reached = BTreeSet::new();
-    for (field, expression, condition, requirement, extra) in [
+    for (field, expression, condition, rule, extra) in [
         (
             Field::Compute,
             "1 +",
@@ -106,7 +102,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             failure.diagnostic(field, path, expression, position.character),
             expression,
             condition,
-            requirement,
+            rule,
             extra,
         ));
     }
@@ -117,7 +113,7 @@ pub(crate) fn predicate_reached(
 ) -> std::collections::BTreeSet<yamaa_core::diagnostic::ConditionCode> {
     pub(crate) use yamaa_core::diagnostic::ConditionCode as C;
     let mut reached = std::collections::BTreeSet::new();
-    for (text, code, requirement) in [
+    for (text, code, rule) in [
         ("A >", C::ExpressionInvalid, "FORMULA-1"),
         (
             "A LIKE 'a' ESCAPE 'ab'",
@@ -146,9 +142,9 @@ pub(crate) fn predicate_reached(
         assert_eq!(d.code, code);
         assert_eq!(d.definition().phase, "validation");
         assert_eq!(d.definition().condition, "invalid_expression");
-        assert_eq!(d.definition().requirement, Some(requirement));
+        assert_eq!(d.definition().rule, Some(rule));
         assert_eq!(failure.condition(), "invalid_expression");
-        assert_eq!(failure.requirement(), requirement);
+        assert_eq!(failure.rule(), rule);
         assert_eq!(d.spec_paths, ["columns.VALUE.window.filter"]);
         assert_eq!(d.context["predicate"], V::String(text.into()));
         assert_eq!(d.context["position"], V::from(position.character));
@@ -167,7 +163,7 @@ pub(crate) fn predicate_reached(
     assert_eq!(d.code, C::LiteralIntegerOverflow);
     assert_eq!(d.definition().phase, "validation");
     assert_eq!(d.definition().condition, "integer_overflow");
-    assert_eq!(d.definition().requirement, Some("VALUE-5"));
+    assert_eq!(d.definition().rule, Some("VALUE-5"));
     assert_eq!(d.spec_paths, ["filter"]);
     assert_eq!(
         d.context,

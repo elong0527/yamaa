@@ -21,14 +21,14 @@ pub(crate) fn text(v: &str) -> V {
 pub(crate) fn check(
     d: Diagnostic,
     condition: &str,
-    requirement: Option<&str>,
+    rule: Option<&str>,
     paths: &[&str],
     values: Vec<(&str, V)>,
 ) -> ConditionCode {
     let def = d.definition();
     assert_eq!(
-        (def.phase, def.condition, def.requirement),
-        ("validation", condition, requirement)
+        (def.phase, def.condition, def.rule),
+        ("validation", condition, rule)
     );
     assert_eq!(d.spec_paths, paths);
     assert_eq!(
@@ -179,7 +179,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     .unwrap();
     let group = ["SRC.ID"];
     let groups = [("SRC", &group[..])];
-    for (phase, condition, requirement, row) in [
+    for (phase, condition, rule, row) in [
         (
             Phase::Row {
                 group_by: Some(&group),
@@ -223,12 +223,12 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         reached.insert(check(
             d,
             condition,
-            Some(requirement),
+            Some(rule),
             &["columns.VALUE.derivation.source.variable"],
             fields,
         ));
     }
-    for (operation, field, value, condition, requirement, fields) in [
+    for (operation, field, value, condition, rule, fields) in [
         (
             "source",
             "variable",
@@ -267,16 +267,14 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         let d = found
             .iter()
             .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-            .find(|d| {
-                d.definition().condition == condition && d.definition().requirement == requirement
-            })
+            .find(|d| d.definition().condition == condition && d.definition().rule == rule)
             .unwrap();
         let path = if operation == "compute" {
             format!("columns.VALUE.derivation.{operation}.{field}")
         } else {
             format!("columns.VALUE.derivation.{operation}")
         };
-        reached.insert(check(d, condition, requirement, &[&path], fields));
+        reached.insert(check(d, condition, rule, &[&path], fields));
     }
     for (expr, reason) in [
         ("SUM(ID)", "a grouped row aggregate reads its row driver"),
@@ -389,7 +387,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     ] {
         let analysis = column_dependencies::analyze(&dependencies, &keys, false).unwrap();
         for f in analysis.diagnostics {
-            let (condition, requirement, site, fields) = match &f {
+            let (condition, rule, site, fields) = match &f {
                 column_dependencies::Diagnostic::Cycle { .. } => (
                     "dependency_cycle",
                     "COLUMN-6",
@@ -419,11 +417,11 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
                 ),
             };
             assert_eq!(f.condition(), condition);
-            assert_eq!(f.requirement(), requirement);
+            assert_eq!(f.rule(), rule);
             reached.insert(check(
                 f.specification_diagnostic(&columns, &paths).unwrap(),
                 condition,
-                Some(requirement),
+                Some(rule),
                 &site,
                 fields,
             ));
@@ -435,7 +433,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
 pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
     let source = source();
-    for (operation, payload, condition, requirement, suffix, values) in [
+    for (operation, payload, condition, rule, suffix, values) in [
         (
             "row_value",
             T::map(vec![
@@ -506,7 +504,7 @@ pub(crate) fn window_reached() -> BTreeSet<ConditionCode> {
         reached.insert(check(
             projected.remove(0),
             condition,
-            Some(requirement),
+            Some(rule),
             &[&path],
             values,
         ));
@@ -684,7 +682,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
         kind: ColumnType::Int,
     }])
     .unwrap();
-    for (value, donor, target, filter, kind, requirement, path, fields) in [
+    for (value, donor, target, filter, kind, rule, path, fields) in [
         (
             "SEL.V",
             "DID",
@@ -766,16 +764,16 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
         let projected = found
             .iter()
             .flat_map(|f| f.diagnostics(prepared.source()).unwrap())
-            .find(|d| d.definition().requirement == Some(requirement))
+            .find(|d| d.definition().rule == Some(rule))
             .unwrap();
         reached.insert(check(
             projected,
-            if requirement == "LOOKUP-9" {
+            if rule == "LOOKUP-9" {
                 "incompatible_input_type"
             } else {
                 "unknown_field"
             },
-            Some(requirement),
+            Some(rule),
             &[path],
             fields,
         ));
@@ -785,7 +783,7 @@ pub(crate) fn lookup_reached() -> BTreeSet<ConditionCode> {
 
 pub(crate) fn source_filter_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (variable, predicate, condition, requirement, values) in [
+    for (variable, predicate, condition, rule, values) in [
         (
             "SRC.V",
             "ID = 1",
@@ -819,7 +817,7 @@ pub(crate) fn source_filter_reached() -> BTreeSet<ConditionCode> {
         reached.insert(check(
             findings[0].diagnostics(&source()).unwrap().remove(0),
             condition,
-            Some(requirement),
+            Some(rule),
             &["columns.VALUE.derivation.source.filter"],
             values,
         ));
@@ -979,7 +977,7 @@ pub fn verification_reached() -> BTreeSet<ConditionCode> {
 
 pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (kind, column_checks, dataset_checks, condition, requirement, path, reason) in [
+    for (kind, column_checks, dataset_checks, condition, rule, path, reason) in [
         (
             "int",
             T::List(vec![]),
@@ -1155,7 +1153,7 @@ pub fn verification_declarations_reached() -> BTreeSet<ConditionCode> {
         reached.insert(check(
             findings.into_iter().next().unwrap(),
             condition,
-            Some(requirement),
+            Some(rule),
             &[path],
             vec![("reason", text(reason))],
         ));
@@ -1205,7 +1203,7 @@ pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
     }])
     .unwrap();
     let mut reached = BTreeSet::new();
-    for (name, kind, condition, requirement, context) in [
+    for (name, kind, condition, rule, context) in [
         (
             "OTHER",
             ColumnType::Int,
@@ -1250,7 +1248,7 @@ pub(crate) fn implicit_source_reached() -> BTreeSet<ConditionCode> {
                 .unwrap()
                 .remove(0),
             condition,
-            Some(requirement),
+            Some(rule),
             &["columns.VALUE.derivation.source"],
             context,
         ));

@@ -1515,7 +1515,7 @@ mod source {
             for (index, finding) in actual.iter().enumerate() {
                 assert_eq!(finding.definition().phase, "ingest");
                 assert_eq!(
-                    finding.definition().requirement,
+                    finding.definition().rule,
                     Some(if index == 9 { "CSV-10" } else { "CSV-16" })
                 );
             }
@@ -1563,17 +1563,11 @@ mod source {
                 ]
             );
             assert_eq!(
-                (
-                    actual[0].definition().phase,
-                    actual[0].definition().requirement
-                ),
+                (actual[0].definition().phase, actual[0].definition().rule),
                 ("validation", Some("INPUT-6"))
             );
             assert_eq!(
-                (
-                    actual[1].definition().phase,
-                    actual[1].definition().requirement
-                ),
+                (actual[1].definition().phase, actual[1].definition().rule),
                 ("ingest", Some("INPUT-7"))
             );
             let long = format!("{}β\0\"\\", "9".repeat(6000));
@@ -1743,15 +1737,15 @@ mod source {
                     ],
                 ),
             ];
-            for (actual, (code, requirement, extra)) in source_diagnostics(&borrowed).zip(wanted) {
+            for (actual, (code, rule, extra)) in source_diagnostics(&borrowed).zip(wanted) {
                 let fields = vec![("dataset", text("SRC")), ("path", text("data.parquet"))]
                     .into_iter()
                     .chain(extra)
                     .collect();
                 assert_eq!(actual, expected(code, "input.SRC.path", fields));
                 assert_eq!(
-                    (actual.definition().phase, actual.definition().requirement),
-                    ("ingest", Some(requirement))
+                    (actual.definition().phase, actual.definition().rule),
+                    ("ingest", Some(rule))
                 );
             }
             let mut inspected = 0;

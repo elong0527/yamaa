@@ -2,6 +2,6 @@ phase: validation
 condition: value_not_permitted
 spec_paths:
   - sdtm.define
-requirement: DEFINE-2
+rule: DEFINE-2
 context:
   detail: a transport requires the document file name define.xml

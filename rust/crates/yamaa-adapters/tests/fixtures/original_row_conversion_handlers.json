@@ -515,7 +515,7 @@
             "value": true
           },
           "phase": "convert",
-          "requirement": "VALUE-3",
+          "rule": "VALUE-3",
           "spec_paths": [
             "rows[0].derivations.VALUE.unconvertible"
           ]
@@ -542,7 +542,7 @@
                 "value": true
               },
               "phase": "convert",
-              "requirement": "VALUE-3",
+              "rule": "VALUE-3",
               "spec_paths": [
                 "rows[0].derivations.VALUE.unconvertible"
               ]

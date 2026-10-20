@@ -2,7 +2,7 @@ phase: derivation
 condition: aggregate_multiple_records
 spec_paths:
   - columns.BAVL.derivation.aggregate
-requirement: FORMULA-20
+rule: FORMULA-20
 context:
   reducer: ONLY
   record_count: 2

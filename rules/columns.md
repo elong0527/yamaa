@@ -465,13 +465,13 @@ those donor records.
 
 <a id="column-15"></a>
 
-### COLUMN-15. A language diagnostic cites the requirement that owns its failure; only listed implementation conditions cite none
+### COLUMN-15. A language diagnostic cites the rule that owns its failure; only listed implementation conditions cite none
 
-A language diagnostic cites the requirement that owns its failure. A missing
-normative requirement is permitted only for the implementation conditions
-listed below, in their stated phases. These conditions report an admitted
-operation that the implementation does not support or an engine refusal;
-neither asserts a language rule violation.
+A language diagnostic cites the rule that owns its failure. A missing rule is
+permitted only for the implementation conditions listed below, in their stated
+phases. These conditions report an admitted operation that the implementation
+does not support or an engine refusal; neither asserts a language rule
+violation.
 
 Fails: `unsupported_operation`, `engine_rejected`.
 Evidence: `tools/tests/test_diagnostics.py::test_null_policy_is_explicit_registered_and_reached`.

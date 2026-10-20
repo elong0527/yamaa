@@ -92,7 +92,7 @@ impl Fixture {
                     yamaa_adapters::json!({
                         "phase": "validation",
                         "condition": "unknown_field",
-                        "requirement": "WINDOW-11",
+                        "rule": "WINDOW-11",
                         "spec_paths": [path],
                         "context": {
                             "identifier": identifier,
@@ -136,7 +136,7 @@ fn row(issue: &Diagnostic) -> Value {
     yamaa_adapters::json!({
         "phase": issue.phase(),
         "condition": issue.condition(),
-        "requirement": issue.requirement(),
+        "rule": issue.rule(),
         "spec_paths": issue.spec_paths,
         "context": issue.context.clone()
     })
@@ -148,7 +148,7 @@ fn ungrouped(path: &str, identifier: &str, dataset: &str) -> Value {
     yamaa_adapters::json!({
         "phase": "validation",
         "condition": "ungrouped_driver_field",
-        "requirement": "NAME-4",
+        "rule": "NAME-4",
         "spec_paths": [path],
         "context": {"identifier": identifier, "dataset": dataset}
     })
@@ -159,7 +159,7 @@ fn unknown(path: &str, identifier: &str) -> Value {
     yamaa_adapters::json!({
         "phase": "validation",
         "condition": "unknown_field",
-        "requirement": "NAME-3",
+        "rule": "NAME-3",
         "spec_paths": [path],
         "context": {"identifier": identifier}
     })

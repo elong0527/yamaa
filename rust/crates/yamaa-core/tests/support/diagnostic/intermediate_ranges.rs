@@ -72,7 +72,7 @@ fn text(value: &str) -> JsonValue {
 fn check(
     d: Diagnostic,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     path: &str,
     context: &[(&str, &str)],
 ) -> ConditionCode {
@@ -80,9 +80,9 @@ fn check(
         (
             d.definition().phase,
             d.definition().condition,
-            d.definition().requirement
+            d.definition().rule
         ),
-        ("validation", condition, Some(requirement))
+        ("validation", condition, Some(rule))
     );
     assert_eq!(d.spec_paths, [path]);
     assert_eq!(

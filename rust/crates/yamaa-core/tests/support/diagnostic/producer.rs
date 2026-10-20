@@ -14,14 +14,14 @@ fn first(result: Result<PreparedSpecification, PrepareError>) -> Diagnostic {
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    let check = |finding: Diagnostic, condition, requirement, paths: &[&str]| {
+    let check = |finding: Diagnostic, condition, rule, paths: &[&str]| {
         assert_eq!(
             (
                 finding.definition().phase,
                 finding.definition().condition,
-                finding.definition().requirement
+                finding.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, paths);
         assert_eq!(finding.source_span, None);

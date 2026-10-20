@@ -1376,7 +1376,7 @@ mod service {
                     assert_eq!(
                         (
                             findings[0].definition().condition,
-                            findings[0].definition().requirement
+                            findings[0].definition().rule
                         ),
                         ("invalid_declaration", Some("CHECK-4"))
                     );

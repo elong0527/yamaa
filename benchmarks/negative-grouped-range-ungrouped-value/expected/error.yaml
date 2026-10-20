@@ -2,7 +2,7 @@ phase: validation
 condition: ungrouped_driver_field
 spec_paths:
   - intermediates[0].between.value
-requirement: ROW-5
+rule: ROW-5
 context:
   identifier: EX.EXSTDY
   intermediate: PERIOD

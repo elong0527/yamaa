@@ -945,7 +945,7 @@ mod service {
                     "study"
                 )]
             );
-            assert_eq!(findings[0].definition().requirement, Some("DEFINE-28"));
+            assert_eq!(findings[0].definition().rule, Some("DEFINE-28"));
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]
@@ -980,7 +980,7 @@ mod service {
             );
             assert!(findings
                 .iter()
-                .all(|finding| finding.definition().requirement == Some("DEFINE-28")));
+                .all(|finding| finding.definition().rule == Some("DEFINE-28")));
             assert_eq!(spy.events, ["capture_environment"]);
         }
         #[test]
@@ -1040,7 +1040,7 @@ mod service {
             use define::ResourceObservation as R;
             use yamaa_core::json::Value as C;
 
-            for (path, observation, code, requirement) in [
+            for (path, observation, code, rule) in [
                 (
                     "datasets.DM.artifact",
                     R::Missing,
@@ -1063,7 +1063,7 @@ mod service {
                 let finding = define::resource_diagnostic(path, "declared.csv", observation);
                 assert_eq!(finding.code, code);
                 assert_eq!(finding.definition().phase, "validation");
-                assert_eq!(finding.definition().requirement, Some(requirement));
+                assert_eq!(finding.definition().rule, Some(rule));
                 assert_eq!(finding.spec_paths, [path]);
                 assert_eq!(
                     finding.context,
@@ -1085,7 +1085,7 @@ mod service {
                     define::resource_diagnostic("sdtm.specs[0]", "declared.yaml", observation);
                 assert_eq!(finding.code, ConditionCode::ApplicationRejected);
                 assert_eq!(finding.definition().phase, "engine");
-                assert_eq!(finding.definition().requirement, None);
+                assert_eq!(finding.definition().rule, None);
                 assert_eq!(finding.spec_paths, ["sdtm.specs[0]"]);
                 assert_eq!(
                     finding.context,
@@ -1113,7 +1113,7 @@ mod service {
                 finding.definition().condition,
                 "resource_path_content_changed"
             );
-            assert_eq!(finding.definition().requirement, Some("FILE-10"));
+            assert_eq!(finding.definition().rule, Some("FILE-10"));
             assert_eq!(finding.spec_paths, ["datasets.DM.artifact"]);
             assert_eq!(
                 finding.context,
@@ -1125,7 +1125,7 @@ mod service {
             use define::PublicationFailure as P;
             use yamaa_core::json::Value as C;
 
-            for (stage, code, phase, requirement) in [
+            for (stage, code, phase, rule) in [
                 (
                     P::TargetAdmission(yamaa_core::application_issue::Fault::InvalidTarget),
                     ConditionCode::ApplicationRejected,
@@ -1146,7 +1146,7 @@ mod service {
                 );
                 assert_eq!(finding.code, code);
                 assert_eq!(finding.definition().phase, phase);
-                assert_eq!(finding.definition().requirement, requirement);
+                assert_eq!(finding.definition().rule, rule);
                 assert_eq!(finding.spec_paths, ["define"]);
                 let mut expected: yamaa_core::diagnostic::Context = [
                     ("artifact".into(), C::from(usize::MAX)),

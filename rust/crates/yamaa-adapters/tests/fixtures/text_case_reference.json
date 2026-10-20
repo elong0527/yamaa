@@ -6,7 +6,7 @@
       "spec_paths": [
         "columns.SITE.derivation.str_case.source"
       ],
-      "requirement": "TEXT-1",
+      "rule": "TEXT-1",
       "context": {
         "source": "SITENUM",
         "expected": "str",
@@ -21,7 +21,7 @@
       "spec_paths": [
         "columns.SITE.derivation.str_case.to"
       ],
-      "requirement": "SCHEMA-12",
+      "rule": "SCHEMA-12",
       "context": {
         "value": "capitalize",
         "permitted": [

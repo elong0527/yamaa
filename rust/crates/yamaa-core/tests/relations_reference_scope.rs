@@ -531,7 +531,7 @@ mod relations {
                 (
                     diagnostic.definition().phase,
                     diagnostic.definition().condition,
-                    diagnostic.definition().requirement
+                    diagnostic.definition().rule
                 ),
                 ("validation", "incomparable_range_types", Some("LOOKUP-9"))
             );
@@ -824,7 +824,7 @@ mod relations {
                     (
                         diagnostic.definition().phase,
                         diagnostic.definition().condition,
-                        diagnostic.definition().requirement
+                        diagnostic.definition().rule
                     ),
                     ("validation", "driver_unavailable", Some("ROW-1"))
                 );
@@ -872,7 +872,7 @@ mod relations {
                     (
                         diagnostic.definition().phase,
                         diagnostic.definition().condition,
-                        diagnostic.definition().requirement
+                        diagnostic.definition().rule
                     ),
                     ("validation", "unknown_field", Some("NAME-3"))
                 );
@@ -925,7 +925,7 @@ mod relations {
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
                     ("validation", "unknown_field", Some("LOOKUP-11"))
                 );
@@ -1463,7 +1463,7 @@ mod relations {
                 assert_eq!(run_report::handler_target(path), target, "{path}");
                 assert_eq!(
                     run_report::handler_condition(path, handler)
-                        .and_then(|code| code.definition().requirement),
+                        .and_then(|code| code.definition().rule),
                     rule,
                     "{path}"
                 );

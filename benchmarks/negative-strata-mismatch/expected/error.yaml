@@ -2,7 +2,7 @@ phase: verification
 condition: assert_failed
 spec_paths:
   - verifications[1].assert
-requirement: CHECK-12
+rule: CHECK-12
 context:
   verification_id: randomized-strata-agree
   failure_count: 1

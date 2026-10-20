@@ -107,15 +107,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     ];
     cases
         .into_iter()
-        .map(|(cause, phase, condition, requirement, context)| {
+        .map(|(cause, phase, condition, rule, context)| {
             let diagnostic = cause.diagnostic().unwrap();
             assert_eq!(
                 (
                     diagnostic.definition().phase,
                     diagnostic.definition().condition,
-                    diagnostic.definition().requirement
+                    diagnostic.definition().rule
                 ),
-                (phase, condition, Some(requirement))
+                (phase, condition, Some(rule))
             );
             let path = match cause {
                 F::MultipleValues { path, .. }

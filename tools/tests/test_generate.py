@@ -331,7 +331,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('<h2 id="outputs-heading">Unexpected Output</h2>', page)
         self.assertIn("not an accepted artifact", page)
         self.assertIn("<div><dt>phase</dt><dd>output</dd></div>", page)
-        self.assertIn("<div><dt>requirement</dt><dd>OUTPUT-3</dd></div>", page)
+        self.assertIn("<div><dt>rule</dt><dd>OUTPUT-3</dd></div>", page)
         self.assertIn("<details><summary>expected/error.yaml</summary>", page)
         base = "https://github.com/elong0527/yamaa/edit/main/benchmarks/negative-output-duplicate"
         self.assertIn(

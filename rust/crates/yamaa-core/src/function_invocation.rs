@@ -125,10 +125,10 @@ impl<E, I> InvocationFailure<E, I> {
         self.code().definition().condition
     }
     /// Name the normative owner of this failure; no handler can repair it.
-    pub fn requirement(&self) -> &'static str {
+    pub fn rule(&self) -> &'static str {
         self.code()
             .definition()
-            .requirement
+            .rule
             .expect("runtime function rule")
     }
 }

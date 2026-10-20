@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - columns.VISITSEQ.derivation.row_number.window.filter
-requirement: SCHEMA-12
+rule: SCHEMA-12
 context:
   expected: predicate
   actual: int

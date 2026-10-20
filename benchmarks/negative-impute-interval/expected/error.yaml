@@ -2,7 +2,7 @@ phase: impute
 condition: interval_or_duration_text
 spec_paths:
   - columns.ASTDT.derivation.impute
-requirement: TIME-13
+rule: TIME-13
 context:
   source: AE.AESTDTC
   value: 2025-03-01/2025-03-10

@@ -40,7 +40,7 @@
         "spec_paths": [
           "columns.RESULT.derivation.str_pad.source"
         ],
-        "requirement": "NAME-3",
+        "rule": "NAME-3",
         "context": {
           "identifier": "SRC.ABSENT"
         }
@@ -58,7 +58,7 @@
         "spec_paths": [
           "columns.RESULT.derivation.str_pad.width"
         ],
-        "requirement": "TEXT-2",
+        "rule": "TEXT-2",
         "context": {
           "expected": "a positive integer width"
         }
@@ -75,7 +75,7 @@
         "spec_paths": [
           "columns.RESULT.derivation.str_pad.width"
         ],
-        "requirement": "SCHEMA-12",
+        "rule": "SCHEMA-12",
         "context": {
           "expected": "int",
           "actual": "str",
@@ -96,7 +96,7 @@
         "spec_paths": [
           "columns.RESULT"
         ],
-        "requirement": "VALUE-3",
+        "rule": "VALUE-3",
         "context": {
           "from": "str",
           "to": "int",

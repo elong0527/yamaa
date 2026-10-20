@@ -2,7 +2,7 @@ phase: validation
 condition: decimals_not_applicable
 spec_paths:
   - adam.specs[0].output.decimals
-requirement: JSON-5
+rule: JSON-5
 context:
   dataset: ADSL
   specification: spec.yaml

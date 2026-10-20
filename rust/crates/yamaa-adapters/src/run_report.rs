@@ -286,7 +286,7 @@ fn checks(run: &dyn RunView, report: &Value) -> Result<Vec<core::Check>, Error> 
                 name: text(value, "check")?,
                 id: optional(value, "verification_id")?,
                 target: optional(value, "target")?,
-                rule: text(value, "requirement")?,
+                rule: text(value, "rule")?,
                 evaluated: count(value, "evaluated_count")?,
                 failure,
                 severity: match value["severity"].as_str() {
@@ -663,8 +663,8 @@ mod tests {
             target: Some("AGE".into()),
             rule: yamaa_core::diagnostic::ConditionCode::VerificationNotMissingFailed
                 .definition()
-                .requirement
-                .expect("registered requirement")
+                .rule
+                .expect("registered rule")
                 .into(),
             severity: VerificationSeverity::Error,
             evaluated: 8,
@@ -677,10 +677,7 @@ mod tests {
             name: "range".into(),
             id: Some("é🙂".into()),
             target: Some("AGE".into()),
-            rule: range_failed()
-                .requirement
-                .expect("registered requirement")
-                .into(),
+            rule: range_failed().rule.expect("registered rule").into(),
             severity: VerificationSeverity::Warning,
             evaluated: 8,
             failure: Some(core::Failure {

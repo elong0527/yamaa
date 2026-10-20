@@ -52,8 +52,8 @@ pub struct Definition {
     pub phase: &'static str,
     pub condition: &'static str,
     /// Language failures cite their owning rule. Only implementation refusals
-    /// listed by COLUMN-15 retain an absent normative requirement.
-    pub requirement: Option<&'static str>,
+    /// listed by COLUMN-15 retain an absent rule.
+    pub rule: Option<&'static str>,
 }
 
 /// Normative ownership of scalar submission decoder facts. These citations do
@@ -75,7 +75,7 @@ pub enum ScalarSubmissionRule {
 }
 
 impl ScalarSubmissionRule {
-    pub fn requirement(self) -> &'static str {
+    pub fn rule(self) -> &'static str {
         match self {
             Self::Identifier => "SPEC-2",
             Self::DefineId => "DEFINE-9",
@@ -110,7 +110,7 @@ pub const SCALAR_SUBMISSION_RULES: &[ScalarSubmissionRule] = &[
 ];
 
 macro_rules! conditions {
-    ($($code:ident => ($phase:literal, $condition:literal, $requirement:expr),)*) => {
+    ($($code:ident => ($phase:literal, $condition:literal, $rule:expr),)*) => {
         /// Stable internal cause identity; no wire spelling or numeric discriminant.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
         pub enum ConditionCode { $($code,)* }
@@ -120,7 +120,7 @@ macro_rules! conditions {
             pub fn definition(self) -> Definition {
                 match self {
                     $(Self::$code => Definition {
-                        phase: $phase, condition: $condition, requirement: $requirement,
+                        phase: $phase, condition: $condition, rule: $rule,
                     },)*
                 }
             }
@@ -523,7 +523,7 @@ pub type Context = BTreeMap<String, crate::json::Value>;
 /// registered cause, the specification paths in authored order, the
 /// structured context and, when recorded, the span and operand route.
 ///
-/// Phase, condition and requirement are not stored: each is a pure function
+/// Phase, condition and rule are not stored: each is a pure function
 /// of `code` in this registry. Missing geometry means unavailable, never
 /// zero: a present `start == end == 0` span and a present empty route are
 /// recorded facts. The context is an owned JSON tree whose numbers keep their
@@ -553,7 +553,7 @@ impl Diagnostic {
     }
 
     /// The rule the cause cites, absent only for implementation refusals.
-    pub fn requirement(&self) -> Option<&'static str> {
-        self.definition().requirement
+    pub fn rule(&self) -> Option<&'static str> {
+        self.definition().rule
     }
 }

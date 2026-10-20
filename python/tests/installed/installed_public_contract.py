@@ -65,7 +65,7 @@ def unknown_member(available):
     return {
         "phase": "validation",
         "condition": "unknown_specification_name",
-        "requirement": "PROJECT-6",
+        "rule": "PROJECT-6",
         "spec_paths": [],
         "context": '{"available":' + available + ',"name":"ADSL"}',
         "source_span": None,
@@ -78,7 +78,7 @@ def nothing_to_save(rule):
     return {
         "phase": "output",
         "condition": "nothing_to_save",
-        "requirement": rule,
+        "rule": rule,
         "spec_paths": [],
         "context": "{}",
         "source_span": None,
@@ -350,7 +350,7 @@ class PublicContract(unittest.TestCase):
         result = yamaa.spec(self.spec).run()
         issues = self.issues(result).to_dicts()
         self.assertEqual(
-            [(row["phase"], row["condition"], row["requirement"]) for row in issues],
+            [(row["phase"], row["condition"], row["rule"]) for row in issues],
             [("verification", "range_failed", "CHECK-7")],
         )
         self.assertEqual(
@@ -768,7 +768,7 @@ class PublicContract(unittest.TestCase):
         )
         (row,) = self.issues(yamaa.spec(self.spec).check()).to_dicts()
         self.assertEqual(
-            (row["phase"], row["condition"], row["requirement"], row["spec_paths"]),
+            (row["phase"], row["condition"], row["rule"], row["spec_paths"]),
             (
                 "validation",
                 "integer_overflow",
@@ -936,7 +936,7 @@ class Resolve(unittest.TestCase):
             yamaa.spec(source).resolve()
         self.assertEqual(
             caught.exception.issues.select(
-                "condition", "requirement", "spec_paths", "context"
+                "condition", "rule", "spec_paths", "context"
             ).rows(),
             [
                 (

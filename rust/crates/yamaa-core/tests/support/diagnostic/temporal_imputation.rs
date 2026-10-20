@@ -29,17 +29,13 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut check = |diagnostic: Diagnostic,
                      phase: &str,
                      condition: &str,
-                     requirement: &str,
+                     rule: &str,
                      path: &str,
                      fields: Vec<(&str, V)>| {
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            (phase, condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            (phase, condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_paths, [path]);
         assert_eq!(
@@ -53,7 +49,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(diagnostic.operand_route, None);
         reached.insert(diagnostic.code);
     };
-    for (month, day, minimum, condition, requirement, path, fields) in [
+    for (month, day, minimum, condition, rule, path, fields) in [
         (
             Some("6"),
             Some(D::Number("1")),
@@ -130,14 +126,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         else {
             panic!("admitted semantic policy failure")
         };
-        check(
-            diagnostic,
-            "validation",
-            condition,
-            requirement,
-            path,
-            fields,
-        );
+        check(diagnostic, "validation", condition, rule, path, fields);
     }
     let date = K::Impute(
         completion_policy(
@@ -202,7 +191,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             ("completed", text("2023-04-31")),
         ],
     );
-    for (kind, requirement, expected) in [
+    for (kind, rule, expected) in [
         (date, "TIME-1", "str or date"),
         (datetime, "TIME-8", "str or datetime"),
         (
@@ -230,7 +219,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
             operation(kind).source_value(ValueRef::Int(1)).unwrap_err(),
             "validation",
             "incompatible_input_type",
-            requirement,
+            rule,
             "columns.V.derivation.impute.source",
             vec![
                 ("source", text("SRC.V")),

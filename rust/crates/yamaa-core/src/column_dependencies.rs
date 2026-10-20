@@ -29,12 +29,12 @@ impl Diagnostic {
         self.diagnostic_code().definition().condition
     }
 
-    /// Retain the governing language requirement for each dependency rule.
-    pub fn requirement(&self) -> &'static str {
+    /// Retain the language rule that governs each dependency.
+    pub fn rule(&self) -> &'static str {
         self.diagnostic_code()
             .definition()
-            .requirement
-            .expect("dependency cause has a normative requirement")
+            .rule
+            .expect("dependency cause has a normative rule")
     }
 
     /// Select the authored path kind without constructing host-specific path strings.

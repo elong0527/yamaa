@@ -2,6 +2,6 @@ phase: validation
 condition: invalid_parent_path
 spec_paths:
   - parent
-requirement: LAYER-2
+rule: LAYER-2
 context:
   reason: remote_reference

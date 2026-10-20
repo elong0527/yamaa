@@ -71,7 +71,7 @@ mod execution {
                 Ok(result) => result.issues().to_vec(),
                 Err(records) => records,
             };
-            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
+            records.iter().map(|issue| yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})).collect()
         }
         const BODY: &str = r#"schema_version: "1.0"
 domain: TEST
@@ -156,7 +156,7 @@ rows:
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
-                    "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                    "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                     "spec_paths":["rows[0].derivations.SECTION.source"],
                     "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                 })]
@@ -173,7 +173,7 @@ rows:
             assert_eq!(
                 found,
                 vec![yamaa_adapters::json!({
-                    "phase":"validation", "condition":"unknown_field", "requirement":"LOOKUP-11",
+                    "phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-11",
                     "spec_paths":["rows[1].derivations.V.compute.expr"], "context":{"identifier":"P.FINAL"}
                 })]
             );
@@ -214,8 +214,8 @@ rows:
             assert_eq!(
                 issues(fixture.run(&collision)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "requirement":"LOOKUP-3", "spec_paths":["intermediates[0].dataset","input.SELF"], "context":{"identifier":"SELF"}}),
-                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "requirement":"LOOKUP-3", "spec_paths":["intermediates[1].dataset","input.SELF"], "context":{"identifier":"SELF"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "rule":"LOOKUP-3", "spec_paths":["intermediates[0].dataset","input.SELF"], "context":{"identifier":"SELF"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"duplicate_identifier", "rule":"LOOKUP-3", "spec_paths":["intermediates[1].dataset","input.SELF"], "context":{"identifier":"SELF"}}),
                 ]
             );
             let missing_rows = BODY
@@ -230,8 +230,8 @@ rows:
             assert_eq!(
                 issues(fixture.run(&missing_rows)),
                 vec![
-                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "requirement":"LOOKUP-7", "spec_paths":["intermediates[0].dataset"], "context":{"identifier":"SELF","intermediate":"P"}}),
-                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "requirement":"LOOKUP-7", "spec_paths":["intermediates[1].dataset"], "context":{"identifier":"SELF","intermediate":"F"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-7", "spec_paths":["intermediates[0].dataset"], "context":{"identifier":"SELF","intermediate":"P"}}),
+                    yamaa_adapters::json!({"phase":"validation", "condition":"unknown_field", "rule":"LOOKUP-7", "spec_paths":["intermediates[1].dataset"], "context":{"identifier":"SELF","intermediate":"F"}}),
                 ]
             );
             assert!(!fixture.0.join("src.csv").exists());
@@ -244,7 +244,7 @@ rows:
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
-                    "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                    "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                     "spec_paths":["rows[0].derivations.SECTION.case[0].then.source"],
                     "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                 })]
@@ -261,7 +261,7 @@ rows:
             assert_eq!(
                 issues(fixture.run(&body)),
                 vec![yamaa_adapters::json!({
-                    "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                    "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                     "spec_paths":["rows[0].derivations.SECTION.first_available.sources[0]"],
                     "context":{"identifier":"P.K","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                 })]
@@ -292,7 +292,7 @@ rows:
                 assert_eq!(
                     issues(fixture.run(&body)),
                     [yamaa_adapters::json!({
-                        "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                        "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                         "spec_paths":[path], "context":{"identifier":identifier,
                             "available_phase":"completed_prior_row_template", "required_phase":"row_construction"}
                     })]
@@ -376,7 +376,7 @@ columns:
                 assert_eq!(
                     issues(fixture.run(&body)),
                     vec![yamaa_adapters::json!({
-                        "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                        "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                         "spec_paths":[format!("rows[0].derivations.SECTION.{operation_name}")],
                         "context":{"identifier":identifier,"available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                     })],
@@ -455,7 +455,7 @@ rows:
                 assert_eq!(
                     issues(fixture.run(&body)),
                     vec![yamaa_adapters::json!({
-                        "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                        "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                         "spec_paths":paths,
                         "context":{"identifier":"P.DAY","available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                     })],
@@ -495,7 +495,7 @@ rows:
                 assert_eq!(
                     issues(fixture.run(&filtered(filter))),
                     vec![yamaa_adapters::json!({
-                        "phase":"validation", "condition":"phase_boundary", "requirement":"LOOKUP-7",
+                        "phase":"validation", "condition":"phase_boundary", "rule":"LOOKUP-7",
                         "spec_paths":paths,
                         "context":{"identifier":identifier,"available_phase":"completed_prior_row_template","required_phase":"row_construction"}
                     })],
@@ -515,7 +515,7 @@ rows:
             assert_eq!(
                 issues(fixture.run(&grouped)),
                 vec![yamaa_adapters::json!({
-                    "phase":"validation", "condition":"phase_boundary", "requirement":"ROW-6",
+                    "phase":"validation", "condition":"phase_boundary", "rule":"ROW-6",
                     "spec_paths":["rows[0].filter"],
                     "context":{"identifier":"P.DAY","row":"first","available_phase":"row_construction","required_phase":"grouped_row_filter"}
                 })]
@@ -790,10 +790,15 @@ rows:
             }
         }
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
-            issues.iter().map(|row| yamaa_adapters::json!({
-        "phase": row.phase(), "condition": row.condition(), "requirement": row.requirement(),
-        "spec_paths": row.spec_paths, "context": row.context.clone()
-    })).collect()
+            issues
+                .iter()
+                .map(|row| {
+                    yamaa_adapters::json!({
+                        "phase": row.phase(), "condition": row.condition(), "rule": row.rule(),
+                        "spec_paths": row.spec_paths, "context": row.context.clone()
+                    })
+                })
+                .collect()
         }
         #[test]
         fn unknown_references_preserve_original_identifiers_and_dataset_context() {
@@ -875,7 +880,7 @@ rows:
     mod empty_child_condition {
         //! An empty child equals its parent (LAYER-5): for these negative
         //! benchmarks the child's first issue must match the parent's in phase,
-        //! condition and requirement, even though the layered path resolves column
+        //! condition and rule, even though the layered path resolves column
         //! dependencies before final validation runs (#2292).
         use std::{
             fs,
@@ -902,7 +907,7 @@ rows:
             }
         }
 
-        /// The first issue of a build as `phase | condition | requirement`.
+        /// The first issue of a build as `phase | condition | rule`.
         fn first_issue(spec: &Path) -> String {
             let path = spec.to_str().unwrap();
             let identity = Identity {
@@ -929,7 +934,7 @@ rows:
                 "{} | {} | {:?}",
                 issue.phase(),
                 issue.condition(),
-                issue.requirement()
+                issue.rule()
             )
         }
 
@@ -1175,7 +1180,7 @@ rows:
                 let issue = &issues[0];
                 assert_eq!(issue.phase(), "validation");
                 assert_eq!(issue.condition(), "duplicate_identifier");
-                assert_eq!(issue.requirement(), Some("LOOKUP-3"));
+                assert_eq!(issue.rule(), Some("LOOKUP-3"));
                 assert_eq!(
                     yamaa_adapters::json_wire::encode_object(&issue.context),
                     "{\"identifier\":\"REF\"}"
@@ -1297,11 +1302,7 @@ rows:
                                 "duplicate_intermediate_records",
                                 "read={read} {entry}"
                             );
-                            assert_eq!(
-                                issue.requirement(),
-                                Some("LOOKUP-17"),
-                                "read={read} {entry}"
-                            );
+                            assert_eq!(issue.rule(), Some("LOOKUP-17"), "read={read} {entry}");
                             assert_eq!(
                                 issue.spec_paths,
                                 ["intermediates[0].verifications[0].unique"],
@@ -1316,7 +1317,7 @@ rows:
                                 None => parent_issues = Some(issues),
                                 Some(expected) => {
                                     // The child must report the parent's issue: same
-                                    // phase, condition, requirement and spec path. On
+                                    // phase, condition, rule and spec path. On
                                     // the read path the parent's context additionally
                                     // embeds its own spec path (pre-existing composed
                                     // provenance), so context is compared verbatim
@@ -1330,11 +1331,7 @@ rows:
                                             want.condition(),
                                             "read={read}"
                                         );
-                                        assert_eq!(
-                                            actual.requirement(),
-                                            want.requirement(),
-                                            "read={read}"
-                                        );
+                                        assert_eq!(actual.rule(), want.rule(), "read={read}");
                                         assert_eq!(
                                             actual.spec_paths, want.spec_paths,
                                             "read={read}"
@@ -1569,7 +1566,7 @@ rows:
         }
 
         fn issue(value: &Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":value.phase(),"condition":value.condition(),"requirement":value.requirement(),"spec_paths":value.spec_paths,"context":value.context.clone()})
+            yamaa_adapters::json!({"phase":value.phase(),"condition":value.condition(),"rule":value.rule(),"spec_paths":value.spec_paths,"context":value.context.clone()})
         }
 
         fn assert_overflow(fixture: &Fixture, path: &str, actual: &str) {
@@ -1755,10 +1752,15 @@ rows:
             }
         }
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
-            issues.iter().map(|row| yamaa_adapters::json!({
-        "phase": row.phase(), "condition": row.condition(), "requirement": row.requirement(),
-        "spec_paths": row.spec_paths, "context": row.context.clone()
-    })).collect()
+            issues
+                .iter()
+                .map(|row| {
+                    yamaa_adapters::json!({
+                        "phase": row.phase(), "condition": row.condition(), "rule": row.rule(),
+                        "spec_paths": row.spec_paths, "context": row.context.clone()
+                    })
+                })
+                .collect()
         }
         #[test]
         fn cyclic_donor_reads_preserve_original_findings_and_forward_dependencies_execute() {
@@ -1890,7 +1892,7 @@ rows:
             yamaa_adapters::json!(rows
                 .iter()
                 .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),
+                    "phase":row.phase(),"condition":row.condition(),"rule":row.rule(),
                     "spec_paths":row.spec_paths,"context":row.context.clone()
                 }))
                 .collect::<Vec<_>>())
@@ -2005,10 +2007,15 @@ rows:
             }
         }
         fn rows(issues: &[Diagnostic]) -> yamaa_core::json::Value {
-            issues.iter().map(|row| yamaa_adapters::json!({
-        "phase": row.phase(), "condition": row.condition(), "requirement": row.requirement(),
-        "spec_paths": row.spec_paths, "context": row.context.clone()
-    })).collect()
+            issues
+                .iter()
+                .map(|row| {
+                    yamaa_adapters::json!({
+                        "phase": row.phase(), "condition": row.condition(), "rule": row.rule(),
+                        "spec_paths": row.spec_paths, "context": row.context.clone()
+                    })
+                })
+                .collect()
         }
         #[test]
         fn scalar_and_window_keys_reuse_current_operands_types_handlers_and_independent_saved_truth(
@@ -2204,9 +2211,9 @@ rows:
                 fs::remove_file(fixture.0.join(present)).unwrap();
             }
             let missing_sources = yamaa_adapters::json!([
-                {"phase": "validation", "condition": "resource_path_missing", "requirement": "FILE-7",
+                {"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7",
                  "spec_paths": ["input.SRC.path"], "context": {"dataset": "SRC", "path": "src.csv"}},
-                {"phase": "validation", "condition": "resource_path_missing", "requirement": "FILE-7",
+                {"phase": "validation", "condition": "resource_path_missing", "rule": "FILE-7",
                  "spec_paths": ["input.TAB.path"], "context": {"dataset": "TAB", "path": "tab.csv"}},
             ]);
             fs::create_dir(fixture.0.join("tab.csv")).unwrap();
@@ -2296,10 +2303,15 @@ rows:
                     "{}",
                     yamaa_adapters::json_wire::encode(&case["name"])
                 );
-                let rows = checked.iter().map(|row| yamaa_adapters::json!({
-            "phase":row.phase(), "condition":row.condition(), "requirement":row.requirement(),
-            "spec_paths":row.spec_paths, "context":row.context.clone()
-        })).collect::<Vec<_>>();
+                let rows = checked
+                    .iter()
+                    .map(|row| {
+                        yamaa_adapters::json!({
+                            "phase":row.phase(), "condition":row.condition(), "rule":row.rule(),
+                            "spec_paths":row.spec_paths, "context":row.context.clone()
+                        })
+                    })
+                    .collect::<Vec<_>>();
                 assert_eq!(
                     yamaa_adapters::json!(rows),
                     case["issues"],
@@ -2565,7 +2577,7 @@ output: {path: out.csv, columns: [I, V]}
             };
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition(), "unknown_project_function");
-            assert_eq!(issues[0].requirement(), Some("FUNC-4"));
+            assert_eq!(issues[0].rule(), Some("FUNC-4"));
             assert_eq!(
                 issues[0].spec_paths,
                 ["columns.V.derivation.case[0].then.function.name"]
@@ -2734,7 +2746,7 @@ output: {path: out.csv, columns: [I, V]}
             );
             let issues = study.refused();
             assert_eq!(issues[0].condition(), "unknown_window");
-            assert_eq!(issues[0].requirement(), Some("WINDOW-1"));
+            assert_eq!(issues[0].rule(), Some("WINDOW-1"));
             assert_eq!(
                 issues[0].spec_paths,
                 ["columns.PREV.derivation.row_value.window"]
@@ -2880,7 +2892,7 @@ output: {path: out.csv, columns: [I, V]}
                     let issues = result.issues();
                     assert_eq!(issues.len(), 1, "{issues:?}");
                     assert_eq!(issues[0].condition(), "row_count_failed");
-                    assert_eq!(issues[0].requirement(), Some("CHECK-13"));
+                    assert_eq!(issues[0].rule(), Some("CHECK-13"));
                     assert_eq!(issues[0].spec_paths, ["verifications[0].row_count"]);
                     let context = yamaa_core::json::Value::Object(issues[0].context.clone());
                     assert_eq!(context["denominator"], 0);
@@ -2908,7 +2920,7 @@ output: {path: out.csv, columns: [I, V]}
             let issues = result.issues();
             assert_eq!(issues.len(), 1, "{issues:?}");
             assert_eq!(issues[0].condition(), "assert_failed");
-            assert_eq!(issues[0].requirement(), Some("CHECK-12"));
+            assert_eq!(issues[0].rule(), Some("CHECK-12"));
             assert_eq!(issues[0].spec_paths, ["verifications[0].assert"]);
             let context = yamaa_core::json::Value::Object(issues[0].context.clone());
             assert_eq!(
@@ -2944,7 +2956,7 @@ output: {path: out.csv, columns: [I, V]}
             yamaa_adapters::json!(rows
                 .iter()
                 .map(|row| yamaa_adapters::json!({
-                    "phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),
+                    "phase":row.phase(),"condition":row.condition(),"rule":row.rule(),
                     "spec_paths":row.spec_paths,"context":row.context.clone()
                 }))
                 .collect::<Vec<_>>())

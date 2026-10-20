@@ -85,7 +85,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     let compiled = compiled();
     let rows = [Row(vec![Value::Int(i64::MAX)])];
     let mut reached = BTreeSet::new();
-    for (code, path, phase, condition, requirement) in [
+    for (code, path, phase, condition, rule) in [
         (
             OutputMissingKeyFailed,
             "keys[0]",
@@ -140,16 +140,13 @@ pub fn reached() -> BTreeSet<ConditionCode> {
                 projected.diagnostics[0].code.definition().condition,
                 condition
             );
-            assert_eq!(
-                projected.diagnostics[0].code.definition().requirement,
-                Some(requirement)
-            );
+            assert_eq!(projected.diagnostics[0].code.definition().rule, Some(rule));
         }
         if phase == Phase::Verification {
             let observation = object(&projected.observations[0]);
             let failure = object(&observation["failure"]);
             assert_eq!(failure["condition"], Fact::Text(condition));
-            assert_eq!(failure["requirement"], Fact::Text(requirement));
+            assert_eq!(failure["rule"], Fact::Text(rule));
             assert_eq!(observation["evaluated_count"], Fact::Unsigned(9));
             assert_eq!(observation["specification"], Fact::Text("test.yaml"));
         } else {

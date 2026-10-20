@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_string_template
 spec_paths:
   - columns.SUBJREF.derivation.str_template
-requirement: TEXT-3
+rule: TEXT-3
 context:
   reason: invalid_placeholder
   placeholder: "SITEID + ':' + SUBJID"

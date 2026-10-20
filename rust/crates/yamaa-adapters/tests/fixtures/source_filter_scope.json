@@ -17,7 +17,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
@@ -30,7 +30,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
@@ -53,7 +53,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.first_available.sources[0].filter"
           ],
@@ -66,7 +66,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.first_available.sources[0].filter"
           ],
@@ -89,7 +89,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "rows[0].derivations.VALUE.case[0].then.source.filter"
           ],
@@ -102,7 +102,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "rows[0].derivations.VALUE.case[0].then.source.filter"
           ],
@@ -125,7 +125,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],
@@ -138,7 +138,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],
@@ -161,7 +161,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],
@@ -172,7 +172,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],
@@ -185,7 +185,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],
@@ -196,7 +196,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.source.filter"
           ],
@@ -219,7 +219,7 @@
         {
           "phase": "validation",
           "condition": "ungrouped_driver_field",
-          "requirement": "ROW-5",
+          "rule": "ROW-5",
           "spec_paths": [
             "columns.VALUE.derivation.source"
           ],
@@ -243,7 +243,7 @@
         {
           "phase": "validation",
           "condition": "resource_path_missing",
-          "requirement": "FILE-7",
+          "rule": "FILE-7",
           "spec_paths": [
             "input.SRC.path"
           ],
@@ -257,7 +257,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],

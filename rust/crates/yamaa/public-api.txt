@@ -173,7 +173,7 @@ yamaa::diagnostic::Diagnostic::code: pub code: String
 yamaa::diagnostic::Diagnostic::context: pub context: DiagnosticContext
 yamaa::diagnostic::Diagnostic::operand_route: pub operand_route: Option<Vec<String>>
 yamaa::diagnostic::Diagnostic::phase: pub phase: String
-yamaa::diagnostic::Diagnostic::requirement: pub requirement: Option<String>
+yamaa::diagnostic::Diagnostic::rule: pub rule: Option<String>
 yamaa::diagnostic::Diagnostic::severity: pub severity: Severity
 yamaa::diagnostic::Diagnostic::source_span: pub source_span: Option<SourceSpan>
 yamaa::diagnostic::Diagnostic::spec_path: pub spec_path: Vec<String>

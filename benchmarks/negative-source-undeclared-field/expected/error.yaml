@@ -2,6 +2,6 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - columns.AGE.derivation.source
-requirement: NAME-3
+rule: NAME-3
 context:
   identifier: DM.AGEYRS

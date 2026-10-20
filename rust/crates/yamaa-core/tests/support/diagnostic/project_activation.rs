@@ -26,7 +26,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         message: "unchanged",
     });
     let mut reached = BTreeSet::new();
-    for (kind, details, condition, requirement) in [
+    for (kind, details, condition, rule) in [
         (
             FailureKind::UnknownArguments(names.clone()),
             None,
@@ -93,8 +93,8 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             projection::invocation("columns.X.derivation", &failure, None, &[], details).unwrap();
         let mapping = diagnostic.code.definition();
         assert_eq!(
-            (mapping.phase, mapping.condition, mapping.requirement),
-            ("derivation", condition, Some(requirement))
+            (mapping.phase, mapping.condition, mapping.rule),
+            ("derivation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_path, "columns.X.derivation");
         let Fact::Text(name) = diagnostic.context["function"] else {

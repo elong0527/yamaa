@@ -18,7 +18,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         let diagnostic = op.declaration_diagnostic().unwrap();
         let def = diagnostic.definition();
         assert_eq!(
-            (def.phase, def.condition, def.requirement),
+            (def.phase, def.condition, def.rule),
             ("validation", "invalid_string_template", Some("TEXT-3"))
         );
         assert_eq!(
@@ -45,7 +45,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let diagnostic = op.missing_diagnostic(1).unwrap();
     let def = diagnostic.definition();
     assert_eq!(
-        (def.phase, def.condition, def.requirement),
+        (def.phase, def.condition, def.rule),
         ("mapping", "missing_input", Some("COLUMN-10"))
     );
     assert_eq!(

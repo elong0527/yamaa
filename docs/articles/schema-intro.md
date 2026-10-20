@@ -83,7 +83,7 @@ under LOOKUP-6).
 The schema never defines behavior. It says that `cut` takes `breaks`,
 `labels`, and `missing`; the
 [derivation contracts](rules.md) say what `cut` computes and when it
-fails. Schema descriptions link to their owning requirement and add no
+fails. Schema descriptions link to their owning rule and add no
 new meaning.
 
 That split is the whole reading order: the schema tells you what you

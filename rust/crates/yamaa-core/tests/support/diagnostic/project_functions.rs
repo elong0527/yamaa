@@ -11,7 +11,7 @@ use yamaa_core::{
 };
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (name, value, functions, condition, requirement, path) in [
+    for (name, value, functions, condition, rule, path) in [
         (
             "unknown",
             N::Integer("7".into()),
@@ -45,9 +45,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_paths, [path]);
         assert_eq!(
@@ -108,13 +108,9 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
-        (
-            "validation",
-            "project_environment_missing",
-            Some("FUNC-1")
-        )
+        ("validation", "project_environment_missing", Some("FUNC-1"))
     );
     assert_eq!(
         diagnostic.spec_paths,
@@ -177,7 +173,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "phase_boundary", Some("COLUMN-4"))
     );
@@ -304,7 +300,7 @@ pub fn donor_keep_reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "invalid_derive_step", Some("LOOKUP-22"))
     );

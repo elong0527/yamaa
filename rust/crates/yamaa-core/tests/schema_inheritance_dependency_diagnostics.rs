@@ -47,7 +47,7 @@ mod schema {
                 )
             );
             assert_eq!(findings[1].definition().condition, "dependency_cycle");
-            assert_eq!(findings[1].definition().requirement, Some("COLUMN-6"));
+            assert_eq!(findings[1].definition().rule, Some("COLUMN-6"));
             assert!(findings
                 .iter()
                 .all(|finding| finding.source_span.is_none() && finding.operand_route.is_none()));
@@ -187,7 +187,7 @@ mod schema {
             assert_eq!(
                 findings
                     .iter()
-                    .map(|finding| (finding.scalar_rule(), finding.requirement()))
+                    .map(|finding| (finding.scalar_rule(), finding.rule()))
                     .collect::<Vec<_>>(),
                 [
                     (Some(Rule::DefineId), Some("DEFINE-9")),
@@ -261,7 +261,7 @@ mod schema {
             assert_eq!(
                 findings
                     .iter()
-                    .map(|finding| (finding.scalar_rule(), finding.requirement()))
+                    .map(|finding| (finding.scalar_rule(), finding.rule()))
                     .collect::<Vec<_>>(),
                 [
                     (Some(Rule::DatasetClass), Some("SUB-4")),
@@ -1334,7 +1334,7 @@ mod schema {
                     .map(|d| (
                         d.path.as_str(),
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ))
                     .collect::<Vec<_>>(),
                 vec![("output", "invalid_clear", Some("LAYER-9"))]
@@ -2132,7 +2132,7 @@ mod schema {
                         finding.phase,
                         finding.path,
                         finding.condition,
-                        finding.requirement,
+                        finding.rule,
                         finding.context.collect(),
                     )
                 })

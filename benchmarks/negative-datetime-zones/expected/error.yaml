@@ -2,7 +2,7 @@ phase: convert
 condition: conversion_failed
 spec_paths:
   - columns.ASTDTM
-requirement: VALUE-15
+rule: VALUE-15
 context:
   from: str
   to: datetime

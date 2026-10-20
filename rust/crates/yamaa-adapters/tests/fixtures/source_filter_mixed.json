@@ -20,7 +20,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
@@ -33,7 +33,7 @@
         {
           "phase": "validation",
           "condition": "prohibited_construct",
-          "requirement": "LOOKUP-8",
+          "rule": "LOOKUP-8",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source.filter"
           ],
@@ -127,7 +127,7 @@
         {
           "phase": "validation",
           "condition": "ungrouped_driver_field",
-          "requirement": "ROW-5",
+          "rule": "ROW-5",
           "spec_paths": [
             "columns.VALUE.derivation.case[0].then.source"
           ],

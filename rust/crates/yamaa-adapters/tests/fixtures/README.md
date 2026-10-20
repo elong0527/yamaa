@@ -441,7 +441,7 @@ opened. Existing benchmark expectations remain unchanged.
 Both installed hosts and the original-document adapter compare each envelope's
 status and complete findings. The core registry test also reaches all twelve preflight causes through
 actual compilation, including the existing Parquet redundant-type requirement.
-Null requirements and unavailable dataset values are intentional reference truth;
+Null rules and unavailable dataset values are intentional reference truth;
 empty lists and ordered repeated/listed row names must remain intact. This is
 preparation evidence, not public API or `shared_run` inventory qualification.
 
@@ -473,7 +473,7 @@ approved VALUE-5 predicate carrier rule requires `integer_overflow` during
 parsing, with the complete predicate and character position. The findings remain
 deferred until source ingestion, preserve the source table and failed-save gate,
 and cannot be hidden by boolean short circuiting. The historical reference
-reports derivation overflow with an absent requirement; that reference remains
+reports derivation overflow with an absent rule; that reference remains
 unqualified for this family. Benchmark expected files are unchanged. Parser and
 executable-plan resource refusals remain implementation policies.
 
@@ -552,7 +552,7 @@ values before parsing that inapplicable filter. The existing core predicate and
 collection services evaluate eligibility before reading candidate values.
 Filtered key assignments, secondary source expressions and source ordering
 remain explicitly unsupported before study effects in this bounded slice.
-The existing predicate requirement/context gaps remain separate and unqualified.
+The existing predicate rule/context gaps remain separate and unqualified.
 
 ## source_inspection
 # Declared-source metadata preflight
@@ -588,7 +588,7 @@ Fifteen independently enumerated issue payloads inspect known verification decla
 
 Unicode is written with the required escape in ASCII YAML source and decoded into UTF-8 issue text; the source policy is unchanged.
 
-The payload contains only phase, condition, requirement, spec_paths and context; context is JSON text encoded once by the shared Rust adapter. Held checks and data-dependent violations have no static issue. Known deferred declarations appear even where a build would first fail conversion or arithmetic. This inspection does not change build checkpoints, promise successful execution, report source-dependent binding findings, or qualify the public filesystem facade.
+The payload contains only phase, condition, rule, spec_paths and context; context is JSON text encoded once by the shared Rust adapter. Held checks and data-dependent violations have no static issue. Known deferred declarations appear even where a build would first fail conversion or arithmetic. This inspection does not change build checkpoints, promise successful execution, report source-dependent binding findings, or qualify the public filesystem facade.
 
 Both installed hosts compare complete UTF-8 payloads twice while study callbacks are forbidden. A fake engine port separately pins zero study effects and unchanged earlier build failure. The encoder checks the exact byte ceiling, refusal one byte below it and reuse after refusal.
 

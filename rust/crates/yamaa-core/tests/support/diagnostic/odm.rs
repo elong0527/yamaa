@@ -13,7 +13,7 @@ pub(crate) fn check(
     finding: F<'_>,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     path: &str,
     context: Vec<(&str, V)>,
     reached: &mut BTreeSet<ConditionCode>,
@@ -23,9 +23,9 @@ pub(crate) fn check(
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
-        (phase, condition, Some(requirement))
+        (phase, condition, Some(rule))
     );
     assert_eq!(diagnostic.spec_paths, [path]);
     assert_eq!(
@@ -39,7 +39,7 @@ pub(crate) fn check(
 }
 pub fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (declared, name, requirement) in [
+    for (declared, name, rule) in [
         (OdmDeclared::Types, "types", "NAME-8"),
         (OdmDeclared::Schema, "schema", "NAME-8"),
         (OdmDeclared::Ordinal, "ordinal", "INPUT-4"),
@@ -51,7 +51,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             },
             "validation",
             "odm_schema_field_type",
-            requirement,
+            rule,
             &format!("input.D.{name}"),
             vec![("dataset", text("D")), ("declared", text(name))],
             &mut reached,

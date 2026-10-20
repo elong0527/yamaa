@@ -1760,7 +1760,7 @@ mod project {
                 panic!("complete rejection")
             };
             assert_eq!(findings.len(), 3);
-            for (finding, condition, requirement) in [
+            for (finding, condition, rule) in [
                 (&findings[0], "unknown_codelist", "CT-1"),
                 (&findings[1], "codelist_type_mismatch", "CT-8"),
                 (&findings[2], "redundant_declaration", "CT-9"),
@@ -1770,9 +1770,9 @@ mod project {
                     (
                         d.definition().phase,
                         d.definition().condition,
-                        d.definition().requirement
+                        d.definition().rule
                     ),
-                    ("validation", condition, Some(requirement))
+                    ("validation", condition, Some(rule))
                 );
                 assert_eq!(d.context["column"], JsonValue::String("VALUE".into()));
             }
@@ -1886,7 +1886,7 @@ mod project {
                 (
                     finding.definition().phase,
                     finding.definition().condition,
-                    finding.definition().requirement
+                    finding.definition().rule
                 ),
                 ("verification", "allowed_values_failed", Some("CT-7"))
             );
@@ -2044,7 +2044,7 @@ mod project {
             let mut wrong = record(&rows, &values);
             wrong.code = ConditionCode::VerificationAllowedValuesFailed;
             assert_eq!(wrong.code.definition().condition, "allowed_values_failed");
-            assert_eq!(wrong.code.definition().requirement, Some("CHECK-6"));
+            assert_eq!(wrong.code.definition().rule, Some("CHECK-6"));
             assert!(matches!(
                 diagnostics(&compiled, &[record(&rows, &values), wrong],),
                 Err(Error::InvalidObservation)

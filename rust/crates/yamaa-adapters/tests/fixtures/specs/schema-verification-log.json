@@ -1,7 +1,7 @@
 {
   "artifacts": [
     {
-      "byte_length": 731,
+      "byte_length": 729,
       "columns": [
         "ARTIFACT",
         "KIND",
@@ -213,7 +213,7 @@
       "check": "not_missing",
       "evaluated_count": 3,
       "failure": null,
-      "requirement": "CHECK-5",
+      "rule": "CHECK-5",
       "severity": "error",
       "spec_path": "columns.AGE.verifications[0].not_missing",
       "specification": "spec.yaml",
@@ -249,13 +249,13 @@
           }
         ],
         "phase": "verification",
-        "requirement": "CHECK-7",
+        "rule": "CHECK-7",
         "severity": "warning",
         "spec_paths": [
           "columns.AGE.verifications[1].range"
         ]
       },
-      "requirement": "CHECK-7",
+      "rule": "CHECK-7",
       "severity": "warning",
       "spec_path": "columns.AGE.verifications[1].range",
       "specification": "spec.yaml",
@@ -266,7 +266,7 @@
       "check": "row_count",
       "evaluated_count": 1,
       "failure": null,
-      "requirement": "CHECK-13",
+      "rule": "CHECK-13",
       "severity": "error",
       "spec_path": "verifications[0].row_count",
       "specification": "spec.yaml",

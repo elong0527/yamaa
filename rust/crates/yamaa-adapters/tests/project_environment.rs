@@ -136,8 +136,8 @@ mod project {
             );
             (rejected, port, allocation, pointer)
         }
-        fn expected(condition: &str, requirement: &str, path: &str, context: Value) -> Value {
-            yamaa_adapters::json!({"phase": "validation", "condition": condition, "requirement": requirement, "spec_paths": [path], "context": context})
+        fn expected(condition: &str, rule: &str, path: &str, context: Value) -> Value {
+            yamaa_adapters::json!({"phase": "validation", "condition": condition, "rule": rule, "spec_paths": [path], "context": context})
         }
         fn opaque(
             rejected: &project_source::RejectedEnvironment<Opaque>,
@@ -363,7 +363,7 @@ mod project {
                 assert_eq!(
                     crate::support::rows(&rows),
                     [
-                        yamaa_adapters::json!({"phase": "engine", "condition": "engine_rejected", "requirement": null, "spec_paths": ["codelists[1]"], "context": json!({
+                        yamaa_adapters::json!({"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["codelists[1]"], "context": json!({
                             "stage": "environment", "code": "resource_limit",
                             "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,
                             "actual": Limits::SPEC_BYTES + 1,
@@ -733,7 +733,7 @@ mod project {
                     Value::Str("é\0🙂".into()),
                 ],
             };
-            for (kind, condition, requirement) in cases {
+            for (kind, condition, rule) in cases {
                 let failure = make_failure(kind);
                 let issue = invocation(
                     "rows[2].derivation.BMI.function",
@@ -745,7 +745,7 @@ mod project {
                 .unwrap();
                 assert_eq!(issue.phase(), "derivation");
                 assert_eq!(issue.condition(), condition);
-                assert_eq!(issue.requirement(), Some(requirement));
+                assert_eq!(issue.rule(), Some(rule));
                 assert_eq!(issue.spec_paths, ["rows[2].derivation.BMI.function"]);
                 let context = yamaa_core::json::Value::Object(issue.context.clone());
                 assert_eq!(context["function"], "bmi");
@@ -895,7 +895,7 @@ mod project {
             )
             .unwrap();
             let payload: Rc<str> = Rc::from("original host condition");
-            for (result, condition, requirement, host_failure) in [
+            for (result, condition, rule, host_failure) in [
                 (
                     Ok(Value::Bool(true)),
                     "invalid_function_result",
@@ -966,7 +966,7 @@ mod project {
                     .unwrap()
                 };
                 assert_eq!(issue.condition(), condition);
-                assert_eq!(issue.requirement(), Some(requirement));
+                assert_eq!(issue.rule(), Some(rule));
                 assert_eq!(port.calls, 1);
             }
         }
@@ -1208,7 +1208,7 @@ mod project {
             for (record, (reason, versions, actual)) in records.iter().zip(expected) {
                 assert_eq!(record.phase(), "validation");
                 assert_eq!(record.condition(), "runtime_artifact_mismatch");
-                assert_eq!(record.requirement(), Some("FUNC-3"));
+                assert_eq!(record.rule(), Some("FUNC-3"));
                 assert_eq!(record.spec_paths, ["lock"]);
                 assert_eq!(
                     yamaa_core::json::Value::Object(record.context.clone()),
@@ -1638,7 +1638,7 @@ mod project {
                         let report = result.observations();
                         assert_eq!(
                             report["diagnostics"],
-                            yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","requirement":"FILE-7","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"absent.csv"}}])
+                            yamaa_adapters::json!([{"phase":"validation","condition":"resource_path_missing","rule":"FILE-7","spec_paths":["input.SRC.path"],"context":{"dataset":"SRC","path":"absent.csv"}}])
                         );
                         assert_eq!(
                             report["source_reads"],
@@ -1711,7 +1711,7 @@ mod project {
             );
             assert_eq!(
                 observed["diagnostics"],
-                yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","requirement":"TEXT-6","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
+                yamaa_adapters::json!([{"phase":"validation","condition":"invalid_regex","rule":"TEXT-6","spec_paths":["columns.LATE.verifications[0].matches.pattern"],"context":{"pattern":"("}}])
             );
             assert_eq!(result.output(), None);
             let mut publisher = Publisher::default();
@@ -2218,7 +2218,7 @@ functions:
                 issues
                     .iter()
                     .any(|issue| issue.condition() == "invalid_derive_step"
-                        && issue.requirement() == Some("LOOKUP-22")),
+                        && issue.rule() == Some("LOOKUP-22")),
                 "{issues:?}"
             );
         }
@@ -2466,7 +2466,7 @@ functions:
             let Err(rejected) = PreparedRun::prepare(document, environment()) else {
                 panic!("project calls without a host environment cannot execute")
             };
-            let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "requirement": "FUNC-1", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
+            let missing = |column: &str, function: &str| yamaa_adapters::json!({"phase": "validation", "condition": "project_environment_missing", "rule": "FUNC-1", "spec_paths": vec![format!("columns.{column}.derivation.function.name")], "context": {"function":function,"language":"python","cause":"undeclared"}});
             assert_eq!(
                 crate::support::rows(&yamaa_adapters::project_check::rejected(&rejected).unwrap()),
                 [missing("VALUE", "id"), missing("OTHER", "absent")]

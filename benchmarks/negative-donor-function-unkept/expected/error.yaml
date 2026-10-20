@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_derive_step
 spec_paths:
   - intermediates[1].derivations.BMI.function.args.weight_kg
-requirement: LOOKUP-22
+rule: LOOKUP-22
 context:
   function: bmi
   argument: weight_kg

@@ -2,6 +2,6 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - columns.ELDFL.derivation.case
-requirement: EXPR-7
+rule: EXPR-7
 context:
   expected: at least one when/then item

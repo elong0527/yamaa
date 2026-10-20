@@ -177,7 +177,7 @@ fn assert_unmatched_key(fixture: &Fixture) {
     assert!(
         domain.issues().iter().any(|issue| {
             let value = yamaa_adapters::report_storage::diagnostic_value(issue);
-            value["condition"] == "unmatched_key" && value["requirement"] == "LOOKUP-24"
+            value["condition"] == "unmatched_key" && value["rule"] == "LOOKUP-24"
         }),
         "{:?}",
         domain.issues()

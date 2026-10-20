@@ -3,7 +3,7 @@ use yamaa_core::json::Value as C;
 use yamaa_core::{csv_source::parse, diagnostic::ConditionCode};
 pub(crate) fn reached() -> BTreeSet<ConditionCode> {
     let mut reached = BTreeSet::new();
-    for (input, condition, requirement, record, field) in [
+    for (input, condition, rule, record, field) in [
         (
             &b""[..],
             "source_header_absent",
@@ -79,14 +79,10 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         let finding = error.finding("SRC", "source.csv").unwrap().diagnostic();
         let definition = finding.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            ("ingest", condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            ("ingest", condition, Some(rule))
         );
-        assert_eq!(error.requirement(), Some(requirement));
+        assert_eq!(error.rule(), Some(rule));
         assert_eq!(finding.spec_paths, ["input.SRC.path"]);
         assert_eq!(finding.context["dataset"], C::String("SRC".into()));
         assert_eq!(finding.context["path"], C::String("source.csv".into()));
@@ -103,7 +99,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         .join(",");
     let error = parse(header.as_bytes()).unwrap_err();
     assert!(error.finding("SRC", "source.csv").is_none());
-    assert!(error.requirement().is_none());
+    assert!(error.rule().is_none());
     reached
 }
 
@@ -114,7 +110,7 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         csv_source, diagnostic::Context, typed_csv::PreparedTypes, value::ColumnType,
     };
     let mut reached = std::collections::BTreeSet::new();
-    for (declarations, content, phase, condition, requirement, field, extra) in [
+    for (declarations, content, phase, condition, rule, field, extra) in [
         (
             vec![
                 ("X".into(), ColumnType::Int),
@@ -144,12 +140,8 @@ pub(crate) fn typing_reached() -> std::collections::BTreeSet<yamaa_core::diagnos
         let diagnostic = error.finding("SRC").unwrap().diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
-            (phase, condition, Some(requirement))
+            (definition.phase, definition.condition, definition.rule),
+            (phase, condition, Some(rule))
         );
         assert_eq!(diagnostic.spec_paths, [format!("input.SRC.types.{field}")]);
         let expected: Context = [("dataset", "SRC"), ("field", field)]

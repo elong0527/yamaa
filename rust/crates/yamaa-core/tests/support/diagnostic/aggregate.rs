@@ -34,7 +34,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "invalid_field_type", Some("LOOKUP-5"))
     );
@@ -70,7 +70,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
             (expected, "aggregate_multiple_records", Some("FORMULA-20"))
         );
@@ -248,15 +248,15 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
     ];
-    for (cause, condition, requirement, context) in cases {
+    for (cause, condition, rule, context) in cases {
         let diagnostic = cause.diagnostic().unwrap();
         assert_eq!(
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert_eq!(
             diagnostic.context,
@@ -300,7 +300,7 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
         )])
     };
     let mut reached = BTreeSet::new();
-    for (bindings, code, condition, requirement) in [
+    for (bindings, code, condition, rule) in [
         (
             vec![],
             ConditionCode::AggregateDeriveDeclaration,
@@ -341,9 +341,9 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            ("validation", condition, Some(requirement))
+            ("validation", condition, Some(rule))
         );
         assert!(diagnostic.spec_paths[0].starts_with("columns.RESULT.derivation.aggregate"));
         reached.insert(diagnostic.code);
@@ -399,7 +399,7 @@ pub(crate) fn derive_reached() -> BTreeSet<ConditionCode> {
         (
             diagnostic.definition().phase,
             diagnostic.definition().condition,
-            diagnostic.definition().requirement
+            diagnostic.definition().rule
         ),
         ("validation", "invalid_derive_step", Some("LOOKUP-22"))
     );

@@ -330,10 +330,7 @@ pub fn test_diagnostics<'a, 'e: 'a, E>(
                         [
                             ("phase", Fact::Text(mapping.phase)),
                             ("condition", Fact::Text(mapping.condition)),
-                            (
-                                "requirement",
-                                mapping.requirement.map_or(Fact::Null, Fact::Text),
-                            ),
+                            ("rule", mapping.rule.map_or(Fact::Null, Fact::Text)),
                             ("context", Fact::Object(held.context)),
                         ]
                         .into(),

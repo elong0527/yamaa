@@ -71,7 +71,7 @@ impl Fixture {
                 yamaa_adapters::json!({
                     "phase": issue.phase(),
                     "condition": issue.condition(),
-                    "requirement": issue.requirement(),
+                    "rule": issue.rule(),
                     "spec_paths": issue.spec_paths,
                     "context": issue.context.clone()
                 })
@@ -91,11 +91,11 @@ const HOME: &str = "USUBJID,VSDY,SYSBP\nS1,8,130\nS1,8,126\n";
 // The intermediate keeps S1's two serious events, which form one group.
 const AE: &str = "USUBJID,AESEQ,AESER,AETERM\nS1,1,Y,HEADACHE\nS1,2,Y,DIZZINESS\nS1,3,N,NAUSEA\n";
 
-fn ungrouped_driver_field(requirement: &str, path: &str, context: Value) -> Vec<Value> {
+fn ungrouped_driver_field(rule: &str, path: &str, context: Value) -> Vec<Value> {
     vec![yamaa_adapters::json!({
         "phase": "validation",
         "condition": "ungrouped_driver_field",
-        "requirement": requirement,
+        "rule": rule,
         "spec_paths": [path],
         "context": context
     })]
@@ -204,7 +204,7 @@ fn column_window_over_a_template_grouped_by_another_driver_names_the_drivers() {
         vec![yamaa_adapters::json!({
             "phase": "validation",
             "condition": "unknown_field",
-            "requirement": "WINDOW-11",
+            "rule": "WINDOW-11",
             "spec_paths": ["columns.VSSTRESN.derivation.row_number.window.order_by[0]"],
             "context": {
                 "identifier": "CLINIC.SYSBP",

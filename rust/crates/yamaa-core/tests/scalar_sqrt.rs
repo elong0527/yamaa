@@ -21,7 +21,7 @@ mod scalar {
                 assert_eq!(error.expression, "SQRT(A)");
                 assert_eq!(error.phase(), "derivation");
                 assert_eq!(error.condition(), "sqrt_of_negative");
-                assert_eq!(error.requirement(), "FORMULA-15");
+                assert_eq!(error.rule(), "FORMULA-15");
             }
         }
 
@@ -474,7 +474,7 @@ mod scalar {
 
         #[test]
         fn arithmetic_overflow_is_fatal_and_missingness_does_not_hide_wrong_types() {
-            for (kind, values, requirement) in [
+            for (kind, values, rule) in [
                 (
                     K::DateShift,
                     vec![date("0001-01-01"), Value::Int(-1)],
@@ -503,7 +503,7 @@ mod scalar {
             ] {
                 let error = operation(kind).apply_values(&values).unwrap().unwrap_err();
                 assert_eq!(error.definition().condition, "conversion_failed");
-                assert_eq!(error.definition().requirement, Some(requirement));
+                assert_eq!(error.definition().rule, Some(rule));
             }
             for (kind, values) in [
                 (K::DateShift, vec![Value::Missing, Value::float(1.0)]),
@@ -935,7 +935,7 @@ mod scalar {
             let operation = StringPad::new("X", "p", "4").unwrap();
             let error = operation.prepare_text(&Value::Bool(true)).unwrap_err();
             assert_eq!(error.condition(), "conversion_failed");
-            assert_eq!(error.requirement(), "VALUE-3");
+            assert_eq!(error.rule(), "VALUE-3");
             assert_eq!(error.target, yamaa_core::value::ColumnType::Str);
         }
 
@@ -1030,7 +1030,7 @@ mod scalar {
             assert_eq!(findings.len(), 1);
             let finding = &findings[0];
             assert_eq!(finding.definition().condition, "invalid_field_type");
-            assert_eq!(finding.definition().requirement, Some("TEXT-2"));
+            assert_eq!(finding.definition().rule, Some("TEXT-2"));
             assert_eq!(finding.spec_paths, ["columns.C0.derivation.str_pad.width"]);
         }
     }

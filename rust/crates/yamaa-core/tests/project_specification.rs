@@ -255,7 +255,7 @@ mod project {
                     [format!("columns.{column}.derivation")]
                 );
                 assert_eq!(diagnostic.definition().condition, "duplicate_derivation");
-                assert_eq!(diagnostic.definition().requirement, Some("SPEC-6"));
+                assert_eq!(diagnostic.definition().rule, Some("SPEC-6"));
                 assert_eq!(
                     diagnostic.context["rows"],
                     JsonValue::Array(vec![
@@ -519,7 +519,7 @@ mod project {
             for (finding, column) in findings.iter().zip(["B", "C"]) {
                 let diagnostic = finding.diagnostic();
                 assert_eq!(diagnostic.definition().condition, "phase_boundary");
-                assert_eq!(diagnostic.definition().requirement, Some("COLUMN-4"));
+                assert_eq!(diagnostic.definition().rule, Some("COLUMN-4"));
                 assert_eq!(
                     diagnostic.spec_paths,
                     [format!("rows[0].derivations.{column}.function.args.x")]
@@ -763,7 +763,7 @@ mod project {
                     (
                         diagnostic.definition().phase,
                         diagnostic.definition().condition,
-                        diagnostic.definition().requirement
+                        diagnostic.definition().rule
                     ),
                     ("validation", "phase_boundary", Some("COLUMN-4"))
                 );

@@ -41,14 +41,14 @@ refused <- function(code) inherits(tryCatch({ force(code); NULL }, yamaa_error =
 # Issue rows as the shared parity truth holds them: context as canonical JSON
 # text, spans as doubles and routes as character.
 issue_rows <- function(frame) {
-  list(phase = frame$phase, condition = frame$condition, requirement = frame$requirement,
+  list(phase = frame$phase, condition = frame$condition, rule = frame$rule,
     spec_paths = frame$spec_paths, context = frame$context, source_span = frame$source_span,
     operand_route = frame$operand_route)
 }
 issue_truth <- function(expected) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  list(phase = text("phase"), condition = text("condition"), requirement = text("requirement"),
+  list(phase = text("phase"), condition = text("condition"), rule = text("rule"),
     spec_paths = lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
     context = enc2utf8(text("context")),
     source_span = lapply(expected, function(issue)

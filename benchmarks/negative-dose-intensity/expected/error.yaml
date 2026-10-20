@@ -2,7 +2,7 @@ phase: validation
 condition: aggregate_identifier_not_grouped
 spec_paths:
   - columns.RDI.derivation.aggregate.expr
-requirement: FORMULA-22
+rule: FORMULA-22
 context:
   dataset: EX
   identifier: EX.EXPLDOS

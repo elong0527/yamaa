@@ -1882,26 +1882,26 @@ fn issue_record(issue: &Diagnostic) -> Sj {
 
 fn brief_record(record: &Sj) -> String {
     format!(
-        "phase={} condition={} requirement={} spec_paths={}",
+        "phase={} condition={} rule={} spec_paths={}",
         record.get("phase").cloned().unwrap_or(Sj::Null),
         record.get("condition").cloned().unwrap_or(Sj::Null),
-        record.get("requirement").cloned().unwrap_or(Sj::Null),
+        record.get("rule").cloned().unwrap_or(Sj::Null),
         record.get("spec_paths").cloned().unwrap_or(Sj::Null),
     )
 }
 
 fn brief_issue(issue: &Diagnostic) -> String {
     format!(
-        "phase={} condition={} requirement={:?} spec_paths={:?}",
+        "phase={} condition={} rule={:?} spec_paths={:?}",
         issue.phase(),
         issue.condition(),
-        issue.requirement(),
+        issue.rule(),
         issue.spec_paths
     )
 }
 
 /// The runner's `diagnostic_matches`: phase, condition and spec_paths
-/// exactly; requirement when the expectation declares one; the expected
+/// exactly; rule when the expectation declares one; the expected
 /// context a recursive subset of the reported one.
 fn diagnostic_matches(want: &Sj, got: &Sj) -> bool {
     for field in ["phase", "condition", "spec_paths"] {
@@ -1913,8 +1913,8 @@ fn diagnostic_matches(want: &Sj, got: &Sj) -> bool {
             return false;
         }
     }
-    if let Some(requirement) = want.get("requirement") {
-        if got.get("requirement") != Some(requirement) {
+    if let Some(rule) = want.get("rule") {
+        if got.get("rule") != Some(rule) {
             return false;
         }
     }

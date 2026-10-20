@@ -378,7 +378,7 @@ def render_failure_section(error_path, edit_url):
         failure = None
     failure = failure if isinstance(failure, dict) else {}
     facts = []
-    for key in ("phase", "condition", "requirement"):
+    for key in ("phase", "condition", "rule"):
         value = failure.get(key)
         if value:
             facts.append((key, str(value)))

@@ -2,6 +2,6 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - columns.AOCCSEQ.derivation.row_number.window.group_by[2]
-requirement: WINDOW-3
+rule: WINDOW-3
 context:
   identifier: USUBJID

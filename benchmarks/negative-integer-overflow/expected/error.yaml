@@ -2,7 +2,7 @@ phase: derivation
 condition: integer_overflow
 spec_paths:
   - columns.CELLTOT.derivation.compute
-requirement: VALUE-5
+rule: VALUE-5
 context:
   expr: "CELLCNT * VOLUML"
   keys:

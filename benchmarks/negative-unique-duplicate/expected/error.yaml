@@ -2,7 +2,7 @@ phase: verification
 condition: unique_failed
 spec_paths:
   - verifications[0].unique
-requirement: CHECK-10
+rule: CHECK-10
 context:
   columns: [SITEID]
   failure_count: 1

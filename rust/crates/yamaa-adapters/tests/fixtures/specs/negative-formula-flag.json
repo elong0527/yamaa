@@ -10,7 +10,7 @@
         "expr": "AVAL > ANRHI"
       },
       "phase": "validation",
-      "requirement": "FORMULA-27",
+      "rule": "FORMULA-27",
       "spec_paths": [
         "columns.HIFL.derivation.compute.expr"
       ]
@@ -30,7 +30,7 @@
             "expr": "AVAL > ANRHI"
           },
           "phase": "validation",
-          "requirement": "FORMULA-27",
+          "rule": "FORMULA-27",
           "spec_paths": [
             "columns.HIFL.derivation.compute.expr"
           ]

@@ -77,7 +77,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
             ("validation", "runtime_artifact_mismatch", Some("FUNC-3"))
         );

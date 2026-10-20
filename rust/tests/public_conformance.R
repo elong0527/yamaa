@@ -109,7 +109,7 @@ declared_types <- function(spec, columns) {
   types[columns]
 }
 issue_rows <- function(frame) lapply(seq_len(nrow(frame)), function(index) list(
-  phase=frame$phase[[index]], condition=frame$condition[[index]], requirement=frame$requirement[[index]],
+  phase=frame$phase[[index]], condition=frame$condition[[index]], rule=frame$rule[[index]],
   spec_paths=as.list(frame$spec_paths[[index]]), context=raw_json(frame$context[[index]])))
 # How a run got its plan, from its private observations: compiled, refused or
 # reused, or NULL when they name none. The measurements close the

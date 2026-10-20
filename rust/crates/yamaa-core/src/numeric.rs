@@ -115,13 +115,13 @@ impl ArithmeticError {
         self.kind.diagnostic_code().definition().condition
     }
 
-    /// Return the normative arithmetic requirement, matching the Python reference.
-    pub fn requirement(&self) -> &'static str {
+    /// Return the normative arithmetic rule, matching the Python reference.
+    pub fn rule(&self) -> &'static str {
         self.kind
             .diagnostic_code()
             .definition()
-            .requirement
-            .expect("numeric and conversion causes have a normative requirement")
+            .rule
+            .expect("numeric and conversion causes have a normative rule")
     }
 }
 

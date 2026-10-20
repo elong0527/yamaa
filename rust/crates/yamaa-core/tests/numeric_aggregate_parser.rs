@@ -87,7 +87,7 @@ mod numeric {
         /// Lexing and syntax precede the binder's construct, call and reduction checks.
         #[test]
         fn diagnostics_have_expression_requirements_and_exact_priority() {
-            for (text, byte, condition, requirement) in [
+            for (text, byte, condition, rule) in [
                 ("SUM(A", 5, "invalid_expression", "FORMULA-1"),
                 ("SUM(A,B)", 5, "invalid_expression", "FORMULA-1"),
                 ("SUM(D.*)", 4, "invalid_expression", "FORMULA-1"),
@@ -108,8 +108,8 @@ mod numeric {
             ] {
                 let (actual, _, failure) = failure(text);
                 assert_eq!(
-                    (actual, failure.condition(), failure.requirement()),
-                    (byte, condition, requirement),
+                    (actual, failure.condition(), failure.rule()),
+                    (byte, condition, rule),
                     "{text}"
                 );
             }
@@ -438,7 +438,7 @@ mod numeric {
                         // The refusal cites the literal, a written sign included.
                         assert_eq!(position.byte, 0, "{}", fields[0]);
                         assert_eq!(failure.diagnostic_code().definition().phase, "validation");
-                        format!("error:{}:{}", failure.condition(), failure.requirement())
+                        format!("error:{}:{}", failure.condition(), failure.rule())
                     }
                     Err(error) => panic!("{}: {error:?}", fields[0]),
                 };
@@ -671,7 +671,7 @@ mod numeric {
                 }
             );
             assert_eq!(kind.condition(), "invalid_expression");
-            assert_eq!(kind.requirement(), "FORMULA-1");
+            assert_eq!(kind.rule(), "FORMULA-1");
             // A reserved word is never a name, so a bare one is outside the grammar.
             let (position, kind) = failure("\u{2003}aNd");
             assert_eq!(
@@ -697,11 +697,11 @@ mod numeric {
                     construct: Construct::Boolean
                 }
             );
-            assert_eq!(kind.requirement(), "FORMULA-27");
+            assert_eq!(kind.rule(), "FORMULA-27");
             for (text, count) in [("abS(1, 2)", Some(2)), ("\u{2003}foo(1)", None)] {
                 let (position, kind) = failure(text);
                 assert_eq!(kind.condition(), "prohibited_function");
-                assert_eq!(kind.requirement(), "FORMULA-13");
+                assert_eq!(kind.rule(), "FORMULA-13");
                 let Failure::ProhibitedFunction {
                     function,
                     argument_count,
@@ -1079,7 +1079,7 @@ mod numeric {
                     power(Number::float(base), Number::float(exponent), "POWER(A, B)").unwrap_err();
                 assert_eq!(error.phase(), "derivation");
                 assert_eq!(error.condition(), "invalid_power");
-                assert_eq!(error.requirement(), "FORMULA-15");
+                assert_eq!(error.rule(), "FORMULA-15");
                 assert_eq!(
                     error.kind,
                     ArithmeticErrorKind::InvalidPower {
@@ -1721,7 +1721,7 @@ mod numeric {
                     failure.diagnostic(Context::Predicate, "site", text, position.character);
                 assert_eq!(finding.definition().condition, "integer_overflow");
                 assert_eq!(finding.definition().phase, "validation");
-                assert_eq!(finding.definition().requirement, Some("VALUE-5"));
+                assert_eq!(finding.definition().rule, Some("VALUE-5"));
             }
         }
     }
@@ -1781,7 +1781,7 @@ mod numeric {
                 );
                 assert_eq!(finding.definition().phase, "validation");
                 assert_eq!(finding.definition().condition, "integer_overflow");
-                assert_eq!(finding.definition().requirement, Some("VALUE-5"));
+                assert_eq!(finding.definition().rule, Some("VALUE-5"));
                 assert_eq!(finding.spec_paths, ["filter"]);
                 assert_eq!(
                     finding.context["predicate"],
@@ -2014,7 +2014,7 @@ mod numeric {
             assert_eq!(position.byte, 21);
             assert_eq!(position.character, 18);
             assert!(matches!(failure, Failure::InvalidRegex { byte: 1, .. }));
-            assert_eq!(failure.requirement(), "FORMULA-8");
+            assert_eq!(failure.rule(), "FORMULA-8");
             // The whole text is lexed and parsed before a pattern is compiled.
             for text in ["str_contains('\u{1f600}', '('", "str_contains(A, '(') @"] {
                 assert!(
@@ -2041,7 +2041,7 @@ mod numeric {
             assert_eq!(position.byte, 16);
         }
 
-        /// Static ESCAPE defects have their owning requirement and original literal site.
+        /// Static ESCAPE defects have their owning rule and original literal site.
         #[test]
         fn escape_admission_and_unicode_positions() {
             for text in [
@@ -2053,7 +2053,7 @@ mod numeric {
                     panic!("{text}")
                 };
                 assert_eq!(failure, Failure::InvalidEscape);
-                assert_eq!(failure.requirement(), "FORMULA-7");
+                assert_eq!(failure.rule(), "FORMULA-7");
             }
             for text in [
                 "A LIKE 'a!!' ESCAPE '!'",

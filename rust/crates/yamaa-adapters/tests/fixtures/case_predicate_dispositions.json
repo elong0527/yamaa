@@ -3,7 +3,7 @@
   "cases": {
     "grouped_key_filter": {
       "classification": "historical_private_reference_defect",
-      "requirement": "LOOKUP-8",
+      "rule": "LOOKUP-8",
       "normative_fixture": "source_filter_scope.json",
       "normative_case": "column-group-key-filter",
       "historical_csv": "ID,VALUE\na,a\nb,\n",

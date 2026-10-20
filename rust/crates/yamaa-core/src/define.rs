@@ -930,7 +930,7 @@ mod projection_tests {
             };
             let diagnostic = &findings[0];
             assert_eq!(diagnostic.code, ConditionCode::ApplicationRejected);
-            assert_eq!(diagnostic.code.definition().requirement, None);
+            assert_eq!(diagnostic.code.definition().rule, None);
             assert_eq!(diagnostic.spec_paths, ["datasets.DM.artifact"]);
             assert_eq!(diagnostic.context["stage"], "define");
             assert_eq!(diagnostic.context["code"], "resource_limit");

@@ -326,9 +326,7 @@ class RuleCheckTests(unittest.TestCase):
     def test_citations_resolve_repository_wide(self):
         self.write("yaml/schema_notes.yaml", "# See LAYER-99.\nnotes: {}\n")
         self.write("rust/crates/core/src/lib.rs", 'const R: &str = "LAYER-7";\n')
-        self.write(
-            "rust/crates/core/tests/fixtures/data.json", '{"requirement": "TYPE-2"}\n'
-        )
+        self.write("rust/crates/core/tests/fixtures/data.json", '{"rule": "TYPE-2"}\n')
         self.write(
             "python/module.py", "# TYPE-1 and LAYER-2 resolve; UTF-8 is no rule.\n"
         )
@@ -371,15 +369,15 @@ class RuleCheckTests(unittest.TestCase):
 
     def test_negative_benchmarks_expect_a_card_id(self):
         path = "benchmarks/negative-case/expected/error.yaml"
-        for requirement, expected in (
+        for rule, expected in (
             ("LAYER-2", None),
             ("~", None),
-            ("REQ-0002", "requirement must be a card ID"),
-            ("R001-1", "requirement must be a card ID"),
+            ("REQ-0002", "rule must be a card ID"),
+            ("R001-1", "rule must be a card ID"),
             ("LAYER-9", "unresolved rule citation LAYER-9"),
         ):
-            with self.subTest(requirement=requirement):
-                self.write(path, f"phase: validation\nrequirement: {requirement}\n")
+            with self.subTest(rule=rule):
+                self.write(path, f"phase: validation\nrule: {rule}\n")
                 errors = self.errors()
                 if expected is None:
                     self.assertEqual(errors, [])

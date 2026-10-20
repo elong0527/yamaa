@@ -122,7 +122,7 @@ mod declaration {
                 }
                 for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
                     finding["phase"] = json!("validation");
-                    finding["requirement"] = json!(match finding["condition"].as_str().unwrap() {
+                    finding["rule"] = json!(match finding["condition"].as_str().unwrap() {
                         "non_ascii_source" => "SPEC-8",
                         "invalid_text" => "VALUE-11",
                         "invalid_yaml" => "SCHEMA-3",
@@ -239,11 +239,11 @@ mod declaration {
             assert_eq!(
                 fixture::observe(SCHEMA, "count: true\nextra: null\n"),
                 json!({"issues": [
-                    {"phase":"validation", "condition":"missing_required_field", "requirement":"SCHEMA-13",
+                    {"phase":"validation", "condition":"missing_required_field", "rule":"SCHEMA-13",
                         "spec_paths":["needed"], "context":{"field":"needed", "class":"root_class"}},
-                    {"phase":"validation", "condition":"invalid_field_type", "requirement":"SCHEMA-12",
+                    {"phase":"validation", "condition":"invalid_field_type", "rule":"SCHEMA-12",
                         "spec_paths":["count"], "context":{"expected":"int", "actual":"bool"}},
-                    {"phase":"validation", "condition":"unknown_field", "requirement":"SCHEMA-13",
+                    {"phase":"validation", "condition":"unknown_field", "rule":"SCHEMA-13",
                         "spec_paths":["extra"], "context":{"field":"extra", "class":"root_class"}}
                 ]})
             );
@@ -257,7 +257,7 @@ mod declaration {
                     "needed: kept\nitems: [1, false, 9223372036854775808]\n"
                 ),
                 json!({"issues": [{"phase":"validation", "condition":"invalid_field_type",
-            "requirement":"SCHEMA-12", "spec_paths":["items[1]"],
+            "rule":"SCHEMA-12", "spec_paths":["items[1]"],
             "context":{"expected":"int", "actual":"bool"}}]})
             );
             assert_eq!(
@@ -298,7 +298,7 @@ mod declaration {
             assert_eq!(
                 observed,
                 json!({"issues": [{"phase":"validation", "condition":"invalid_field_type",
-        "requirement":"SCHEMA-12", "spec_paths":["language"],
+        "rule":"SCHEMA-12", "spec_paths":["language"],
         "context":{"expected":"str", "actual":"bool"}}]})
             );
         }
@@ -339,10 +339,10 @@ mod declaration {
             let held_nodes = captured.document().unwrap().nodes().as_ptr();
             let held_findings = captured.findings().as_ptr();
             let expected: Value = yamaa_adapters::json_wire::decode(&format!(r#"[
-        {{"phase":"validation","condition":"value_not_permitted","requirement":"SCHEMA-12","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","permitted":["z","a","z"]}}}},
-        {{"phase":"validation","condition":"pattern_mismatch","requirement":"SCHEMA-12","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","pattern":"^OK$"}}}},
-        {{"phase":"validation","condition":"minimum_length","requirement":"SCHEMA-12","spec_paths":["alpha"],"context":{{"minimum":{BIG}}}}},
-        {{"phase":"validation","condition":"invalid_size","requirement":"SCHEMA-12","spec_paths":["items"],"context":{{"size":{BIG}}}}}
+        {{"phase":"validation","condition":"value_not_permitted","rule":"SCHEMA-12","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","permitted":["z","a","z"]}}}},
+        {{"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["alpha"],"context":{{"value":"bad\"\nλ","pattern":"^OK$"}}}},
+        {{"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["alpha"],"context":{{"minimum":{BIG}}}}},
+        {{"phase":"validation","condition":"invalid_size","rule":"SCHEMA-12","spec_paths":["items"],"context":{{"size":{BIG}}}}}
     ]"#)).unwrap();
             for _ in 0..2 {
                 let rows = crate::support::findings(capture_failure(&error));
@@ -380,8 +380,8 @@ mod declaration {
             assert_eq!(captured.findings()[1].path, "last");
             let original = captured.document().unwrap().nodes().as_ptr();
             let expected = json!([
-                {"phase":"validation","condition":"value_not_permitted","requirement":"SCHEMA-12","spec_paths":["first"],"context":{"value":"x".repeat(1_400_000),"permitted":["OK"]}},
-                {"phase":"validation","condition":"value_not_permitted","requirement":"SCHEMA-12","spec_paths":["last"],"context":{"value":"y".repeat(1_400_000),"permitted":["OK"]}}
+                {"phase":"validation","condition":"value_not_permitted","rule":"SCHEMA-12","spec_paths":["first"],"context":{"value":"x".repeat(1_400_000),"permitted":["OK"]}},
+                {"phase":"validation","condition":"value_not_permitted","rule":"SCHEMA-12","spec_paths":["last"],"context":{"value":"y".repeat(1_400_000),"permitted":["OK"]}}
             ]);
             for _ in 0..2 {
                 assert_eq!(crate::support::findings(capture_failure(&error)), expected);
@@ -570,23 +570,23 @@ mod declaration {
             let cases = [
                 (
                     VALID.replace("'1.0'", "'99.0'"),
-                    json!({"phase":"validation","condition":"schema_version_mismatch","requirement":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
+                    json!({"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0"}}),
                 ),
                 (
                     VALID.replace("schema_version: '1.0'\n", ""),
-                    json!({"phase":"validation","condition":"schema_version_mismatch","requirement":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
+                    json!({"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":null}}),
                 ),
                 (
                     VALID.replace("domain: TEST", "domain: bad-name"),
-                    json!({"phase":"validation","condition":"pattern_mismatch","requirement":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$"}}),
+                    json!({"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$"}}),
                 ),
                 (
                     VALID.replace("type: int", "type: unknown"),
-                    json!({"phase":"validation","condition":"value_not_permitted","requirement":"VALUE-1","spec_paths":["columns.ID.type"],"context":{"value":"unknown","permitted":["str","int","float","date","datetime"]}}),
+                    json!({"phase":"validation","condition":"value_not_permitted","rule":"VALUE-1","spec_paths":["columns.ID.type"],"context":{"value":"unknown","permitted":["str","int","float","date","datetime"]}}),
                 ),
                 (
                     VALID.replace("path: output.csv", "path: ''"),
-                    json!({"phase":"validation","condition":"minimum_length","requirement":"SCHEMA-12","spec_paths":["output.path"],"context":{"minimum":1}}),
+                    json!({"phase":"validation","condition":"minimum_length","rule":"SCHEMA-12","spec_paths":["output.path"],"context":{"minimum":1}}),
                 ),
             ];
             for (text, expected) in cases {
@@ -643,7 +643,7 @@ mod declaration {
             // Independent expected/error.yaml is unchanged.
             assert_eq!(
                 crate::support::findings(capture_failure(&error)),
-                json!([{"phase":"validation","condition":"unknown_window","spec_paths":["columns.VISITSEQ.derivation.row_number.window"],"requirement":"WINDOW-1","context":{"window":"VISITS_ORDER"}}])
+                json!([{"phase":"validation","condition":"unknown_window","spec_paths":["columns.VISITSEQ.derivation.row_number.window"],"rule":"WINDOW-1","context":{"window":"VISITS_ORDER"}}])
             );
         }
 
@@ -660,7 +660,7 @@ mod declaration {
             assert!(matches!(&error, Error::Findings(_)));
             assert_eq!(
                 crate::support::findings(capture_failure(&error)),
-                json!([{"phase":"validation","condition":"schema_version_mismatch","requirement":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":version}}])
+                json!([{"phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":version}}])
             );
         }
 
@@ -682,7 +682,7 @@ mod declaration {
                 }
                 for finding in expected["outcome"]["diagnostics"].as_array_mut().unwrap() {
                     finding["phase"] = json!("validation");
-                    finding["requirement"] = json!(match finding["condition"].as_str().unwrap() {
+                    finding["rule"] = json!(match finding["condition"].as_str().unwrap() {
                         "non_ascii_source" => "SPEC-8",
                         "invalid_text" => "VALUE-11",
                         "invalid_yaml" => "SCHEMA-3",
@@ -779,7 +779,7 @@ mod declaration {
                 crate::support::findings(
                     inheritance_failure_ref(&inherited_error(&entry, invalid_parent)).unwrap()
                 ),
-                json!([{"phase":"validation","condition":"pattern_mismatch","requirement":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":"parent.yaml","entry":"entry.yaml"}}])
+                json!([{"phase":"validation","condition":"pattern_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"value":"bad-name","pattern":"^[A-Za-z_][A-Za-z0-9_]*$","source":"parent.yaml","entry":"entry.yaml"}}])
             );
             let empty_parent = "schema_version: '1.0'\n";
             let missing = inherited_error(&entry.replace("domain: TEST\n", ""), empty_parent);
@@ -793,7 +793,7 @@ mod declaration {
             assert!(context.input.is_some());
             assert_eq!(
                 crate::support::findings(inheritance_failure_ref(&missing).unwrap()),
-                json!([{"phase":"validation","condition":"missing_required_field","requirement":"SCHEMA-13","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}])
+                json!([{"phase":"validation","condition":"missing_required_field","rule":"SCHEMA-13","spec_paths":["domain"],"context":{"field":"domain","class":"root_class"}}])
             );
             let unknown = inherited_error(
                 &entry.replace(
@@ -804,7 +804,7 @@ mod declaration {
             );
             assert_eq!(
                 crate::support::findings(inheritance_failure_ref(&unknown).unwrap()),
-                json!([{"phase":"validation","condition":"unknown_reference","requirement":"COLUMN-5","spec_paths":["columns.ID.derivation"],"context":{"column":"ID","dependency":"UNKNOWN"}}])
+                json!([{"phase":"validation","condition":"unknown_reference","rule":"COLUMN-5","spec_paths":["columns.ID.derivation"],"context":{"column":"ID","dependency":"UNKNOWN"}}])
             );
         }
 
@@ -960,7 +960,7 @@ mod declaration {
             assert_eq!(captured.source().identity.as_ptr(), identity);
             let decoded = decode_yaml(text.as_bytes()).unwrap();
             assert_eq!(captured.document(), Some(&decoded.document));
-            let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
+            let expected:Value=yamaa_adapters::json_wire::decode("{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"rule\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}").unwrap();
             assert_eq!(outcome(&error), json!([expected]));
             // Output names both columns so pruning (LAYER-11) keeps them live
             // and strict window expansion still reports their unknown windows.
@@ -983,8 +983,8 @@ mod declaration {
             assert_eq!(
                 outcome(&error),
                 json!([
-                    {"phase":"validation","condition":"unknown_window","requirement":"WINDOW-1","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
-                    {"phase":"validation","condition":"unknown_window","requirement":"WINDOW-1","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
+                    {"phase":"validation","condition":"unknown_window","rule":"WINDOW-1","spec_paths":["columns.Z.derivation.row_number.window"],"context":{"window":"SECOND"}},
+                    {"phase":"validation","condition":"unknown_window","rule":"WINDOW-1","spec_paths":["columns.A.derivation.row_number.window"],"context":{"window":"FIRST"}}
                 ])
             );
         }
@@ -1005,9 +1005,9 @@ mod declaration {
             assert_eq!(
                 outcome(&error),
                 json!([
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"SCHEMA-12","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"SCHEMA-13","spec_paths":["output.path"],"context":{"reason":"Field required"}},
-                    {"phase":"validation","condition":"model_contract_mismatch","requirement":"SCHEMA-13","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-12","spec_paths":["domain"],"context":{"reason":"Input should be a valid string"}},
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-13","spec_paths":["output.path"],"context":{"reason":"Field required"}},
+                    {"phase":"validation","condition":"model_contract_mismatch","rule":"SCHEMA-13","spec_paths":["output.columns"],"context":{"reason":"Field required"}}
                 ])
             );
         }
@@ -1168,7 +1168,7 @@ mod declaration {
                 assert_eq!(rows.len(), 1, "{derivation}: {rows:?}");
                 assert_eq!(rows[0].condition(), condition, "{derivation}");
                 assert_eq!(rows[0].spec_paths, [path], "{derivation}");
-                assert!(rows[0].requirement().is_some());
+                assert!(rows[0].rule().is_some());
             }
         }
 
@@ -1250,7 +1250,7 @@ mod declaration {
                     yamaa_adapters::json_wire::encode(&false_value)
                 );
                 assert_eq!(rows[0].condition(), "missing_value_required");
-                assert_eq!(rows[0].requirement(), Some("EXPR-8"));
+                assert_eq!(rows[0].rule(), Some("EXPR-8"));
                 assert_eq!(rows[0].spec_paths, ["columns.F.derivation.flag.missing"]);
                 let context = yamaa_core::json::Value::Object(rows[0].context.clone());
                 assert_eq!(context, yamaa_adapters::json!({"false_value": false_value}));
@@ -1286,7 +1286,7 @@ mod declaration {
                 observed["outcome"],
                 json!({
                     "status":"invalid", "condition":"invalid_string_template",
-                    "requirement":"TEXT-3",
+                    "rule":"TEXT-3",
                     "context":{"reason":"invalid_placeholder","placeholder":"A + B"},
                     "position":{"byte":2,"character":1},
                     "span":{"byte_start":2,"byte_end":9,"character_start":1,"character_end":8}
@@ -1476,7 +1476,7 @@ mod declaration {
             for (finding, field) in findings[1..].iter().zip(["language", "runtime", "version"]) {
                 assert_eq!(finding.path, field);
                 assert_eq!(finding.definition().condition, "unknown_field");
-                assert_eq!(finding.definition().requirement, Some("SCHEMA-13"));
+                assert_eq!(finding.definition().rule, Some("SCHEMA-13"));
                 assert_eq!(
                     finding.context,
                     vec![
@@ -2165,13 +2165,9 @@ mod declaration {
                         (
                             finding.definition().phase,
                             finding.definition().condition,
-                            finding.definition().requirement
+                            finding.definition().rule
                         ),
-                        (
-                            "validation",
-                            "project_environment_invalid",
-                            Some("FUNC-2")
-                        )
+                        ("validation", "project_environment_invalid", Some("FUNC-2"))
                     );
                     assert_eq!(finding.context["value"], value);
                 }
@@ -2237,7 +2233,7 @@ mod declaration {
             }
         }
         fn issues(rows: Vec<Diagnostic>) -> Value {
-            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase(),"condition":row.condition(),"requirement":row.requirement(),"spec_paths":row.spec_paths,"context":row.context.clone()})).collect())
+            Value::Array(rows.into_iter().map(|row|json!({"phase":row.phase(),"condition":row.condition(),"rule":row.rule(),"spec_paths":row.spec_paths,"context":row.context.clone()})).collect())
         }
         fn original_locations(
             actual: &yamaa_adapters::specification_source::CapturedDocument,
@@ -2298,12 +2294,12 @@ mod declaration {
         fn live_root_full_reports_preserve_original_source_and_stop_before_every_dependency() {
             let schemas = candidate_schemas();
             for (text,expected) in [
-        ("schema_version: '99.0'\nparent: parent.yaml\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml]\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","requirement":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}])),
+        ("schema_version: '99.0'\nparent: parent.yaml\nenvironments: {python: environment.yaml}\ncodelists: [bad.yaml]\n",json!([{ "phase":"validation","condition":"schema_version_mismatch","rule":"SCHEMA-2","spec_paths":["schema_version"],"context":{"expected":"1.0","actual":"99.0","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}])),
         ("schema_version: '1.0'\nparent: base.yaml\nlanguage: python\nruntime: {language: python}\nversion: old\n",json!([
-            {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["parent"],"context":{"field":"parent","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["language"],"context":{"field":"language","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["runtime"],"context":{"field":"runtime","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
-            {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["version"],"context":{"field":"version","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["parent"],"context":{"field":"parent","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["language"],"context":{"field":"language","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["runtime"],"context":{"field":"runtime","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}},
+            {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["version"],"context":{"field":"version","class":"project_class","source":"study/project.yaml","entry":"study/project.yaml","environment_path":"$"}}
         ])),
     ] {
         let entry=source(PROJECT,text);let bytes=entry.bytes.as_ptr();let identity=entry.identity.as_ptr();let mut port=Metadata::new(vec![]);
@@ -2377,8 +2373,8 @@ mod declaration {
             assert_eq!(
                 issues(diagnostics::schema_sources(&rejected).unwrap()),
                 json!([
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["language"],"context":{"field":"language","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["codelists"],"context":{"field":"codelists","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}}
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["language"],"context":{"field":"language","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["codelists"],"context":{"field":"codelists","class":"environment_class","source":"study/environment.yaml","entry":"study/project.yaml","environment_path":"environments.python"}}
                 ])
             );
         }
@@ -2563,8 +2559,8 @@ mod declaration {
             assert_eq!(
                 issues(diagnostics::schema_sources(&rejected).unwrap()),
                 json!([
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}}
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class","source":"held/bad.yaml","entry":"study/project.yaml","environment_path":"functions.bad"}}
                 ])
             );
         }
@@ -2662,7 +2658,7 @@ mod declaration {
             use yamaa_adapters::specification_diagnostics::capture_failure;
             let schemas = candidate_schemas();
             let root = "schema_version: 92233720368547758081234567890\n";
-            let expected:Value=yamaa_adapters::json_wire::decode("[{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"requirement\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}]").unwrap();
+            let expected:Value=yamaa_adapters::json_wire::decode("[{\"phase\":\"validation\",\"condition\":\"schema_version_mismatch\",\"rule\":\"SCHEMA-2\",\"spec_paths\":[\"schema_version\"],\"context\":{\"expected\":\"1.0\",\"actual\":92233720368547758081234567890}}]").unwrap();
             for (schema, identity) in [
                 (&schemas.environment, ENVIRONMENT),
                 (&schemas.project, PROJECT),
@@ -2691,9 +2687,9 @@ mod declaration {
             assert_eq!(
                 crate::support::findings(capture_failure(&error)),
                 json!([
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["<normalization>.schema_version"],"context":{"field":"schema_version","class":"function_definition_class"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class"}},
-                    {"phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class"}}
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.schema_version"],"context":{"field":"schema_version","class":"function_definition_class"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.contract_version"],"context":{"field":"contract_version","class":"function_definition_class"}},
+                    {"phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.binding"],"context":{"field":"binding","class":"function_definition_class"}}
                 ])
             );
         }
@@ -2759,7 +2755,7 @@ mod declaration {
             );
             assert_eq!(
                 issues(diagnostics::schema_sources(&rejected).unwrap()),
-                json!([{ "phase":"validation","condition":"unknown_field","requirement":"SCHEMA-13","spec_paths":["<normalization>.retired"],"context":{"field":"retired","class":"codelist_source_class","source":"held/bad-ct.yaml","entry":"study/project.yaml","environment_path":"codelists[0]"}}])
+                json!([{ "phase":"validation","condition":"unknown_field","rule":"SCHEMA-13","spec_paths":["<normalization>.retired"],"context":{"field":"retired","class":"codelist_source_class","source":"held/bad-ct.yaml","entry":"study/project.yaml","environment_path":"codelists[0]"}}])
             );
         }
     }
@@ -2860,12 +2856,12 @@ mod declaration {
             };
             match expected {
                 None => assert!(rows.is_empty(), "{name}: {rows:?}"),
-                Some((condition, requirement, path)) => {
+                Some((condition, rule, path)) => {
                     assert_eq!(rows.len(), 1, "{name}: {rows:?}");
                     let issue = &rows[0];
                     assert_eq!(issue.phase(), "validation");
                     assert_eq!(issue.condition(), condition);
-                    assert_eq!(issue.requirement(), Some(requirement));
+                    assert_eq!(issue.rule(), Some(rule));
                     assert_eq!(issue.spec_paths, [path]);
                     assert_eq!(
                         yamaa_core::json::Value::Object(issue.context.clone()),

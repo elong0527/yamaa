@@ -2,7 +2,7 @@ phase: validation
 condition: value_not_permitted
 spec_paths:
   - columns.TRTDURM.derivation.diff.bounds
-requirement: TIME-5
+rule: TIME-5
 context:
   value: inclusive
   permitted: [exclusive]

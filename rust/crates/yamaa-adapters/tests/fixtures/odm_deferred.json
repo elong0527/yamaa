@@ -1616,7 +1616,7 @@
             }
           },
           "phase": "derivation",
-          "requirement": "NAME-13",
+          "rule": "NAME-13",
           "spec_paths": [
             "columns.VAL.derivation.case[0].then.odm"
           ]
@@ -1654,7 +1654,7 @@
                 }
               },
               "phase": "derivation",
-              "requirement": "NAME-13",
+              "rule": "NAME-13",
               "spec_paths": [
                 "columns.VAL.derivation.case[0].then.odm"
               ]

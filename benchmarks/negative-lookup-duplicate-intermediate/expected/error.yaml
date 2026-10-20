@@ -2,7 +2,7 @@ phase: verification
 condition: duplicate_intermediate_records
 spec_paths:
   - intermediates[0].verifications[0].unique
-requirement: LOOKUP-17
+rule: LOOKUP-17
 context:
   intermediate: DS_EOS
   dataset: DS

@@ -609,7 +609,7 @@ survive `filter` ([LOOKUP-25](#lookup-25)).
 
 An `id` collision fails as `duplicate_identifier`. The schema requires `id`
 and `dataset`: omitting either fails as `missing_required_field` with no
-requirement attached. An omitted `key` with no applicable key fails as
+rule cited. An omitted `key` with no applicable key fails as
 `no_applicable_keys` ([LOOKUP-5](#lookup-5)).
 
 ```yaml

@@ -105,18 +105,13 @@ class DiagnosticGuardTests(unittest.TestCase):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace('Some("VALUE-1")', "None"))
         self.assertTrue(
-            any(
-                "null requirement is not normatively permitted" in e
-                for e in self.errors()
-            )
+            any("null rule is not normatively permitted" in e for e in self.errors())
         )
 
     def test_implementation_condition_must_retain_null(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace("None", 'Some("VALUE-1")'))
-        self.assertTrue(
-            any("must retain a null requirement" in e for e in self.errors())
-        )
+        self.assertTrue(any("must retain a null rule" in e for e in self.errors()))
 
     def test_null_policy_is_explicit_registered_and_reached(self):
         path = self.root / guard.NULL_POLICY
@@ -173,7 +168,7 @@ class DiagnosticGuardTests(unittest.TestCase):
                     'const REQUIREMENT: &str = "VALUE-999";\n',
                 )
                 self.assertTrue(
-                    any("undefined requirement VALUE-999" in e for e in self.errors())
+                    any("undefined rule VALUE-999" in e for e in self.errors())
                 )
                 path.unlink()
 
@@ -192,12 +187,12 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_escaped_and_raw_json_diagnostics_cannot_create_new_host_sites(self):
         sources = [
-            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-1\"}";',
-            r'const ERROR: &str = "{\"payload\":\"{\\\"condition\\\":\\\"invalid_value\\\",\\\"requirement\\\":\\\"VALUE-1\\\"}\"}";',
-            r'const ERROR: &str = r###"{"condition":"invalid_value","requirement":"VALUE-1"}"###;',
-            r'const ERROR: &str = "{\"condition\":\"invalid\\u005Fvalue\",\"requirement\":\"VALUE-1\"}";',
-            r'const ERROR: &str = r#"{"condition":"invalid\u005Fvalue","requirement":"VALUE-1"}"#;',
-            r'let error = format!("{{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-1\",\"path\":\"{path}\"}}");',
+            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"rule\":\"VALUE-1\"}";',
+            r'const ERROR: &str = "{\"payload\":\"{\\\"condition\\\":\\\"invalid_value\\\",\\\"rule\\\":\\\"VALUE-1\\\"}\"}";',
+            r'const ERROR: &str = r###"{"condition":"invalid_value","rule":"VALUE-1"}"###;',
+            r'const ERROR: &str = "{\"condition\":\"invalid\\u005Fvalue\",\"rule\":\"VALUE-1\"}";',
+            r'const ERROR: &str = r#"{"condition":"invalid\u005Fvalue","rule":"VALUE-1"}"#;',
+            r'let error = format!("{{\"condition\":\"invalid_value\",\"rule\":\"VALUE-1\",\"path\":\"{path}\"}}");',
             r'const CONDITION: &str = "invalid\u{005F}value";',
             r'const REQUIREMENT: &str = "VALUE-\x31";',
         ]
@@ -215,13 +210,11 @@ class DiagnosticGuardTests(unittest.TestCase):
     def test_escaped_json_unknown_requirement_is_still_undefined(self):
         self.write(
             "rust/crates/yamaa-core/src/json_error.rs",
-            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-999\"}";'
+            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"rule\":\"VALUE-999\"}";'
             + "\n",
         )
         self.assertEqual(len(self.errors()), 2)
-        self.assertTrue(
-            any("undefined requirement VALUE-999" in e for e in self.errors())
-        )
+        self.assertTrue(any("undefined rule VALUE-999" in e for e in self.errors()))
         self.assertTrue(any("outside canonical registry" in e for e in self.errors()))
 
     def test_comments_quoted_prose_and_character_literals_are_irrelevant(self):
@@ -240,7 +233,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
     def test_multiline_raw_json_diagnostic_is_a_new_site(self):
         self.write(
             "rust/crates/yamaa-adapters/src/errors.rs",
-            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"requirement":"VALUE-1"\n}"#;\n',
+            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"rule":"VALUE-1"\n}"#;\n',
         )
         self.assertEqual(len(self.errors()), 1)
         self.assertIn("errors.rs:1: new diagnostic", self.errors()[0])
@@ -253,7 +246,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.assertEqual(self.errors(), [])
         path.write_text('const REQ: &str = "VALUE-999";\n')
         self.assertEqual(len(self.errors()), 1)
-        self.assertIn("undefined requirement VALUE-999", self.errors()[0])
+        self.assertIn("undefined rule VALUE-999", self.errors()[0])
 
     def test_missing_condition_and_wrong_phase_fail(self):
         path = self.root / "yaml/conditions.yaml"
@@ -304,9 +297,9 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         sources = [
             'const CONDITION: &str = "invalid_value";',
             'const REQUIREMENT: &str = "VALUE-1";',
-            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-1\"}";',
-            r'const ERROR: &str = r#"{"condition":"invalid_value","requirement":"VALUE-1"}"#;',
-            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"requirement":"VALUE-1"\n}"#;',
+            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"rule\":\"VALUE-1\"}";',
+            r'const ERROR: &str = r#"{"condition":"invalid_value","rule":"VALUE-1"}"#;',
+            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"rule":"VALUE-1"\n}"#;',
         ]
         for crate in sorted(guard.CORE_CRATES):
             for source in sources:
@@ -351,7 +344,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             "    yamaa_adapters::issue_rows::Issue {\n"
             '        phase: "check".into(),\n'
             '        condition: "cancelled".into(),\n'
-            "        requirement: None,\n"
+            "        rule: None,\n"
             "        spec_paths: Vec::new(),\n"
             "        context: yamaa_adapters::json!({}),\n"
             "        source_span: None,\n"
@@ -416,7 +409,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             '    let known = failure["condition"] == "cancelled";\n'
             "    Issue {\n"
             "        condition: definition.condition.into(),\n"
-            '        requirement: text(failure, "condition"),\n'
+            '        rule: text(failure, "condition"),\n'
             "    }\n"
             "}\n"
             "#[cfg(test)]\n"
@@ -577,9 +570,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.write(
             "rust/crates/yamaa-core/src/retired.rs", 'const RULE: &str = "VALUE-2";\n'
         )
-        self.assertTrue(
-            any("undefined requirement VALUE-2" in e for e in self.errors())
-        )
+        self.assertTrue(any("undefined rule VALUE-2" in e for e in self.errors()))
 
     def publication_unit_module(self):
         self.write(
@@ -617,9 +608,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             str(guard.PRIVATE_TEST_MODULE),
             '#[test]\nfn independent_expectation() { assert_eq!("VALUE-999", "VALUE-999"); }\n',
         )
-        self.assertTrue(
-            any("undefined requirement VALUE-999" in e for e in self.errors())
-        )
+        self.assertTrue(any("undefined rule VALUE-999" in e for e in self.errors()))
 
     def card_file(self, fails="Fails: `invalid_value`.\n"):
         self.write(
@@ -667,10 +656,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("VALUE-9")'))
         self.assertEqual(
             self.errors(),
-            [
-                "rust/crates/yamaa-core/src/diagnostic/mod.rs:2: "
-                "undefined requirement VALUE-9"
-            ],
+            ["rust/crates/yamaa-core/src/diagnostic/mod.rs:2: undefined rule VALUE-9"],
         )
 
     def test_undefined_card_id_and_unknown_prefix_are_rejected(self):
@@ -678,9 +664,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.write(
             "rust/crates/yamaa-core/src/unknown.rs", 'const RULE: &str = "LAYER-99";\n'
         )
-        self.assertTrue(
-            any("undefined requirement LAYER-99" in e for e in self.errors())
-        )
+        self.assertTrue(any("undefined rule LAYER-99" in e for e in self.errors()))
         (self.root / "rust/crates/yamaa-core/src/unknown.rs").unlink()
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
         path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("RULE-1")'))

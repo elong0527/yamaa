@@ -32,11 +32,7 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         .diagnostic();
         let definition = diagnostic.definition();
         assert_eq!(
-            (
-                definition.phase,
-                definition.condition,
-                definition.requirement
-            ),
+            (definition.phase, definition.condition, definition.rule),
             ("ingest", "source_sas_invalid", Some("SAS-7"))
         );
         assert_eq!(diagnostic.spec_paths, ["input.SRC.path"]);

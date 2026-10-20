@@ -2,7 +2,7 @@ phase: validation
 condition: resource_path_symlink
 spec_paths:
   - input.LBREF.path
-requirement: FILE-8
+rule: FILE-8
 context:
   dataset: LBREF
   path: input/lbref.csv

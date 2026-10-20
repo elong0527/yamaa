@@ -69,12 +69,12 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         ),
     ];
     let mut reached = BTreeSet::new();
-    for (error, condition, requirement, extra) in errors {
+    for (error, condition, rule, extra) in errors {
         let finding = error.finding("SRC", "data.parquet").diagnostic();
         let def = finding.definition();
         assert_eq!(
-            (def.phase, def.condition, def.requirement),
-            ("ingest", condition, Some(requirement))
+            (def.phase, def.condition, def.rule),
+            ("ingest", condition, Some(rule))
         );
         assert_eq!(finding.spec_paths, ["input.SRC.path"]);
         let expected: Context = [("dataset", text("SRC")), ("path", text("data.parquet"))]

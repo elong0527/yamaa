@@ -2,7 +2,7 @@ phase: validation
 condition: invalid_field_type
 spec_paths:
   - columns.SEVRANK.derivation.rank.method
-requirement: SCHEMA-12
+rule: SCHEMA-12
 context:
   expected: str
   actual: mapping

@@ -70,7 +70,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
     .unwrap_err() else {
         panic!()
     };
-    for (finding, phase, condition, requirement, path, context) in [
+    for (finding, phase, condition, rule, path, context) in [
         (
             mapping.select(ValueRef::Int(1)).unwrap_err(),
             "validation",
@@ -126,7 +126,7 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             ],
         ),
     ] {
-        check(&finding, phase, condition, requirement, path, context);
+        check(&finding, phase, condition, rule, path, context);
         reached.insert(finding.code);
     }
     reached
@@ -135,18 +135,14 @@ pub(crate) fn check(
     finding: &Diagnostic,
     phase: &str,
     condition: &str,
-    requirement: &str,
+    rule: &str,
     path: &str,
     context: Vec<(&str, V)>,
 ) {
     let definition = finding.definition();
     assert_eq!(
-        (
-            definition.phase,
-            definition.condition,
-            definition.requirement
-        ),
-        (phase, condition, Some(requirement))
+        (definition.phase, definition.condition, definition.rule),
+        (phase, condition, Some(rule))
     );
     assert_eq!(finding.spec_paths, [path]);
     assert_eq!(

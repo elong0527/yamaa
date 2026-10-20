@@ -472,7 +472,7 @@ def diagnostic_matches(want, got):
             got.get(field) == want[field]
             for field in ("phase", "condition", "spec_paths")
         )
-        and ("requirement" not in want or got.get("requirement") == want["requirement"])
+        and ("rule" not in want or got.get("rule") == want["rule"])
         and subset(want.get("context") or {}, got.get("context") or {})
     )
 
@@ -588,7 +588,7 @@ def build_difference(reference, variant, unordered_report_rows=False):
         return None
     if not reference_issues or not variant_issues:
         return "exactly one build reports issues"
-    fields = ("phase", "condition", "requirement", "spec_paths")
+    fields = ("phase", "condition", "rule", "spec_paths")
     if any(
         reference_issues[0].get(field) != variant_issues[0].get(field)
         for field in fields

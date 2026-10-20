@@ -32,9 +32,9 @@ saved_csv <- function() readBin(saved, "raw", file.size(saved))
 issues_equal <- function(frame, expected) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  actual <- list(frame$phase, frame$condition, frame$requirement, frame$spec_paths,
+  actual <- list(frame$phase, frame$condition, frame$rule, frame$spec_paths,
     frame$context, frame$source_span, frame$operand_route)
-  authored <- list(text("phase"), text("condition"), text("requirement"),
+  authored <- list(text("phase"), text("condition"), text("rule"),
     lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
     enc2utf8(text("context")),
     lapply(expected, function(issue)

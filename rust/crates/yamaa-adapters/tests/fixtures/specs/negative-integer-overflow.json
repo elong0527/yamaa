@@ -18,7 +18,7 @@
         "value": "9223372036854776832"
       },
       "phase": "derivation",
-      "requirement": "VALUE-5",
+      "rule": "VALUE-5",
       "spec_paths": [
         "columns.CELLTOT.derivation.compute"
       ],
@@ -51,7 +51,7 @@
             "value": "9223372036854776832"
           },
           "phase": "derivation",
-          "requirement": "VALUE-5",
+          "rule": "VALUE-5",
           "spec_paths": [
             "columns.CELLTOT.derivation.compute"
           ],

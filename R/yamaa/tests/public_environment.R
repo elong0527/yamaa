@@ -30,8 +30,8 @@ observations <- function(run) yamaa:::.run_observations(run)
 here <- function(name) file.path(normalizePath(getwd(), winslash = "/"), name)
 # One issue row as a list of plain R values, for exact comparison.
 row_of <- function(frame, index = 1L) lapply(frame, function(column) column[[index]])
-issue <- function(condition, requirement, spec_paths, context, phase = "validation")
-  list(phase = phase, condition = condition, requirement = requirement, spec_paths = spec_paths,
+issue <- function(condition, rule, spec_paths, context, phase = "validation")
+  list(phase = phase, condition = condition, rule = rule, spec_paths = spec_paths,
     context = context, source_span = NULL, operand_route = NULL)
 same_issues <- function(frame, expected) {
   actual <- lapply(seq_len(nrow(frame)), function(index) row_of(frame, index))
@@ -284,7 +284,7 @@ stopifnot(identical(row_of(checked), lock_kind("python/environment.yaml")),
 invisible(file.copy(file.path(root, name, "project.yaml"), "project.yaml", overwrite = TRUE))
 writeLines(c("schema_version: '1.0'", "language: r", readtext(env)[-1L]), env)
 checked <- refuse_activation(project$check())$issues
-stopifnot(identical(checked$condition, "unknown_field"), identical(checked$requirement, "SCHEMA-13"),
+stopifnot(identical(checked$condition, "unknown_field"), identical(checked$rule, "SCHEMA-13"),
   identical(checked$spec_paths, list("language")),
   grepl('"environment_path":"environments.r"', checked$context, fixed = TRUE))
 invisible(file.copy(file.path(root, name, "r/environment.yaml"), env, overwrite = TRUE))
@@ -303,7 +303,7 @@ text <- sub("codelist: IDENTIFIERS", "codelist: ABSENT", text, fixed = TRUE)
 text <- sub("args: {x: SOURCE.VALUE}", "args: {}", text, fixed = TRUE)
 writeLines(text, "spec.yaml"); unlink("input", recursive = TRUE)
 checked <- refuse_activation(project$spec("TEST")$check())
-stopifnot(setequal(checked$issues$requirement, c("FUNC-5", "CT-1")))
+stopifnot(setequal(checked$issues$rule, c("FUNC-5", "CT-1")))
 # Independently specified math truth is identical in column, row and nested case
 # contexts. These declarations call no project function.
 for (context in fixture_strings(host_truth[["quota_modes"]])) {
@@ -371,7 +371,7 @@ for (precision in fixture_strings(host_truth[["invalid_csv_precision"]])) {
     identical(checked$issues, failed$issues),
     identical(failed$issues$phase, "validation"),
     identical(failed$issues$condition, "invalid_field_type"),
-    identical(failed$issues$requirement, "CSV-6"),
+    identical(failed$issues$rule, "CSV-6"),
     identical(failed$issues$spec_paths, list("output.decimals")),
     grepl(paste0('"actual":', precision), failed$issues$context, fixed = TRUE),
     grepl(host_truth[["csv_precision_expected"]], failed$issues$context, fixed = TRUE),
@@ -381,7 +381,7 @@ for (case in list(c("-9223372036854775809", "rounded.csv", "invalid_field_type",
                   c("2", "rounded.parquet", "decimals_not_applicable", "CSV-6"))) {
   failed <- precision_study(case[[1L]], case[[2L]])$run()
   stopifnot(is.null(failed$output), identical(failed$issues$condition, case[[3L]]),
-    identical(failed$issues$requirement, case[[4L]]),
+    identical(failed$issues$rule, case[[4L]]),
     identical(failed$issues$spec_paths, list("output.decimals")),
     inherits(tryCatch(failed$save(), error = identity), "yamaa_error"), !file.exists(case[[2L]]))
   if (case[[1L]] == "-9223372036854775809") stopifnot(grepl(
@@ -450,7 +450,7 @@ stopifnot(nrow(checked$issues) == 0L)
 writeLines(graph_document(host_truth[["incompatible_leaf_reference"]], "P", "consumer.csv"), "spec.yaml")
 checked <- refuse_activation(spec$check())
 stopifnot(identical(checked$issues$condition, "redundant_field_type"),
-  identical(checked$issues$requirement, "INPUT-6"),
+  identical(checked$issues$rule, "INPUT-6"),
   identical(checked$issues$spec_paths, list("input.P.types.ID")),
   !any(file.exists(fixture_strings(host_truth[["unread_graph_files"]]))))
 cat("public R linked checks report only the entry with no study/publication effects\n")
@@ -610,7 +610,7 @@ qualify_aggregate_callback <- function() {
   writeLines(sub(", order_by: [SRC.ID], keep: first", "", spec, fixed = TRUE), "spec.yaml")
   unlink("input.csv")
   issues <- refuse_activation(project$spec("TEST")$check())$issues
-  stopifnot(any(issues$condition == "invalid_derive_step" & issues$requirement == "LOOKUP-22"))
+  stopifnot(any(issues$condition == "invalid_derive_step" & issues$rule == "LOOKUP-22"))
   cat("public R aggregate callbacks preserve current-source types and kept record identity\n")
 }
 qualify_aggregate_callback()

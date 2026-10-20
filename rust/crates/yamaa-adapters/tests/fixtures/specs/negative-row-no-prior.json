@@ -9,7 +9,7 @@
         "offset": 0
       },
       "phase": "validation",
-      "requirement": "WINDOW-7",
+      "rule": "WINDOW-7",
       "spec_paths": [
         "columns.PREVAL.derivation.row_value.offset"
       ]
@@ -28,7 +28,7 @@
             "offset": 0
           },
           "phase": "validation",
-          "requirement": "WINDOW-7",
+          "rule": "WINDOW-7",
           "spec_paths": [
             "columns.PREVAL.derivation.row_value.offset"
           ]

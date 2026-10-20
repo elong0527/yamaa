@@ -248,7 +248,7 @@ fn each_route_fails_a_run_then_succeeds_on_the_same_prepared_value() {
         let issue = &issues[0];
         assert_eq!(issue.phase(), "validation");
         assert_eq!(issue.condition(), "resource_path_missing");
-        assert_eq!(issue.requirement(), Some("FILE-7"));
+        assert_eq!(issue.rule(), Some("FILE-7"));
         let (dataset, path) = route.input();
         assert_eq!(issue.spec_paths, [format!("input.{dataset}.path")]);
         assert_eq!(

@@ -2,7 +2,7 @@ phase: output
 condition: duplicate_key
 spec_paths:
   - keys
-requirement: OUTPUT-3
+rule: OUTPUT-3
 context:
   duplicate_count: 1
   keys:

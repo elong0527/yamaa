@@ -7,7 +7,7 @@ use yamaa_core::{
 
 pub(crate) fn reached() -> BTreeSet<C> {
     let mut reached = BTreeSet::new();
-    for (kind, values, code, phase, condition, requirement) in [
+    for (kind, values, code, phase, condition, rule) in [
         (
             K::DateShift,
             vec![Value::Str("2030-01-01".into()), Value::Int(1)],
@@ -104,9 +104,9 @@ pub(crate) fn reached() -> BTreeSet<C> {
             (
                 diagnostic.definition().phase,
                 diagnostic.definition().condition,
-                diagnostic.definition().requirement
+                diagnostic.definition().rule
             ),
-            (phase, condition, Some(requirement))
+            (phase, condition, Some(rule))
         );
         assert_eq!(diagnostic.source_span, None);
         assert_eq!(diagnostic.operand_route, None);

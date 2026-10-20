@@ -360,16 +360,8 @@ mod project {
                 let diagnostic = failure.diagnostic("/study/project.yaml");
                 let definition = diagnostic.code.definition();
                 assert_eq!(
-                    (
-                        definition.phase,
-                        definition.condition,
-                        definition.requirement
-                    ),
-                    (
-                        "validation",
-                        "project_environment_missing",
-                        Some("FUNC-1")
-                    )
+                    (definition.phase, definition.condition, definition.rule),
+                    ("validation", "project_environment_missing", Some("FUNC-1"))
                 );
                 assert_eq!(diagnostic.spec_paths, ["environment"]);
                 assert_eq!(diagnostic.context["cause"], JsonValue::String(cause.into()));
@@ -579,7 +571,7 @@ mod project {
                 assert_eq!(result.len(), 1);
                 let d = &result[0];
                 assert_eq!(
-                    (d.definition().condition, d.definition().requirement),
+                    (d.definition().condition, d.definition().rule),
                     ("project_environment_invalid", Some("FUNC-2"))
                 );
                 assert_eq!(d.spec_paths, [path]);
@@ -1246,13 +1238,9 @@ mod project {
                         (
                             d.definition().phase,
                             d.definition().condition,
-                            d.definition().requirement
+                            d.definition().rule
                         ),
-                        (
-                            "validation",
-                            "project_environment_invalid",
-                            Some("FUNC-2")
-                        )
+                        ("validation", "project_environment_invalid", Some("FUNC-2"))
                     );
                 }
             }

@@ -1003,7 +1003,7 @@
       "check": "row_count",
       "evaluated_count": 1,
       "failure": null,
-      "requirement": "CHECK-13",
+      "rule": "CHECK-13",
       "severity": "error",
       "spec_path": "verifications[0].row_count",
       "specification": "spec.yaml",

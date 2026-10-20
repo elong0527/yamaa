@@ -54,7 +54,7 @@ the changed output, so a stale plan would fail them.
 
 `diagnostic-parity` is the cross-host issue parity truth. Each case holds a
 specification, its input, the call (`check` or `run`) and every row of the
-issues table that call returns, in order: phase, condition, requirement,
+issues table that call returns, in order: phase, condition, rule,
 specification paths, context, source span and operand route. Both public
 contract suites require their rows to equal this truth field for field, so the
 two hosts equal each other. The context is the canonical JSON text both hosts
@@ -63,7 +63,7 @@ no JSON reader chooses a host number type. Together the cases cover every
 value shape a context holds: integers at and beyond 2^53, the signed 64-bit
 bounds and a wider literal, fractional and whole floats, null, non-ASCII text,
 text holding NUL (escaped), nested and empty objects and arrays, absent and
-present geometry, an empty route, an absent requirement, empty specification
+present geometry, an empty route, an absent rule, empty specification
 paths and several rows. A zero-width span is not reachable from a
 specification, because spans come only from expression nodes; the adapter
 record tests own it. Spans are integer pairs, doubles in R, and both geometry

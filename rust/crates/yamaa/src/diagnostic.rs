@@ -2,7 +2,7 @@
 //!
 //! This is the edge where core's diagnostic record (cause, spec paths,
 //! structured context and optional geometry) becomes its public form: the
-//! registry names the phase, condition and requirement, and the context
+//! registry names the phase, condition and rule, and the context
 //! becomes JSON text here and nowhere earlier. Severity is error for every
 //! issue today: only error-severity findings become issues, while
 //! warning-severity findings surface as rows of the run report. Context
@@ -26,7 +26,7 @@ use crate::table::Table;
 pub const ISSUE_COLUMNS: [&str; 7] = [
     "phase",
     "condition",
-    "requirement",
+    "rule",
     "spec_paths",
     "context",
     "source_span",
@@ -192,7 +192,7 @@ pub struct Diagnostic {
     pub severity: Severity,
     pub phase: String,
     pub code: String,
-    pub requirement: Option<String>,
+    pub rule: Option<String>,
     pub spec_path: Vec<String>,
     pub context: DiagnosticContext,
     /// Byte span in the original expression, when the failure site recorded one.
@@ -210,7 +210,7 @@ impl Diagnostic {
             severity: Severity::Error,
             phase: definition.phase.to_owned(),
             code: definition.condition.to_owned(),
-            requirement: definition.requirement.map(str::to_owned),
+            rule: definition.rule.map(str::to_owned),
             spec_path: diagnostic.spec_paths.clone(),
             context: DiagnosticContext::from_core(&diagnostic.context),
             source_span: diagnostic.source_span.map(|span| SourceSpan {
@@ -257,7 +257,7 @@ impl Report {
 
         let mut phase = StringBuilder::new();
         let mut condition = StringBuilder::new();
-        let mut requirement = StringBuilder::new();
+        let mut rule = StringBuilder::new();
         let mut spec_paths = ListBuilder::new(StringBuilder::new());
         let mut context = StringBuilder::new();
         let mut source_span = ListBuilder::new(Int64Builder::new());
@@ -265,7 +265,7 @@ impl Report {
         for diagnostic in &self.diagnostics {
             phase.append_value(&diagnostic.phase);
             condition.append_value(&diagnostic.code);
-            requirement.append_option(diagnostic.requirement.as_deref());
+            rule.append_option(diagnostic.rule.as_deref());
             for path in &diagnostic.spec_path {
                 spec_paths.values().append_value(path);
             }
@@ -314,7 +314,7 @@ impl Report {
             vec![
                 Arc::new(phase.finish()),
                 Arc::new(condition.finish()),
-                Arc::new(requirement.finish()),
+                Arc::new(rule.finish()),
                 Arc::new(spec_paths.finish()),
                 Arc::new(context.finish()),
                 Arc::new(source_span.finish()),
@@ -334,7 +334,7 @@ mod tests {
     use super::*;
 
     // NOTE: tools/validation/check_diagnostics.py forbids registered
-    // condition/requirement literals in crate sources (they live in the core
+    // condition/rule literals in crate sources (they live in the core
     // registry and in tests/ instead), so the expected vocabulary below is read
     // from the registry. tests/diagnostic_records.rs covers real registry
     // diagnostics end to end through the public Engine API.
@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(diagnostic.severity, Severity::Error);
         assert_eq!(diagnostic.phase, CODE.definition().phase);
         assert_eq!(diagnostic.code, CODE.definition().condition);
-        assert_eq!(diagnostic.requirement.as_deref(), None);
+        assert_eq!(diagnostic.rule.as_deref(), None);
         assert_eq!(diagnostic.spec_path, ["columns.A"]);
         assert_eq!(diagnostic.context.to_json(), CONTEXT);
         assert_eq!(
@@ -465,7 +465,7 @@ mod tests {
             [
                 "phase",
                 "condition",
-                "requirement",
+                "rule",
                 "spec_paths",
                 "context",
                 "source_span",
@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(text(0).value(0), CODE.definition().phase);
         assert_eq!(text(1).value(1), overflow.condition);
         assert!(text(2).is_null(0));
-        assert_eq!(Some(text(2).value(1)), overflow.requirement);
+        assert_eq!(Some(text(2).value(1)), overflow.rule);
         assert_eq!(text(4).value(0), CONTEXT);
         let list = |index: usize| {
             batch

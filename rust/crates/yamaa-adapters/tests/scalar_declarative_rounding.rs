@@ -106,7 +106,7 @@ mod scalar {
             let finding = &findings[0];
             assert_eq!(finding.phase(), "validation");
             assert_eq!(finding.condition(), "incompatible_input_type");
-            assert_eq!(finding.requirement(), Some("FORMULA-16"));
+            assert_eq!(finding.rule(), Some("FORMULA-16"));
             assert_eq!(
                 finding.spec_paths,
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.source"]
@@ -148,7 +148,7 @@ mod scalar {
             assert_eq!(findings.len(), 1, "{findings:?}");
             assert_eq!(findings[0].phase(), "validation");
             assert_eq!(findings[0].condition(), "invalid_field_type");
-            assert_eq!(findings[0].requirement(), Some("SCHEMA-12"));
+            assert_eq!(findings[0].rule(), Some("SCHEMA-12"));
             assert_eq!(
                 findings[0].spec_paths,
                 ["columns.RNDVAL.derivation.round_half_away_from_zero.digits"]
@@ -297,7 +297,7 @@ mod scalar {
                 identity(&path),
             );
             assert_eq!(findings.len(), 1, "{findings:?}");
-            assert_eq!(findings[0].requirement(), Some("FORMULA-16"));
+            assert_eq!(findings[0].rule(), Some("FORMULA-16"));
             assert_eq!(
                 findings[0].spec_paths,
                 ["columns.RNDVAL.derivation.case[0].then.round_half_away_from_zero.source"]
@@ -438,7 +438,7 @@ mod scalar {
                 );
                 assert_eq!(findings.len(), 1, "{name}: {findings:?}");
                 let finding = &findings[0];
-                let actual = yamaa_adapters::json!({"phase":finding.phase(), "condition":finding.condition(), "requirement":finding.requirement(), "spec_paths":finding.spec_paths, "context":finding.context.clone()});
+                let actual = yamaa_adapters::json!({"phase":finding.phase(), "condition":finding.condition(), "rule":finding.rule(), "spec_paths":finding.spec_paths, "context":finding.context.clone()});
                 assert_eq!(actual, expected, "{name}");
                 let failed = file_application::domain(
                     yamaa_core::project_function::Language::Python,
@@ -523,7 +523,7 @@ mod scalar {
         "spec_paths": [
           "input.SRC.path"
         ],
-        "requirement": "FILE-7",
+        "rule": "FILE-7",
         "context": {
           "dataset": "SRC",
           "path": "src.csv"
@@ -544,7 +544,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.to_epoch_day.source"
         ],
-        "requirement": "TIME-1",
+        "rule": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -573,7 +573,7 @@ mod scalar {
         "spec_paths": [
           "input.SRC.path"
         ],
-        "requirement": "FILE-7",
+        "rule": "FILE-7",
         "context": {
           "dataset": "SRC",
           "path": "src.csv"
@@ -594,7 +594,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.study_day.date"
         ],
-        "requirement": "TIME-1",
+        "rule": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -607,7 +607,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.study_day.reference"
         ],
-        "requirement": "TIME-1",
+        "rule": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -636,7 +636,7 @@ mod scalar {
         "spec_paths": [
           "input.SRC.path"
         ],
-        "requirement": "FILE-7",
+        "rule": "FILE-7",
         "context": {
           "dataset": "SRC",
           "path": "src.csv"
@@ -657,7 +657,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.diff.start"
         ],
-        "requirement": "TIME-1",
+        "rule": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -670,7 +670,7 @@ mod scalar {
         "spec_paths": [
           "rows[0].derivations.EP.diff.end"
         ],
-        "requirement": "TIME-1",
+        "rule": "TIME-1",
         "context": {
           "source": "SRC.D",
           "expected": "date",
@@ -736,7 +736,7 @@ mod scalar {
                     .map(|finding| {
                         yamaa_adapters::json!({
                             "phase": finding.phase(), "condition": finding.condition(),
-                            "requirement": finding.requirement(), "spec_paths": finding.spec_paths,
+                            "rule": finding.rule(), "spec_paths": finding.spec_paths,
                             "context": finding.context.clone()
                         })
                     })
@@ -909,11 +909,7 @@ mod scalar {
                 let actual = &issues[0];
                 assert_eq!(actual.phase(), expected["phase"], "{name}");
                 assert_eq!(actual.condition(), expected["condition"], "{name}");
-                assert_eq!(
-                    actual.requirement(),
-                    expected["requirement"].as_str(),
-                    "{name}"
-                );
+                assert_eq!(actual.rule(), expected["rule"].as_str(), "{name}");
                 assert_eq!(
                     yamaa_adapters::json_wire::project(&actual.spec_paths).unwrap(),
                     expected["spec_paths"],
@@ -947,10 +943,10 @@ mod scalar {
                 assert!(result.output().is_none());
                 assert_eq!(result.issues().len(), 1);
                 let issue = &result.issues()[0];
-                let actual = yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()});
+                let actual = yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()});
                 assert_eq!(actual, reference[name][0], "{name}");
                 let expected = golden(&fixture);
-                for field in ["phase", "condition", "requirement", "spec_paths"] {
+                for field in ["phase", "condition", "rule", "spec_paths"] {
                     assert_eq!(actual[field], expected[field], "{name}: {field}");
                 }
                 for (key, value) in expected["context"].as_object().unwrap() {
@@ -1073,7 +1069,7 @@ columns:
                     yamaa_adapters::json!({
                         "phase": issue.phase(),
                         "condition": issue.condition(),
-                        "requirement": issue.requirement(),
+                        "rule": issue.rule(),
                         "spec_paths": issue.spec_paths,
                         "context": issue.context.clone(),
                     })
@@ -1177,7 +1173,7 @@ columns:
                 yamaa_adapters::json!([{
                     "phase": "validation",
                     "condition": "incompatible_input_type",
-                    "requirement": "TIME-1",
+                    "rule": "TIME-1",
                     "spec_paths": ["columns.END.derivation.impute.not_after"],
                     "context": {"source": "SRC.HIGH", "expected": "date", "actual": "int"},
                 }])
@@ -1212,7 +1208,7 @@ intermediates:
                 yamaa_adapters::json!([{
                     "phase": "planning",
                     "condition": "unsupported_operation",
-                    "requirement": null,
+                    "rule": null,
                     "spec_paths": ["intermediates[0].key.M.impute.not_after"],
                     "context": {"operation": "not_after"},
                 }])
@@ -1291,7 +1287,7 @@ columns:
                     .map(|issue| yamaa_adapters::json!({
                         "phase": issue.phase(),
                         "condition": issue.condition(),
-                        "requirement": issue.requirement(),
+                        "rule": issue.rule(),
                         "spec_paths": issue.spec_paths,
                         "context": issue.context.clone(),
                     }))
@@ -1491,7 +1487,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn original_sentence_fixture_matches_its_ordered_artifact() {
@@ -1704,7 +1700,7 @@ columns:
                 assert_eq!(
                     issues.iter().map(issue_json).collect::<Vec<_>>(),
                     [
-                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","requirement":"TEXT-1","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
+                        yamaa_adapters::json!({"phase":"validation","condition":"incompatible_input_type","rule":"TEXT-1","spec_paths":["rows[0].derivations.TEXT.str_case.source"],"context":{"source":"SRC.TEXT","expected":"str","actual":kind}})
                     ]
                 );
                 assert!(!fixture.0.join("output.csv").exists());
@@ -1803,7 +1799,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adae-text-cleanup");
@@ -1956,7 +1952,7 @@ columns:
             assert_eq!(
                 issue_json(&issues[0]),
                 yamaa_adapters::json!({
-                    "phase":cause["phase"],"condition":cause["condition"],"requirement":cause["requirement"],
+                    "phase":cause["phase"],"condition":cause["condition"],"rule":cause["rule"],
                     "spec_paths":["columns.RESULT.derivation.str_extract.group"],"context":cause["context"]
                 })
             );
@@ -1993,7 +1989,7 @@ columns:
             };
             assert_eq!(findings.len(), 60);
             let expected = (0..60).map(|index| yamaa_adapters::json!({
-        "phase":"validation", "condition":"invalid_regex", "requirement":"TEXT-6",
+        "phase":"validation", "condition":"invalid_regex", "rule":"TEXT-6",
         "spec_paths":[format!("columns.V{index}.derivation.str_extract.pattern")],
         "context":{"pattern":format!("[{}", "a".repeat(600)), "reason":"a character class is never closed"}
     })).collect::<Vec<_>>();
@@ -2082,7 +2078,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         #[test]
         fn independent_reference_captures_match_full_output_and_reached_findings() {
@@ -2240,7 +2236,7 @@ columns:
                 [yamaa_adapters::json!({
                     "phase": "engine",
                     "condition": "engine_rejected",
-                    "requirement": null,
+                    "rule": null,
                     "spec_paths": [],
                     "context": {"stage": "build", "code": "result_projection"},
                 })]
@@ -2340,7 +2336,7 @@ columns:
         }
 
         fn issue_json(issue: &yamaa_core::diagnostic::Diagnostic) -> yamaa_core::json::Value {
-            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"requirement":issue.requirement(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
+            yamaa_adapters::json!({"phase":issue.phase(),"condition":issue.condition(),"rule":issue.rule(),"spec_paths":issue.spec_paths,"context":issue.context.clone()})
         }
         fn bespoke(source: &str, input: &[u8]) -> Fixture {
             let fixture = Fixture::new("adam-adsl-site-parse");
@@ -2621,7 +2617,7 @@ columns:
                 };
                 assert_eq!(findings.len(), paths.len());
                 let expected = paths.iter().map(|path| yamaa_adapters::json!({
-            "phase":"validation", "condition":"invalid_string_template", "requirement":"TEXT-3",
+            "phase":"validation", "condition":"invalid_string_template", "rule":"TEXT-3",
             "spec_paths":[path], "context":{"reason":"unmatched_brace"}
         })).collect::<Vec<_>>();
                 let fixture = bespoke(&yamaa_adapters::json_wire::encode(&spec), b"ID,A,B,N\n");
