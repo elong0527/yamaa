@@ -234,9 +234,19 @@ pub fn binding_diagnostics<'a, 'e, E>(
             ]
             .into();
             host_context(&mut context, host.expect("preflighted ordinary facts"));
+            // A 0.5 definition's callable is its `function`; a 1.0 function
+            // file names the host's under `implementations` (FUNC-8).
+            let (code, field) = if source.function.definition().header.is_some() {
+                (
+                    ConditionCode::FunctionFileInvalid,
+                    format!("implementations.{}", source.function.language().key()),
+                )
+            } else {
+                (ConditionCode::ProjectEnvironmentInvalid, "function".into())
+            };
             Diagnostic {
-                code: ConditionCode::ProjectEnvironmentInvalid,
-                spec_path: format!("{}.function", source.path),
+                code,
+                spec_path: format!("{}.{field}", source.path),
                 context,
             }
         })

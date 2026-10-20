@@ -1047,6 +1047,260 @@ mod preparation {
             assert_eq!(limit.actual, Some(Limits::SPEC_BYTES + 1));
             assert!(rejected.admission.is_none());
         }
+
+        /// A 1.0 project lists its function files and holds each host
+        /// language's lock, all relative to the project file (D8).
+        fn project_v1() -> Tree {
+            Tree::map(vec![
+                ("yamaa", Tree::text("1.0")),
+                ("type", Tree::text("project")),
+                (
+                    "functions",
+                    Tree::List(vec![
+                        Tree::text("functions/python.yaml"),
+                        Tree::text("functions/both.yaml"),
+                    ]),
+                ),
+                (
+                    "environments",
+                    Tree::map(vec![
+                        (
+                            "python",
+                            Tree::map(vec![("lock", Tree::text("python/uv.lock"))]),
+                        ),
+                        ("r", Tree::map(vec![("lock", Tree::text("r/renv.lock"))])),
+                    ]),
+                ),
+                ("codelists", Tree::List(vec![Tree::text("ct.yaml")])),
+            ])
+        }
+        /// `function(result)` as a 1.0 function file: its own header and
+        /// name, and the callable of each host it implements.
+        fn function_file(name: &str, implementations: &[(&str, &str)], result: &str) -> Tree {
+            let Tree::Map(fields) = function(result) else {
+                unreachable!("a definition is a mapping")
+            };
+            let mut file = vec![
+                ("yamaa".to_string(), Tree::text("1.0")),
+                ("type".into(), Tree::text("function")),
+                ("name".into(), Tree::text(name)),
+            ];
+            file.extend(fields.into_iter().filter(|(key, _)| key != "function"));
+            file.push((
+                "implementations".into(),
+                Tree::Map(
+                    implementations
+                        .iter()
+                        .map(|&(host, callable)| (host.to_string(), Tree::text(callable)))
+                        .collect(),
+                ),
+            ));
+            Tree::Map(file)
+        }
+        fn codelist_file() -> Tree {
+            let Tree::Map(fields) = codelist("SEX", Tree::text("F")) else {
+                unreachable!("a codelist source is a mapping")
+            };
+            let mut file = vec![
+                ("yamaa".to_string(), Tree::text("1.0")),
+                ("type".into(), Tree::text("codelists")),
+            ];
+            file.extend(fields);
+            Tree::Map(file)
+        }
+
+        #[test]
+        fn a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file() {
+            let held = |written: &str| format!("/held/{written}");
+            for (host, lock, kind) in [
+                (Language::Python, "python/uv.lock", LockKind::Uv),
+                (Language::R, "r/renv.lock", LockKind::Renv),
+            ] {
+                let log = EventLog::default();
+                let root = source("/author/project.yaml", b"held 1.0 project");
+                let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
+                decoder.steps.push_back(MetadataDecodeStep {
+                    source: root.clone(),
+                    target: DecodeTarget::Project,
+                    outcome: Ok(project_v1().document()),
+                });
+                let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
+                // Only the host's own lock is read, from the project file.
+                port.steps.push_back(MetadataCaptureStep {
+                    kind: Kind::Lock,
+                    declaring_source: "/author/project.yaml".into(),
+                    written: lock.into(),
+                    outcome: Ok(Reply::Lock {
+                        source: source(&held(lock), b"held lock"),
+                        kind,
+                    }),
+                });
+                // Every listed file is read, whichever hosts it implements.
+                for (written, file) in [
+                    (
+                        "functions/python.yaml",
+                        function_file("only_python", &[("python", "project.constant")], "7"),
+                    ),
+                    (
+                        "functions/both.yaml",
+                        function_file(
+                            "both",
+                            &[("python", "project.constant"), ("r", "project::constant")],
+                            "7",
+                        ),
+                    ),
+                ] {
+                    let captured = source(&held(written), written.as_bytes());
+                    port.steps.push_back(MetadataCaptureStep {
+                        kind: Kind::Function,
+                        declaring_source: "/author/project.yaml".into(),
+                        written: written.into(),
+                        outcome: Ok(Reply::Document(captured.clone())),
+                    });
+                    decoder.steps.push_back(MetadataDecodeStep {
+                        source: captured,
+                        target: DecodeTarget::FunctionFile,
+                        outcome: Ok(file.document()),
+                    });
+                }
+                let terminology = source(&held("ct.yaml"), b"held codelists");
+                port.steps.push_back(MetadataCaptureStep {
+                    kind: Kind::Codelist,
+                    declaring_source: "/author/project.yaml".into(),
+                    written: "ct.yaml".into(),
+                    outcome: Ok(Reply::Document(terminology.clone())),
+                });
+                decoder.steps.push_back(MetadataDecodeStep {
+                    source: terminology,
+                    target: DecodeTarget::CodelistFile,
+                    outcome: Ok(codelist_file().document()),
+                });
+                let prepared = prepare(&mut decoder, root, host, &mut port).unwrap();
+                assert_eq!(
+                    effects(&log),
+                    [
+                        "decode Project /author/project.yaml".to_string(),
+                        format!("capture {lock}"),
+                        "capture functions/python.yaml".into(),
+                        "decode FunctionFile /held/functions/python.yaml".into(),
+                        "capture functions/both.yaml".into(),
+                        "decode FunctionFile /held/functions/both.yaml".into(),
+                        "capture ct.yaml".into(),
+                        "decode CodelistFile /held/ct.yaml".into(),
+                    ]
+                );
+                assert!(prepared.environment_file.is_none());
+                assert_eq!(prepared.origins.functions, ["only_python", "both"]);
+                assert_eq!(prepared.origins.function_files, [0, 1]);
+                assert_eq!(prepared.origins.codelists, [0]);
+                assert_eq!(
+                    prepared
+                        .captures
+                        .iter()
+                        .map(|capture| capture.origin.clone())
+                        .collect::<Vec<_>>(),
+                    [
+                        Origin::FunctionFile(0),
+                        Origin::FunctionFile(1),
+                        Origin::Codelist(0)
+                    ]
+                );
+                assert_eq!(prepared.lock.as_ref().unwrap().kind, kind);
+                let draft = prepared.environment.draft();
+                assert_eq!(draft.surface, yamaa_core::ast::Surface::V1 { minor: 0 });
+                assert_eq!(draft.language, Some(host));
+                assert_eq!(draft.lock.as_ref().unwrap().written, lock);
+                // A function file that names no callable for the host is
+                // admitted; a call of it fails before any data is read.
+                let execution = prepared.environment.into_execution();
+                assert_eq!(execution.undeclared_language(), None);
+                assert_eq!(
+                    execution
+                        .functions()
+                        .iter()
+                        .map(|function| (function.name(), function.implemented()))
+                        .collect::<Vec<_>>(),
+                    [("only_python", host == Language::Python), ("both", true)]
+                );
+                assert!(execution.catalogue().get("SEX").is_some());
+            }
+        }
+
+        #[test]
+        fn a_listed_function_file_that_fails_keeps_its_listing() {
+            let log = EventLog::default();
+            let root = source("/author/project.yaml", b"held 1.0 project");
+            let mut decoder = ScriptedMetadataDecoder::<Opaque>::new(log.clone());
+            let mut project = project_v1();
+            project.remove(&["environments"]);
+            project.remove(&["codelists"]);
+            decoder.steps.push_back(MetadataDecodeStep {
+                source: root.clone(),
+                target: DecodeTarget::Project,
+                outcome: Ok(project.document()),
+            });
+            let mut port = ScriptedMetadata::<Opaque>::new(log.clone());
+            port.steps.push_back(MetadataCaptureStep {
+                kind: Kind::Function,
+                declaring_source: "/author/project.yaml".into(),
+                written: "functions/python.yaml".into(),
+                outcome: Err(Opaque("unreadable".into())),
+            });
+            let wide = source("/held/functions/both.yaml", b"wide");
+            port.steps.push_back(MetadataCaptureStep {
+                kind: Kind::Function,
+                declaring_source: "/author/project.yaml".into(),
+                written: "functions/both.yaml".into(),
+                outcome: Ok(Reply::Document(wide.clone())),
+            });
+            decoder.steps.push_back(MetadataDecodeStep {
+                source: wide,
+                target: DecodeTarget::FunctionFile,
+                outcome: Ok(function_file(
+                    "both",
+                    &[("python", "project.constant")],
+                    "9223372036854775808",
+                )
+                .document()),
+            });
+            let Err(Failure::Rejected(rejected)) =
+                prepare(&mut decoder, root, Language::Python, &mut port)
+            else {
+                panic!("both listed function files fail")
+            };
+            // Without a lock entry the host declares no lock, so none is read.
+            assert_eq!(
+                effects(&log),
+                [
+                    "decode Project /author/project.yaml",
+                    "capture functions/python.yaml",
+                    "capture functions/both.yaml",
+                    "decode FunctionFile /held/functions/both.yaml",
+                ]
+            );
+            assert_eq!(
+                rejected
+                    .sources
+                    .iter()
+                    .map(|failure| (failure.origin.clone(), failure.written.as_str()))
+                    .collect::<Vec<_>>(),
+                [
+                    (Origin::FunctionFile(0), "functions/python.yaml"),
+                    (Origin::FunctionFile(1), "functions/both.yaml"),
+                ]
+            );
+            assert!(matches!(rejected.sources[0].error, CaptureFailure::Port(_)));
+            let CaptureFailure::Scalar { findings, .. } = &rejected.sources[1].error else {
+                panic!("an unreadable value in the second file")
+            };
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].path, "tests[0].result");
+            assert_eq!(findings[0].kind, ScalarKind::IntegerRange);
+            assert!(rejected.origins.functions.is_empty());
+            assert!(rejected.origins.function_files.is_empty());
+            assert_eq!(rejected.draft.functions, Some(vec![]));
+            assert!(rejected.admission.is_none());
+        }
     }
     mod schema_capture {
         use std::{

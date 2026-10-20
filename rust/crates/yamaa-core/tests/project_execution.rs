@@ -774,6 +774,7 @@ mod project {
                 Environment::admit(
                     Language::Python,
                     Draft {
+                        surface: yamaa_core::ast::Surface::V0_5,
                         language: present.then_some(Language::Python),
                         lock: present.then_some(LockReference {
                             written: "../uv.lock".into(),
@@ -2158,6 +2159,7 @@ mod project {
                 let environment = Environment::admit(
                     host,
                     Draft {
+                        surface: yamaa_core::ast::Surface::V0_5,
                         language: None,
                         lock: None,
                         functions: None,

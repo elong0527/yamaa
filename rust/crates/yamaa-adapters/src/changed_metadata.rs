@@ -91,8 +91,9 @@ pub(crate) fn environment(
     if environment.root.source().identity == identity {
         return Some(failure.field_diagnostic("environment", environment.written));
     }
-    // The project declares its environment link and codelists; the linked
-    // environment file declares its lock and functions.
+    // A 0.5 project declares its environment link and codelists, and the
+    // linked environment file its lock and functions; a 1.0 project declares
+    // its lock, function files and codelists itself (D8).
     let project = environment.project;
     let host = project.environment(environment.host);
     if environment
@@ -108,7 +109,11 @@ pub(crate) fn environment(
         .is_some_and(|lock| lock.source.identity == identity)
     {
         let written = &host?.lock.as_ref()?.text;
-        return Some(failure.field_diagnostic("lock", written));
+        let field = match project.header.surface {
+            ast::Surface::V0_5 => "lock".into(),
+            ast::Surface::V1 { .. } => format!("environments.{}.lock", environment.host.key()),
+        };
+        return Some(failure.field_diagnostic(&field, written));
     }
     let capture = environment
         .captures
@@ -126,6 +131,13 @@ pub(crate) fn environment(
                 return None;
             };
             Some(failure.field_diagnostic(&format!("functions.{name}"), &written.text))
+        }
+        Origin::FunctionFile(index) => {
+            let declaration = project.functions.as_deref()?.get(*index)?;
+            let FunctionSource::File(written) = &declaration.source else {
+                return None;
+            };
+            Some(failure.field_diagnostic(&format!("functions[{index}]"), &written.text))
         }
         Origin::Codelist(index) => {
             let CodelistSource::File(written) = &project.codelists.get(*index)?.source else {
