@@ -4,6 +4,13 @@
 //! nothing until `save`. A lazy object also keeps a [`Plans`] holder, so a
 //! later run reuses what an earlier run compiled once the run-start check
 //! finds the files unchanged.
+//!
+//! Every operation produces one outcome: its members in run order and the
+//! project-level issues that refused the whole operation. A specification run
+//! is a producer graph of one member; a project run is a graph of every
+//! specification in its scope, producer first. [`Check`], [`Run`],
+//! [`ProjectRun`] and [`Submission`] are views of the outcome, and each
+//! computes its [`Status`] from the issues and the build, never storing it.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -15,8 +22,9 @@ use yamaa_core::project_environment::Submission as Section;
 
 use crate::cancel::CancellationToken;
 use crate::diagnostic::{context_value_from_core, ContextValue, Report};
-use crate::engine::{Build, DefineBuild, DefineRequest, Engine, Request, SaveOutcome};
+use crate::engine::{Build, DefineRequest, Engine, Request, SaveOutcome};
 use crate::error::Error;
+use crate::outcome::{fails, Member, Outcome, Work};
 use crate::plan::Plan;
 use crate::table::Table;
 
@@ -61,7 +69,64 @@ impl std::fmt::Display for Failure {
 
 impl std::error::Error for Failure {}
 
-/// One specification run: its output dataset, issues and run report.
+/// The status of a result or of one member of it (P-STATUS-1). Rust computes
+/// it from the issues and the build; it is never stored. A warning never
+/// changes it, and `status` describes the operation, not a later save.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    /// Everything the operation set out to build was built, with no
+    /// error-severity issue.
+    Succeeded,
+    /// Anything else.
+    Failed,
+    /// A project-run member that did not run because a run-scope producer
+    /// failed or was skipped (PROJECT-11).
+    Skipped,
+}
+
+impl Status {
+    /// The status as written: `succeeded`, `failed` or `skipped`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+            Self::Skipped => "skipped",
+        }
+    }
+
+    /// `succeeded` exactly when every member succeeded and no issue fails
+    /// the whole operation.
+    pub(crate) fn of_all(issues: &[Diagnostic], members: impl IntoIterator<Item = Status>) -> Self {
+        if !fails(issues) && members.into_iter().all(|status| status == Self::Succeeded) {
+            Self::Succeeded
+        } else {
+            Self::Failed
+        }
+    }
+}
+
+/// The static check of a specification or a project: what is wrong, read
+/// without study data or project code.
+pub struct Check {
+    outcome: Outcome,
+}
+
+impl Check {
+    /// What is wrong, one row per finding; empty when nothing is. A project
+    /// check lists the project findings first, then each specification's.
+    pub fn issues(&self) -> Table {
+        Report::from_issues(&self.outcome.issues()).table()
+    }
+
+    /// `succeeded` when the check found no error-severity issue.
+    pub fn status(&self) -> Status {
+        self.outcome.status()
+    }
+}
+
+/// One specification run, or one member of a project run: its output
+/// dataset, issues and run report.
 pub struct Run {
     build: Build,
 }
@@ -81,6 +146,13 @@ impl Run {
     /// began or, in a producer graph, when the entry never ran.
     pub fn report(&self) -> Option<&Table> {
         self.build.run_report()
+    }
+
+    /// `succeeded` when the run built its output with no error-severity
+    /// issue; `skipped` for a project-run member that did not run because a
+    /// run-scope producer failed or was skipped; `failed` otherwise.
+    pub fn status(&self) -> Status {
+        self.build.status()
     }
 
     /// Write the declared report file and the output dataset. A failed run
@@ -192,7 +264,82 @@ impl Plans {
     }
 }
 
+/// One member of a producer graph: the specification to build, with its
+/// project, and what decides whether it builds.
+struct Node<'a> {
+    name: Option<String>,
+    identity: Option<String>,
+    request: Request<'a>,
+    /// What the request resolves to now, for a kept plan.
+    plan: Option<PlanKey>,
+    /// Findings that stop the member before it builds.
+    refused: Vec<Diagnostic>,
+    /// The producers it reads, by node, each with the finding the member
+    /// reports when that producer did not complete.
+    producers: Vec<(usize, Diagnostic)>,
+    /// The producer identity and location under which consumers read the
+    /// member's artifact.
+    artifact: Option<(String, String)>,
+}
+
 impl Engine {
+    /// Build every member of a producer graph once, in order. A producer
+    /// hands its artifact to its consumers in memory; a member whose own
+    /// findings refuse it, or whose producer did not complete, does not
+    /// build, and a user interrupt in project code stops the graph after
+    /// that member. Only cancellation fails the call.
+    fn run_graph(
+        &self,
+        nodes: Vec<Node<'_>>,
+        plans: &Plans,
+        token: &CancellationToken,
+    ) -> Result<Outcome, Error> {
+        let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
+        let mut succeeded = vec![false; nodes.len()];
+        let mut members = Vec::with_capacity(nodes.len());
+        for (position, node) in nodes.into_iter().enumerate() {
+            let blocked = node
+                .producers
+                .into_iter()
+                .filter(|(producer, _)| !succeeded[*producer])
+                .map(|(_, finding)| finding)
+                .collect::<Vec<_>>();
+            let build = if !node.refused.is_empty() {
+                self.refused_build(node.refused)
+            } else if !blocked.is_empty() {
+                self.refused_build(blocked)
+            } else {
+                self.build_reusing(
+                    plans,
+                    &node.request,
+                    node.plan,
+                    Some(Arc::new(held.clone())),
+                    token,
+                )?
+            };
+            let artifact = build.artifact();
+            succeeded[position] = artifact.is_some();
+            if let (Some(bytes), Some((producer, location))) = (artifact, node.artifact) {
+                held.insert(producer, location, bytes);
+            }
+            // A user interrupt in project code stops the graph here, so no
+            // later member builds or calls project code.
+            let interrupted = build.interrupt().is_some();
+            members.push(Member {
+                name: node.name,
+                identity: node.identity,
+                work: Work::Built(Box::new(Run { build })),
+            });
+            if interrupted {
+                break;
+            }
+        }
+        Ok(Outcome {
+            members,
+            issues: Vec::new(),
+        })
+    }
+
     /// Check one specification without reading study data or running project
     /// code, with the project's codelists and functions when it has one. Only
     /// cancellation fails the call.
@@ -201,9 +348,18 @@ impl Engine {
         specification: &str,
         project: Option<&str>,
         token: &CancellationToken,
-    ) -> Result<Table, Error> {
-        self.check(&request(specification, project), token)
-            .map(|report| report.table())
+    ) -> Result<Check, Error> {
+        let issues = crate::internal::run_check(self.shared(), specification, project, token)?;
+        Ok(Check {
+            outcome: Outcome {
+                members: vec![Member {
+                    name: None,
+                    identity: None,
+                    work: Work::Checked(issues),
+                }],
+                issues: Vec::new(),
+            },
+        })
     }
 
     /// Build one specification in memory; nothing is written until `save`.
@@ -235,8 +391,25 @@ impl Engine {
         // identity, such as the one its relative path named before the
         // working directory changed, is dropped.
         plans.retain(|kept| identity.as_ref() == Some(kept));
-        self.build_reusing(plans, &request, identity, None, token)
-            .map(|build| Run { build })
+        let node = Node {
+            name: None,
+            identity: None,
+            request,
+            plan: identity,
+            refused: Vec::new(),
+            producers: Vec::new(),
+            artifact: None,
+        };
+        let outcome = self.run_graph(vec![node], plans, token)?;
+        let member = outcome
+            .members
+            .into_iter()
+            .next()
+            .expect("a graph of one member builds it");
+        match member.work {
+            Work::Built(run) => Ok(*run),
+            Work::Checked(_) | Work::Composed(..) => unreachable!("a graph builds its members"),
+        }
     }
 
     /// The specification after its layers are composed, as one structured
@@ -300,55 +473,28 @@ fn section(section: Option<&str>) -> Result<Option<Section>, Error> {
         })
 }
 
-/// One specification of a project run: its name, when it has one, its
-/// identity and its run.
-struct ProjectStep {
-    name: Option<String>,
-    identity: String,
-    run: Run,
-}
-
-/// The name a message uses for a step: its name, else its identity.
-fn label(step: &ProjectStep) -> &str {
-    step.name.as_deref().unwrap_or(&step.identity)
-}
-
-/// A step's issues, each naming its specification as its entry.
-fn step_issues(step: &ProjectStep) -> Vec<Diagnostic> {
-    let mut issues = step.run.build.issues();
-    identify(&mut issues, &step.identity);
-    issues
-}
-
 /// Every specification of one project run scope, built once in run order.
 pub struct ProjectRun {
-    steps: Vec<ProjectStep>,
-    /// Project findings that refused the run before any specification built.
-    refusal: Vec<Diagnostic>,
+    outcome: Outcome,
 }
 
 impl ProjectRun {
-    fn refused(refusal: Vec<Diagnostic>) -> Self {
-        Self {
-            steps: Vec::new(),
-            refusal,
-        }
-    }
-
     /// The names of the run's specifications, in run order.
     pub fn names(&self) -> Vec<String> {
-        self.steps
+        self.outcome
+            .members
             .iter()
-            .filter_map(|step| step.name.clone())
+            .filter_map(|member| member.name.clone())
             .collect()
     }
 
     /// The run of the specification named `name`.
     pub fn get(&self, name: &str) -> Option<&Run> {
-        self.steps
+        self.outcome
+            .members
             .iter()
-            .find(|step| step.name.as_deref() == Some(name))
-            .map(|step| &step.run)
+            .find(|member| member.name.as_deref() == Some(name))
+            .and_then(Member::run)
     }
 
     /// The run of the specification named `name`, or the refusal every host
@@ -376,25 +522,28 @@ impl ProjectRun {
     /// Every run's issues in run order, after any project finding that
     /// refused the run. Each names its specification as its `entry`.
     pub fn issues(&self) -> Table {
-        let mut issues = self.refusal.clone();
-        for step in &self.steps {
-            issues.extend(step_issues(step));
-        }
-        Report::from_issues(&issues).table()
+        Report::from_issues(&self.outcome.issues()).table()
     }
 
     /// The runs' reports stacked in run order; each row names its
     /// specification's artifact. A specification that did not run adds none.
     pub fn report(&self) -> Table {
         let reports = self
-            .steps
+            .outcome
+            .members
             .iter()
-            .filter_map(|step| step.run.report().map(Table::public))
+            .filter_map(|member| member.run()?.report().map(Table::public))
             .collect::<Vec<_>>();
         Table::from_public(
             yamaa_adapters::project_scope::stack_reports(&reports)
                 .expect("every run report has the run report columns"),
         )
+    }
+
+    /// `succeeded` when every specification succeeded and no project finding
+    /// refused the run; a run whose scope is empty succeeds.
+    pub fn status(&self) -> Status {
+        self.outcome.status()
     }
 
     /// Validate every target, then publish in run order. When every
@@ -405,47 +554,57 @@ impl ProjectRun {
     /// run that built no specification fails with `nothing_to_save`
     /// (PROJECT-12).
     pub fn save(&mut self) -> Result<(), Failure> {
-        if !self.refusal.is_empty() {
+        let outcome = &mut self.outcome;
+        if !outcome.issues.is_empty() {
             return Err(Failure::from_issues(
                 "the project run was refused; see issues",
-                &self.refusal,
+                &outcome.issues,
             ));
         }
-        if self.steps.is_empty() {
+        if outcome.members.is_empty() {
             return Err(Failure::from_finding(
                 "the project run built no specification, so nothing was saved",
                 yamaa_core::project_scope::run_nothing_to_save(),
             ));
         }
-        let failed = self.steps.iter().any(|step| step.run.output().is_none());
+        let failed = outcome
+            .members
+            .iter()
+            .any(|member| member.run().is_none_or(|run| run.output().is_none()));
         let mut preflight = yamaa_adapters::project_scope::Preflight::new();
-        for step in &self.steps {
-            if let Err(mut issues) = step.run.build.preflight(&mut preflight, failed) {
-                identify(&mut issues, &step.identity);
+        for member in &outcome.members {
+            let Some(run) = member.run() else { continue };
+            if let Err(mut issues) = run.build.preflight(&mut preflight, failed) {
+                if let Some(identity) = &member.identity {
+                    identify(&mut issues, identity);
+                }
                 return Err(Failure::from_issues(
-                    format!("cannot save {}; see issues", label(step)),
+                    format!("cannot save {}; see issues", member.label()),
                     &issues,
                 ));
             }
         }
         drop(preflight);
-        for step in &mut self.steps {
+        for member in &mut outcome.members {
+            let label = member.label().to_owned();
+            let Work::Built(run) = &mut member.work else {
+                continue;
+            };
             if failed {
-                if step.run.build.save_report() == Ok(false) {
+                if run.build.save_report() == Ok(false) {
                     return Err(Failure::from_issues(
-                        format!("cannot save the report of {}; see issues", label(step)),
-                        &step_issues(step),
+                        format!("cannot save the report of {label}; see issues"),
+                        &member.issues(),
                     ));
                 }
                 continue;
             }
-            let label = label(step).to_owned();
-            match step.run.build.save() {
+            match run.build.save() {
                 Ok(SaveOutcome::Saved) => {}
                 Ok(_) => {
                     return Err(Failure::from_issues(
                         format!("cannot save {label}; see issues"),
-                        &step_issues(step),
+                        &member.issues(),
                     ))
                 }
                 Err(error) => {
@@ -454,10 +613,9 @@ impl ProjectRun {
             }
         }
         if failed {
-            let issues = self.steps.iter().flat_map(step_issues).collect::<Vec<_>>();
             return Err(Failure::from_issues(
                 "a specification failed, so no primary artifact was saved; see issues",
-                &issues,
+                &outcome.issues(),
             ));
         }
         Ok(())
@@ -466,21 +624,19 @@ impl ProjectRun {
 
 /// One Define-XML composition per section, with its Dataset-JSON files.
 pub struct Submission {
-    sections: Vec<(Section, DefineBuild)>,
-    /// Project findings that refused the submission before any section.
-    refusal: Vec<Diagnostic>,
+    outcome: Outcome,
 }
 
 impl Submission {
     /// Every section's issues in section order, after any project finding.
     pub fn issues(&self) -> Table {
-        let mut report = Report::from_issues(&self.refusal);
-        for (_, define) in &self.sections {
-            report
-                .diagnostics
-                .extend(define.report().diagnostics.iter().cloned());
-        }
-        report.table()
+        Report::from_issues(&self.outcome.issues()).table()
+    }
+
+    /// `succeeded` when every selected section composed with no issue and no
+    /// project finding refused the submission.
+    pub fn status(&self) -> Status {
+        self.outcome.status()
     }
 
     /// Publish the sections in the order `sdtm`, `adam`, `send`, after
@@ -488,20 +644,24 @@ impl Submission {
     /// fails stops the save. A submission that composed no section fails with
     /// `nothing_to_save` (PROJECT-13).
     pub fn save(&mut self) -> Result<(), Failure> {
-        if !self.refusal.is_empty() {
+        let outcome = &mut self.outcome;
+        if !outcome.issues.is_empty() {
             return Err(Failure::from_issues(
                 "the submission was refused; see issues",
-                &self.refusal,
+                &outcome.issues,
             ));
         }
-        if self.sections.is_empty() {
+        if outcome.members.is_empty() {
             return Err(Failure::from_finding(
                 "the submission composed no section, so nothing was saved",
                 yamaa_core::project_scope::submission_nothing_to_save(),
             ));
         }
         let mut preflight = yamaa_adapters::project_scope::Preflight::new();
-        for (section, define) in &self.sections {
+        for member in &outcome.members {
+            let Work::Composed(section, define) = &member.work else {
+                continue;
+            };
             if let Err(issues) = define.preflight(&mut preflight) {
                 return Err(Failure::from_issues(
                     format!(
@@ -513,7 +673,10 @@ impl Submission {
             }
         }
         drop(preflight);
-        for (section, define) in &mut self.sections {
+        for member in &mut outcome.members {
+            let Work::Composed(section, define) = &mut member.work else {
+                continue;
+            };
             let key = yamaa_core::project_scope::key(*section);
             match define.save() {
                 Ok(SaveOutcome::Saved) => {}
@@ -571,30 +734,42 @@ impl Engine {
     /// Static check of every listed specification with the project's codelists
     /// and functions, plus the project findings: shared names, inputs that
     /// read a listed artifact without a `schema` link, and colliding files.
-    /// Only cancellation fails the call, with no table: a check cancelled
+    /// Only cancellation fails the call, with no result: a check cancelled
     /// between specifications returns none of the findings it gathered.
-    pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Table, Error> {
+    pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Check, Error> {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
-            Err(issues) => return Ok(Report::from_issues(&issues).table()),
+            Err(issues) => {
+                return Ok(Check {
+                    outcome: Outcome::refused(issues),
+                })
+            }
         };
-        let mut issues = read.check_findings();
+        let mut members = Vec::with_capacity(read.listed().len());
         for listed in read.listed() {
             if token.is_cancelled() {
                 return Err(Error::Cancelled);
             }
-            let mut rows = if listed.failure().is_empty() {
+            let issues = if listed.failure().is_empty() {
                 crate::internal::run_check(self.shared(), listed.path(), Some(project), token)?
             } else {
                 listed.failure().to_vec()
             };
-            identify(&mut rows, listed.identity());
-            issues.extend(rows);
+            members.push(Member {
+                name: listed.name().map(str::to_owned),
+                identity: Some(listed.identity().to_owned()),
+                work: Work::Checked(issues),
+            });
         }
-        Ok(Report::from_issues(&issues).table())
+        Ok(Check {
+            outcome: Outcome {
+                members,
+                issues: read.check_findings(),
+            },
+        })
     }
 
     /// Build every listed specification of `section` ("sdtm", "adam", "send"),
@@ -634,7 +809,11 @@ impl Engine {
         let section = self::section(section)?;
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
-            Err(issues) => return Ok(ProjectRun::refused(issues)),
+            Err(issues) => {
+                return Ok(ProjectRun {
+                    outcome: Outcome::refused(issues),
+                })
+            }
         };
         // Identify every listed specification from this read, with the
         // project path resolved now rather than its raw spelling.
@@ -653,48 +832,41 @@ impl Engine {
         plans.retain(|kept| identities.iter().flatten().any(|identity| identity == kept));
         let plan = read.plan(section);
         if !plan.refusal().is_empty() {
-            return Ok(ProjectRun::refused(plan.refusal().to_vec()));
-        }
-        let mut held = yamaa_adapters::file_resources::HeldArtifacts::new();
-        // Per listing: whether its run succeeded, once it ran.
-        let mut succeeded = vec![None; read.listed().len()];
-        let mut steps = Vec::with_capacity(plan.steps().len());
-        for step in plan.steps() {
-            let listed = &read.listed()[step.listed()];
-            let blocked = step.blocked(&read, |producer| succeeded[producer] != Some(true));
-            let build = if !step.refused().is_empty() {
-                self.refused_build(step.refused().to_vec())
-            } else if !blocked.is_empty() {
-                self.refused_build(blocked)
-            } else {
-                self.build_reusing(
-                    plans,
-                    &Request::new(listed.path()).with_environment(project),
-                    identities[step.listed()].clone(),
-                    Some(Arc::new(held.clone())),
-                    token,
-                )?
-            };
-            let artifact = build.artifact();
-            succeeded[step.listed()] = Some(artifact.is_some());
-            if let (Some(bytes), Some(location)) = (artifact, listed.artifact_location()) {
-                held.insert(listed.identity().to_owned(), location.to_owned(), bytes);
-            }
-            // A user interrupt in project code stops the run here, so no
-            // later specification builds or calls project code.
-            let interrupted = build.interrupt().is_some();
-            steps.push(ProjectStep {
-                name: listed.name().map(str::to_owned),
-                identity: listed.identity().to_owned(),
-                run: Run { build },
+            return Ok(ProjectRun {
+                outcome: Outcome::refused(plan.refusal().to_vec()),
             });
-            if interrupted {
-                break;
-            }
         }
+        // The run scope as a producer graph, in run order.
+        let position = |listing: usize| {
+            plan.steps()
+                .iter()
+                .position(|step| step.listed() == listing)
+                .expect("an in-scope producer is a step of the run")
+        };
+        let nodes = plan
+            .steps()
+            .iter()
+            .map(|step| {
+                let listed = &read.listed()[step.listed()];
+                Node {
+                    name: listed.name().map(str::to_owned),
+                    identity: Some(listed.identity().to_owned()),
+                    request: Request::new(listed.path()).with_environment(project),
+                    plan: identities[step.listed()].clone(),
+                    refused: step.refused().to_vec(),
+                    producers: step
+                        .links(&read)
+                        .into_iter()
+                        .map(|(producer, finding)| (position(producer), finding))
+                        .collect(),
+                    artifact: listed
+                        .artifact_location()
+                        .map(|location| (listed.identity().to_owned(), location.to_owned())),
+                }
+            })
+            .collect();
         Ok(ProjectRun {
-            steps,
-            refusal: Vec::new(),
+            outcome: self.run_graph(nodes, plans, token)?,
         })
     }
 
@@ -719,34 +891,38 @@ impl Engine {
             Ok(read) => read,
             Err(issues) => {
                 return Ok(Submission {
-                    sections: Vec::new(),
-                    refusal: issues,
+                    outcome: Outcome::refused(issues),
                 })
             }
         };
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
             return Ok(Submission {
-                sections: Vec::new(),
-                refusal: duplicates,
+                outcome: Outcome::refused(duplicates),
             });
         }
         let sections = match selected {
             Some(section) => vec![section],
             None => read.define_sections().collect(),
         };
-        let mut defines = Vec::with_capacity(sections.len());
+        let mut members = Vec::with_capacity(sections.len());
         for section in sections {
             let mut request =
                 DefineRequest::new(project, yamaa_core::project_scope::key(section), installed);
             if let Some(created) = created {
                 request = request.with_created(created);
             }
-            defines.push((section, self.define(&request, token)?));
+            members.push(Member {
+                name: Some(yamaa_core::project_scope::key(section).to_owned()),
+                identity: None,
+                work: Work::Composed(section, Box::new(self.define(&request, token)?)),
+            });
         }
         Ok(Submission {
-            sections: defines,
-            refusal: Vec::new(),
+            outcome: Outcome {
+                members,
+                issues: Vec::new(),
+            },
         })
     }
 }

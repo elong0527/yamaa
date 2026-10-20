@@ -1,8 +1,10 @@
-//! One native lifecycle behind both hosts' file entry points.
+//! One native lifecycle behind both hosts' file entry points: a specification
+//! alone and a member of a project run prepare, run and report on one route.
 use crate::report_storage::StoredReport;
 use crate::{
     file_preparation::{self, FileSpecification},
     specification_report::{self, BuildResult, Identity},
+    specification_run::Attempt,
 };
 use std::{
     any::Any,
@@ -13,6 +15,7 @@ use yamaa_core::application_observer::Scope;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::domain_entry::{self, Request};
 use yamaa_core::json::Value;
+use yamaa_core::project_activation::ActivationPort;
 use yamaa_core::project_function::Language;
 
 /// The diagnostics of a refused operation, in authored order.
@@ -32,28 +35,6 @@ pub fn collect(issues: impl IntoIterator<Item = Diagnostic>) -> Failure {
         .into_iter()
         .take(yamaa_core::limits::Limits::FINDINGS)
         .collect()
-}
-/// A build that produced no public result: its closed refusal code and, for a
-/// classified resource limit, the limit facts. Both hosts convert this value;
-/// neither chooses the code.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BuildRefusal {
-    pub code: Fault,
-    pub limit: Option<crate::resource_diagnostics::Refusal>,
-}
-impl BuildRefusal {
-    pub fn issues(&self) -> Failure {
-        self.limit.as_ref().map_or_else(
-            || rejected(Stage::Build, self.code),
-            |limit| limit.issues(Stage::Build, self.code),
-        )
-    }
-}
-fn report_failure(stage: Stage, code: Fault, error: &specification_report::Error) -> Failure {
-    match error {
-        specification_report::Error::ResourceLimit(refusal) => refusal.issues(stage, code),
-        _ => rejected(stage, code),
-    }
 }
 pub(crate) fn classified_resource(diagnostic: &Diagnostic) -> Failure {
     vec![diagnostic.clone()]
@@ -215,19 +196,15 @@ fn publication_at(
     issues
 }
 impl Domain {
-    /// Use the same owned output and anchored save gate for project reports.
-    /// Save targets resolve from the run's scope.
-    pub fn from_project(
+    /// Hold one built result with the anchored save gate of its declared
+    /// files. Save targets resolve from the run's scope.
+    pub fn new(
         result: BuildResult,
-        project: &crate::file_project::FileProject,
+        prepared: &FileSpecification,
         run: &crate::file_resources::RunScope,
-    ) -> Result<Self, Failure> {
+    ) -> Self {
         Self::from_build(result, |field| {
-            if field == "path" {
-                project.publication_target(run)
-            } else {
-                project.publication_field_target(run, field)
-            }
+            prepared.publication_field_target(run, field)
         })
     }
     fn from_build(
@@ -238,7 +215,7 @@ impl Domain {
             crate::resource_publication::AnchoredTarget,
             crate::file_resources::Error,
         >,
-    ) -> Result<Self, Failure> {
+    ) -> Self {
         let fields = [
             ("report", result.report_file()),
             ("path", result.output().is_some()),
@@ -252,13 +229,13 @@ impl Domain {
             Ok(targets) => (Some(targets), Vec::new()),
             Err(error) => (None, resource_failure(Stage::Output, &error)),
         };
-        Ok(Self {
+        Self {
             result,
             targets,
             publication_issues,
             published: None,
             publication_attempt: Default::default(),
-        })
+        }
     }
     pub fn output(&self) -> Option<&[u8]> {
         self.result.output()
@@ -401,8 +378,12 @@ impl Domain {
         let (report, mut artifacts) = match report {
             Ok(report) => report,
             Err(error) => {
-                self.publication_issues =
-                    report_failure(Stage::Output, Fault::PublicationReportLimit, &error);
+                self.publication_issues = match &error {
+                    specification_report::Error::ResourceLimit(refusal) => {
+                        refusal.issues(Stage::Output, Fault::PublicationReportLimit)
+                    }
+                    _ => rejected(Stage::Output, Fault::PublicationReportLimit),
+                };
                 return if failed { Err(FailedBuild) } else { Ok(false) };
             }
         };
@@ -487,131 +468,39 @@ impl Domain {
 #[derive(Debug)]
 pub struct FailedBuild;
 
-struct Native<'a> {
-    identity: Identity<'a>,
-    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
-}
-/// The host provides activation and original-error conversion. All route
-/// preparation, static checks and dispatch stay behind the shared application.
-/// Each run borrows the prepared value and opens its own study scope.
-pub trait RuntimePort {
-    type Result;
-    type Error;
-    fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
-        None
-    }
-    fn plain(
-        &mut self,
-        prepared: &FileSpecification,
-        scope: Scope<'_>,
-    ) -> Result<Self::Result, Self::Error>;
-    fn project(
-        &mut self,
-        prepared: &crate::file_project::FileProject,
-        scope: Scope<'_>,
-    ) -> Result<Self::Result, Self::Error>;
-}
-pub enum ApplicationError<E> {
-    Preparation(crate::file_workflow::SelectionError),
-    Runtime(E),
-}
-pub struct Application<R> {
-    pub host: Language,
-    pub runtime: R,
-}
-impl<R: RuntimePort> yamaa_core::build::Ports for Application<R> {
-    type Plain = FileSpecification;
-    type Project = Box<crate::file_project::FileProject>;
-    type CheckResult = Failure;
-    type BuildResult = R::Result;
-    type Failure = ApplicationError<R::Error>;
-    fn prepare(
-        &mut self,
-        request: Request<'_>,
-    ) -> Result<crate::file_workflow::Selected, Self::Failure> {
-        match self.runtime.resolver() {
-            Some(resolver) => {
-                crate::file_workflow::select_with_resolver(request, self.host, resolver)
-            }
-            None => crate::file_workflow::select_request(request, self.host),
-        }
-        .map_err(ApplicationError::Preparation)
-    }
-    fn check_plain(&mut self, prepared: FileSpecification) -> Result<Failure, Self::Failure> {
-        Ok(crate::specification_check::issues(prepared.run()))
-    }
-    fn check_project(&mut self, prepared: Self::Project) -> Result<Failure, Self::Failure> {
-        Ok(crate::project_check::prepared(prepared.run()))
-    }
-    fn build_plain(
-        &mut self,
-        prepared: &FileSpecification,
-        scope: Scope<'_>,
-    ) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .plain(prepared, scope)
-            .map_err(ApplicationError::Runtime)
-    }
-    fn build_project(
-        &mut self,
-        prepared: &Self::Project,
-        scope: Scope<'_>,
-    ) -> Result<R::Result, Self::Failure> {
-        self.runtime
-            .project(prepared, scope)
-            .map_err(ApplicationError::Runtime)
-    }
-}
-impl RuntimePort for Native<'_> {
-    type Result = Domain;
-    type Error = Failure;
-    fn resolver(&self) -> Option<std::sync::Arc<dyn crate::host_resources::Resolver>> {
-        self.resolver.clone()
-    }
-    fn plain(&mut self, prepared: &FileSpecification, scope: Scope<'_>) -> Result<Domain, Failure> {
-        let identity = Identity {
-            runtime: self.identity.runtime,
-            runtime_version: self.identity.runtime_version,
-            engine_version: self.identity.engine_version,
-            example: self.identity.example,
-            specification: self.identity.specification,
-            base_directory: self.identity.base_directory,
-        };
-        plain(prepared, &mut prepared.run_scope(None), identity, scope)
-    }
-    fn project(
-        &mut self,
-        _: &crate::file_project::FileProject,
-        _: Scope<'_>,
-    ) -> Result<Domain, Failure> {
-        Err(unsupported("environment", Some("environment")))
-    }
+/// How a host classifies one retained failure of its functions port: an
+/// ordinary host failure with its details, lock findings, or an opaque failure
+/// reported without classification facts.
+pub enum Classification {
+    Host(crate::callback::CallbackError),
+    Lock(Vec<crate::project_lock::Finding>),
+    Opaque,
 }
 
-/// Run an already checked plain capability in `run` without recapturing
-/// metadata. Inputs come from the scope and Save targets resolve there.
-pub fn plain(
+/// Run one prepared specification in `run` and build its result: activate the
+/// project functions it calls through `activation`, read its inputs from the
+/// scope, execute, and report. A specification alone and a member of a project
+/// run take this one route; Save targets resolve in the scope. `classify`
+/// reads the retained failures of `activation`. The attempt is returned beside
+/// the result for the host failures it holds.
+pub fn run<A: ActivationPort>(
     prepared: &FileSpecification,
     run: &mut crate::file_resources::RunScope,
+    activation: &mut A,
+    classify: impl Fn(&A::Error) -> Classification,
     identity: Identity<'_>,
     scope: Scope<'_>,
-) -> Result<Domain, Failure> {
-    let attempt = prepared.build(run, scope);
-    if let Some(error) = file_preparation::opaque_resource_failure(&attempt) {
-        return Err(resource_failure(Stage::Capture, error));
+) -> (
+    Attempt<crate::file_resources::Error, A::Error>,
+    Result<Domain, Failure>,
+) {
+    let attempt = prepared.build(run, activation, scope);
+    if let Some(error) = file_preparation::opaque_resource_failure(&attempt.dataset) {
+        let failure = resource_failure(Stage::Capture, error);
+        return (attempt, Err(failure));
     }
     scope.phase(yamaa_core::application_observer::Phase::Output);
-    let converted = (|| {
-        let result = specification_report::build_result(prepared.run(), &attempt, identity)
-            .map_err(|error| report_failure(Stage::Build, Fault::ResultProjection, &error))?;
-        Domain::from_build(result, |field| {
-            if field == "path" {
-                prepared.publication_target(run)
-            } else {
-                prepared.publication_field_target(run, field)
-            }
-        })
-    })();
+    let converted = result(prepared, run, &attempt, classify, identity);
     scope.exit(
         yamaa_core::application_observer::Phase::Output,
         if converted.is_ok() {
@@ -620,53 +509,109 @@ pub fn plain(
             yamaa_core::application_observer::Outcome::Failed
         },
     );
-    converted
+    (attempt, converted)
 }
-/// The host language is configured by the caller, never derived from the
-/// runtime name: an embedder may name its runtime anything.
-fn native(host: Language, identity: Identity<'_>) -> Application<Native<'_>> {
-    Application {
-        host,
-        runtime: Native {
-            identity,
-            resolver: None,
-        },
+
+/// Report one attempt, classifying its retained host failures first.
+fn result<E>(
+    prepared: &FileSpecification,
+    run: &crate::file_resources::RunScope,
+    attempt: &Attempt<crate::file_resources::Error, E>,
+    classify: impl Fn(&E) -> Classification,
+    identity: Identity<'_>,
+) -> Result<Domain, Failure> {
+    use crate::project_report::Classified;
+    let mut held = Vec::new();
+    crate::project_attempt::visit_host_failures(attempt, |_, error| held.push(error));
+    let classified = held.iter().map(|error| classify(error)).collect::<Vec<_>>();
+    let facts = held
+        .iter()
+        .zip(&classified)
+        .filter_map(|(failure, classified)| match classified {
+            Classification::Host(error) => {
+                crate::callback::details(error).map(|details| Classified::Host {
+                    failure: *failure,
+                    details,
+                })
+            }
+            Classification::Lock(findings) => Some(Classified::Lock {
+                failure: *failure,
+                findings,
+            }),
+            Classification::Opaque => None,
+        })
+        .collect::<Vec<_>>();
+    let result = specification_report::build_result(prepared.run(), attempt, identity, &facts)
+        .map_err(|refusal| refusal.issues())?;
+    Ok(Domain::new(result, prepared, run))
+}
+
+/// Prepare one request through `resolver`, or the local file resolver.
+pub fn select(
+    host: Language,
+    request: Request<'_>,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> Result<FileSpecification, crate::file_workflow::SelectionError> {
+    match resolver {
+        Some(resolver) => crate::file_workflow::select_with_resolver(request, host, resolver),
+        None => crate::file_workflow::select_request(request, host),
     }
 }
+
 pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
     check_with_resolver(host, request, identity, None)
 }
+/// The static check of one request: preparation findings, or the compiled
+/// specification's own findings. No study input is read.
 pub fn check_with_resolver(
     host: Language,
     request: Request<'_>,
-    identity: Identity<'_>,
+    _identity: Identity<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Failure {
-    let mut application = native(host, identity);
-    application.runtime.resolver = resolver;
-    collect(
-        domain_entry::check(request, &mut application).unwrap_or_else(|error| match error {
-            ApplicationError::Preparation(error) => {
-                crate::project_application::selection_failure(&error)
-            }
-            ApplicationError::Runtime(issues) => issues,
-        }),
-    )
+    collect(match select(host, request, resolver) {
+        Ok(prepared) => crate::specification_check::issues(prepared.run()),
+        Err(error) => crate::project_application::selection_failure(&error),
+    })
 }
+/// Prepare and run one request with no project functions: a request with a
+/// project, whose functions need a host, is unsupported here.
 pub fn domain(
     host: Language,
     request: Request<'_>,
     identity: Identity<'_>,
 ) -> Result<Domain, Failure> {
-    let mut application = native(host, identity);
-    domain_entry::domain(request, &mut application, Scope::default())
-        .map_err(|error| match error {
-            ApplicationError::Preparation(error) => {
-                crate::project_application::selection_failure(&error)
+    domain_observed(host, request, identity, Scope::default())
+}
+fn domain_observed(
+    host: Language,
+    request: Request<'_>,
+    identity: Identity<'_>,
+    scope: Scope<'_>,
+) -> Result<Domain, Failure> {
+    domain_entry::domain(
+        scope,
+        || {
+            select(host, request, None)
+                .map_err(|error| crate::project_application::selection_failure(&error))
+        },
+        |prepared| {
+            if prepared.run().has_project() {
+                return Err(unsupported("environment", Some("environment")));
             }
-            ApplicationError::Runtime(issues) => issues,
-        })
-        .map_err(collect)
+            let mut run = prepared.run_scope(None);
+            let (_, result) = self::run(
+                prepared,
+                &mut run,
+                &mut crate::specification_run::NoActivation,
+                |_| Classification::Opaque,
+                identity,
+                scope,
+            );
+            result
+        },
+    )
+    .map_err(collect)
 }
 
 #[cfg(test)]
@@ -739,7 +684,7 @@ mod tests {
         let document =
             crate::file_preparation::prepare_document(&mut resources, &entry, None).unwrap();
         let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
-        let attempt = prepared.execute_with_port(&mut resources, Scope::default());
+        let attempt = prepared.execute(&mut resources, Scope::default());
         let result = specification_report::build_result(
             &prepared,
             &attempt,
@@ -751,6 +696,7 @@ mod tests {
                 specification: written,
                 base_directory: ".",
             },
+            &[],
         )
         .unwrap();
         let mut result = Domain::from_build(result, |field| {
@@ -759,8 +705,7 @@ mod tests {
                 .written_output_field_origin(field)
                 .ok_or(crate::file_resources::Error::InvalidPath)?;
             resources.publication_target_from(origin.base_source, origin.written)
-        })
-        .unwrap();
+        });
         assert!(result.output().is_some());
         assert!(result.result.publication_items().last().unwrap().1.len() > 8 * 1024 * 1024);
         // One run, input and base row, two column rows and two check rows.
@@ -843,10 +788,13 @@ mod tests {
         };
         let ordinary = domain(Language::Python, request(), identity()).unwrap();
         let result = if let Some(measurements) = measurements {
-            let mut application = native(Language::Python, identity());
-            let observed =
-                domain_entry::domain(request(), &mut application, Scope::new(measurements))
-                    .unwrap_or_else(|_| panic!("observed fixture failed"));
+            let observed = domain_observed(
+                Language::Python,
+                request(),
+                identity(),
+                Scope::new(measurements),
+            )
+            .unwrap_or_else(|_| panic!("observed fixture failed"));
             measurements.complete(observed.output().is_some());
             assert_eq!(observed.observations_json(), ordinary.observations_json());
             assert_eq!(observed.output(), ordinary.output());
@@ -1189,8 +1137,8 @@ mod tests {
                 crate::file_preparation::prepare_document(&mut resources, &entry, Some(schema))
                     .unwrap();
             let prepared = crate::specification_run::PreparedRun::prepare(document).unwrap();
-            let attempt = prepared.execute_with_port(&mut resources, Scope::default());
-            assert!(attempt.result.as_ref().unwrap().execution.is_some());
+            let attempt = prepared.execute(&mut resources, Scope::default());
+            assert!(attempt.dataset.result.as_ref().unwrap().result.is_ok());
             let result = specification_report::build_result(
                 &prepared,
                 &attempt,
@@ -1202,6 +1150,7 @@ mod tests {
                     specification: written,
                     base_directory: ".",
                 },
+                &[],
             )
             .unwrap();
             assert!(result.issues().is_empty());
@@ -1215,7 +1164,7 @@ mod tests {
                     .ok_or(crate::file_resources::Error::InvalidPath)?;
                 resources.publication_target_from(origin.base_source, origin.written)
             });
-            let mut domain = domain.unwrap();
+            let mut domain = domain;
             assert!(domain.output().is_some());
             assert!(domain.issues().is_empty());
             assert_eq!(domain.result.report_file(), verification);

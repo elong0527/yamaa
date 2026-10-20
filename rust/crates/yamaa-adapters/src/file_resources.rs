@@ -1085,9 +1085,13 @@ mod default_resolver_tests {
         let prepared =
             crate::file_preparation::FileSpecification::prepare(resources, "spec.yaml").unwrap();
         let mut run = prepared.run_scope(None);
-        let attempt = prepared.build(&mut run, yamaa_core::application_observer::Scope::default());
+        let attempt = prepared.build(
+            &mut run,
+            &mut crate::specification_run::NoActivation,
+            yamaa_core::application_observer::Scope::default(),
+        );
         std::fs::remove_dir_all(&directory).unwrap();
-        assert!(attempt.result.is_ok());
+        assert!(attempt.dataset.result.is_ok());
         assert_eq!(run.capture_reads(), 2);
         let requests = recording.requests.lock().unwrap().clone();
         let captured = |kind, written: &str| {

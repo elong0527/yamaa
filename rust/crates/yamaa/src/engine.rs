@@ -16,8 +16,7 @@ use crate::diagnostic::Report;
 use crate::error::{Error, FunctionError};
 use crate::functions::{HostLanguage, ProjectFunctions};
 use crate::internal::{
-    outcome_accepted, outcome_report, run_check, snapshot_failures,
-    AttemptFailure as InternalFailure, BuildOutcome, EngineShared, ObserverBridge,
+    outcome_accepted, outcome_report, run_check, Built, EngineShared, ObserverBridge,
 };
 use crate::observe::Progress;
 use crate::plan::Plan;
@@ -32,15 +31,6 @@ pub struct AttemptFailure {
     pub stage: &'static str,
     /// The retained function failure with its host payload.
     pub error: FunctionError,
-}
-
-impl AttemptFailure {
-    pub(crate) fn from_internal(failure: &InternalFailure) -> Self {
-        Self {
-            stage: failure.stage,
-            error: failure.error.clone(),
-        }
-    }
 }
 
 /// Engine configuration. Options and request types are `#[non_exhaustive]`
@@ -435,7 +425,7 @@ impl Engine {
     pub(crate) fn refused_build(&self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) -> Build {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         measurements.complete(false);
-        Build::from_outcome(BuildOutcome::Refused { issues }, measurements, &self.shared)
+        Build::from_outcome(Built::refused(issues), measurements, &self.shared)
     }
 
     pub(crate) fn shared(&self) -> &EngineShared {
@@ -560,8 +550,11 @@ pub type SourceBytes = Vec<(String, Arc<[u8]>)>;
 /// An owned build: one attempt with its output, run report and observations.
 /// `save` is the only mutating operation and publishes through the resolver.
 pub struct Build {
-    state: BuildOutcome,
+    state: Built,
     measurements: Arc<yamaa_adapters::application_measurements::Measurements>,
+    /// The issues of the build as it was made: a later save's refusal joins
+    /// the report, never these.
+    built: Vec<yamaa_core::diagnostic::Diagnostic>,
     report: Report,
     output: Option<Table>,
     run_report: Option<Table>,
@@ -571,13 +564,15 @@ pub struct Build {
 
 impl Build {
     pub(crate) fn from_outcome(
-        outcome: BuildOutcome,
+        outcome: Built,
         measurements: Arc<yamaa_adapters::application_measurements::Measurements>,
         shared: &EngineShared,
     ) -> Self {
+        let built = crate::internal::outcome_issues(&outcome);
         let mut build = Self {
             state: outcome,
             measurements,
+            built,
             report: Report {
                 diagnostics: Vec::new(),
             },
@@ -605,20 +600,16 @@ impl Build {
                 .as_ref()
                 .is_some_and(|functions| functions.is_interrupt(error))
         };
-        if let BuildOutcome::Project { attempt, .. } = &self.state {
-            let mut borrowed = Vec::new();
-            yamaa_adapters::project_attempt::visit_host_failures(&**attempt, |stage, error| {
-                borrowed.push((stage, error));
-            });
-            let failures: Vec<AttemptFailure> = snapshot_failures(borrowed)
-                .iter()
-                .map(AttemptFailure::from_internal)
-                .collect();
+        if let Built::Ran {
+            failures: Some(failures),
+            ..
+        } = &self.state
+        {
             self.interrupt = failures
                 .iter()
                 .find(|failure| is_interrupt(&failure.error))
                 .map(|failure| failure.error.clone());
-            self.project_failures = Some(failures);
+            self.project_failures = Some(failures.clone());
         }
     }
 
@@ -629,13 +620,7 @@ impl Build {
 
     /// Borrow the output bytes, when the build produced them.
     pub fn output_bytes(&self) -> Option<&[u8]> {
-        match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) } => domain.output(),
-            BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => domain.output(),
-            _ => None,
-        }
+        self.state.domain()?.output()
     }
 
     /// Borrow the run report table, which every executed build holds,
@@ -648,13 +633,7 @@ impl Build {
 
     /// Borrow the run report's Arrow IPC bytes.
     pub fn run_report_bytes(&self) -> Option<&[u8]> {
-        match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) } => Some(domain.run_report()),
-            BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => Some(domain.run_report()),
-            _ => None,
-        }
+        self.state.domain().map(|domain| domain.run_report())
     }
 
     /// Borrow the build report with every diagnostic.
@@ -667,16 +646,33 @@ impl Build {
         crate::internal::outcome_issues(&self.state)
     }
 
+    /// The build's status (P-STATUS-1), computed from its issues as built and
+    /// what it built: `skipped` when it did not run because every reason is a
+    /// run-scope producer that did not complete (PROJECT-11), `succeeded`
+    /// when it built its output with no error-severity issue, and `failed`
+    /// otherwise. A later save does not change it.
+    pub(crate) fn status(&self) -> crate::api::Status {
+        use crate::api::Status;
+        use yamaa_core::diagnostic::ConditionCode;
+        let issues = &self.built;
+        match &self.state {
+            Built::Refused { .. }
+                if !issues.is_empty()
+                    && issues
+                        .iter()
+                        .all(|issue| issue.code == ConditionCode::ProjectProducerNotCompleted) =>
+            {
+                Status::Skipped
+            }
+            _ if self.output.is_some() && !crate::outcome::fails(issues) => Status::Succeeded,
+            _ => Status::Failed,
+        }
+    }
+
     /// The accepted primary artifact's serialized bytes, shared, for the
     /// consumers a project run builds later.
     pub(crate) fn artifact(&self) -> Option<Arc<[u8]>> {
-        match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) }
-            | BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => domain.artifact(),
-            _ => None,
-        }
+        self.state.domain()?.artifact()
     }
 
     /// Open, without writing, every file `save` would write, or only the
@@ -686,12 +682,9 @@ impl Build {
         preflight: &mut yamaa_adapters::project_scope::Preflight,
         report_only: bool,
     ) -> Result<(), Vec<yamaa_core::diagnostic::Diagnostic>> {
-        match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) }
-            | BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => preflight.admit_domain(domain, report_only),
-            _ => Ok(()),
+        match self.state.domain() {
+            Some(domain) => preflight.admit_domain(domain, report_only),
+            None => Ok(()),
         }
     }
 
@@ -699,12 +692,9 @@ impl Build {
     /// `Ok(true)` published it, `Ok(false)` refused the publication with
     /// issues, and `Err` means the build holds no report file to write.
     pub(crate) fn save_report(&mut self) -> Result<bool, ()> {
-        let saved = match &mut self.state {
-            BuildOutcome::Plain { result: Ok(domain) }
-            | BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => domain.save_report().map_err(drop),
-            _ => Err(()),
+        let saved = match self.state.domain_mut() {
+            Some(domain) => domain.save_report().map_err(drop),
+            None => Err(()),
         };
         if saved.is_ok() {
             self.measurements.save_entered();
@@ -773,12 +763,9 @@ impl Build {
     pub fn save(&mut self) -> Result<SaveOutcome, Error> {
         use yamaa_adapters::file_application::FailedBuild;
         self.measurements.save_entered();
-        let saved = match &mut self.state {
-            BuildOutcome::Plain { result: Ok(domain) } => domain.save(),
-            BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => domain.save(),
-            _ => Err(FailedBuild),
+        let saved = match self.state.domain_mut() {
+            Some(domain) => domain.save(),
+            None => Err(FailedBuild),
         };
         let outcome = match saved {
             Ok(true) => "succeeded",
@@ -796,13 +783,7 @@ impl Build {
 
     /// Render observations, optionally enveloped with timing measurements.
     pub fn observations(&self, include_measurements: bool) -> Option<String> {
-        let observed = match &self.state {
-            BuildOutcome::Plain { result: Ok(domain) } => Some(domain.observations_json()),
-            BuildOutcome::Project {
-                result: Ok(domain), ..
-            } => Some(domain.observations_json()),
-            _ => None,
-        };
+        let observed = self.state.domain().map(|domain| domain.observations_json());
         if include_measurements {
             Some(self.measurements.envelope(observed))
         } else {
@@ -815,8 +796,8 @@ impl Build {
     pub fn preparation_sources(&self) -> &SourceBytes {
         static EMPTY: SourceBytes = Vec::new();
         match &self.state {
-            BuildOutcome::SelectionFailed { sources, .. } => sources,
-            _ => &EMPTY,
+            Built::Refused { sources, .. } => sources,
+            Built::Ran { .. } => &EMPTY,
         }
     }
 
@@ -832,19 +813,13 @@ impl Build {
     }
 }
 
-fn tables_of(state: &BuildOutcome) -> (Option<Table>, Option<Table>) {
-    let tables = |domain: &yamaa_adapters::file_application::Domain| {
-        (
+fn tables_of(state: &Built) -> (Option<Table>, Option<Table>) {
+    match state.domain() {
+        Some(domain) => (
             domain.output_table().map(Table::from_adapter),
             Some(Table::from_adapter(domain.report_table())),
-        )
-    };
-    match state {
-        BuildOutcome::Plain { result: Ok(domain) } => tables(domain),
-        BuildOutcome::Project {
-            result: Ok(domain), ..
-        } => tables(domain),
-        _ => (None, None),
+        ),
+        None => (None, None),
     }
 }
 
@@ -869,18 +844,38 @@ pub struct DefineArtifact {
 /// `save` is the only mutating operation and publishes through the resolver.
 pub struct DefineBuild {
     inner: yamaa_adapters::file_define::Define,
+    /// The issues of the composition as it was made: a later save's refusal
+    /// joins `issues` and the report, never these.
+    composed: Vec<yamaa_core::diagnostic::Diagnostic>,
+    issues: Vec<yamaa_core::diagnostic::Diagnostic>,
     report: Report,
 }
 
 impl DefineBuild {
     pub(crate) fn from_define(inner: yamaa_adapters::file_define::Define) -> Self {
-        let report = Report::from_issues(inner.issues());
-        Self { inner, report }
+        let issues = inner.issues().to_vec();
+        let report = Report::from_issues(&issues);
+        Self {
+            inner,
+            composed: issues.clone(),
+            issues,
+            report,
+        }
     }
 
     /// Borrow the define report with every diagnostic.
     pub fn report(&self) -> &Report {
         &self.report
+    }
+
+    /// The composition's issues, as its report holds them.
+    pub(crate) fn issues(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
+        self.issues.clone()
+    }
+
+    /// The composition's issues as it was made, before any save.
+    pub(crate) fn composed(&self) -> &[yamaa_core::diagnostic::Diagnostic] {
+        &self.composed
     }
 
     /// Borrow the rendered artifacts with their publication states.
@@ -924,7 +919,8 @@ impl DefineBuild {
             Ok(true) => Ok(SaveOutcome::Saved),
             Ok(false) => Ok(SaveOutcome::NothingToSave),
             Err(_) => {
-                self.report = Report::from_issues(self.inner.issues());
+                self.issues = self.inner.issues().to_vec();
+                self.report = Report::from_issues(&self.issues);
                 Err(Error::Rejected(self.report.clone()))
             }
         }

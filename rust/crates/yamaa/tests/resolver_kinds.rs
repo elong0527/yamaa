@@ -91,6 +91,7 @@ fn every_reported_kind_raises_its_file_rule_condition() {
             engine(&resolver)
                 .spec_check("spec.yaml", None, &token)
                 .unwrap()
+                .issues()
                 .rows(),
             0,
             "{kind:?}"

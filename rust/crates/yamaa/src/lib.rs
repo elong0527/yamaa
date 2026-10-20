@@ -57,8 +57,9 @@ pub mod scalar;
 pub mod table;
 
 mod internal;
+mod outcome;
 
-pub use api::{Failure, Plans, ProjectRun, Run, Submission};
+pub use api::{Check, Failure, Plans, ProjectRun, Run, Status, Submission};
 pub use cancel::CancellationToken;
 pub use diagnostic::{
     ContextValue, Diagnostic, DiagnosticContext, Report, Severity, SourceSpan, ISSUE_COLUMNS,
