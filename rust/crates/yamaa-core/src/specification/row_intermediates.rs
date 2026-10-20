@@ -2,115 +2,6 @@
 //! The matching language remains owned by the shared match-value compiler.
 use super::*;
 
-/// Borrow references from admitted key occurrences, without lowering them again.
-/// Named reads in every expression promote their matching output defaults,
-/// through the `between` values of further intermediates too, as binding
-/// follows them ([`dependencies`]).
-pub(super) fn default_dependencies(
-    d: &Document,
-    reference: &str,
-    output: &TableSchema,
-    templates: &str_template::Prepared,
-) -> Result<Vec<usize>, PrepareError> {
-    let mut dependencies = Vec::new();
-    let mut followed = Vec::new();
-    match_dependencies(
-        d,
-        reference,
-        output,
-        templates,
-        &mut followed,
-        &mut dependencies,
-    )?;
-    Ok(dependencies)
-}
-
-/// The output columns the lookup `reference` names matches on, following a
-/// `between` value that reads another intermediate. A lookup already
-/// followed is not followed again; binding reports such a cycle.
-fn match_dependencies<'a>(
-    d: &'a Document,
-    reference: &str,
-    output: &TableSchema,
-    templates: &str_template::Prepared,
-    followed: &mut Vec<&'a str>,
-    dependencies: &mut Vec<usize>,
-) -> Result<(), PrepareError> {
-    let Some((name, _)) = reference.split_once('.') else {
-        return Ok(());
-    };
-    let Some(items) = d
-        .field(d.root(), "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    else {
-        return Ok(());
-    };
-    let Some(&item) = sequence(d, items)?.iter().find(|&&item| {
-        d.field(item, "id")
-            .is_some_and(|id| text(d, id).is_ok_and(|id| id == name))
-    }) else {
-        return Ok(());
-    };
-    let name = text(d, field(d, item, "id")?)?;
-    if followed.contains(&name) {
-        return Ok(());
-    }
-    followed.push(name);
-    let mut register = |name: &str| {
-        if !name.contains('.') {
-            if let Some(column) = output
-                .columns()
-                .iter()
-                .position(|column| column.name == name)
-            {
-                dependencies.push(column);
-            }
-        }
-    };
-    if let Some(key) = d
-        .field(item, "key")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        if let N::Text(name) = &d.nodes()[key] {
-            register(name);
-        } else if matches!(d.nodes()[key], N::Sequence(_)) {
-            for &value in sequence(d, key)? {
-                register(text(d, value)?);
-            }
-        } else {
-            // Preparation has already admitted the closed map-valued key language.
-            for &(_, value) in mapping(d, key)? {
-                if let N::Text(name) = &d.nodes()[value] {
-                    register(name);
-                    continue;
-                }
-                let mut names = Vec::new();
-                derivations::current_references(d, value, None, &mut names, 0)?;
-                self_relations::template_references(d, value, templates, &mut names, 0)?;
-                for name in &names {
-                    register(name);
-                }
-            }
-        }
-    } else {
-        for &key in sequence(d, field(d, d.root(), "keys")?)? {
-            register(text(d, key)?);
-        }
-    }
-    if let Some(range) = d
-        .field(item, "between")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    {
-        let value = text(d, field(d, range, "value")?)?;
-        if value.contains('.') {
-            match_dependencies(d, value, output, templates, followed, dependencies)?;
-        } else {
-            register(value);
-        }
-    }
-    Ok(())
-}
-
 /// The value sites through which the intermediate at `index` matches on
 /// output column `column`: each `between` value followed into a further
 /// intermediate, then the value that reads the column.
@@ -147,7 +38,7 @@ fn match_sites(
 
 /// Whether `findings` already holds this lookup finding: a template reads
 /// one intermediate through several identifiers of one site.
-fn reported(findings: &[BindFinding], finding: &BindFinding) -> bool {
+pub(super) fn reported(findings: &[BindFinding], finding: &BindFinding) -> bool {
     findings.iter().any(|prior| {
         matches!((prior, finding), (BindFinding::Lookup(prior), BindFinding::Lookup(finding))
             if prior.diagnostic() == finding.diagnostic())
@@ -174,7 +65,12 @@ pub(super) fn dependencies(
 /// phase completes (LOOKUP-2): a key match value, its `between` value, or a
 /// match value of another lookup a `between` value reads. The finding is at
 /// the template's read of the lookup.
-fn match_phase_boundary(path: &str, column: &str, intermediate: &str, row: &str) -> BindFinding {
+pub(super) fn match_phase_boundary(
+    path: &str,
+    column: &str,
+    intermediate: &str,
+    row: &str,
+) -> BindFinding {
     let mut finding = LookupFinding::new(
         path,
         crate::diagnostic::ConditionCode::IntermediateMatchPhaseBoundary,
