@@ -83,7 +83,16 @@ JSON_CODECS = {
     Path("rust/crates/yamaa-adapters/src/report_storage.rs"),
     Path("rust/crates/yamaa-adapters/src/resolved_artifact/model.rs"),
 }
+JSON_WIRE = "json_wire"
+# The wire module's public items that read JSON text: its decoders, the serde
+# field hook and the owned value a serde decoder fills.
+JSON_WIRE_READERS = frozenset(
+    {"decode", "decode_slice", "decode_array", "deserialize_value", "WireValueOwned"}
+)
 SPACE = re.compile(r"\s*")
+# A module item's keyword and name: out of line or inline.
+MODULE_ITEM = re.compile(rf"\bmod\s+({RUST_NAME})\s*([;{{])")
+VISIBILITY = re.compile(r"\bpub(?:\s*\([^)]*\))?\s*\Z")
 
 
 def cause_pattern(rules) -> re.Pattern:
@@ -457,21 +466,38 @@ def external_serde_json(path: tuple[str, ...]) -> tuple[str, ...] | None:
     return None
 
 
-def json_decodes(source: str, *, crate_root: bool = True) -> list[int]:
-    """JSON reading capabilities outside test items, including Rust imports.
-
-    Resolve use trees before checking paths so renames, nested imports and
-    module aliases retain their owner's identity. Importing a reader or a
-    glob that exposes readers is itself a site, as in the original guard.
-    Serialization, typed tree projection and ordinary string literals are
-    not decoding. Serde's field-deserializer string is executable metadata,
-    so inspect that string only inside its actual serde attribute.
-    """
+def production_code(source: str) -> tuple[list, str]:
+    """The source's tokens, and its code with comments, literals and the
+    items that compile only for tests spaced out, lines kept."""
     tokens = list(rust_tokens(source))
     code = blank(source, tokens, {"comment", "character", "string"})
     tests = cfg_test_items(code)
-    code = blank(code, [("test", low, high, 0, None) for low, high in tests], {"test"})
-    imports = RustImports(code, crate_root=crate_root)
+    return tokens, blank(
+        code, [("test", low, high, 0, None) for low, high in tests], {"test"}
+    )
+
+
+def json_decodes(
+    source: str,
+    *,
+    crate_root: bool = True,
+    wire_names: frozenset[str] = frozenset({JSON_WIRE}),
+) -> list[int]:
+    """JSON reading capabilities outside test items, including Rust imports.
+
+    Resolve use trees before checking paths so renames, nested imports and
+    module aliases retain their owner's identity. ``wire_names`` are the
+    names the wire module has in any source (``json_wire_names``); each
+    stands for the module, and a glob of it brings in its public readers as
+    bare names. Importing a reader or a glob that exposes readers is itself
+    a site, as in the original guard. Of the module's items only its public
+    readers decode. Serialization, typed tree projection and ordinary string
+    literals are not decoding. Serde's field-deserializer string is
+    executable metadata, so inspect that string only inside its actual serde
+    attribute.
+    """
+    tokens, code = production_code(source)
+    imports = RustImports(code, crate_root=crate_root, wire_names=wire_names)
 
     def reader(path, offset):
         return any(
@@ -480,14 +506,16 @@ def json_decodes(source: str, *, crate_root: bool = True) -> list[int]:
             if isinstance(candidate, tuple)
         )
 
+    # A glob of the module exposes its readers, and a `with` module's field
+    # deserializer is its `deserialize`.
+    wire_tails = {(name,) for name in JSON_WIRE_READERS | {"*", "deserialize"}}
+
     def reader_path(path):
-        if "json_wire" in path:
-            tail = path[path.index("json_wire") + 1 :]
-            return bool(tail) and (
-                tail[0] == "*"
-                or tail[0].startswith("decode")
-                or tail[0] in {"deserialize", "deserialize_value", "WireValueOwned"}
-            )
+        if any(
+            part in wire_names and path[index + 1 : index + 2] in wire_tails
+            for index, part in enumerate(path)
+        ):
+            return True
         tail = external_serde_json(path)
         return bool(tail) and (
             tail in {("*",), ("de", "*")}
@@ -642,10 +670,19 @@ class RustImports:
     A type alias follows only an explicit path RHS. Other type alias declarations
     still shadow an outer name, but their type is not inferred; associated
     type items in traits and impls never introduce lexical aliases.
+    A glob of a module named in ``wire_names`` resolves only that module's
+    public readers, the names that matter here.
     This resolves source ownership, not Rust's privacy or type checking.
     """
 
-    def __init__(self, code: str, *, crate_root: bool = True):
+    def __init__(
+        self,
+        code: str,
+        *,
+        crate_root: bool = True,
+        wire_names: frozenset[str] = frozenset({JSON_WIRE}),
+    ):
+        self.wire_names = wire_names
         uses = list(re.finditer(r"\buse\s+([^;]+);", code))
         self.code_without_uses = blank(
             code,
@@ -837,6 +874,12 @@ class RustImports:
                         # text readers. Resolve its types only when used, so
                         # Value::deserialize is caught without banning trees.
                         targets.add(owner + (name,))
+                    elif (
+                        owner
+                        and owner[-1] in self.wire_names
+                        and name in JSON_WIRE_READERS
+                    ):
+                        targets.add(owner + (name,))
             if targets:
                 return targets
             if (
@@ -848,16 +891,127 @@ class RustImports:
             scope = self.parents[scope]
 
 
+def json_wire_names(files: dict[Path, tuple[str, bool]]) -> frozenset[str]:
+    """Every name the wire module has in production code, across sources.
+
+    ``files`` maps each source that can name the module to its text and
+    whether it is a crate root. Each file resolves its own names, but a
+    module-scope `use` is an item that child module files and, made public,
+    other modules and crates can name. So a rename of the module there, or a
+    rename of such a name, stands for the module in every file, as its own
+    name does. A rename inside a function body stays in its file. Only a
+    source that mentions a known name can add one.
+    """
+    names = {JSON_WIRE}
+    imports = {}
+    while True:
+        mention = re.compile(
+            r"\b(?:" + "|".join(map(re.escape, sorted(names))) + r")\b"
+        )
+        added = set()
+        for path, (source, crate_root) in files.items():
+            if not mention.search(source):
+                continue
+            if path not in imports:
+                imports[path] = RustImports(
+                    production_code(source)[1], crate_root=crate_root
+                )
+            resolver = imports[path]
+            for leaf, alias, _, scope in resolver.leaves:
+                if alias is None or resolver.module[scope] != scope:
+                    continue
+                alias = alias.removeprefix("r#")
+                if alias not in names | {"_"} and any(
+                    isinstance(target, tuple) and target and target[-1] in names
+                    for target in resolver.resolve(leaf, scope)
+                ):
+                    added.add(alias)
+        if not added:
+            return frozenset(names)
+        names |= added
+
+
+def item_attributes(code: str, spans: dict[int, int], keyword: int) -> int:
+    """Where the outer attributes of the item whose keyword is at ``keyword``
+    start, past any visibility. ``spans`` maps the end of each attribute in
+    ``code`` to its start, so a bracket in a string literal cannot end one."""
+    visibility = VISIBILITY.search(code, max(0, keyword - 200), keyword)
+    first = visibility.start() if visibility is not None else keyword
+    while True:
+        end = first
+        while end and code[end - 1].isspace():
+            end -= 1
+        if end not in spans:
+            return first
+        first = spans[end]
+
+
+def module_path_values(attributes: str) -> tuple[list[str], bool]:
+    """The `path` values among a module's attributes, and whether one of them
+    applies unconditionally rather than through `cfg_attr`."""
+    values = [
+        text
+        for kind, start, _, _, text in rust_tokens(attributes)
+        if kind == "string" and re.search(r"\bpath\s*=\s*$", attributes[:start])
+    ]
+    return values, bool(re.search(r"#\s*\[\s*path\s*=", attributes))
+
+
+def module_file_candidates(
+    path: Path,
+    inline: list[tuple[str, list[str], bool]],
+    name: str,
+    values: list[str],
+    plain: bool,
+    mod_rs: bool,
+) -> list[Path]:
+    """The files an out-of-line module declaration can load, as Rust finds
+    them. ``inline`` lists the inline modules around the declaration,
+    outermost first, each with its `path` values and whether one of them
+    applies unconditionally; ``mod_rs`` reads the declaring file as a crate
+    root, a `mod.rs` or a file that a path attribute loads.
+
+    Each step keeps a directory and, for a file not read as a mod-rs file,
+    the file's name, which a module below still adds as a directory. An
+    inline module adds its name below both, or a `path` on it names a
+    directory relative to the first alone. A `path` on the declaration is
+    relative to the directory alone too; its ordinary file is the module's
+    name below both. A conditional path can still load the ordinary module
+    on the other configuration, so both loaders are kept.
+    """
+    places = [(path.parent, None if mod_rs else path.stem)]
+    for module, module_values, module_plain in inline:
+        nested = []
+        for directory, stem in places:
+            nested.extend((directory / value, None) for value in module_values)
+            if not module_plain:
+                nested.append(
+                    ((directory / stem if stem else directory) / module, None)
+                )
+        places = nested
+    candidates = []
+    for directory, stem in places:
+        candidates.extend(directory / value for value in values)
+        if not plain:
+            directory = directory / stem if stem else directory
+            candidates.extend([directory / f"{name}.rs", directory / name / "mod.rs"])
+    return candidates
+
+
 def json_test_sources(sources: dict[Path, str]) -> set[Path]:
     """External modules whose every code loader is test-only.
 
     A filename such as `tests.rs` grants no exemption. Follow ordinary module
-    declarations, explicit path attributes and literal includes; a production
-    alias of a test module prevents exemption. Children of a proven test
-    module are test-only too. Unresolved includes conservatively prevent this
+    declarations (a raw identifier names the plain file), explicit path
+    attributes, on inline modules too, and literal includes; a production
+    alias of a test module prevents exemption. A file that a path attribute
+    loads is read as a mod-rs file, with its children beside it, so its
+    declarations count toward both places. Children of a proven test module
+    are test-only too. Unresolved includes conservatively prevent this
     exemption, since their code target cannot be proved here.
     """
     incoming: dict[Path, list[tuple[Path, bool]]] = {}
+    declarations = []
     unresolved = []
     for path, source in sources.items():
         tokens = list(rust_tokens(source))
@@ -868,47 +1022,29 @@ def json_test_sources(sources: dict[Path, str]) -> set[Path]:
         def gated(offset):
             return any(low <= offset < high for low, high in tests)
 
-        inline = []
-        for match in re.finditer(rf"\bmod\s+({RUST_NAME})\s*\{{", code):
-            end = balanced(code, match.end() - 1, "{", "}")
+        spans = {}
+        for match in re.finditer(r"#\s*\[", code):
+            end = balanced(code, match.end() - 1, "[", "]")
             if end is not None:
-                inline.append((match.start(), end, match[1]))
-        for match in re.finditer(
-            rf"((?:#\s*\[[^\]]*\]\s*)*)(?:pub(?:\s*\([^)]*\))?\s+)?"
-            rf"\bmod\s+({RUST_NAME})\s*;",
-            visible,
-        ):
-            # Comments are already blank; reject matches inside string literals.
-            start = match.start(2)
-            if not re.search(r"\bmod\s+", code[match.start() : match.end()]):
+                spans[end] = match.start()
+        inline = []
+        for match in MODULE_ITEM.finditer(code):
+            start = match.start()
+            name = match[1].removeprefix("r#")
+            values, plain = module_path_values(
+                visible[item_attributes(code, spans, start) : start]
+            )
+            if match[2] == "{":
+                end = balanced(code, match.end() - 1, "{", "}")
+                if end is not None:
+                    inline.append((start, end, name, values, plain))
                 continue
-            directories = [name for low, high, name in inline if low < start < high]
-            explicit = [
-                text
-                for kind, start, _, _, text in rust_tokens(match[1])
-                if kind == "string" and re.search(r"\bpath\s*=\s*$", match[1][:start])
+            enclosing = [
+                (module, module_values, module_plain)
+                for low, high, module, module_values, module_plain in inline
+                if low < start < high
             ]
-            explicit_base = path.parent
-            # Inside an inline module, Rust includes a non-mod-rs file's
-            # stem in relative paths. A top-level #[path] remains relative
-            # to the file's own directory.
-            if directories and path.stem not in {"lib", "main", "mod"}:
-                explicit_base /= path.stem
-            candidates = [
-                explicit_base.joinpath(*directories) / name for name in explicit
-            ]
-            # A conditional path can still load the ordinary module on the
-            # other configuration. Both loaders must be accounted for.
-            if not re.search(r"#\s*\[\s*path\s*=", match[1]):
-                base = path.parent
-                if path.stem not in {"lib", "main", "mod"}:
-                    base /= path.stem
-                base = base.joinpath(*directories)
-                candidates.extend([base / f"{match[2]}.rs", base / match[2] / "mod.rs"])
-            for candidate in candidates:
-                target = candidate.resolve()
-                if target in sources:
-                    incoming.setdefault(target, []).append((path, gated(start)))
+            declarations.append((path, enclosing, name, values, plain, gated(start)))
         for match in re.finditer(r"\binclude\s*!\s*\(", code):
             end = balanced(code, match.end() - 1, "(", ")")
             strings = [
@@ -923,6 +1059,27 @@ def json_test_sources(sources: dict[Path, str]) -> set[Path]:
                 target = (path.parent / strings[0]).resolve()
                 if target in sources:
                     incoming.setdefault(target, []).append((path, gated(match.start())))
+    # A file that a path attribute loads is read as a mod-rs file. How its
+    # loader is read is not known yet, so read every declaring file both ways
+    # to find each such file.
+    pathed = {
+        candidate.resolve()
+        for path, inline, name, values, _, _ in declarations
+        if values
+        for mod_rs in (False, True)
+        for candidate in module_file_candidates(
+            path, inline, name, values, True, mod_rs
+        )
+    }
+    for path, inline, name, values, plain, test in declarations:
+        mod_rs = path.stem in {"lib", "main", "mod"}
+        for reading in {mod_rs, mod_rs or path in pathed}:
+            for candidate in module_file_candidates(
+                path, inline, name, values, plain, reading
+            ):
+                target = candidate.resolve()
+                if target in sources:
+                    incoming.setdefault(target, []).append((path, test))
     result = set()
     while True:
         added = {
@@ -1188,10 +1345,28 @@ def violations(root: Path) -> list[str]:
     errors.extend(rule_vocabulary_errors(root, registered))
     rule = rules.identifier
     json_tests = json_test_sources(sources)
+    crate_roots = {
+        path
+        for path in sources
+        if path.parent.parent.parent == root / "rust/crates"
+        and path.parent.name == "src"
+        and path.name in {"lib.rs", "main.rs"}
+    }
+    wire_names = json_wire_names(
+        {
+            path: (source, path in crate_roots)
+            for path, source in sources.items()
+            if path not in json_tests
+        }
+    )
     for path, source in sources.items():
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
-        test_only = private_unit_test_source(root, Path(relative))
+        # The unit module keeps its literal credit only while every loader
+        # the guard can follow is test-only, as for the checks below.
+        test_only = (
+            private_unit_test_source(root, Path(relative)) and path in json_tests
+        )
         for number, literals in diagnostic_literals(source, registered, rule).items():
             for identifier in literals:
                 if rule.fullmatch(identifier) and identifier not in defined:
@@ -1212,11 +1387,9 @@ def violations(root: Path) -> list[str]:
                 + ", ".join(literals)
             )
         if Path(relative) not in JSON_CODECS and path not in json_tests:
-            crate_root = (
-                path.parent == root / "rust/crates" / crate / "src"
-                and path.name in {"lib.rs", "main.rs"}
-            )
-            for number in json_decodes(source, crate_root=crate_root):
+            for number in json_decodes(
+                source, crate_root=path in crate_roots, wire_names=wire_names
+            ):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
         if (
             Path(relative) in (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE)
