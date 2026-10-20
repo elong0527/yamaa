@@ -613,11 +613,13 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertNotIn("rustup target", scripts)
                 # rustup removes itself on Windows; the macOS image's Homebrew
                 # rustup cannot, so Homebrew removes it there.
-                self.assertIn("rustup self uninstall -y", steps[removal]["run"])
+                macos, _, others = steps[removal]["run"].partition("elif")
+                self.assertIn('[ "${RUNNER_OS}" = macOS ]', macos)
                 self.assertIn(
-                    "brew uninstall --force --ignore-dependencies rustup",
-                    steps[removal]["run"],
+                    "brew uninstall --force --ignore-dependencies rustup", macos
                 )
+                self.assertNotIn("brew uninstall", others)
+                self.assertIn("rustup self uninstall -y", others)
                 self.assertLess(removal, install)
                 self.assertIn(
                     "install.packages(commandArgs(TRUE), repos = NULL",
