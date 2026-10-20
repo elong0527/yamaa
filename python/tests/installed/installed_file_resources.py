@@ -28,6 +28,11 @@ ROOT = Path(__file__).with_name("specification-original")
 PATHS = TRUTH["lookup_paths"]
 
 
+def paths_of(*paths):
+    """The paths save() returns: absolute, with forward slashes, in order."""
+    return [Path(path).resolve().as_posix() for path in paths]
+
+
 class FileResources(unittest.TestCase):
     def test_entry_relative_shared_program_isolates_study_inputs_and_saved_outputs(
         self,
@@ -65,7 +70,9 @@ class FileResources(unittest.TestCase):
                     # save each study's producer before its consumer reads it.
                     produced = yamaa.spec(study / "producer.yaml").run()
                     self.assertTrue(produced.issues.is_empty(), produced.issues)
-                    self.assertIsNone(produced.save())
+                    self.assertEqual(
+                        produced.save(), paths_of(study / "output/produced.csv")
+                    )
                     self.assertEqual(
                         (study / "output/produced.csv").read_bytes(),
                         csv.encode("ascii"),
@@ -79,7 +86,10 @@ class FileResources(unittest.TestCase):
             shutil.rmtree(shared)
             for study, csv, result in results:
                 shutil.rmtree(study / "input")
-                self.assertIsNone(result.save())
+                self.assertEqual(
+                    result.save(),
+                    paths_of(study / "output/report.csv", study / "output/result.csv"),
+                )
                 self.assertEqual((study / "output/result.csv").read_bytes(), csv)
                 self.assertTrue((study / "output/report.csv").is_file())
                 if producer:
@@ -184,6 +194,7 @@ class FileResources(unittest.TestCase):
             with self.assertRaises(yamaa.Error) as caught:
                 result.save()
             self.assertTrue(caught.exception.issues.equals(result.issues))
+            self.assertEqual(caught.exception.paths, [])
             self.assertEqual(self.observe(result), expected)
             self.assertFalse((case / "adsl.csv").exists())
 
@@ -273,7 +284,7 @@ class FileResources(unittest.TestCase):
                 [r["snapshots_created"] for r in self.observe(second)["source_reads"]],
                 [1, 1, 1],
             )
-            self.assertIsNone(first.save())
+            self.assertEqual(first.save(), paths_of(case / "adsl.csv"))
             self.assertEqual(
                 (case / "adsl.csv").read_bytes(),
                 (case / "expected/adsl.csv").read_bytes(),
@@ -293,7 +304,7 @@ class FileResources(unittest.TestCase):
             entry.unlink()
             shutil.rmtree(case / "input")
             gc.collect()
-            self.assertIsNone(result.save())
+            self.assertEqual(result.save(), paths_of(case / "adsl.csv"))
             self.assertEqual((case / "adsl.csv").read_bytes(), golden)
             self.assertEqual(self.observe(result), expected)
             self.assertTrue(result.output.equals(held))
@@ -322,7 +333,7 @@ class FileResources(unittest.TestCase):
                 result = yamaa.spec(entry).run()
                 self.assertTrue(result.issues.is_empty(), result.issues)
                 self.assertEqual(result.output["ID"].to_list(), [7])
-                self.assertIsNone(result.save())
+                self.assertEqual(result.save(), paths_of(case / "result.csv"))
                 self.assertEqual((case / "result.csv").read_bytes(), b"ID\n7\n")
 
     def test_physical_symlink_refusal_retains_native_condition_without_output(self):

@@ -81,6 +81,11 @@ impl AnchoredTarget {
             target,
         }
     }
+    /// The target's absolute path in the engine's spelling, with forward
+    /// slashes.
+    pub(crate) fn path(&self) -> &str {
+        &self.target
+    }
     pub(crate) fn publisher(&self, declared: &str) -> Result<Publisher, Error> {
         if declared.is_empty() || declared.contains('\0') || self.remainder.is_empty() {
             return Err(Error::InvalidTarget);
@@ -223,23 +228,29 @@ impl Publisher {
             Err(error) => Err(error.into()),
         }
     }
+    /// Stage and commit one file on its own, as a save of that one file.
     pub fn publish(&mut self, declared: &str, content: &[u8]) -> Result<(), Error> {
-        self.publish_with_checkpoint(declared, content, |_| Ok(()))
+        let mut locks = Locks::default();
+        let staged = self.stage(&mut locks, declared, content)?;
+        self.commit(staged)
     }
-    fn publish_with_checkpoint(
-        &mut self,
+    /// Write `content` completely into a private temporary file beside the
+    /// target, flushed and synced, without making it visible. The target's
+    /// directory stays locked in `locks` until the save ends (OUTPUT-8).
+    pub fn stage(
+        &self,
+        locks: &mut Locks,
         declared: &str,
         content: &[u8],
-        checkpoint: impl FnOnce(&str) -> Result<(), Error>,
-    ) -> Result<(), Error> {
+    ) -> Result<Staged, Error> {
         if declared != self.declared {
             return Err(Error::PathMismatch);
         }
         yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
-        let _lock = DirectoryLock::acquire(&self.parent)?;
+        locks.hold(&self.parent)?;
         self.check_target()?;
         let (mut temporary, descriptor) = self.temporary()?;
-        let publication = (|| {
+        let written = (|| {
             let mut file = File::from(descriptor);
             file.write_all(content)?;
             file.flush()?;
@@ -254,6 +265,32 @@ impl Publisher {
             if kind(&held) != FileType::RegularFile || identity(&held) != identity(&observed) {
                 return Err(Error::Changed);
             }
+            Ok(())
+        })();
+        match written {
+            Ok(()) => Ok(Staged(temporary)),
+            Err(error) => Err(temporary.failure(error)),
+        }
+    }
+    /// Replace the target with the staged file in one step.
+    pub fn commit(&self, staged: Staged) -> Result<(), Error> {
+        self.commit_with_checkpoint(staged, |_| Ok(()))
+    }
+    fn commit_with_checkpoint(
+        &self,
+        staged: Staged,
+        checkpoint: impl FnOnce(&str) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let mut temporary = staged.0;
+        let replaced = (|| {
+            let observed = fs::statat(
+                &temporary.directory,
+                "candidate.part",
+                AtFlags::SYMLINK_NOFOLLOW,
+            )?;
+            if temporary.candidate != Some(identity(&observed)) {
+                return Err(Error::Changed);
+            }
             self.check_target()?;
             checkpoint(&temporary.name)?;
             fs::renameat(
@@ -264,7 +301,7 @@ impl Publisher {
             )?;
             Ok(())
         })();
-        match publication {
+        match replaced {
             Ok(()) => {
                 // Replacement committed: cleanup must not report a failed save.
                 let _ = temporary.cleanup();
@@ -273,13 +310,24 @@ impl Publisher {
             Err(error) => Err(temporary.failure(error)),
         }
     }
-    fn temporary(&self) -> Result<(Pending<'_>, OwnedFd), Error> {
+    #[cfg(test)]
+    fn publish_with_checkpoint(
+        &mut self,
+        declared: &str,
+        content: &[u8],
+        checkpoint: impl FnOnce(&str) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let mut locks = Locks::default();
+        let staged = self.stage(&mut locks, declared, content)?;
+        self.commit_with_checkpoint(staged, checkpoint)
+    }
+    fn temporary(&self) -> Result<(Pending, OwnedFd), Error> {
         self.temporary_with_numbers(|| NEXT.fetch_add(1, Ordering::Relaxed))
     }
     fn temporary_with_numbers(
         &self,
         mut next: impl FnMut() -> u64,
-    ) -> Result<(Pending<'_>, OwnedFd), Error> {
+    ) -> Result<(Pending, OwnedFd), Error> {
         for _ in 0..64 {
             let number = next();
             let name = format!(".yamaa-output-{}-{number}.stage", std::process::id());
@@ -317,8 +365,8 @@ impl Publisher {
                     return Err(Error::Changed);
                 }
                 Ok(Pending {
-                    parent: &self.parent,
-                    parent_path: &self.parent_path,
+                    parent: self.parent.try_clone()?,
+                    parent_path: self.parent_path.clone(),
                     name: name.clone(),
                     directory,
                     identity: identity(&initial),
@@ -373,16 +421,29 @@ fn parent_case_sensitive(parent: &OwnedFd) -> Result<bool, Error> {
         _ => Err(Error::InvalidTarget),
     }
 }
-struct Pending<'a> {
-    parent: &'a OwnedFd,
-    parent_path: &'a Path,
+/// One staged file: its complete bytes in a private temporary file beside the
+/// target, not yet visible there. Dropping it removes the temporary file.
+pub struct Staged(Pending);
+impl Staged {
+    /// Remove the staged file; the target stays as it was. A removal that
+    /// fails names the staging location it left behind.
+    pub fn abort(self) -> Result<(), (PathBuf, std::io::Error)> {
+        let mut temporary = self.0;
+        temporary
+            .cleanup()
+            .map_err(|cleanup| (temporary.parent_path.join(&temporary.name), cleanup))
+    }
+}
+struct Pending {
+    parent: OwnedFd,
+    parent_path: PathBuf,
     name: String,
     directory: OwnedFd,
     identity: (i128, i128, FileType),
     candidate: Option<(i128, i128, FileType)>,
     cleaned: bool,
 }
-impl Pending<'_> {
+impl Pending {
     fn cleanup(&mut self) -> std::io::Result<()> {
         if self.cleaned {
             return Ok(());
@@ -399,7 +460,7 @@ impl Pending<'_> {
             }
             Err(error) => return Err(error.into()),
         }
-        cleanup_directory(self.parent, &self.name, Some(self.identity))?;
+        cleanup_directory(&self.parent, &self.name, Some(self.identity))?;
         self.cleaned = true;
         Ok(())
     }
@@ -407,7 +468,7 @@ impl Pending<'_> {
         with_cleanup(error, self.parent_path.join(&self.name), self.cleanup())
     }
 }
-impl Drop for Pending<'_> {
+impl Drop for Pending {
     fn drop(&mut self) {
         // Fallible operation paths clean explicitly; Drop also covers unwinding.
         let _ = self.cleanup();
@@ -442,16 +503,36 @@ fn with_cleanup(error: Error, staging: PathBuf, cleanup: std::io::Result<()>) ->
         },
     }
 }
-struct DirectoryLock<'a>(&'a OwnedFd);
-impl<'a> DirectoryLock<'a> {
-    fn acquire(parent: &'a OwnedFd) -> Result<Self, Error> {
-        fs::flock(parent, fs::FlockOperation::NonBlockingLockExclusive)?;
-        Ok(Self(parent))
+/// The directory locks one save holds: one exclusive lock on each physical
+/// directory it publishes into, taken before the first file there is staged
+/// and released when the save ends, after its last commit (OUTPUT-8).
+#[derive(Default)]
+pub struct Locks(Vec<DirectoryLock>);
+impl Locks {
+    fn hold(&mut self, parent: &OwnedFd) -> Result<(), Error> {
+        let directory = identity(&fs::fstat(parent)?);
+        if !self.0.iter().any(|lock| lock.directory == directory) {
+            self.0.push(DirectoryLock::acquire(parent, directory)?);
+        }
+        Ok(())
     }
 }
-impl Drop for DirectoryLock<'_> {
+struct DirectoryLock {
+    directory: (i128, i128, FileType),
+    /// A duplicate of the publisher's descriptor: the lock belongs to the
+    /// open directory description they share, and outlives the publisher.
+    held: OwnedFd,
+}
+impl DirectoryLock {
+    fn acquire(parent: &OwnedFd, directory: (i128, i128, FileType)) -> Result<Self, Error> {
+        let held = parent.try_clone()?;
+        fs::flock(&held, fs::FlockOperation::NonBlockingLockExclusive)?;
+        Ok(Self { directory, held })
+    }
+}
+impl Drop for DirectoryLock {
     fn drop(&mut self) {
-        let _ = fs::flock(self.0, fs::FlockOperation::Unlock);
+        let _ = fs::flock(&self.held, fs::FlockOperation::Unlock);
     }
 }
 impl yamaa_core::specification_output::ArtifactPort for Publisher {

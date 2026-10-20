@@ -67,7 +67,7 @@ pub use diagnostic::{
 };
 pub use engine::{
     AttemptFailure, Build, DefineArtifact, DefineBuild, DefineRequest, Engine, EngineOptions,
-    Request, ResolvedSpecification, SaveOutcome, SourceBytes,
+    Request, ResolvedSpecification, SourceBytes,
 };
 pub use error::{
     Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, OdmError,

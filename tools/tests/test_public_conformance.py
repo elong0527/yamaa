@@ -29,7 +29,9 @@ METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
 def repeated(build):
     """The build as the runners record it: its object compiled a plan, and its
     second run reused it, equals the first and changed no saved file (#2821)."""
-    repeat = copy.deepcopy({key: build[key] for key in ("issues", "tables", "saved")})
+    repeat = copy.deepcopy(
+        {key: build[key] for key in ("issues", "tables", "saved", "paths")}
+    )
     return {
         **build,
         "plan": "compiled",
@@ -68,6 +70,8 @@ class PublicConformance(unittest.TestCase):
             "environment": None,
             "issues": [],
             "saved": True,
+            # save() returns the declared file's absolute path (D38).
+            "paths": [candidate.resolve().as_posix()],
             "tables": {
                 "output": {
                     "columns": [["ID", "int"], ["VALUE", "str"]],
@@ -77,6 +81,11 @@ class PublicConformance(unittest.TestCase):
             },
         }
         self.example = judge.plan(self.fixtures)["examples"][0]
+
+    def saved(self, *names):
+        """The build's save wrote `names` in this order beside the candidate."""
+        work = self.observed / "work/simple"
+        self.build["paths"] = [(work / name).resolve().as_posix() for name in names]
 
     def verdict(self):
         return judge.compare_example(
@@ -145,6 +154,12 @@ class PublicConformance(unittest.TestCase):
                 "7",
             ),
             "saved": (lambda repeat: repeat.update(saved=False), "saved", True, False),
+            "paths": (
+                lambda repeat: repeat["paths"].append("/elsewhere.csv"),
+                "paths[1]",
+                None,
+                "/elsewhere.csv",
+            ),
         }
         for field, (change, at, first, second) in changes.items():
             with self.subTest(field=field):
@@ -174,6 +189,24 @@ class PublicConformance(unittest.TestCase):
             },
             result["findings"],
         )
+
+    def test_a_successful_save_returns_the_authored_paths_in_order(self):
+        path = self.build["paths"][0]
+        for paths in (
+            None,
+            [],
+            [path, path],
+            [path.replace("result.csv", "other.csv")],
+            [path.replace("/", "\\")],
+        ):
+            with self.subTest(paths=paths):
+                self.build["paths"] = paths
+                result = self.verdict()
+                self.assertEqual(result["verdict"], "mismatch")
+                self.assertIn(
+                    {"saved_paths": "spec.yaml", "expected": [path], "actual": paths},
+                    result["findings"],
+                )
 
     def test_retired_adapter_csv_mutations_cannot_pass_public_conformance(self):
         # Preserve the independent corruption controls from the retired
@@ -425,6 +458,7 @@ class PublicConformance(unittest.TestCase):
         (self.case / "spec.yaml").write_text(
             SPEC.replace("path: result.csv,", "path: result.csv, report: checks.csv,")
         )
+        self.saved("checks.csv", "result.csv")
         truth = b"KIND,COUNT,TOTAL,DETAILS\nrun,3,,{}\n"
         (self.case / "expected/checks.csv").write_bytes(truth)
         (self.observed / "work/simple/checks.csv").write_bytes(truth)
@@ -486,6 +520,7 @@ class PublicConformance(unittest.TestCase):
         (self.case / "spec.yaml").write_text(
             SPEC.replace("result.csv", "result.parquet")
         )
+        self.saved("result.parquet")
         (self.case / "expected/result.csv").unlink()
         table = pa.table(
             {
@@ -530,6 +565,7 @@ class PublicConformance(unittest.TestCase):
             "  - {name: USUBJID, type: str, derivation: DM.USUBJID}\n"
             "  - {name: AGE, type: int, derivation: DM.AGE}\n"
         )
+        self.saved("adsl-checks.parquet", "adsl.parquet")
         (self.case / "expected/result.csv").unlink()
         report = pa.table(
             {
@@ -653,6 +689,7 @@ class PublicConformance(unittest.TestCase):
                 "path: result.csv,", "path: result.csv, report: report.parquet,"
             )
         )
+        self.saved("report.parquet", "result.csv")
         table = pa.table(
             {
                 "COUNT": pa.array([1, 2], pa.int64()),
@@ -906,6 +943,7 @@ class PublicConformance(unittest.TestCase):
         candidate = observed / "work/ordered/result.csv"
         candidate.parent.mkdir(parents=True)
         shutil.copyfile(case / "expected/result.csv", candidate)
+        self.build["paths"] = [candidate.resolve().as_posix()]
         example = judge.plan(fixtures)["examples"][0]
         kinds = [v["kind"] for v in example["variants"]["python"]]
         self.assertEqual(

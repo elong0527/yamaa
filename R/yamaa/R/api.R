@@ -13,7 +13,7 @@
   error <- reply$error
   if (!is.null(error)) {
     stop(structure(
-      list(message = error$message, call = NULL, issues = error$issues),
+      list(message = error$message, call = NULL, issues = error$issues, paths = error$paths),
       class = c("yamaa_error", "error", "condition")
     ))
   }

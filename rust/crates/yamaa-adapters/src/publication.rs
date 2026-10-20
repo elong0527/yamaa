@@ -1,0 +1,439 @@
+//! One save: every file a save writes, across every member of an outcome,
+//! opened for writing, staged beside its target, then committed in order.
+//!
+//! A target is a physical file under the local file resolver, or an object a
+//! caller's resolver names. [`stage`] opens every target first, so a target
+//! that cannot be written, or two files that name one target, stop the save
+//! before anything is staged; it then stages every file completely.
+//! [`Staged::commit`] replaces each target in order. The first file that
+//! cannot replace its target stops the save there: the files before it stay
+//! replaced, and every staged file after it is removed. Between staging and
+//! the first commit nothing is visible at any target, so a save stopped there
+//! writes nothing (D74).
+use crate::{
+    file_publication as file,
+    host_resources::{Failure, Kind, Operation, Request, Resolver},
+};
+use std::{
+    any::Any,
+    panic::{catch_unwind, AssertUnwindSafe},
+    path::PathBuf,
+    sync::Arc,
+};
+pub(crate) enum AnchoredTarget {
+    File(file::AnchoredTarget),
+    Host {
+        resolver: Arc<dyn Resolver>,
+        declaring: String,
+        written: String,
+        reference: String,
+    },
+}
+pub enum Publisher {
+    File(file::Publisher),
+    Host {
+        resolver: Arc<dyn Resolver>,
+        declaring: String,
+        written: String,
+        reference: String,
+    },
+}
+impl AnchoredTarget {
+    pub(crate) fn publisher(&self, declared: &str) -> Result<Publisher, file::Error> {
+        match self {
+            Self::File(target) => target.publisher(declared).map(Publisher::File),
+            Self::Host {
+                resolver,
+                declaring,
+                written,
+                reference,
+            } => {
+                let reply = resolver
+                    .request(Request {
+                        operation: Operation::Target,
+                        kind: Kind::Output,
+                        declaring,
+                        written,
+                        reference: Some(reference),
+                        bytes: None,
+                        limit: None,
+                    })
+                    .map_err(file::Error::Host)?;
+                if reply.reference != *reference || (reply.bytes.is_some() || reply.frame.is_some())
+                {
+                    return Err(file::Error::Host(Failure::Changed));
+                }
+                Ok(Publisher::Host {
+                    resolver: Arc::clone(resolver),
+                    declaring: declaring.clone(),
+                    written: declared.into(),
+                    reference: reference.clone(),
+                })
+            }
+        }
+    }
+    /// The path a save reports for this target: a file's absolute path with
+    /// forward slashes, or the reference a caller's resolver gave its object.
+    pub(crate) fn path(&self) -> &str {
+        match self {
+            Self::File(target) => target.path(),
+            Self::Host { reference, .. } => reference,
+        }
+    }
+}
+/// A staged file: the file publisher's private temporary file, or the staging
+/// token a caller's resolver returned.
+enum Staging {
+    File(file::Staged),
+    Host(String),
+}
+/// What a staged file left behind when it could not be removed.
+enum Leftover {
+    File(PathBuf, std::io::Error),
+    Host,
+}
+impl Publisher {
+    pub fn same_target(&self, other: &Self) -> Result<bool, file::Error> {
+        match (self, other) {
+            (Self::File(left), Self::File(right)) => left.same_target(right),
+            (
+                Self::Host {
+                    resolver: left,
+                    reference: l,
+                    ..
+                },
+                Self::Host {
+                    resolver: right,
+                    reference: r,
+                    ..
+                },
+            ) => Ok(Arc::ptr_eq(left, right) && l == r),
+            _ => Ok(false),
+        }
+    }
+    /// Stage and commit one file on its own, as a save of that one file.
+    pub fn publish(&mut self, declared: &str, bytes: &[u8]) -> Result<(), file::Error> {
+        let mut locks = file::Locks::default();
+        let staging = self.stage(&mut locks, declared, bytes)?;
+        self.commit(staging)
+    }
+    fn request<'a>(
+        &'a self,
+        operation: Operation,
+        token: &'a str,
+        bytes: Option<&'a [u8]>,
+    ) -> Option<(&'a Arc<dyn Resolver>, Request<'a>)> {
+        let Self::Host {
+            resolver,
+            declaring,
+            written,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        Some((
+            resolver,
+            Request {
+                operation,
+                kind: Kind::Output,
+                declaring,
+                written,
+                reference: Some(token),
+                bytes,
+                limit: None,
+            },
+        ))
+    }
+    fn stage(
+        &self,
+        locks: &mut file::Locks,
+        declared: &str,
+        bytes: &[u8],
+    ) -> Result<Staging, file::Error> {
+        let (written, reference) = match self {
+            Self::File(publisher) => {
+                return publisher.stage(locks, declared, bytes).map(Staging::File)
+            }
+            Self::Host {
+                written, reference, ..
+            } => (written, reference),
+        };
+        if written != declared {
+            return Err(file::Error::PathMismatch);
+        }
+        yamaa_core::limits::Limits::output_bytes(bytes.len()).map_err(file::Error::Limit)?;
+        let (resolver, request) = self
+            .request(Operation::Stage, reference, Some(bytes))
+            .expect("a host publisher");
+        let reply = resolver.request(request).map_err(file::Error::Host)?;
+        // Stage is atomic by contract: a failed Stage leaves nothing to abort,
+        // and a reply without a staging token staged nothing.
+        if reply.reference.is_empty() || reply.bytes.is_some() || reply.frame.is_some() {
+            return Err(file::Error::Host(Failure::Rejected));
+        }
+        Ok(Staging::Host(reply.reference))
+    }
+    fn commit(&self, staging: Staging) -> Result<(), file::Error> {
+        let token = match (self, staging) {
+            (Self::File(publisher), Staging::File(staged)) => return publisher.commit(staged),
+            (Self::Host { .. }, Staging::Host(token)) => token,
+            _ => unreachable!("a staged file belongs to the publisher that staged it"),
+        };
+        let Self::Host { reference, .. } = self else {
+            unreachable!("a host staging token belongs to a host publisher")
+        };
+        let (resolver, request) = self
+            .request(Operation::Commit, &token, None)
+            .expect("a host publisher");
+        let committed = resolver.request(request).and_then(|reply| {
+            if reply.reference == *reference && reply.bytes.is_none() && reply.frame.is_none() {
+                Ok(())
+            } else {
+                Err(Failure::Publication)
+            }
+        });
+        // Attempt-owned cleanup uses the returned staging token, never the
+        // target reference.
+        committed.map_err(|failure| match self.abort(Staging::Host(token)) {
+            Ok(()) => file::Error::Host(failure),
+            Err(_) => file::Error::Host(Failure::Cleanup),
+        })
+    }
+    fn abort(&self, staging: Staging) -> Result<(), Leftover> {
+        match staging {
+            Staging::File(staged) => staged
+                .abort()
+                .map_err(|(staging, cleanup)| Leftover::File(staging, cleanup)),
+            Staging::Host(token) => {
+                let (resolver, request) = self
+                    .request(Operation::Abort, &token, None)
+                    .expect("a host staging token belongs to a host publisher");
+                resolver
+                    .request(request)
+                    .map(drop)
+                    .map_err(|_| Leftover::Host)
+            }
+        }
+    }
+}
+/// `error`, keeping what a staged file left behind beside it (OUTPUT-8).
+fn keeping(error: file::Error, leftover: Leftover) -> file::Error {
+    match leftover {
+        Leftover::File(staging, cleanup) => file::Error::Cleanup {
+            operation: Box::new(error),
+            staging,
+            cleanup,
+        },
+        Leftover::Host => file::Error::Host(Failure::Cleanup),
+    }
+}
+
+/// One file a save writes: its target, the path its specification or project
+/// file wrote, and its complete bytes.
+pub struct File<'a> {
+    pub(crate) target: &'a AnchoredTarget,
+    pub(crate) written: &'a str,
+    pub(crate) bytes: &'a [u8],
+}
+impl File<'_> {
+    /// The path the save reports for the file once written.
+    pub fn path(&self) -> &str {
+        self.target.path()
+    }
+}
+
+/// Where a save stopped: the position of the file in save order, how many
+/// files before it replaced their targets, and why.
+#[derive(Debug)]
+pub struct Stop {
+    pub file: usize,
+    pub committed: usize,
+    pub cause: Cause,
+}
+pub enum Cause {
+    /// The file's target cannot be written.
+    Target(file::Error),
+    /// The file names the target of the earlier file at this position.
+    Collision { earlier: usize },
+    /// The file could not be staged.
+    Stage(file::Error),
+    /// The file could not replace its target.
+    Commit(file::Error),
+    /// A caller's resolver unwound while staging or committing the file; the
+    /// original payload is kept.
+    Unwind(Box<dyn Any + Send>),
+}
+impl std::fmt::Debug for Cause {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Target(error) => formatter.debug_tuple("Target").field(error).finish(),
+            Self::Collision { earlier } => formatter
+                .debug_struct("Collision")
+                .field("earlier", earlier)
+                .finish(),
+            Self::Stage(error) => formatter.debug_tuple("Stage").field(error).finish(),
+            Self::Commit(error) => formatter.debug_tuple("Commit").field(error).finish(),
+            Self::Unwind(_) => formatter.write_str("Unwind"),
+        }
+    }
+}
+
+struct StagedFile {
+    publisher: Publisher,
+    staging: Staging,
+    path: String,
+}
+/// Every file of one save, staged beside its target in save order and not yet
+/// visible. Dropping it removes every staged file; the save's directory locks
+/// are released after the last file is committed or removed.
+pub struct Staged {
+    files: Vec<StagedFile>,
+    locks: file::Locks,
+}
+
+/// Open every file's target, then stage every file, in save order. A target
+/// that cannot be written, two files that name one target, or a file that
+/// cannot be staged stop the save before any target is replaced, and every
+/// file already staged is removed.
+pub fn stage(files: &[File<'_>]) -> Result<Staged, Stop> {
+    let mut publishers: Vec<Publisher> = Vec::with_capacity(files.len());
+    for (index, file) in files.iter().enumerate() {
+        let stop = |cause| Stop {
+            file: index,
+            committed: 0,
+            cause,
+        };
+        let publisher = file
+            .target
+            .publisher(file.written)
+            .map_err(|error| stop(Cause::Target(error)))?;
+        for (earlier, prior) in publishers.iter().enumerate() {
+            match publisher.same_target(prior) {
+                Ok(false) => {}
+                Ok(true) => return Err(stop(Cause::Collision { earlier })),
+                Err(error) => return Err(stop(Cause::Target(error))),
+            }
+        }
+        publishers.push(publisher);
+    }
+    let mut staged = Staged {
+        files: Vec::with_capacity(files.len()),
+        locks: file::Locks::default(),
+    };
+    for (index, (publisher, file)) in publishers.into_iter().zip(files).enumerate() {
+        let locks = &mut staged.locks;
+        let cause = match catch_unwind(AssertUnwindSafe(|| {
+            publisher.stage(locks, file.written, file.bytes)
+        })) {
+            Ok(Ok(staging)) => {
+                staged.files.push(StagedFile {
+                    publisher,
+                    staging,
+                    path: file.path().to_owned(),
+                });
+                continue;
+            }
+            Ok(Err(error)) => Cause::Stage(error),
+            Err(payload) => Cause::Unwind(payload),
+        };
+        return Err(staged.stop(index, 0, cause));
+    }
+    Ok(staged)
+}
+
+impl Staged {
+    /// Replace each target in save order and return every file's path. The
+    /// first file that cannot replace its target stops the save: the files
+    /// before it stay replaced, and it and every later file are removed.
+    pub fn commit(self) -> Result<Vec<String>, Stop> {
+        self.commit_with(|_| Ok(()))
+    }
+    /// [`Self::commit`], first calling `before` with each file's position;
+    /// an error it returns fails that file's commit, as a test injects one.
+    pub fn commit_with(
+        mut self,
+        mut before: impl FnMut(usize) -> Result<(), file::Error>,
+    ) -> Result<Vec<String>, Stop> {
+        let mut pending = std::mem::take(&mut self.files);
+        pending.reverse();
+        let mut paths = Vec::with_capacity(pending.len());
+        while let Some(StagedFile {
+            publisher,
+            staging,
+            path,
+        }) = pending.pop()
+        {
+            let index = paths.len();
+            let cause = match catch_unwind(AssertUnwindSafe(|| before(index))) {
+                Ok(Ok(())) => match catch_unwind(AssertUnwindSafe(|| publisher.commit(staging))) {
+                    Ok(Ok(())) => {
+                        paths.push(path);
+                        continue;
+                    }
+                    Ok(Err(error)) => Cause::Commit(error),
+                    Err(payload) => Cause::Unwind(payload),
+                },
+                Ok(Err(error)) => Cause::Commit(match publisher.abort(staging) {
+                    Ok(()) => error,
+                    Err(leftover) => keeping(error, leftover),
+                }),
+                Err(payload) => {
+                    let _ = publisher.abort(staging);
+                    Cause::Unwind(payload)
+                }
+            };
+            pending.reverse();
+            self.files = pending;
+            return Err(self.stop(index, index, cause));
+        }
+        Ok(paths)
+    }
+    /// Remove every staged file; no target is touched.
+    pub fn abort(mut self) {
+        self.remove();
+    }
+    /// Remove every file still staged, returning the first removal that left
+    /// something behind.
+    fn remove(&mut self) -> Option<Leftover> {
+        let mut first = None;
+        for StagedFile {
+            publisher, staging, ..
+        } in std::mem::take(&mut self.files)
+        {
+            let removed = catch_unwind(AssertUnwindSafe(|| publisher.abort(staging)));
+            if let Ok(Err(leftover)) = removed {
+                first.get_or_insert(leftover);
+            }
+        }
+        first
+    }
+    /// Stop at `file`, after `committed` files replaced their targets: remove
+    /// every file still staged, and keep what a removal left behind with the
+    /// cause's error.
+    fn stop(mut self, file: usize, committed: usize, cause: Cause) -> Stop {
+        let cause = match (self.remove(), cause) {
+            (Some(leftover), Cause::Stage(error)) => Cause::Stage(keeping(error, leftover)),
+            (Some(leftover), Cause::Commit(error)) => Cause::Commit(keeping(error, leftover)),
+            (_, cause) => cause,
+        };
+        Stop {
+            file,
+            committed,
+            cause,
+        }
+    }
+}
+impl Drop for Staged {
+    fn drop(&mut self) {
+        self.remove();
+        // The locks are released after every staged file is gone.
+        drop(std::mem::take(&mut self.locks));
+    }
+}
+
+/// The finding of a file whose target an earlier file of another member of
+/// the same save also writes.
+pub fn shared_target() -> Vec<yamaa_core::diagnostic::Diagnostic> {
+    crate::file_application::publication_failure(&file::Error::InvalidTarget)
+}

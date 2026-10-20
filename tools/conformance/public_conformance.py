@@ -2,8 +2,10 @@
 
 Only the comparator reads independent expected truth. CSV bytes and typed host
 views compare exactly; Parquet compares logical fields, types, nulls and rows.
-A run's output and its declared run report are the compared tables. R holds a
-declared integer as a plain double, which must equal that integer exactly.
+A run's output and its declared run report are the compared tables, and a
+successful build's save() returns the absolute paths of those declared files in
+publication order, the report first (D38, OUTPUT-10). R holds a declared
+integer as a plain double, which must equal that integer exactly.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import csv
 import datetime as dt
 import json
 import math
+import os
 import re
 import shutil
 import struct
@@ -726,10 +729,10 @@ def judge_repeats(builds):
 
     A spec object's second run reuses the plan its first run compiled (#2821).
     It must say so in its private observations, reproduce the first run's
-    issues, typed public tables and save outcome, and leave every saved file
-    byte for byte as the first run saved it, so the saved bytes judged against
-    the authored truth below are both runs' bytes. A finding names the first
-    differing value or the changed files.
+    issues, typed public tables, save outcome and saved paths, and leave every
+    saved file byte for byte as the first run saved it, so the saved bytes
+    judged against the authored truth below are both runs' bytes. A finding
+    names the first differing value or the changed files.
     """
     findings = []
     for build in builds:
@@ -748,7 +751,7 @@ def judge_repeats(builds):
                     "expected_second_run_plan": expected,
                 }
             )
-        for field in ("issues", "tables", "saved"):
+        for field in ("issues", "tables", "saved", "paths"):
             found = first_difference(build.get(field), repeat.get(field), field)
             if found is not None:
                 at, first, second = found
@@ -770,6 +773,16 @@ def judge_repeats(builds):
                 }
             )
     return findings
+
+
+def same_path(actual, expected):
+    """Whether save() reported `expected`: one absolute path with forward
+    slashes, spelled as the host's own filesystem compares it."""
+    return (
+        isinstance(actual, str)
+        and "\\" not in actual
+        and os.path.normcase(actual) == os.path.normcase(expected)
+    )
 
 
 def compare_example(example, runtime, record, fixtures, observed, expectations=None):
@@ -925,6 +938,19 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
     compared = set()
     for entry, build in zip(entries, builds):
         types, output = declarations(case / entry["specification"])
+        written = [
+            (
+                observed
+                / "work"
+                / case.name
+                / Path(entry["specification"]).parent
+                / declared
+            )
+            .resolve()
+            .as_posix()
+            for declared in (output.get("report"), output.get("path"))
+            if declared is not None
+        ]
         for slot, key in (("output", "path"), ("report", "report")):
             declared = output.get(key)
             actual = build["tables"].get(slot)
@@ -987,6 +1013,20 @@ def compare_example(example, runtime, record, fixtures, observed, expectations=N
             result["findings"].append(
                 f"successful {entry['specification']} did not save"
             )
+        else:
+            paths = build.get("paths")
+            if not (
+                isinstance(paths, list)
+                and len(paths) == len(written)
+                and all(map(same_path, paths, written))
+            ):
+                result["findings"].append(
+                    {
+                        "saved_paths": entry["specification"],
+                        "expected": written,
+                        "actual": paths,
+                    }
+                )
     for truth in (case / "expected").iterdir():
         if truth.suffix in {".csv", ".parquet"} and truth.name not in compared:
             result["findings"].append(

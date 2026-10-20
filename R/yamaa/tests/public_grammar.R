@@ -1,5 +1,10 @@
 # Authored shared grammar acceptance/diagnostics through the installed public API.
 library(yamaa)
+# save() returns the absolute paths it wrote, invisibly, with forward slashes,
+# in publication order (D38); each one exists once written.
+returns_paths <- function(paths) is.character(paths) && length(paths) > 0L && !anyNA(paths) &&
+  all(grepl("^(/|[[:alpha:]]:/)", paths)) && !any(grepl("\\", paths, fixed = TRUE)) &&
+  all(file.exists(paths))
 # The grammar conditions are JSON truth, and jsonlite, which reads it, is a
 # suggested package: where it is not installed, these checks are skipped and
 # the CSV preservation checks below still run.
@@ -51,7 +56,7 @@ csv_preservation <- function() {
     identical(result$output$SITE, c("007", "008")),
     identical(result$output$BARE, c(NA_character_, NA_character_)),
     identical(result$output$QUOTED, c(NA_character_, NA_character_)),
-    is.null(result$save()))
+    returns_paths(result$save()))
   path <- file.path(root, "output.csv")
   stopifnot(identical(readBin(path, "raw", n = file.info(path)$size),
     charToRaw("SUBJECT,SITE,BARE,QUOTED\n001,007,,\n002,008,,\n")))

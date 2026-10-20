@@ -27,15 +27,20 @@ An object with four methods:
   \item{\code{$run(section = NULL)}}{Builds every specification of one section
     (\code{"sdtm"}, \code{"adam"} or \code{"send"}), or of all sections. The
     project run has \code{$names}, \code{$issues}, \code{$report} and
-    \code{$save()}; \code{runs[["ADSL"]]} is one specification's run, with
-    \code{$output}, \code{$issues} and \code{$report}.}
+    \code{$save()}, which writes each declared report file and then each output
+    dataset in run order, only the reports when a specification failed;
+    \code{runs[["ADSL"]]} is one specification's run, with \code{$output},
+    \code{$issues} and \code{$report}.}
   \item{\code{$submission(section = NULL, created = NULL)}}{define.xml, and
     a Dataset-JSON or SAS Transport version 5 file per dataset where a section
     sets \code{datasets: json} or \code{datasets: xpt}, with \code{$issues}
-    and \code{$save()}.}
+    and \code{$save()}, which writes each section's transport files and then
+    its define.xml.}
 }
-A failure raises a condition of class \code{yamaa_error} whose \code{issues}
-data frame says why.
+Each \code{$save()} returns the absolute paths it wrote invisibly, in
+publication order. A failure raises a condition of class \code{yamaa_error}
+whose \code{issues} data frame says why; for a refused \code{$save()}, its
+\code{paths} lists the files written before the refusal.
 }
 \examples{
 \dontrun{

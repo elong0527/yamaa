@@ -73,7 +73,9 @@ removed <- c(entry,file.path(case,"input","dm.csv"))
 stopifnot(unlink(removed)==0L,!any(file.exists(removed)))
 invisible(gc())
 for(attempt in seq_len(2L)) {
-  stopifnot(is.null(built$save()),identical(observations(built),expected))
+  # save() returns the paths it wrote, the report before the output (D38).
+  stopifnot(identical(built$save(),normalizePath(file.path(case,names),winslash="/")),
+    identical(observations(built),expected))
   for(name in names) stopifnot(identical(rawfile(file.path(case,name)),rawfile(file.path(case,"expected",name))))
 }
 report_directory <- Sys.getenv("YAMAA_PUBLIC_REPORT_DIR")
@@ -115,6 +117,7 @@ for(attempt in seq_len(2L)) {
   failure <- tryCatch(failed$save(),error=identity)
   stopifnot(inherits(failure,"yamaa_error"),identical(conditionMessage(failure),"cannot save a failed run; see issues"),
     identical(failure$issues,issues),identical(failed$issues,issues),
+    identical(failure$paths,normalizePath(file.path(case,names[[1L]]),winslash="/")),
     identical(rawfile(file.path(case,names[[1L]])),report_csv(fatal)),
     identical(rawfile(file.path(case,names[[2L]])),charToRaw("sentinel")))
 }
@@ -146,11 +149,13 @@ check_report_view(warn$report,report_view(rawToChar(report_csv(warned))))
 writeBin(charToRaw("stale"),file.path(case,"checks.csv"))
 failure <- tryCatch(warn$save(),error=identity)
 stopifnot(inherits(failure,"yamaa_error"),identical(conditionMessage(failure),"nothing was saved; see issues"),
+  identical(failure$paths,character()),
   identical(failure$issues,warn$issues),identical(rawfile(file.path(case,"checks.csv")),charToRaw("stale")))
 dir.create(file.path(case,"absent"))
 removed <- c(entry,file.path(case,"input.csv"))
 stopifnot(unlink(removed)==0L,!any(file.exists(removed)))
-stopifnot(is.null(warn$save()),nrow(warn$issues)==0L,identical(rawfile(file.path(case,"checks.csv")),report_csv(warned)),
+stopifnot(identical(warn$save(),normalizePath(file.path(case,c("checks.csv","absent/out.csv")),winslash="/")),
+  nrow(warn$issues)==0L,identical(rawfile(file.path(case,"checks.csv")),report_csv(warned)),
   identical(rawfile(file.path(case,"absent/out.csv")),charToRaw(paste0("ID\n",paste0(seq_len(8L),"\n",collapse="")))))
 # A run without checks still reports its run, input, rows and columns.
 source <- strsplit(source,"    verifications:",fixed=TRUE)[[1L]][[1L]]
@@ -163,7 +168,8 @@ unchecked <- c(
   "absent/out.csv,column,columns.ID,ID,,,,,,,0,1,,{}")
 empty <- yamaa_spec(entry)$run()
 check_report_view(empty$report,report_view(rawToChar(report_csv(unchecked))))
-stopifnot(!any(empty$report$KIND=="check"),is.null(empty$save()),
+stopifnot(!any(empty$report$KIND=="check"),
+  identical(empty$save(),normalizePath(file.path(case,c("checks.csv","absent/out.csv")),winslash="/")),
   identical(rawfile(file.path(case,"checks.csv")),report_csv(unchecked)))
 unlink(directory,recursive=TRUE)
 Sys.setenv(PATH=original_path)

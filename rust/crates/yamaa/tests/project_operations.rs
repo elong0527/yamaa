@@ -579,7 +579,20 @@ fn a_section_run_builds_only_its_scope_and_a_full_run_hands_producers_over_in_me
             .map(|name| run.get(name).unwrap().report().unwrap().rows())
             .sum::<usize>()
     );
-    run.save().unwrap();
+    // The save returns every path it wrote, in run order, each report before
+    // its primary artifact (D38, OUTPUT-10).
+    assert_eq!(
+        run.save().unwrap(),
+        [
+            "out/dm-report.csv",
+            "out/dm.csv",
+            "out/ae.csv",
+            "out/adsl-report.csv",
+            "out/adsl.csv",
+            "out/adadd.csv"
+        ]
+        .map(|name| study.path(name))
+    );
     assert_eq!(study.read("out/dm.csv").unwrap(), DM_CSV);
     assert_eq!(study.read("out/adsl.csv").unwrap(), DM_CSV);
     assert_eq!(study.read("out/adadd.csv").unwrap(), "USUBJID\nS1\nS2\n");
@@ -740,7 +753,9 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
 
     let failure = run.save().unwrap_err();
     assert_eq!(rows(&failure.issues).len(), 2);
-    // Only the report of the failed specification that ran is written.
+    // Only the report of the failed specification that ran is written, and
+    // the refusal names it (P-API-1).
+    assert_eq!(failure.paths, [study.path("out/dm-report.csv")]);
     assert!(study
         .read("out/dm-report.csv")
         .unwrap()
@@ -753,6 +768,17 @@ fn a_failed_specification_stops_only_its_consumers_and_saves_reports_alone() {
     ] {
         assert!(!study.exists(absent), "{absent}");
     }
+    // DM run alone fails the same way: its save writes the report, then
+    // refuses with the run's issues and names what it wrote.
+    std::fs::remove_file(study.0.join("out/dm-report.csv")).unwrap();
+    let mut alone = engine
+        .spec_run(&study.path("sdtm/dm.yaml"), Some(&study.project()), &token)
+        .unwrap();
+    let failure = alone.save().unwrap_err();
+    assert_eq!(failure.message, "cannot save a failed run; see issues");
+    assert_eq!(rows(&failure.issues).len(), 1);
+    assert_eq!(failure.paths, [study.path("out/dm-report.csv")]);
+    assert!(study.exists("out/dm-report.csv"));
 }
 
 #[test]
@@ -769,6 +795,7 @@ fn every_target_is_validated_before_the_first_file_is_written() {
     assert_eq!(run.issues().rows(), 0, "{:?}", rows(&run.issues()));
     let failure = run.save().unwrap_err();
     assert!(failure.message.contains("ADSL"), "{}", failure.message);
+    assert!(failure.paths.is_empty());
     assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
     // Two run-scope specifications that write one file refuse the run.
     study.write(
@@ -782,6 +809,51 @@ fn every_target_is_validated_before_the_first_file_is_written() {
     assert_eq!(issues[0].condition, "artifact_path_collision");
     assert_eq!(issues[0].spec_paths, ["output.report", "output.path"]);
     assert!(run.save().is_err());
+}
+
+/// One save stages every file of every specification before it replaces any
+/// target (D74): a file that cannot be staged stops the save with nothing
+/// written, though earlier specifications' files staged cleanly.
+#[cfg(unix)]
+#[test]
+fn a_file_that_cannot_be_staged_stops_the_save_before_any_target_is_replaced() {
+    use std::os::unix::fs::PermissionsExt;
+    let study = study();
+    // ADSL publishes into a directory that exists but admits no new entry.
+    study.write(
+        "adam/adsl.yaml",
+        ADSL.replace("../out/adsl", "../locked/adsl"),
+    );
+    let locked = study.0.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500)).unwrap();
+    if std::fs::write(locked.join("probe"), b"").is_ok() {
+        // A privileged user is not refused; nothing to observe here.
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+        return;
+    }
+    let token = CancellationToken::new();
+    let mut run = engine()
+        .project_run(&study.project(), None, &token)
+        .unwrap();
+    assert_eq!(run.status(), Status::Succeeded);
+    let failure = run.save().unwrap_err();
+    assert!(failure.message.contains("ADSL"), "{}", failure.message);
+    assert!(failure.paths.is_empty());
+    let issues = rows(&failure.issues);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].condition, "engine_rejected");
+    assert_eq!(issues[0].spec_paths, ["output.report"]);
+    assert_eq!(issues[0].context["entered"], Value::from(1));
+    assert_eq!(issues[0].context["completed"], Value::from(0));
+    // Neither DM's nor AE's staged files became visible, and none is left.
+    assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(std::fs::read_dir(&locked).unwrap().count(), 0);
+    // Once the directory admits it, the same run saves every file.
+    assert_eq!(run.save().unwrap().len(), 5);
+    assert_eq!(run.get("ADSL").unwrap().issues().rows(), 0);
+    assert_eq!(study.read("locked/adsl.csv").unwrap(), DM_CSV);
 }
 
 /// One specification runs on the same route alone or as a member of a
@@ -909,7 +981,11 @@ fn a_submission_composes_the_selected_section() {
         rows(&submission.issues())
     );
     assert_eq!(submission.status(), Status::Succeeded);
-    submission.save().unwrap();
+    // Transport files come before the document (JSON-14).
+    assert_eq!(
+        submission.save().unwrap(),
+        [study.path("dm.json"), study.path("define.xml")]
+    );
     assert_eq!(
         study.read("define.xml").unwrap(),
         std::fs::read_to_string(fixture.join("expected/define.xml")).unwrap()
@@ -956,6 +1032,10 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     assert!(issues.iter().any(|row| row.spec_paths == ["adam.standard"]));
     let failure = submission.save().unwrap_err();
     assert!(failure.message.contains("adam"), "{}", failure.message);
+    assert_eq!(
+        failure.paths,
+        [study.path("dm.json"), study.path("define.xml")]
+    );
     assert!(study.exists("define.xml"));
     assert!(!study.exists("adam-define.xml"));
 }
@@ -993,6 +1073,61 @@ fn two_sections_that_write_one_file_save_neither() {
     );
     let failure = submission.save().unwrap_err();
     assert!(failure.message.contains("adam"), "{}", failure.message);
+    assert!(failure.paths.is_empty());
     assert!(!study.exists("define.xml"));
     assert!(!study.exists("dm.json"));
+}
+
+/// One save admits every section's targets before it writes any file
+/// (PROJECT-13): a later section whose target can no longer be written stops
+/// the save with nothing written, and that section's issues say why.
+#[test]
+fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
+    let study = define_study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let project = std::fs::read_to_string(study.0.join("project.yaml")).unwrap();
+    // ADaM copies SDTM's section metadata with a define target of its own.
+    let adam = project[project.find("sdtm:\n").unwrap()..]
+        .replacen("sdtm:", "adam:", 1)
+        .replace(
+            "name: SDTMIG\n    version: '3.4'",
+            "name: ADaMIG\n    version: '1.3'",
+        )
+        .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
+        .replace("  datasets: json\n", "")
+        .replace("define: define.xml", "define: adam-define.xml");
+    study.write("project.yaml", format!("{project}{adam}"));
+    let mut submission = engine
+        .project_submission(
+            &study.project(),
+            None,
+            Some("2026-09-11T00:00:00"),
+            "0.4.0",
+            &token,
+        )
+        .unwrap();
+    assert_eq!(
+        submission.issues().rows(),
+        0,
+        "{:?}",
+        rows(&submission.issues())
+    );
+    std::fs::create_dir(study.0.join("adam-define.xml")).unwrap();
+    let failure = submission.save().unwrap_err();
+    assert!(failure.message.contains("adam"), "{}", failure.message);
+    assert!(failure.paths.is_empty());
+    let issues = rows(&failure.issues);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].condition, "engine_rejected");
+    assert_eq!(
+        issues[0].context["stage"],
+        text("publication_target_admission")
+    );
+    assert_eq!(issues[0].context["code"], text("invalid_target"));
+    assert!(!study.exists("define.xml"));
+    assert!(!study.exists("dm.json"));
+    // The submission keeps the cause; its status describes the composition.
+    assert_eq!(conditions(&submission.issues()), ["engine_rejected"]);
+    assert_eq!(submission.status(), Status::Succeeded);
 }
