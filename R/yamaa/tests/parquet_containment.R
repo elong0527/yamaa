@@ -36,10 +36,14 @@ saved_csv <- function() readBin(saved, "raw", file.size(saved))
 issues_equal <- function(frame, expected) {
   text <- function(field) vapply(expected, function(issue)
     if (is.null(issue[[field]])) NA_character_ else issue[[field]], "")
-  actual <- list(frame$phase, frame$condition, frame$rule, frame$spec_paths,
-    frame$context, frame$source_span, frame$operand_route)
-  authored <- list(text("phase"), text("condition"), text("rule"),
+  number <- function(field) vapply(expected, function(issue)
+    if (is.null(issue[[field]])) NA_real_ else as.double(issue[[field]]), 0)
+  actual <- list(frame$severity, frame$phase, frame$condition, frame$rule, frame$spec_paths,
+    frame$file, frame$line, frame$column, frame$message, frame$context, frame$source_span,
+    frame$operand_route)
+  authored <- list(text("severity"), text("phase"), text("condition"), text("rule"),
     lapply(expected, function(issue) as.character(unlist(issue$spec_paths))),
+    text("file"), number("line"), number("column"), enc2utf8(text("message")),
     enc2utf8(text("context")),
     lapply(expected, function(issue)
       if (is.null(issue$source_span)) NULL else as.double(unlist(issue$source_span))),

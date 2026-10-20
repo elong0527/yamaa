@@ -23,10 +23,44 @@ TRUTH = load_truth(__file__, "original-specifications")
 
 ROOT = Path(__file__).with_name("specification-original")
 CASES = tuple(TRUTH["original_case_names"])
-# The public issues table: the five fields the authored findings state, then
-# the expression geometry, which no finding here authors.
+# The public issues table (D28): the five fields the authored findings state
+# sit among the severity, the location, the message and the expression
+# geometry, which no finding here authors.
 FIELDS = ("phase", "condition", "rule", "spec_paths", "context")
-ISSUE_COLUMNS = [*FIELDS, "source_span", "operand_route"]
+GEOMETRY = ("source_span", "operand_route")
+ISSUE_COLUMNS = [
+    "severity",
+    "phase",
+    "condition",
+    "rule",
+    "spec_paths",
+    "file",
+    "line",
+    "column",
+    "message",
+    "context",
+    *GEOMETRY,
+]
+
+
+def issue_schema():
+    """The issues table's Polars schema, in column order."""
+    import polars as pl
+
+    return {
+        "severity": pl.String,
+        "phase": pl.String,
+        "condition": pl.String,
+        "rule": pl.String,
+        "spec_paths": pl.List(pl.String),
+        "file": pl.String,
+        "line": pl.Int64,
+        "column": pl.Int64,
+        "message": pl.String,
+        "context": pl.String,
+        "source_span": pl.List(pl.Int64),
+        "operand_route": pl.List(pl.String),
+    }
 
 
 def fixture_bytes(value):
@@ -1998,19 +2032,18 @@ columns:
                     )
                     for r in expected["diagnostics"]
                 ]
-                self.assertEqual(result.issues.rows(), expected_rows)
                 self.assertEqual(
-                    result.issues.schema,
-                    {
-                        "phase": pl.String,
-                        "condition": pl.String,
-                        "rule": pl.String,
-                        "spec_paths": pl.List(pl.String),
-                        "context": pl.String,
-                        "source_span": pl.List(pl.Int64),
-                        "operand_route": pl.List(pl.String),
-                    },
+                    result.issues.select([*FIELDS, *GEOMETRY]).rows(), expected_rows
                 )
+                self.assertEqual(result.issues.schema, issue_schema())
+                # Every issue is an error with a message, and no location is
+                # recorded yet (#3262).
+                for row in result.issues.to_dicts():
+                    self.assertEqual(row["severity"], "error")
+                    self.assertEqual(
+                        (row["file"], row["line"], row["column"]), (None,) * 3
+                    )
+                    self.assertTrue(row["message"])
                 # The run report records the same outcome as the complete truth.
                 self.assertEqual(
                     result.report.row(0, named=True)["OUTCOME"],

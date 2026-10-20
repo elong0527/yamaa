@@ -36,13 +36,18 @@ values.lint_finding.invalid_suppression
 values.lint_finding.repeated_row_derivation
 values.lint_finding.redundant_intermediate
 values.lint_finding.missing_label
-tables.issues.columns[0]: phase: str, values phase
-tables.issues.columns[1]: condition: str, values yaml/conditions.yaml
-tables.issues.columns[2]: rule: optional<str>
-tables.issues.columns[3]: spec_paths: list<str>
-tables.issues.columns[4]: context: str
-tables.issues.columns[5]: source_span: optional<list<int>>
-tables.issues.columns[6]: operand_route: optional<list<str>>
+tables.issues.columns[0]: severity: str, values severity
+tables.issues.columns[1]: phase: str, values phase
+tables.issues.columns[2]: condition: str, values yaml/conditions.yaml
+tables.issues.columns[3]: rule: optional<str>
+tables.issues.columns[4]: spec_paths: list<str>
+tables.issues.columns[5]: file: optional<str>
+tables.issues.columns[6]: line: optional<int>
+tables.issues.columns[7]: column: optional<int>
+tables.issues.columns[8]: message: str
+tables.issues.columns[9]: context: str
+tables.issues.columns[10]: source_span: optional<list<int>>
+tables.issues.columns[11]: operand_route: optional<list<str>>
 tables.report.columns[0]: ARTIFACT: str
 tables.report.columns[1]: KIND: str, values report_kind
 tables.report.columns[2]: SPEC_PATH: str

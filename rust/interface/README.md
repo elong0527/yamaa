@@ -172,8 +172,8 @@ including class methods, the private qualification accessor `observations`, the
 one native exception, version metadata and the ODM reader. The `python` section
 holds only `module`, `registration` and `exports`, and the generator refuses any
 other key. There is no issue-record declaration: the Rust facade builds the
-seven-column issues table once, and every issues view crosses the boundary as a
-table like any output or report. Python reads it from an `_ArrowTable` as a
+twelve-column issues table of #3030 D28 once, and every issues view crosses the
+boundary as a table like any output or report. Python reads it from an `_ArrowTable` as a
 Polars DataFrame, and the R binding converts it natively into a data.frame.
 `context_object` is the owned tree `spec_resolve` returns, a `dict[str, object]`
 of text, booleans, exact integers, floats, `None`, lists and nested objects.

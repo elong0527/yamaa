@@ -3,17 +3,20 @@
 //! This is the edge where core's diagnostic record (cause, spec paths,
 //! structured context and optional geometry) becomes its public form: the
 //! registry names the phase, condition, rule and severity, core renders the
-//! message from the registry's template, and the context becomes JSON text
-//! here and nowhere earlier. The registry gives every issue error severity:
-//! only error-severity findings become issues, while warning-severity
-//! findings surface as rows of the run report. Context
-//! numbers keep their exact identity: an integer token wider than both 64-bit
-//! machine types keeps its decimal spelling instead of passing through
-//! binary64. The canonical context text is retained privately so host
-//! data-frame conversion stays byte-identical; the public shape is the value
-//! map. Geometry is optional, and absent means unavailable: a present
-//! zero-width span or a present empty route is a recorded fact, never a
-//! default.
+//! message from the registry's template, and JSON text is made here and
+//! nowhere earlier: the issues table's canonical `context` column, and the
+//! issue objects of [`Diagnostic::to_value`], whose `context` is an object.
+//! The one record feeds every form of an issue: the table row, the printed
+//! line ([`Diagnostic::text`]), the error text and the JSON object. The
+//! registry gives every issue error severity: only error-severity findings
+//! become issues, while warning-severity findings surface as rows of the run
+//! report. Context numbers keep their exact identity: an integer token wider
+//! than both 64-bit machine types keeps its decimal spelling instead of
+//! passing through binary64. The canonical context text is retained
+//! privately so host data-frame conversion stays byte-identical; the public
+//! shape is the value map. Geometry and location are optional, and absent
+//! means unavailable: a present zero-width span or a present empty route is a
+//! recorded fact, never a default.
 
 use std::collections::BTreeMap;
 
@@ -23,12 +26,18 @@ use crate::table::Table;
 // rust/interface/bindings.yaml declares each of these constants, and its
 // generator refuses a column or value that the declaration lacks.
 
-/// The columns of the issues table that [`Report::table`] builds, in order.
-pub const ISSUE_COLUMNS: [&str; 7] = [
+/// The columns of the issues table that [`Report::table`] builds, in order
+/// (D28): the frozen twelve of #3030 section 2.7.
+pub const ISSUE_COLUMNS: [&str; 12] = [
+    "severity",
     "phase",
     "condition",
     "rule",
     "spec_paths",
+    "file",
+    "line",
+    "column",
+    "message",
     "context",
     "source_span",
     "operand_route",
@@ -60,7 +69,9 @@ pub const REPORT_KINDS: [&str; 6] = yamaa_core::run_report::KINDS;
 /// Values of the run report's `OUTCOME` column.
 pub const REPORT_OUTCOMES: [&str; 4] = yamaa_core::run_report::OUTCOMES;
 
-/// Values of the run report's `SEVERITY` column: the severity of a check.
+/// Values of the issues table's `severity` column, one for each
+/// [`Severity`], and of the run report's `SEVERITY` column, the severity of a
+/// check.
 pub const SEVERITIES: [&str; 2] = yamaa_core::dataset::SEVERITIES;
 
 /// Diagnostic severity. Every issue carries error severity today.
@@ -69,6 +80,38 @@ pub const SEVERITIES: [&str; 2] = yamaa_core::dataset::SEVERITIES;
 pub enum Severity {
     Error,
     Warning,
+}
+
+impl Severity {
+    /// The severity as the issues table's `severity` column writes it:
+    /// `error` or `warning`, one of [`SEVERITIES`].
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+        }
+    }
+}
+
+/// Where an issue's first spec path is written (P-ISSUE-1): the YAML file of
+/// the layer whose value took effect, and the node's position in it. The
+/// issues table's `file`, `line` and `column` columns show it.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Location {
+    /// The file's absolute path, with forward slashes.
+    pub file: String,
+    /// The node's position in the file, when a node was located.
+    pub position: Option<Position>,
+}
+
+/// A one-based line and column in a file; the column counts Unicode scalar
+/// values.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Position {
+    pub line: usize,
+    pub column: usize,
 }
 
 /// Half-open UTF-8 byte offsets into the original expression text.
@@ -101,6 +144,41 @@ pub enum ContextValue {
     Text(String),
     List(Vec<ContextValue>),
     Map(BTreeMap<String, ContextValue>),
+}
+
+impl ContextValue {
+    /// The value as canonical JSON text (RFC 8785, one line): members in key
+    /// order, numbers as their exact tokens, the encoding of the issues
+    /// table's `context` column. A float that is not finite writes `null`,
+    /// and a [`ContextValue::Wide`] spelling that is not a JSON number
+    /// writes as text.
+    pub fn to_json(&self) -> String {
+        yamaa_adapters::json_wire::encode(&context_value_to_core(self))
+    }
+}
+
+fn context_value_to_core(value: &ContextValue) -> yamaa_core::json::Value {
+    use yamaa_core::json::{Number, Value};
+    match value {
+        ContextValue::Null => Value::Null,
+        ContextValue::Bool(value) => Value::Bool(*value),
+        ContextValue::Int(value) => Value::from(*value),
+        ContextValue::Uint(value) => Value::from(*value),
+        ContextValue::Wide(text) => text
+            .parse::<Number>()
+            .map_or_else(|_| Value::String(text.clone()), Value::Number),
+        ContextValue::Float(value) => Number::from_f64(*value).map_or(Value::Null, Value::Number),
+        ContextValue::Text(text) => Value::String(text.clone()),
+        ContextValue::List(values) => {
+            Value::Array(values.iter().map(context_value_to_core).collect())
+        }
+        ContextValue::Map(values) => Value::Object(
+            values
+                .iter()
+                .map(|(key, value)| (key.clone(), context_value_to_core(value)))
+                .collect(),
+        ),
+    }
 }
 
 pub(crate) fn context_value_from_core(value: &yamaa_core::json::Value) -> ContextValue {
@@ -186,15 +264,20 @@ impl DiagnosticContext {
 }
 
 /// A typed diagnostic record, the public form of one issue: one row of the
-/// issues table.
+/// issues table, one printed line and one JSON object.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub phase: String,
+    /// The condition.
     pub code: String,
     pub rule: Option<String>,
     pub spec_path: Vec<String>,
+    /// Where the first spec path is written. Issue locations (P-ISSUE-1,
+    /// #3262) are not recorded yet, so this is `None` and the table's `file`,
+    /// `line` and `column` are missing.
+    pub location: Option<Location>,
     /// The issue's message, rendered in Rust from the template the condition
     /// registry holds for its condition. Messages are not frozen: match on
     /// the condition and rule, never on the message.
@@ -224,6 +307,7 @@ impl Diagnostic {
             code: definition.condition.to_owned(),
             rule: definition.rule.map(str::to_owned),
             spec_path: diagnostic.spec_paths.clone(),
+            location: None,
             message: diagnostic.message(),
             context: DiagnosticContext::from_core(&diagnostic.context),
             source_span: diagnostic.source_span.map(|span| SourceSpan {
@@ -232,6 +316,75 @@ impl Diagnostic {
             }),
             operand_route: diagnostic.operand_route.clone(),
         }
+    }
+
+    /// The issue as one printed line (P-PRINT-1 rule 3): `<location>:
+    /// <message> [<condition>, <rule>]`, the location's file relative to the
+    /// current directory when beneath it and its missing parts dropped,
+    /// `[<condition>]` when the condition cites no rule, and only ASCII. The
+    /// command line prints each issue so; a summary's `first issue:` line and
+    /// D39's error text carry the first.
+    pub fn text(&self) -> String {
+        crate::text::issue_line(self, crate::text::current_directory().as_deref())
+    }
+
+    /// The issue as one JSON object with the twelve keys of the issues table,
+    /// whose `context` is an object rather than text, as the command line's
+    /// `--format json` writes it; [`ContextValue::to_json`] encodes it.
+    /// Missing cells are `null`.
+    pub fn to_value(&self) -> ContextValue {
+        let text = |value: &str| ContextValue::Text(value.to_owned());
+        let texts =
+            |values: &[String]| ContextValue::List(values.iter().map(|v| text(v)).collect());
+        let int = |value: usize| ContextValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
+        let position = self
+            .location
+            .as_ref()
+            .and_then(|location| location.position);
+        let values = [
+            ("severity", text(self.severity.as_str())),
+            ("phase", text(&self.phase)),
+            ("condition", text(&self.code)),
+            (
+                "rule",
+                self.rule.as_deref().map_or(ContextValue::Null, text),
+            ),
+            ("spec_paths", texts(&self.spec_path)),
+            (
+                "file",
+                self.location
+                    .as_ref()
+                    .map_or(ContextValue::Null, |location| text(&location.file)),
+            ),
+            (
+                "line",
+                position.map_or(ContextValue::Null, |at| int(at.line)),
+            ),
+            (
+                "column",
+                position.map_or(ContextValue::Null, |at| int(at.column)),
+            ),
+            ("message", text(&self.message)),
+            ("context", ContextValue::Map(self.context.values.clone())),
+            (
+                "source_span",
+                self.source_span.map_or(ContextValue::Null, |span| {
+                    ContextValue::List(vec![int(span.start), int(span.end)])
+                }),
+            ),
+            (
+                "operand_route",
+                self.operand_route
+                    .as_deref()
+                    .map_or(ContextValue::Null, texts),
+            ),
+        ];
+        ContextValue::Map(
+            values
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect(),
+        )
     }
 }
 
@@ -259,23 +412,34 @@ impl Report {
         self.diagnostics.len()
     }
 
-    /// The issues table both hosts return: one row per diagnostic, in report
-    /// order. `context` is the canonical JSON text; `source_span` is
-    /// `[start, end]` and, like `operand_route`, missing when the failure site
-    /// recorded no geometry.
+    /// The issues table both hosts return (D28): one row per diagnostic, in
+    /// report order, with the [`ISSUE_COLUMNS`]. `message` is the rendered
+    /// message and `context` the canonical JSON text; `rule` is missing for
+    /// a condition that cites none; `file`, `line` and `column` are missing
+    /// where no location was recorded; `source_span` is `[start, end]` and,
+    /// like `operand_route`, missing when the failure site recorded no
+    /// geometry.
     pub fn table(&self) -> Table {
         use arrow_array::builder::{Int64Builder, ListBuilder, StringBuilder};
+        use arrow_array::ArrayRef;
         use arrow_schema::{DataType, Field, Schema};
         use std::sync::Arc;
 
+        let int = |value: usize| i64::try_from(value).unwrap_or(i64::MAX);
+        let mut severity = StringBuilder::new();
         let mut phase = StringBuilder::new();
         let mut condition = StringBuilder::new();
         let mut rule = StringBuilder::new();
         let mut spec_paths = ListBuilder::new(StringBuilder::new());
+        let mut file = StringBuilder::new();
+        let mut line = Int64Builder::new();
+        let mut column = Int64Builder::new();
+        let mut message = StringBuilder::new();
         let mut context = StringBuilder::new();
         let mut source_span = ListBuilder::new(Int64Builder::new());
         let mut operand_route = ListBuilder::new(StringBuilder::new());
         for diagnostic in &self.diagnostics {
+            severity.append_value(diagnostic.severity.as_str());
             phase.append_value(&diagnostic.phase);
             condition.append_value(&diagnostic.code);
             rule.append_option(diagnostic.rule.as_deref());
@@ -283,14 +447,17 @@ impl Report {
                 spec_paths.values().append_value(path);
             }
             spec_paths.append(true);
+            let location = diagnostic.location.as_ref();
+            let position = location.and_then(|location| location.position);
+            file.append_option(location.map(|location| location.file.as_str()));
+            line.append_option(position.map(|at| int(at.line)));
+            column.append_option(position.map(|at| int(at.column)));
+            message.append_value(&diagnostic.message);
             context.append_value(diagnostic.context.to_json());
             match diagnostic.source_span {
                 Some(span) => {
-                    for offset in [span.start, span.end] {
-                        source_span
-                            .values()
-                            .append_value(i64::try_from(offset).unwrap_or(i64::MAX));
-                    }
+                    source_span.values().append_value(int(span.start));
+                    source_span.values().append_value(int(span.end));
                     source_span.append(true);
                 }
                 None => source_span.append(false),
@@ -306,15 +473,21 @@ impl Report {
             }
         }
         let list = |item: DataType| DataType::List(Arc::new(Field::new("item", item, true)));
-        let types: [DataType; ISSUE_COLUMNS.len()] = [
-            DataType::Utf8,
-            DataType::Utf8,
-            DataType::Utf8,
-            list(DataType::Utf8),
-            DataType::Utf8,
-            list(DataType::Int64),
-            list(DataType::Utf8),
+        let columns: [(DataType, ArrayRef); ISSUE_COLUMNS.len()] = [
+            (DataType::Utf8, Arc::new(severity.finish())),
+            (DataType::Utf8, Arc::new(phase.finish())),
+            (DataType::Utf8, Arc::new(condition.finish())),
+            (DataType::Utf8, Arc::new(rule.finish())),
+            (list(DataType::Utf8), Arc::new(spec_paths.finish())),
+            (DataType::Utf8, Arc::new(file.finish())),
+            (DataType::Int64, Arc::new(line.finish())),
+            (DataType::Int64, Arc::new(column.finish())),
+            (DataType::Utf8, Arc::new(message.finish())),
+            (DataType::Utf8, Arc::new(context.finish())),
+            (list(DataType::Int64), Arc::new(source_span.finish())),
+            (list(DataType::Utf8), Arc::new(operand_route.finish())),
         ];
+        let (types, arrays): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
         let schema = Arc::new(Schema::new(
             ISSUE_COLUMNS
                 .into_iter()
@@ -322,19 +495,8 @@ impl Report {
                 .map(|(name, kind)| Field::new(name, kind, true))
                 .collect::<Vec<_>>(),
         ));
-        let batch = arrow_array::RecordBatch::try_new(
-            schema.clone(),
-            vec![
-                Arc::new(phase.finish()),
-                Arc::new(condition.finish()),
-                Arc::new(rule.finish()),
-                Arc::new(spec_paths.finish()),
-                Arc::new(context.finish()),
-                Arc::new(source_span.finish()),
-                Arc::new(operand_route.finish()),
-            ],
-        )
-        .expect("the builders produce exactly the declared issue columns");
+        let batch = arrow_array::RecordBatch::try_new(schema.clone(), arrays)
+            .expect("the builders produce exactly the declared issue columns");
         Table::from_public(
             yamaa_adapters::public_table::PublicTable::from_batches(schema, vec![batch])
                 .expect("the batch was built against this schema"),
@@ -491,15 +653,28 @@ mod tests {
         located.code = yamaa_core::diagnostic::ConditionCode::IntegerOverflow;
         located.source_span = Some(yamaa_core::expression::SourceSpan { start: 3, end: 9 });
         located.operand_route = Some(vec!["left".into()]);
-        let table = Report::from_issues(&[issue(), located]).table();
+        let mut report = Report::from_issues(&[issue(), located]);
+        report.diagnostics[1].location = Some(Location {
+            file: "/study/sdtm/dm.yaml".into(),
+            position: Some(Position {
+                line: 41,
+                column: 5,
+            }),
+        });
+        let table = report.table();
         let names: Vec<_> = table.columns().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(
             names,
             [
+                "severity",
                 "phase",
                 "condition",
                 "rule",
                 "spec_paths",
+                "file",
+                "line",
+                "column",
+                "message",
                 "context",
                 "source_span",
                 "operand_route"
@@ -507,37 +682,108 @@ mod tests {
         );
         assert_eq!(table.rows(), 2);
         let batch = &table.batches()[0];
-        let text = |index: usize| {
-            batch
-                .column(index)
+        let column = |name: &str| batch.column(table.schema().index_of(name).unwrap()).clone();
+        let text = |name: &str| {
+            column(name)
                 .as_any()
                 .downcast_ref::<StringArray>()
                 .unwrap()
                 .clone()
         };
-        let overflow = yamaa_core::diagnostic::ConditionCode::IntegerOverflow.definition();
-        assert_eq!(text(0).value(0), CODE.definition().phase);
-        assert_eq!(text(1).value(1), overflow.condition);
-        assert!(text(2).is_null(0));
-        assert_eq!(Some(text(2).value(1)), overflow.rule);
-        assert_eq!(text(4).value(0), CONTEXT);
-        let list = |index: usize| {
-            batch
-                .column(index)
+        let int = |name: &str| {
+            column(name)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap()
+                .clone()
+        };
+        let list = |name: &str| {
+            column(name)
                 .as_any()
                 .downcast_ref::<ListArray>()
                 .unwrap()
                 .clone()
         };
-        let paths = list(3).value(0);
+        let overflow = yamaa_core::diagnostic::ConditionCode::IntegerOverflow.definition();
+        assert_eq!(text("severity").value(0), "error");
+        assert_eq!(text("phase").value(0), CODE.definition().phase);
+        assert_eq!(text("condition").value(1), overflow.condition);
+        assert!(text("rule").is_null(0));
+        assert_eq!(Some(text("rule").value(1)), overflow.rule);
+        let paths = list("spec_paths").value(0);
         let paths = paths.as_any().downcast_ref::<StringArray>().unwrap();
         assert_eq!(paths.value(0), "columns.A");
-        assert!(list(5).is_null(0));
-        let span = list(5).value(1);
+        // No location is recorded yet (#3262): the three columns are missing.
+        assert!(text("file").is_null(0) && int("line").is_null(0) && int("column").is_null(0));
+        assert_eq!(text("file").value(1), "/study/sdtm/dm.yaml");
+        assert_eq!((int("line").value(1), int("column").value(1)), (41, 5));
+        assert_eq!(text("message").value(0), report.diagnostics[0].message);
+        assert!(!text("message").value(1).is_empty());
+        assert_eq!(text("context").value(0), CONTEXT);
+        assert!(list("source_span").is_null(0));
+        let span = list("source_span").value(1);
         let span = span.as_any().downcast_ref::<Int64Array>().unwrap();
         assert_eq!((span.value(0), span.value(1)), (3, 9));
-        assert!(list(6).is_null(0));
-        assert!(!list(6).is_null(1));
+        assert!(list("operand_route").is_null(0));
+        assert!(!list("operand_route").is_null(1));
+    }
+
+    /// An issue's JSON object has the table's twelve keys, with `context` an
+    /// object whose canonical text is the table's `context` cell.
+    #[test]
+    fn an_issue_as_json_carries_its_context_as_an_object() {
+        let mut located = issue();
+        located.source_span = Some(yamaa_core::expression::SourceSpan { start: 0, end: 4 });
+        located.operand_route = Some(Vec::new());
+        let report = Report::from_issues(&[located]);
+        let diagnostic = &report.diagnostics[0];
+        let ContextValue::Map(value) = diagnostic.to_value() else {
+            panic!("an issue is an object");
+        };
+        let keys = value.keys().map(String::as_str).collect::<Vec<_>>();
+        let mut columns = ISSUE_COLUMNS.to_vec();
+        columns.sort_unstable();
+        assert_eq!(keys, columns);
+        assert_eq!(value["context"].to_json(), CONTEXT);
+        assert_eq!(value["context"].to_json(), diagnostic.context.to_json());
+        let message = diagnostic.message.clone();
+        let condition = CODE.definition().condition;
+        let phase = CODE.definition().phase;
+        assert_eq!(
+            diagnostic.to_value().to_json(),
+            format!(
+                r#"{{"column":null,"condition":"{condition}","context":{CONTEXT},"file":null,"line":null,"message":"{message}","operand_route":[],"phase":"{phase}","rule":null,"severity":"error","source_span":[0,4],"spec_paths":["columns.A"]}}"#
+            )
+        );
+    }
+
+    #[test]
+    fn public_values_encode_as_canonical_json() {
+        let value = ContextValue::Map(
+            [
+                ("b".to_owned(), ContextValue::Float(1.5)),
+                ("a".to_owned(), ContextValue::Wide("1e400".to_owned())),
+                ("c".to_owned(), ContextValue::Float(f64::NAN)),
+                (
+                    "d".to_owned(),
+                    ContextValue::Wide("not a number".to_owned()),
+                ),
+                (
+                    "e".to_owned(),
+                    ContextValue::List(vec![
+                        ContextValue::Uint(u64::MAX),
+                        ContextValue::Int(-1),
+                        ContextValue::Text("\"é\"\n".to_owned()),
+                        ContextValue::Bool(false),
+                    ]),
+                ),
+            ]
+            .into(),
+        );
+        assert_eq!(
+            value.to_json(),
+            r#"{"a":1e400,"b":1.5,"c":null,"d":"not a number","e":[18446744073709551615,-1,"\"é\"\n",false]}"#
+        );
     }
 
     #[test]
@@ -551,6 +797,14 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(declared.len(), PHASES.len(), "a phase is listed twice");
         assert_eq!(registered, declared);
+    }
+
+    #[test]
+    fn severities_are_the_issue_severities_in_order() {
+        assert_eq!(
+            [Severity::Error, Severity::Warning].map(Severity::as_str),
+            SEVERITIES
+        );
     }
 
     #[test]

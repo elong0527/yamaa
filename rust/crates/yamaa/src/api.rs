@@ -11,6 +11,8 @@
 //! specification in its scope, producer first. [`Check`], [`Run`],
 //! [`ProjectRun`] and [`Submission`] are views of the outcome, and each
 //! computes its [`Status`] from the issues and the build, never storing it.
+//! Each prints its [`Summary`] (D37), and a refusal's message is D39's error
+//! text, both rendered by [`crate::text`].
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -26,14 +28,23 @@ use crate::error::Error;
 use crate::outcome::{fails, Member, Outcome, Work};
 use crate::plan::Plan;
 use crate::table::Table;
+use crate::text::{self, Action, Head, MemberLine, Summary};
 
-/// A refused operation: a message for people, the issues that explain it,
-/// and the files it wrote before it was refused (P-API-1).
+/// A refused operation: D39's error text, the issues that explain it, and
+/// the files it wrote before it was refused (P-API-1).
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct Failure {
+    /// D39's error text: the call that refused, the first issue's line and
+    /// the count of the other issues, such as `cannot save ADAE: column ASTDY
+    /// reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]
+    /// (and 2 more issues)`. Only ASCII; see [`crate::text`].
     pub message: String,
+    /// The issues table both hosts attach to their error (D28).
     pub issues: Table,
+    /// The same issues as typed records, first issue first, for the command
+    /// line's printed lines and JSON.
+    pub diagnostics: Vec<crate::diagnostic::Diagnostic>,
     /// The files a refused save wrote before it stopped, such as a failed
     /// run's report, in publication order and spelled as `save` returns
     /// them; empty for any other refusal.
@@ -41,10 +52,12 @@ pub struct Failure {
 }
 
 impl Failure {
-    pub fn new(message: impl Into<String>, report: &Report) -> Self {
+    /// The refusal of `action`, which `report`'s issues explain.
+    pub fn new(action: Action<'_>, report: &Report) -> Self {
         Self {
-            message: message.into(),
+            message: text::error_text(action, &report.diagnostics, None),
             issues: report.table(),
+            diagnostics: report.diagnostics.clone(),
             paths: Vec::new(),
         }
     }
@@ -55,20 +68,26 @@ impl Failure {
         self
     }
 
-    pub fn from_error(context: &str, error: &Error) -> Self {
+    /// The refusal of `action` for `error`: the issues of an engine refusal,
+    /// or, for an error that carries none, the error's own text after the
+    /// prefix.
+    pub fn from_error(action: Action<'_>, error: &Error) -> Self {
         match error {
-            Error::Rejected(report) => Self::new(format!("{context}; see issues"), report),
-            other => Self::new(format!("{context}: {other}"), &Report::default()),
+            Error::Rejected(report) => Self::new(action, report),
+            other => Self {
+                message: text::error_text(action, &[], Some(&other.to_string())),
+                ..Self::new(action, &Report::default())
+            },
         }
     }
 
-    pub(crate) fn from_issues(message: impl Into<String>, issues: &[Diagnostic]) -> Self {
-        Self::new(message, &Report::from_issues(issues))
+    pub(crate) fn from_issues(action: Action<'_>, issues: &[Diagnostic]) -> Self {
+        Self::new(action, &Report::from_issues(issues))
     }
 
     /// A refusal that one registered finding explains.
-    pub(crate) fn from_finding(message: impl Into<String>, finding: Diagnostic) -> Self {
-        Self::from_issues(message, std::slice::from_ref(&finding))
+    pub(crate) fn from_finding(action: Action<'_>, finding: Diagnostic) -> Self {
+        Self::from_issues(action, std::slice::from_ref(&finding))
     }
 }
 
@@ -121,6 +140,8 @@ impl Status {
 /// without study data or project code.
 pub struct Check {
     outcome: Outcome,
+    /// The path as given.
+    subject: String,
 }
 
 impl Check {
@@ -130,9 +151,26 @@ impl Check {
         Report::from_issues(&self.outcome.issues()).table()
     }
 
+    /// The issues as typed records, in the table's order.
+    pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        Report::from_issues(&self.outcome.issues()).diagnostics
+    }
+
     /// `succeeded` when the check found no error-severity issue.
     pub fn status(&self) -> Status {
         self.outcome.status()
+    }
+
+    /// The printed text (D37, P-PRINT-1): `yamaa check of <path>: <status>,
+    /// <n> issues`, naming the path as given, then the first issue.
+    pub fn summary(&self) -> Summary {
+        let head = Head {
+            kind: "check",
+            subject: &self.subject,
+            status: self.status(),
+            size: None,
+        };
+        text::summary(head, &[], &self.diagnostics())
     }
 }
 
@@ -153,6 +191,11 @@ impl Run {
         self.build.report().table()
     }
 
+    /// The issues as typed records, in the table's order.
+    pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        self.build.report().diagnostics.clone()
+    }
+
     /// What the run read, counted and checked; missing when the run never
     /// began or, in a producer graph, when the entry never ran.
     pub fn report(&self) -> Option<&Table> {
@@ -164,6 +207,20 @@ impl Run {
     /// run-scope producer failed or was skipped; `failed` otherwise.
     pub fn status(&self) -> Status {
         self.build.status()
+    }
+
+    /// The printed text (D37, P-PRINT-1): `yamaa run of <subject>: <status>,
+    /// <size>, <n> issues`, then the first issue. The subject is a project
+    /// run member's name, or the dataset name once read, or else the path as
+    /// given; the size is `<r> rows x <c> columns`, or `no output`.
+    pub fn summary(&self) -> Summary {
+        let head = Head {
+            kind: "run",
+            subject: self.build.subject(),
+            status: self.status(),
+            size: Some(text::output_size(self.output())),
+        };
+        text::summary(head, &[], &self.build.report().diagnostics)
     }
 
     /// Write the declared report file, then the output dataset (OUTPUT-10),
@@ -312,9 +369,9 @@ impl Engine {
                 .map(|(_, finding)| finding)
                 .collect::<Vec<_>>();
             let build = if !node.refused.is_empty() {
-                self.refused_build(node.refused)
+                self.refused_build(node.refused, node.request.specification)
             } else if !blocked.is_empty() {
-                self.refused_build(blocked)
+                self.refused_build(blocked, node.request.specification)
             } else {
                 self.build_reusing(
                     plans,
@@ -332,6 +389,11 @@ impl Engine {
             // A user interrupt in project code stops the graph here, so no
             // later member builds or calls project code.
             let interrupted = build.interrupt().is_some();
+            // A project run names each member by its listed name.
+            let build = match &node.name {
+                Some(name) => build.with_subject(name),
+                None => build,
+            };
             members.push(Member {
                 name: node.name,
                 identity: node.identity,
@@ -366,6 +428,7 @@ impl Engine {
                 }],
                 issues: Vec::new(),
             },
+            subject: specification.to_owned(),
         })
     }
 
@@ -428,17 +491,20 @@ impl Engine {
     ) -> Result<ContextValue, Failure> {
         let resolved = self
             .resolve_specification(&request(specification, project))
-            .map_err(|error| Failure::from_error("cannot resolve the specification", &error))?;
-        resolved_value(resolved.to_value())
+            .map_err(|error| Failure::from_error(Action::Resolve(specification), &error))?;
+        resolved_value(specification, resolved.to_value())
     }
 }
 
 /// The resolved tree as the artifact's codec reads it. Facts the engine
 /// cannot represent are an engine fault, refused with `engine_rejected`.
-fn resolved_value(tree: Result<yamaa_core::json::Value, Error>) -> Result<ContextValue, Failure> {
-    let tree = tree.map_err(|error| {
+fn resolved_value(
+    specification: &str,
+    tree: Result<yamaa_core::json::Value, Error>,
+) -> Result<ContextValue, Failure> {
+    let tree = tree.map_err(|_| {
         Failure::from_issues(
-            format!("cannot resolve the specification: {error}"),
+            Action::Resolve(specification),
             &yamaa_adapters::file_application::rejected(
                 Stage::Resolve,
                 Fault::ArtifactRepresentation,
@@ -480,9 +546,19 @@ fn section(section: Option<&str>) -> Result<Option<Section>, Error> {
         })
 }
 
+/// What a project operation's summary names: the project path as given,
+/// then `, section <s>` when a section was named.
+fn project_subject(project: &str, section: Option<&str>) -> String {
+    match section {
+        Some(section) => format!("{project}, section {section}"),
+        None => project.to_owned(),
+    }
+}
+
 /// Every specification of one project run scope, built once in run order.
 pub struct ProjectRun {
     outcome: Outcome,
+    subject: String,
 }
 
 impl ProjectRun {
@@ -510,17 +586,9 @@ impl ProjectRun {
     pub fn member(&self, name: &str) -> Result<&Run, Failure> {
         self.get(name).ok_or_else(|| {
             let names = self.names();
-            let message = if names.is_empty() {
-                format!("the project run has no specification named {name:?}; it built none")
-            } else {
-                format!(
-                    "the project run has no specification named {name:?}; it has {}",
-                    names.join(", ")
-                )
-            };
             let available = names.iter().map(String::as_str).collect::<Vec<_>>();
             Failure::from_finding(
-                message,
+                Action::Select(name),
                 yamaa_core::project_scope::unknown_name(name, &available),
             )
         })
@@ -530,6 +598,40 @@ impl ProjectRun {
     /// refused the run. Each names its specification as its `entry`.
     pub fn issues(&self) -> Table {
         Report::from_issues(&self.outcome.issues()).table()
+    }
+
+    /// The issues as typed records, in the table's order.
+    pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        Report::from_issues(&self.outcome.issues()).diagnostics
+    }
+
+    /// The printed text (D37, P-PRINT-1): `yamaa project run of <path>[,
+    /// section <s>]: <status>, <k> specifications, <n> issues`, then one line
+    /// per specification in run order, then the first issue. A member line
+    /// gives the name, the status, the size and the issue count, and a
+    /// member's own summary is its run's, [`Run::summary`].
+    pub fn summary(&self) -> Summary {
+        let members = self
+            .outcome
+            .members
+            .iter()
+            .filter_map(|member| {
+                let run = member.run()?;
+                Some(MemberLine {
+                    name: run.build.subject().to_owned(),
+                    status: run.status(),
+                    size: text::output_size(run.output()),
+                    issues: member.issues().len(),
+                })
+            })
+            .collect::<Vec<_>>();
+        let head = Head {
+            kind: "project run",
+            subject: &self.subject,
+            status: self.status(),
+            size: Some(text::specifications(self.outcome.members.len())),
+        };
+        text::summary(head, &members, &self.diagnostics())
     }
 
     /// The runs' reports stacked in run order; each row names its
@@ -570,19 +672,52 @@ impl ProjectRun {
     /// (P-API-1). A run refused by a project finding fails with that finding,
     /// and a run that built no specification with `nothing_to_save`.
     pub fn save(&mut self) -> Result<Vec<String>, Failure> {
-        self.outcome.save(crate::outcome::Operation::ProjectRun)
+        self.outcome
+            .save(crate::outcome::Operation::ProjectRun, &self.subject)
     }
 }
 
 /// One Define-XML composition per section, with its Dataset-JSON files.
 pub struct Submission {
     outcome: Outcome,
+    subject: String,
 }
 
 impl Submission {
     /// Every section's issues in section order, after any project finding.
     pub fn issues(&self) -> Table {
         Report::from_issues(&self.outcome.issues()).table()
+    }
+
+    /// The issues as typed records, in the table's order.
+    pub fn diagnostics(&self) -> Vec<crate::diagnostic::Diagnostic> {
+        Report::from_issues(&self.outcome.issues()).diagnostics
+    }
+
+    /// The printed text (D37, P-PRINT-1): `yamaa submission of <path>[,
+    /// section <s>]: <status>, <d> define.xml and <t> transport files, <n>
+    /// issues`, then the first issue. The counts are the documents of the
+    /// sections that composed: each holds one define.xml and its transport
+    /// files.
+    pub fn summary(&self) -> Summary {
+        let (defines, transports) = self
+            .outcome
+            .members
+            .iter()
+            .filter_map(|member| match &member.work {
+                Work::Composed(define) if define.composed().is_empty() => Some(define.transports()),
+                _ => None,
+            })
+            .fold((0, 0), |(defines, transports), files| {
+                (defines + 1, transports + files)
+            });
+        let head = Head {
+            kind: "submission",
+            subject: &self.subject,
+            status: self.status(),
+            size: Some(text::submission_size(defines, transports)),
+        };
+        text::summary(head, &[], &self.diagnostics())
     }
 
     /// `succeeded` when every selected section composed with no issue and no
@@ -605,40 +740,28 @@ impl Submission {
     /// issues and the paths written before it (P-API-1); a submission that
     /// composed no section fails with `nothing_to_save`.
     pub fn save(&mut self) -> Result<Vec<String>, Failure> {
-        self.outcome.save(crate::outcome::Operation::Submission)
+        self.outcome
+            .save(crate::outcome::Operation::Submission, &self.subject)
     }
 }
 
 impl Engine {
     /// Path of the listed specification whose `domain` is `name`.
+    ///
+    /// Every refusal names the call as `cannot select <name>` (D39): a
+    /// project that cannot be read, one that lists a name twice, or a name it
+    /// does not list, whose issue names the listed names.
     pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure> {
-        let read = crate::internal::read_project(self.shared(), project).map_err(|issues| {
-            Failure::from_issues("cannot read the project; see issues", &issues)
-        })?;
+        let action = Action::Select(name);
+        let read = crate::internal::read_project(self.shared(), project)
+            .map_err(|issues| Failure::from_issues(action, &issues))?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
-            return Err(Failure::from_issues(
-                "the project lists one specification name more than once; see issues",
-                &duplicates,
-            ));
+            return Err(Failure::from_issues(action, &duplicates));
         }
         match read.find(name) {
             Ok(listed) => Ok(listed.path().to_owned()),
-            Err(issues) => {
-                let mut available = read
-                    .listed()
-                    .iter()
-                    .filter_map(|listed| listed.name())
-                    .collect::<Vec<_>>();
-                available.sort_unstable();
-                Err(Failure::from_issues(
-                    format!(
-                        "no specification named {name}; available: {}",
-                        available.join(", ")
-                    ),
-                    &issues,
-                ))
-            }
+            Err(issues) => Err(Failure::from_issues(action, &issues)),
         }
     }
 
@@ -656,6 +779,7 @@ impl Engine {
             Err(issues) => {
                 return Ok(Check {
                     outcome: Outcome::refused(issues),
+                    subject: project.to_owned(),
                 })
             }
         };
@@ -680,6 +804,7 @@ impl Engine {
                 members,
                 issues: read.check_findings(),
             },
+            subject: project.to_owned(),
         })
     }
 
@@ -717,12 +842,14 @@ impl Engine {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
+        let subject = project_subject(project, section);
         let section = self::section(section)?;
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => {
                 return Ok(ProjectRun {
                     outcome: Outcome::refused(issues),
+                    subject,
                 })
             }
         };
@@ -745,6 +872,7 @@ impl Engine {
         if !plan.refusal().is_empty() {
             return Ok(ProjectRun {
                 outcome: Outcome::refused(plan.refusal().to_vec()),
+                subject,
             });
         }
         // The run scope as a producer graph, in run order.
@@ -778,6 +906,7 @@ impl Engine {
             .collect();
         Ok(ProjectRun {
             outcome: self.run_graph(nodes, plans, token)?,
+            subject,
         })
     }
 
@@ -797,12 +926,14 @@ impl Engine {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
+        let subject = project_subject(project, section);
         let selected = self::section(section)?;
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
             Err(issues) => {
                 return Ok(Submission {
                     outcome: Outcome::refused(issues),
+                    subject,
                 })
             }
         };
@@ -810,6 +941,7 @@ impl Engine {
         if !duplicates.is_empty() {
             return Ok(Submission {
                 outcome: Outcome::refused(duplicates),
+                subject,
             });
         }
         let sections = match selected {
@@ -826,7 +958,7 @@ impl Engine {
             members.push(Member {
                 name: Some(yamaa_core::project_scope::key(section).to_owned()),
                 identity: None,
-                work: Work::Composed(section, Box::new(self.define(&request, token)?)),
+                work: Work::Composed(Box::new(self.define(&request, token)?)),
             });
         }
         Ok(Submission {
@@ -834,6 +966,7 @@ impl Engine {
                 members,
                 issues: Vec::new(),
             },
+            subject,
         })
     }
 }
@@ -949,17 +1082,21 @@ mod tests {
     }
 
     /// Resolved facts the engine cannot represent are refused as the
-    /// registered engine fault, keeping the message of the failure.
+    /// registered engine fault, whose message names the stage and code.
     #[test]
     fn unrepresentable_resolved_facts_are_an_engine_fault() {
         let fault = yamaa_core::diagnostic::ConditionCode::ApplicationRejected.definition();
         let unwritten = Error::Internal {
             code: "resolved_serialization",
         };
-        let failure = resolved_value(Err(unwritten.clone())).unwrap_err();
+        let failure = resolved_value("adam/adsl.yaml", Err(unwritten)).unwrap_err();
         assert_eq!(
             failure.message,
-            format!("cannot resolve the specification: {unwritten}")
+            format!(
+                "cannot resolve adam/adsl.yaml: the engine refused the operation in its \
+                 resolve stage: artifact_representation [{}]",
+                fault.condition
+            )
         );
         assert_eq!(
             cells(&failure.issues, "phase"),
@@ -984,7 +1121,7 @@ mod tests {
             .into(),
         );
         assert_eq!(
-            resolved_value(Ok(tree)).unwrap(),
+            resolved_value("adam/adsl.yaml", Ok(tree)).unwrap(),
             ContextValue::Map(
                 [(
                     "entry".to_owned(),

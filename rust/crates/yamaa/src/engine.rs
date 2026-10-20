@@ -363,7 +363,8 @@ impl Engine {
         // The compilation above has just verified the metadata it captured.
         let outcome = plan.run_observed(None, false, &measurements, progress);
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+        let subject = plan.name().unwrap_or(request.specification);
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
     }
 
     /// Build `request` through `plans`, as a host's lazy object runs (#2821).
@@ -393,10 +394,11 @@ impl Engine {
             .as_ref()
             .and_then(|identity| plans.get(identity))
             .filter(|plan| plan.reusable_by(&self.shared));
-        let outcome = match kept {
+        let (outcome, name) = match kept {
             Some(plan) => {
                 measurements.plan("reused");
-                plan.run_through(&self.shared, held, &measurements, progress)
+                let outcome = plan.run_through(&self.shared, held, &measurements, progress);
+                (outcome, plan.name().map(str::to_owned))
             }
             None => {
                 let plan = self.compile_observed(request, &measurements, progress);
@@ -415,19 +417,25 @@ impl Engine {
                         == Some(&identity);
                     plans.replace(identity, stable.then_some(&plan));
                 }
-                outcome
+                (outcome, plan.name().map(str::to_owned))
             }
         };
         measurements.complete(outcome_accepted(&outcome));
-        Ok(Build::from_outcome(outcome, measurements, &self.shared))
+        let subject = name.as_deref().unwrap_or(request.specification);
+        Ok(Build::from_outcome(outcome, measurements, &self.shared).with_subject(subject))
     }
 
     /// A project-run specification that did not build, with the findings
-    /// that explain why.
-    pub(crate) fn refused_build(&self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) -> Build {
+    /// that explain why, named by `subject` in what it prints.
+    pub(crate) fn refused_build(
+        &self,
+        issues: Vec<yamaa_core::diagnostic::Diagnostic>,
+        subject: &str,
+    ) -> Build {
         let measurements = Arc::new(yamaa_adapters::application_measurements::Measurements::new());
         measurements.complete(false);
         Build::from_outcome(Built::refused(issues), measurements, &self.shared)
+            .with_subject(subject)
     }
 
     pub(crate) fn shared(&self) -> &EngineShared {
@@ -476,7 +484,8 @@ impl Engine {
             self.shared.language,
             crate::internal::resolver_bridge(&self.shared),
         );
-        Ok(DefineBuild::from_define(inner, request.standard))
+        let subject = format!("{}, section {}", request.environment, request.standard);
+        Ok(DefineBuild::from_define(inner, subject))
     }
 
     /// Resolve one specification entry into its owned inspection artifact,
@@ -560,6 +569,10 @@ pub struct Build {
     run_report: Option<Table>,
     project_failures: Option<Vec<AttemptFailure>>,
     interrupt: Option<FunctionError>,
+    /// What the build's printed text and refusals name (P-PRINT-1): a
+    /// project run member's name, or the dataset name once read, or else the
+    /// path as given.
+    subject: String,
 }
 
 impl Build {
@@ -580,10 +593,22 @@ impl Build {
             run_report: None,
             project_failures: None,
             interrupt: None,
+            subject: String::new(),
         };
         build.refresh();
         build.capture_evidence(shared);
         build
+    }
+
+    /// The same build, named by `subject` in what it prints.
+    pub(crate) fn with_subject(mut self, subject: &str) -> Self {
+        subject.clone_into(&mut self.subject);
+        self
+    }
+
+    /// What the build's printed text and refusals name.
+    pub(crate) fn subject(&self) -> &str {
+        &self.subject
     }
 
     fn refresh(&mut self) {
@@ -729,14 +754,15 @@ impl Build {
     /// output, returning the paths written (D38). A failed build writes only
     /// its report file and fails with its issues. See [`crate::Run::save`].
     pub fn save(&mut self) -> Result<Vec<String>, Failure> {
+        let subject = self.subject.clone();
         crate::outcome::save(
             &[],
             vec![crate::outcome::Part::Built {
-                label: None,
                 identity: None,
                 build: self,
             }],
             crate::outcome::Operation::Run,
+            &subject,
         )
     }
 
@@ -795,8 +821,8 @@ pub struct DefineArtifact {
 /// the submission that holds it writes, through the resolver.
 pub struct DefineBuild {
     inner: yamaa_adapters::file_define::Define,
-    /// The standard composed, such as `sdtm`, which names it in a refusal.
-    standard: String,
+    /// What a refusal of its own save names: its project and section.
+    subject: String,
     /// The issues of the composition as it was made: a later save's refusal
     /// joins `issues` and the report, never these.
     composed: Vec<yamaa_core::diagnostic::Diagnostic>,
@@ -805,12 +831,12 @@ pub struct DefineBuild {
 }
 
 impl DefineBuild {
-    pub(crate) fn from_define(inner: yamaa_adapters::file_define::Define, standard: &str) -> Self {
+    pub(crate) fn from_define(inner: yamaa_adapters::file_define::Define, subject: String) -> Self {
         let issues = inner.issues().to_vec();
         let report = Report::from_issues(&issues);
         Self {
             inner,
-            standard: standard.to_owned(),
+            subject,
             composed: issues.clone(),
             issues,
             report,
@@ -858,6 +884,12 @@ impl DefineBuild {
         self.inner.capture_reads()
     }
 
+    /// The transport files of a section that composed: every artifact but
+    /// its define.xml, which comes last (JSON-14).
+    pub(crate) fn transports(&self) -> usize {
+        self.inner.artifacts().len().saturating_sub(1)
+    }
+
     /// The files a save of this composition writes, in publication order:
     /// each transport file, then define.xml (JSON-14). `None` when the
     /// composition, or an earlier save of it, failed.
@@ -894,17 +926,13 @@ impl DefineBuild {
     /// composition writes nothing and fails with its issues. See
     /// [`crate::Submission::save`].
     pub fn save(&mut self) -> Result<Vec<String>, Failure> {
-        let standard = std::mem::take(&mut self.standard);
-        let saved = crate::outcome::save(
+        let subject = self.subject.clone();
+        crate::outcome::save(
             &[],
-            vec![crate::outcome::Part::Composed {
-                label: &standard,
-                define: self,
-            }],
+            vec![crate::outcome::Part::Composed { define: self }],
             crate::outcome::Operation::Submission,
-        );
-        self.standard = standard;
-        saved
+            &subject,
+        )
     }
 }
 
@@ -1047,7 +1075,15 @@ mod tests {
             .spec_run(missing.to_str().unwrap(), None, &token)
             .unwrap();
         let failure = run.save().unwrap_err();
-        assert_eq!(failure.message, "cannot save a failed run; see issues");
+        // D39: a run whose file was not read names the path as given.
+        assert_eq!(
+            failure.message,
+            format!(
+                "cannot save {}: {}",
+                missing.to_str().unwrap(),
+                failure.diagnostics[0].text()
+            )
+        );
         assert!(failure.issues.rows() > 0);
         assert!(failure.paths.is_empty());
     }

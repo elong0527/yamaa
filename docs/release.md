@@ -675,9 +675,10 @@ owns decoding behavior.
   output and in project function calls, raising on an integer beyond 2^53 or
   text containing NUL. R has no exact-value classes.
 - Report every finding in one issues table, built in Rust and identical in
-  both hosts: `phase`, `condition`, `rule`, `spec_paths`, `context` as
-  canonical JSON text, and the optional `source_span` and `operand_route`. No
-  host interprets conditions, and there are no separate diagnostic records.
+  both hosts: the twelve columns `severity`, `phase`, `condition`, `rule`,
+  `spec_paths`, `file`, `line`, `column`, `message`, `context` as canonical
+  JSON text, `source_span` and `operand_route` (#3030 D28). No host
+  interprets conditions, and there are no separate diagnostic records.
 - Give each run one run report, written to `output.report`, in place of the
   verification and warning logs (#2912).
 - Resolve resources from their original declaring file by default; explicit
