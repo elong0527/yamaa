@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tools.staging import stage_grammar_inputs as grammar
 from tools.staging import stage_r_package as staging
 from tools.staging import stage_specification_inputs as specification
 from tools.staging import vendor_crates
@@ -265,6 +266,29 @@ class StagingTests(unittest.TestCase):
                 for row in rows:
                     row["expected"] = json.loads(row["expected"])
             self.assertEqual(historical, normative)
+
+    def test_shared_grammar_inputs_leave_out_only_the_derivation_context(self):
+        """The hosts replay every case a public field reads; no field reads
+        the derivation context until the engine reads 1.0 files."""
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "grammar-original"
+            grammar.stage(destination)
+            with (destination / "cases.tsv").open(
+                encoding="utf-8", newline=""
+            ) as stream:
+                staged = list(csv.DictReader(stream, delimiter="\t"))
+        documents = dict(grammar.documents())
+        declared = documents["expression"]["contexts"]
+        self.assertEqual(list(grammar.CONTEXTS), declared)
+        self.assertEqual(
+            {row["context"] for row in staged if row["contract"] == "expression"},
+            set(declared) - {"derivation"},
+        )
+        every = [case for document in documents.values() for case in document["cases"]]
+        every += grammar.expansions(documents["expression"])
+        unread = [case for case in every if case.get("context") == "derivation"]
+        self.assertTrue(unread)
+        self.assertEqual(len(staged), len(every) - len(unread))
 
     def test_unread_inputs_follow_gitignore_order_and_refuse_stale_patterns(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -17,16 +17,13 @@ value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
 miss an issue row built with a condition the registry does not have.
 A diagnostic record crosses Rust modules typed, so JSON text is decoded only
-in a codec that owns its format: a `json_wire` decoder anywhere else, outside
-the items that compile only for tests, is refused, whether it is named by path,
-through a grouped, aliased or glob import, or as a serde route (the owned wire
-value a serde decoder fills, or a `deserialize_with` hook). A module file that
-a test gate declares out of line compiles only for tests as a whole.
+in a codec that owns its format. Wire helpers and serde JSON readers, including
+imports and field deserializers, are refused elsewhere outside test-only code.
 """
 
 import argparse
+import bisect
 import json
-import os
 import re
 from pathlib import Path
 
@@ -75,20 +72,10 @@ CONDITION_SITE = re.compile(
     r"|(?i:\bcondition)\s*(?::[^=;{}()]*)?=\s*)\Z"
 )
 CONDITION_KEY = re.compile(r'"condition"\s*:\s*("(?:[^"\\]|\\.)*")')
-# The `json_wire` items that read JSON text: its decoders, the serde hook that
-# deserializes a field and the owned wire value a serde decoder fills.
-JSON_DECODER = r"(?:decode\w*|deserialize_value|WireValueOwned)\b"
-# A local name for the `json_wire` module: `json_wire as name` or a grouped
-# `self as name`.
-JSON_MODULE_ALIAS = re.compile(
-    r"\bjson_wire\s+as\s+(\w+)|\bjson_wire\s*::\s*\{[^}]*\bself\s+as\s+(\w+)"
+RUST_NAME = r"(?:r#)?[A-Za-z_][A-Za-z_0-9]*"
+RUST_PATH = re.compile(
+    rf"(?<![A-Za-z_0-9#])(?:::\s*)?{RUST_NAME}(?:\s*::\s*{RUST_NAME})*"
 )
-# The code just before a string attribute value that names a serde function.
-SERDE_HOOK = re.compile(r"\b(?:deserialize_with|with)\s*=\s*\Z")
-# An out-of-line module declaration, after any attributes and visibility.
-MODULE_FILE = re.compile(r"\bmod\s+(\w+)\s*;")
-VISIBILITY = re.compile(r"\bpub(?:\s*\([^)]*\))?\s*\Z")
-PATH_ATTRIBUTE = re.compile(r'#\[\s*path\s*=\s*"([^"]*)"\s*\]\Z')
 # The codecs that read JSON text they own: the wire module itself, the
 # package-lock reader, the stored report rows and the resolved artifact.
 JSON_CODECS = {
@@ -462,110 +449,495 @@ def condition_literals(source: str) -> list[tuple[int, str]]:
     return found
 
 
-def json_decodes(source: str) -> list[int]:
-    """The lines that decode JSON text through `json_wire`, outside items that
-    compile only for tests: a decoder named by path or a grouped import under
-    the module or a local alias of it, a decoder named bare where the module
-    is glob imported, and a serde hook naming one. Comments never count, and
-    other literals count only as a serde hook's value."""
+def external_serde_json(path: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Members of the external crate, never a local module with its name."""
+    if path[:1] == ("serde_json",):
+        return path[1:]
+    if path[:2] == ("", "serde_json"):
+        return path[2:]
+    return None
+
+
+def json_decodes(source: str, *, crate_root: bool = True) -> list[int]:
+    """JSON reading capabilities outside test items, including Rust imports.
+
+    Resolve use trees before checking paths so renames, nested imports and
+    module aliases retain their owner's identity. Importing a reader or a
+    glob that exposes readers is itself a site, as in the original guard.
+    Serialization, typed tree projection and ordinary string literals are
+    not decoding. Serde's field-deserializer string is executable metadata,
+    so inspect that string only inside its actual serde attribute.
+    """
     tokens = list(rust_tokens(source))
     code = blank(source, tokens, {"comment", "character", "string"})
     tests = cfg_test_items(code)
-    modules = {"json_wire"}
-    for match in JSON_MODULE_ALIAS.finditer(code):
-        modules.update(alias for alias in match.groups() if alias)
-    module = "(?:" + "|".join(sorted(map(re.escape, modules))) + ")"
-    routes = [
-        re.compile(rf"\b{module}\s*::\s*(?:{JSON_DECODER}|\{{[^}}]*\b{JSON_DECODER})")
-    ]
-    if re.search(rf"\b{module}\s*::\s*\*", code):
-        routes.append(re.compile(rf"(?<![\w:.]){JSON_DECODER}"))
-    offsets = [match.start() for route in routes for match in route.finditer(code)]
-    hook = re.compile(rf"(?:\A|::){module}(?:::{JSON_DECODER})?\Z")
-    commented = blank(source, tokens, {"comment"})
-    offsets.extend(
-        start
-        for kind, start, _, _, text in tokens
-        if kind == "string"
-        and SERDE_HOOK.search(commented[max(0, start - 40) : start])
-        and hook.search(text)
-    )
-    return sorted(
-        {
-            code.count("\n", 0, offset) + 1
-            for offset in offsets
-            if not any(low <= offset < high for low, high in tests)
-        }
-    )
+    code = blank(code, [("test", low, high, 0, None) for low, high in tests], {"test"})
+    imports = RustImports(code, crate_root=crate_root)
 
-
-def module_files(source: str) -> list[tuple[str, str | None, bool]]:
-    """Every module the source declares out of line: its name, the file a
-    ``#[path]`` attribute names (None for the default location) and whether a
-    test gate among its attributes compiles it for tests only."""
-    tokens = list(rust_tokens(source))
-    code = blank(source, tokens, {"comment", "character", "string"})
-    kept = blank(source, tokens, {"comment"})
-    found = []
-    for match in MODULE_FILE.finditer(code):
-        start = match.start()
-        visibility = VISIBILITY.search(code, 0, start)
-        if visibility is not None:
-            start = visibility.start()
-        attributes = []
-        while (end := len(code[:start].rstrip())) and code[end - 1] == "]":
-            depth = 0
-            for opening in range(end - 1, -1, -1):
-                depth += (code[opening] == "]") - (code[opening] == "[")
-                if not depth:
-                    break
-            if depth or opening == 0 or code[opening - 1] != "#":
-                break
-            attributes.append(kept[opening - 1 : end])
-            start = opening - 1
-        path = next(
-            (
-                attribute[1]
-                for text in attributes
-                if (attribute := PATH_ATTRIBUTE.fullmatch(text)) is not None
-            ),
-            None,
+    def reader(path, offset):
+        return any(
+            reader_path(candidate)
+            for candidate in imports.resolve(path, imports.scope_at(offset))
+            if isinstance(candidate, tuple)
         )
-        found.append((match[1], path, any(map(is_test_gate, attributes))))
-    return found
 
-
-def test_module_files(sources: list[Path]) -> set[Path]:
-    """The module files that compile only for tests: each declared out of line
-    under a test gate, or by such a file, at the default location for its
-    declaring file or at the file its ``#[path]`` attribute names."""
-    children = {}
-    for path in sources:
-        for name, written, gated in module_files(path.read_text(encoding="utf-8")):
-            if written is not None:
-                candidates = [path.parent / written]
-            else:
-                base = (
-                    path.parent
-                    if path.name in {"lib.rs", "main.rs", "mod.rs"}
-                    else path.with_suffix("")
-                )
-                candidates = [base / f"{name}.rs", base / name / "mod.rs"]
-            children.setdefault(path, []).append(
-                ([Path(os.path.normpath(each)) for each in candidates], gated)
+    def reader_path(path):
+        if "json_wire" in path:
+            tail = path[path.index("json_wire") + 1 :]
+            return bool(tail) and (
+                tail[0] == "*"
+                or tail[0].startswith("decode")
+                or tail[0] in {"deserialize", "deserialize_value", "WireValueOwned"}
             )
-    tests = set()
-    pending = list(sources)
-    while pending:
-        parent = pending.pop()
-        for candidates, gated in children.get(parent, []):
-            if not (gated or parent in tests):
+        tail = external_serde_json(path)
+        return bool(tail) and (
+            tail in {("*",), ("de", "*")}
+            or any(
+                part in {"from_str", "from_slice", "from_reader", "Deserializer"}
+                for part in tail
+            )
+            or (tail[-1] == "deserialize" and "Value" in tail)
+        )
+
+    sites = {
+        offset
+        for path, _, offset, scope in imports.leaves
+        if any(
+            reader_path(candidate)
+            for candidate in imports.resolve(path, scope)
+            if isinstance(candidate, tuple)
+        )
+    }
+    for match in RUST_PATH.finditer(imports.code_without_uses):
+        if reader(tuple(re.split(r"\s*::\s*", match[0])), match.start()):
+            sites.add(match.start())
+    # Qualified trait calls separate the reader target from its method.
+    for match in re.finditer(
+        rf"<\s*({RUST_PATH.pattern})\s+as\s+({RUST_PATH.pattern})(?:\s*<[^>]*>)?\s*>\s*::\s*(?:r#)?(deserialize|from_str)\b",
+        code,
+    ):
+        if match[3] == "from_str" and not any(
+            candidate
+            in {
+                ("std", "str", "FromStr"),
+                ("core", "str", "FromStr"),
+                ("", "std", "str", "FromStr"),
+                ("", "core", "str", "FromStr"),
+            }
+            for candidate in imports.resolve(
+                tuple(re.split(r"\s*::\s*", match[2])), imports.scope_at(match.start())
+            )
+        ):
+            continue
+        if reader(tuple(re.split(r"\s*::\s*", match[1])) + (match[3],), match.start()):
+            sites.add(match.start())
+    # str::parse selects FromStr through its explicit type argument. Do not
+    # infer that an unrelated free parse<T> function is a text reader.
+    for match in re.finditer(
+        rf"\.\s*(?:r#)?parse\s*::\s*<\s*({RUST_PATH.pattern})\s*,?\s*>\s*\(",
+        code,
+    ):
+        if reader(
+            tuple(re.split(r"\s*::\s*", match[1])) + ("from_str",), match.start()
+        ):
+            sites.add(match.start())
+    for match in re.finditer(
+        rf"({RUST_PATH.pattern})\s*::\s*<\s*({RUST_PATH.pattern})\s*,?\s*>\s*\(",
+        code,
+    ):
+        if any(
+            candidate
+            in {
+                ("str", "parse"),
+                ("std", "primitive", "str", "parse"),
+                ("core", "primitive", "str", "parse"),
+                ("", "std", "primitive", "str", "parse"),
+                ("", "core", "primitive", "str", "parse"),
+            }
+            for candidate in imports.resolve(
+                tuple(re.split(r"\s*::\s*", match[1])), imports.scope_at(match.start())
+            )
+        ) and reader(
+            tuple(re.split(r"\s*::\s*", match[2])) + ("from_str",), match.start()
+        ):
+            sites.add(match.start())
+    for attribute in re.finditer(r"#\s*\[\s*serde\s*\(", code):
+        end = balanced(code, code.index("[", attribute.start()), "[", "]")
+        if end is None:
+            continue
+        for kind, start, _, _, value in tokens:
+            if (
+                kind == "string"
+                and attribute.end() <= start < end
+                and (
+                    hook := re.search(
+                        r"\b(deserialize_with|with)\s*=\s*$",
+                        code[attribute.end() : start],
+                    )
+                )
+                and reader(
+                    tuple(re.split(r"\s*::\s*", value.strip()))
+                    + (("deserialize",) if hook[1] == "with" else ()),
+                    start,
+                )
+            ):
+                sites.add(start)
+    return sorted({source.count("\n", 0, offset) + 1 for offset in sites})
+
+
+def rust_imports(
+    tree: str, offset: int = 0
+) -> list[tuple[tuple[str, ...], str | None, int]]:
+    """Expand a Rust use tree into (path, local name, source offset) leaves."""
+    tokens = list(re.finditer(rf"{RUST_NAME}|::|[{{}},*]", tree))
+    result = []
+    index = 0
+
+    def branch(prefix):
+        nonlocal index
+        path = prefix
+        start = tokens[index].start() if index < len(tokens) else 0
+        alias = None
+        while index < len(tokens):
+            token = tokens[index][0]
+            index += 1
+            if token == "::":
+                if not path:
+                    path = ("",)
                 continue
+            if token == "{":
+                while index < len(tokens) and tokens[index][0] != "}":
+                    branch(path)
+                    if index < len(tokens) and tokens[index][0] == ",":
+                        index += 1
+                index += 1
+                return
+            if token == "as":
+                if index < len(tokens):
+                    alias = tokens[index][0]
+                    index += 1
+                break
+            if token in {",", "}"}:
+                index -= 1
+                break
+            if token != "self" or not path:
+                path += (token,)
+        if path:
+            result.append(
+                (path, alias or (None if path[-1] == "*" else path[-1]), offset + start)
+            )
+
+    branch(())
+    return result
+
+
+class RustImports:
+    """Resolve imports and simple path type aliases in Rust lexical scopes.
+
+    Items apply throughout their block. Blocks inherit imports; child modules
+    do not, and `super` skips enclosing function blocks. Each alias resolves
+    in its declaration scope, so a caller's shadow cannot retarget it. Multiple
+    declarations in one scope are kept for conditional compilation alternatives.
+    Root extern-crate aliases also enter the extern prelude. Their targets are
+    canonical crate identities, independent of local aliases with that name.
+    A type alias follows only an explicit path RHS. Other type alias declarations
+    still shadow an outer name, but their type is not inferred; associated
+    type items in traits and impls never introduce lexical aliases.
+    This resolves source ownership, not Rust's privacy or type checking.
+    """
+
+    def __init__(self, code: str, *, crate_root: bool = True):
+        uses = list(re.finditer(r"\buse\s+([^;]+);", code))
+        self.code_without_uses = blank(
+            code,
+            [("use", match.start(), match.end(), 0, None) for match in uses],
+            {"use"},
+        )
+        # Import-tree braces are not lexical blocks.
+        modules = {
+            match.end() - 1: match[1].removeprefix("r#")
+            for match in re.finditer(
+                rf"\bmod\s+({RUST_NAME})\s*\{{", self.code_without_uses
+            )
+        }
+        associated_bodies = {
+            match.end() - 1
+            for match in re.finditer(
+                r"(?:^|(?<=[;{}]))\s*(?:#\s*\[[^\]]*\]\s*)*"
+                r"(?:pub(?:\s*\([^)]*\))?\s+)?(?:(?:unsafe|auto|default)\s+)*"
+                r"(?:impl|trait)\b[^{;]*\{",
+                self.code_without_uses,
+            )
+        }
+        self.starts = [0]
+        self.ends = [len(code)]
+        self.parents = [None]
+        self.module = [0]
+        self.module_paths = [("crate",)]
+        self.bindings = [{}]
+        self.globs = [[]]
+        stack = [0]
+        for match in re.finditer(r"[{}]", self.code_without_uses):
+            if match[0] == "}":
+                if len(stack) > 1:
+                    self.ends[stack.pop()] = match.end()
+                continue
+            parent = stack[-1]
+            scope = len(self.starts)
+            self.starts.append(match.start())
+            self.ends.append(len(code))
+            self.parents.append(parent)
+            name = modules.get(match.start())
+            self.module.append(scope if name is not None else self.module[parent])
+            self.module_paths.append(
+                self.module_paths[self.module[parent]] + (name,)
+                if name is not None
+                else self.module_paths[self.module[parent]]
+            )
+            self.bindings.append({})
+            self.globs.append([])
+            if name is not None:
+                self.bindings[parent].setdefault(name, []).append(
+                    (scope, parent, match.start())
+                )
+            stack.append(scope)
+        self.leaves = []
+        self.canonical_targets = {}
+        self.extern_prelude = {}
+        for match in re.finditer(
+            rf"\bextern\s+crate\s+({RUST_NAME})(?:\s+as\s+({RUST_NAME}))?\s*;",
+            code,
+        ):
+            crate = match[1].removeprefix("r#")
+            alias = (match[2] or match[1]).removeprefix("r#")
+            if alias == "_":
+                continue
+            scope = self.scope_at(match.start())
+            if crate == "self":
+                target = 0 if crate_root else ("crate",)
+            else:
+                target = ("", crate)
+            offset = match.start(1)
+            self.canonical_targets[scope, offset] = target
+            self.bindings[scope].setdefault(alias, []).append((target, scope, offset))
+            if scope == 0 and crate_root:
+                self.extern_prelude.setdefault(alias, set()).add(target)
+        for match in re.finditer(rf"\bmod\s+({RUST_NAME})\s*;", self.code_without_uses):
+            scope = self.scope_at(match.start())
+            name = match[1].removeprefix("r#")
+            target = self.module_paths[self.module[scope]] + (name,)
+            offset = match.start(1)
+            self.canonical_targets[scope, offset] = target
+            self.bindings[scope].setdefault(name, []).append((target, scope, offset))
+        for match in re.finditer(rf"\btype\s+({RUST_NAME})\b", self.code_without_uses):
+            scope = self.scope_at(match.start())
+            if self.starts[scope] in associated_bodies:
+                continue
+            name = match[1].removeprefix("r#")
+            offset = match.start(1)
+            rhs = re.match(
+                rf"\s*=\s*({RUST_PATH.pattern})\s*;",
+                self.code_without_uses[match.end() :],
+            )
+            if rhs is not None:
+                target = tuple(re.split(r"\s*::\s*", rhs[1]))
+            else:
+                target = self.module_paths[self.module[scope]] + (name,)
+                self.canonical_targets[scope, offset] = target
+            self.bindings[scope].setdefault(name, []).append((target, scope, offset))
+        for match in uses:
+            scope = self.scope_at(match.start())
+            for path, alias, offset in rust_imports(match[1], match.start(1)):
+                path = tuple(part.removeprefix("r#") for part in path)
+                self.leaves.append((path, alias, offset, scope))
+                binding = (path, scope, offset)
+                if alias is None:
+                    self.globs[scope].append(binding)
+                else:
+                    self.bindings[scope].setdefault(
+                        alias.removeprefix("r#"), []
+                    ).append(binding)
+
+    def scope_at(self, offset):
+        scope = bisect.bisect_right(self.starts, offset) - 1
+        while offset >= self.ends[scope] and self.parents[scope] is not None:
+            scope = self.parents[scope]
+        return scope
+
+    def resolve(self, path, scope, seen=frozenset()):
+        path = tuple(part.removeprefix("r#") for part in path)
+        if not path:
+            return set()
+        if path[0] == "":  # Absolute paths name the extern prelude.
+            if len(path) < 2:
+                return {path}
+            targets = self.extern_prelude.get(path[1], {path[:2]})
+            path = path[2:]
+        elif path[0] in {"crate", "self", "super"}:
+            target = 0 if path[0] == "crate" else self.module[scope]
+            if path[0] == "super":
+                parent = self.parents[target]
+                target = self.module[parent] if parent is not None else 0
+            path = path[1:]
+            while path and path[0] == "super":
+                parent = self.parents[target]
+                target = self.module[parent] if parent is not None else 0
+                path = path[1:]
+            targets = {target}
+        else:
+            targets = self.lookup(path[0], scope, seen, lexical=True)
+            if not targets:
+                targets = self.extern_prelude.get(path[0], {(path[0],)})
+            path = path[1:]
+        for name in path:
+            expanded = set()
+            for target in targets:
+                if isinstance(target, tuple):
+                    expanded.add(target + (name,))
+                else:
+                    members = self.lookup(name, target, seen, lexical=False)
+                    expanded.update(members or {self.module_paths[target] + (name,)})
+            targets = expanded
+        return targets
+
+    def lookup(self, name, scope, seen, *, lexical):
+        while True:
+            bindings = self.bindings[scope].get(name)
+            if bindings:
+                targets = set()
+                for path, declaration, offset in bindings:
+                    key = (declaration, offset)
+                    if key in seen:
+                        continue
+                    if key in self.canonical_targets:
+                        targets.add(self.canonical_targets[key])
+                    elif isinstance(path, int):
+                        targets.add(path)
+                    else:
+                        targets.update(self.resolve(path, declaration, seen | {key}))
+                return targets
+            targets = set()
+            for path, declaration, offset in self.globs[scope]:
+                key = (declaration, offset)
+                if key in seen:
+                    continue
+                for owner in self.resolve(path[:-1], declaration, seen | {key}):
+                    if isinstance(owner, int):
+                        targets.update(
+                            self.lookup(name, owner, seen | {key}, lexical=False)
+                        )
+                    elif external_serde_json(owner) == ("value",) and name in {
+                        "Value",
+                        "Map",
+                        "Number",
+                        "Serializer",
+                        "from_value",
+                        "to_value",
+                    }:
+                        # The value module exports trees and projections, not
+                        # text readers. Resolve its types only when used, so
+                        # Value::deserialize is caught without banning trees.
+                        targets.add(owner + (name,))
+            if targets:
+                return targets
+            if (
+                not lexical
+                or self.module[scope] == scope
+                or self.parents[scope] is None
+            ):
+                return set()
+            scope = self.parents[scope]
+
+
+def json_test_sources(sources: dict[Path, str]) -> set[Path]:
+    """External modules whose every code loader is test-only.
+
+    A filename such as `tests.rs` grants no exemption. Follow ordinary module
+    declarations, explicit path attributes and literal includes; a production
+    alias of a test module prevents exemption. Children of a proven test
+    module are test-only too. Unresolved includes conservatively prevent this
+    exemption, since their code target cannot be proved here.
+    """
+    incoming: dict[Path, list[tuple[Path, bool]]] = {}
+    unresolved = []
+    for path, source in sources.items():
+        tokens = list(rust_tokens(source))
+        code = blank(source, tokens, {"comment", "character", "string"})
+        visible = blank(source, tokens, {"comment"})
+        tests = cfg_test_items(code)
+
+        def gated(offset):
+            return any(low <= offset < high for low, high in tests)
+
+        inline = []
+        for match in re.finditer(rf"\bmod\s+({RUST_NAME})\s*\{{", code):
+            end = balanced(code, match.end() - 1, "{", "}")
+            if end is not None:
+                inline.append((match.start(), end, match[1]))
+        for match in re.finditer(
+            rf"((?:#\s*\[[^\]]*\]\s*)*)(?:pub(?:\s*\([^)]*\))?\s+)?"
+            rf"\bmod\s+({RUST_NAME})\s*;",
+            visible,
+        ):
+            # Comments are already blank; reject matches inside string literals.
+            start = match.start(2)
+            if not re.search(r"\bmod\s+", code[match.start() : match.end()]):
+                continue
+            directories = [name for low, high, name in inline if low < start < high]
+            explicit = [
+                text
+                for kind, start, _, _, text in rust_tokens(match[1])
+                if kind == "string" and re.search(r"\bpath\s*=\s*$", match[1][:start])
+            ]
+            explicit_base = path.parent
+            # Inside an inline module, Rust includes a non-mod-rs file's
+            # stem in relative paths. A top-level #[path] remains relative
+            # to the file's own directory.
+            if directories and path.stem not in {"lib", "main", "mod"}:
+                explicit_base /= path.stem
+            candidates = [
+                explicit_base.joinpath(*directories) / name for name in explicit
+            ]
+            # A conditional path can still load the ordinary module on the
+            # other configuration. Both loaders must be accounted for.
+            if not re.search(r"#\s*\[\s*path\s*=", match[1]):
+                base = path.parent
+                if path.stem not in {"lib", "main", "mod"}:
+                    base /= path.stem
+                base = base.joinpath(*directories)
+                candidates.extend([base / f"{match[2]}.rs", base / match[2] / "mod.rs"])
             for candidate in candidates:
-                if candidate.is_file() and candidate not in tests:
-                    tests.add(candidate)
-                    pending.append(candidate)
-    return tests
+                target = candidate.resolve()
+                if target in sources:
+                    incoming.setdefault(target, []).append((path, gated(start)))
+        for match in re.finditer(r"\binclude\s*!\s*\(", code):
+            end = balanced(code, match.end() - 1, "(", ")")
+            strings = [
+                text
+                for kind, start, stop, _, text in tokens
+                if kind == "string" and match.end() <= start < stop <= (end or 0)
+            ]
+            body = code[match.end() : (end or match.end()) - 1].strip()
+            if end is None or len(strings) != 1 or body:
+                unresolved.append((path, gated(match.start())))
+            else:
+                target = (path.parent / strings[0]).resolve()
+                if target in sources:
+                    incoming.setdefault(target, []).append((path, gated(match.start())))
+    result = set()
+    while True:
+        added = {
+            path
+            for path, loaders in incoming.items()
+            if path.stem not in {"lib", "main"}
+            and all(test or parent in result for parent, test in loaders)
+        } - result
+        if not added:
+            break
+        result.update(added)
+    if any(not test and parent not in result for parent, test in unresolved):
+        return set()
+    return result
 
 
 def embedded_json_strings(source: str) -> list[str]:
@@ -805,11 +1177,15 @@ def registry_errors(
 
 def violations(root: Path) -> list[str]:
     """Check every mapping and exact existing literals outside the canonical registry."""
+    root = root.resolve()
     rules = load(root)
     defined = rules.identifiers()
     if not defined:
         return ["no rule definitions found"]
-    sources = sorted((root / "rust/crates").glob("*/src/**/*.rs"))
+    sources = {
+        path.resolve(): path.read_text(encoding="utf-8")
+        for path in sorted((root / "rust/crates").glob("*/src/**/*.rs"))
+    }
     if not sources:
         return ["no Rust crate sources found"]
     registered, errors = vocabulary(root)
@@ -820,11 +1196,10 @@ def violations(root: Path) -> list[str]:
     )
     errors.extend(rule_vocabulary_errors(root, registered))
     requirement = rules.identifier
-    test_files = test_module_files(sources)
-    for path in sources:
+    json_tests = json_test_sources(sources)
+    for path, source in sources.items():
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
-        source = path.read_text(encoding="utf-8")
         test_only = private_unit_test_source(root, Path(relative))
         for number, literals in diagnostic_literals(
             source, registered, requirement
@@ -849,13 +1224,17 @@ def violations(root: Path) -> list[str]:
                 )
                 + ", ".join(literals)
             )
-        if Path(relative) not in JSON_CODECS and path not in test_files:
-            for number in json_decodes(source):
+        if Path(relative) not in JSON_CODECS and path not in json_tests:
+            crate_root = (
+                path.parent == root / "rust/crates" / crate / "src"
+                and path.name in {"lib.rs", "main.rs"}
+            )
+            for number in json_decodes(source, crate_root=crate_root):
                 errors.append(f"{relative}:{number}: JSON text decoded outside a codec")
         if (
             Path(relative) in (REGISTRY, SHIPPED_SCHEMA)
             or test_only
-            or path in test_files
+            or path in json_tests
         ):
             continue
         # A registered literal is already a new site above; an unregistered

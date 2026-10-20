@@ -1,23 +1,26 @@
 # Machine-readable grammar of the one expression language.
 #
 # This file is the single source for the closed grammar written in a field
-# typed `predicate`, in `compute.expr` and in `aggregate.expr`. The grammar
-# block of the Formulas rules is rendered from `productions`, and the shared
-# parser and binder are checked against `vocabulary`, `reserved` and `cases`,
-# so the rule and the implementation cannot drift apart without failing
-# validation.
+# typed `predicate`, in `aggregate.expr` and as text in an expression field.
+# The grammar block of the Formulas rules is rendered from `productions`, and
+# the shared parser and binder are checked against `vocabulary`, `reserved`
+# and `cases`, so the rule and the implementation cannot drift apart without
+# failing validation.
 #
 # Each case names the context it is written in. A context decides the root
 # and the constructs and functions a text may use, so the same text can be
-# admitted in one context and refused in another.
+# admitted in one context and refused in another. Text in an expression field
+# is read in the `derivation` context. The `compute` context reads the
+# numeric formula of a file that declares `schema_version`, until Phase 2 of
+# #3030 removes it.
 #
 # `grammar/README.md` states the file format and the shape notation.
 schema_version: "1.0"
 contract: expression
-contract_version: "1.0.0"
+contract_version: "1.1.0"
 rule: formulas
 start: expression
-contexts: [predicate, compute, aggregate]
+contexts: [predicate, compute, aggregate, derivation]
 productions:
   - name: expression
     definition: |-
@@ -903,6 +906,190 @@ cases:
     context: compute
     covers: [rejection]
     text: "A # B"
+    parse: reject
+    condition: invalid_expression
+  # Expression fields: any value over the current row. A name or a literal
+  # may stand alone, quoted text and temporal literals are values, and
+  # comparisons, Boolean logic and reductions are refused.
+  - id: a-name-alone-in-an-expression-field-is-a-reference
+    context: derivation
+    covers: [identifier, context]
+    text: "DM"
+    parse: accept
+    identifiers: [DM]
+    shape: (id DM)
+  - id: a-qualified-name-alone-in-an-expression-field-is-a-reference
+    context: derivation
+    covers: [identifier, context]
+    text: "DM.SEX"
+    parse: accept
+    identifiers: [DM.SEX]
+    shape: (id DM.SEX)
+  - id: quoted-text-is-a-literal-in-an-expression-field
+    context: derivation
+    covers: [literal, context]
+    text: "'DM'"
+    parse: accept
+    identifiers: []
+    shape: (str 'DM')
+  - id: a-doubled-quote-in-expression-field-text-is-one-quote
+    context: derivation
+    covers: [literal, escape]
+    text: "'it''s'"
+    parse: accept
+    identifiers: []
+    shape: (str 'it''s')
+  - id: a-double-quote-does-not-delimit-text
+    context: derivation
+    covers: [literal, rejection]
+    text: "\"DM\""
+    parse: reject
+    condition: invalid_expression
+  - id: a-date-literal-is-a-value-in-an-expression-field
+    context: derivation
+    covers: [literal, temporal, context]
+    text: "DATE '2025-06-01'"
+    parse: accept
+    identifiers: []
+    shape: (date '2025-06-01')
+  - id: a-datetime-literal-is-a-value-in-an-expression-field
+    context: derivation
+    covers: [literal, temporal, context]
+    text: "DATETIME '2025-06-01T08:30'"
+    parse: accept
+    identifiers: []
+    shape: (datetime '2025-06-01T08:30')
+  - id: a-temporal-keyword-alone-is-a-name-in-an-expression-field
+    context: derivation
+    covers: [identifier, reserved, temporal]
+    text: "DATE"
+    parse: accept
+    identifiers: [DATE]
+    shape: (id DATE)
+  - id: a-date-literal-that-names-no-day-is-rejected-in-an-expression-field
+    context: derivation
+    covers: [literal, temporal, rejection]
+    text: "DATE '2025-02-30'"
+    parse: reject
+    condition: invalid_expression
+  - id: null-alone-is-missing-in-an-expression-field
+    context: derivation
+    covers: [null-literal, literal]
+    text: "NULL"
+    parse: accept
+    identifiers: []
+    shape: "null"
+  - id: a-number-alone-is-a-literal-in-an-expression-field
+    context: derivation
+    covers: [literal]
+    text: "0"
+    parse: accept
+    identifiers: []
+    shape: (int 0)
+  - id: a-signed-fraction-alone-is-a-literal-in-an-expression-field
+    context: derivation
+    covers: [literal, unary]
+    text: "-1.5"
+    parse: accept
+    identifiers: []
+    shape: (float -1.5)
+  - id: a-literal-outside-the-int-range-is-refused-in-an-expression-field
+    context: derivation
+    covers: [literal, rejection]
+    text: "9223372036854775808"
+    parse: reject
+    condition: integer_overflow
+  - id: arithmetic-and-numeric-functions-in-an-expression-field
+    context: derivation
+    covers: [arithmetic, call]
+    text: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
+    parse: accept
+    identifiers: [HEIGHTCM, WEIGHTKG]
+    shape: (/ (id WEIGHTKG) (call POWER (/ (id HEIGHTCM) (int 100))
+      (int 2)))
+  - id: quoted-text-in-arithmetic-is-left-to-operand-typing
+    context: derivation
+    covers: [arithmetic, literal, context]
+    text: "A + 'text'"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (id A) (str 'text'))
+  - id: a-truth-literal-is-refused-in-an-expression-field
+    context: derivation
+    covers: [literal, context, rejection]
+    text: "TRUE"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-comparison-is-refused-in-an-expression-field
+    context: derivation
+    covers: [comparison, context, rejection]
+    text: "AVAL > ANRHI"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-null-test-is-refused-in-an-expression-field
+    context: derivation
+    covers: [null-test, context, rejection]
+    text: "AEENDTC IS NULL"
+    parse: reject
+    condition: prohibited_construct
+  - id: list-membership-is-refused-in-an-expression-field
+    context: derivation
+    covers: [in, context, rejection]
+    text: "AEACN IN ('DRUG WITHDRAWN', 'DOSE REDUCED')"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-range-is-refused-in-an-expression-field
+    context: derivation
+    covers: [between, context, rejection]
+    text: "AVAL BETWEEN 1 AND 10"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-pattern-match-is-refused-in-an-expression-field
+    context: derivation
+    covers: [like, context, rejection]
+    text: "AEDECOD LIKE 'HEAD%'"
+    parse: reject
+    condition: prohibited_construct
+  - id: boolean-logic-is-refused-in-an-expression-field
+    context: derivation
+    covers: [logic, context, rejection]
+    text: "NOT FLAG"
+    parse: reject
+    condition: prohibited_construct
+  - id: str-contains-is-refused-in-an-expression-field
+    context: derivation
+    covers: [call, context, rejection]
+    text: "str_contains(AETERM, '^HEAD')"
+    parse: reject
+    condition: prohibited_function
+  - id: a-reduction-is-refused-in-an-expression-field
+    context: derivation
+    covers: [reduction, context, rejection]
+    text: "SUM(AVAL)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-record-count-is-refused-in-an-expression-field
+    context: derivation
+    covers: [star, context, rejection]
+    text: "COUNT(EX.*)"
+    parse: reject
+    condition: prohibited_function
+  - id: rounding-is-not-in-the-vocabulary-of-an-expression-field
+    context: derivation
+    covers: [vocabulary, rejection]
+    text: "ROUND(AVAL, 1)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-conditional-is-outside-the-grammar-of-an-expression-field
+    context: derivation
+    covers: [rejection]
+    text: "CASE WHEN FLAG THEN 'Y' END"
+    parse: reject
+    condition: invalid_expression
+  - id: an-empty-expression-field-text-is-rejected
+    context: derivation
+    covers: [rejection]
+    text: ""
     parse: reject
     condition: invalid_expression
   # Aggregate: reductions over one relation.

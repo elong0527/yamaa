@@ -2,7 +2,7 @@
 use crate::{
     application_issue::{Fault, Stage},
     diagnostic::ConditionCode,
-    limits::{LimitExceeded, Limits},
+    limits::Limits,
     project_terminology as ct, specification_submission_document as s,
     submission_composition::{self as model, Finding, Study},
     submission_document as e,
@@ -90,17 +90,10 @@ impl Element {
     }
     fn write(&self, level: usize, out: &mut String) -> Result<(), Finding> {
         let append = |out: &mut String, text: &str| -> Result<(), Finding> {
-            out.len()
-                .checked_add(text.len())
-                .ok_or(LimitExceeded {
-                    resource: "output_bytes",
-                    limit: Limits::OUTPUT_BYTES,
-                    actual: None,
-                })
-                .and_then(Limits::output_bytes)
-                .map_err(|bound| {
-                    Finding::limit(&self.path, Stage::Define, Fault::OutputLimit, bound)
-                })?;
+            Limits::output_extension(out.len(), text.len()).map_err(|bound| {
+                Finding::limit(&self.path, Stage::Define, Fault::OutputLimit, bound)
+                    .with_detail("render_byte_limit")
+            })?;
             out.push_str(text);
             Ok(())
         };

@@ -44,6 +44,15 @@ impl Limits {
         check("output_bytes", Some(actual), Self::OUTPUT_BYTES)
     }
 
+    /// Admit an output extension before allocating, retaining arithmetic overflow.
+    pub fn output_extension(current: usize, additional: usize) -> Result<(), LimitExceeded> {
+        check(
+            "output_bytes",
+            current.checked_add(additional),
+            Self::OUTPUT_BYTES,
+        )
+    }
+
     /// Admit one decoded or materialized table, including a proposed next shape.
     pub fn table(rows: usize, columns: usize) -> Result<(), LimitExceeded> {
         Self::columns(columns)?;
@@ -133,6 +142,27 @@ mod tests {
                     actual: Some(limit + 1),
                 }),
                 "{resource} above"
+            );
+        }
+    }
+
+    #[test]
+    fn output_extensions_admit_the_boundary_and_distinguish_overflow() {
+        assert_eq!(
+            Limits::output_extension(Limits::OUTPUT_BYTES - 1, 1),
+            Ok(())
+        );
+        for (current, additional, actual) in [
+            (Limits::OUTPUT_BYTES, 1, Some(Limits::OUTPUT_BYTES + 1)),
+            (usize::MAX, 1, None),
+        ] {
+            assert_eq!(
+                Limits::output_extension(current, additional),
+                Err(LimitExceeded {
+                    resource: "output_bytes",
+                    limit: Limits::OUTPUT_BYTES,
+                    actual,
+                })
             );
         }
     }
