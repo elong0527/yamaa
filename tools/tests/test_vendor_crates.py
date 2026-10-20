@@ -391,6 +391,16 @@ class AuthorsTests(unittest.TestCase):
                 listed - {("parser", "0.2.1")},
                 self.LOCKED,
             )
+        # Notices that name a crate the package does not bundle, such as the
+        # canonical graph's Python binding crates, stop it too.
+        with self.assertRaisesRegex(
+            ValueError,
+            "pyo3 0.27.2: LICENSE-THIRD-PARTY.txt lists it, but the package does "
+            "not bundle it",
+        ):
+            staging.authors_text(
+                self.metadata(), crates, listed | {("pyo3", "0.27.2")}, self.LOCKED
+            )
         # A vendored crate that the trimmed lock does not select stops it too.
         with self.assertRaisesRegex(ValueError, "pyo3 0.27.2: the vendored"):
             staging.authors_text(
