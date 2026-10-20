@@ -201,11 +201,12 @@ impl Publisher {
         })
     }
     fn abort(&self, staging: Staging) -> Result<(), Leftover> {
-        match staging {
-            Staging::File(staged) => staged
-                .abort()
+        match (self, staging) {
+            (Self::File(publisher), Staging::File(staged)) => publisher
+                .abort(staged)
                 .map_err(|(staging, cleanup)| Leftover::File(staging, cleanup)),
-            Staging::Host(token) => {
+            (_, Staging::File(_)) => unreachable!("a staged file belongs to its file publisher"),
+            (_, Staging::Host(token)) => {
                 let (resolver, request) = self
                     .request(Operation::Abort, &token, None)
                     .expect("a host staging token belongs to a host publisher");
@@ -279,10 +280,19 @@ impl std::fmt::Debug for Cause {
     }
 }
 
+/// One staged file with the publisher that staged it. Dropping it before it is
+/// committed removes it.
 struct StagedFile {
     publisher: Publisher,
-    staging: Staging,
+    staging: Option<Staging>,
     path: String,
+}
+impl Drop for StagedFile {
+    fn drop(&mut self) {
+        if let Some(staging) = self.staging.take() {
+            let _ = catch_unwind(AssertUnwindSafe(|| self.publisher.abort(staging)));
+        }
+    }
 }
 /// Every file of one save, staged beside its target in save order and not yet
 /// visible. Dropping it removes every staged file; the save's directory locks
@@ -329,7 +339,7 @@ pub fn stage(files: &[File<'_>]) -> Result<Staged, Stop> {
             Ok(Ok(staging)) => {
                 staged.files.push(StagedFile {
                     publisher,
-                    staging,
+                    staging: Some(staging),
                     path: file.path().to_owned(),
                 });
                 continue;
@@ -358,17 +368,14 @@ impl Staged {
         let mut pending = std::mem::take(&mut self.files);
         pending.reverse();
         let mut paths = Vec::with_capacity(pending.len());
-        while let Some(StagedFile {
-            publisher,
-            staging,
-            path,
-        }) = pending.pop()
-        {
+        while let Some(mut file) = pending.pop() {
             let index = paths.len();
+            let staging = file.staging.take().expect("a staged file");
+            let publisher = &file.publisher;
             let cause = match catch_unwind(AssertUnwindSafe(|| before(index))) {
                 Ok(Ok(())) => match catch_unwind(AssertUnwindSafe(|| publisher.commit(staging))) {
                     Ok(Ok(())) => {
-                        paths.push(path);
+                        paths.push(std::mem::take(&mut file.path));
                         continue;
                     }
                     Ok(Err(error)) => Cause::Commit(error),
@@ -397,11 +404,11 @@ impl Staged {
     /// something behind.
     fn remove(&mut self) -> Option<Leftover> {
         let mut first = None;
-        for StagedFile {
-            publisher, staging, ..
-        } in std::mem::take(&mut self.files)
-        {
-            let removed = catch_unwind(AssertUnwindSafe(|| publisher.abort(staging)));
+        for mut file in std::mem::take(&mut self.files) {
+            let Some(staging) = file.staging.take() else {
+                continue;
+            };
+            let removed = catch_unwind(AssertUnwindSafe(|| file.publisher.abort(staging)));
             if let Ok(Err(leftover)) = removed {
                 first.get_or_insert(leftover);
             }

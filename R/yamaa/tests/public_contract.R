@@ -699,7 +699,7 @@ qualify_resolved_schema_links <- function() {
     stopifnot(identical(source$location$path, file.path(study, "output/produced.csv")))
     # Callers build and save each study's producer first.
     dir.create(file.path(study, "output"))
-    stopifnot(is.null(yamaa_spec(file.path(study, "producer.yaml"))$run()$save()))
+    stopifnot(returns_paths(yamaa_spec(file.path(study, "producer.yaml"))$run()$save()))
     result <- spec$run()
     stopifnot(nrow(result$issues) == 0L, identical(result$output$ID, identifier),
       !file.exists(file.path(study, "output/final.csv")))

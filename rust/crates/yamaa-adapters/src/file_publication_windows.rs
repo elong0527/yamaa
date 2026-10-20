@@ -236,6 +236,11 @@ impl Publisher {
     pub fn commit(&self, staged: Staged) -> Result<(), Error> {
         self.commit_with_checkpoint(staged, |_| Ok(()))
     }
+    /// Remove the staged file; the target stays as it was. A removal that
+    /// fails names the staging location it left behind.
+    pub fn abort(&self, staged: Staged) -> Result<(), (PathBuf, std::io::Error)> {
+        staged.abort()
+    }
     fn commit_with_checkpoint(
         &self,
         staged: Staged,

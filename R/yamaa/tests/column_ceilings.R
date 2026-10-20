@@ -329,7 +329,7 @@ run_column_ceilings <- function() {
     consumer <- linked_consumer(producer)
     if (width == 1024L) {
       # Callers build and save the producer before its consumer reads it.
-      stopifnot(is.null(yamaa_spec(producer)$run()$save()))
+      stopifnot(returns_paths(yamaa_spec(producer)$run()$save()))
       assert_build(consumer)
     } else {
       for (operation in operations(FALSE)) assert_refusal(operation(consumer))

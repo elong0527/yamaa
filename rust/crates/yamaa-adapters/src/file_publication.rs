@@ -268,7 +268,7 @@ impl Publisher {
             Ok(())
         })();
         match written {
-            Ok(()) => Ok(Staged(temporary)),
+            Ok(()) => Ok(temporary.keep()),
             Err(error) => Err(temporary.failure(error)),
         }
     }
@@ -281,7 +281,7 @@ impl Publisher {
         staged: Staged,
         checkpoint: impl FnOnce(&str) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        let mut temporary = staged.0;
+        let mut temporary = self.reopen(&staged)?;
         let replaced = (|| {
             let observed = fs::statat(
                 &temporary.directory,
@@ -310,6 +310,46 @@ impl Publisher {
             Err(error) => Err(temporary.failure(error)),
         }
     }
+    /// Remove the staged file; the target stays as it was. A removal that
+    /// fails names the staging location it left behind.
+    pub fn abort(&self, staged: Staged) -> Result<(), (PathBuf, std::io::Error)> {
+        let staging = self.parent_path.join(&staged.name);
+        let mut temporary = self.reopen(&staged).map_err(|_| {
+            (
+                staging.clone(),
+                std::io::Error::other("temporary directory identity unconfirmed or changed"),
+            )
+        })?;
+        temporary.cleanup().map_err(|cleanup| (staging, cleanup))
+    }
+    /// The staging directory of `staged` again, through this publisher's held
+    /// parent, confirmed to be the directory it staged into.
+    fn reopen(&self, staged: &Staged) -> Result<Pending<'_>, Error> {
+        let unconfirmed = || Error::Cleanup {
+            operation: Box::new(Error::Changed),
+            staging: self.parent_path.join(&staged.name),
+            cleanup: std::io::Error::other("temporary directory identity unconfirmed or changed"),
+        };
+        let directory = fs::openat(
+            &self.parent,
+            staged.name.as_str(),
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|_| unconfirmed())?;
+        if identity(&fs::fstat(&directory)?) != staged.directory {
+            return Err(unconfirmed());
+        }
+        Ok(Pending {
+            parent: &self.parent,
+            parent_path: &self.parent_path,
+            name: staged.name.clone(),
+            directory,
+            identity: staged.directory,
+            candidate: Some(staged.candidate),
+            cleaned: false,
+        })
+    }
     #[cfg(test)]
     fn publish_with_checkpoint(
         &mut self,
@@ -321,13 +361,13 @@ impl Publisher {
         let staged = self.stage(&mut locks, declared, content)?;
         self.commit_with_checkpoint(staged, checkpoint)
     }
-    fn temporary(&self) -> Result<(Pending, OwnedFd), Error> {
+    fn temporary(&self) -> Result<(Pending<'_>, OwnedFd), Error> {
         self.temporary_with_numbers(|| NEXT.fetch_add(1, Ordering::Relaxed))
     }
     fn temporary_with_numbers(
         &self,
         mut next: impl FnMut() -> u64,
-    ) -> Result<(Pending, OwnedFd), Error> {
+    ) -> Result<(Pending<'_>, OwnedFd), Error> {
         for _ in 0..64 {
             let number = next();
             let name = format!(".yamaa-output-{}-{number}.stage", std::process::id());
@@ -365,8 +405,8 @@ impl Publisher {
                     return Err(Error::Changed);
                 }
                 Ok(Pending {
-                    parent: self.parent.try_clone()?,
-                    parent_path: self.parent_path.clone(),
+                    parent: &self.parent,
+                    parent_path: &self.parent_path,
                     name: name.clone(),
                     directory,
                     identity: identity(&initial),
@@ -422,28 +462,34 @@ fn parent_case_sensitive(parent: &OwnedFd) -> Result<bool, Error> {
     }
 }
 /// One staged file: its complete bytes in a private temporary file beside the
-/// target, not yet visible there. Dropping it removes the temporary file.
-pub struct Staged(Pending);
-impl Staged {
-    /// Remove the staged file; the target stays as it was. A removal that
-    /// fails names the staging location it left behind.
-    pub fn abort(self) -> Result<(), (PathBuf, std::io::Error)> {
-        let mut temporary = self.0;
-        temporary
-            .cleanup()
-            .map_err(|cleanup| (temporary.parent_path.join(&temporary.name), cleanup))
-    }
+/// target, not yet visible there. It holds no descriptor, so a save may stage
+/// any number of files: the publisher that staged it reopens its private
+/// directory to commit or abort it, and confirms the directory is the one it
+/// staged into. A staged file neither committed nor aborted stays behind.
+pub struct Staged {
+    name: String,
+    directory: (i128, i128, FileType),
+    candidate: (i128, i128, FileType),
 }
-struct Pending {
-    parent: OwnedFd,
-    parent_path: PathBuf,
+struct Pending<'a> {
+    parent: &'a OwnedFd,
+    parent_path: &'a Path,
     name: String,
     directory: OwnedFd,
     identity: (i128, i128, FileType),
     candidate: Option<(i128, i128, FileType)>,
     cleaned: bool,
 }
-impl Pending {
+impl Pending<'_> {
+    /// Keep the written candidate for a later commit, closing its directory.
+    fn keep(mut self) -> Staged {
+        self.cleaned = true;
+        Staged {
+            name: std::mem::take(&mut self.name),
+            directory: self.identity,
+            candidate: self.candidate.expect("a staged candidate"),
+        }
+    }
     fn cleanup(&mut self) -> std::io::Result<()> {
         if self.cleaned {
             return Ok(());
@@ -460,7 +506,7 @@ impl Pending {
             }
             Err(error) => return Err(error.into()),
         }
-        cleanup_directory(&self.parent, &self.name, Some(self.identity))?;
+        cleanup_directory(self.parent, &self.name, Some(self.identity))?;
         self.cleaned = true;
         Ok(())
     }
@@ -468,7 +514,7 @@ impl Pending {
         with_cleanup(error, self.parent_path.join(&self.name), self.cleanup())
     }
 }
-impl Drop for Pending {
+impl Drop for Pending<'_> {
     fn drop(&mut self) {
         // Fallible operation paths clean explicitly; Drop also covers unwinding.
         let _ = self.cleanup();
@@ -688,6 +734,52 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"old");
         assert!(staging.is_dir());
         assert!(!staging.join("candidate.part").exists());
+        std::fs::remove_dir_all(path).unwrap();
+    }
+    /// A save may stage any number of files: a staged file holds no
+    /// descriptor until it is committed, so only the publishers' parents and
+    /// the save's directory lock stay open.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn staged_files_hold_no_descriptor_until_they_are_committed() {
+        let path = std::env::temp_dir().join(format!(
+            "yamaa-publication-many-staged-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&path).unwrap();
+        let path = crate::canonical_path::canonicalize(path).unwrap();
+        // Descriptors this process holds beneath the directory, as staging
+        // directories and candidates would be.
+        let beneath = || {
+            std::fs::read_dir("/proc/self/fd")
+                .unwrap()
+                .filter_map(|entry| std::fs::read_link(entry.ok()?.path()).ok())
+                .filter(|target| target.starts_with(&path) && target != &path)
+                .count()
+        };
+        let names = (0..64)
+            .map(|index| format!("f{index}.csv"))
+            .collect::<Vec<_>>();
+        let publishers = names
+            .iter()
+            .map(|name| Publisher::new(name, path.join(name).to_str().unwrap()).unwrap())
+            .collect::<Vec<_>>();
+        let mut locks = Locks::default();
+        let staged = publishers
+            .iter()
+            .zip(&names)
+            .map(|(publisher, name)| publisher.stage(&mut locks, name, name.as_bytes()).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(beneath(), 0);
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 64);
+        for (publisher, staged) in publishers.iter().zip(staged) {
+            publisher.commit(staged).unwrap();
+        }
+        drop(locks);
+        for name in &names {
+            assert_eq!(std::fs::read(path.join(name)).unwrap(), name.as_bytes());
+        }
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 64);
         std::fs::remove_dir_all(path).unwrap();
     }
     #[test]
