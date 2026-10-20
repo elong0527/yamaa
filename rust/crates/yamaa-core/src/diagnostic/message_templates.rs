@@ -47,6 +47,8 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("forward_reference", "column {column} reads {dependency}, which is declared after it"),
     ("function_call_failed", "the call to project function {call} failed"),
     ("function_conformance_failed", "function {function} fails its test case {case}: {reason}"),
+    ("function_file_invalid", "a function file or lock cannot be admitted"),
+    ("function_implementation_missing", "project function {function} has no implementation for {language}"),
     ("incomparable_range_types", "a range value of type {value_type} cannot be compared with its bounds"),
     ("incomparable_sources", "the sources {sources} have types {types}, which cannot be compared"),
     ("incompatible_input_type", "{spec_path} reads a value of a type it does not accept"),

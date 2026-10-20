@@ -124,8 +124,8 @@ the conditions that path still raises.
 | [Define-XML](profiles/define-xml.md) | DEFINE | Compose study metadata into deterministic Define-XML 2.1 documents. |
 | [Dataset-JSON](profiles/dataset-json.md) | JSON | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 | [SAS Transport](profiles/xpt.md) | XPT | Write a dataset as one deterministic SAS Transport version 5 file in the public record layout. |
-| [Project functions](profiles/functions.md) | FUNC | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
-| [Project file](profiles/project.md) | PROJECT | Link each host's environment, declare a study's terminology and submission sections once, and check, run and package the specifications its sections list. |
+| [Project functions](profiles/functions.md) | FUNC | Define each project function once in a function file, resolve immutable runtimes, and validate function inputs, results, and activation conformance. |
+| [Project file](profiles/project.md) | PROJECT | List a study's function files and host locks, declare its terminology and submission sections once, and check, run and package the specifications its sections list. |
 
 The [rule index](https://elong0527.github.io/yamaa/reference/rule-index/),
 [rules at a glance](https://elong0527.github.io/yamaa/reference/rules-summary/)
@@ -178,10 +178,13 @@ One term per concept across all rules, schema comments, and messages:
 
 - **specification** -- the YAML file under review. `study` and `document` stay
   project-level (resources and submission contracts), never names for the YAML.
-- **project file** -- the one study-level YAML a caller passes: it links each
-  host language's **environment file**, which declares only that host's lock
-  and project functions, and it declares the study's terminology and
-  submission sections ([Project file](profiles/project.md)).
+- **project file** -- the one study-level YAML a caller passes: it lists the
+  study's **function files**, each defining one project function with a
+  callable for each host language it implements, holds each host language's
+  lock, and declares the study's terminology and submission sections
+  ([Project file](profiles/project.md)). A project file that declares
+  `schema_version` links each host language's **environment file** instead,
+  which declares only that host's lock and project functions.
 - **input dataset** / **output dataset** -- state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.

@@ -167,6 +167,7 @@ mod project {
         };
         fn draft() -> Draft {
             Draft {
+                surface: yamaa_core::ast::Surface::V0_5,
                 language: None,
                 lock: None,
                 functions: None,
@@ -416,6 +417,7 @@ mod project {
         }
         fn draft() -> Draft {
             Draft {
+                surface: yamaa_core::ast::Surface::V0_5,
                 language: Some(Language::Python),
                 lock: Some(LockReference {
                     written: "uv.lock".into(),
@@ -832,6 +834,7 @@ mod project {
                     environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
+                    function_files: &[],
                     codelist_origins: &[],
                     captures: captures.iter().copied(),
                 },
@@ -910,6 +913,7 @@ mod project {
         }
         fn draft() -> Draft {
             Draft {
+                surface: yamaa_core::ast::Surface::V0_5,
                 language: Some(Language::Python),
                 lock: Some(LockReference {
                     written: "uv.lock".into(),
@@ -954,6 +958,7 @@ mod project {
                     environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &[],
+                    function_files: &[],
                     codelist_origins: &origins,
                     captures: std::iter::empty(),
                 },
@@ -1209,6 +1214,7 @@ mod project {
                         environment: Some(ENVIRONMENT),
                         draft: &draft,
                         function_origins: &names,
+                        function_files: &[],
                         codelist_origins: &[],
                         captures: captures.into_iter(),
                     },
@@ -1274,6 +1280,7 @@ mod project {
                     environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
+                    function_files: &[],
                     codelist_origins: &[],
                     captures: std::iter::empty(),
                 },
@@ -1333,6 +1340,7 @@ mod project {
                             environment,
                             draft: &draft,
                             function_origins: origins,
+                            function_files: &[],
                             codelist_origins: &[],
                             captures: captures.into_iter()
                         },
@@ -1353,6 +1361,7 @@ mod project {
                         environment: None,
                         draft: &lock_only,
                         function_origins: &[],
+                        function_files: &[],
                         codelist_origins: &[],
                         captures: std::iter::empty()
                     },
@@ -1368,7 +1377,7 @@ mod project {
                 value: None,
             }];
             assert!(matches!(
-                p::admit_root_scalars(PROJECT, &scalar),
+                p::admit_root_scalars(PROJECT, yamaa_core::ast::Surface::V0_5, &scalar),
                 Err(Error::Core(
                     project_environment_diagnostics::Error::UnavailableShape
                 ))
@@ -1395,6 +1404,7 @@ mod project {
                     environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &[],
+                    function_files: &[],
                     codelist_origins: &[],
                     captures: std::iter::empty(),
                 },
@@ -1422,7 +1432,8 @@ mod project {
         fn root_wide_scalars_are_one_admitted_complete_report() {
             let wide_value = "123456789012345678901234567890";
             let findings = [wide("codelists[0].codelists[0].items[0].value", wide_value)];
-            let report = p::admit_root_scalars(PROJECT, &findings).unwrap();
+            let report =
+                p::admit_root_scalars(PROJECT, yamaa_core::ast::Surface::V0_5, &findings).unwrap();
             assert_eq!(
                 report.diagnostics().unwrap(),
                 [expected(
@@ -1595,6 +1606,7 @@ mod project {
                     environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
+                    function_files: &[],
                     codelist_origins: &[],
                     captures: Once {
                         capture: Some(Capture {
@@ -1664,6 +1676,7 @@ mod project {
                     environment: Some(ENVIRONMENT),
                     draft: &draft,
                     function_origins: &names,
+                    function_files: &[],
                     codelist_origins: &[],
                     captures: std::iter::empty(),
                 },

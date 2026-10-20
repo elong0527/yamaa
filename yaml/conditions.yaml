@@ -149,6 +149,12 @@ conditions:
   function_conformance_failed:
     phases: [validation]
     message: "function {function} fails its test case {case}: {reason}"
+  function_file_invalid:
+    phases: [validation]
+    message: "a function file or lock cannot be admitted"
+  function_implementation_missing:
+    phases: [validation]
+    message: "project function {function} has no implementation for {language}"
   incomparable_range_types:
     phases: [validation]
     message: "a range value of type {value_type} cannot be compared with its bounds"

@@ -1,10 +1,11 @@
-//! Read the scalars of a structurally normalized 0.5 document: the reader the
-//! project front end ([`crate::front_end::v0_5::project`]) and project call
-//! decoding share. A value the engine cannot run with, or a node whose shape
-//! the schema should have refused, is a finding at its authored path.
+//! Read the scalars of a structurally normalized document: the reader the
+//! project front ends ([`crate::front_end::v0_5::project`],
+//! [`crate::front_end::v1::project`]) and project call decoding share. A value
+//! the engine cannot run with, or a node whose shape the schema should have
+//! refused, is a finding at its authored path.
 use crate::{
     schema::{Document, DocumentNode as N},
-    value::Value,
+    value::{Value, ValueType},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -134,6 +135,35 @@ impl Reader<'_> {
                 self.fault(path, node, Kind::NormalizedShape);
                 Vec::new()
             }
+        }
+    }
+    /// A 1.0 function-file value, typed by the type its definition declares
+    /// (P-FN-1): text is a date or a datetime where that is the declared
+    /// type, and no value is a tagged mapping. Any other scalar keeps its
+    /// YAML type, which admission checks against the declaration; a value
+    /// with no declared type, such as an argument no parameter names, too.
+    pub(crate) fn declared(&mut self, node: usize, path: &str, kind: Option<ValueType>) -> Value {
+        let document = self.document;
+        match (document.nodes().get(node), kind) {
+            (Some(N::Text(text)), Some(ValueType::Date)) => match text.parse() {
+                Ok(value) => Value::Date(value),
+                Err(_) => {
+                    self.refuse(path, node, Kind::InvalidDate, text);
+                    Value::Missing
+                }
+            },
+            (Some(N::Text(text)), Some(ValueType::DateTime)) => match text.parse() {
+                Ok(value) => Value::DateTime(value),
+                Err(_) => {
+                    self.refuse(path, node, Kind::InvalidDateTime, text);
+                    Value::Missing
+                }
+            },
+            (Some(N::Mapping(_)), _) => {
+                self.fault(path, node, Kind::NormalizedShape);
+                Value::Missing
+            }
+            _ => self.scalar(node, path),
         }
     }
     pub(crate) fn scalar(&mut self, node: usize, path: &str) -> Value {
