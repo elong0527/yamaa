@@ -126,6 +126,28 @@ def stage_lock(case, project, lock):
             shutil.copyfile(lock, target)
 
 
+def relative(paths, case):
+    """The paths a save returned, relative to the case's root, so a record
+    reads the same on every machine, container and operating system.
+
+    save() returns absolute paths with forward slashes. A path that has a
+    backslash, or that is not below the case, stays as returned, for the
+    comparator to refuse.
+    """
+    if paths is None:
+        return None
+
+    def one(path):
+        if "\\" in path:
+            return path
+        try:
+            return Path(path).relative_to(case).as_posix()
+        except ValueError:
+            return path
+
+    return [one(path) for path in paths]
+
+
 def table(frame):
     if frame is None:
         return None
@@ -198,10 +220,11 @@ def main(argv=None):
         },
     )
 
-    def observe(run):
+    def observe(run, case):
         tables = {"output": table(run.output), "report": table(run.report)}
         # A save returns the paths it wrote, in publication order; a refused
-        # save raises with the paths it wrote first.
+        # save raises with the paths it wrote first. The record keeps them
+        # relative to the case's root.
         saved, paths = False, None
         if not run.issues.height:
             try:
@@ -213,7 +236,12 @@ def main(argv=None):
         issues = run.issues.to_dicts()
         for issue in issues:
             issue["context"] = json.loads(issue["context"])
-        return {"issues": issues, "tables": tables, "saved": saved, "paths": paths}
+        return {
+            "issues": issues,
+            "tables": tables,
+            "saved": saved,
+            "paths": relative(paths, case),
+        }
 
     def files(case):
         return {
@@ -256,7 +284,7 @@ def main(argv=None):
         record = {
             "specification": specification,
             "environment": project,
-            **observe(first),
+            **observe(first, case),
         }
         if repeat:
             # The repeat pass (#2821): a second run of the same object reuses
@@ -264,7 +292,7 @@ def main(argv=None):
             record["plan"] = plan_of(first)
             before = files(case)
             second = spec.run()
-            again = observe(second)
+            again = observe(second, case)
             after = files(case)
             changed = sorted(
                 path.relative_to(case).as_posix()

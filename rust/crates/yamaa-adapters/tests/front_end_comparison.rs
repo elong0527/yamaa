@@ -27,7 +27,8 @@
 //! Every specification whose trees still differ is listed in [`EXPECTED`]
 //! with the reason, and the test fails when the list is wrong in either
 //! direction. Each 1.0 tree is also checked to be total and located. The
-//! converter runs through `uv`, as `make setup` installs it.
+//! converter runs through `uv` in the locked tooling environment that
+//! `make setup` installs; without uv or PyYAML the test says so.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -109,6 +110,11 @@ impl Drop for Scratch {
     }
 }
 
+/// How to install what the converter needs: uv, and the locked tooling
+/// environment, with PyYAML.
+const SETUP: &str = "run `make setup`, or \
+                     `uv sync --project python --locked --group tooling --no-install-package yamaa`";
+
 /// Convert `benchmarks`, the directory of every benchmark or of one, into
 /// `output/benchmarks` as `python -m tools.migrate` does.
 fn convert(benchmarks: &str, output: &Path) {
@@ -119,13 +125,18 @@ fn convert(benchmarks: &str, output: &Path) {
         .current_dir(repository())
         .output()
         .unwrap_or_else(|error| {
-            panic!("the comparison runs tools/migrate through uv ({error}); run `make setup`")
+            panic!("the comparison runs tools/migrate through uv, which did not start ({error}); {SETUP}")
         });
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    // tools/migrate refuses to run where `import yaml` is not PyYAML.
+    assert!(
+        !stderr.contains("tools.migrate needs PyYAML"),
+        "tools/migrate cannot run without PyYAML; {SETUP}:\n{stderr}"
+    );
     assert!(
         result.status.success(),
-        "tools/migrate failed:\n{}{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
+        "tools/migrate failed:\n{}{stderr}",
+        String::from_utf8_lossy(&result.stdout)
     );
 }
 
