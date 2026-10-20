@@ -1,56 +1,76 @@
 # Project file
 
 This file is a profile: it is optional, and it applies only to a caller that
-passes a project file. A project file names one study's implementation
-environments, terminology and submission sections, and lists the
-specifications of each section. Checking, running and packaging a project
-operate on the specifications its sections list. A specification built without
-a project file is unaffected, except that it has no implementation
-environment, no terminology and no dataset inventory.
+passes a project file. A project file names one study's function files, host
+locks, terminology and submission sections, and lists the specifications of
+each section. Checking, running and packaging a project operate on the
+specifications its sections list. A specification built without a project
+file is unaffected, except that it has no project functions, no terminology
+and no dataset inventory.
 
 ## The project file
 
 <a id="project-1"></a>
 
-### PROJECT-1. A project file is passed explicitly and names one study's environments, terminology and submission sections
+### PROJECT-1. A project file is passed explicitly and names one study's functions, host locks, terminology and submission sections
 
-A project file names one study's implementation environments, terminology and
-submission sections. The caller passes it explicitly, and it is admitted
-against `schema_project.yaml`, whose `schema_version` selects the schema
-bundle. No project file is discovered from a specification, a directory or a
-host default, and a specification cannot select, replace or override its
-project. A run without a project file has no implementation environment, no
-terminology and no dataset inventory.
+A project file names one study's function files and host locks, its
+terminology and its submission sections. The caller passes it explicitly; it
+declares `yamaa` and `type: project`
+([SCHEMA-2](../reference/schema-language.md#schema-2)) and is admitted against
+the project schema. No project file is discovered from a specification, a
+directory or a host default, and a specification cannot select, replace or
+override its project. A run without a project file has no project functions,
+no terminology and no dataset inventory.
 
 Fails: `project_environment_missing`, `project_environment_invalid`.
-Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`.
+Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::the_converted_project_files_lower_to_the_roots_of_their_sources`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`.
 
-A project file declares `schema_version`, `environments`, `codelists`,
-`study`, and the `sdtm`, `adam` and `send` sections, each optional except
-`schema_version`. A project file that cannot be read fails with
-`project_environment_missing` ([FUNC-1](functions.md#func-1)), and one that
-does not validate against `schema_project.yaml` fails with
-`project_environment_invalid` ([FUNC-2](functions.md#func-2)), before any
-activation or study read. Its `schema_version` follows
-[SCHEMA-2](../reference/schema-language.md#schema-2).
+A project file declares `yamaa`, `type`, `functions`, `environments`,
+`codelists`, `study`, and the `sdtm`, `adam` and `send` sections, each optional
+except `yamaa` and `type`. A codelist source is written inline or as the path
+of a codelist file, which declares `type: codelists`
+([CT-1](terminology.md#ct-1)). A project file whose content does not validate
+against the project schema fails, before any activation or study read, with
+the conditions of [SCHEMA-12](../reference/schema-language.md#schema-12) and
+[SCHEMA-13](../reference/schema-language.md#schema-13) at its own paths; the
+project file has no condition of its own. Without a project file, a function
+call names no declared function ([FUNC-4](functions.md#func-4)) and a codelist
+binding names no declared codelist ([CT-1](terminology.md#ct-1)).
+
+A project file that declares `schema_version` declares `environments`,
+`codelists`, `study` and the sections instead, and is read under the rules at
+the `yamaa-v0.5.0` tag ([Rules](../README.md)): one that does not validate
+against `schema_project.yaml` fails with `project_environment_invalid`
+([FUNC-2](functions.md#func-2)). Until that path goes, a project file that
+cannot be read, and so declares neither, fails with
+`project_environment_missing` ([FUNC-1](functions.md#func-1)), before any
+activation or study read.
 
 <a id="project-2"></a>
 
-### PROJECT-2. `environments` links each host language's environment file, and each host reads only its own
+### PROJECT-2. `environments` holds each host language's lock, and each host reads only its own
 
-`environments` maps a host language key, `python` or `r`, to that language's
-environment file under [Project functions](functions.md). The key states the
-language of the file it names, and an environment file declares no language of
-its own. Each host reads only the entry its own key names; the other entry is
-neither opened nor validated, and one project serves both hosts with one copy
-of its study metadata.
+`environments.<host>.lock`, under the host language key `python` or `r`, names
+that host's packaging lock, which [FUNC-3](functions.md#func-3) verifies; a
+host without a lock needs no entry. Each host reads only the entry its own key
+names; the other entry is neither opened nor validated. Function files are
+language-neutral ([FUNC-4](functions.md#func-4)), so one project serves both
+hosts with one copy of its study metadata and its functions.
 
 Fails: `project_environment_missing`.
-Evidence: `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_project_without_an_environment_for_the_host_leaves_other_languages_unread`.
+Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_project_without_an_environment_for_the_host_leaves_other_languages_unread`.
 
-An absent entry leaves that host without an implementation environment. A
-specification that calls a project function then cannot execute, and the call
-fails with `project_environment_missing` under [FUNC-1](functions.md#func-1).
+An absent entry means the host declares no lock, and its calls run without a
+package-version audit ([FUNC-3](functions.md#func-3)); a call in a host with no
+implementation fails under [FUNC-1](functions.md#func-1).
+
+In a project file that declares `schema_version`, `environments` maps each host
+language key to that language's environment file under
+[Project functions](functions.md), whose key states its language. An absent
+entry leaves that host without an implementation environment, and a call to a
+project function then fails with `project_environment_missing` under
+[FUNC-1](functions.md#func-1).
 
 <a id="project-3"></a>
 
@@ -59,37 +79,42 @@ fails with `project_environment_missing` under [FUNC-1](functions.md#func-1).
 `codelists` supplies the study terminology
 [Controlled terminology](terminology.md) owns, `study` names the study, and
 each `sdtm`, `adam` or `send` section lists in `specs` the specifications of
-that family with the submission metadata [Define-XML](define-xml.md) composes.
-A section needs only `specs`. `study` and the section's `standard` and `define`
-are required only when Define-XML composes the section
+that model with the submission metadata [Define-XML](define-xml.md) composes.
+A section needs only `specs`. `study` and the section's `standards` and
+`define` are required only when Define-XML composes the section
 ([DEFINE-28](define-xml.md#define-28)). A run does not open a section's
 document links or generate a Define-XML document.
 
 Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`.
 
 A project can therefore list its specifications and run them before its
-submission metadata is ready. A section's `datasets` requests the transport
+submission metadata is ready. A section's `transport` requests the transport
 files of [Dataset-JSON](dataset-json.md#json-1) or
 [SAS Transport](xpt.md#xpt-1), which only a project submission writes
-([PROJECT-13](#project-13)).
+([PROJECT-13](#project-13)). A section's `standards` is a list, its first
+entry the guide a specification binds by default. A project file that declares
+`schema_version` writes one `standard` and `datasets: json` or `datasets: xpt`
+instead.
 
 <a id="project-4"></a>
 
-### PROJECT-4. A project file's relative paths resolve from the project file, and an environment file's from the environment file
+### PROJECT-4. A project file's relative paths resolve from the project file
 
-Every relative path the project file writes, namely each environment link,
+Every relative path the project file writes, namely each function file, lock,
 codelist source, section specification and Define-XML target, resolves from
-the directory of the project file. Every relative path an environment file
-writes, namely its lock and its function definition files, resolves from that
-environment file. Absolute local paths and parent segments have their
-[File resolution](../reference/files.md) meaning.
+the directory of the project file. Absolute local paths and parent segments
+have their [File resolution](../reference/files.md) meaning.
 
 Fails: `resource_path_missing`.
-Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_and_function_paths_resolve_from_the_environment_file_and_codelists_from_the_project`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
+Evidence: `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::lock_and_function_paths_resolve_from_the_environment_file_and_codelists_from_the_project`, `python/tests/installed/installed_public_environment.py::test_project_codelists_keep_project_locations_and_missing_files_fail_there`.
 
 An absent file fails at its one selected location, without discovery or a
 fallback search. The project file does not change where a specification's own
 resources resolve under [FILE-1](../reference/files.md#file-1).
+
+In a project file that declares `schema_version`, each environment link
+resolves from the project file, and the lock and function definition files an
+environment file writes resolve from that environment file.
 
 ## Specification names
 
@@ -271,7 +296,7 @@ that built no specification has nothing to save, and saving it fails with
 A project submission composes one [Define-XML](define-xml.md) document for the
 selected section, or one for each declared section that names `define`, in the
 order `sdtm`, `adam`, `send`, together with the transport files of a section
-that declares `datasets` ([JSON-1](dataset-json.md#json-1)). Its findings are
+that declares `transport` ([JSON-1](dataset-json.md#json-1)). Its findings are
 those of its sections in that order. Saving publishes the sections in that
 order; the first section whose publication fails stops the save.
 

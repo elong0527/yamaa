@@ -120,6 +120,104 @@ pub fn format_name_reached() -> BTreeSet<ConditionCode> {
     assert_eq!(finding.operand_route, None);
     BTreeSet::from([rendered(&finding)])
 }
+/// FUNC-2, FUNC-3 (P-FN-2): a finding in a 1.0 function file fails as
+/// `function_file_invalid` at that file's own path, and a lock whose kind is
+/// not its host's at the project's `environments.<host>.lock`, with the
+/// reasons and context a 0.5 environment file's findings take.
+pub fn function_file_reached() -> BTreeSet<ConditionCode> {
+    use crate::support::project_call_compiler::definition;
+    // A function file that names no callable at all.
+    let unimplemented = definition("constant").file(&[]);
+    let draft = Draft {
+        surface: yamaa_core::ast::Surface::V1 { minor: 0 },
+        language: Some(Language::Python),
+        lock: Some(LockReference {
+            written: "renv.lock".into(),
+            kind: LockKind::Renv,
+        }),
+        functions: Some(vec![
+            // A Python callable written for R.
+            definition("id").file(&[
+                (Language::Python, "project.id"),
+                (Language::R, "project.id"),
+            ]),
+            // A second file declaring the same name.
+            definition("id").file(&[(Language::Python, "project.id")]),
+            unimplemented,
+        ]),
+        codelists: vec![],
+    };
+    let findings = project_environment::validate(Language::Python, &draft);
+    let projected = project_environment_diagnostics::diagnostics(&draft, &findings).unwrap();
+    let expected = [
+        (
+            "environments.python.lock",
+            vec![
+                ("reason", "lock_kind_mismatch"),
+                ("language", "python"),
+                ("actual_lock_kind", "renv"),
+            ],
+        ),
+        (
+            "implementations.r",
+            vec![
+                ("function", "id"),
+                ("language", "r"),
+                ("reason", "invalid_callable"),
+            ],
+        ),
+        (
+            "name",
+            vec![("function", "id"), ("reason", "duplicate_function")],
+        ),
+        (
+            "implementations",
+            vec![
+                ("function", "constant"),
+                ("reason", "missing_implementation"),
+            ],
+        ),
+    ];
+    assert_eq!(projected.len(), expected.len(), "{projected:?}");
+    let mut reached = BTreeSet::new();
+    for (finding, (path, context)) in projected.iter().zip(expected) {
+        assert_eq!(
+            (
+                finding.definition().phase,
+                finding.definition().condition,
+                finding.definition().rule
+            ),
+            ("validation", "function_file_invalid", Some("FUNC-2"))
+        );
+        assert_eq!(finding.spec_paths, [path]);
+        assert_eq!(
+            finding.context,
+            context
+                .into_iter()
+                .map(|(key, value)| (key.into(), JsonValue::String(value.into())))
+                .collect()
+        );
+        reached.insert(rendered(finding));
+    }
+    // A value the declared type cannot read fails as its file does, keeping
+    // the text it is written as.
+    let scalar = project_environment_diagnostics::function_file_scalar_diagnostics(&[
+        yamaa_core::project_function_document::Finding {
+            path: "tests[0].result".into(),
+            node: 0,
+            kind: yamaa_core::project_function_document::Kind::InvalidDate,
+            value: Some("2024-02-30".into()),
+        },
+    ])
+    .unwrap();
+    assert_eq!(scalar.len(), 1);
+    assert_eq!(scalar[0].code, ConditionCode::FunctionFileInvalid);
+    assert_eq!(scalar[0].spec_paths, ["tests[0].result"]);
+    assert_eq!(scalar[0].context["reason"], "invalid_date");
+    assert_eq!(scalar[0].context["value"], "2024-02-30");
+    reached.insert(rendered(&scalar[0]));
+    reached
+}
 /// A project that links a Python environment file with no functions and
 /// declares two invalid codelists of its own.
 pub fn draft() -> Draft {
@@ -154,6 +252,7 @@ pub fn draft() -> Draft {
         }),
     };
     Draft {
+        surface: yamaa_core::ast::Surface::V0_5,
         language: Some(Language::Python),
         lock: None,
         functions: Some(vec![]),
