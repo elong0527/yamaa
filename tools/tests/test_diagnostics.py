@@ -12,11 +12,11 @@ class DiagnosticGuardTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        # The registry cites REQ-0001, which this card replaces.
+        # The registry cites this card.
         self.write(
             "rules/values.md",
             '# Values\n\n<a id="value-1"></a>\n\n### VALUE-1. Values are valid\n\n'
-            "A value is valid.\n\nFails: `invalid_value`.\nReplaces: REQ-0001.\n",
+            "A value is valid.\n\nFails: `invalid_value`.\n",
         )
         self.write(
             str(guard.NULL_POLICY),
@@ -33,7 +33,7 @@ class DiagnosticGuardTests(unittest.TestCase):
         )
         self.write(
             "rust/crates/yamaa-core/src/diagnostic/mod.rs",
-            'conditions! {\n    Invalid => ("validation", "invalid_value", Some("REQ-0001")),\n'
+            'conditions! {\n    Invalid => ("validation", "invalid_value", Some("VALUE-1")),\n'
             '    Rejected => ("engine", "engine_rejected", None),\n}\n',
         )
 
@@ -54,7 +54,7 @@ class DiagnosticGuardTests(unittest.TestCase):
     ):
         self.write(
             "rules/resources.md",
-            "**REQ-0788.** Held bytes cannot change.\n\n## Error conditions\n\n| Condition | Rejects |\n| --- | --- |\n| `resource_path_content_changed` | content changed after validation |\n",
+            "Held bytes cannot change.\n\n## Error conditions\n\n| Condition | Rejects |\n| --- | --- |\n| `resource_path_content_changed` | content changed after validation |\n",
         )
         self.assertEqual(
             self.errors(),
@@ -103,7 +103,7 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_new_null_language_cause_is_rejected(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(path.read_text().replace('Some("REQ-0001")', "None"))
+        path.write_text(path.read_text().replace('Some("VALUE-1")', "None"))
         self.assertTrue(
             any(
                 "null requirement is not normatively permitted" in e
@@ -113,7 +113,7 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_implementation_condition_must_retain_null(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(path.read_text().replace("None", 'Some("REQ-0001")'))
+        path.write_text(path.read_text().replace("None", 'Some("VALUE-1")'))
         self.assertTrue(
             any("must retain a null requirement" in e for e in self.errors())
         )
@@ -170,10 +170,10 @@ class DiagnosticGuardTests(unittest.TestCase):
             with self.subTest(crate=crate):
                 path = self.write(
                     f"rust/crates/{crate}/src/unknown.rs",
-                    'const REQUIREMENT: &str = "REQ-999999";\n',
+                    'const REQUIREMENT: &str = "VALUE-999";\n',
                 )
                 self.assertTrue(
-                    any("undefined requirement REQ-999999" in e for e in self.errors())
+                    any("undefined requirement VALUE-999" in e for e in self.errors())
                 )
                 path.unlink()
 
@@ -182,7 +182,7 @@ class DiagnosticGuardTests(unittest.TestCase):
             with self.subTest(crate=crate):
                 self.write(
                     f"rust/crates/{crate}/src/nested/errors.rs",
-                    'const MAPPING: (&str, &str) = ("invalid_value", "REQ-0001");\n',
+                    'const MAPPING: (&str, &str) = ("invalid_value", "VALUE-1");\n',
                 )
         errors = self.errors()
         self.assertEqual(len(errors), 3)
@@ -192,14 +192,14 @@ class DiagnosticGuardTests(unittest.TestCase):
 
     def test_escaped_and_raw_json_diagnostics_cannot_create_new_host_sites(self):
         sources = [
-            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"REQ-0001\"}";',
-            r'const ERROR: &str = "{\"payload\":\"{\\\"condition\\\":\\\"invalid_value\\\",\\\"requirement\\\":\\\"REQ-0001\\\"}\"}";',
-            r'const ERROR: &str = r###"{"condition":"invalid_value","requirement":"REQ-0001"}"###;',
-            r'const ERROR: &str = "{\"condition\":\"invalid\\u005Fvalue\",\"requirement\":\"REQ-0001\"}";',
-            r'const ERROR: &str = r#"{"condition":"invalid\u005Fvalue","requirement":"REQ-0001"}"#;',
-            r'let error = format!("{{\"condition\":\"invalid_value\",\"requirement\":\"REQ-0001\",\"path\":\"{path}\"}}");',
+            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-1\"}";',
+            r'const ERROR: &str = "{\"payload\":\"{\\\"condition\\\":\\\"invalid_value\\\",\\\"requirement\\\":\\\"VALUE-1\\\"}\"}";',
+            r'const ERROR: &str = r###"{"condition":"invalid_value","requirement":"VALUE-1"}"###;',
+            r'const ERROR: &str = "{\"condition\":\"invalid\\u005Fvalue\",\"requirement\":\"VALUE-1\"}";',
+            r'const ERROR: &str = r#"{"condition":"invalid\u005Fvalue","requirement":"VALUE-1"}"#;',
+            r'let error = format!("{{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-1\",\"path\":\"{path}\"}}");',
             r'const CONDITION: &str = "invalid\u{005F}value";',
-            r'const REQUIREMENT: &str = "REQ-\x30\x30\x30\x31";',
+            r'const REQUIREMENT: &str = "VALUE-\x31";',
         ]
         for crate in sorted(guard.HOST_CRATES):
             for source in sources:
@@ -215,21 +215,21 @@ class DiagnosticGuardTests(unittest.TestCase):
     def test_escaped_json_unknown_requirement_is_still_undefined(self):
         self.write(
             "rust/crates/yamaa-core/src/json_error.rs",
-            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"REQ-999999\"}";'
+            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-999\"}";'
             + "\n",
         )
         self.assertEqual(len(self.errors()), 2)
         self.assertTrue(
-            any("undefined requirement REQ-999999" in e for e in self.errors())
+            any("undefined requirement VALUE-999" in e for e in self.errors())
         )
         self.assertTrue(any("outside canonical registry" in e for e in self.errors()))
 
     def test_comments_quoted_prose_and_character_literals_are_irrelevant(self):
         self.write(
             "rust/crates/yamaa-adapters/src/prose.rs",
-            r"""// "REQ-999999" and "invalid_value"
-/* outer "REQ-999999" /* nested "invalid_value" */ */
-const MESSAGE: &str = "a message containing \"invalid_value\" and \"REQ-999999\"";
+            r"""// "VALUE-999" and "invalid_value"
+/* outer "VALUE-999" /* nested "invalid_value" */ */
+const MESSAGE: &str = "a message containing \"invalid_value\" and \"VALUE-999\"";
 let quote = '"';
 let escaped_quote = '\"';
 let text: &'static str = "ordinary text \u00e9\U0001f642";
@@ -240,7 +240,7 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
     def test_multiline_raw_json_diagnostic_is_a_new_site(self):
         self.write(
             "rust/crates/yamaa-adapters/src/errors.rs",
-            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"requirement":"REQ-0001"\n}"#;\n',
+            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"requirement":"VALUE-1"\n}"#;\n',
         )
         self.assertEqual(len(self.errors()), 1)
         self.assertIn("errors.rs:1: new diagnostic", self.errors()[0])
@@ -248,12 +248,12 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
     def test_generated_schema_is_exempt_from_ownership_but_not_normative_ids(self):
         path = self.write(
             "rust/crates/yamaa-adapters/src/shipped_schema/data.rs",
-            'const DATA: &str = "invalid_value";\nconst REQ: &str = "REQ-0001";\n',
+            'const DATA: &str = "invalid_value";\nconst REQ: &str = "VALUE-1";\n',
         )
         self.assertEqual(self.errors(), [])
-        path.write_text('const REQ: &str = "REQ-999999";\n')
+        path.write_text('const REQ: &str = "VALUE-999";\n')
         self.assertEqual(len(self.errors()), 1)
-        self.assertIn("undefined requirement REQ-999999", self.errors()[0])
+        self.assertIn("undefined requirement VALUE-999", self.errors()[0])
 
     def test_missing_condition_and_wrong_phase_fail(self):
         path = self.root / "yaml/conditions.yaml"
@@ -303,10 +303,10 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
     def test_new_core_and_engine_sites_are_rejected_in_every_literal_form(self):
         sources = [
             'const CONDITION: &str = "invalid_value";',
-            'const REQUIREMENT: &str = "REQ-0001";',
-            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"REQ-0001\"}";',
-            r'const ERROR: &str = r#"{"condition":"invalid_value","requirement":"REQ-0001"}"#;',
-            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"requirement":"REQ-0001"\n}"#;',
+            'const REQUIREMENT: &str = "VALUE-1";',
+            r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"requirement\":\"VALUE-1\"}";',
+            r'const ERROR: &str = r#"{"condition":"invalid_value","requirement":"VALUE-1"}"#;',
+            'const ERROR: &str = r#"{\n"condition":"invalid_value",\n"requirement":"VALUE-1"\n}"#;',
         ]
         for crate in sorted(guard.CORE_CRATES):
             for source in sources:
@@ -328,12 +328,12 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         relative = "rust/crates/yamaa-core/src/prose.rs"
         self.write(
             relative,
-            '// "REQ-999999"\n/* "invalid_value" */\nconst PROSE: &str = "about \\"invalid_value\\"";\n',
+            '// "VALUE-999"\n/* "invalid_value" */\nconst PROSE: &str = "about \\"invalid_value\\"";\n',
         )
         self.assertEqual(self.errors(), [])
         self.write(
             "rust/crates/yamaa-core/src/diagnostic.rs",
-            'const REQ: &str = "REQ-0001";\n',
+            'const REQ: &str = "VALUE-1";\n',
         )
         self.write(
             "rust/crates/yamaa-core/src/shipped_schema_data.rs",
@@ -571,16 +571,14 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         self.assertEqual(self.errors(), [])
 
-    def test_retired_citation_is_not_a_definition(self):
+    def test_a_card_id_in_prose_is_not_a_definition(self):
+        path = self.root / "rules/values.md"
+        path.write_text(path.read_text() + "\nA retired VALUE-2 is historical.\n")
         self.write(
-            "rules/values.md",
-            "**REQ-0001.** Required.\nRetired REQ-0002 is historical.\n",
-        )
-        self.write(
-            "rust/crates/yamaa-core/src/retired.rs", 'const REQ: &str = "REQ-0002";\n'
+            "rust/crates/yamaa-core/src/retired.rs", 'const RULE: &str = "VALUE-2";\n'
         )
         self.assertTrue(
-            any("undefined requirement REQ-0002" in e for e in self.errors())
+            any("undefined requirement VALUE-2" in e for e in self.errors())
         )
 
     def publication_unit_module(self):
@@ -617,10 +615,10 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.publication_unit_module()
         self.write(
             str(guard.PRIVATE_TEST_MODULE),
-            '#[test]\nfn independent_expectation() { assert_eq!("REQ-999999", "REQ-999999"); }\n',
+            '#[test]\nfn independent_expectation() { assert_eq!("VALUE-999", "VALUE-999"); }\n',
         )
         self.assertTrue(
-            any("undefined requirement REQ-999999" in e for e in self.errors())
+            any("undefined requirement VALUE-999" in e for e in self.errors())
         )
 
     def card_file(self, fails="Fails: `invalid_value`.\n"):
@@ -628,29 +626,18 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
             "rules/inheritance.md",
             '# Inheritance\n\n<a id="layer-1"></a>\n\n'
             "### LAYER-1. Layers compose in one order\n\n"
-            f"Layers compose depth first.\n\n{fails}Replaces: REQ-0002.\n",
+            f"Layers compose depth first.\n\n{fails}",
         )
 
-    def test_registry_accepts_card_and_replaced_requirement_ids(self):
+    def test_registry_accepts_the_id_of_any_card(self):
         self.card_file()
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        for requirement in ("LAYER-1", "REQ-0002"):
-            with self.subTest(requirement=requirement):
-                path.write_text(
-                    path.read_text().replace(
-                        'Some("REQ-0001")', f'Some("{requirement}")'
-                    )
-                )
-                self.assertEqual(self.errors(), [])
-                path.write_text(
-                    path.read_text().replace(
-                        f'Some("{requirement}")', 'Some("REQ-0001")'
-                    )
-                )
+        path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("LAYER-1")'))
+        self.assertEqual(self.errors(), [])
 
     def test_card_cause_reports_a_condition_its_fails_line_names(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(path.read_text().replace('Some("REQ-0001")', 'Some("LAYER-1")'))
+        path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("LAYER-1")'))
         for fails in ("", "Fails: `engine_rejected`.\n"):
             with self.subTest(fails=fails):
                 self.card_file(fails)
@@ -664,44 +651,25 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         self.card_file("Fails: `engine_rejected`, `invalid_value`.\n")
         self.assertEqual(self.errors(), [])
 
-    def test_requirement_cause_reports_a_condition_its_replacing_card_names(self):
+    def test_a_retired_requirement_id_is_no_citation(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(
-            path.read_text().replace('Some("REQ-0001")', 'Some("REQ-0002")')
-        )
-        for fails in ("", "Fails: `engine_rejected`.\n"):
-            with self.subTest(fails=fails):
-                self.card_file(fails)
-                self.assertEqual(
-                    self.errors(),
-                    [
-                        "core diagnostic registry:Invalid: REQ-0002 is replaced by "
-                        "LAYER-1, which does not name invalid_value in its Fails line"
-                    ],
-                )
-        self.card_file("Fails: `engine_rejected`, `invalid_value`.\n")
-        self.assertEqual(self.errors(), [])
-
-    def test_legacy_requirement_cannot_be_cited(self):
-        self.write("rules/values.md", "**REQ-0001.** A normative requirement.\n")
+        path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("REQ-0001")'))
         self.assertEqual(
             self.errors(),
             [
-                "core diagnostic registry:Invalid: REQ-0001 is a legacy requirement "
-                "with no Fails line naming invalid_value"
+                "core diagnostic registry: unrecognized cause: Invalid => "
+                '("validation", "invalid_value", Some("REQ-0001")),'
             ],
         )
 
     def test_undefined_citation_is_reported_once(self):
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(
-            path.read_text().replace('Some("REQ-0001")', 'Some("REQ-0009")')
-        )
+        path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("VALUE-9")'))
         self.assertEqual(
             self.errors(),
             [
                 "rust/crates/yamaa-core/src/diagnostic/mod.rs:2: "
-                "undefined requirement REQ-0009"
+                "undefined requirement VALUE-9"
             ],
         )
 
@@ -715,13 +683,16 @@ let text: &'static str = "ordinary text \u00e9\U0001f642";
         )
         (self.root / "rust/crates/yamaa-core/src/unknown.rs").unlink()
         path = self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs"
-        path.write_text(path.read_text().replace('Some("REQ-0001")', 'Some("RULE-1")'))
+        path.write_text(path.read_text().replace('Some("VALUE-1")', 'Some("RULE-1")'))
         self.assertTrue(any("unrecognized cause" in e for e in self.errors()))
 
     def test_missing_rules_and_sources_do_not_pass(self):
         (self.root / "rules/values.md").unlink()
         self.assertEqual(self.errors(), ["no rule definitions found"])
-        self.write("rules/values.md", "**REQ-0001.** Required.\n")
+        self.write(
+            "rules/values.md",
+            '<a id="value-1"></a>\n\n### VALUE-1. Values are valid\n\nA value is valid.\n',
+        )
         (self.root / "rust/crates/yamaa-core/src/diagnostic/mod.rs").unlink()
         self.assertEqual(self.errors(), ["no Rust crate sources found"])
 

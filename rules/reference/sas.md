@@ -18,7 +18,6 @@ admit versions 5 and 8 and contain exactly one dataset member. These profiles
 add no output format; publication remains CSV or Parquet.
 
 Evidence: `negative-output-transport`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::rle_and_rdc_compression_equal_independent_upstream_csv_truth`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::reject_multiple_members_in_both_transport_versions`.
-Replaces: REQ-1310.
 
 A study document's submission section writes version 5 transport files from
 published artifacts under [SAS Transport](../profiles/xpt.md); that is not an
@@ -37,7 +36,6 @@ encoding, or an encoding declaration on another profile, fails validation.
 
 Fails: `source_encoding_required`.
 Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_run`.
-Replaces: REQ-1311.
 
 The failure reports `source_encoding_required` at `input.<dataset>.encoding`.
 
@@ -64,7 +62,6 @@ fails ingestion.
 
 Fails: `source_sas_invalid`, `unknown_field`.
 Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit`, `rust/tests/host-fixtures/sas-cases.json::character-cannot-be-int`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::malformed_truncated_encoding_and_unknown_fields_fail_before_execution`.
-Replaces: REQ-1312.
 
 A disallowed physical/type pair fails with `source_sas_invalid`
 ([SAS-7](#sas-7)). A `types` entry naming an unknown field still
@@ -84,7 +81,6 @@ SAS value. A numeric `date` counts whole days from 1960-01-01, and a numeric
 
 Fails: `field_parse_failed`.
 Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::ordinary_float_keeps_readstat_conversion_while_exact_narrowing_is_guarded`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::narrowing_never_truncates_or_accepts_an_ibm_precision_loss`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::numeric_narrowing_has_exact_bounds_and_epoch`.
-Replaces: REQ-1313, REQ-1314.
 
 An IBM transport number whose stored precision cannot be represented exactly
 in binary64 cannot narrow, even if decoding would produce an integral binary64
@@ -110,7 +106,6 @@ rejected.
 
 Fails: `source_sas_invalid`.
 Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::all_numeric_missing_tags_map_to_missing`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::both_xport_versions_preserve_order_padding_unicode_and_default_float`, `rust/tests/host-fixtures/sas-cases.json::embedded-nul-is-refused`.
-Replaces: REQ-1315.
 
 Under an omitted or `missing` `empty_string`, a zero-length character value is
 missing; under `present` it is the present empty string. An embedded NUL byte
@@ -129,7 +124,6 @@ their corresponding allocations where the physical framing supplies those
 counts.
 
 Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::fixed_header_geometry_is_checked_before_retaining_any_columns_or_rows`, `rust/crates/yamaa-adapters/src/resource_diagnostics.rs::fixed_sas_boundary_keeps_its_bound_and_input_owner`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::references_bouncing_between_pages_cannot_read_more_than_the_file_holds`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::the_row_limit_admits_live_records_not_stored_ones`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::decompressed_records_are_admitted_as_source_bytes_before_any_is_decompressed`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_small_file_cannot_decompress_to_more_than_the_source_byte_limit`, `python/tests/installed/installed_sas_sources.py::test_held_output_and_repeat_saves_survive_source_and_specification_mutation`.
-Replaces: REQ-1316.
 
 Resource refusal is separate from semantic source invalidity.
 
@@ -161,7 +155,6 @@ names and incomplete physical framing fail before derivation.
 
 Fails: `source_sas_invalid`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/sas.rs`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::unsupported_compression_has_a_specific_retained_cause`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::counted_deletions_without_marks_are_refused_with_a_rewrite_hint`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_keeps_trailing_blank_records`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::transport_without_a_usable_count_treats_trailing_blank_records_as_padding`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::trailing_blank_records_of_any_width_are_padding_only_without_a_count`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_row_size_subheader_cannot_change_the_row_length_once_columns_are_submitted`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::compressed_records_after_a_changed_row_length_are_refused_before_they_are_written`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::column_subheaders_shorter_than_their_fixed_part_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::a_short_attributes_subheader_cannot_rewrite_a_column_after_the_first_record`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::stored_record_counts_beyond_32_bits_are_refused`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::version_8_observation_count_must_be_decimal_digits_between_blanks`, `python/tests/installed/installed_sas_sources.py::test_bad_sources_are_not_read_by_check_and_failed_saves_have_no_output`.
-Replaces: REQ-1317.
 
 Cause `deleted_records` reports records deleted in place that cannot be
 reconciled with the dataset's count of them ([SAS-8](#sas-8)). That finding's

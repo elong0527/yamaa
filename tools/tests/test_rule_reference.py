@@ -1,4 +1,4 @@
-"""Generated reference pages render rule cards, requirements and schema fields."""
+"""Generated reference pages render rule cards and schema fields."""
 
 import re
 import subprocess
@@ -19,12 +19,12 @@ version: "1.0"
 
 literal_value:
     type: [str, int]
-    description: See REQ-0001.
+    description: See TYPE-1.
 
 path_base:
     type: str
     values: [declaring, entry]
-    description: See REQ-0003.
+    description: See LAYER-1.
 
 project_path:
     type: str
@@ -58,23 +58,20 @@ class RuleReferenceTests(unittest.TestCase):
             check=False,
         )
 
-    def test_requirement_index_lists_cards_requirements_and_replaced_ids(self):
+    def test_requirement_index_lists_every_card(self):
         index = self.page("requirements.md")
         self.assertIn(
+            "| Rule | Title | File |\n| --- | --- | --- |\n"
             "| [LAYER-1](../inheritance.md#layer-1) | Layers compose depth first "
-            "| `inheritance.md` |",
+            "| `inheritance.md` |\n",
             index,
         )
         self.assertIn(
-            "| [REQ-0004](../values/types.md#req-0004) | `values/types.md` |", index
+            "| [TYPE-2](../values/types.md#type-2) | A failed conversion fails "
+            "| `values/types.md` |",
+            index,
         )
-        self.assertIn("| REQ-0003 | [LAYER-1](../inheritance.md#layer-1) |", index)
-        self.assertLess(
-            index.index("## Rule cards"), index.index("## Requirements not yet")
-        )
-        self.assertLess(
-            index.index("## Requirements not yet"), index.index("## Replaced")
-        )
+        self.assertEqual(index.count("\n## "), 1)
 
     def test_summary_lists_principles_and_each_card_title(self):
         summary = self.page("rules-summary.md")
@@ -82,7 +79,7 @@ class RuleReferenceTests(unittest.TestCase):
         self.assertIn(
             "**P1. Layers are ordered.** Layers compose in one order. Enforced by\n"
             "[LAYER-1](../inheritance.md#layer-1) and "
-            "[REQ-0001](../values/types.md#req-0001).",
+            "[TYPE-1](../values/types.md#type-1).",
             summary,
         )
         self.assertIn("## Inheritance\n\nResolve inherited layers.\n", summary)
@@ -95,19 +92,18 @@ class RuleReferenceTests(unittest.TestCase):
         self.assertNotIn("A cycle reports its path", summary)
         self.assertNotIn("Fails:", summary)
         self.assertIn(
-            "## Not yet converted\n\nThese contracts keep their `REQ-NNNN` requirements"
-            " until they become\ncards.\n\n- [Types](../values/types.md): Define column types.",
+            "## Types\n\nDefine column types.\n\n### Columns\n\n"
+            "- [TYPE-1](../values/types.md#type-1). A column has one type\n",
             summary,
         )
 
-    def test_schema_fields_link_cards_replaced_ids_and_free_text(self):
+    def test_schema_fields_link_cards_and_free_text(self):
         fields = self.page("schema-fields.md")
         self.assertIn(
             '| `literal_value` | `["str", "int"]` | `false` | Absent | -- '
-            "| [REQ-0001](../values/types.md#req-0001) |",
+            "| [TYPE-1](../values/types.md#type-1) |",
             fields,
         )
-        # A replaced ID links to the card that now holds its meaning.
         self.assertIn("| [LAYER-1](../inheritance.md#layer-1) |", fields)
         self.assertIn(
             "| A local path, composed under [LAYER-2](../inheritance.md#layer-2) "
@@ -121,15 +117,13 @@ class RuleReferenceTests(unittest.TestCase):
             ("null", f"schema description must be a string: {source}"),
             ("17", f"schema description must be a string: {source}"),
             (
-                "See REQ-9999.",
-                f"schema description cites REQ-9999, which names no rule: {source}",
+                "See TYPE-9.",
+                f"schema description cites TYPE-9, which names no rule: {source}",
             ),
         ):
             with self.subTest(value=value):
                 self.schema.write_text(
-                    SCHEMA.replace(
-                        "description: See REQ-0001.", f"description: {value}"
-                    )
+                    SCHEMA.replace("description: See TYPE-1.", f"description: {value}")
                 )
                 with self.assertRaisesRegex(ValueError, error):
                     generated(self.root)
@@ -148,16 +142,16 @@ class RuleReferenceTests(unittest.TestCase):
 
     def test_schema_sources_share_strict_yaml_loader(self):
         for replacement, message in (
-            ("description: &owner See REQ-0001.", "YAML anchors are not allowed"),
-            ("description: !!str See REQ-0001.", "explicit YAML tags are not allowed"),
+            ("description: &owner See TYPE-1.", "YAML anchors are not allowed"),
+            ("description: !!str See TYPE-1.", "explicit YAML tags are not allowed"),
             (
-                "description: See REQ-0001.\n    <<: {}",
+                "description: See TYPE-1.\n    <<: {}",
                 "YAML merge keys are not allowed",
             ),
         ):
             with self.subTest(feature=message):
                 self.schema.write_text(
-                    SCHEMA.replace("description: See REQ-0001.", replacement)
+                    SCHEMA.replace("description: See TYPE-1.", replacement)
                 )
                 errors = check(self.root).errors
                 self.assertTrue(
@@ -203,16 +197,13 @@ class RuleReferenceTests(unittest.TestCase):
         source = self.root / "rules/values/types.md"
         target = source.with_name("kinds.md")
         source.rename(target)
-        target.write_text(
-            target.read_text().replace("id: values/types", "id: values/kinds")
-        )
         for path in (self.root / "rules/README.md", self.root / "rules/inheritance.md"):
             path.write_text(
                 path.read_text().replace("values/types.md", "values/kinds.md")
             )
         self.assertEqual(check(self.root).errors, [])
         self.assertIn(
-            "[REQ-0001](../values/kinds.md#req-0001)", self.page("requirements.md")
+            "[TYPE-1](../values/kinds.md#type-1)", self.page("requirements.md")
         )
 
     def test_repository_pages_render(self):
@@ -263,10 +254,10 @@ class RuleReferenceTests(unittest.TestCase):
             self.root,
             "yaml/v1/schema_spec.yaml",
             'version: "1.0"\n\nroot_class:\n'
-            "    - yamaa:\n        type: str\n        description: See REQ-9999.\n",
+            "    - yamaa:\n        type: str\n        description: See TYPE-9.\n",
         )
         source = "v1/schema_spec.yaml:root_class.yamaa.description"
-        error = f"schema description cites REQ-9999, which names no rule: {source}"
+        error = f"schema description cites TYPE-9, which names no rule: {source}"
         with self.assertRaisesRegex(ValueError, error):
             generated(self.root)
         self.assertIn(error, check(self.root).errors)

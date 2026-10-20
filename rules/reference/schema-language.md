@@ -24,7 +24,6 @@ loaded before names resolve, and every document in a bundle declares the same
 version.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
-Replaces: REQ-0242, REQ-0243, REQ-0244, REQ-0282.
 
 A document may be included by several entry points; declaration uniqueness
 applies within each loaded bundle. Absolute paths, parent traversal, URLs,
@@ -45,7 +44,6 @@ fails.
 
 Fails: `schema_version_mismatch`.
 Evidence: `negative-version-mismatch`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::entry_version_finding_precedes_parent_and_study_authority`.
-Replaces: REQ-0245, REQ-0281.
 
 A specification whose `schema_version` does not equal the bundle version fails
 with `schema_version_mismatch`.
@@ -63,7 +61,6 @@ notation.
 
 Fails: `invalid_yaml`.
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::complete_original_codec_reports_survive_schema_closure_admission`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::forbidden_metadata_reports_its_prefix_and_precedes_later_errors`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::merge_key_style_and_non_scalar_keys_are_checked`.
-Replaces: REQ-0246, REQ-0247, REQ-0280.
 
 <a id="schema-4"></a>
 
@@ -77,7 +74,6 @@ unquoted ISO-looking date or datetime is also a string. This holds without
 requiring authors to quote values.
 
 Evidence: `schema-non-finite`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::core_booleans_nulls_and_text_do_not_use_yaml11_resolvers`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::different_large_integer_keys_are_never_rounded_or_collapsed`.
-Replaces: REQ-0248, REQ-0249.
 
 Default parser settings do not satisfy this rule.
 [Values](../values.md)'s non-finite normalization applies
@@ -101,7 +97,6 @@ declare `type` or descriptor constraints. Named-type references may cross
 module boundaries, and recursive types are allowed.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::complete_bundle_resolves_forward_names_and_preserves_reused_default_origin`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::registry_contributions_merge_after_complete_include_loading`, `rust/crates/yamaa-core/tests/schema_references.rs::union_selects_success_then_matching_outer_type_and_recursion_is_value_local`.
-Replaces: REQ-0250, REQ-0251, REQ-0253, REQ-0254, REQ-0255, REQ-0256.
 
 A specification value is finite and must eventually match a non-recursive
 type.
@@ -142,7 +137,6 @@ Unknown references, reuse cycles and duplicate field names after expansion are
 errors.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::include_and_field_reuse_cycles_do_not_become_recursive_aliases`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::original_sources_locations_reused_defaults_and_fresh_normalization_are_retained`.
-Replaces: REQ-0252.
 
 <a id="schema-7"></a>
 
@@ -157,7 +151,6 @@ matches that entry's payload shape.
 
 Fails: `invalid_operation_count`, `unknown_operation`, `model_contract_mismatch`.
 Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_registry_entries_and_closed_include_names_are_rejected`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::duplicate_reused_fields_and_unknown_types_preserve_stage_order`.
-Replaces: REQ-0257, REQ-0258, REQ-0259, REQ-0260, REQ-0286.
 
 ```yaml
 expressions:
@@ -207,7 +200,6 @@ are not integers. An `int` is accepted where `float` is expected, but a
 unresolved reference fails.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::builtins_and_unresolved_names_are_syntax_not_bundle_resolution`, `rust/crates/yamaa-core/tests/schema_references.rs::malformed_types_and_string_encoded_unions_are_rejected`, `rust/crates/yamaa-core/tests/schema_references.rs::constraints_keep_order_unicode_lengths_and_alias_requirements_after_type_success`.
-Replaces: REQ-0261, REQ-0262, REQ-0263, REQ-0283.
 
 ```text
 type_expression := type_name
@@ -247,7 +239,6 @@ document contains only the canonical class. A union of a type `T` and
 `list[T]` is a bundle error, and no other union is shorthand.
 
 Evidence: `schema-shorthand`, `rust/crates/yamaa-core/tests/schema_references.rs::single_or_list_unions_are_bundle_errors_and_lists_normalize_as_written`, `rust/crates/yamaa-core/tests/schema_references.rs::shorthand_checks_the_written_member_without_reinterpreting_generated_fields`.
-Replaces: REQ-0264, REQ-0265, REQ-0266, REQ-0267, REQ-0268.
 
 The class is the canonical form. When a bare `V` expands, declared defaults
 are applied to the remaining fields of the class and other optional fields
@@ -319,7 +310,6 @@ when `required` is false or absent, and it must satisfy the same descriptor.
 An invalid descriptor keyword or default fails.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::findings_follow_keyword_type_required_description_constraint_order`, `rust/crates/yamaa-core/tests/schema_inheritance_dependency_diagnostics.rs::invalid_types_and_required_flags_do_not_become_boolean_integer_coercions`, `rust/crates/yamaa-core/tests/schema_references.rs::invalid_default_preparation_never_bypasses_normalization_admission`.
-Replaces: REQ-0269, REQ-0270, REQ-0271, REQ-0272, REQ-0273, REQ-0274, REQ-0275, REQ-0276, REQ-0284.
 
 | Keyword | Allowed | Meaning |
 |---|---|---|
@@ -344,7 +334,6 @@ validation, retaining the rejected value's declaring path and complete reason.
 
 Fails: `invalid_field_type`, `value_not_permitted`, `pattern_mismatch`, `minimum_length`, `invalid_size`, `model_contract_mismatch`.
 Evidence: `negative-str-case-unknown`, `negative-str-pad-width`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::captured_structural_projection_preserves_complete_ordered_constraint_outcome_and_authority`.
-Replaces: REQ-0277, REQ-0287.
 
 A value of the wrong type fails with `invalid_field_type`, a value outside
 `values` with `value_not_permitted`, a string that does not satisfy `pattern`
@@ -362,7 +351,6 @@ field the class does not declare. An undeclared or missing class field fails.
 
 Fails: `unknown_field`, `missing_required_field`, `model_contract_mismatch`.
 Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::custom_versionless_class_preserves_ordered_required_type_and_unknown_findings`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::final_model_findings_retain_no_pass_document_and_move_original_source`, `rust/crates/yamaa-core/tests/schema_references.rs::version_precedes_field_findings_and_classes_keep_schema_then_input_order`.
-Replaces: REQ-0285.
 
 Schema findings report an undeclared field as `unknown_field` and a missing
 required field as `missing_required_field`. Final normalized model admission
@@ -380,7 +368,6 @@ them. The bundle writes a class field descriptor in flow form without a
 of how the bundle is written, not a validation requirement.
 
 Evidence: `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::compact_flow_pairs_keep_nested_mapping_entries`, `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::shipped_closure_retains_every_authoritative_byte_and_admits_without_a_directory`.
-Replaces: REQ-0278, REQ-0279.
 
 ```yaml
 example_class:

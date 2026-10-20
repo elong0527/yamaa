@@ -20,7 +20,6 @@ reference to an undeclared window fails.
 
 Fails: `unknown_window`.
 Evidence: `negative-unknown-window`, `schema-window-functions`, `adam-adae-severity-rank`.
-Replaces: REQ-1251, REQ-1253.
 
 Omitted fields keep their ordinary window meanings: omission does not create a
 parameter the caller can supply. Names belong to a separate window naming list
@@ -43,7 +42,6 @@ restriction applies to the expanded window. The resolved specification
 contains only inline windows and omits root `windows`.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_windows.rs::expands_independent_copies_keeps_order_scope_and_definition_origins`, `adam-adlbc-window-chain`, `schema-window-functions`.
-Replaces: REQ-1252.
 
 Definition shapes are checked in every written layer, including unused
 definitions. Expanded dependencies take part in reachability and column
@@ -67,7 +65,6 @@ missing group positions share one partition.
 
 Fails: `invalid_field_type`.
 Evidence: `schema-window-functions`, `schema-window-intermediate-rank`, `negative-window-repeated-group`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`.
-Replaces: REQ-0293, REQ-0326, REQ-1122, REQ-1129.
 
 A `window.group_by` names each variable once; a variable listed again fails as
 `invalid_field_type` at that entry, reporting the variable. A window partition
@@ -156,7 +153,6 @@ construction, a `window.filter` that is not a Boolean predicate over
 constructed output columns fails.
 
 Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
-Replaces: REQ-0294, REQ-0327.
 
 <a id="window-5"></a>
 
@@ -171,7 +167,6 @@ validation error rather than silently ignored.
 
 Fails: `window_order_by_required`, `window_order_by_forbidden`.
 Evidence: `negative-locf-no-order`, `rust/crates/yamaa-adapters/tests/fixtures/window_diagnostics.tsv`, `rust/crates/yamaa-adapters/tests/fixtures/specs/window-failures.json`, `rust/crates/yamaa-adapters/tests/execution_declarative_self.rs::value_and_tie_break_bind_at_their_paths_and_window_order_stays_forbidden`.
-Replaces: REQ-0340, REQ-0341.
 
 ## Window operations
 
@@ -188,7 +183,6 @@ position they occupy and the next distinct value takes its own position; with
 `dense`, the next distinct value takes the following number.
 
 Evidence: `schema-window-functions`, `adam-adae-severity-rank`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::numbering_and_rank_keep_exact_order_null_placement_and_ties_within_partitions`.
-Replaces: REQ-0303, REQ-1123, REQ-1124.
 
 The tie-break settles positions, not equality. `row_number`, `row_value`,
 `locf` and right-side selection read the positions themselves, so a tie
@@ -215,7 +209,6 @@ distinguish an absent row from a present row whose value is missing. An
 
 Fails: `zero_offset`.
 Evidence: `schema-window-functions`, `negative-row-no-prior`.
-Replaces: REQ-0328, REQ-1125.
 
 The current row's own value is `source`, and a window must not be a second
 spelling of it.
@@ -232,7 +225,6 @@ instead. With `include_current: false` the current row is never a candidate.
 A row with no qualifying source yields missing.
 
 Evidence: `adam-advs-locf`, `adam-adqs-missed-visit-locf`, `adam-advs-carryforward`, `schema-window-functions`.
-Replaces: REQ-1126, REQ-1239.
 
 `locf` preserves row count and the selected value's type and temporal
 precision. Zero and a present empty string are values, not gaps. In either
@@ -277,7 +269,6 @@ and every term fail.
 
 Fails: `ambiguous_baseline`, `incompatible_input_type`.
 Evidence: `negative-tied-baseline`, `negative-baseline-unresolved-tie`, `schema-baseline-tie-break`, `schema-baseline-exclusive`, `schema-baseline-missing-value`, `schema-window-functions`, `adam-adae-worsening-emergence`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_tie_break_terms_pick_the_last_same_date_row_or_fail_when_still_tied`, `rust/crates/yamaa-adapters/tests/execution_window_semantics.rs::baseline_flag_judges_each_row_by_its_own_reference_and_skips_filtered_rows`.
-Replaces: REQ-1127.
 
 `date` and `reference_date` are both `date` columns or both `datetime`
 columns; any other pairing fails validation as `incompatible_input_type` at
@@ -325,7 +316,6 @@ return the selected value with its type and, for a temporal value, its
 collected precision. `row_value` requires an integer `offset`.
 
 Evidence: `schema-window-functions`, `rust/crates/yamaa-adapters/tests/fixtures/source_selection.json`.
-Replaces: REQ-0311, REQ-0316.
 
 Scalar selection follows [EXPR-6](expressions.md#expr-6), and temporal
 operation results follow [TIME-1](temporal.md#time-1).

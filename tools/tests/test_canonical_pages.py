@@ -139,7 +139,9 @@ class CanonicalPages(unittest.TestCase):
     def test_rule_references_render_from_current_sources(self):
         (self.root / "rules/values").mkdir()
         (self.root / "rules/values/types.md").write_text(
-            "# Types\n\n**REQ-0001.** A column has one type.\n", encoding="ascii"
+            '# Types\n\n<a id="type-1"></a>\n\n### TYPE-1. A column has one type\n\n'
+            "A column has one type.\n",
+            encoding="ascii",
         )
         (self.root / "rules/inheritance.md").write_text(
             '# Inheritance\n\n<a id="layer-1"></a>\n\n'
@@ -151,7 +153,7 @@ class CanonicalPages(unittest.TestCase):
         repository = "https://github.com/elong0527/yamaa"
         index = self.page("reference/requirements/index.html")
         self.assertIn(
-            f'href="{repository}/blob/main/rules/values/types.md#req-0001"', index
+            f'href="{repository}/blob/main/rules/values/types.md#type-1"', index
         )
         self.assertIn(
             f'href="{repository}/blob/main/rules/inheritance.md#layer-1"', index
@@ -167,10 +169,12 @@ class CanonicalPages(unittest.TestCase):
         self.assertNotIn("/edit/main/", summary)
         self.assertFalse((self.root / "rules/reference").exists())
         (self.root / "rules/values/types.md").write_text(
-            "# Types\n\n**REQ-0002.** A column has one type.\n", encoding="ascii"
+            '# Types\n\n<a id="type-2"></a>\n\n### TYPE-2. A column has one type\n\n'
+            "A column has one type.\n",
+            encoding="ascii",
         )
         self.build()
-        self.assertIn("REQ-0002", self.page("reference/requirements/index.html"))
+        self.assertIn("TYPE-2", self.page("reference/requirements/index.html"))
 
     def test_duplicate_pages_fail_with_the_canonical_edit_target(self):
         for destination, message in (

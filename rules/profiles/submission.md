@@ -25,7 +25,6 @@ the column.
 
 Fails: `submission_not_output_column`.
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionColumnNotOutput`, `rust/crates/yamaa-core/tests/schema_submission.rs::absent_submission_remains_absent_and_preserves_ordinary_column_declarations`.
-Replaces: REQ-0855, REQ-0856, REQ-0886, REQ-0909, REQ-1131, REQ-1148.
 
 An internal column is not in the artifact, so it is not in the document that
 describes the artifact; declaring metadata for one is an error rather than an
@@ -48,7 +47,6 @@ every column metadata field name.
 
 Fails: `reserved_metadata_key`.
 Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/project_execution.rs::submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause`.
-Replaces: REQ-0857, REQ-0858, REQ-0910.
 
 A study moves governed facts from the map to submission metadata. A reserved
 key fails validation with `reserved_metadata_key`, reporting the key.
@@ -68,7 +66,6 @@ the table, or to a standard of type `CT`, fails.
 
 Fails: `unknown_standard_family`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
-Replaces: REQ-0859, REQ-0860, REQ-0861, REQ-0924.
 
 | Family | Standard names |
 |---|---|
@@ -98,7 +95,6 @@ data.
 
 Fails: `reference_data_repeating_conflict`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionReferenceRepeating`, `rust/crates/yamaa-core/tests/schema_submission.rs::dataset_defaults_and_comment_survive_original_document_drop`.
-Replaces: REQ-0862, REQ-0863, REQ-0864, REQ-0865, REQ-0925, REQ-1130, REQ-1146, REQ-1147, REQ-1296.
 
 `label` states what the dataset is. It is the dataset's own description and is
 distinct from `domain`: `DM` is the domain and `Demographics` is the label.
@@ -126,7 +122,6 @@ fails validation, reporting the field.
 
 Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`.
-Replaces: REQ-0866, REQ-0867, REQ-0917.
 
 A domain declared for the `adam` family is an error rather than an unused
 value. A `role` declared for that family fails the same way under
@@ -149,7 +144,6 @@ the admitted set fails validation.
 
 Fails: `submission_data_type_not_admitted`.
 Evidence: `sdtm-vs-epoch-from-subject-elements`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDataType`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::submission_fields_do_not_change_any_original_domain_artifact`.
-Replaces: REQ-0868, REQ-0869, REQ-0870, REQ-0914, REQ-1145.
 
 | Declared type | Default | Also admits |
 |---|---|---|
@@ -193,7 +187,6 @@ declared otherwise.
 
 Fails: `submission_length_missing`, `submission_length_not_applicable`, `submission_length_invalid`.
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionLengthMissing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::effective_value_metadata_rejects_invalid_bounds_types_and_explicit_length_conflicts_before_data`.
-Replaces: REQ-0871, REQ-0872, REQ-0873, REQ-0911, REQ-0912.
 
 The other submission types carry fixed-form values, so a length for such a type
 restates that form. A `date` or `datetime` column has the fixed length its
@@ -220,7 +213,6 @@ transport is requested ([SUB-24](#sub-24)).
 
 Fails: `declared_length_conflict`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::declared_length_is_checked_once_over_unicode_scalar_values`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`.
-Replaces: REQ-0874, REQ-0875, REQ-0876, REQ-0913.
 
 The declared length binds rather than describes. `length` and `max_length`
 state one bound, and the bound is checked once either way. A `length` and a
@@ -293,7 +285,6 @@ is `adam`; a role there fails validation, reporting the field.
 
 Fails: `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionAdamField`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`.
-Replaces: REQ-0877, REQ-0878, REQ-0879.
 
 A numeric column's `display_format` is also its SAS format in a transport file
 ([XPT-9](xpt.md#xpt-9)), and an `adam` date's is fixed ([SUB-25](#sub-25)). An
@@ -324,7 +315,6 @@ dataset's class is a tabulation class and its `core` is `Req`.
 
 Fails: `core_mandatory_conflict`, `value_not_permitted`.
 Evidence: `sdtm-dm-metadata`, `negative-required-sex-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::mandatory_columns_are_checked_without_a_study_document`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionCoreMandatory`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionClassFamily`.
-Replaces: REQ-0880, REQ-0881, REQ-0882, REQ-0883, REQ-0884, REQ-0915, REQ-1141.
 
 For `sdtm` and `send`, `Req` is required, `Exp` expected and `Perm`
 permissible. For `adam`, `Req` is required, `Cond` conditionally required and
@@ -392,7 +382,6 @@ fails validation.
 
 Fails: `not_missing_failed`, `redundant_declaration`.
 Evidence: `negative-mandatory-arm-missing`, `negative-required-sex-missing`, `negative-value-level-mandatory-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::value_level_mandatory_applies_only_to_the_rows_of_its_test_code`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::restated_facts_and_relaxed_keys_fail_validation_before_data`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMandatoryRedundant`.
-Replaces: REQ-0885, REQ-0916.
 
 The domain build enforces the resolution of [SUB-10](#sub-10) without a study
 document. The check runs after the column's declared verifications and before
@@ -432,7 +421,6 @@ clauses can select one row fail validation.
 
 Fails: `value_level_where_invalid`, `duplicate_identifier`, `value_level_overlap`.
 Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `negative-value-level-overlap`, `negative-value-level-where-column`, `negative-numeric-test-code`, `rust/crates/yamaa-core/src/submission_values.rs::static_findings_name_the_entry_column_and_fault`, `rust/crates/yamaa-core/tests/schema_submission.rs::each_independent_value_admission_control_has_the_required_condition_and_entry_path`, `rust/crates/yamaa-core/tests/schema_submission.rs::entries_inherit_complete_metadata_and_preserve_written_occurrences`.
-Replaces: REQ-1162, REQ-1163, REQ-1164, REQ-1165, REQ-1166.
 
 The column-level `submission` stays the shared declaration for the column,
 and each entry supplies the metadata of the rows its where clause selects. An
@@ -493,7 +481,6 @@ that cannot be known.
 
 Fails: `value_level_multiple_matches`, `value_level_unmatched`, `refuted_value_origin`.
 Evidence: `negative-value-level-ambiguous-row`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::a_row_two_entries_select_fails_with_its_keys_and_both_entries`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::an_entry_that_matches_no_row_is_a_warning_and_scoped_checks_read_their_rows`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionValueOriginRefuted`.
-Replaces: REQ-1167, REQ-1168.
 
 Both checks run where [Verification](../verification.md) runs a column
 verification, after the column's declared verifications and before its other
@@ -543,7 +530,6 @@ carrying submission metadata fails.
 
 Fails: `origin_missing`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginMissing`, `rust/crates/yamaa-core/tests/schema_submission.rs::portable_choice_and_identifier_failures_use_only_applicable_current_causes`.
-Replaces: REQ-0887, REQ-0888, REQ-0918, REQ-1132, REQ-1142, REQ-1143.
 
 A submission document states where every value came from, and a column with no
 declared origin has no place in a submission document.
@@ -562,7 +548,6 @@ family does not admit fails.
 
 Fails: `origin_source_not_admitted`.
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`, `rust/crates/yamaa-adapters/tests/file_resources.rs::not_available_and_send_sources_follow_the_family_pairs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginSource`.
-Replaces: REQ-0889, REQ-0890, REQ-0891, REQ-0919.
 
 | Type | Admitted sources for `sdtm` |
 |---|---|
@@ -598,7 +583,6 @@ optional elsewhere. A description absent where this rule requires it, or a
 
 Fails: `origin_description_missing`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDescription`, `rust/crates/yamaa-core/src/submission_origin.rs::predecessor_descriptions_name_one_column_and_an_optional_condition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`.
-Replaces: REQ-0892, REQ-0920.
 
 Neither `Other` nor `Not Available` states anything alone. The dataset and the
 column are identifiers joined by one period, and the condition after the
@@ -624,7 +608,6 @@ no page reference, fails.
 
 Fails: `origin_document_missing`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginDocument`, `rust/crates/yamaa-adapters/tests/file_resources.rs::collected_origins_name_their_form_page_under_submission`, `python/tests/installed/installed_public_define.py::test_defaults_selection_bound_lists_and_required_acrf_aliases`.
-Replaces: REQ-0893, REQ-0894, REQ-0921.
 
 A value collected from a person is traceable to the form it was collected on.
 The annotated case report form is the only document the reference can name,
@@ -643,7 +626,6 @@ origin with no `method` fails.
 
 Fails: `method_missing`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionMethodMissing`.
-Replaces: REQ-0895, REQ-0923.
 
 The algorithm is what a derived origin claims exists; a claim with no
 algorithm attached is not traceable.
@@ -665,7 +647,6 @@ entries admit, and no shared type fails.
 
 Fails: `origin_contradicts_derivation`.
 Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::independent_metadata_refutations_preserve_shared_conditions_and_zero_writes`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::recodes_literals_and_stored_values_admit_their_published_origins`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::computed_values_and_case_reads_of_derived_columns_refute_collected`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-core/src/submission_origin.rs::every_derivation_row_refutes_exactly_its_published_types`, `rust/crates/yamaa-core/src/submission_origin.rs::only_the_reduction_of_one_variable_to_its_one_value_is_a_pivot`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionOriginRefuted`.
-Replaces: REQ-0896, REQ-0897, REQ-0898, REQ-0899, REQ-0900, REQ-0922.
 
 | Derivation | Admitted `origin.type` | Refuted |
 |---|---|---|
@@ -749,7 +730,6 @@ be equal; a renamed column keeps its own label.
 
 Fails: `origin_contradicts_derivation`, `refuted_value_origin`, `predecessor_label_mismatch`.
 Evidence: `negative-mandatory-arm-missing`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::predecessor_columns_copy_the_column_their_description_names`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::pivots_and_plain_lookups_are_bare_reads_that_admit_collected`, `rust/crates/yamaa-adapters/tests/file_resources.rs::predecessor_labels_and_the_dataset_inventory_span_every_section`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionPredecessorLabel`.
-Replaces: REQ-1157.
 
 The `source` reads the predecessor through the input dataset declared under the
 predecessor's name: `origin.description: DM.AGE` requires `source: DM.AGE`, and
@@ -790,7 +770,6 @@ carries code as text under a named `context`, which this language neither
 parses nor evaluates.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/schema_submission.rs::all_core_origin_source_and_method_choices_are_retained`.
-Replaces: REQ-0901, REQ-0902, REQ-0903, REQ-0904, REQ-1133, REQ-1135, REQ-1139, REQ-1144.
 
 A generated document carries the code unchanged. No rule checks the code
 against the specification's derivation: an expression is sponsor-supplied
@@ -810,7 +789,6 @@ document the study document declares, and optionally the place within it: as a
 string the reference is the identifier, and as a mapping it adds `pages`.
 
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::complete_nested_metadata_retains_integer_text_documents_pages_and_order_after_drop`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`.
-Replaces: REQ-0905, REQ-0906, REQ-1134, REQ-1136, REQ-1137, REQ-1138, REQ-1140.
 
 [Define-XML](define-xml.md) mints each comment an identifier from the place it
 is declared, so a shared comment would need an identifier space the profile
@@ -837,7 +815,6 @@ the dataset's `class`. Every other rule is checked when
 [Define-XML](define-xml.md) composes the specification into a document.
 
 Evidence: `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-adapters/tests/file_resources.rs::original_lb_source_rejection_and_per_value_published_vocabulary_have_zero_writes`.
-Replaces: REQ-0907, REQ-0908.
 
 Checked when the specification is validated on its own:
 

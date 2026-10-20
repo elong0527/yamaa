@@ -3,25 +3,24 @@
 One run reads the shared rules model (:mod:`tools.rules.model`) and checks:
 
 - the index: its Rule files table lists every rule file once under its title,
-  with a unique prefix (``REQ`` for a contract not yet converted), and each
-  principle cites at least one rule;
-- cards: anchor, prefix, unique ID, title, statement length, and the
-  ``Fails``, ``Evidence`` and ``Replaces`` lines;
-- legacy requirements: one definition each, anchors, contract front matter
-  and sections, and the verification checks the verification contract defines;
+  with a unique prefix, and each principle cites at least one rule;
+- cards: anchor, prefix, unique ID, title, statement length, the ``Fails`` and
+  ``Evidence`` lines, and the verification checks the verification rules
+  define;
 - every rule ID cited anywhere in the repository, and the requirement each
-  negative benchmark expects, resolves to a legacy requirement, a card or a
-  card's ``Replaces``;
+  negative benchmark expects, names a card, and no retired ``REQ-NNNN`` ID is
+  cited outside the records that keep them;
 - relative markdown links name an existing file and anchor, and a link whose
   text is a rule ID targets that rule;
 - schema descriptions and comments cite rules that resolve;
 - rules prose states behavior without rationale phrases.
 
 It also prints, without failing, the registered conditions that no card's
-``Fails`` line or legacy requirement names.
+``Fails`` line names.
 """
 
 import argparse
+import fnmatch
 import posixpath
 import re
 import textwrap
@@ -31,10 +30,8 @@ from pathlib import Path, PurePosixPath
 import yaml
 from tools.docs.pages import CANONICAL, GENERATED, GENERATED_DIRECTORIES
 from tools.paths import ROOT
-from tools.rules.migrate import SENTINELS
 from tools.rules.model import (
     GENERATED_PAGES,
-    LEGACY_PREFIX,
     METADATA_LABELS,
     anchors,
     authored_files,
@@ -43,7 +40,6 @@ from tools.rules.model import (
     prose_lines,
     words,
 )
-from tools.validation.editorial import UniqueKeyLoader
 from tools.validation.repository_schema import (
     POINTER,
     SchemaSourceError,
@@ -57,9 +53,6 @@ STATEMENT_WORDS = 90
 CARD_NUMBER = re.compile(r"[1-9]\d*")
 CONDITION = re.compile(r"`(?P<name>[a-z][a-z0-9_]*)`")
 EVIDENCE = re.compile(r"`(?P<item>[^`\s]+)`")
-REPLACED = re.compile(r"REQ-\d{4}")
-RETIRED = re.compile(r"(?:this form is )?retired\b", re.IGNORECASE)
-CONTRACT_SECTIONS = (["Requirements"], ["Requirements", "Error conditions"])
 SCHEMA_COMMENT = re.compile(r"(?:^\s*#|\s+#)\s*([^\n]*)", re.MULTILINE)
 
 VERIFICATION_CONTRACT = "verification.md"
@@ -115,17 +108,23 @@ CITATION_EXEMPT = {
     "benchmarks/schema-text-functions/input/dm.csv": None,
     # SAS arithmetic on a variable named VALUE.
     "evaluations/harbor/solutions/sdtm-vs-units/result.sas": frozenset({"VALUE-32"}),
-    # A synthetic diagnostic record that names no rule, and this table.
-    "python/tests/test_native_results.py": frozenset({"REQ-0000"}),
-    "tools/rules/check.py": frozenset({"REQ-0000", "VALUE-32"}),
-    # The sentinel IDs the citations command leaves as written.
-    "tools/rules/migrate.py": SENTINELS,
+    # This table.
+    "tools/rules/check.py": frozenset({"VALUE-32"}),
     "tools/tests/test_diagnostics.py": None,
     "tools/tests/test_rule_reference.py": None,
     "tools/tests/test_rules_check.py": None,
     "tools/tests/test_rules_migrate.py": None,
     "tools/tests/test_rules_model.py": None,
 }
+# REQ-NNNN IDs were retired when rule cards replaced them: none names a rule.
+# Benchmark inputs are data, and these records quote the IDs of their time.
+RETIRED_ID = re.compile(r"\bREQ-\d{4,}\b")
+RETIRED_KEPT = (
+    "benchmarks/*/input/*",
+    "docs/design/*",
+    "docs/releases/0.4.0.md",
+    "docs/releases/0.5.0.md",
+)
 # A template the benchmark dashboard generator fills; not a page itself.
 LINK_EXEMPT = frozenset({"docs/articles/benchmark.md"})
 
@@ -171,13 +170,12 @@ def index_errors(rules):
             continue
         if not re.fullmatch(r"[A-Z]+", row.prefix):
             errors.append(f"{where}: prefix {row.prefix!r} must be capital letters")
-        elif row.prefix != LEGACY_PREFIX:
-            if row.prefix in prefixes:
-                errors.append(
-                    f"{where}: prefix {row.prefix} is already used by "
-                    f"{prefixes[row.prefix]}"
-                )
-            prefixes.setdefault(row.prefix, row.path)
+        elif row.prefix in prefixes:
+            errors.append(
+                f"{where}: prefix {row.prefix} is already used by "
+                f"{prefixes[row.prefix]}"
+            )
+        prefixes.setdefault(row.prefix, row.path)
         if rule_file.title is not None and row.title != rule_file.title:
             errors.append(
                 f"{where}: {row.path} is listed as {row.title!r} "
@@ -185,16 +183,6 @@ def index_errors(rules):
             )
         if not row.covers:
             errors.append(f"{where}: {row.path} needs a Covers description")
-        if rule_file.kind == "legacy" and row.prefix != LEGACY_PREFIX:
-            errors.append(
-                f"{where}: {row.path} holds legacy requirements and is listed "
-                f"with prefix {LEGACY_PREFIX} until it is converted"
-            )
-        if rule_file.kind == "cards" and row.prefix == LEGACY_PREFIX:
-            errors.append(
-                f"{where}: {row.path} holds cards and needs its own prefix, "
-                f"not {LEGACY_PREFIX}"
-            )
     for path in sorted(set(rules.files) - set(listed)):
         errors.append(f"rules/{path}: absent from the Rule files table in {INDEX}")
     return errors
@@ -225,79 +213,22 @@ def principle_errors(rules):
 
 
 def file_errors(rules):
-    """Each rule file holds cards or legacy requirements, never both."""
+    """Each rule file has a title and holds cards, without front matter."""
     errors = []
     for rule_file in rules.files.values():
         label = f"rules/{rule_file.path}"
         if rule_file.title is None:
             errors.append(f"{label}: no '# Title' heading")
-        if rule_file.kind == "mixed":
-            errors.append(
-                f"{label}: mixes cards and legacy requirements; convert the whole file"
-            )
-        elif rule_file.kind == "empty":
-            errors.append(f"{label}: defines no cards or requirements")
-        elif rule_file.kind == "cards":
-            if rule_file.front_matter is not None:
-                errors.append(f"{label}: a card file must not have front matter")
-            errors.extend(
-                f"{label}:{heading.line}: '### {heading.text}' is not a card "
-                "heading ('### PREFIX-N. Title')"
-                for heading in rule_file.stray_headings
-            )
-        else:
-            errors.extend(contract_errors(rule_file))
+        if not rule_file.cards:
+            errors.append(f"{label}: defines no cards")
+        if rule_file.front_matter is not None:
+            errors.append(f"{label}: a card file must not have front matter")
+        errors.extend(
+            f"{label}:{heading.line}: '### {heading.text}' is not a card "
+            "heading ('### PREFIX-N. Title')"
+            for heading in rule_file.stray_headings
+        )
     return errors
-
-
-def contract_errors(rule_file):
-    """Front matter, sections, anchors and live blocks of a legacy contract."""
-    label = f"rules/{rule_file.path}"
-    errors = []
-    meta = None
-    if rule_file.front_matter is not None:
-        try:
-            meta = yaml.load(
-                rule_file.front_matter.strip("-\n"), Loader=UniqueKeyLoader
-            )
-        except yaml.YAMLError as exc:
-            errors.append(f"{label}: invalid contract front matter: {exc}")
-    title = meta.get("title") if isinstance(meta, dict) else None
-    expected = {
-        "id": rule_file.path.removesuffix(".md"),
-        "title": title,
-        "status": "normative",
-    }
-    if meta != expected or not isinstance(title, str) or not title:
-        errors.append(f"{label}: expected id, title, and normative status")
-    sections = [heading.text for heading in rule_file.headings if heading.level == 2]
-    if sections not in CONTRACT_SECTIONS:
-        errors.append(f"{label}: incorrect contract section order")
-    for requirement in rule_file.requirements:
-        where = f"{label}:{requirement.line}"
-        if RETIRED.match(requirement.text):
-            errors.append(
-                f"{where}: retired requirement must be deleted: {requirement.id}"
-            )
-        if requirement.anchor != requirement.id.lower():
-            errors.append(
-                f'{where}: {requirement.id} needs <a id="{requirement.id.lower()}"></a>'
-                " directly above it"
-            )
-    return errors
-
-
-def requirement_errors(rules):
-    """Every legacy requirement is defined exactly once."""
-    defined = {}
-    for requirement in rules.all_requirements():
-        defined.setdefault(requirement.id, []).append(requirement.file)
-    return [
-        f"duplicate requirement definition: {identifier} "
-        f"({len(files)}x in {', '.join(sorted(set(files)))})"
-        for identifier, files in sorted(defined.items())
-        if len(files) > 1
-    ]
 
 
 def evidence_errors(root, item):
@@ -351,7 +282,7 @@ def metadata_errors(root, card, conditions):
                         f"{where}: {condition['name']} is not registered in "
                         "yaml/conditions.yaml"
                     )
-            elif entry.label == "Evidence":
+            else:
                 evidence = EVIDENCE.fullmatch(item)
                 problem = (
                     f"Evidence item {item!r} is not a `benchmark` or `path`"
@@ -360,19 +291,17 @@ def metadata_errors(root, card, conditions):
                 )
                 if problem:
                     errors.append(f"{where}: {problem}")
-            elif REPLACED.fullmatch(item) is None:
-                errors.append(f"{where}: Replaces item {item!r} is not a REQ-NNNN ID")
     order = [METADATA_LABELS.index(label) for label in dict.fromkeys(labels)]
     if order != sorted(order):
         errors.append(
             f"rules/{card.file}:{card.metadata[0].line}: {card.id}: metadata "
-            "must be ordered Fails, Evidence, Replaces"
+            "must be ordered Fails, Evidence"
         )
     return errors
 
 
 def card_errors(root, rules, conditions):
-    """Structure of every card, and IDs and replacements across all cards."""
+    """Structure of every card, and IDs across all cards."""
     errors = []
     prefixes = {
         row.path: row.prefix
@@ -393,7 +322,7 @@ def card_errors(root, rules, conditions):
                 f"{where}: the number must be at least 1, without leading zeros"
             )
         prefix = prefixes.get(card.file)
-        if prefix not in (None, LEGACY_PREFIX) and card.prefix != prefix:
+        if prefix is not None and card.prefix != prefix:
             errors.append(f"{where}: cards in {card.file} must use the prefix {prefix}")
         if not card.dotted:
             errors.append(f"{where}: the heading must read '### {card.id}. Title'")
@@ -409,31 +338,18 @@ def card_errors(root, rules, conditions):
                 f"has {count} words; the limit is {STATEMENT_WORDS}"
             )
         errors.extend(
-            f"rules/{card.file}:{line}: {card.id}: Fails, Evidence and Replaces must "
-            "form one paragraph directly after the statement"
+            f"rules/{card.file}:{line}: {card.id}: Fails and Evidence must form "
+            "one paragraph directly after the statement"
             for line in card.stray_metadata
         )
         errors.extend(metadata_errors(root, card, conditions))
     defined = {}
-    replaced = {}
     for card in rules.all_cards():
         defined.setdefault(card.id, []).append(card)
-        for identifier in card.replaces:
-            replaced.setdefault(identifier, []).append(card)
     for identifier, cards in sorted(defined.items()):
         if len(cards) > 1:
             places = ", ".join(f"rules/{card.file}:{card.line}" for card in cards)
             errors.append(f"duplicate card {identifier}: {places}")
-    for identifier, cards in sorted(replaced.items()):
-        if len(cards) > 1:
-            names = ", ".join(card.id for card in cards)
-            errors.append(f"{identifier} is replaced more than once: {names}")
-        requirement = rules.requirements.get(identifier)
-        if requirement is not None:
-            errors.append(
-                f"{identifier} is replaced by {cards[0].id} but still defined at "
-                f"rules/{requirement.file}:{requirement.line}"
-            )
     return errors
 
 
@@ -476,10 +392,7 @@ def verification_errors(root, rules):
             for definition in operations.values():
                 declared.update(fields(definition))
     declared |= registered
-    openings = [
-        (requirement.id, requirement.text) for requirement in contract.requirements
-    ]
-    openings += [(card.id, card.statement or "") for card in contract.cards]
+    openings = [(card.id, card.statement or "") for card in contract.cards]
     defined = {}
     for identifier, text in openings:
         match = DEFINING_NAME.match(text)
@@ -503,7 +416,7 @@ def verification_errors(root, rules):
 
 
 def citation_errors(root, rules):
-    """Every rule ID cited in the repository names a rule."""
+    """Every rule ID cited in the repository names a card, and none is retired."""
     errors = []
     for path in authored_files(root, CITATION_SUFFIXES, CITATION_NAMES):
         relative = path.relative_to(root).as_posix()
@@ -519,6 +432,14 @@ def citation_errors(root, rules):
                 errors.append(
                     f"{relative}:{line}: unresolved rule citation {identifier}"
                 )
+        if any(fnmatch.fnmatchcase(relative, kept) for kept in RETIRED_KEPT):
+            continue
+        for line, text_line in enumerate(text.splitlines(), 1):
+            for identifier in RETIRED_ID.findall(text_line):
+                errors.append(
+                    f"{relative}:{line}: retired requirement ID {identifier}; "
+                    "cite the card that replaced it"
+                )
     for path in sorted((root / "benchmarks").glob("negative-*/expected/error.yaml")):
         try:
             contract = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -529,8 +450,7 @@ def citation_errors(root, rules):
         cited = contract["requirement"]
         if not isinstance(cited, str) or rules.identifier.fullmatch(cited) is None:
             errors.append(
-                f"{path.relative_to(root).as_posix()}: requirement must be a rule ID "
-                "(REQ-NNNN or a card ID)"
+                f"{path.relative_to(root).as_posix()}: requirement must be a card ID"
             )
     return errors
 
@@ -649,10 +569,8 @@ def rationale_errors(root):
 
 
 def unnamed_conditions(rules, conditions):
-    """Registered conditions that no card's Fails line or legacy text names."""
+    """Registered conditions that no card's Fails line names."""
     named = {name for card in rules.all_cards() for name in card.fails}
-    for requirement in rules.all_requirements():
-        named.update(re.findall(r"[a-z][a-z0-9_]*", requirement.text))
     return sorted(set(conditions or ()) - named)
 
 
@@ -666,7 +584,6 @@ def check(root):
         *principle_errors(rules),
         *file_errors(rules),
         *card_errors(root, rules, conditions),
-        *requirement_errors(rules),
         *verification_errors(root, rules),
         *citation_errors(root, rules),
         *link_errors(root, rules),
@@ -683,7 +600,7 @@ def main():
     if report.unnamed_conditions:
         print(
             f"NOTE: {len(report.unnamed_conditions)} registered conditions are named "
-            "by no card Fails line or legacy requirement:"
+            "by no card Fails line:"
         )
         print(
             textwrap.fill(
@@ -701,8 +618,8 @@ def main():
         return 1
     rules = report.rules
     print(
-        f"PASS: {len(rules.cards)} cards and {len(rules.requirements)} legacy "
-        "requirements; citations, links, schema navigation and rules prose resolve."
+        f"PASS: {len(rules.cards)} cards; citations, links, schema navigation and "
+        "rules prose resolve."
     )
     return 0
 

@@ -19,7 +19,6 @@ under its own name.
 
 Fails: `unknown_field`.
 Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/preflight.rs`, `rust/tests/host-fixtures/cases.json`.
-Replaces: REQ-0076, REQ-0077, REQ-0078, REQ-0079, REQ-0081, REQ-0105.
 
 A row template may also name a named intermediate under
 [ROW-2](rows.md#row-2). [Inputs](inputs.md)
@@ -41,7 +40,6 @@ dataset.
 
 Fails: `duplicate_identifier`.
 Evidence: `negative-source-self-reference`.
-Replaces: REQ-0080, REQ-0082.
 
 [Column derivation](columns.md) owns what happens when a column
 reaches its own value through that column's window partition.
@@ -60,7 +58,6 @@ unknown dataset identifier or variable fails.
 
 Fails: `unknown_field`, `unresolvable_name`.
 Evidence: `schema-source-binding`, `negative-source-undeclared-field`, `rust/crates/yamaa-adapters/tests/fixtures/binding_diagnostics.tsv`.
-Replaces: REQ-0083, REQ-0084, REQ-0103, REQ-0106, REQ-1057.
 
 ```yaml
 source: DM.SEX
@@ -91,7 +88,6 @@ source variable with a scalar `source` fails.
 
 Fails: `ungrouped_driver_field`.
 Evidence: `schema-rows-group-scope`, `schema-column-default-own-record`, `rust/crates/yamaa-adapters/tests/fixtures/source_filter_scope.json`, `rust/crates/yamaa-adapters/tests/execution_grouped_driver_dataset.rs`, `rust/crates/yamaa-adapters/tests/execution_column_window_drivers.rs`, `rust/crates/yamaa-adapters/tests/execution_column_driver_bindings.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/binding.rs`.
-Replaces: REQ-0085, REQ-0086, REQ-0087, REQ-0107.
 
 The driver is an input dataset or an eligible named intermediate under
 [ROW-2](rows.md#row-2). A scalar `source` naming a source
@@ -130,7 +126,6 @@ Plain strings outside fields typed `variable` are literal under
 [Values](values.md).
 
 Evidence: `negative-variable-nested`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
-Replaces: REQ-0088, REQ-0089, REQ-0090, REQ-0091, REQ-1058.
 
 ```yaml
 - name: PREFIX
@@ -163,7 +158,6 @@ reading no record is an absent match, which `absent` answers
 ([LOOKUP-24](lookup.md#lookup-24)).
 
 Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_filters.json`.
-Replaces: REQ-0093, REQ-0094, REQ-0095.
 
 ```yaml
 source:
@@ -189,7 +183,6 @@ complete `ItemOID`, periods included. A bare string is the
 [Schema language](reference/schema-language.md) shorthand for `{item: ...}`.
 
 Evidence: `schema-odm-item-subject`, `schema-odm-form-items`, `rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json`.
-Replaces: REQ-1265, REQ-1274.
 
 ```yaml
 derivation: {odm: ODM.IT.DM.AGE}
@@ -219,7 +212,6 @@ stored as text. An ODM input declares no `types` and no `schema`.
 
 Fails: `odm_schema_field_ambiguous`, `odm_schema_field_missing`, `odm_schema_field_type`.
 Evidence: `negative-odm-schema-missing`, `negative-odm-schema-ambiguous`, `negative-odm-schema-type`.
-Replaces: REQ-1266, REQ-1267, REQ-1268, REQ-1275.
 
 The fields are `StudyOID`, `MetaDataVersionOID`, `SubjectKey`,
 `StudyEventOID`, `StudyEventRepeatKey`, `FormOID`, `FormRepeatKey`,
@@ -255,7 +247,6 @@ ingest, naming the field and the first record that lacks it.
 
 Fails: `odm_schema_value_missing`.
 Evidence: `negative-odm-schema-value`.
-Replaces: REQ-1276.
 
 <a id="name-10"></a>
 
@@ -268,7 +259,6 @@ outside the hierarchy never narrow a scope, so a row built for one item reads
 the other items of its own item group occurrence.
 
 Evidence: `schema-odm-item-sample`, `schema-odm-form-items`, `schema-odm-item-subject`, `schema-window-key-odm-records`.
-Replaces: REQ-1269.
 
 | The row was built by | Its ODM scope |
 | --- | --- |
@@ -293,7 +283,6 @@ evaluate, fails at validation.
 
 Fails: `invalid_odm_context`.
 Evidence: `negative-odm-context`, `schema-odm-column-override`.
-Replaces: REQ-1270, REQ-1277.
 
 A row template that overrides a row-local column derivation does not evaluate
 that column's `odm` expression ([SPEC-6](specification.md#spec-6)). An `odm`
@@ -311,7 +300,6 @@ which `filter` is `TRUE` under [Formulas](formulas.md).
 `filter` names only schema fields, qualified with the ODM input.
 
 Evidence: `schema-odm-form-items`, `schema-odm-item-subject`, `rust/crates/yamaa-adapters/tests/fixtures/odm_reads.json`.
-Replaces: REQ-1271.
 
 <a id="name-13"></a>
 
@@ -326,7 +314,6 @@ under [Values](values.md), as any derivation result does.
 
 Fails: `odm_not_unique`.
 Evidence: `negative-odm-not-unique`, `negative-odm-repeated-record`, `schema-odm-item-subject`.
-Replaces: REQ-1272, REQ-1273, REQ-1278.
 
 The failure reports:
 

@@ -22,7 +22,6 @@ unknown payload field fails validation, and an unsatisfied semantic constraint
 of an operation fails.
 
 Evidence: `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
-Replaces: REQ-0045, REQ-0288, REQ-0289, REQ-0318, REQ-0321, REQ-0322.
 
 `schema_expression_*.yaml` and `schema_function.yaml` contribute the entries of
 the `expressions` registry under [Schema language](reference/schema-language.md),
@@ -51,8 +50,6 @@ expression that changes the row count fails under
 [Column derivation](columns.md), which owns the phase
 invariant.
 
-Replaces: REQ-0046, REQ-0325.
-
 <a id="expr-3"></a>
 
 ### EXPR-3. Expressions nest only in case results and key match values
@@ -67,7 +64,6 @@ derivation's own top-level expression, in `derivation` or
 their own rules resolve.
 
 Evidence: `schema-expressions`.
-Replaces: REQ-0290, REQ-0291, REQ-0292.
 
 `case` selects among expressions, and a key match value computes the operand
 it matches. [FORMULA-9](formulas.md#formula-9) resolves the identifiers of
@@ -154,7 +150,6 @@ field it exposes has one column type ([ROW-2](rows.md#row-2)).
 declared scalar value unchanged. Both are expression leaves.
 
 Evidence: `schema-expressions`, `schema-source-binding`.
-Replaces: REQ-1093, REQ-1094.
 
 A dataset-qualified `source` reads through the implicit join, and a structured
 `source:` binding adds its range, filter, selection and absent value
@@ -176,7 +171,6 @@ form.
 
 Fails: `bare_derivation_scalar`, `redundant_long_form`.
 Evidence: `negative-derivation-call-form`, `schema-shorthand`, `schema-expressions`, `rust/crates/yamaa-core/tests/schema_references.rs::bare_derivation_strings_are_source_references_never_calls`, `rust/crates/yamaa-core/tests/schema_references.rs::registry_and_bare_derivation_diagnostics_preserve_paths_and_context`.
-Replaces: REQ-0319, REQ-0320.
 
 For a `derivation`, the handled-expression expansion of
 [SCHEMA-10](reference/schema-language.md#schema-10) then applies unchanged.
@@ -206,7 +200,6 @@ selected temporal value keeps its collected precision. The result type each
 expression declares is [EXPR-14](#expr-14)'s.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`, `schema-expressions`.
-Replaces: REQ-0315.
 
 ## Conditional selection
 
@@ -223,7 +216,6 @@ whose `when` predicate is `TRUE`, then the `otherwise` value, or missing. A
 
 Fails: `invalid_field_type`.
 Evidence: `schema-expressions`, `negative-case-otherwise-only`, `rust/crates/yamaa-core/tests/schema_references.rs::case_otherwise_reports_inside_the_otherwise_member`.
-Replaces: REQ-0339, REQ-1098, REQ-1099, REQ-1100, REQ-1101.
 
 A malformed `case` fails as `invalid_field_type`, at the `case` when it has no
 `when`/`then` item and at each `otherwise` item that is not the last item.
@@ -244,7 +236,6 @@ for missing.
 
 Fails: `missing_value_required`.
 Evidence: `negative-flag-missing-value`, `negative-flag-condition`, `adam-adae-occurrence-flags`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`.
-Replaces: REQ-1256, REQ-1257, REQ-1258.
 
 `flag` is the shorthand for the common one-branch `case` that returns a flag
 value. A bare predicate string is the condition with the default values:
@@ -275,7 +266,6 @@ declared `missing`, or missing when none is declared, counted under `missing`
 either way.
 
 Evidence: `schema-expressions`, `adam-adsl-demographics`, `rust/crates/yamaa-adapters/tests/fixtures/first_available.json`.
-Replaces: REQ-1095.
 
 A source that is a binding reading through an implicit join answers its own
 absent record first ([LOOKUP-24](lookup.md#lookup-24)); the answer, missing by
@@ -290,7 +280,6 @@ default, is what `first_available` then tests.
 sources must be mutually comparable.
 
 Evidence: `schema-expressions`, `negative-greatest-mixed`, `negative-least-mixed`.
-Replaces: REQ-0310, REQ-1096, REQ-1097.
 
 [VALUE-19](values.md#value-19) checks that comparability and states
 which source an equal extreme keeps; `int` and `float` compare exactly under
@@ -311,7 +300,6 @@ answers an unmapped source ([COLUMN-10](columns.md#column-10)).
 
 Fails: `incompatible_input_type`.
 Evidence: `schema-text-mapping`, `schema-text-mapping-unmapped`, `negative-mapping-unmapped-value`, `schema-missing-input-default`.
-Replaces: REQ-0304, REQ-1110.
 
 A `mapping` requires a string source. The source may be a filtered source
 carrying the variable with its range, filter, selection or absent value
@@ -334,7 +322,6 @@ this fold, or validation fails.
 
 Fails: `ambiguous_dictionary`.
 Evidence: `negative-mapping-case-collision`, `schema-text-mapping`, `sdtm-lb-character-results`.
-Replaces: REQ-0709, REQ-0710, REQ-0714.
 
 Keys that collide after the fold fail validation with `ambiguous_dictionary`,
 reporting the folded key and the original entries. A non-ASCII value can match
@@ -354,7 +341,6 @@ when it is omitted, counted under `missing`, and a non-numeric source fails.
 
 Fails: `incompatible_input_type`, `invalid_field_type`.
 Evidence: `schema-expressions`, `negative-cut-coded`, `schema-missing-input-default`.
-Replaces: REQ-0306, REQ-1118.
 
 The source may be a filtered source carrying the variable with its range,
 filter, selection or absent value ([LOOKUP-1](lookup.md#lookup-1)). Breaks compare

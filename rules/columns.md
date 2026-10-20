@@ -17,7 +17,6 @@ and publishes it. A value completes its lifecycle before a dependent reads it.
 Row construction evaluates the `rows` entries and may change the row count.
 
 Evidence: `schema-lifecycle`.
-Replaces: REQ-0031, REQ-0032.
 
 Derivation has two phases: row construction under
 [Row construction](rows.md), then column derivation under
@@ -36,7 +35,6 @@ value but never counts as a second value.
 
 Fails: `multiple_values_per_key`.
 Evidence: `negative-keys-conflict`, `negative-sex-duplicate`.
-Replaces: REQ-0033, REQ-0044, REQ-0075.
 
 A source `filter` decides which of those records the derivation reads before
 that count, as [LOOKUP-8](lookup.md#lookup-8) defines. A source
@@ -60,8 +58,6 @@ string template and reducer expression under its grammar; none of the four is
 treated as dependency-free.
 
 Evidence: `rust/crates/yamaa-core/tests/schema_references.rs::closed_languages_retain_field_and_record_count_dependencies`.
-Replaces: REQ-0048, REQ-0049, REQ-0050, REQ-0051, REQ-0052, REQ-0053, REQ-0054,
-REQ-0055, REQ-0056, REQ-0057, REQ-0058.
 
 | Site | Collected references |
 |---|---|
@@ -99,7 +95,6 @@ no graph edge between columns and runs only after all columns have completed.
 
 Fails: `phase_boundary`.
 Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`.
-Replaces: REQ-0059, REQ-0069.
 
 A row dependency on a later-phase value fails as `phase_boundary`.
 
@@ -114,7 +109,6 @@ declares a `parent`; otherwise declaration order is the resolved order.
 
 Fails: `unknown_reference`, `forward_reference`.
 Evidence: `negative-forward-reference`, `negative-forward-key-reference`, `rust/crates/yamaa-core/tests/schema_references.rs::unknown_dependencies_are_lexical_and_precede_cycle_reporting`, `rust/crates/yamaa-adapters/tests/execution_column_driver_bindings.rs::column_bindings_run_one_driver_after_another`.
-Replaces: REQ-0060, REQ-0070, REQ-0071.
 
 [Inheritance](inheritance.md) composes and prunes every specification before
 these rules apply: a specification that declares no `parent` is a composition
@@ -141,7 +135,6 @@ iteration, and a dependency cycle fails.
 
 Fails: `dependency_cycle`.
 Evidence: `negative-adlb-computed-param`, `negative-first-available-self`, `negative-row-value-self`.
-Replaces: REQ-0061, REQ-0072.
 
 `locf` with `include_current: false` crosses any number of missing rows by
 searching a separate completed source column; with the default
@@ -162,7 +155,6 @@ base record its own row.
 
 Fails: `key_dependency`.
 Evidence: `negative-keys-missing`, `negative-keys-aggregate`, `negative-keys-odm`, `schema-keys-record-reads`, `rust/crates/yamaa-adapters/tests/execution_no_rows_record_reads.rs`.
-Replaces: REQ-0074.
 
 A key reads its base record's fields, the keys declared before it, and a
 named intermediate's selection for that record, through any operation that
@@ -189,8 +181,6 @@ verifications over the whole column. Dependent columns, verifications and the
 artifact see the same converted value.
 
 Evidence: `schema-lifecycle`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::dependent_reads_converted_handler_value`.
-Replaces: REQ-0211, REQ-0212, REQ-0213, REQ-0214, REQ-0215, REQ-0216, REQ-0217,
-REQ-0241.
 
 Stages 1 to 3 run on each value, in whichever phase its derivation belongs to.
 Stage 4 runs once, after every row holds that column's final value. A
@@ -223,7 +213,6 @@ it. An error reached while deriving the candidate still fails the run; the
 filter does not retroactively hide a failed derivation.
 
 Evidence: `schema-lifecycle`, `rust/crates/yamaa-adapters/tests/fixtures/row_filters.json`.
-Replaces: REQ-0218.
 
 For a grouped template, the values the filter may read are those of every row
 derivation. For an ungrouped template, they are those of every derivation that
@@ -245,7 +234,6 @@ as that handler. Every other condition fails without its handler, a missing
 
 Fails: `missing_input`, `unmapped_value`, `unmatched_pattern`.
 Evidence: `schema-handlers`, `schema-missing-input-default`, `schema-lookup-absent-default`, `negative-mapping-unmapped-value`.
-Replaces: REQ-0334, REQ-0342, REQ-0343, REQ-0344, REQ-0360, REQ-0362, REQ-0364.
 
 These sites identify conditions within expression evaluation or result
 handling; the ordered derivation lifecycle is [COLUMN-8](#column-8) and
@@ -309,7 +297,6 @@ placeholders, it fires when any input is missing. `invalid`, `unmapped` and
 `str_extract`'s `no_match` fire only when every input is present.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `schema-handlers`.
-Replaces: REQ-0345, REQ-0346, REQ-0347, REQ-0348, REQ-0349, REQ-0350, REQ-0357.
 
 On `mapping`, `missing` never answers a non-missing input with no dictionary
 entry; that is `unmapped`'s condition
@@ -348,7 +335,6 @@ and right-side record order resolves remaining ties. An empty filtered result
 is an absent match, answered as [LOOKUP-24](lookup.md#lookup-24) states.
 
 Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/source_selection.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`.
-Replaces: REQ-0351, REQ-0352, REQ-0353, REQ-0354, REQ-0355, REQ-0365.
 
 ```yaml
 source:
@@ -384,7 +370,6 @@ output conversion is fatal.
 
 Fails: `conversion_failed`.
 Evidence: `schema-handlers`, `rust/crates/yamaa-adapters/tests/fixtures/original_conversion_handlers.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_row_conversion_handlers.json`.
-Replaces: REQ-0219, REQ-0358, REQ-0359, REQ-0363, REQ-0366.
 
 A derivation that needs stage 3 wraps its expression in `value`:
 
@@ -419,7 +404,6 @@ zero times is reportable and is not an error. The count for a source's
 the filter.
 
 Evidence: `rust/crates/yamaa-adapters/tests/fixtures/original_source_bindings.json`, `rust/crates/yamaa-adapters/tests/fixtures/original_mapping_cut.json`, `rust/crates/yamaa-adapters/tests/fixtures/flag_reference.json`, `rust/crates/yamaa-core/tests/execution_numeric_lifecycle.rs::accounting_retains_zero_declarations_and_prior_firings_on_failure`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::handler_rows_register_every_path_at_zero_in_one_order`, `rust/crates/yamaa-adapters/tests/scalar_language.rs::intermediate_derivation_handlers_count_each_build_of_the_donor_records`, `rust/crates/yamaa-core/src/dataset/resolved/tests.rs::column_bindings_register_their_sites_one_binding_after_another`.
-Replaces: REQ-0356, REQ-0361.
 
 A default substitution is counted where the handler it stands for would be:
 at `<operation>.missing` for `mapping`, `cut`, `str_extract`, `str_replace`,
@@ -491,7 +475,6 @@ neither asserts a language rule violation.
 
 Fails: `unsupported_operation`, `engine_rejected`.
 Evidence: `tools/tests/test_diagnostics.py::test_null_policy_is_explicit_registered_and_reached`.
-Replaces: REQ-1297.
 
 <!-- normative-null-conditions:start -->
 - `unsupported_operation` (`planning`)

@@ -87,10 +87,7 @@ class RationalePhraseTests(unittest.TestCase):
     def test_prose_before_midline_fence_counts(self):
         self.write(
             "values/one.md",
-            "# One\n\n"
-            "**REQ-0160.** A pattern fails because it is empty. ```text\n"
-            "example\n"
-            "```\n",
+            "# One\n\nA pattern fails because it is empty. ```text\nexample\n```\n",
         )
         self.assertTrue(any("because" in error for error in self.errors()))
 

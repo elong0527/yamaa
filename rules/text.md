@@ -17,7 +17,6 @@ sources; a source of another runtime type fails rather than being converted.
 
 Fails: `incompatible_input_type`.
 Evidence: `negative-str-case-number`, `rust/crates/yamaa-core/tests/support/diagnostic/text_case.rs`.
-Replaces: REQ-0308.
 
 A source of another type fails under [VALUE-2](values.md#value-2).
 
@@ -33,7 +32,6 @@ below one fails as `invalid_field_type`.
 
 Fails: `invalid_field_type`.
 Evidence: `negative-str-pad-width`, `adam-adlb-supplb-padded-key`, `rust/crates/yamaa-adapters/tests/fixtures/text_pad_reference.json`.
-Replaces: REQ-1261.
 
 An unknown source or a failed conversion reports its existing condition.
 
@@ -52,7 +50,6 @@ not parse fails validation with `invalid_string_template`.
 
 Fails: `invalid_string_template`.
 Evidence: `negative-subject-reference`, `yaml/grammar/string-template.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
-Replaces: REQ-0336, REQ-0449, REQ-0450, REQ-0451, REQ-0452, REQ-0453, REQ-0454, REQ-0461.
 
 <!-- grammar: string-template -->
 
@@ -89,7 +86,6 @@ when the template is empty.
 
 Fails: `incompatible_input_type`, `missing_input`.
 Evidence: `schema-shorthand`, `sdtm-dm-race-ethnicity`, `schema-expressions`, `rust/crates/yamaa-adapters/tests/fixtures/text_template_reference.json`.
-Replaces: REQ-0446, REQ-0447, REQ-0448, REQ-0455, REQ-0456, REQ-0457, REQ-0458, REQ-0459, REQ-0460, REQ-0462, REQ-1112, REQ-1113, REQ-1116, REQ-1117.
 
 `str_template` accepts a bare template as
 [Schema language](reference/schema-language.md) shorthand. The shorthand
@@ -142,7 +138,6 @@ letters and the downward one to the rest of the run. Every other scalar is
 unchanged.
 
 Evidence: `schema-sentence-case`, `schema-text-functions`, `rust/crates/yamaa-adapters/tests/fixtures/text_case_reference.json`.
-Replaces: REQ-0706, REQ-0707, REQ-0708, REQ-0711, REQ-0712, REQ-1114, REQ-1240, REQ-1241.
 
 Every substitution preserves scalar count. None has a one-to-many mapping, a
 context rule, language tailoring or a Unicode-version dependency, and word
@@ -178,7 +173,6 @@ identifier. An invalid pattern fails validation with `invalid_regex`, or with
 
 Fails: `invalid_regex`, `invalid_expression`.
 Evidence: `negative-matches-bad-pattern`, `negative-str-replace-invalid-regex`, `negative-str-contains-invalid-regex`.
-Replaces: REQ-0796, REQ-0797, REQ-0798, REQ-0799, REQ-0800, REQ-0809, REQ-0820, REQ-0821, REQ-0826, REQ-0827, REQ-0829.
 
 The consumers are:
 
@@ -241,7 +235,6 @@ end, never before a trailing `U+000A`. `.` matches every scalar except
 evaluations, and no consumer observes match offsets.
 
 Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-adapters/tests/declaration_contract_vectors.rs::unchanged_regex_documents_and_authored_capture_controls_run_directly`.
-Replaces: REQ-0801, REQ-0802, REQ-0803, REQ-0804, REQ-0805, REQ-0806, REQ-0807, REQ-0824.
 
 ECMA-262 has no inline flag syntax, so `(?i)` is a syntax error. The `u` flag
 makes a pattern operate on the Unicode scalar values of
@@ -266,7 +259,6 @@ the pattern compiles. A pattern is ASCII language source, so it matches a
 non-ASCII scalar by spelling it with that escape.
 
 Evidence: `yaml/conformance/regex.yaml`, `rust/crates/yamaa-adapters/tests/fixtures/regex_contract.tsv`.
-Replaces: REQ-0808, REQ-0810, REQ-0822, REQ-0823, REQ-0825.
 
 The `\s` set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`,
 `U+2000` through `U+200A`, `U+202F`, `U+205F`, `U+3000`, `U+FEFF`, `U+000A`,
@@ -292,7 +284,6 @@ leftmost-first one: an earlier alternative wins, a greedy quantifier prefers
 more iterations and a lazy one fewer. An empty match is a match.
 
 Evidence: `yaml/conformance/regex.yaml`, `adam-adsl-demographics`, `schema-str-contains`.
-Replaces: REQ-0811, REQ-0812, REQ-0813, REQ-0814, REQ-0818, REQ-0819.
 
 The full-match wrapper adds no capturing group or group number. A `matches`
 pattern that must describe the whole value anchors itself.
@@ -322,7 +313,6 @@ returns the declared `no_match` value.
 
 Fails: `regex_group_out_of_range`.
 Evidence: `negative-str-uncaptured-group`, `adam-adsl-site-parse`, `rust/crates/yamaa-adapters/tests/fixtures/text_extract_reference.json`.
-Replaces: REQ-0815, REQ-0816, REQ-0817, REQ-1111.
 
 `(?:...)` and a character class contribute no number. The failure reports the
 path, the requested group and the number of capturing groups. A capture inside
@@ -351,7 +341,6 @@ replaced by the literal `replacement` text, scalars outside matches are kept in
 order, and an empty result is the empty string.
 
 Evidence: `schema-str-replace`, `rust/crates/yamaa-core/tests/execution_declarative_text_replace.rs`, `yaml/conformance/regex.yaml`.
-Replaces: REQ-1318, REQ-1319, REQ-1320, REQ-1321, REQ-1322.
 
 Every step matches against the whole source, so `^` still matches only before
 its first scalar and an assertion such as `\b` reads the scalars around the

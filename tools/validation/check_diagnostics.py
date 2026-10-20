@@ -2,16 +2,14 @@
 
 Core registry conditions and phases must be in the shared vocabulary. Rule error
 tables/refusal clauses must name registered conditions. A cause's citation names
-a card, directly or as a REQ ID the card's Replaces line lists, and that card's
-Fails line names the cause's condition, so one fault keeps the one condition its
-card states. A legacy requirement block has no Fails line and cannot be cited. A
-registered condition needs no core cause or separate disposition record; the
-vocabulary and the core registry are the only sources. These are static
-ownership checks, not a claim that every registered condition has executable
-release coverage.
+a card whose Fails line names the cause's condition, so one fault keeps the one
+condition its card states. A registered condition needs no core cause or
+separate disposition record; the vocabulary and the core registry are the only
+sources. These are static ownership checks, not a claim that every registered
+condition has executable release coverage.
 Condition and requirement literals outside the canonical registry, the generated
-shipped schema and private unit tests are refused. A requirement is a legacy
-REQ ID or a card ID, read from the shared rules model.
+shipped schema and private unit tests are refused. A requirement is a card ID,
+read from the shared rules model.
 A condition written as a literal must also name a registered condition: the
 value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
@@ -101,7 +99,7 @@ SPACE = re.compile(r"\s*")
 
 
 def cause_pattern(rules) -> re.Pattern:
-    """One registry cause; its requirement is a legacy or card ID, or None."""
+    """One registry cause; its requirement is a card ID, or None."""
     return re.compile(
         r'\s*(\w+) => \("([a-z_]+)", "([a-z_]+)", '
         rf'(Some\("(?:{rules.identifier.pattern})"\)|None)\),\s*'
@@ -715,28 +713,15 @@ def null_conditions(
 def citation_error(name: str, condition: str, cited: str, rules) -> str | None:
     """Why a cause's citation names no card stating its condition, or None.
 
-    A card ID names its card and a REQ ID names the card whose Replaces line
-    lists it; that card's Fails line must name the condition. An ID that names
+    The cited card's Fails line must name the condition. An ID that names
     nothing is reported where literals are checked, as an undefined requirement.
     """
-    card = rules.cards.get(cited) or rules.replaced.get(cited)
-    if card is None:
-        if cited not in rules.requirements:
-            return None
-        return (
-            f"core diagnostic registry:{name}: {cited} is a legacy requirement "
-            f"with no Fails line naming {condition}"
-        )
-    if condition in card.fails:
+    card = rules.cards.get(cited)
+    if card is None or condition in card.fails:
         return None
-    if card.id == cited:
-        return (
-            f"core diagnostic registry:{name}: {cited} does not name "
-            f"{condition} in its Fails line"
-        )
     return (
-        f"core diagnostic registry:{name}: {cited} is replaced by {card.id}, "
-        f"which does not name {condition} in its Fails line"
+        f"core diagnostic registry:{name}: {cited} does not name "
+        f"{condition} in its Fails line"
     )
 
 

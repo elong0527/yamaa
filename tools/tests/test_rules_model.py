@@ -1,4 +1,4 @@
-"""The shared rules model reads cards, legacy requirements and citations once."""
+"""The shared rules model reads cards and citations once."""
 
 import subprocess
 import tempfile
@@ -14,9 +14,9 @@ class MarkdownTests(unittest.TestCase):
         text = (
             "---\ntitle: Because\n---\n"
             "Prose `code` here.\n"
-            "```yaml\nfenced: REQ-0099\n```\n"
+            "```yaml\nfenced: LAYER-9\n```\n"
             "<!-- hidden -->Visible.\n"
-            "**REQ-0160.** ```text\ngrammar := rule\n```\n"
+            "Grammar: ```text\ngrammar := rule\n```\n"
             "After the block.\n"
         )
         lines = model.prose_lines(text)
@@ -26,7 +26,7 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(lines[4:7], ["", "", ""])
         self.assertEqual(lines[7], " " * len("<!-- hidden -->") + "Visible.")
         # A fence opening after prose keeps that prose.
-        self.assertEqual(lines[8], "**REQ-0160.** ")
+        self.assertEqual(lines[8], "Grammar: ")
         self.assertEqual(lines[9:11], ["", ""])
         self.assertEqual(lines[11], "After the block.")
         self.assertEqual(model.prose_lines(text, code=True)[3], "Prose `code` here.")
@@ -116,7 +116,7 @@ class RuleFileTests(unittest.TestCase):
             sorted(self.rules.files), ["inheritance.md", "values/types.md"]
         )
         for page in model.GENERATED_PAGES:
-            write(self.root / "rules", page, "# Generated\n\n**REQ-0099.** No.\n")
+            write(self.root / "rules", page, "# Generated\n\n### GEN-1. No\n")
         self.assertEqual(
             sorted(model.load(self.root).files), ["inheritance.md", "values/types.md"]
         )
@@ -135,32 +135,25 @@ class RuleFileTests(unittest.TestCase):
         self.assertEqual(
             card.evidence, ("schema-inheritance", "rules/values/types.md::column")
         )
-        self.assertEqual(card.replaces, ("REQ-0002", "REQ-0003"))
-        replaces = card.entry("Replaces")
-        self.assertEqual((replaces.line, replaces.end), (16, 17))
+        evidence = card.entry("Evidence")
+        self.assertEqual((evidence.line, evidence.end), (15, 16))
         self.assertTrue(card.detail.startswith("A cycle reports its path."))
         self.assertEqual(card.stray_metadata, ())
         second = self.rules.cards["LAYER-2"]
         self.assertEqual(second.metadata, ())
         self.assertEqual(second.detail, "")
-        self.assertIn("REQ-0001", second.statement)
-
-    def test_legacy_fields(self):
-        first, second = self.rules.files["values/types.md"].requirements
+        self.assertIn("TYPE-1", second.statement)
         self.assertEqual(
-            (first.id, first.anchor, first.section, first.text),
-            ("REQ-0001", "req-0001", "Requirements", "A column has one type."),
+            [card.id for card in self.rules.files["values/types.md"].cards],
+            ["TYPE-1", "TYPE-2"],
         )
-        self.assertEqual((second.id, second.section), ("REQ-0004", "Error conditions"))
-        self.assertEqual(self.rules.files["values/types.md"].kind, "legacy")
-        self.assertEqual(self.rules.files["inheritance.md"].kind, "cards")
 
-    def test_misplaced_metadata_stray_headings_and_kinds(self):
+    def test_misplaced_metadata_and_stray_headings(self):
         rule_file = model.parse_file(
             "a.md",
             "# A\n\n### A-1. Title\nFails: `x`.\n\n"
-            "### A-2 Undotted\n\nStatement.\nReplaces: REQ-0001.\n\n"
-            "Detail.\n\nEvidence: `b`.\n\n### Notes\n\n**REQ-0002.** Legacy.\n",
+            "### A-2 Undotted\n\nStatement.\nFails: `y`.\n\n"
+            "Detail.\n\nEvidence: `b`.\n\n### Notes\n\nProse.\n",
         )
         first, second = rule_file.cards
         self.assertIsNone(first.statement)
@@ -169,15 +162,14 @@ class RuleFileTests(unittest.TestCase):
         self.assertEqual(second.title, "Undotted")
         self.assertEqual(second.stray_metadata, (9, 13))
         self.assertEqual([item.text for item in rule_file.stray_headings], ["Notes"])
-        self.assertEqual(rule_file.kind, "mixed")
-        self.assertEqual(model.parse_file("b.md", "# B\n\nProse.\n").kind, "empty")
+        self.assertEqual(model.parse_file("b.md", "# B\n\nProse.\n").cards, ())
 
     def test_index_listing_and_principles(self):
         self.assertEqual(
             [(row.path, row.title, row.prefix) for row in self.rules.listing],
             [
                 ("inheritance.md", "Inheritance", "LAYER"),
-                ("values/types.md", "Types", "REQ"),
+                ("values/types.md", "Types", "TYPE"),
             ],
         )
         self.assertEqual(self.rules.listing_problems, [])
@@ -196,22 +188,24 @@ class RuleFileTests(unittest.TestCase):
 
     def test_resolution_and_citations(self):
         rules = self.rules
-        self.assertEqual(rules.prefixes, frozenset({"LAYER"}))
-        self.assertIs(rules.resolve("REQ-0002"), rules.cards["LAYER-1"])
-        self.assertEqual(rules.location("REQ-0003"), ("inheritance.md", "layer-1"))
-        self.assertEqual(rules.location("REQ-0001"), ("values/types.md", "req-0001"))
-        self.assertIsNone(rules.resolve("REQ-0099"))
+        self.assertEqual(rules.prefixes, frozenset({"LAYER", "TYPE"}))
+        self.assertIs(rules.resolve("TYPE-2"), rules.cards["TYPE-2"])
+        self.assertEqual(rules.location("LAYER-2"), ("inheritance.md", "layer-2"))
+        self.assertIsNone(rules.resolve("LAYER-9"))
         self.assertEqual(
-            rules.identifiers(),
-            {"LAYER-1", "LAYER-2", "REQ-0001", "REQ-0002", "REQ-0003", "REQ-0004"},
+            rules.identifiers(), {"LAYER-1", "LAYER-2", "TYPE-1", "TYPE-2"}
         )
-        text = "UTF-8, ISO-8601, LAYER-2, MULTILAYER-3, REQ-0001 and REQ-999999.\n"
+        # A retired REQ-NNNN ID is not a citation.
+        text = "UTF-8, ISO-8601, LAYER-2, MULTILAYER-3, TYPE-9 and REQ-0001.\n"
         self.assertEqual(
             [identifier for _, _, identifier in rules.citations(text)],
-            ["LAYER-2", "REQ-0001", "REQ-999999"],
+            ["LAYER-2", "TYPE-9"],
         )
         self.assertIsNotNone(rules.identifier.fullmatch("LAYER-12"))
         self.assertIsNone(rules.identifier.fullmatch("UTF-8"))
+        self.assertIsNone(rules.identifier.fullmatch("REQ-0001"))
+        # Without a prefix, nothing is a citation.
+        self.assertEqual(list(model.parse({}).citations("LAYER-1")), [])
 
     def test_load_ref_reads_a_revision(self):
         def git(*arguments):

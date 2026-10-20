@@ -155,12 +155,11 @@ import repository packages.
 
 For rule or schema changes, follow their area guides; `make quick` runs the
 repository checks. `make check-repository` runs `tools.rules.check`, which reads the
-rules once through `tools/rules/model.py` and checks cards, legacy requirements,
-every rule citation and markdown links. During the 0.5.0 conversion, run
+rules once through `tools/rules/model.py` and checks cards,
+every rule citation and markdown links. Run
 `python -m tools.rules.migrate statements --base origin/main` to list
 the card titles and statements a pull request adds, changes or removes for
-review; `report` accounts for the replaced requirements and `links` moves
-markdown citations to their cards.
+review.
 
 Repository Python checks source syntax, physical schema includes, fixture
 metadata, grammar documents, layout and editorial rules without importing an

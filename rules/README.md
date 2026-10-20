@@ -86,11 +86,9 @@ Enforced by [CSV-3](reference/csv.md#csv-3),
 
 ## Rule files
 
-Language rules live in `rules/*.md`. Format and file-handling rules move to
+Language rules live in `rules/*.md`, format and file-handling rules in
 `rules/reference/`, and the submission, project-file and project-function
-profiles to `rules/profiles/`. During the 0.5.0 conversion, contracts not yet
-converted keep their `REQ-NNNN` requirements and are listed with the prefix
-`REQ`.
+profiles in `rules/profiles/`.
 
 | File | Prefix | Covers |
 | --- | --- | --- |
@@ -162,8 +160,6 @@ For a study entry whose parent is a compound layer whose parent is an ...
   tests and grammar vectors that exercise the rule.
 - **Detail**: everything after those lines. Detail is normative, holds edge
   cases, tables and examples, and must agree with the statement.
-- **Replaces**: during the 0.5.0 conversion only, the `REQ-NNNN` IDs the card
-  absorbs, so existing citations keep resolving. It is removed before release.
 
 Cite a rule by ID, linked to its anchor. Normative `must`, `must not`,
 `should` and `may` have their usual requirement meanings. Rules state behavior,
