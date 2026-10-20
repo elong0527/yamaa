@@ -641,31 +641,27 @@ mod project {
         /// Build one specification on the project route; its run calls no
         /// project function, so the activation port is never entered.
         fn project_domain(path: &str, project_path: &str) -> file_application::Domain {
-            let yamaa_adapters::file_workflow::Selected::Ordinary(project) =
-                yamaa_adapters::file_workflow::select(
-                    path,
-                    project_path,
-                    yamaa_core::project_function::Language::Python,
+            let project = yamaa_adapters::file_workflow::select(
+                path,
+                project_path,
+                yamaa_core::project_function::Language::Python,
+            )
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{:?}",
+                    yamaa_adapters::project_application::selection_failure(&error)
                 )
-                .unwrap_or_else(|error| {
-                    panic!(
-                        "{:?}",
-                        yamaa_adapters::project_application::selection_failure(&error)
-                    )
-                })
-            else {
-                panic!("ordinary metadata capability")
-            };
+            });
             let mut run_scope = project.run_scope(None);
             let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
-            let result = yamaa_adapters::project_report::build_result(
+            let result = yamaa_adapters::specification_report::build_result(
                 project.run(),
                 &attempt,
                 identity(path),
                 &[],
             )
             .unwrap();
-            file_application::Domain::from_project(result, &project, &run_scope).unwrap()
+            file_application::Domain::new(result, &project, &run_scope)
         }
 
         #[test]
@@ -803,21 +799,17 @@ mod project {
                 let path = study.0.join("spec.yaml");
                 let path = path.to_str().unwrap();
                 let project_path = study.0.join("project.yaml");
-                let yamaa_adapters::file_workflow::Selected::Ordinary(project) =
-                    yamaa_adapters::file_workflow::select(
-                        path,
-                        project_path.to_str().unwrap(),
-                        language,
+                let project = yamaa_adapters::file_workflow::select(
+                    path,
+                    project_path.to_str().unwrap(),
+                    language,
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{:?}",
+                        yamaa_adapters::project_application::selection_failure(&error)
                     )
-                    .unwrap_or_else(|error| {
-                        panic!(
-                            "{:?}",
-                            yamaa_adapters::project_application::selection_failure(&error)
-                        )
-                    })
-                else {
-                    panic!("ordinary inventory capability")
-                };
+                });
                 assert_eq!(project.run().environment().inventory().names(), ["DM"]);
                 let retained = project.run().captured_environment().inventory_documents();
                 assert_eq!(retained.len(), 1);
@@ -830,15 +822,14 @@ mod project {
                 fs::write(study.0.join("input.csv"), "ID,VALUE\n1,DM\n2,renamed\n3,\n").unwrap();
                 let mut run_scope = project.run_scope(None);
                 let attempt = project.build(&mut run_scope, &mut NoActivation, Scope::default());
-                let result = yamaa_adapters::project_report::build_result(
+                let result = yamaa_adapters::specification_report::build_result(
                     project.run(),
                     &attempt,
                     identity(path),
                     &[],
                 )
                 .unwrap();
-                let run =
-                    file_application::Domain::from_project(result, &project, &run_scope).unwrap();
+                let run = file_application::Domain::new(result, &project, &run_scope);
                 assert_eq!(run.issues().len(), 1);
                 assert_eq!(run.issues()[0].requirement(), Some("REQ-1156"));
                 assert_eq!(yamaa_adapters::json_wire::encode_object(&run.issues()[0].context),"{\"column\":\"VALUE\",\"failure_count\":1,\"keys\":[{\"ID\":2}],\"values\":[\"renamed\"]}");

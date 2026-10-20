@@ -11,10 +11,11 @@ mod file {
             sync::atomic::{AtomicUsize, Ordering},
         };
         use yamaa_adapters::{
-            file_project::{Error, FileProject},
+            file_preparation::FileSpecification,
+            file_project::{self, Error},
             file_resources::{Error as ResourceError, Resources},
-            project_run::BoundaryFailure,
             project_source::{CaptureFailure, Failure as EnvironmentFailure, Origin},
+            specification_run::BoundaryFailure,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::{
@@ -75,8 +76,8 @@ mod file {
             fn write(&self, name: &str, bytes: &str) {
                 fs::write(self.0.join(name), bytes).unwrap();
             }
-            fn prepare(&self, root: &str, roots: &[String]) -> Result<FileProject, Error> {
-                FileProject::prepare(
+            fn prepare(&self, root: &str, roots: &[String]) -> Result<FileSpecification, Error> {
+                file_project::prepare(
                     Resources::new(root, &self.text("entry"), roots).unwrap(),
                     "domain.yaml",
                     "../project.yaml",
@@ -208,16 +209,14 @@ mod file {
                 ..Default::default()
             };
             let attempt = project.build(&mut run_scope, &mut activation, Scope::default());
-            let run = project.retained_run();
             study.write("env/id.yaml", "changed after preparation");
             study.write(
                 "env/environment.yaml",
                 "changed environment after preparation",
             );
             study.write("project.yaml", "changed root after preparation");
-            drop(project);
-            let result = yamaa_adapters::project_report::build_result(
-                &run,
+            let result = yamaa_adapters::specification_report::build_result(
+                project.run(),
                 &attempt,
                 yamaa_adapters::specification_report::Identity {
                     runtime: "test",
@@ -246,7 +245,7 @@ mod file {
             assert_eq!(activation.trace, ["lock", "bind", "call", "call"]);
             assert_eq!(reads, 6);
             assert_eq!(
-                run.captured_environment().captures()[0]
+                project.run().captured_environment().captures()[0]
                     .document
                     .source()
                     .identity,
@@ -529,18 +528,21 @@ mod file {
             study.write("entry/input.csv", "ID\n1\n");
             let mut constructed = 0;
             for _ in 0..2 {
-                let attempt = project.build_with(
-                    &mut run_scope,
-                    |run| {
-                        constructed += 1;
-                        Borrowed {
-                            lock: &run.captured_environment().lock().unwrap().source.bytes,
-                            expected,
-                            inner: Activation::default(),
-                        }
-                    },
-                    Scope::default(),
-                );
+                // Each build borrows the exact retained lock for a port
+                // constructed for it, without copying it.
+                let mut port = Borrowed {
+                    lock: &project
+                        .run()
+                        .captured_environment()
+                        .lock()
+                        .unwrap()
+                        .source
+                        .bytes,
+                    expected,
+                    inner: Activation::default(),
+                };
+                constructed += 1;
+                let attempt = project.build(&mut run_scope, &mut port, Scope::default());
                 assert!(attempt.boundary.is_ok());
                 assert_eq!(attempt.activation.lock, LockObservation::Verified);
                 assert!(attempt.dataset.result.unwrap().result.is_ok());
@@ -620,14 +622,14 @@ mod file {
         #[test]
         fn selected_ordinary_environment_owner_preserves_fresh_activation_and_inherited_data_origins(
         ) {
-            use yamaa_adapters::file_workflow::{self, Selected};
+            use yamaa_adapters::file_workflow;
             let study = Study::new();
             study.write("parent/base.yaml", &DOMAIN.replace("input.csv", "data.csv"));
             study.write(
                 "entry/domain.yaml",
                 "schema_version: '1.0'\nparent: ../parent/base.yaml\n",
             );
-            let Selected::Ordinary(project) = file_workflow::select_with_resources(
+            let project = file_workflow::select_with_resources(
                 Resources::new(&study.text(""), &study.text("entry"), &[]).unwrap(),
                 "domain.yaml",
                 "../project.yaml",
@@ -635,9 +637,7 @@ mod file {
                 schemas::domain_schema(),
                 schemas::project_schemas(),
             )
-            .unwrap() else {
-                panic!("ordinary capability");
-            };
+            .unwrap();
             let mut run_scope = project.run_scope(None);
             assert_eq!(project.capture_reads(), 7);
             assert_eq!(project.run().compiled().source().path, "../parent/data.csv");
@@ -664,10 +664,9 @@ mod file {
                 first.dataset.sources[0].snapshot.as_ref().unwrap(),
                 second.dataset.sources[0].snapshot.as_ref().unwrap()
             ));
-            let retained = project.retained_run();
-            drop(project);
-            // Metadata and environment retention survives all other owners. The original
-            // tests and lock stay in this run; repeated builds never replaced them.
+            let retained = project.run();
+            // The original tests and lock stay in this run; repeated builds
+            // never replaced them.
             assert_eq!(retained.captured_environment().captures().len(), 2);
             assert_eq!(
                 retained.document().parents()[0].source().bytes,
@@ -1631,7 +1630,7 @@ mod file {
             file_resources::Resources,
             file_workflow::{self, Error},
             project_application::{preparation_issues, IssueError},
-            project_check, shipped_schema,
+            shipped_schema, specification_check,
         };
         use yamaa_core::application_observer::Scope;
         use yamaa_core::project_function::Language;
@@ -1731,10 +1730,9 @@ mod file {
                 fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::write(path, text).unwrap();
             }
-            fn prepare(&self) -> Box<yamaa_adapters::file_project::FileProject> {
+            fn prepare(&self) -> yamaa_adapters::file_preparation::FileSpecification {
                 match self.select() {
-                    Ok(file_workflow::Selected::Ordinary(project)) => project,
-                    Ok(_) => panic!("project capability"),
+                    Ok(project) => project,
                     Err(error) => panic!("project preparation: {error:?}"),
                 }
             }
@@ -1745,9 +1743,9 @@ mod file {
                     Err(error) => panic!("expected preparation rejection: {error:?}"),
                 }
             }
-            fn compile_rejection(&self) -> Box<yamaa_adapters::file_project::RejectedOrdinary> {
+            fn compile_rejection(&self) -> Box<yamaa_adapters::file_preparation::Rejected> {
                 match self.select() {
-                    Err(file_workflow::SelectionError::Ordinary(error)) => error,
+                    Err(file_workflow::SelectionError::Compile(error)) => error,
                     Ok(_) => panic!("expected compilation rejection"),
                     Err(error) => panic!("expected compilation rejection: {error:?}"),
                 }
@@ -1783,7 +1781,7 @@ mod file {
             study.write("root.yaml", &source);
             let project = study.prepare();
             assert_eq!(project.capture_reads(), 2);
-            assert!(project_check::prepared(project.run()).is_empty());
+            assert!(specification_check::issues(project.run()).is_empty());
             let compiled = yamaa_core::specification::PreparedSpecification::prepare(
                 project.run().document().model(),
             )
@@ -2096,7 +2094,7 @@ mod file {
                 )),
                 undeclared("r")
             );
-            let Err(file_workflow::SelectionError::Ordinary(rejected)) =
+            let Err(file_workflow::SelectionError::Compile(rejected)) =
                 file_workflow::select(&entry, &project, Language::R)
             else {
                 panic!("ordinary compiler rejection")
@@ -2484,12 +2482,12 @@ mod file {
                 "context": {"pattern": "é("},
             })];
             assert_eq!(
-                crate::support::rows(&project_check::prepared(project.run())),
+                crate::support::rows(&specification_check::issues(project.run())),
                 expected
             );
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
-                crate::support::rows(&project_check::prepared(project.run())),
+                crate::support::rows(&specification_check::issues(project.run())),
                 expected
             );
             assert_eq!(
@@ -2512,7 +2510,7 @@ mod file {
                 Language::Python,
             )
             .unwrap();
-            let expected = yamaa_adapters::project_check::prepared(ordinary.run());
+            let expected = yamaa_adapters::specification_check::issues(ordinary.run());
             assert_eq!(expected.len(), 1);
             assert_eq!(
                 yamaa_adapters::project_application::check(
@@ -2543,7 +2541,7 @@ mod file {
                 ),
             );
             let error = study.compile_rejection();
-            let rows = project_check::rejected(error.run()).unwrap();
+            let rows = specification_check::rejected(error.run()).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition(), "redundant_field_type");
             assert_eq!(rows[0].requirement(), Some("REQ-0523"));
@@ -2553,7 +2551,7 @@ mod file {
                 yamaa_adapters::json!({"dataset":"P", "field":"ID", "type":"int"})
             );
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(project_check::rejected(error.run()).unwrap(), rows);
+            assert_eq!(specification_check::rejected(error.run()).unwrap(), rows);
             assert_eq!(error.capture_reads(), 3);
             assert_eq!(error.retained_sources().len(), 3);
         }
@@ -2576,7 +2574,7 @@ mod file {
                 ),
             );
             let project = study.prepare();
-            assert!(project_check::prepared(project.run()).is_empty());
+            assert!(specification_check::issues(project.run()).is_empty());
             assert_eq!(
                 project.run().compiled().sources()[0].path,
                 "copy/stored.csv"
@@ -2600,7 +2598,7 @@ mod file {
                 "schema_version: \"1.0\"\nparent: parent.yaml\ninput:\n  DM: {schema: producer/dm.yaml}\n",
             );
             let error = study.compile_rejection();
-            let rows = project_check::rejected(error.run()).unwrap();
+            let rows = specification_check::rejected(error.run()).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition(), "redundant_field_type");
             assert_eq!(rows[0].requirement(), Some("REQ-0523"));
@@ -2686,7 +2684,7 @@ mod file {
                 study.write("leaf.yaml", &leaf);
                 // The producer is never compiled and its links are never followed.
                 let project = study.prepare();
-                assert!(project_check::prepared(project.run()).is_empty());
+                assert!(specification_check::issues(project.run()).is_empty());
                 assert_eq!(project.capture_reads(), 3);
             }
             let study = Study::new();
@@ -2700,7 +2698,7 @@ mod file {
                 ),
             );
             let error = study.compile_rejection();
-            let rows = project_check::rejected(error.run()).unwrap();
+            let rows = specification_check::rejected(error.run()).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition(), "invalid_producer_contract");
             assert_eq!(rows[0].requirement(), Some("REQ-0534"));
@@ -2822,7 +2820,7 @@ mod file {
             // One environment, the entry, its parent and the one linked producer
             // with its own parent. The producer's invalid regex is never compiled.
             assert_eq!(project.capture_reads(), 5);
-            assert!(project_check::prepared(project.run()).is_empty());
+            assert!(specification_check::issues(project.run()).is_empty());
             let document = project.run().document();
             for dataset in ["P", "Q"] {
                 assert_eq!(
@@ -2901,7 +2899,7 @@ mod file {
                 .replace("    label: Reported value\n", "");
             study.write("leaf.yaml", &original);
             let error = study.compile_rejection();
-            let rows = project_check::rejected(error.run()).unwrap();
+            let rows = specification_check::rejected(error.run()).unwrap();
             assert!(rows.iter().any(|row| row.requirement() == Some("REQ-0534")
                 && row.condition() == "invalid_producer_contract"
                 && row.spec_paths == ["input.P.schema.columns.VALUE.label"]));
@@ -2943,7 +2941,7 @@ mod file {
                 .retained_sources()
                 .iter()
                 .any(|(_, bytes)| bytes.as_ref() == original.as_bytes()));
-            assert_eq!(project_check::rejected(error.run()).unwrap(), rows);
+            assert_eq!(specification_check::rejected(error.run()).unwrap(), rows);
             assert_eq!(
                 environment
                     .captured_sources()
@@ -2976,7 +2974,7 @@ mod file {
                 ),
             );
             let project = study.prepare();
-            assert!(project_check::prepared(project.run()).is_empty());
+            assert!(specification_check::issues(project.run()).is_empty());
             let artifact = project.resolved_specification().unwrap();
             let schema = artifact.entries()[0]
                 .resources
@@ -3007,7 +3005,7 @@ mod file {
             let original = fs::read(study.0.join("root.yaml")).unwrap();
             drop(study);
             assert_eq!(document.source().bytes, original);
-            assert!(project_check::prepared(project.run()).is_empty());
+            assert!(specification_check::issues(project.run()).is_empty());
         }
 
         #[test]
@@ -3047,7 +3045,7 @@ mod file {
             );
             assert!(project.run().compiled().source_contract(0).is_some());
             drop(study);
-            assert!(project_check::prepared(project.run()).is_empty());
+            assert!(specification_check::issues(project.run()).is_empty());
         }
 
         #[test]
@@ -3152,22 +3150,19 @@ mod file {
 
         #[test]
         fn selected_ordinary_keeps_complete_report_and_explicit_held_byte_save() {
-            use file_workflow::Selected;
             use yamaa_core::specification_output::ArtifactPort;
             let study = Study::new();
             study.write(
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            let Selected::Ordinary(selected) = study.select().unwrap() else {
-                panic!("ordinary capability");
-            };
+            let selected = study.select().unwrap();
             assert_eq!(selected.capture_reads(), 2);
             assert!(!study.0.join("never-read.csv").exists());
             assert!(!study.0.join("root.csv").exists());
             // An independent study source is first created and read after preparation.
             study.write("never-read.csv", "ID,VALUE\n1,alpha\n2,beta\n");
-            let ordinary = yamaa_adapters::file_project::FileProject::prepare(
+            let ordinary = yamaa_adapters::file_project::prepare(
                 Resources::new(&study.path(""), &study.path(""), &[]).unwrap(),
                 "root.yaml",
                 "project.yaml",
@@ -3185,14 +3180,14 @@ mod file {
                 Scope::default(),
             );
             assert_eq!(selected_scope.capture_reads(), 3);
-            let selected_result = yamaa_adapters::project_report::build_result(
+            let selected_result = yamaa_adapters::specification_report::build_result(
                 selected.run(),
                 &selected_attempt,
                 ordinary_report_id(),
                 &[],
             )
             .unwrap();
-            let ordinary_result = yamaa_adapters::project_report::build_result(
+            let ordinary_result = yamaa_adapters::specification_report::build_result(
                 ordinary.run(),
                 &ordinary_attempt,
                 ordinary_report_id(),
@@ -3236,9 +3231,7 @@ mod file {
                     Ok(())
                 }
             }
-            let retained = selected.retained_run();
-            drop(selected);
-            drop(ordinary);
+            let retained = selected.run();
             fs::remove_dir_all(&study.0).unwrap();
             assert_eq!(
                 retained.document().source().bytes,
@@ -3260,7 +3253,6 @@ mod file {
 
         #[test]
         fn selected_inherited_links_read_each_producer_once_with_shared_aliases() {
-            use file_workflow::Selected;
             let study = Study::new();
             study.write(
                 "leaf.yaml",
@@ -3291,9 +3283,7 @@ mod file {
             study.write("parents/base.yaml", &parent);
             let entry = "schema_version: '1.0'\nparent: parents/base.yaml\ndomain: ROOT\n";
             study.write("root.yaml", entry);
-            let Selected::Ordinary(project) = study.select().unwrap() else {
-                panic!("project capability");
-            };
+            let project = study.select().unwrap();
             // Environment, entry, parent and the two distinct linked producers;
             // leaf.yaml is linked only by producers and is never read.
             assert_eq!(project.capture_reads(), 5);
@@ -3304,14 +3294,14 @@ mod file {
                 .document
                 .field(document.raw().document.root(), "input")
                 .is_none());
-            let rows = project_check::prepared(project.run());
+            let rows = specification_check::issues(project.run());
             assert_eq!(rows.len(), 1);
             assert_eq!(
                 document.declaring_source(&rows[0].spec_paths[0]),
                 Some(study.path("parents/base.yaml").as_str())
             );
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(project_check::prepared(project.run()), rows);
+            assert_eq!(specification_check::issues(project.run()), rows);
             assert_eq!(project.capture_reads(), 5);
         }
 
@@ -3322,14 +3312,14 @@ mod file {
             let raw = yaml("{RAW: never-read.csv}", "RAW", "root.csv", false)
                 .replace("RAW.VALUE", "{function: {name: missing, args: {x: 1}}}");
             study.write("root.yaml", &raw);
-            let SelectionError::Ordinary(rejected) = study.selection_rejection() else {
+            let SelectionError::Compile(rejected) = study.selection_rejection() else {
                 panic!("original ordinary compiler rejection");
             };
             assert_eq!(rejected.capture_reads(), 2);
             assert_eq!(rejected.entry(), "root.yaml");
             // The default project links no Python environment, so the call
             // reports the undeclared environment rather than an unknown function.
-            let rows = yamaa_adapters::project_check::rejected(rejected.run()).unwrap();
+            let rows = yamaa_adapters::specification_check::rejected(rejected.run()).unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].condition(), "project_environment_missing");
             assert_eq!(rows[0].requirement(), Some("REQ-0694"));
@@ -3349,7 +3339,7 @@ mod file {
                 .any(|(identity, bytes)| identity.ends_with("root.yaml")
                     && bytes.as_ref() == raw.as_bytes()));
             assert_eq!(
-                yamaa_adapters::project_check::rejected(rejected.run()).unwrap(),
+                yamaa_adapters::specification_check::rejected(rejected.run()).unwrap(),
                 rows
             );
             assert_eq!(
@@ -3401,14 +3391,14 @@ mod file {
                 "leaf.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "leaf.csv", false),
             );
-            let SelectionError::Ordinary(rejected) = study.selection_rejection() else {
+            let SelectionError::Compile(rejected) = study.selection_rejection() else {
                 panic!("owned compilation rejection");
             };
-            let rows = project_check::rejected(rejected.run()).unwrap();
+            let rows = specification_check::rejected(rejected.run()).unwrap();
             assert!(rows.iter().any(|r| r.requirement() == Some("REQ-0523")));
             assert_eq!(rejected.capture_reads(), 3);
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(project_check::rejected(rejected.run()).unwrap(), rows);
+            assert_eq!(specification_check::rejected(rejected.run()).unwrap(), rows);
         }
 
         #[test]
@@ -3471,14 +3461,14 @@ mod file {
                     // A link back to the consumer and a producer compiler failure
                     // are producer facts the consumer never compiles or follows.
                     let project = study.prepare();
-                    assert!(project_check::prepared(project.run()).is_empty());
+                    assert!(specification_check::issues(project.run()).is_empty());
                     assert_eq!(project.capture_reads(), 3);
                     continue;
                 }
-                let SelectionError::Ordinary(rejected) = study.selection_rejection() else {
+                let SelectionError::Compile(rejected) = study.selection_rejection() else {
                     panic!("whole contract rejection");
                 };
-                let rows = project_check::rejected(rejected.run()).unwrap();
+                let rows = specification_check::rejected(rejected.run()).unwrap();
                 assert_eq!(
                     rows.iter()
                         .map(|r| (r.condition(), r.spec_paths[0].as_str()))
@@ -3496,27 +3486,25 @@ mod file {
                 );
                 assert_eq!(rejected.capture_reads(), 3);
                 fs::remove_dir_all(&study.0).unwrap();
-                assert_eq!(project_check::rejected(rejected.run()).unwrap(), rows);
+                assert_eq!(specification_check::rejected(rejected.run()).unwrap(), rows);
             }
         }
 
         #[test]
         fn selected_entry_paths_keep_absolute_environment_policy_and_early_owned_refusal() {
-            use file_workflow::{Selected, SelectionError};
+            use file_workflow::SelectionError;
             let study = Study::new();
             study.write("yamaa-project.yaml", "version: '1.0'\ndata_roots: []\n");
             study.write(
                 "root.yaml",
                 &yaml("{RAW: never-read.csv}", "RAW", "root.csv", false),
             );
-            let Selected::Ordinary(project) = file_workflow::select(
+            let project = file_workflow::select(
                 &study.path("root.yaml"),
                 &study.path("project.yaml"),
                 Language::Python,
             )
-            .unwrap() else {
-                panic!("configured ordinary capability");
-            };
+            .unwrap();
             assert_eq!(project.capture_reads(), 2); // project + root; no configuration
             let Err(SelectionError::Preparation(Error::Environment(owner))) =
                 file_workflow::select(&study.path("root.yaml"), "", Language::Python)
@@ -3572,9 +3560,7 @@ mod file {
                     yamaa_adapters::project_application::selection_failure(&error)
                 )
             });
-            let file_workflow::Selected::Plain(prepared) = selected else {
-                panic!("a schema link keeps the plain route");
-            };
+            let prepared = selected;
             assert_eq!(prepared.capture_reads(), 2);
             assert!(prepared.run().compiled().source_contract(0).is_some());
             assert!(!study.0.join("never-read.csv").exists());
@@ -3618,7 +3604,7 @@ mod file {
                         std::os::windows::fs::symlink_file("target", &input).unwrap();
                     }
                 }
-                let Err(file_workflow::SelectionError::Plain(owner)) =
+                let Err(file_workflow::SelectionError::Compile(owner)) =
                     file_workflow::select_request(
                         yamaa_core::build::Request {
                             specification: &study.path("entry/root.yaml"),
@@ -3634,12 +3620,7 @@ mod file {
                     2,
                     "only root and parent metadata were captured"
                 );
-                let yamaa_adapters::file_preparation::Error::Compile(
-                    yamaa_adapters::specification_run::Error::Prepare(PrepareError::Invalid(
-                        findings,
-                    )),
-                ) = owner.error()
-                else {
+                let PrepareError::Invalid(findings) = &owner.run().rejection.error else {
                     panic!("original compiler finding remains owned");
                 };
                 let issue = findings[0].diagnostic();

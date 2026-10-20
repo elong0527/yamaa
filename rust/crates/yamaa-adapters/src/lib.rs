@@ -38,7 +38,6 @@ pub mod specification_source;
 
 mod source_profile_inspection;
 pub mod specification_run;
-pub mod specification_run_view;
 
 pub mod resource_diagnostics;
 pub mod source_diagnostics;
@@ -85,7 +84,6 @@ pub mod project_source_decoder;
 
 pub mod project_attempt;
 pub mod project_report;
-pub mod project_run;
 
 pub mod project_function_diagnostics;
 
@@ -96,7 +94,6 @@ pub mod project_activation_diagnostics;
 pub mod project_activation_observations;
 
 pub mod project_application;
-pub mod project_check;
 pub mod project_scope;
 
 mod project_diagnostic_projection;

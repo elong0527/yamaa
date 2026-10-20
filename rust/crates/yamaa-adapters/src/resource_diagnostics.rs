@@ -2,10 +2,7 @@
 use crate::{csv_source::TextTableError, specification_run::Error};
 use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::diagnostic::Diagnostic;
-use yamaa_core::{
-    dataset::{ExecutionError, Resource},
-    specification::SourceDeclaration,
-};
+use yamaa_core::{dataset::Resource, specification::SourceDeclaration};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Refusal {
@@ -75,52 +72,6 @@ fn source_path(
             .1
     };
     Some(format!("input.{}", source.name))
-}
-pub(crate) fn execution<E>(
-    error: &ExecutionError<E>,
-    sources: &[SourceDeclaration],
-    driver_index: usize,
-) -> Option<Refusal> {
-    let (resource, limit, actual, mut spec_paths) = match error {
-        ExecutionError::Limit {
-            resource,
-            limit,
-            required,
-        } => (resource_name(*resource), *limit, *required, Vec::new()),
-        ExecutionError::SourceLimit {
-            resource,
-            limit,
-            required,
-            source_index,
-        } => (
-            resource_name(*resource),
-            *limit,
-            *required,
-            vec![source_path(sources, driver_index, *source_index)?],
-        ),
-        ExecutionError::ScopedLimit {
-            resource,
-            limit,
-            required,
-            spec_paths,
-        } => (
-            resource_name(*resource),
-            *limit,
-            *required,
-            spec_paths.clone(),
-        ),
-        ExecutionError::Grouping(yamaa_core::table_grouping::GroupingError::Limit(error))
-        | ExecutionError::OutputGrouping(yamaa_core::table_grouping::GroupingError::Limit(error))
-        | ExecutionError::Reduction {
-            error: yamaa_core::table_reduction::TableReductionError::Limit(error),
-            ..
-        } => (error.resource, error.limit, error.actual, Vec::new()),
-        _ => return None,
-    };
-    if spec_paths.is_empty() && matches!(resource, "rows" | "cells" | "columns" | "sources") {
-        spec_paths = input_paths(sources);
-    }
-    Some(Refusal::new(resource, limit, actual, spec_paths))
 }
 pub(crate) fn source(error: &Error, source: &SourceDeclaration) -> Option<Refusal> {
     let (resource, limit, actual) = match error {
@@ -195,6 +146,24 @@ pub(crate) fn source_findings(
     }
     Ok(Some(findings))
 }
+/// The findings of several sources' failures, as [`source_findings`] reports
+/// one failure that lists them: every finding when all are language findings,
+/// otherwise each source's own findings or bound, in order.
+pub(crate) fn sources_findings(
+    failures: &[(&SourceDeclaration, &Error)],
+) -> Result<Option<Vec<Diagnostic>>, crate::source_diagnostics::SourceProjectionError> {
+    if let Some(findings) = crate::source_diagnostics::findings_of(failures)? {
+        return Ok(Some(findings));
+    }
+    let mut findings = Vec::new();
+    for &(source, error) in failures {
+        match source_findings(error, source)? {
+            Some(projected) => findings.extend(projected),
+            None => return Ok(None),
+        }
+    }
+    Ok(Some(findings))
+}
 pub(crate) fn run_limit<E>(
     error: &yamaa_core::specification_run::RunError<E>,
     sources: &[SourceDeclaration],
@@ -244,6 +213,7 @@ pub(crate) fn outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yamaa_core::dataset::ExecutionError;
     use yamaa_core::json::Value;
     #[test]
     fn source_resource_fallback_preserves_complete_context_and_nested_findings() {
@@ -307,6 +277,21 @@ mod tests {
         assert_eq!(projected.spec_paths, ["input.XW"]);
     }
 
+    /// The bound an execution error is reported as.
+    fn bound(error: ExecutionError<core::convert::Infallible>) -> crate::dataset_result::Limit {
+        let attempt = yamaa_core::dataset::ExecutionAttempt {
+            result: Err(Box::new(error)),
+            handler_counts: Vec::new(),
+            retained_verifications: Vec::new(),
+            template_rows: Vec::new(),
+        };
+        let crate::dataset_result::Outcome::Limit(bound) =
+            crate::dataset_result::response(&attempt).unwrap().outcome
+        else {
+            panic!("a bound is a limit outcome");
+        };
+        bound
+    }
     #[test]
     fn column_refusal_projects_the_source_coordinate_with_a_non_first_driver() {
         let sources = ["FIRST", "DRIVER", "LAST"].map(|name| SourceDeclaration {
@@ -314,26 +299,19 @@ mod tests {
             ..input()
         });
         for (source_index, owner) in [(0, "DRIVER"), (1, "FIRST"), (2, "LAST")] {
-            let error = ExecutionError::<core::convert::Infallible>::SourceLimit {
+            let bound = bound(ExecutionError::SourceLimit {
                 resource: Resource::SourceColumns,
                 limit: 1,
                 required: Some(2),
                 source_index,
-            };
-            let projected = execution(&error, &sources, 1).unwrap();
-            assert_eq!(projected.spec_paths, [format!("input.{owner}")]);
-            let crate::dataset_result::Outcome::Limit(bound) =
-                crate::dataset_result::semantic_condition(&error).unwrap()
-            else {
-                panic!("a source bound is a limit outcome");
-            };
+            });
             assert_eq!(bound.source_index, Some(source_index));
-            assert_eq!(outcome(&bound, &sources, 1), Some(projected));
+            let projected = outcome(&bound, &sources, 1).unwrap();
+            assert_eq!(projected.spec_paths, [format!("input.{owner}")]);
         }
     }
     #[test]
     fn intermediate_table_limits_keep_their_bounds_through_the_execution_outcome() {
-        use core::convert::Infallible;
         use yamaa_core::{
             limits::Limits, table_grouping::GroupingError, table_reduction::TableReductionError,
         };
@@ -344,7 +322,7 @@ mod tests {
             Limits::table(3_575_419, 179).unwrap_err(),
         ] {
             for error in [
-                ExecutionError::<Infallible>::Grouping(GroupingError::Limit(limit)),
+                ExecutionError::Grouping(GroupingError::Limit(limit)),
                 ExecutionError::OutputGrouping(GroupingError::Limit(limit)),
                 ExecutionError::Reduction {
                     path: "row_columns.TOTAL".into(),
@@ -352,16 +330,11 @@ mod tests {
                     identity: None,
                 },
             ] {
-                let crate::dataset_result::Outcome::Limit(bound) =
-                    crate::dataset_result::semantic_condition(&error).unwrap()
-                else {
-                    panic!("a table bound is a limit outcome");
-                };
+                let bound = bound(error);
                 let expected = Refusal::new(limit.resource, limit.limit, limit.actual, Vec::new());
                 assert_eq!(bound.resource, limit.resource);
                 assert_eq!(bound.limit, Some(limit.limit));
                 assert_eq!(bound.required, limit.actual);
-                assert_eq!(execution(&error, &sources, 0), Some(expected.clone()));
                 assert_eq!(outcome(&bound, &sources, 0), Some(expected));
             }
         }

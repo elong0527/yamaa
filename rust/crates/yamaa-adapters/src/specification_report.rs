@@ -1,18 +1,20 @@
-//! Format observed bounded standalone runs and publish through explicit host authority.
-//! Classified resource findings retain observations; opaque host failures stay opaque.
+//! The one result builder: format one observed attempt, with or without a
+//! project, and publish only through explicit host authority. Classified
+//! resource findings retain observations; opaque host failures stay opaque.
 use crate::json;
 use crate::{
     dataset_result::{Condition, Outcome},
+    project_report::{Classified, FactMap},
     report_storage::{StoredReport, StoredTable},
     specification_diagnostics,
-    specification_run::{CapturedAttempt, PortError},
-    specification_run_view::RunView,
+    specification_run::{Attempt, BoundaryFailure, CapturedAttempt, PortError, PreparedRun},
 };
 use yamaa_core::application_issue::{Fault, Stage};
+use yamaa_core::dataset::ExecutionError;
 use yamaa_core::diagnostic::Diagnostic;
 use yamaa_core::json::{Map, Value};
 use yamaa_core::numeric_lifecycle::HandlerCount;
-use yamaa_core::specification_run::SourceOrigin;
+use yamaa_core::specification_run::{RunError, SourceIssue, SourceOrigin};
 use yamaa_core::{table::TableAccess, value::Value as Scalar};
 
 pub struct Identity<'a> {
@@ -90,7 +92,7 @@ fn fields(values: &[(String, Scalar)]) -> Map<String, Value> {
 }
 /// An execution finding with the row keys, matched intermediate key or
 /// baseline partition it names added to its context.
-pub(crate) fn condition(run: &dyn RunView, condition: &Condition) -> Result<Diagnostic, Error> {
+pub(crate) fn condition(run: &PreparedRun, condition: &Condition) -> Result<Diagnostic, Error> {
     let mut diagnostic = condition.diagnostic.clone();
     if let Some(identity) = &condition.identity {
         let names = run.compiled().key_names().collect::<Vec<_>>();
@@ -125,9 +127,9 @@ pub(crate) fn condition(run: &dyn RunView, condition: &Condition) -> Result<Diag
 }
 /// A classified capture failure terminates the request sequence. Reject malformed
 /// observations rather than attaching a resource finding to an unrelated failure.
-fn captured_failure<E>(
-    attempt: &CapturedAttempt<E>,
-) -> Result<&crate::specification_run::CapturedSource, Error> {
+fn captured_failure<C, E>(
+    attempt: &CapturedAttempt<C, E>,
+) -> Result<&crate::specification_run::CapturedSource<E>, Error> {
     if !matches!(attempt.result, Err(PortError::Capture(_))) {
         return Err(Error::UnsupportedOutcome);
     }
@@ -149,10 +151,10 @@ fn captured_failure<E>(
     Ok(last)
 }
 
-fn inspected_failures<'a, E>(
-    run: &dyn RunView,
-    attempt: &'a CapturedAttempt<E>,
-) -> Result<&'a [crate::specification_run::InspectionFailure<E>], Error> {
+fn inspected_failures<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a CapturedAttempt<C, E>,
+) -> Result<&'a [crate::specification_run::InspectionFailure<C>], Error> {
     let Err(PortError::Inspect(failures)) = &attempt.result else {
         return Err(Error::UnsupportedOutcome);
     };
@@ -171,67 +173,159 @@ fn inspected_failures<'a, E>(
     Ok(failures)
 }
 
-/// Refuse outcomes outside this formatter instead of inventing observations.
-pub fn failure<E>(
-    run: &dyn RunView,
-    attempt: &CapturedAttempt<E>,
+/// The findings of a run that stopped while reading its sources, each
+/// naming its own declaration.
+fn run_findings(
+    run: &PreparedRun,
+    error: &RunError<crate::specification_run::Error>,
+) -> Result<Option<Vec<Diagnostic>>, Error> {
+    use crate::resource_diagnostics as resources;
+    use crate::specification_run::Error as E;
+    let sources = run.compiled().sources();
+    Ok(match error {
+        RunError::Decode(error) => resources::source_findings(error, run.source())?,
+        RunError::Sources(errors) if sources.len() == 1 => {
+            let (_, error) = errors.last().ok_or(Error::InvalidObservation)?;
+            resources::source_findings(error, run.source())?
+        }
+        RunError::Sources(errors) => {
+            let errors = errors
+                .iter()
+                .map(|(index, error)| {
+                    Ok((sources.get(*index).ok_or(Error::InvalidObservation)?, error))
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            resources::sources_findings(&errors)?
+        }
+        RunError::AdmittedSources(errors) => {
+            let values = errors
+                .iter()
+                .map(|(_, issue)| match issue {
+                    SourceIssue::OdmValues(values) => Some(E::OdmValues(values.clone())),
+                    SourceIssue::Decode(_) => None,
+                })
+                .collect::<Vec<_>>();
+            let errors = errors
+                .iter()
+                .zip(&values)
+                .map(|((index, issue), value)| {
+                    let error = match (issue, value) {
+                        (SourceIssue::Decode(error), _) => error,
+                        (_, Some(value)) => value,
+                        (SourceIssue::OdmValues(_), None) => unreachable!("ODM values are held"),
+                    };
+                    Ok((sources.get(*index).ok_or(Error::InvalidObservation)?, error))
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            resources::sources_findings(&errors)?
+        }
+        RunError::Bind(error) => specification_diagnostics::binding(error, run.source()),
+        error @ RunError::Boundary { .. } => resources::run_limit(error, sources)
+            .map(|refusal| vec![refusal.diagnostic(Stage::Ingest, Fault::SourceLimit)]),
+    })
+}
+
+/// The observations of a failed attempt that called no project function,
+/// as its report holds them before output preparation. Outcomes outside this
+/// formatter are refused instead of inventing observations.
+pub fn failure<C, E>(
+    run: &PreparedRun,
+    attempt: &Attempt<C, E>,
     id: Identity<'_>,
 ) -> Result<StoredReport, Error> {
+    dataset_failure(run, &attempt.dataset, &FactMap::new(), &id).map_err(|refusal| match refusal {
+        Refusal::Report(error) => error,
+        Refusal::Opaque(_) | Refusal::Boundary(_) => Error::UnsupportedOutcome,
+    })
+}
+
+/// Refuse outcomes outside this formatter instead of inventing observations.
+fn dataset_failure<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a CapturedAttempt<C, E>,
+    supplied: &FactMap<'a, '_, E>,
+    id: &Identity<'_>,
+) -> Result<StoredReport, Refusal<'a, E>> {
     if attempt.sources.is_empty() && !matches!(attempt.result, Err(PortError::Inspect(_))) {
-        return Err(Error::UnsupportedOutcome);
+        return Err(Error::UnsupportedOutcome.into());
     }
     let mut verifications = Vec::new();
     let diagnostics = match &attempt.result {
-        Ok(response) => {
-            if response.table.is_some() {
-                return Err(Error::UnsupportedOutcome);
-            }
-            if !response.retained_verifications.is_empty() {
-                verifications.extend(
-                    check_observations(
-                        run,
-                        &response.retained_verifications,
-                        yamaa_core::verification_diagnostics::Phase::Verification,
-                        &id,
-                    )?
-                    .0,
+        Ok(execution) => {
+            let Err(error) = &execution.result else {
+                return Err(Error::UnsupportedOutcome.into());
+            };
+            if let ExecutionError::ProjectFunction {
+                path,
+                error,
+                identity,
+            } = error.as_ref()
+            {
+                // A project function's failure keeps its host payload: the
+                // completed checks, then the invocation finding.
+                let (checks, mut findings) = crate::project_report::checked_records(
+                    run,
+                    &execution.retained_verifications,
+                    "verification",
+                    id,
+                )?;
+                verifications.extend(checks);
+                findings.push(
+                    crate::project_function_diagnostics::invocation(
+                        path,
+                        error,
+                        identity.as_ref(),
+                        &run.compiled().key_names().collect::<Vec<_>>(),
+                        crate::project_report::invocation_host(supplied, &error.kind),
+                    )
+                    .map_err(crate::project_report::project_error)?,
                 );
-            }
-            match &response.outcome {
-                Outcome::Condition(found) => {
-                    if let Some((phase, completed)) = &response.failed_verifications {
-                        verifications.extend(check_observations(run, completed, *phase, &id)?.0);
-                    }
-                    if response.intermediate_diagnostics.is_empty() {
-                        vec![condition(run, found)?]
-                    } else {
-                        response.intermediate_diagnostics.clone()
-                    }
+                findings
+            } else {
+                let response = crate::dataset_result::response(execution)
+                    .map_err(|_| Error::UnsupportedOutcome)?;
+                if !response.retained_verifications.is_empty() {
+                    verifications.extend(
+                        check_observations(
+                            run,
+                            response.retained_verifications,
+                            yamaa_core::verification_diagnostics::Phase::Verification,
+                            id,
+                        )?
+                        .0,
+                    );
                 }
-                Outcome::Failure => {
-                    let (phase, completed) = response
-                        .failed_verifications
-                        .as_ref()
-                        .ok_or(Error::InvalidObservation)?;
-                    let (records, diagnostics) = check_observations(run, completed, *phase, &id)?;
-                    verifications.extend(records);
-                    diagnostics
+                match &response.outcome {
+                    Outcome::Condition(found) => {
+                        if let Some((phase, completed)) = response.failed_verifications {
+                            verifications.extend(check_observations(run, completed, phase, id)?.0);
+                        }
+                        if response.intermediate_diagnostics.is_empty() {
+                            vec![condition(run, found)?]
+                        } else {
+                            response.intermediate_diagnostics.to_vec()
+                        }
+                    }
+                    Outcome::Failure => {
+                        let (phase, completed) = response
+                            .failed_verifications
+                            .ok_or(Error::InvalidObservation)?;
+                        let (records, diagnostics) = check_observations(run, completed, phase, id)?;
+                        verifications.extend(records);
+                        diagnostics
+                    }
+                    Outcome::Limit(bound) => vec![crate::resource_diagnostics::outcome(
+                        bound,
+                        run.compiled().sources(),
+                        run.compiled().driver_index(),
+                    )
+                    .map(|refusal| refusal.diagnostic(Stage::Execute, Fault::ExecutionLimit))
+                    .ok_or(Error::UnsupportedOutcome)?],
+                    Outcome::Success => return Err(Error::UnsupportedOutcome.into()),
                 }
-                Outcome::Limit(bound) => vec![crate::resource_diagnostics::outcome(
-                    bound,
-                    run.compiled().sources(),
-                    run.compiled().driver_index(),
-                )
-                .map(|refusal| refusal.diagnostic(Stage::Execute, Fault::ExecutionLimit))
-                .ok_or(Error::UnsupportedOutcome)?],
-                Outcome::Success => return Err(Error::UnsupportedOutcome),
             }
         }
-        Err(PortError::Run(error)) => {
-            crate::resource_diagnostics::source_findings(error, run.source())
-                .map_err(Error::from)?
-                .ok_or(Error::UnsupportedOutcome)?
-        }
+        Err(PortError::Run(error)) => run_findings(run, error)?.ok_or(Error::UnsupportedOutcome)?,
         Err(PortError::Capture(_)) => {
             let source = captured_failure(attempt)?;
             let written = run
@@ -271,11 +365,11 @@ pub fn failure<E>(
                     .collect::<Result<Vec<_>, Error>>()?
             }
         }
-        _ => return Err(Error::UnsupportedOutcome),
+        _ => return Err(Error::UnsupportedOutcome.into()),
     };
-    let mut report = envelope(run, attempt, &id)?;
-    if let Ok(response) = &attempt.result {
-        set_handler_counts(&mut report, &response.handler_counts);
+    let mut report = envelope(run, attempt, id)?;
+    if let Ok(execution) = &attempt.result {
+        set_handler_counts(&mut report, &execution.handler_counts);
     }
     report.set_diagnostics(diagnostics);
     report["verifications"] = json!(verifications);
@@ -296,9 +390,9 @@ pub(crate) fn table_observation_projected<T: TableAccess>(
     })
 }
 
-fn envelope<E>(
-    run: &dyn RunView,
-    attempt: &CapturedAttempt<E>,
+fn envelope<C, E>(
+    run: &PreparedRun,
+    attempt: &CapturedAttempt<C, E>,
     id: &Identity<'_>,
 ) -> Result<StoredReport, Error> {
     if attempt.sources.is_empty() {
@@ -313,11 +407,10 @@ fn envelope<E>(
     {
         return Err(Error::InvalidObservation);
     }
-    envelope_sources(run, &attempt.sources, id, false)
+    envelope_sources(&attempt.sources, id, false)
 }
 
 pub(crate) fn envelope_sources<T: TableAccess>(
-    _run: &dyn RunView,
     sources: &[yamaa_core::specification_run::CapturedSource<T>],
     id: &Identity<'_>,
     partial: bool,
@@ -479,24 +572,76 @@ impl BuildResult {
     }
 }
 
-/// Prepare a public-result candidate without recapturing data or publishing bytes.
-pub fn build_result<E>(
-    run: &dyn RunView,
-    attempt: &CapturedAttempt<E>,
+/// Why one attempt has no public result: its report could not be built, a
+/// host failure carries no classification facts, or the activation boundary
+/// ended without a classified failure. Each refuses the build with one closed
+/// code; the original payload stays with the attempt.
+#[derive(Debug)]
+pub enum Refusal<'a, E> {
+    Report(Error),
+    Opaque(&'a E),
+    Boundary(&'a BoundaryFailure<E>),
+}
+impl<E> From<Error> for Refusal<'_, E> {
+    fn from(error: Error) -> Self {
+        Self::Report(error)
+    }
+}
+impl<E> From<crate::source_diagnostics::SourceProjectionError> for Refusal<'_, E> {
+    fn from(error: crate::source_diagnostics::SourceProjectionError) -> Self {
+        Self::Report(error.into())
+    }
+}
+impl<E> Refusal<'_, E> {
+    /// The issues that refuse a build with no public result.
+    pub fn issues(&self) -> crate::file_application::Failure {
+        let code = match self {
+            Self::Opaque(_) => Fault::OpaqueHost,
+            Self::Boundary(_) => Fault::ActivationBoundary,
+            Self::Report(Error::ResourceLimit(limit)) => {
+                return limit.issues(Stage::Build, Fault::ResultProjection)
+            }
+            Self::Report(_) => Fault::ResultProjection,
+        };
+        crate::file_application::rejected(Stage::Build, code)
+    }
+}
+
+/// Prepare the public result of one attempt without recapturing data or
+/// publishing bytes. Every build, with or without a project, reports here;
+/// `facts` classify the attempt's retained host failures, and a build with a
+/// project also records its activation evidence.
+pub fn build_result<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a Attempt<C, E>,
     id: Identity<'_>,
-) -> Result<BuildResult, Error> {
-    let response = attempt.result.as_ref().ok();
-    let execution = response.and_then(|r| r.execution.as_ref());
-    let observations = observations(run, attempt, &id)?;
+    facts: &[Classified<'a, E>],
+) -> Result<BuildResult, Refusal<'a, E>> {
+    let supplied = crate::project_report::supplied(attempt, facts)?;
+    let activation = crate::project_report::activation_evidence(run, attempt)?;
+    let mut report = match &attempt.boundary {
+        Err(boundary) => {
+            crate::project_report::activation_failure(run, attempt, boundary, &supplied, &id)?
+        }
+        Ok(()) => observations(run, &attempt.dataset, &supplied, &id)?,
+    };
+    if run.has_project() {
+        report["activation"] = activation;
+    }
+    let execution = crate::project_attempt::execution(attempt);
     let facts = crate::run_report::RunFacts::captured(
-        &attempt.sources,
-        response.map_or(&[], |r| r.template_rows.as_slice()),
+        &attempt.dataset.sources,
+        attempt
+            .dataset
+            .result
+            .as_ref()
+            .map_or(&[], |dataset| dataset.template_rows.as_slice()),
     );
-    prepare_result(run, execution, id, observations, &facts)
+    Ok(prepare_result(run, execution, id, report, &facts)?)
 }
 
 pub(crate) fn prepare_result(
-    run: &dyn RunView,
+    run: &PreparedRun,
     execution: Option<&yamaa_core::dataset::Execution>,
     id: Identity<'_>,
     observations: StoredReport,
@@ -619,7 +764,7 @@ impl<E> From<Error> for CompleteError<E> {
     }
 }
 pub(crate) fn check_observations(
-    run: &dyn RunView,
+    run: &PreparedRun,
     records: &[yamaa_core::dataset::CheckRecord],
     phase: yamaa_core::verification_diagnostics::Phase,
     id: &Identity<'_>,
@@ -658,13 +803,18 @@ pub(crate) fn output_diagnostics(
 }
 /// Render all retained observations and validate output boundaries before
 /// publication. A host publication failure is retained, never a success report.
-pub fn complete<E, P: ArtifactPort>(
-    run: &dyn RunView,
-    attempt: &CapturedAttempt<E>,
+pub fn complete<C, E, P: ArtifactPort>(
+    run: &PreparedRun,
+    attempt: &Attempt<C, E>,
     id: Identity<'_>,
     publisher: &mut P,
 ) -> Result<Value, CompleteError<P::Error>> {
-    let result = build_result(run, attempt, id)?;
+    let result = build_result(run, attempt, id, &[]).map_err(|refusal| match refusal {
+        Refusal::Report(error) => CompleteError::Report(error),
+        Refusal::Opaque(_) | Refusal::Boundary(_) => {
+            CompleteError::Report(Error::UnsupportedOutcome)
+        }
+    })?;
     let items = result.publication_items();
 
     let report = result.publication_observations(items.len())?;
@@ -729,41 +879,37 @@ impl yamaa_core::specification_output::ArtifactEncoder for Encoder<'_> {
     }
 }
 
-fn observations<E>(
-    run: &dyn RunView,
-    attempt: &CapturedAttempt<E>,
+fn observations<'a, C, E>(
+    run: &PreparedRun,
+    attempt: &'a CapturedAttempt<C, E>,
+    supplied: &FactMap<'a, '_, E>,
     id: &Identity<'_>,
-) -> Result<StoredReport, Error> {
-    let Some(response) = attempt
+) -> Result<StoredReport, Refusal<'a, E>> {
+    let Some((execution, success)) = attempt
         .result
         .as_ref()
         .ok()
-        .filter(|r| r.execution.is_some())
+        .and_then(|execution| Some((execution, execution.result.as_ref().ok()?)))
     else {
-        return failure(run, attempt, id.borrow());
+        return dataset_failure(run, attempt, supplied, id);
     };
     let mut report = envelope(run, attempt, id)?;
-    let completed = &response
-        .execution
-        .as_ref()
-        .ok_or(Error::InvalidObservation)?
-        .verifications;
     let (checks, unexpected) = check_observations(
         run,
-        completed,
+        &success.verifications,
         yamaa_core::verification_diagnostics::Phase::Verification,
         id,
     )?;
     if !unexpected.is_empty() {
-        return Err(Error::InvalidObservation);
+        return Err(Error::InvalidObservation.into());
     }
-    set_handler_counts(&mut report, &response.handler_counts);
+    set_handler_counts(&mut report, &execution.handler_counts);
     report["verifications"] = json!(checks);
     Ok(report)
 }
 
 struct Report<'a, 'i> {
-    run: &'a dyn RunView,
+    run: &'a PreparedRun,
     id: Identity<'i>,
     value: Option<StoredReport>,
 }
@@ -803,7 +949,7 @@ impl yamaa_core::specification_output::OutputReport for Report<'_, '_> {
 }
 
 pub(crate) fn artifact_report(
-    run: &dyn RunView,
+    run: &PreparedRun,
     id: &Identity<'_>,
     mut report: StoredReport,
     execution: &yamaa_core::dataset::Execution,
@@ -848,19 +994,6 @@ pub(crate) fn artifact_report(
     report["outcome"] = json!("success");
     report["nodes"][0]["outcome"] = json!("success");
     Ok(report)
-}
-
-impl Identity<'_> {
-    pub(crate) fn borrow(&self) -> Identity<'_> {
-        Identity {
-            runtime: self.runtime,
-            runtime_version: self.runtime_version,
-            engine_version: self.engine_version,
-            example: self.example,
-            specification: self.specification,
-            base_directory: self.base_directory,
-        }
-    }
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@
 //! and no constructor accepts a publisher.
 use crate::json;
 use crate::{
-    public_table::PublicTable, specification_report::Error, specification_run_view::RunView,
+    public_table::PublicTable, specification_report::Error, specification_run::PreparedRun,
 };
 use std::{collections::BTreeMap, sync::Arc};
 use yamaa_core::json::Value;
@@ -237,7 +237,7 @@ fn profile(profile: SourceProfile) -> &'static str {
 /// The evaluated checks in execution order. A value-level codelist check runs
 /// once per bound codelist; each run is reported at the path that declares
 /// that codelist, so every check row keeps a unique specification path.
-fn checks(run: &dyn RunView, report: &Value) -> Result<Vec<core::Check>, Error> {
+fn checks(run: &PreparedRun, report: &Value) -> Result<Vec<core::Check>, Error> {
     let values = report["verifications"]
         .as_array()
         .ok_or(Error::InvalidObservation)?;
@@ -318,7 +318,7 @@ fn handlers(report: &Value) -> Result<Vec<core::Handler>, Error> {
 
 /// Missing values, output rows and, for `str` columns, the longest value of
 /// each output column in `output.columns` order.
-fn columns(run: &dyn RunView, execution: &Execution) -> Result<Vec<core::Column>, Error> {
+fn columns(run: &PreparedRun, execution: &Execution) -> Result<Vec<core::Column>, Error> {
     let dataset = &execution.dataset;
     let rows = dataset.rows();
     run.compiled()
@@ -359,7 +359,7 @@ fn columns(run: &dyn RunView, execution: &Execution) -> Result<Vec<core::Column>
 /// Gather the report facts. `condition` is the fatal condition of a failed
 /// run; a successful run supplies its execution.
 fn facts(
-    run: &dyn RunView,
+    run: &PreparedRun,
     report: &Value,
     observed: &RunFacts,
     condition: Option<&str>,
@@ -517,7 +517,7 @@ fn parquet_error(error: crate::parquet_artifact::Error<std::convert::Infallible>
 /// execution. A report that cannot be built or verified is an execution
 /// defect: the caller refuses the result rather than recording it.
 pub(crate) fn prepare(
-    run: &dyn RunView,
+    run: &PreparedRun,
     report: &Value,
     observed: &RunFacts,
     condition: Option<&str>,
@@ -557,7 +557,7 @@ pub(crate) fn empty_table() -> Result<PublicTable, Error> {
 /// path refusal remains at the publication gate.
 pub(crate) fn location_findings(
     resources: &crate::file_resources::Resources,
-    run: &dyn RunView,
+    run: &PreparedRun,
     links: &[crate::specification_source::LinkedSpecification],
 ) -> Vec<yamaa_core::specification::PreflightFinding> {
     use crate::file_resources::same_location;
