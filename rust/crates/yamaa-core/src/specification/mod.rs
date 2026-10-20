@@ -34,6 +34,7 @@ mod types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
+mod phases;
 mod preflight_diagnostics;
 mod root_filter;
 mod source_expressions;
@@ -1490,6 +1491,7 @@ impl PreparedSpecification {
             }
             let rows = rows::Rows::prepare(
                 d,
+                &lowered,
                 &output,
                 driver,
                 project.as_ref(),

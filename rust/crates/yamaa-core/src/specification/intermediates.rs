@@ -555,46 +555,6 @@ impl Declarations {
             .get(index)
             .is_some_and(|item| matches!(item.source, self_relations::Relation::SelfRows))
     }
-    pub fn self_donor_fields(&self) -> impl Iterator<Item = &str> {
-        self.0
-            .iter()
-            .filter(|item| matches!(item.source, self_relations::Relation::SelfRows))
-            .flat_map(|item| {
-                item.keys
-                    .as_ref()
-                    .into_iter()
-                    .flatten()
-                    .map(|(field, _)| field.as_str())
-                    .chain(
-                        item.order
-                            .iter()
-                            .map(|(field, _, _)| field.strip_prefix("SELF.").unwrap_or(field)),
-                    )
-                    .chain(
-                        item.filter
-                            .as_ref()
-                            .and_then(|filter| filter.as_ref().ok())
-                            .into_iter()
-                            .flat_map(|plan| plan.identifiers())
-                            .filter(|field| !field.contains('.') || field.starts_with("SELF."))
-                            .map(|field| field.strip_prefix("SELF.").unwrap_or(field)),
-                    )
-                    .chain(
-                        item.derivations
-                            .iter()
-                            .flat_map(|derive| &derive.references)
-                            .filter(|name| !name.contains('.') || name.starts_with("SELF."))
-                            .map(|name| name.strip_prefix("SELF.").unwrap_or(name)),
-                    )
-                    .chain(item.range.iter().flat_map(|range| range.donor_fields()))
-                    .chain(item.columns.iter().flatten().map(String::as_str))
-                    .chain(
-                        item.unique.iter().flat_map(|(_, columns, _)| {
-                            columns.iter().map(|(name, _)| name.as_str())
-                        }),
-                    )
-            })
-    }
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|item| item.name == name)
     }

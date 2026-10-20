@@ -54,56 +54,6 @@ pub(super) fn declaration_findings(
     Ok(findings)
 }
 
-/// Donor reads and selector fields promote row-local defaults through the normal graph.
-pub(super) fn donor_defaults(
-    d: &Document,
-    output: &TableSchema,
-    project: Option<&functions::Prepared>,
-    named: &intermediates::Declarations,
-    templates: &str_template::Prepared,
-) -> Result<std::collections::BTreeSet<usize>, PrepareError> {
-    let mut fields = std::collections::BTreeSet::new();
-    let mut register = |field: &str| {
-        if let Some(column) = output
-            .columns()
-            .iter()
-            .position(|column| column.name == field)
-        {
-            fields.insert(column);
-        }
-    };
-    for field in named.self_donor_fields() {
-        register(field);
-    }
-    let mut inspect = |declaration: usize| -> Result<(), PrepareError> {
-        let mut names = Vec::new();
-        derivations::references(d, field(d, declaration, "value")?, project, &mut names, 0)?;
-        template_references(d, field(d, declaration, "value")?, templates, &mut names, 0)?;
-        for name in names {
-            if let Some((index, field)) = named.reference(&name) {
-                if named.is_self(index) {
-                    register(field);
-                }
-            }
-        }
-        Ok(())
-    };
-    for &column in sequence(d, field(d, d.root(), "columns")?)? {
-        if let Some(derivation) = d
-            .field(column, "derivation")
-            .filter(|&id| !matches!(d.nodes()[id], N::Null))
-        {
-            inspect(derivation)?;
-        }
-    }
-    for &row in sequence(d, field(d, d.root(), "rows")?)? {
-        for &(_, declaration) in mapping(d, field(d, row, "derivations")?)? {
-            inspect(declaration)?;
-        }
-    }
-    Ok(fields)
-}
-
 /// Supplemental template placeholders share the already-admitted parser metadata.
 pub(super) fn template_references(
     d: &Document,
@@ -326,23 +276,4 @@ pub(super) fn bind_operand(
             reference, path, catalog, driver, row, phase, available, edges, findings,
         )
     }
-}
-
-/// A column default reading SELF retains its completed-donor phase (REQ-0120).
-pub(super) fn is_self_reference(d: &Document, name: &str) -> Result<bool, PrepareError> {
-    let Some((relation, _)) = name.split_once('.') else {
-        return Ok(false);
-    };
-    let Some(items) = d
-        .field(d.root(), "intermediates")
-        .filter(|&id| !matches!(d.nodes()[id], N::Null))
-    else {
-        return Ok(false);
-    };
-    for &item in sequence(d, items)? {
-        if text(d, field(d, item, "id")?)? == relation {
-            return Ok(text(d, field(d, item, "dataset")?)? == "SELF");
-        }
-    }
-    Ok(false)
 }

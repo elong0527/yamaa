@@ -223,41 +223,6 @@ pub(super) fn bind(
         .map_err(BindError::InvalidPlan)
 }
 
-pub(super) fn contains(d: &Document, node: usize, depth: usize) -> Result<bool, PrepareError> {
-    if depth > crate::limits::Limits::SEMANTIC_DEPTH {
-        return Err(PrepareError::limit(
-            "semantic_depth",
-            crate::limits::Limits::SEMANTIC_DEPTH,
-            Some(depth),
-            None,
-        ));
-    }
-    match &d.nodes()[node] {
-        N::Mapping(fields) => {
-            if d.field(node, "odm").is_some() {
-                return Ok(true);
-            }
-            for &(key, child) in fields {
-                if ["literal", "dict"].contains(&text(d, key)?) {
-                    continue;
-                }
-                if contains(d, child, depth + 1)? {
-                    return Ok(true);
-                }
-            }
-        }
-        N::Sequence(nodes) => {
-            for &child in nodes {
-                if contains(d, child, depth + 1)? {
-                    return Ok(true);
-                }
-            }
-        }
-        _ => (),
-    }
-    Ok(false)
-}
-
 /// ODM scope and filter names depend only on the authored specification.
 /// Keep them ahead of source capture, including reads under aggregate derive.
 pub(super) fn context_findings(
@@ -673,13 +638,6 @@ mod tests {
             let document = Document::new(nodes, root).unwrap();
             let admitted = SpecificationDocument::admit(document).unwrap().unwrap();
             let document = admitted.document();
-            let column = sequence(
-                document,
-                field(document, document.root(), "columns").unwrap(),
-            )
-            .unwrap()[0];
-            let derivation = field(document, column, "derivation").unwrap();
-            assert!(!contains(document, derivation, 0).unwrap());
             assert!(inputs(document).unwrap().is_empty());
             assert!(context_findings(&admitted).unwrap().is_empty());
         }
