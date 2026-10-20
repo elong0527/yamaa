@@ -141,7 +141,7 @@ fn collect(
                 collect(&entry.path(), parents, found)?;
                 parents.pop();
             }
-        } else if name.ends_with(".yaml") {
+        } else if name.ends_with(".yaml") && !(kind.is_symlink() && entry.path().is_dir()) {
             let mut parts = parents.clone();
             parts.push(name);
             found.push(parts);

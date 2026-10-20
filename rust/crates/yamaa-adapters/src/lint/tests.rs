@@ -1204,6 +1204,35 @@ mod files {
 
     #[cfg(unix)]
     #[test]
+    fn directory_links_are_skipped_and_specification_links_are_refused() {
+        use std::os::unix::fs::symlink;
+
+        let directory = Directory::new("links");
+        let packed_text = super::packed();
+        let packed = directory.write("packed.yaml", &packed_text);
+        let target = directory.write(".target/adsl.yaml", CANONICAL);
+        symlink(target.parent().unwrap(), directory.0.join("linked.yaml")).unwrap();
+        let linted = lint(&[text(&directory.0)], false).unwrap();
+        assert_eq!(linted.len(), 1);
+        assert_eq!(linted[0].file, display(&packed));
+
+        let link = directory.0.join("linked-file.yaml");
+        symlink(&target, &link).unwrap();
+        let error = lint(&[text(&directory.0)], true).unwrap_err();
+        assert_eq!(error.file(), Some(display(&link).as_str()));
+        assert!(matches!(
+            error,
+            super::super::Error::Read {
+                error: crate::file_resources::Error::Symlink,
+                ..
+            }
+        ));
+        assert_eq!(std::fs::read_to_string(&packed).unwrap(), packed_text);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), CANONICAL);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn unreadable_directories_refuse_before_any_file_is_fixed() {
         use std::os::unix::fs::PermissionsExt;
 
