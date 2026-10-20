@@ -210,7 +210,10 @@ qualification.
 
 A change to the executor, such as rewrite 1 (#2785), must leave every result
 unchanged. Each such PR passes ordinary CI and `make check-equivalence` on its
-exact head, and says so in the PR. The gate builds the Python and R packages
+exact head, and says so in the PR. CI's `equivalence` job runs the gate on a
+pull request whose diff reaches `rust/`, `yaml/`, `benchmarks/`, the host
+packages or the converter, and passes without running it otherwise; the
+command stays the local route. The gate builds the Python and R packages
 from the checkout and installs both outside it. On each host it runs public
 benchmark conformance: every active benchmark must reproduce its expected
 bytes, and every negative benchmark its first diagnostic's phase, condition,
