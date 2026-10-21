@@ -8,6 +8,22 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
+# Tools run from the repository root, whose yaml/ directory holds the
+# specification schemas. Without PyYAML installed, `import yaml` finds that
+# directory as an empty namespace package, and the metadata loader below would
+# fail on a missing attribute; refuse whatever stands in for PyYAML by name.
+if not (hasattr(yaml, "__version__") and hasattr(yaml, "SafeLoader")):
+    found = (
+        getattr(yaml, "__file__", None)
+        or ", ".join(getattr(yaml, "__path__", []))
+        or repr(yaml)
+    )
+    raise ImportError(
+        f"tools.benchmark needs PyYAML, but `import yaml` found {found}, "
+        "which is not PyYAML: install the locked tooling environment with "
+        "`uv sync --project python --locked --group tooling --no-install-package yamaa`"
+    )
+
 HOSTS = ("python", "r")
 PROJECT = "project.yaml"
 LIFECYCLES = {"draft": "lightgrey", "reviewed": "yellow", "finalized": "brightgreen"}

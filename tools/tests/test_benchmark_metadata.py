@@ -3,6 +3,8 @@
 import copy
 import io
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -360,6 +362,36 @@ class BenchmarkMetadata(unittest.TestCase):
         self.assertEqual(benchmark.directories(self.case.parent), [self.case])
         with self.assertRaises(ValueError):
             benchmark.entries(self.case)
+
+
+class PyYAMLRequirement(unittest.TestCase):
+    def test_the_repository_yaml_directory_cannot_stand_in_for_pyyaml(self):
+        from tools.paths import ROOT
+
+        # Without site-packages there is no PyYAML, so `import yaml` from the
+        # repository root finds its yaml/ directory, as in a job that never
+        # installed PyYAML. The metadata reader names what it found instead of
+        # failing on a missing loader (#3347).
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]); import tools.benchmark",
+                str(ROOT),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "ImportError: tools.benchmark needs PyYAML, but `import yaml` found "
+            f"{ROOT / 'yaml'}, which is not PyYAML",
+            result.stderr,
+        )
+        self.assertNotIn("AttributeError", result.stderr)
 
 
 if __name__ == "__main__":
