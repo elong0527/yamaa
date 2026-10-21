@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+from tools import surface
 from tools.benchmark import load_metadata
 from tools.commands import conversion
 from tools.migrate.excepted import EXCEPTED
@@ -31,14 +33,20 @@ class CorpusTests(unittest.TestCase):
             self.assertEqual(fixtures, Path(directory) / "converted" / "benchmarks")
             changed, rewritten = conversion.negative_paths(fixtures)
             self.assertEqual(changed, [])
-            self.assertIn(
-                (
-                    "negative-lookup-empty-order",
-                    "intermediates[0]",
-                    "intermediates.LASTDOSE",
-                ),
-                rewritten,
-            )
+            # A benchmark already in the 1.0 surface is copied unchanged, so
+            # only one still in 0.5 has a path to rewrite (P2-5 to P2-8).
+            spec = ROOT / "benchmarks/negative-lookup-empty-order/spec.yaml"
+            if not surface.declares_header(
+                yaml.safe_load(spec.read_text(encoding="utf-8"))
+            ):
+                self.assertIn(
+                    (
+                        "negative-lookup-empty-order",
+                        "intermediates[0]",
+                        "intermediates.LASTDOSE",
+                    ),
+                    rewritten,
+                )
             for link in (ROOT / "benchmarks").rglob("*"):
                 if link.is_symlink():
                     converted = fixtures / link.relative_to(ROOT / "benchmarks")

@@ -97,9 +97,9 @@ def observe(example, fixtures, work, binary):
 
 
 def document(ran, stdout, case):
-    """The JSON document a run printed: exactly one, on one line, after
-    which it exited with status 0 or 1. Its `paths` are kept relative to
-    `case`."""
+    """The result document a run printed: exactly one JSON object, on one
+    line, with its `status`, `issues` and `paths`, after which it exited with
+    status 0 or 1. Its `paths` are kept relative to `case`."""
     if ran["exit_status"] not in (0, 1):
         raise ValueError(
             f"yamaa exited with status {ran['exit_status']}: {ran['stderr']}"
@@ -107,8 +107,14 @@ def document(ran, stdout, case):
     if not stdout.endswith("\n") or "\n" in stdout[:-1]:
         raise ValueError("yamaa printed no single JSON line")
     printed = json.loads(stdout)
-    if isinstance(printed, dict) and isinstance(printed.get("paths"), list):
-        printed["paths"] = relative(printed["paths"], case)
+    if not (
+        isinstance(printed, dict)
+        and isinstance(printed.get("status"), str)
+        and isinstance(printed.get("issues"), list)
+        and isinstance(printed.get("paths"), list)
+    ):
+        raise ValueError("yamaa printed no result with a status, issues and paths")
+    printed["paths"] = relative(printed["paths"], case)
     return printed
 
 
@@ -116,12 +122,14 @@ def relative(paths, case):
     """The paths a save wrote, relative to the case's root.
 
     The binary prints absolute paths with forward slashes (D38). A path that
-    has a backslash, or that is not below the case, stays as printed, for the
-    comparator to refuse, as the Python and R runners keep it.
+    has a backslash or a `..` part, or that is not below the case, stays as
+    printed, for the comparator to refuse, as the Python and R runners keep
+    it. The comparison is of spellings alone, so `..` would otherwise climb
+    out of the case unnoticed.
     """
 
     def one(path):
-        if not isinstance(path, str) or "\\" in path:
+        if not isinstance(path, str) or "\\" in path or ".." in Path(path).parts:
             return path
         try:
             return Path(path).relative_to(case).as_posix()

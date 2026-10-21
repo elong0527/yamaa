@@ -84,6 +84,29 @@ pub(super) fn read_odm(bytes: &[u8]) -> Result<Decoded, Error> {
     read_interpreted(bytes, true)
 }
 
+/// Each stored column's schema facts, from the admitted footer alone: no page
+/// is decoded and no profile is applied.
+pub(super) fn signature(bytes: &[u8]) -> Result<Vec<super::ColumnSignature>, Error> {
+    let frame = framing::admit(bytes)?;
+    let metadata = row_groups::decode(frame.metadata)?;
+    Ok(metadata
+        .file_metadata()
+        .schema_descr()
+        .columns()
+        .iter()
+        .map(|column| super::ColumnSignature {
+            path: column.path().string(),
+            physical_type: format!("{:?}", column.physical_type()),
+            logical_type: column.logical_type().map(|logical| format!("{logical:?}")),
+            converted_type: format!("{:?}", column.converted_type()),
+            precision: column.type_precision(),
+            scale: column.type_scale(),
+            max_definition_level: column.max_def_level(),
+            max_repetition_level: column.max_rep_level(),
+        })
+        .collect())
+}
+
 /// Reconcile page counts with their held chunk and row-group metadata before
 /// any codec interprets a claimed value count as an allocation size. Repeated
 /// columns may contain more values than rows. The ordinary physical decoder

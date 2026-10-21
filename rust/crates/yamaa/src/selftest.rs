@@ -18,9 +18,11 @@
 //!
 //! - A case passes when every file it saved, read back from the resolver,
 //!   equals the expected file of that name, and every expected file was
-//!   saved. A Parquet file is compared as the conformance runners compare
-//!   it, by the columns, types and values that the engine's Parquet reader
-//!   reads from both, since its bytes depend on the writer that authored it.
+//!   saved. A Parquet file is compared as the public conformance runner
+//!   compares it, since its bytes depend on the writer that authored it:
+//!   each column's stored schema (its physical type, logical and converted
+//!   type annotations, and definition and repetition levels), then the
+//!   values, floats by their bits.
 //! - A negative case passes when its first issue matches its
 //!   `expected/error.yaml` as the conformance runners match it: the phase,
 //!   condition and spec paths exactly, the rule when the file names one, and
@@ -294,28 +296,32 @@ fn run(case: &Case, info: &Info) -> SelfTestCase {
                 "not covered: this build does not compile {feature}"
             )),
         ),
-        None => {
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(case, info))) {
-                Ok(Ok(())) => (Status::Succeeded, None),
-                Ok(Err(message)) => (Status::Failed, Some(message)),
-                Err(payload) => {
-                    let reason = payload
-                        .downcast_ref::<String>()
-                        .map(String::as_str)
-                        .or_else(|| payload.downcast_ref::<&str>().copied())
-                        .unwrap_or("a panic");
-                    (
-                        Status::Failed,
-                        Some(format!("the engine stopped: {reason}")),
-                    )
-                }
-            }
-        }
+        None => contained(|| check(case, info)),
     };
     SelfTestCase {
         case: case.name,
         status,
         message,
+    }
+}
+
+/// The status and message of one case's `check`, which a panic fails as it
+/// fails the case, so that the cases after it still run.
+fn contained(check: impl FnOnce() -> Result<(), String>) -> (Status, Option<String>) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(check)) {
+        Ok(Ok(())) => (Status::Succeeded, None),
+        Ok(Err(message)) => (Status::Failed, Some(message)),
+        Err(payload) => {
+            let reason = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&str>().copied())
+                .unwrap_or("a panic");
+            (
+                Status::Failed,
+                Some(format!("the engine stopped: {reason}")),
+            )
+        }
     }
 }
 
@@ -418,11 +424,7 @@ fn compare(case: &Case, resolver: &MemoryResolver, saved: &[String]) -> Result<(
             return Err(format!("{name} was saved but not published"));
         };
         if name.ends_with(".parquet") {
-            if !same_table(&published, expected) {
-                return Err(format!(
-                    "the output table of {name} differs from the expected table"
-                ));
-            }
+            compare_parquet(name, &published, expected)?;
         } else if *published != **expected {
             return Err(format!(
                 "the output bytes of {name} differ from the expected bytes"
@@ -440,18 +442,48 @@ fn compare(case: &Case, resolver: &MemoryResolver, saved: &[String]) -> Result<(
     }
 }
 
-/// Whether two Parquet files hold the same columns, with the same types, and
-/// the same values in the same rows, as the engine's Parquet reader reads
-/// them. Neither reads in a build without the `parquet` feature.
-fn same_table(saved: &[u8], expected: &[u8]) -> bool {
+/// Whether the saved Parquet file `name` holds what its expected file holds,
+/// as the public conformance runner compares them, since the bytes depend on
+/// the writer. First every column must be stored alike: the physical type,
+/// logical type and definition and repetition levels that the runner's
+/// `parquet_signature` compares, with each annotation as stored, so a legacy
+/// converted type does not stand in for its logical type as it does for that
+/// runner's reader. Then the values must be the same in the same rows, floats
+/// by their bits. Neither file reads in a build without the `parquet`
+/// feature.
+fn compare_parquet(name: &str, saved: &[u8], expected: &[u8]) -> Result<(), String> {
+    use yamaa_adapters::parquet_source::{parse, signature};
+
+    let (Ok(saved_columns), Ok(expected_columns), Ok(saved), Ok(expected)) = (
+        signature(saved),
+        signature(expected),
+        parse(saved),
+        parse(expected),
+    ) else {
+        return Err(format!("{name} does not read as a Parquet file"));
+    };
+    if saved_columns != expected_columns {
+        return Err(format!(
+            "the stored columns of {name} differ from the expected columns"
+        ));
+    }
+    if !same_values(&saved, &expected) {
+        return Err(format!(
+            "the output table of {name} differs from the expected table"
+        ));
+    }
+    Ok(())
+}
+
+/// Whether two tables the engine's Parquet reader read hold the same columns
+/// and the same values in the same rows, a float by its bits, so that `-0.0`
+/// differs from `0.0` as it does for the conformance runners.
+fn same_values(
+    saved: &yamaa_adapters::arrow_table::ArrowTable,
+    expected: &yamaa_adapters::arrow_table::ArrowTable,
+) -> bool {
     use yamaa_core::table::TableAccess;
 
-    let (Ok(saved), Ok(expected)) = (
-        yamaa_adapters::parquet_source::parse(saved),
-        yamaa_adapters::parquet_source::parse(expected),
-    ) else {
-        return false;
-    };
     let columns = |table: &yamaa_adapters::arrow_table::ArrowTable| {
         table
             .schema()
@@ -460,17 +492,33 @@ fn same_table(saved: &[u8], expected: &[u8]) -> bool {
             .map(|column| (column.name.clone(), column.kind))
             .collect::<Vec<_>>()
     };
-    let width = columns(&saved).len();
-    columns(&saved) == columns(&expected)
+    let width = columns(saved).len();
+    columns(saved) == columns(expected)
         && saved.row_count() == expected.row_count()
         && (0..saved.row_count()).all(|row| {
             (0..width).all(
                 |column| match (saved.cell(row, column), expected.cell(row, column)) {
-                    (Ok(left), Ok(right)) => left == right,
+                    (Ok(left), Ok(right)) => same_cell(left, right),
                     _ => false,
                 },
             )
         })
+}
+
+/// Whether two cells hold the same value: a float by its bits, any other
+/// value by its equality.
+fn same_cell(
+    left: yamaa_core::table::ValueRef<'_>,
+    right: yamaa_core::table::ValueRef<'_>,
+) -> bool {
+    use yamaa_core::table::ValueRef;
+
+    match (left, right) {
+        (ValueRef::Float(left), ValueRef::Float(right)) => {
+            left.get().to_bits() == right.get().to_bits()
+        }
+        (left, right) => left == right,
+    }
 }
 
 /// Whether the first issue matches the expected issue `expected`, the
@@ -705,23 +753,47 @@ fn spellings(identity: &str, target: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
-    /// A copy of the listed case `name` with `edit` applied to its expected
-    /// files, for a test that needs a case to fail.
-    fn edited(name: &str, edit: impl FnOnce(&mut Vec<(&'static str, Vec<u8>)>)) -> Case {
-        let case = cases::CASES
+    /// A case's files, editable.
+    type Files = Vec<(&'static str, Vec<u8>)>;
+
+    /// The listed case `name`.
+    fn listed(name: &str) -> &'static Case {
+        cases::CASES
             .iter()
             .find(|case| case.name == name)
-            .expect("the case is listed");
-        let mut expected = case
-            .expected
+            .expect("the case is listed")
+    }
+
+    /// The bytes of the file `name` among `files`.
+    fn file(files: &'static [(&'static str, &'static [u8])], name: &str) -> &'static [u8] {
+        files
             .iter()
-            .map(|(name, bytes)| (*name, bytes.to_vec()))
-            .collect::<Vec<_>>();
-        edit(&mut expected);
-        let expected = expected
-            .into_iter()
-            .map(|(name, bytes)| (name, &*Vec::leak(bytes)))
-            .collect::<Vec<_>>();
+            .find(|(file, _)| *file == name)
+            .map(|(_, bytes)| *bytes)
+            .expect("the case has the file")
+    }
+
+    /// A copy of the listed case `name` with `edit` applied to the files it
+    /// serves and to its expected files, for a test that needs a case to
+    /// fail. The fixture lives here, never under benchmarks/.
+    fn edited(name: &str, edit: impl FnOnce(&mut Files, &mut Files)) -> Case {
+        let case = listed(name);
+        let copy = |files: &[(&'static str, &'static [u8])]| {
+            files
+                .iter()
+                .map(|(name, bytes)| (*name, bytes.to_vec()))
+                .collect::<Files>()
+        };
+        let (mut files, mut expected) = (copy(case.files), copy(case.expected));
+        edit(&mut files, &mut expected);
+        let leak = |files: Files| {
+            &*Vec::leak(
+                files
+                    .into_iter()
+                    .map(|(name, bytes)| (name, &*Vec::leak(bytes)))
+                    .collect::<Vec<_>>(),
+            )
+        };
         Case {
             name: case.name,
             features: case.features,
@@ -732,9 +804,21 @@ mod tests {
                 section: define.section,
                 created: define.created,
             }),
-            files: case.files,
-            expected: Vec::leak(expected),
+            files: leak(files),
+            expected: leak(expected),
         }
+    }
+
+    /// Replace `from`, which the text file `name` of `files` holds, with
+    /// `to`.
+    fn replace(files: &mut Files, name: &str, from: &str, to: &str) {
+        let (_, bytes) = files
+            .iter_mut()
+            .find(|(file, _)| *file == name)
+            .expect("the case has the file");
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        assert!(text.contains(from), "{name} holds {from}");
+        *bytes = text.replace(from, to).into_bytes();
     }
 
     fn engine_info() -> Info {
@@ -777,7 +861,7 @@ mod tests {
     /// and the selftest with it.
     #[test]
     fn a_changed_expected_byte_fails_its_case() {
-        let case = edited("adam-adsl-xpt", |expected| {
+        let case = edited("adam-adsl-xpt", |_, expected| {
             let (_, bytes) = expected
                 .iter_mut()
                 .find(|(name, _)| *name == "adsl.xpt")
@@ -809,41 +893,135 @@ mod tests {
         );
     }
 
-    /// A Parquet file is compared by what it holds: its own bytes differ from
-    /// the authored file's, yet the case passes, and a changed value fails.
+    /// A Parquet file is compared by how it stores each column and by what it
+    /// holds, never by its bytes, which the listed case's saved file does not
+    /// share with the authored one: a file whose columns are stored otherwise
+    /// fails on them, and a file that does not read fails as such.
     #[test]
-    fn a_parquet_file_compares_by_its_table() {
-        let case = cases::CASES
-            .iter()
-            .find(|case| case.name == "negative-transport-empty-string")
-            .unwrap();
+    fn a_parquet_file_compares_by_its_stored_columns_then_its_values() {
+        let case = listed("negative-transport-empty-string");
         if !compiled(case) {
             return;
         }
-        let (_, expected) = case
-            .expected
-            .iter()
-            .find(|(name, _)| *name == "dm.parquet")
-            .unwrap();
-        assert!(same_table(expected, expected));
-        let (_, input) = case
-            .files
-            .iter()
-            .find(|(name, _)| *name == "input/dm_raw.parquet")
-            .unwrap();
-        assert!(!same_table(input, expected));
-        let mut changed = expected.to_vec();
-        let at = changed.len() / 2;
-        changed[at] ^= 0xff;
-        assert!(!same_table(&changed, expected));
+        let expected = file(case.expected, "dm.parquet");
+        assert_eq!(compare_parquet("dm.parquet", expected, expected), Ok(()));
+        let input = file(case.files, "input/dm_raw.parquet");
+        assert_eq!(
+            compare_parquet("dm.parquet", input, expected),
+            Err("the stored columns of dm.parquet differ from the expected columns".to_owned())
+        );
+        assert_eq!(
+            compare_parquet("dm.parquet", &expected[..expected.len() - 8], expected),
+            Err("dm.parquet does not read as a Parquet file".to_owned())
+        );
     }
 
-    /// A negative case passes only on its expected issue: another condition,
-    /// rule, spec path or context value fails it, and the message gives the
-    /// reported issue.
+    /// A saved Parquet file whose columns are stored as the expected file's
+    /// but whose values differ fails on its values: here the specification
+    /// writes another literal into DOMAIN, a change no other check sees.
+    #[test]
+    fn a_changed_parquet_value_fails_its_case() {
+        let case = edited("negative-transport-empty-string", |files, _| {
+            replace(
+                files,
+                "spec.yaml",
+                "derivation: {literal: DM}",
+                "derivation: {literal: XX}",
+            );
+        });
+        if !compiled(&case) {
+            return;
+        }
+        let outcome = run(&case, &engine_info());
+        assert_eq!(outcome.status, Status::Failed);
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("the output table of dm.parquet differs from the expected table")
+        );
+    }
+
+    /// A float compares by its bits, as both conformance runners compare it:
+    /// `-0.0` is not `0.0`.
+    #[test]
+    fn a_float_compares_by_its_bits() {
+        use yamaa_core::table::ValueRef;
+        use yamaa_core::value::FiniteFloat;
+
+        let float = |value| ValueRef::Float(FiniteFloat::new(value).unwrap());
+        assert!(same_cell(float(1.5), float(1.5)));
+        assert!(!same_cell(float(-0.0), float(0.0)));
+        assert!(same_cell(ValueRef::Int(3), ValueRef::Int(3)));
+        assert!(!same_cell(ValueRef::Str("a"), ValueRef::Str("b")));
+        assert!(!same_cell(ValueRef::Missing, ValueRef::Str("")));
+    }
+
+    /// Every saved file needs an expected file of its name, and every
+    /// expected file but the expected issue must be saved.
+    #[test]
+    fn saved_and_expected_files_must_pair() {
+        let without = edited("adam-adsl-xpt", |_, expected| {
+            expected.retain(|(name, _)| *name != "adsl.csv");
+        });
+        if !compiled(&without) {
+            return;
+        }
+        let outcome = run(&without, &engine_info());
+        assert_eq!(outcome.status, Status::Failed);
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("adsl.csv was written, but the case expects no adsl.csv")
+        );
+        let extra = edited("adam-adsl-xpt", |_, expected| {
+            expected.push(("adsl.json", b"{}".to_vec()));
+        });
+        let outcome = run(&extra, &engine_info());
+        assert_eq!(outcome.status, Status::Failed);
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("adsl.json was not written")
+        );
+    }
+
+    /// A panic inside a case fails that case with what the panic said, and
+    /// returns, so that the cases after it still run.
+    #[test]
+    fn a_panic_fails_its_case() {
+        assert_eq!(contained(|| Ok(())), (Status::Succeeded, None));
+        assert_eq!(
+            contained(|| Err("why".to_owned())),
+            (Status::Failed, Some("why".to_owned()))
+        );
+        assert_eq!(
+            contained(|| panic!("the decoder broke")),
+            (
+                Status::Failed,
+                Some("the engine stopped: the decoder broke".to_owned())
+            )
+        );
+        let reason = String::from("an owned reason");
+        assert_eq!(
+            contained(move || std::panic::panic_any(reason)),
+            (
+                Status::Failed,
+                Some("the engine stopped: an owned reason".to_owned())
+            )
+        );
+        assert_eq!(
+            contained(|| std::panic::panic_any(7_u8)),
+            (
+                Status::Failed,
+                Some("the engine stopped: a panic".to_owned())
+            )
+        );
+    }
+
+    /// A negative case passes only on its expected issue: another phase,
+    /// condition, rule, spec path or context value fails it, and the message
+    /// gives the reported issue.
     #[test]
     fn a_negative_case_matches_its_expected_issue() {
         for (from, to) in [
+            ("phase: output", "phase: validation"),
             (
                 "condition: transport_text_invalid",
                 "condition: transport_length_exceeded",
@@ -853,14 +1031,8 @@ mod tests {
             ("row: 1", "row: 2"),
             ("cause: empty_string", "cause: non_ascii"),
         ] {
-            let case = edited("negative-transport-empty-string", |expected| {
-                let (_, bytes) = expected
-                    .iter_mut()
-                    .find(|(name, _)| *name == ERROR)
-                    .unwrap();
-                let text = String::from_utf8(bytes.clone()).unwrap();
-                assert!(text.contains(from), "{from}");
-                *bytes = text.replace(from, to).into_bytes();
+            let case = edited("negative-transport-empty-string", |_, expected| {
+                replace(expected, ERROR, from, to);
             });
             if !compiled(&case) {
                 return;
@@ -874,6 +1046,20 @@ mod tests {
                 "{message}"
             );
         }
+    }
+
+    /// An expected issue that names no rule matches on everything else, as the
+    /// runners match it.
+    #[test]
+    fn an_expected_issue_without_a_rule_matches() {
+        let case = edited("negative-transport-empty-string", |_, expected| {
+            replace(expected, ERROR, "rule: XPT-7\n", "");
+        });
+        if !compiled(&case) {
+            return;
+        }
+        let outcome = run(&case, &engine_info());
+        assert_eq!(outcome.status, Status::Succeeded, "{outcome:?}");
     }
 
     /// The expected context is a subset: a value the issue reports but the
@@ -940,7 +1126,7 @@ mod tests {
             message: None,
         };
         let result = SelfTest::new(
-            &[case, edited("adam-adsl-xpt", |_| {})],
+            &[case, edited("adam-adsl-xpt", |_, _| {})],
             vec![outcome.clone(), passed.clone()],
             &["odm", "readstat"],
             info.clone(),

@@ -1037,6 +1037,40 @@ class PublicConformance(unittest.TestCase):
         ):
             self.assertIsNone(judge.key_order_texts(ineligible))
 
+    def test_key_order_texts_read_a_1_x_document_in_its_language(self):
+        """A 1.x key column reads one qualified field, or is a literal written
+        as quoted text or a YAML scalar (EXPR-5); the texts keep the header."""
+        document = {
+            "yamaa": "1.0",
+            "type": "spec",
+            "keys": ["DOMAIN", "ID", "SEQ", "FLAG"],
+            "columns": [
+                {"name": "OTHER", "derivation": "SRC.OTHER"},
+                {"name": "DOMAIN", "derivation": "'DM'"},
+                {"name": "ID", "derivation": "SRC.ID"},
+                {"name": "SEQ", "derivation": 1},
+                {"name": "FLAG", "derivation": None},
+            ],
+        }
+        control, permuted = judge.key_order_texts(document)
+        self.assertEqual(judge.json.loads(control)["yamaa"], "1.0")
+        self.assertEqual(
+            [c["name"] for c in judge.json.loads(permuted)["columns"]],
+            ["FLAG", "SEQ", "ID", "DOMAIN", "OTHER"],
+        )
+        for derivation in ("ID", "SRC.ID + 1", "UPPER(SRC.ID)", {"literal": "x"}):
+            ineligible = copy.deepcopy(document)
+            ineligible["columns"][2]["derivation"] = derivation
+            self.assertIsNone(judge.key_order_texts(ineligible), derivation)
+        # A 0.5 document reads text as a field and `{literal: X}` as a literal.
+        legacy = copy.deepcopy(document)
+        del legacy["yamaa"], legacy["type"]
+        self.assertIsNone(judge.key_order_texts(legacy))
+        for column, derivation in ((1, {"literal": "DM"}), (3, {"literal": 1})):
+            legacy["columns"][column]["derivation"] = derivation
+        legacy["columns"][4]["derivation"] = {"literal": None}
+        self.assertIsNotNone(judge.key_order_texts(legacy))
+
     def test_declarations_follow_the_single_parent_chain(self):
         (self.case / "layers").mkdir()
         (self.case / "layers/base.yaml").write_text(SPEC)
@@ -1055,6 +1089,31 @@ class PublicConformance(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "cyclic declarations"):
             judge.declarations(self.case / "entry.yaml")
+
+    def test_a_1_x_child_clears_an_inherited_output_field(self):
+        """A 1.x child removes an inherited field by listing it in `clear`
+        (LAYER-9), as a 0.5 child writes it as null; its own value applies
+        after the clear."""
+        (self.case / "base.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\ndomain: TEST\nkeys: [ID]\n'
+            "output: {path: result.csv, report: checks.csv, decimals: 2}\n"
+            "columns:\n  - {name: ID, type: int}\n"
+        )
+        (self.case / "entry.yaml").write_text(
+            'yamaa: "1.0"\ntype: spec\nparent: base.yaml\n'
+            "clear: [output.report, output.decimals, columns.ID.label]\n"
+            "output: {decimals: 3}\n"
+        )
+        types, output = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(types, {"ID": "int"})
+        self.assertEqual(output, {"path": "result.csv", "decimals": 3})
+        self.assertEqual(judge.declared_paths("entry.yaml", output), ["result.csv"])
+        # In a 0.5 child, `clear` is no field, and null removes the field.
+        (self.case / "entry.yaml").write_text(
+            'schema_version: "1.0"\nparent: base.yaml\noutput: {report: null}\n'
+        )
+        _, output = judge.declarations(self.case / "entry.yaml")
+        self.assertEqual(judge.declared_paths("entry.yaml", output), ["result.csv"])
 
     def test_metamorphic_key_order_permutation_compares_against_control(self):
         fixtures = self.root / "fixtures2"
