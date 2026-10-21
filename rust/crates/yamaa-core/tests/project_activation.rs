@@ -459,12 +459,12 @@ mod project {
                 callable: crate::support::roots::text("program::ridentity"),
             }];
             let rfunction = Function::admit(Language::R, definition).unwrap();
-            assert_eq!(rfunction.language(), Language::R);
+            assert_eq!(rfunction.language(), Some(Language::R));
             assert!(matches!(
                 activate(Language::Python, &lock(), &[rfunction], &mut port),
                 Err(Failure::FunctionLanguageMismatch {
                     function: 0,
-                    declared: Language::R,
+                    declared: Some(Language::R),
                     selected: Language::Python
                 })
             ));
@@ -2174,7 +2174,7 @@ mod project {
                 functions: Some(functions),
                 codelists: vec![],
             };
-            assert!(Environment::admit(Language::Python, draft).is_ok());
+            assert!(Environment::admit(Some(Language::Python), draft).is_ok());
         }
     }
 }

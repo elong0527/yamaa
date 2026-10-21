@@ -772,7 +772,7 @@ mod project {
             fn environment(functions: Option<Vec<ast::Function>>) -> ExecutionEnvironment {
                 let present = functions.is_some();
                 Environment::admit(
-                    Language::Python,
+                    Some(Language::Python),
                     Draft {
                         surface: yamaa_core::ast::Surface::V0_5,
                         language: present.then_some(Language::Python),
@@ -2162,7 +2162,7 @@ mod project {
             for host in [Language::Python, Language::R] {
                 // The supplied project declares no `environments` key for the host.
                 let environment = Environment::admit(
-                    host,
+                    Some(host),
                     Draft {
                         surface: yamaa_core::ast::Surface::V0_5,
                         language: None,
@@ -2213,7 +2213,7 @@ mod project {
                 }
             }
             // Without any project the same calls keep the ordinary unknown cause.
-            let plain = build::without_environment(Language::Python);
+            let plain = build::without_environment(Some(Language::Python));
             let Err(PrepareError::Invalid(findings)) =
                 PreparedSpecification::prepare_with_environment(&spec, &plain)
             else {

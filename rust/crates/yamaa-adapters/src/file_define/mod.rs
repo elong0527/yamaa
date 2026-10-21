@@ -54,7 +54,7 @@ impl Define {
         standard: &str,
         created: Option<&str>,
         installed: &str,
-        host: Language,
+        host: Option<Language>,
         resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
     ) -> Self {
         let mut ports = NativePorts {
@@ -214,7 +214,8 @@ struct NativePorts {
     /// The caller's resolver, which serves the project file under the name
     /// it is given; the local file resolver reads a caller path without one.
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
-    host: Language,
+    /// The host language, or none for an engine that claims no host language.
+    host: Option<Language>,
     environment: Option<std::sync::Arc<OwnedEnvironment>>,
     environment_written: String,
     specifications: Vec<(String, String, std::sync::Arc<PreparedDocument>)>,

@@ -186,14 +186,17 @@ impl PartialEq for ProjectInvocationPlan {
 }
 impl ProjectInvocationPlan {
     /// Host syntax, complete static coverage and activation precede this trusted
-    /// typed construction; declaration names also name the host arguments.
+    /// typed construction; declaration names also name the host arguments. An
+    /// empty `call` names no callable: the plan of an engine that claims no
+    /// host language (#3030 section 2.10), which compiles calls but binds
+    /// none, since activation refuses a function of no host language.
     pub fn new(
         identity: ProjectFunctionIdentity,
         parameters: Vec<Parameter>,
         returns: ColumnType,
         may_return_missing: bool,
     ) -> Result<Self, PlanError> {
-        if identity.name.is_empty() || identity.call.is_empty() {
+        if identity.name.is_empty() {
             return Err(PlanError::EmptyIdentity);
         }
         if parameters.iter().any(|p| p.name != p.host_name) {

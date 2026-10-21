@@ -144,10 +144,10 @@ pub struct CapturedProject {
 /// admission that a specification build applies to the same project file.
 /// A caller's resolver serves the project file and everything it declares
 /// under the names it is given; without one, the local file resolver reads
-/// the caller path.
+/// the caller path. Without a host language, no `environments` entry is read.
 pub fn capture_project(
     project: &str,
-    host: Language,
+    host: Option<Language>,
     resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<CapturedProject, Error> {
     let request = match resolver {
@@ -206,15 +206,16 @@ pub fn select(
             specification,
             environment: Some(environment),
         },
-        host,
+        Some(host),
     )
 }
 
 /// Capture the request's project, when it names one, and its entry through
-/// the local file resolver, then compile.
+/// the local file resolver, then compile. Without a host language, no
+/// `environments` entry is read.
 pub fn select_request(
     request: yamaa_core::build::Request<'_>,
-    host: Language,
+    host: Option<Language>,
 ) -> Result<Selected, SelectionError> {
     let request = configure(request.specification, request.environment)
         .map_err(SelectionError::Preparation)?;
@@ -239,7 +240,7 @@ pub fn select_request(
 /// uses the same engine ports.
 pub fn select_with_resolver(
     request: yamaa_core::build::Request<'_>,
-    host: Language,
+    host: Option<Language>,
     resolver: Arc<dyn crate::host_resources::Resolver>,
 ) -> Result<Selected, SelectionError> {
     let specification_schema = crate::shipped_schema::capture()
@@ -281,7 +282,7 @@ pub fn select_with_resources(
         resources,
         entry,
         Some(environment),
-        host,
+        Some(host),
         specification_schema,
         project_schemas,
     )
@@ -291,7 +292,7 @@ pub fn select_with_optional_resources(
     resources: Resources,
     entry: &str,
     environment: Option<&str>,
-    host: Language,
+    host: Option<Language>,
     specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<Selected, SelectionError> {
@@ -311,7 +312,7 @@ fn capture_environment(
     mut resources: Resources,
     entry: &str,
     environment: Option<&str>,
-    host: Language,
+    host: Option<Language>,
     specification_schema: Arc<CapturedSchema>,
     project_schemas: ProjectSchemas,
 ) -> Result<(Resources, crate::project_source::OwnedEnvironment), Error> {
