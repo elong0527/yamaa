@@ -100,25 +100,26 @@ class RunReport(unittest.TestCase):
             entry = case / "spec.yaml"
             expected = self.expected(entry)
             run = yamaa.spec(entry).run()
-            self.assertTrue(run.issues.is_empty())
+            self.assertEqual(run.issues.num_rows, 0)
             self.assertEqual(
                 json.loads(run._native.observations()), dict(expected, artifacts=[])
             )
             for index, view in enumerate((run.report, run.output)):
+                view = view.to_polars()
                 types = kinds(expected["artifacts"][index])
                 golden = pl.read_csv(
                     case / "expected" / NAMES[index], schema_overrides=types
                 )
                 self.assertEqual(view.schema, types)
                 self.assertTrue(view.equals(golden))
-            # Each public view is a fresh host copy of privately owned bytes.
+            # Each conversion is a fresh host copy of privately owned bytes.
             # The report has a row for the run, its input, its rows, two
             # columns and three checks.
-            changed = run.report.replace_column(
+            changed = run.report.to_polars().replace_column(
                 0, pl.Series("ARTIFACT", ["changed"] * 8)
             )
             self.assertEqual(changed["ARTIFACT"].to_list(), ["changed"] * 8)
-            self.assertEqual(run.report["ARTIFACT"].to_list(), [OUTPUT] * 8)
+            self.assertEqual(run.report.to_polars()["ARTIFACT"].to_list(), [OUTPUT] * 8)
             for name in NAMES:
                 self.assertFalse((case / name).exists())
             entry.unlink()
@@ -136,8 +137,8 @@ class RunReport(unittest.TestCase):
             held = run.report
             del run
             gc.collect()
-            self.assertEqual(held.height, 8)
-            checks = held.filter(pl.col("KIND") == "check")
+            self.assertEqual(held.num_rows, 8)
+            checks = held.to_polars().filter(pl.col("KIND") == "check")
             self.assertEqual(
                 checks["TOTAL"].to_list(),
                 [int(value) for value in TRUTH["evaluated_counts"]],
@@ -169,16 +170,17 @@ class RunReport(unittest.TestCase):
             ).encode("utf-8")
             run = yamaa.spec(entry).run()
             self.assertIsNone(run.output)
-            checks = run.report.filter(pl.col("KIND") == "check")
+            checks = run.report.to_polars().filter(pl.col("KIND") == "check")
             self.assertEqual(checks["OUTCOME"].to_list(), TRUTH["fatal_outcomes"])
             self.assertTrue(
-                run.report.equals(
+                run.report.to_polars().equals(
                     pl.read_csv(
-                        io.BytesIO(failed_report), schema_overrides=run.report.schema
+                        io.BytesIO(failed_report),
+                        schema_overrides=run.report.to_polars().schema,
                     )
                 )
             )
-            issues = run.issues.clone()
+            issues = run.issues.to_polars().clone()
             self.assertEqual(issues["condition"].to_list(), ["range_failed"])
             for name in NAMES:
                 (case / name).write_bytes(b"sentinel")
@@ -187,8 +189,8 @@ class RunReport(unittest.TestCase):
             for _ in range(2):
                 with self.assertRaises(yamaa.Error) as raised:
                     run.save()
-                self.assertTrue(raised.exception.issues.equals(issues))
-                self.assertTrue(run.issues.equals(issues))
+                self.assertTrue(raised.exception.issues.to_polars().equals(issues))
+                self.assertTrue(run.issues.to_polars().equals(issues))
                 self.assertEqual((case / REPORT).read_bytes(), failed_report)
                 self.assertEqual((case / OUTPUT).read_bytes(), b"sentinel")
                 self.assertEqual(
@@ -205,14 +207,14 @@ class RunReport(unittest.TestCase):
             )
             expected = self.expected(entry)
             run = yamaa.spec(entry).run()
-            self.assertTrue(run.issues.is_empty())
+            self.assertEqual(run.issues.num_rows, 0)
             self.assertEqual(
                 json.loads(run._native.observations()), dict(expected, artifacts=[])
             )
             types = kinds(expected["artifacts"][0])
             golden = pl.read_csv(case / "expected" / REPORT, schema_overrides=types)
-            self.assertEqual(run.report.schema, types)
-            self.assertTrue(run.report.equals(golden))
+            self.assertEqual(run.report.to_polars().schema, types)
+            self.assertTrue(run.report.to_polars().equals(golden))
             entry.unlink()
             (case / "input/dm.csv").unlink()
             gc.collect()
@@ -262,8 +264,8 @@ columns:
                 "ID\n" + "\n".join(map(str, range(1, 9))) + "\n"
             )
             run = yamaa.spec(entry).run()
-            self.assertTrue(run.issues.is_empty())
-            warning = run.report.filter(pl.col("KIND") == "check")
+            self.assertEqual(run.issues.num_rows, 0)
+            warning = run.report.to_polars().filter(pl.col("KIND") == "check")
             self.assertEqual(warning["ID"].to_list(), ["\u00e9\U0001d11e"])
             self.assertEqual(warning["SEVERITY"].to_list(), ["warning"])
             self.assertEqual(warning["OUTCOME"].to_list(), ["violated"])
@@ -287,7 +289,7 @@ columns:
             entry.unlink()
             (root / "input.csv").unlink()
             run.save()
-            self.assertTrue(run.issues.is_empty())
+            self.assertEqual(run.issues.num_rows, 0)
             # The ASCII canonical details remain stable independently of host JSON.
             with (root / "checks.csv").open(newline="", encoding="utf-8") as stream:
                 row = next(
@@ -298,10 +300,11 @@ columns:
             (root / "input.csv").write_text("ID\n1\n")
             unchecked = yamaa.spec(entry).run()
             self.assertEqual(
-                unchecked.report["KIND"].to_list(), ["run", "input", "rows", "column"]
+                unchecked.report.to_polars()["KIND"].to_list(),
+                ["run", "input", "rows", "column"],
             )
-            self.assertEqual(unchecked.report.schema["COUNT"], pl.Int64)
-            self.assertEqual(unchecked.report.schema["TOTAL"], pl.Int64)
+            self.assertEqual(unchecked.report.to_polars().schema["COUNT"], pl.Int64)
+            self.assertEqual(unchecked.report.to_polars().schema["TOTAL"], pl.Int64)
             unchecked.save()
             self.assertEqual((root / "checks.csv").read_bytes().count(b"\n"), 5)
             self.assertEqual((root / "absent/out.csv").read_bytes(), b"ID\n1\n")

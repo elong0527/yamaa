@@ -1,0 +1,7 @@
+lifecycle: reviewed
+standard: SDTM
+domain: DM
+define:
+  environment: project.yaml
+  standard: sdtm
+  created: '2026-09-11T00:00:00'

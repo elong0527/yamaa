@@ -4,14 +4,16 @@ import tomllib
 import unittest
 from unittest import mock
 
+from tools.ci import toolchain
 from tools.commands import setup
 from tools.paths import ROOT
 
 
-def commands(*arguments):
-    """The commands that setup runs where rustup is absent."""
+def commands(*arguments, rustup=None):
+    """The commands that setup runs, where rustup is absent unless `rustup`
+    names it."""
     with (
-        mock.patch.object(setup.shutil, "which", return_value=None),
+        mock.patch.object(setup.shutil, "which", return_value=rustup),
         mock.patch.object(setup.subprocess, "run") as run,
         mock.patch.object(setup.subprocess, "check_output", return_value="python\n"),
     ):
@@ -40,6 +42,20 @@ class SetupCommand(unittest.TestCase):
         without = commands("--without-package")
         self.assertEqual(without[0], [*default[0], "--no-install-package", package])
         self.assertEqual(without[1:], default[1:])
+
+    def test_where_rustup_runs_setup_adds_what_make_quick_needs(self):
+        # Clippy and rustfmt for its lint, and rust-src for its notices check.
+        install, *rest = commands(rustup="rustup")
+        self.assertEqual(
+            install, toolchain.install_command(toolchain.declaration(), notices=True)
+        )
+        self.assertIn("rust-src", install)
+        self.assertEqual(rest, commands())
+
+    def test_keep_toolchain_adds_no_components(self):
+        # CI's setup action installs the toolchain first, with rust-src only
+        # for the jobs that run the notices generator.
+        self.assertEqual(commands("--keep-toolchain", rustup="rustup"), commands())
 
 
 if __name__ == "__main__":

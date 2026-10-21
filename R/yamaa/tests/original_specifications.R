@@ -120,6 +120,27 @@ check_issue_frame <- function(actual,expected) {
     all(actual$severity=="error"),all(nzchar(actual$message)),
     all(vapply(actual[c("spec_paths","source_span","operand_route")],is.list,logical(1))))
 }
+# A finding's context (JSON text) without the layer a refused layer names: a
+# schema finding in a 1.x specification names the files the run loaded,
+# "source" and "entry" together; a standalone 0.5 one names none (#3422).
+without_layer <- function(context) {
+  layered <- grepl('"entry":',context,fixed=TRUE)
+  context[layered] <- sub(",}$","}",gsub('"(entry|source)":"[^"]*",?',"",context[layered]))
+  context
+}
+# The lines of an expected/error.yaml that states the one finding of `issues`
+# exactly, in any order: its fields, each path as an item and each context
+# entry, with a list in flow style; read without a YAML parser (#3422).
+error_lines <- function(issues) {
+  context <- jsonlite::fromJSON(issues$context[[1L]],simplifyVector=FALSE)
+  entries <- vapply(names(context),function(key) {
+    value <- context[[key]]
+    paste0("  ",key,": ",if(is.list(value)) paste0("[",paste(unlist(value),collapse=", "),"]") else value)
+  },character(1),USE.NAMES=FALSE)
+  sort(unique(c(paste0("phase: ",issues$phase),paste0("condition: ",issues$condition),
+    paste0("rule: ",issues$rule),"spec_paths:",paste0("  - ",issues$spec_paths[[1L]]),
+    if(length(context)) "context:",entries)))
+}
 # One run report replaces the retired verification and warning logs: every
 # run that began returns it, first its run row (CHECK-23, CHECK-24).
 report_columns <- c("ARTIFACT","KIND","SPEC_PATH","NAME","ID","TARGET","RULE","SEVERITY",
@@ -548,24 +569,20 @@ local({
       identical(rawfile(file.path(case,"adsl.csv")),rawfile(file.path(case,"expected","adsl.csv"))))
   }
   cases <- list(
-    list("negative-date-diff-endpoints","columns.SURVDD.derivation.diff.start","RFSTDTM","datetime"),
-    list("negative-study-day-datetime","columns.DTHDY.derivation.study_day.date","DTHDTM","datetime"),
-    list("negative-epoch-day-non-date","columns.EXSTDY.derivation.to_epoch_day.source","EX.EXSTDT","str"),
-    list("negative-date-diff-units","columns.TRTDURM.derivation.diff.bounds",NULL,NULL))
+    list("negative-date-diff-endpoints","TIME-1"),
+    list("negative-study-day-datetime","TIME-1"),
+    list("negative-epoch-day-non-date","TIME-1"),
+    list("negative-date-diff-units","TIME-5"))
   for(item in cases) {
     stopifnot(file.copy(file.path(root,"cases",item[[1L]]),directory,recursive=TRUE))
     case <- file.path(directory,item[[1L]]);unlink(file.path(case,"input"),recursive=TRUE)
-    bounds <- is.null(item[[3L]])
-    condition <- if(bounds) "value_not_permitted" else "incompatible_input_type"
-    rule <- if(bounds) "TIME-5" else "TIME-1"
-    context_yaml <- if(bounds) "  value: inclusive\n  permitted: [exclusive]\n" else paste0("  source: ",item[[3L]],"\n  expected: date\n  actual: ",item[[4L]],"\n")
-    context <- if(bounds) '{"permitted":["exclusive"],"value":"inclusive"}' else paste0('{"actual":"',item[[4L]],'","expected":"date","source":"',item[[3L]],'"}')
-    stopifnot(identical(rawToChar(rawfile(file.path(case,"expected","error.yaml"))),paste0("phase: validation\ncondition: ",condition,"\nspec_paths:\n  - ",item[[2L]],"\nrule: ",rule,"\ncontext:\n",context_yaml)))
+    # Each benchmark states its one complete finding in its expected/error.yaml,
+    # in the language it is written in (#3422); its lines are the finding's.
+    stated <- sort(unique(readLines(file.path(case,"expected","error.yaml"))))
     checked <- check_spec(file.path(case,"spec.yaml"))$issues
     rejected <- run_spec(file.path(case,"spec.yaml"))
-    stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,condition),
-      identical(checked$rule,rule),identical(checked$spec_paths,list(item[[2L]])),
-      identical(checked$context,context),identical(rejected$issues,checked),is.null(rejected$output),
+    stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$rule,item[[2L]]),
+      identical(error_lines(checked),stated),identical(rejected$issues,checked),is.null(rejected$output),
       is.null(domain_observations(rejected)),
       failed_save(rejected),!file.exists(file.path(case,"input")))
   }
@@ -604,7 +621,7 @@ local({
     result <- run_spec(entry);actual <- result$issues
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),
       identical(actual$condition,finding$condition),identical(actual$rule,finding$rule),
-      identical(actual$spec_paths,list(finding$spec_path)),identical(actual$context,finding$context),
+      identical(actual$spec_paths,list(finding$spec_path)),identical(without_layer(actual$context),finding$context),
       is.null(result$output),identical(is.null(domain_observations(result)),static),
       failed_save(result),length(list.files(case,pattern="[.]csv$"))==0L)
     if(static) stopifnot(identical(checked,actual)) else stopifnot(nrow(checked)==0L)
@@ -644,7 +661,7 @@ local({
     checked <- check_spec(entry)$issues;rejected <- run_spec(entry);actual <- rejected$issues
     stopifnot(nrow(actual)==1L,identical(actual$phase,finding$phase),identical(actual$condition,finding$condition),
       identical(actual$rule,finding$rule),identical(actual$spec_paths,list(finding$spec_path)),
-      identical(actual$context,finding$context),identical(checked,actual),is.null(rejected$output),
+      identical(without_layer(actual$context),finding$context),identical(checked,actual),is.null(rejected$output),
       is.null(domain_observations(rejected)),
       failed_save(rejected),!file.exists(file.path(case,"input")))
   }
@@ -735,7 +752,7 @@ local({
   entry <- file.path(case,"spec.yaml");checked <- check_spec(entry)$issues;rejected <- run_spec(entry)
   stopifnot(nrow(checked)==1L,identical(checked$phase,"validation"),identical(checked$condition,"invalid_field_type"),
     identical(checked$rule,"SCHEMA-12"),identical(checked$spec_paths,list("columns.IDVARVAL.derivation.str_pad.width")),
-    identical(checked$context,'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
+    identical(without_layer(checked$context),'{"actual":"str","expected":"int"}'),identical(rejected$issues,checked),
     is.null(rejected$output),!file.exists(file.path(case,"input")))
   cat("public canonical scalar padding matches complete independent CSV, findings and handlers with missing passthrough and original width failure before input without Python passed\n")
 })
@@ -750,14 +767,19 @@ local({
     truth <- flag_truth[[name]]
     stopifnot(file.copy(file.path(root,truth$directory,name),directory,recursive=TRUE))
     case <- file.path(directory,name);entry <- file.path(case,"spec.yaml")
-    stopifnot(identical(rawfile(entry),charToRaw(enc2utf8(truth$specification))))
+    # A witness is staged from its capture; a benchmark runs as it is written,
+    # in either language, whose findings and handlers are the same (#3422).
+    if(identical(truth$directory,"flags"))
+      stopifnot(identical(rawfile(entry),charToRaw(enc2utf8(truth$specification))))
     files <- list.files(case,recursive=TRUE,full.names=TRUE)
     retained <- lapply(files,rawfile)
     output <- file.path(case,truth$output)
     for(attempt in seq_len(2L)) {
       stopifnot(!file.exists(output))
       result <- run_spec(entry)
-      check_issue_frame(result$issues,truth$findings)
+      issues <- result$issues
+      if(truth$schema_failure) issues$context <- without_layer(issues$context)
+      check_issue_frame(issues,truth$findings)
       wire <- observations(result)
       if(is.null(wire)) stopifnot(identical(truth$handlers,"[]")) else {
         report <- wire

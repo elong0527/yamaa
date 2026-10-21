@@ -44,6 +44,17 @@ The fixed source is `ID\n1\n`. Both installed hosts compile original YAML/JSON, 
 
 Expected report strings use canonical UTF-8 JSON, matching the installed R report boundary. Source documents retain ASCII JSON escapes; decoded reports and exact publication bytes are unchanged by this fixture serialization choice.
 
+## converted
+# Benchmark specifications as 1.0 writes them
+
+`converted/` holds benchmark specifications, and the projects of the two
+transport cases, as `tools/migrate` writes them in 1.0, for the tests that edit
+their text: `scalar_declarative_rounding.rs`, `scalar_language.rs`,
+`specification_sources.rs` and `submission_transport.rs`. Each benchmark moves
+to 1.0 in its own pull request; the copy keeps the edits and expectations of
+these tests in one language. The tests read inputs and expected files from the
+benchmark itself.
+
 ## correlated_aggregates
 # Aggregate relation controls
 
@@ -165,6 +176,19 @@ Rust and both installed hosts compare these complete reports, retain failed
 results after releasing the compiled handle and require repeated saves to fail
 without publication or recapture. These are private original-document tests,
 not qualification of the replacement public facade or an inventory promotion.
+
+## legacy
+# Frozen 0.5 benchmark files
+
+`legacy/` holds byte copies of benchmark files as 0.5 wrote them, for the
+tests of 0.5-only behaviour: a 0.5 source beside its 1.0 conversion
+(`declaration_layer_composition.rs`, `declaration_project_files.rs`); the 0.5
+admission's origins, named windows, shorthand expansion, standalone route and
+model admission (`specification_sources.rs`, `declaration_schema_capture.rs`);
+the 0.5 inheritance lifecycle and the window failures, one of which 1.0 refuses
+at admission rather than as WINDOW-5 (`specification_reports.rs`). The
+benchmarks move to 1.0 one prefix at a time; these copies do not, and go when
+the engine stops reading 0.5 specifications.
 
 ## native_file_resources
 # Native file resource qualification

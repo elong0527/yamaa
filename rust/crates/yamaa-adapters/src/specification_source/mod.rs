@@ -585,8 +585,7 @@ impl Dictionaries {
 /// Prepare a specification that declares the 1.x header, read from `source`,
 /// with the 1.0 closures the package ships, by an engine that reads
 /// [`yamaa_core::language::LANGUAGE_VERSION`] (#3030 D76): its layers are read
-/// and composed, the dictionary files it names are read, and what it writes
-/// that the engine does not build yet is refused.
+/// and composed, and the dictionary files it names are read.
 pub(crate) fn prepare_versioned<P: InheritancePort>(
     source: Source,
     display_path: String,
@@ -625,15 +624,6 @@ pub(crate) fn prepare_versioned_within<P: InheritancePort>(
     let prepared = versioned
         .prepare_sources_within(display_path, port, resolving)
         .map_err(refuse)?;
-    // A 1.0 feature the engine does not build yet is refused before binding
-    // or rendering reads the specification (D76).
-    let unbuilt =
-        yamaa_core::front_end::v1::spec::checks::unbuilt(prepared.specification.lowered().spec());
-    if !unbuilt.is_empty() {
-        return Err(refuse(crate::document::SpecificationError::Unsupported(
-            unbuilt,
-        )));
-    }
     PreparedDocument {
         schema,
         source: prepared.source,

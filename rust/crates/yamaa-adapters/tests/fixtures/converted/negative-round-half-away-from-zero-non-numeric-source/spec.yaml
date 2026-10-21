@@ -1,0 +1,37 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, RNDVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+
+  # The defect: SEX is a text code, and rounding accepts only a numeric
+  # source, so the specification is rejected before any data is read.
+  - name: RNDVAL
+    type: float
+    label: Rounded Value
+    derivation:
+      round_half_away_from_zero:
+        source: SEX
+        digits: 1

@@ -172,11 +172,13 @@ def relative(paths, case):
     return [one(path) for path in paths]
 
 
-def table(frame):
-    if frame is None:
+def table(result):
+    """A yamaa.Table's columns, with their types, and its cells as text."""
+    if result is None:
         return None
     import polars as pl
 
+    frame = result.to_polars()
     kinds = []
     for dtype in frame.dtypes:
         if dtype == pl.String:
@@ -250,14 +252,14 @@ def main(argv=None):
         # save raises with the paths it wrote first. The record keeps them
         # relative to the case's root.
         saved, paths = False, None
-        if not run.issues.height:
+        if not run.issues.num_rows:
             try:
                 paths = run.save()
             except yamaa.Error as error:
                 paths = error.paths
             else:
                 saved = True
-        issues = run.issues.to_dicts()
+        issues = run.issues.to_pylist()
         for issue in issues:
             issue["context"] = json.loads(issue["context"])
         return {
@@ -301,8 +303,8 @@ def main(argv=None):
                 # record's error.
                 spec = yamaa.Spec(case / specification, os.fspath(case / listing))
                 checked = spec.check().issues
-                if not checked.height or (
-                    checked.to_dicts() != refusal.issues.to_dicts()
+                if not checked.num_rows or (
+                    checked.to_pylist() != refusal.issues.to_pylist()
                 ):
                     raise refusal
         first = spec.run()

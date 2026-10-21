@@ -509,8 +509,8 @@ fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_fol
             ("Derived", "columns.AVAL.submission.origins[1]".to_string()),
         ]
     );
-    // A comparator class selects no listed value; a bare list selects one
-    // of them (P-VLM-1).
+    // A comparator class keeps the comparator written, and selects no listed
+    // value; a bare list selects one of them (P-VLM-1).
     let clauses = submission
         .value_level
         .iter()
@@ -530,7 +530,7 @@ fn origins_a_standard_and_a_value_level_comparator_lower_for_the_checks_that_fol
         clauses,
         [
             (
-                Comparator::NotIn,
+                Comparator::Ne,
                 vec![(
                     "X",
                     "columns.AVAL.submission.value_level.OTHER.where.CODE.values[0]".to_string()

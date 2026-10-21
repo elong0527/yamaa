@@ -4,7 +4,8 @@ HELP = """yamaa repository commands (run from the repository root)
 
   setup             Build the installed dev-profile Python extension and locked tools.
                     Needs uv, the pinned Rust toolchain and a platform C compiler.
-                    Under rustup it also adds Clippy and rustfmt to that toolchain.
+                    Under rustup it also adds Clippy, rustfmt and rust-src to that
+                    toolchain.
   quick             check-lint, then check-repository. Runs no test suite and needs
                     no R. Before a push, run it only for a change to generated files,
                     rule cards, schemas, docs generators or Python.
@@ -13,6 +14,7 @@ HELP = """yamaa repository commands (run from the repository root)
                     and over the fuzz targets. Needs Clippy and rustfmt added to the
                     pinned Rust toolchain, and a C++ compiler for libFuzzer.
   check-repository  Repository/rule/notice validation and a strict generated docs build.
+                    The notice check needs rust-src added to the pinned Rust toolchain.
   test-rust         cargo test --locked --workspace without the two host bindings,
                     which have no Rust tests. Needs no R.
   test-python       Package/tools tests and standalone public-host suites outside checkout.

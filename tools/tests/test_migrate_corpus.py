@@ -1,10 +1,13 @@
-"""The converter over the whole benchmark corpus: properties that hold for any corpus.
+"""The converter over the benchmarks still written in 0.5: properties that hold for any corpus.
 
 Every written file parses and keeps its comments, the follow-up list names what
-the conversion leaves to people, and a second run changes nothing. The counts
-the converter produced against the RFC's measurement of main 1758ad145 were
-the acceptance check of #3165 and are recorded on its pull request (#3186);
-they are a snapshot of a moving corpus, so this suite does not pin them.
+the conversion leaves to people, and a second run changes nothing. The corpus
+moves to 1.0 one prefix at a time (#3030 P2-5 to P2-8), so the suite converts
+only the benchmarks whose specifications are still written in 0.5, and runs
+while any is (#3422). The counts the converter produced against the RFC's
+measurement of main 1758ad145 were the acceptance check of #3165 and are
+recorded on its pull request (#3186); they are a snapshot of a moving corpus,
+so this suite does not pin them.
 """
 
 import tempfile
@@ -16,40 +19,52 @@ import yaml
 from tools.migrate import convert, write
 from tools.migrate.text import comment_texts
 from tools.paths import ROOT
+from tools.surface import declares_header
 
 BENCHMARKS = ROOT / "benchmarks"
 
 
-def zero_five_corpus():
-    """True while every benchmark specification still declares schema_version."""
-    for path in BENCHMARKS.glob("*/spec*.yaml"):
-        if "schema_version" not in path.read_text(encoding="utf-8"):
-            return False
-    return True
+def written_in_1_0(path):
+    """Whether a specification declares the 1.x header; one that does not
+    parse is read as 0.5, as the converter reads it."""
+    try:
+        return declares_header(yaml.safe_load(path.read_text(encoding="utf-8")))
+    except yaml.YAMLError:
+        return False
 
 
-@unittest.skipUnless(zero_five_corpus(), "the corpus is already in the 1.0 surface")
+def zero_five_benchmarks():
+    """The benchmarks with a specification still written in 0.5."""
+    return [
+        case
+        for case in sorted(BENCHMARKS.iterdir())
+        if (case / "benchmark.yaml").is_file()
+        and not all(written_in_1_0(path) for path in case.glob("spec*.yaml"))
+    ]
+
+
+ZERO_FIVE = zero_five_benchmarks()
+
+
+@unittest.skipUnless(ZERO_FIVE, "every benchmark is written in 1.0")
 class CorpusTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory()
         cls.target = Path(cls.temporary.name) / "first"
-        cls.result = convert([BENCHMARKS])
-        write(cls.result, cls.target, [BENCHMARKS])
+        cls.result = convert(ZERO_FIVE, base=ROOT)
+        write(cls.result, cls.target, ZERO_FIVE)
 
     @classmethod
     def tearDownClass(cls):
         cls.temporary.cleanup()
 
     def test_every_written_file_parses_and_keeps_its_comments(self):
-        for path in sorted(BENCHMARKS.rglob("*.yaml")):
+        for path in sorted(p for case in ZERO_FIVE for p in case.rglob("*.yaml")):
             relative = path.relative_to(ROOT)
-            output = self.target / "benchmarks" / path.relative_to(BENCHMARKS)
+            output = self.target / relative
             if not output.exists():
-                self.assertIn(
-                    str(relative.relative_to("benchmarks")),
-                    "\n".join(self.result.removed),
-                )
+                self.assertIn(str(relative), "\n".join(self.result.removed))
                 continue
             text = output.read_text(encoding="utf-8")
             with self.subTest(file=str(relative)):
@@ -61,12 +76,12 @@ class CorpusTests(unittest.TestCase):
 
     def test_the_follow_up_list_names_what_the_conversion_leaves_to_people(self):
         notes = {(note.file, note.kind) for note in self.result.notes}
-        for item in (
-            ("benchmarks/AGENTS.md", "D8"),
-            ("benchmarks/schema-inheritance-clear/spec_study.yaml", "comment"),
-        ):
-            with self.subTest(note=item):
-                self.assertIn(item, notes)
+        # The expected notes name only the benchmarks still written in 0.5.
+        if BENCHMARKS / "schema-inheritance-clear" in ZERO_FIVE:
+            self.assertIn(
+                ("benchmarks/schema-inheritance-clear/spec_study.yaml", "comment"),
+                notes,
+            )
         kinds = Counter(note.kind for note in self.result.notes)
         self.assertNotIn("internal", kinds)
         self.assertNotIn("yaml", kinds)

@@ -41,6 +41,19 @@ mod transport {
             .unwrap()
     }
 
+    /// Write the benchmark's project and specification as 1.0 writes them
+    /// over a staged copy, for a test that edits the project's text: the
+    /// benchmark moves to 1.0 in its own pull request, and the copies keep
+    /// the edit in one language (#3422).
+    fn convert(name: &str, temp: &Temp) {
+        let converted = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/converted")
+            .join(name);
+        for file in ["project.yaml", "spec.yaml"] {
+            fs::copy(converted.join(file), temp.0.join(file)).unwrap();
+        }
+    }
+
     fn yaml(path: &Path) -> Value {
         let text = fs::read(path).unwrap();
         let document = yamaa_adapters::yaml_decode::decode_yaml(&text)
@@ -327,10 +340,11 @@ mod transport {
         };
         let case = benchmarks().join("adam-adae-analysis-time");
         let temp = stage(&case);
+        convert("adam-adae-analysis-time", &temp);
         let project = temp.0.join("project.yaml");
         let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("datasets: json", "datasets: xpt");
+            .replace("transport: dataset_json", "transport: xpt");
         fs::write(&project, text).unwrap();
         let mut result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());
@@ -377,10 +391,11 @@ mod transport {
     fn adam_dataset_json_targets_the_integer_its_document_submits() {
         let case = benchmarks().join("adam-adsl-xpt");
         let temp = stage(&case);
+        convert("adam-adsl-xpt", &temp);
         let project = temp.0.join("project.yaml");
         let text = fs::read_to_string(&project)
             .unwrap()
-            .replace("datasets: xpt", "datasets: json");
+            .replace("transport: xpt", "transport: dataset_json");
         fs::write(&project, text).unwrap();
         let result = run(&case, &temp);
         assert!(result.issues().is_empty(), "{:?}", result.issues());

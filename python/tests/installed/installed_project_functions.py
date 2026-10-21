@@ -217,7 +217,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 def mismatch(result):
                     """The one issue a mismatched witness version reports."""
                     self.assertIsNone(result.output)
-                    (issue,) = result.issues.to_dicts()
+                    (issue,) = result.issues.to_pylist()
                     context = json.loads(issue["context"])
                     return (
                         issue["condition"],
@@ -244,14 +244,15 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 self.assertNotIn(module, sys.modules)
                 (root / "uv.lock").write_bytes(raw)
                 checked = listed().check()
-                self.assertTrue(checked.issues.is_empty(), checked.issues)
+                self.assertEqual(checked.issues.num_rows, 0, checked.issues)
                 self.assertNotIn(module, sys.modules)
                 self.assertFalse(marker.exists())
                 first = listed().run()
                 # No project failure: the run has no issues at all.
-                self.assertTrue(first.issues.is_empty(), first.issues)
+                self.assertEqual(first.issues.num_rows, 0, first.issues)
                 self.assertEqual(
-                    first.output.to_dict(as_series=False), {"x": [1], "V": [101]}
+                    first.output.to_polars().to_dict(as_series=False),
+                    {"x": [1], "V": [101]},
                 )
                 self.assertEqual(marker.read_text(encoding="utf-8"), "imported")
                 observed = json.loads(first._native.observations())
@@ -277,9 +278,10 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                     )
                 self.assertEqual(len(sys.modules[module].calls), 3)
                 second = listed().run()
-                self.assertTrue(second.issues.is_empty(), second.issues)
+                self.assertEqual(second.issues.num_rows, 0, second.issues)
                 self.assertEqual(
-                    second.output.to_dict(as_series=False), {"x": [1], "V": [101]}
+                    second.output.to_polars().to_dict(as_series=False),
+                    {"x": [1], "V": [101]},
                 )
                 self.assertEqual(len(sys.modules[module].calls), 6)
                 self.assertEqual(
@@ -289,7 +291,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 rejected = listed().run()
                 self.assertIsNone(rejected.output)
                 self.assertEqual(
-                    rejected.issues["condition"].to_list(),
+                    rejected.issues.to_polars()["condition"].to_list(),
                     ["runtime_artifact_mismatch"],
                 )
                 self.assertEqual(
@@ -308,7 +310,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                         failed = listed().run()
                         self.assertIsNone(failed.output)
                         report = json.loads(failed._native.observations())
-                        issues = failed.issues.to_dicts()
+                        issues = failed.issues.to_pylist()
                         self.assertTrue(issues)
                         context = json.loads(issues[0]["context"])
                         if stage == "conformance":
@@ -334,7 +336,7 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                         self.assertEqual(context["host_error"], "ValueError")
                         self.assertEqual(context["host_message"], str(original))
                         gc.collect()
-                        self.assertEqual(failed.issues.to_dicts(), issues)
+                        self.assertEqual(failed.issues.to_pylist(), issues)
                         with self.assertRaises(yamaa.Error):
                             failed.save()
                 package.failure = None
@@ -345,7 +347,8 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 gc.collect()
                 for result in (first, second):
                     self.assertEqual(
-                        result.output.to_dict(as_series=False), {"x": [1], "V": [101]}
+                        result.output.to_polars().to_dict(as_series=False),
+                        {"x": [1], "V": [101]},
                     )
                     result.save()
                     self.assertEqual(
