@@ -36,6 +36,7 @@ mod types;
 pub use lookup_diagnostics::LookupFinding;
 use lookup_diagnostics::ReferenceCause;
 mod output_diagnostics;
+pub use output_diagnostics::unknown_artifact_profile;
 mod phases;
 mod preflight_diagnostics;
 mod root_filter;
@@ -1127,7 +1128,7 @@ impl PreparedSpecification {
         }
     }
     pub fn output_profile(&self) -> Option<&'static str> {
-        output_profile(&self.output_path)
+        artifact_profile(&self.output_path)
     }
     /// Canonical arbitrary-width declaration, never a runtime signed-i64 value.
     pub fn output_decimals(&self) -> Option<&str> {
@@ -1142,7 +1143,7 @@ impl PreparedSpecification {
     /// Invoke only after derivation, output-key checks, and verification succeed.
     pub fn output_findings(&self) -> Vec<OutputFinding> {
         let mut findings = Vec::new();
-        if output_profile(&self.output_path).is_none() {
+        if artifact_profile(&self.output_path).is_none() {
             findings.push(OutputFinding::UnknownProfile {
                 path: self.output_path.clone(),
             });
@@ -1287,7 +1288,12 @@ fn output_basename(path: &str) -> &str {
         .rfind(|part| !part.is_empty() && *part != ".")
         .unwrap_or("")
 }
-fn output_profile(path: &str) -> Option<&'static str> {
+/// The profile OUTPUT-5's closed mapping gives `path`: `csv` or `parquet`, by
+/// the case-insensitive extension of its last segment, or `None` for any
+/// other extension or none. `path` separates its segments with `/`, as a
+/// written path does; a name that is only an extension, such as `.csv`, has
+/// none.
+pub fn artifact_profile(path: &str) -> Option<&'static str> {
     let (stem, suffix) = output_basename(path).rsplit_once('.')?;
     if stem.is_empty() {
         return None;

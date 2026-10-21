@@ -323,7 +323,7 @@ fn resolve_reads_only_the_specification_through_the_resolver() {
 }
 
 #[test]
-fn read_odm_captures_its_source_once_through_the_resolver() {
+fn read_odm_captures_its_source_once_and_its_table_saves_through_the_resolver() {
     const ODM: &[u8] = br#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">
   <ClinicalData StudyOID="S" MetaDataVersionOID="M">
     <SubjectData SubjectKey="01"><StudyEventData StudyEventOID="E">
@@ -338,8 +338,29 @@ fn read_odm_captures_its_source_once_through_the_resolver() {
     // One request each: a source read twice would log twice.
     let once = |location: &str| vec![("capture", location.to_owned())];
     if cfg!(feature = "odm") {
-        assert_eq!(result.unwrap().rows(), 1);
+        let table = result.unwrap();
+        assert_eq!(table.rows(), 1);
         assert_eq!(case.requests(), once("/odm/items.xml"));
+        // The table saves through the same resolver, as a run's output does.
+        assert_eq!(
+            case.engine().save_table(&table, "odm/items.csv").unwrap(),
+            ["memory:/odm/items.csv"]
+        );
+        assert_eq!(
+            case.accesses(),
+            set(&[
+                ("target", "/odm/items.csv"),
+                ("stage", "/odm/items.csv"),
+                ("commit", "/odm/items.csv"),
+            ])
+        );
+        assert_eq!(
+            String::from_utf8(case.published("/odm/items.csv")).unwrap(),
+            format!(
+                "{}\n1.3,,S,M,01,,,E,,,,,,F,,,,,,,G,,,,AGE,,42,true,false,1\n",
+                yamaa::ODM_COLUMNS.join(",")
+            )
+        );
         let Err(yamaa::Error::Odm(refusal)) =
             case.engine().read_odm("odm/absent.xml", &OdmOptions::new())
         else {
