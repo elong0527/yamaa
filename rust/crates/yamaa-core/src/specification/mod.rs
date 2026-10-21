@@ -146,9 +146,9 @@ pub enum PreflightFinding {
     DuplicateRowDefault {
         column: String,
         rows: Vec<String>,
-        /// Why the column-level derivation is not row-local (SPEC-6): the
-        /// root cause kind, such as `aggregate`, `lookup`, `window` or
-        /// `named_intermediate`.
+        /// Why the column-level derivation is not row-local (SPEC-6): it, or
+        /// a column it reads, holds an `aggregate` or a `window`, or reads a
+        /// `SELF` intermediate (`self_intermediate`).
         not_row_local: String,
     },
     MissingRowDerivation {

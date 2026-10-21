@@ -107,8 +107,8 @@ that row derivation, naming the column.
 
 ### SPEC-6. A row-local column-level derivation is a default that each row template may override
 
-A column-level derivation is row-local unless it is an aggregate, holds a
-window operation, or reads a `SELF` intermediate or a column whose
+A column-level derivation is row-local unless it holds an aggregate or a
+window operation, reads a `SELF` intermediate, or reads a column whose
 column-level derivation is not row-local; a read through the implicit join or
 an input-backed named intermediate is row-local. A structured `source` reads
 its `between` value. A row-local column-level derivation is its column's
@@ -117,7 +117,7 @@ context reads it, and an entry's own derivation overrides it. Any other keeps
 its column-phase meaning; a `rows` entry naming its column fails.
 
 Fails: `duplicate_derivation`.
-Evidence: `schema-rows-override`, `schema-lookup-source-range-default`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/phases.rs::a_template_cannot_replace_a_default_that_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_s_range_value_brings_its_default_into_the_row_phase`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_whose_range_value_reads_a_window_is_not_row_local`.
+Evidence: `schema-rows-override`, `schema-lookup-source-range-default`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/phases.rs::a_template_cannot_replace_a_default_that_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::an_aggregate_in_a_case_result_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::a_row_phase_leaves_an_aggregate_in_a_case_result_to_the_column_phase`, `rust/crates/yamaa-adapters/tests/check_row_phase_boundaries.rs::an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_s_range_value_brings_its_default_into_the_row_phase`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_whose_range_value_reads_a_window_is_not_row_local`.
 
 The rule applies to output and internal columns alike. A row-phase context is
 one of these:
@@ -129,8 +129,8 @@ one of these:
   derivation reads ([LOOKUP-2](lookup.md#lookup-2)), and of each further
   intermediate that such a `between` value reads.
 
-A window operation makes its derivation not row-local as the whole expression
-or as a `case` result, and an aggregate only as the whole expression. A
+An aggregate or a window operation makes its derivation not row-local as the
+whole expression or as a `case` result, whichever branch a row selects. A
 structured `source`'s `between` value is a read of the derivation that holds
 the source, whether the source is that whole derivation or a `case` result in
 it. A row-local default that the value names therefore completes in the row
