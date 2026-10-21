@@ -383,4 +383,31 @@ submission:
         assert_eq!(issue.context["report"], text("dm-report.parquet"));
         assert_eq!(issue.context["reason"], text("row_count"));
     }
+
+    /// An ODM XML input's records are the clinical items its profile
+    /// decodes, as its run counted them (CHECK-24, ODM-1).
+    #[cfg(feature = "odm")]
+    #[test]
+    fn an_odm_xml_input_counts_the_items_its_run_read() {
+        let snapshot = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../benchmarks/sdtm-dm-odm-snapshot/input/odm.xml");
+        let spec = SPEC
+            .replace("  RAW: raw.csv\n", "  RAW: odm.xml\n")
+            .replace("RAW.STUDYID", "RAW.StudyOID")
+            .replace("RAW.USUBJID", "RAW.SubjectKey")
+            .replace("      length: 4\n", "      length: 7\n");
+        let study = Study::new(&spec);
+        let xml = fs::read(snapshot).unwrap();
+        study.write("odm.xml", &xml);
+        let mut result = study.run();
+        assert!(result.issues().is_empty(), "{:?}", result.issues());
+        assert!(result.save().unwrap());
+        let define = study.compose();
+        assert!(define.issues().is_empty(), "{:?}", define.issues());
+        // A later export of more bytes is not the one the run read.
+        study.write("odm.xml", [xml.as_slice(), b"\n"].concat());
+        let facts = stale(&study.compose(), "input_bytes");
+        assert_eq!(facts[0], ("actual".to_owned(), Value::from(xml.len() + 1)));
+        assert_eq!(facts[1], ("input".to_owned(), text("RAW")));
+    }
 }
