@@ -1,22 +1,8 @@
 //! Submission boundary findings retained by a native preparation owner.
 //! Resource identity and platform path comparison stay with that owner; core
 //! classifies the observed declaration/relation without reading a resource.
-use crate::{
-    diagnostic::ConditionCode, project_environment::Submission, submission_composition::Finding,
-};
+use crate::{diagnostic::ConditionCode, submission_composition::Finding};
 
-pub fn standard_name(written: &str) -> Result<Submission, Finding> {
-    match written {
-        "sdtm" => Ok(Submission::Sdtm),
-        "adam" => Ok(Submission::Adam),
-        "send" => Ok(Submission::Send),
-        _ => Err(Finding::cause(
-            ConditionCode::DefineStandardName,
-            "standard",
-            written,
-        )),
-    }
-}
 /// Clock acquisition stays native. The held explicit text has the same portable
 /// whole-second civil grammar as a generated Define creation attribute.
 pub fn created_text(written: &str) -> Result<&str, Finding> {

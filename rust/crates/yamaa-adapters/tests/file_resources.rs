@@ -667,7 +667,7 @@ mod file {
             sync::atomic::{AtomicU64, Ordering},
         };
         use yamaa_adapters::file_define::{Define, PublicationState};
-        use yamaa_core::project_function::Language;
+        use yamaa_core::{project_environment::Submission, project_function::Language};
         static NEXT: AtomicU64 = AtomicU64::new(0);
         struct Temp(PathBuf);
         impl Temp {
@@ -719,7 +719,7 @@ mod file {
             fn run(&self, created: &str) -> Define {
                 Define::prepare(
                     self.0.join("project.yaml").to_str().unwrap(),
-                    "sdtm",
+                    Submission::Sdtm,
                     Some(created),
                     "0.3.0",
                     Some(Language::Python),
@@ -874,11 +874,44 @@ mod file {
             assert!(found, "{header:?}");
             kept
         }
+        /// The DM fixture's composition with the entries under `removed` taken
+        /// out of its project file, and its specification deleted, so that
+        /// the refusal must come before any specification is read.
+        fn without_entries(removed: &[&str]) -> (Temp, Define) {
+            let temp = Temp::fixture("sdtm-dm-metadata", true);
+            let path = temp.0.join("project.yaml");
+            let mut project = fs::read_to_string(&path).unwrap();
+            for header in removed {
+                project = without_entry(&project, header);
+            }
+            fs::write(&path, project).unwrap();
+            fs::remove_file(temp.0.join("spec.yaml")).unwrap();
+            let run = temp.run("2026-09-11T00:00:00");
+            (temp, run)
+        }
+        fn records(run: &Define) -> Vec<yamaa_core::json::Value> {
+            run.issues()
+                .iter()
+                .map(|issue| {
+                    yamaa_adapters::json!({
+                        "phase": issue.phase(), "condition": issue.condition(),
+                        "rule": issue.rule(), "spec_paths": issue.spec_paths,
+                        "context": issue.context.clone()
+                    })
+                })
+                .collect()
+        }
+        /// A refused composition holds and writes nothing.
+        fn assert_writes_nothing(temp: &Temp, mut run: Define) {
+            assert_eq!(run.artifacts().len(), 0);
+            assert!(run.save().is_err());
+            assert!(!temp.0.join("define.xml").exists());
+            assert!(!temp.0.join("dm.json").exists());
+        }
         #[test]
-        fn define_reports_every_missing_study_section_guide_and_target_before_reading_specifications(
-        ) {
-            // A run needs only a section's specs; Define requires the study, the
-            // selected section and that section's standard and define (DEFINE-28).
+        fn define_reports_every_missing_study_guide_and_target_before_reading_specifications() {
+            // A run needs only a section's specs; Define requires the study and
+            // the section's standard and define (DEFINE-28).
             for (removed, expected) in [
                 (
                     &["study:", "  standard:", "  define: define.xml"][..],
@@ -892,29 +925,8 @@ mod file {
                     &["  define: define.xml"][..],
                     &[("sdtm.define", "define")][..],
                 ),
-                (&["sdtm:"][..], &[("sdtm", "sdtm")][..]),
             ] {
-                let temp = Temp::fixture("sdtm-dm-metadata", true);
-                let path = temp.0.join("project.yaml");
-                let mut project = fs::read_to_string(&path).unwrap();
-                for header in removed {
-                    project = without_entry(&project, header);
-                }
-                fs::write(&path, project).unwrap();
-                // The declarations are refused before any specification is read.
-                fs::remove_file(temp.0.join("spec.yaml")).unwrap();
-                let mut run = temp.run("2026-09-11T00:00:00");
-                let actual: Vec<_> = run
-                    .issues()
-                    .iter()
-                    .map(|issue| {
-                        yamaa_adapters::json!({
-                            "phase": issue.phase(), "condition": issue.condition(),
-                            "rule": issue.rule(), "spec_paths": issue.spec_paths,
-                            "context": issue.context.clone()
-                        })
-                    })
-                    .collect();
+                let (temp, run) = without_entries(removed);
                 let wanted: Vec<_> = expected
                     .iter()
                     .map(|(field, detail)| {
@@ -925,12 +937,24 @@ mod file {
                         })
                     })
                     .collect();
-                assert_eq!(actual, wanted, "{removed:?}");
-                assert_eq!(run.artifacts().len(), 0);
-                assert!(run.save().is_err());
-                assert!(!temp.0.join("define.xml").exists());
-                assert!(!temp.0.join("dm.json").exists());
+                assert_eq!(records(&run), wanted, "{removed:?}");
+                assert_writes_nothing(&temp, run);
             }
+        }
+        #[test]
+        fn a_project_without_the_selected_section_refuses_it_before_reading_specifications() {
+            // The project file no longer declares the section the caller
+            // selected, as when it changes after a submission checked it.
+            let (temp, run) = without_entries(&["sdtm:"]);
+            assert_eq!(
+                records(&run),
+                [yamaa_adapters::json!({
+                    "phase": "validation", "condition": "unknown_section",
+                    "rule": "PROJECT-14", "spec_paths": [],
+                    "context": {"section": "sdtm", "sections": []}
+                })]
+            );
+            assert_writes_nothing(&temp, run);
         }
         fn root() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1027,7 +1051,7 @@ mod file {
                     }
                     let mut run = Define::prepare(
                         temp.0.join("project.yaml").to_str().unwrap(),
-                        "sdtm",
+                        Submission::Sdtm,
                         Some("2026-09-11T00:00:00"),
                         "0.3.0",
                         Some(host),
@@ -1256,7 +1280,7 @@ mod file {
             assert_eq!(after, names, "no publication residue");
         }
         #[test]
-        fn explicit_section_selector_datetime_and_missing_published_artifact_are_refused() {
+        fn explicit_datetime_and_missing_published_artifact_are_refused() {
             let temp = Temp::fixture("sdtm-dm-metadata", false);
             let mut run = temp.run("2026-09-11T00:00:00");
             assert!(run
@@ -1266,15 +1290,6 @@ mod file {
             assert!(run.save().is_err());
             let run = temp.run("2026-09-11");
             assert!(run.issues().iter().any(|i| i.spec_paths == ["created"]));
-            let run = Define::prepare(
-                temp.0.join("project.yaml").to_str().unwrap(),
-                "SDTM",
-                None,
-                "0.3.0",
-                Some(Language::Python),
-                None,
-            );
-            assert!(run.issues().iter().any(|i| i.spec_paths == ["standard"]));
         }
         #[test]
         fn inherited_original_output_supplies_both_json_capture_and_publication_target() {
@@ -1605,7 +1620,7 @@ mod file {
             let send = |temp: &Temp| {
                 Define::prepare(
                     temp.0.join("project.yaml").to_str().unwrap(),
-                    "send",
+                    Submission::Send,
                     Some("2026-09-11T00:00:00"),
                     "0.3.0",
                     Some(Language::Python),
@@ -1664,7 +1679,7 @@ mod file {
             fs::write(temp.0.join("project.yaml"), environment).unwrap();
             let run = Define::prepare(
                 temp.0.join("project.yaml").to_str().unwrap(),
-                "adam",
+                Submission::Adam,
                 Some("2026-09-30T00:00:00"),
                 "0.3.0",
                 Some(Language::Python),

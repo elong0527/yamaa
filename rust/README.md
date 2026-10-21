@@ -255,8 +255,6 @@ impl Engine {
         -> Result<Build, Error>;
     pub fn compile(&self, request: &Request<'_>, token: &CancellationToken)
         -> Result<Plan, Error>;
-    pub fn define(&self, request: &DefineRequest<'_>, token: &CancellationToken)
-        -> Result<DefineBuild, Error>;
     pub fn resolve_specification(&self, request: &Request<'_>)
         -> Result<ResolvedSpecification, Error>;
     pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>;
@@ -284,19 +282,6 @@ impl RunRequest {
     pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self;
 }
 
-#[non_exhaustive]
-pub struct DefineRequest<'a> {
-    pub environment: &'a str,
-    pub standard: &'a str,
-    pub created: Option<&'a str>,
-    pub installed: &'a str,
-}
-
-impl<'a> DefineRequest<'a> {
-    pub fn new(environment: &'a str, standard: &'a str, installed: &'a str) -> Self;
-    pub fn with_created(mut self, created: &'a str) -> Self;
-}
-
 pub struct Build { /* owned attempt state */ }
 impl Build {
     pub fn output(&self) -> Option<&Table>;
@@ -306,15 +291,9 @@ impl Build {
     pub fn report(&self) -> &Report;
     pub fn save(&mut self) -> Result<Vec<String>, Failure>;  // the paths written
 }
-
-pub struct DefineBuild { /* owned attempt state */ }
-impl DefineBuild {
-    pub fn report(&self) -> &Report;
-    pub fn save(&mut self) -> Result<Vec<String>, Failure>;  // the paths written
-}
 ```
 
-- `EngineOptions`, `Request`, `DefineRequest` and `RunRequest` are
+- `EngineOptions`, `Request` and `RunRequest` are
   `#[non_exhaustive]`, so external crates cannot use struct literals; the
   `new` plus `with_*` constructors above are the only way to build them, which
   keeps additive field changes non-breaking.
@@ -348,9 +327,8 @@ impl DefineBuild {
   path. Its refusals are a run's: `unknown_artifact_profile` for another
   extension, and the save's `engine_rejected` codes for a target that cannot
   be written (#3030 D134).
-- `define` mirrors `file_define::Define::prepare` plus its save step.
 - Every operation goes through the engine's resolver: checks, builds,
-  plans, project reads, `define`, `resolve_specification`, `read_odm`,
+  plans, project reads and submissions, `resolve_specification`, `read_odm`,
   `save_table` and `file_type`.
   Without one, the engine's local file resolver serves the same requests, so a
   resolver that records them sees every access. A resolver serves a regular
@@ -432,7 +410,7 @@ impl DefineBuild {
 | Handle | Ownership | `Send` | `Sync` | Notes |
 | --- | --- | --- | --- | --- |
 | `Engine` | Owned, cheap to clone (shared `Arc` state) | Yes | Yes | Operations take `&self`; concurrent calls are independent attempts. |
-| `Build`, `DefineBuild` | Owned, one attempt | Yes | No | `save(&mut self)` publishes once, as today. |
+| `Build` | Owned, one attempt | Yes | No | `save(&mut self)` publishes once, as today. |
 | `Plan` | Owned, reusable, cheap to clone (shared `Arc` state) | Yes | Yes | `run` takes `&self`; each run is an independent attempt in its own resource scope. The plan lives until its last clone drops, independently of the `Engine`. |
 | `RunRequest` | Owned | Yes | Yes | Concurrent runs pass their own observer; progress events carry no run identity. |
 | `Plans` | Owned by one host object, interior lock | Yes | Yes | Keeps one `Plan` per resolved specification and project identity. The lock is held only to read or replace a kept plan, never across a compilation, a run or a callback, so a run started from a callback or another thread proceeds as any other. |
@@ -617,7 +595,7 @@ was removed. Any module not listed here is internal by default.
 | `arrow_table` | Internal -- the engine's table representation; `Table` is the public form. |
 | `callback` | Facade -- the `ProjectFunctions` trait and `FunctionError`; `BoundaryError`/`CallbackError` convert into `FunctionError`. |
 | `file_application` | Facade -- the one route behind `Engine::check`, `Engine::build`, `Engine::compile`, `Plan::run` and every host operation: a specification alone and each member of a project run prepare, run and report there. |
-| `file_define` | Facade -- `Engine::define` and `DefineBuild::save`; its `Failure` converts into `Error`. |
+| `file_define` | Internal -- each section's composition behind `Engine::project_submission`, which `Submission::save` publishes. |
 | `file_preparation` | Internal -- `FileSpecification`, the one prepared specification, alone or with its project, behind `Build` and `Plan`. |
 | `file_project` | Internal -- project environment capture for preparation. |
 | `file_resources` | Internal -- its `Error` converts into `ResolverFailure`/`Error::Internal`. |

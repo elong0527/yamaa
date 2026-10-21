@@ -1743,27 +1743,24 @@ pub struct Required<'a> {
     pub surface: ast::Surface,
 }
 impl<'a> Required<'a> {
-    /// A section admits for runs with only its `specs`. Composition requires the
-    /// project `study`, the selected family's section and that section's
+    /// A section admits for runs with only its `specs`. Composition of the
+    /// selected `section` requires the project `study` and the section's
     /// guide and `define`, and reports every missing one together as a
     /// missing required field: the guide as a project written in `surface`
     /// spells it, `standards` in 1.0, whose list may also be empty, and
     /// `standard` in 0.5 (DEFINE-28).
     pub fn admit(
         study: Option<&'a ast::Study>,
-        section: Option<&'a ast::Section>,
-        family: Submission,
+        section: &'a ast::Section,
         surface: ast::Surface,
     ) -> Result<Self, Vec<Finding>> {
-        let family = family_name(family);
+        let family = family_name(section.family);
         let missing = |path: String, field: &str| {
             Finding::cause(ConditionCode::DefineRequiredDeclaration, &path, field)
         };
-        let standard = section.and_then(|section| section.standards.first());
-        let define = section.and_then(|section| section.define.as_ref());
-        if let (Some(study), Some(section), Some(standard), Some(define)) =
-            (study, section, standard, define)
-        {
+        let standard = section.standards.first();
+        let define = section.define.as_ref();
+        if let (Some(study), Some(standard), Some(define)) = (study, standard, define) {
             return Ok(Self {
                 study,
                 section,
@@ -1776,19 +1773,15 @@ impl<'a> Required<'a> {
         if study.is_none() {
             findings.push(missing("study".into(), "study"));
         }
-        if section.is_none() {
-            findings.push(missing(family.into(), family));
-        } else {
-            if standard.is_none() {
-                let field = match surface {
-                    ast::Surface::V0_5 => "standard",
-                    ast::Surface::V1 { .. } => "standards",
-                };
-                findings.push(missing(format!("{family}.{field}"), field));
-            }
-            if define.is_none() {
-                findings.push(missing(format!("{family}.define"), "define"));
-            }
+        if standard.is_none() {
+            let field = match surface {
+                ast::Surface::V0_5 => "standard",
+                ast::Surface::V1 { .. } => "standards",
+            };
+            findings.push(missing(format!("{family}.{field}"), field));
+        }
+        if define.is_none() {
+            findings.push(missing(format!("{family}.define"), "define"));
         }
         Err(findings)
     }
