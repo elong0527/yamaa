@@ -212,10 +212,11 @@ the specification declares its `model`: the entry's `core`, `mandatory` and
 `role`, the producer's content metadata, and one `Predecessor` origin whose
 `description` is `<producer domain>.X`. A copied column that `output.columns`
 does not list is internal ([SPEC-7](#spec-7)) and carries none
-([SUB-1](profiles/submission.md#sub-1)). An entry that writes `submission`
-gives its columns submission metadata in either case, so an internal one then
-fails under SUB-1, and a specification without `model` under
-[SUB-3](profiles/submission.md#sub-3).
+([SUB-1](profiles/submission.md#sub-1)); like any internal column, it is
+pruned when nothing reads it ([LAYER-11](inheritance.md#layer-11)). An entry
+that writes `submission` gives its columns submission metadata in either case,
+so an internal one that another column reads then fails under SUB-1, and a
+specification without `model` under [SUB-3](profiles/submission.md#sub-3).
 
 The producer's content metadata is `data_type`, `length`, `significant_digits`,
 `display_format` and `codelist` where it declares them, a `str` column's
