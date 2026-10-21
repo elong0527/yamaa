@@ -6,7 +6,7 @@ a shared Rust engine, which the package compiles at installation.
 ## Test environments
 
 To be completed from the checks of the 1.0.0 candidate that is submitted:
-`R CMD check --as-cran` on Linux, macOS and Windows with R 4.4, R-release and
+`R CMD check --as-cran` on Linux, macOS and Windows with R 4.2.0, R-release and
 R-devel, with R-devel on Linux without the suggested packages
 (`_R_CHECK_DEPENDS_ONLY_=true`), win-builder (R-release, R-devel and R-oldrel)
 and the macOS builder.
@@ -15,7 +15,7 @@ aarch64, macOS and Windows.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note with R 4.6.1 and R-devel; R 4.4 also notes
+0 errors | 0 warnings | 1 note with R 4.6.1 and R-devel; R 4.2 also notes
 the installed size. The notes, and why they remain:
 
 - `checking CRAN incoming feasibility ... NOTE`: a new submission, and the
@@ -24,7 +24,7 @@ the installed size. The notes, and why they remain:
   CRAN's guidance for packages that use Rust asks to be bundled rather than
   downloaded. The Repository Policy allows a modestly increased size limit to
   be requested for such bundled sources; we request a limit of 15 MB.
-- `checking installed package size ... NOTE` (R 4.4; R 4.6.1 and R-devel
+- `checking installed package size ... NOTE` (R 4.2; R 4.6.1 and R-devel
   report it as INFO): 24 to 28 MB on Linux, by Rust release, almost all of it
   the shared object. The shared object, 23 to 27 MB, links the Rust engine
   statically: most of it is machine code, and the symbols and the debug
