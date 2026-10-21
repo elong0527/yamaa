@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use yamaa::{DataType, Engine, EngineOptions, Error, OdmOptions, StringArray, Table, ODM_COLUMNS};
+#[cfg(feature = "odm")]
+use yamaa::{DataType, StringArray, ODM_COLUMNS};
+use yamaa::{Engine, EngineOptions, Error, OdmOptions, Table};
 
 /// The items of the local file `path`, read as the command line reads them.
 fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error> {

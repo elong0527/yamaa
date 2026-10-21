@@ -331,7 +331,7 @@ impl Plans {
         drop(dropped);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "yaml"))]
     pub(crate) fn identities(&self) -> Vec<PlanKey> {
         self.kept().keys().cloned().collect()
     }
