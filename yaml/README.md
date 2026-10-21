@@ -159,7 +159,9 @@ rule, grammar, or fixture:
   with `uv run --project python --no-sync python -m
   tools.packaging.generate_message_templates --write`. `make quick` refuses a
   stale table, and the Rust test that reaches every registry cause fails when
-  a message names a key some cause does not record.
+  a message names a key some cause does not record. Name the condition on the
+  `Fails` line of the card whose rule raises it: `tools.rules.check` refuses a
+  registered condition that no card's `Fails` line names.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
