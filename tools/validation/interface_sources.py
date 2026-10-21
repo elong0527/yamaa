@@ -9,19 +9,21 @@ release tag's (`tools/validation/check_interface_stability.py`):
   `tools/validation/check_diagnostics.py`. A removed triple breaks: an
   existing failure would report another condition or rule. Cause names are
   not compared. A rule is the ID the cause cites, whichever rule files define
-  it, so that 0.5.0's requirement IDs compare too. The
-  registry must be in both trees, so when it moves the check fails naming its
-  path, and the pull request that moves it adds the new path to REGISTRIES.
+  it, so that 0.5.0's requirement IDs compare too. The registry must be in
+  both trees, so when it moves the check fails naming its path, and the pull
+  request that moves it adds the new path to REGISTRIES.
 - `rules`: the ID of each rule card in `rules/**/*.md`, read with
   `tools/rules/model.py`. A removed card breaks, because numbers are never
   reused. A card may move to another rule file.
 - `benchmarks`: each benchmark directory of the baseline,
   `benchmarks/<name>`, keeps its specification, project, input and expected
-  files, byte for byte; a symbolic link's bytes are its target, as Git stores
-  them. A file removed, changed or added there breaks, each named by its path,
-  so an exception entry skips one file. A removed directory breaks as one
-  element. Its README files and its `benchmark.yaml`, the review lifecycle
-  and runner metadata, may change. A new directory is an addition.
+  files, byte for byte. A symbolic link stays a link to the same target, as
+  Git stores it: a regular file in its place changes the case, even one that
+  holds the target's spelling (FILE-8). Executable bits are not compared. A
+  file removed, changed or added there breaks, each named by its path, so an
+  exception entry skips one file. A removed directory breaks as one element.
+  Its README files and its `benchmark.yaml`, the review lifecycle and runner
+  metadata, may change. A new directory is an addition.
 
 A tag's benchmark files are read in one batch, with one `git ls-tree` and one
 `git cat-file --batch`, rather than two git calls a file.
@@ -124,7 +126,9 @@ def _compare_cards(baseline, current):
 
 
 def benchmark_files(tree):
-    """Map each file in a benchmark directory of `tree` to its bytes."""
+    """Map each file in a benchmark directory of `tree` to its kind,
+    "symlink" or "regular", and its bytes; a symbolic link's bytes are its
+    target, as Git stores it."""
     if tree.ref is None:
         files = _working_files(tree, BENCHMARKS)
     else:
@@ -135,19 +139,21 @@ def benchmark_files(tree):
 
 
 def _tag_files(tree, directory):
-    """Map each file under `directory` at the tag to its bytes, read with one
-    `git ls-tree` and one `git cat-file --batch`."""
+    """Map each file under `directory` at the tag to its kind and bytes, read
+    with one `git ls-tree` and one `git cat-file --batch`."""
     listed = git(
         tree.root, "ls-tree", "--full-tree", "-r", "-z", tree.ref, "--", directory
     )
-    paths, objects = [], []
+    paths, kinds, objects = [], [], []
     # Each entry is `<mode> <type> <object>\t<path>`. A symbolic link is a
-    # blob that holds its target; a submodule, a commit, holds no file.
+    # blob of mode 120000 that holds its target; any other blob is a regular
+    # file, executable or not; a submodule, a commit, holds no file.
     for entry in filter(None, listed.split(b"\0")):
         fields, _, path = entry.partition(b"\t")
-        _, kind, name = fields.split(b" ")
+        mode, kind, name = fields.split(b" ")
         if kind == b"blob":
             paths.append(path.decode("utf-8"))
+            kinds.append("symlink" if mode == b"120000" else "regular")
             objects.append(name)
     if not objects:
         return {}
@@ -162,36 +168,36 @@ def _tag_files(tree, directory):
         raise ManifestError(f"git cat-file --batch: {message}")
     # Each object is `<object> blob <size>\n`, its bytes, then `\n`.
     output, offset, files = result.stdout, 0, {}
-    for path, name in zip(paths, objects, strict=True):
+    for path, kind, name in zip(paths, kinds, objects, strict=True):
         end = output.find(b"\n", offset)
         header = output[offset:end].split(b" ") if end >= 0 else []
         if len(header) != 3 or header[:2] != [name, b"blob"]:
             raise ManifestError(f"{path} at {tree}: git cat-file --batch read no blob")
         start = end + 1
         offset = start + int(header[2])
-        files[path] = output[start:offset]
+        files[path] = (kind, output[start:offset])
         offset += 1
     return files
 
 
 def _working_files(tree, directory):
-    """Map each file under `directory` in the working tree to its bytes; a
-    symbolic link's bytes are its target, as at a tag."""
+    """Map each file under `directory` in the working tree to its kind and
+    bytes, as at a tag; a symbolic link is not followed."""
     files = {}
 
     def visit(folder):
         with os.scandir(folder) as entries:
             for entry in entries:
                 if entry.is_symlink():
-                    data = os.fsencode(os.readlink(entry.path))
+                    file = ("symlink", os.fsencode(os.readlink(entry.path)))
                 elif entry.is_dir():
                     visit(entry.path)
                     continue
                 elif entry.is_file():
-                    data = Path(entry.path).read_bytes()
+                    file = ("regular", Path(entry.path).read_bytes())
                 else:
                     continue
-                files[Path(entry.path).relative_to(tree.root).as_posix()] = data
+                files[Path(entry.path).relative_to(tree.root).as_posix()] = file
 
     if (tree.root / directory).is_dir():
         try:
@@ -221,11 +227,11 @@ def _compare_benchmarks(baseline, current):
         Change(BENCHMARKS, directory, "removed", breaking=True)
         for directory in known - present
     ]
-    for path, data in before.items():
+    for path, file in before.items():
         if _frozen(path) and _directory(path) in present:
             if path not in after:
                 breaks.append(Change(BENCHMARKS, path, "removed", breaking=True))
-            elif after[path] != data:
+            elif after[path] != file:
                 breaks.append(Change(BENCHMARKS, path, "changed", breaking=True))
     breaks += [
         Change(BENCHMARKS, path, "added to a baseline benchmark", breaking=True)
