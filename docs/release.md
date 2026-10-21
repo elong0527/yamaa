@@ -22,8 +22,10 @@ open gates live in GitHub issues and pull requests, not here.
 - R source builds with R 4.6.1 on Linux aarch64. There, with the network
   disabled, native qualification builds and installs the R source package
   that a release publishes and runs the conformance corpus with it: its
-  `native-offline-source` job. No `R CMD check --as-cran` runs on aarch64,
-  and no lane there uses R 4.4 or the minimum Rust.
+  `native-offline-source` job, with the pinned Rust, and its
+  `native-offline-toolchain` job, with the minimum Rust installed from its
+  standalone installer. No `R CMD check --as-cran` runs on aarch64, and no
+  lane there uses R 4.4.
 - R binary packages for R-release and R-oldrel, today R 4.6 and R 4.5, on
   Windows x64 and macOS arm64, as CRAN builds them (#3030 D48). Each is built
   for one R series and works only with R of that series, and the macOS
@@ -68,6 +70,25 @@ runs its selftest, `yamaa.selftest()` or `yamaa_selftest()`, without a
 network: the job's log keeps the report as installation qualification
 evidence, and the job fails unless the selftest reports `succeeded`. The
 package then runs the conformance corpus, also without a network.
+
+The native run also proves the offline toolchain route (#3030 D54) on Linux
+x86_64 and aarch64: its `native-offline-toolchain` jobs. While the network is
+up, each downloads the standalone installer archive of the minimum Rust for
+the runner's target from static.rust-lang.org, such as
+`rust-1.82.0-x86_64-unknown-linux-gnu.tar.xz`, and GnuPG checks the signature
+beside it, its `.asc` file, against the committed public key at
+`tools/ci/keys/rust-key.gpg.ascii`, in a fresh keyring with automatic key
+retrieval disabled. The installer download cannot replace the trusted key.
+That file is the ASCII-armored key published at
+`https://static.rust-lang.org/rust-key.gpg.ascii`. A maintainer refreshes it
+only in a reviewed change, after checking the Rust project's signing-key
+announcement through an independent official source; a failed signature
+never triggers an automatic key refresh. Then, in containers without a
+network, the archive's own `install.sh` installs rustc, Cargo and the standard
+library into a prefix, with no rustup, and both source archives build and
+install with that toolchain alone, in the images and with the commands of the
+`native-offline-source` jobs. Each installed package then passes its selftest
+and runs the conformance corpus without a network.
 
 The native run builds the R binary packages that a release publishes from
 the R source package that it publishes, with `R CMD INSTALL --build` and
@@ -182,7 +203,9 @@ the public project submission API.
 
 The Rust workspace declares MSRV 1.82 and builds with Rust 1.99.1, the
 toolchain that `rust/rust-toolchain.toml` pins; a CI job checks and lints it
-with Rust 1.82.0, and another builds and checks the R source package with it.
+with Rust 1.82.0, another builds and checks the R source package with it, and
+native qualification builds both source archives on Linux with it, installed
+from its standalone installer.
 Rust 1.82.0 was released on 2024-10-17, so it is at least the two-year-old
 Cargo that CRAN's guidance for packages using Rust asks to test with, on any
 submission date (#3111). The source packages carry no toolchain file, so they
@@ -346,9 +369,9 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs and the R binary installs among them, the R binary builds,
-shared Rust/math, complete cohort comparisons, strict R package checks and
-CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
+source installs, the offline toolchain route and the R binary installs among
+them, the R binary builds, shared Rust/math, complete cohort comparisons,
+strict R package checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named
