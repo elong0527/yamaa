@@ -115,8 +115,13 @@ pub enum Status {
     Skipped,
 }
 
+/// The statuses as written, one for each [`Status`] in declaration order: the
+/// closed vocabulary of every `status` a host returns (P-STATUS-1).
+pub const STATUSES: [&str; 3] = ["succeeded", "failed", "skipped"];
+
 impl Status {
-    /// The status as written: `succeeded`, `failed` or `skipped`.
+    /// The status as written: `succeeded`, `failed` or `skipped`, one of
+    /// [`STATUSES`].
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Succeeded => "succeeded",
@@ -1079,6 +1084,14 @@ mod tests {
                     .collect::<Vec<_>>()
             })
             .collect()
+    }
+
+    #[test]
+    fn statuses_are_the_statuses_in_order() {
+        assert_eq!(
+            [Status::Succeeded, Status::Failed, Status::Skipped].map(Status::as_str),
+            STATUSES
+        );
     }
 
     /// Resolved facts the engine cannot represent are refused as the

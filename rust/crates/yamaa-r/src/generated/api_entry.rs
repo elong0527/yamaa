@@ -28,4 +28,9 @@ extendr_module! {
     fn submission_issues;
     fn submission_save;
     fn lint;
+    fn selftest;
+    fn selftest_status;
+    fn selftest_cases;
+    fn selftest_info;
+    fn selftest_summary;
 }
