@@ -8,11 +8,16 @@
 //!   (ROW-5), or in the column phase outside the `group_by` of a grouped
 //!   template over that driver (NAME-4);
 //! - a row template's formula, flag or `case` predicate that reads another
-//!   input, and a column formula that reads a qualified name other than a
-//!   lookup's (FORMULA-9);
+//!   input, a column formula that reads a qualified name other than a
+//!   lookup's, and a flag that reads a lookup or a name nothing declares
+//!   (FORMULA-9);
 //! - a read of a lookup whose key value reads another input's record than
 //!   the driver's (LOOKUP-5), or that matches on a column the row template
 //!   leaves to the column phase, through its key or range value (LOOKUP-2);
+//!   and a read of a 1.0 row driver, which declares no key, as a lookup of
+//!   rows it does not drive (LOOKUP-3);
+//! - `require_match` or `between` on a structured source that reads anything
+//!   but another input through its implicit join (LOOKUP-24, LOOKUP-9);
 //! - a row filter's read of a column its template does not derive, a
 //!   grouped filter's qualified read, and an ungrouped filter's read of a
 //!   window result, directly or through a lookup's match (ROW-6).
@@ -43,7 +48,9 @@ pub(super) struct Reads<'a> {
     /// The lookups whose key types fail, which binding does not bind: it
     /// reports each read of one as unknown, and the read binds nothing.
     refused: &'a BTreeSet<usize>,
-    /// Whether a read since the last [`Self::bound`] named a refused lookup.
+    /// Whether a lookup read since the last [`Self::bound`] failed. A refused
+    /// lookup's read fails without a finding of its own, and so does a read
+    /// whose phase boundary its site already reported.
     unbound: Cell<bool>,
 }
 
@@ -88,8 +95,8 @@ impl<'a> Reads<'a> {
         }
     }
 
-    /// Whether every read since the last call bound, as far as the
-    /// declarations decide: none named a refused lookup.
+    /// Whether every lookup read since the last call bound, as far as the
+    /// declarations decide; the other reads that fail report a finding.
     pub(super) fn bound(&self) -> bool {
         !self.unbound.replace(false)
     }
@@ -118,6 +125,11 @@ impl<'a> Reads<'a> {
         if self.drivers.contains(&owner) {
             return None;
         }
+        self.named(owner)
+    }
+
+    /// The lookup `owner` names, whatever rows it drives.
+    fn named(&self, owner: &str) -> Option<usize> {
         self.spec
             .intermediates
             .iter()
@@ -140,50 +152,62 @@ impl<'a> Reads<'a> {
     /// One named read, as binding reads an operand: a bare column, a lookup
     /// through its selector, the driver's record, or another input's
     /// through its implicit join, whose keys only its captured schema
-    /// decides.
-    pub(super) fn read(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+    /// decides. In the column phase a lookup that drives the rows of some
+    /// bindings is a lookup for the others, each binding in turn. True when
+    /// the read binds, as far as the declarations decide.
+    pub(super) fn read(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) -> bool {
         let Some((owner, _)) = name.split_once('.') else {
-            self.bare(path, name, findings);
-            return;
+            return self.bare(path, name, findings);
         };
         if let Some(index) = self.lookup(owner) {
-            if self.refused.contains(&index) {
-                self.unbound.set(true);
-            } else {
-                self.lookup_read(index, path, findings);
-            }
-        } else if self.drivers.contains(&owner) {
-            self.group(path, name, findings);
+            return self.lookup_read(index, path, findings);
         }
+        if !self.drivers.contains(&owner) {
+            return true;
+        }
+        let named = self.named(owner);
+        let mut bound = true;
+        for &driver in self.drivers {
+            bound &= match named {
+                _ if driver == owner => self.group(path, name, findings),
+                Some(index) => self.lookup_read(index, path, findings),
+                None => true,
+            };
+        }
+        bound
     }
 
     /// A bare read of a column the row template leaves to the column phase
-    /// (COLUMN-4).
-    pub(super) fn bare(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
+    /// (COLUMN-4). True when it binds.
+    pub(super) fn bare(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) -> bool {
         let Some((row, _)) = self.row else {
-            return;
+            return true;
         };
-        if let Some(column) = self.output(name).filter(|&column| !self.available(column)) {
-            findings.push(BindFinding::OutputReference {
-                path: path.into(),
-                name: name.into(),
-                row: Some(row.into()),
-                finding: crate::reference_binding::Diagnostic::PhaseBoundary { column },
-            });
-        }
+        let Some(column) = self.output(name).filter(|&column| !self.available(column)) else {
+            return true;
+        };
+        findings.push(BindFinding::OutputReference {
+            path: path.into(),
+            name: name.into(),
+            row: Some(row.into()),
+            finding: crate::reference_binding::Diagnostic::PhaseBoundary { column },
+        });
+        false
     }
 
     /// A read of the driver's field `name` names one value of the row only
-    /// as a group key (ROW-5, NAME-4).
-    fn group(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
-        if let Some(finding) = crate::reference_scope::group_finding(name, self.phase) {
-            findings.push(BindFinding::QualifiedReference {
-                path: path.into(),
-                name: name.into(),
-                row: self.row.map(|(row, _)| row.into()),
-                finding,
-            });
-        }
+    /// as a group key (ROW-5, NAME-4). True when it binds.
+    fn group(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) -> bool {
+        let Some(finding) = crate::reference_scope::group_finding(name, self.phase) else {
+            return true;
+        };
+        findings.push(BindFinding::QualifiedReference {
+            path: path.into(),
+            name: name.into(),
+            row: self.row.map(|(row, _)| row.into()),
+            finding,
+        });
+        false
     }
 
     /// A row template's formula, flag or `case` predicate reads only its
@@ -252,14 +276,33 @@ impl<'a> Reads<'a> {
     }
 
     /// A name of a flag's condition, which reads columns, its driver's record
-    /// and, in the column phase, another input's through its join. Binding
-    /// reports a lookup's field there as unknown.
+    /// and, in the column phase, another input's through its join. Every
+    /// other qualified name, a lookup's field or a name nothing declares, is
+    /// unknown there (FORMULA-9), in each binding whose driver it does not
+    /// name.
     pub(super) fn flag(&self, path: &str, name: &str, findings: &mut Vec<BindFinding>) {
-        match name.split_once('.') {
-            None => self.bare(path, name, findings),
-            Some((owner, _)) if self.joined(owner) => self.source_scope(path, name, findings),
-            Some((owner, _)) if self.drivers.contains(&owner) => self.group(path, name, findings),
-            Some(_) => {}
+        let Some((owner, _)) = name.split_once('.') else {
+            self.bare(path, name, findings);
+            return;
+        };
+        if self.joined(owner) {
+            self.source_scope(path, name, findings);
+            return;
+        }
+        let input = self.input(owner);
+        for &driver in self.drivers {
+            if driver == owner {
+                self.group(path, name, findings);
+            } else if !input {
+                findings.push(BindFinding::Predicate(crate::diagnostic::Diagnostic {
+                    code: crate::diagnostic::ConditionCode::PredicateUnknownField,
+                    spec_paths: vec![path.into()],
+                    context: [("identifier".into(), crate::json::Value::String(name.into()))]
+                        .into(),
+                    source_span: None,
+                    operand_route: None,
+                }));
+            }
         }
     }
 
@@ -278,34 +321,46 @@ impl<'a> Reads<'a> {
     /// A structured source binding's variable, read at the binding's own
     /// path, then the range value of the implicit join it keeps
     /// (LOOKUP-25): one naming the driver reads one value of its record
-    /// (ROW-5, NAME-4), and a bare one a column of the row (COLUMN-4).
-    pub(super) fn source(&self, e: ExprId, findings: &mut Vec<BindFinding>) {
+    /// (ROW-5, NAME-4), and a bare one a column of the row (COLUMN-4). A
+    /// read that is no implicit join, once it binds with no finding since
+    /// `start`, refuses `require_match` and `between`
+    /// ([`super::declared::join_options`]), unless it reads a lookup whose
+    /// matching binding defers ([`Self::deferred`]). True when the binding
+    /// binds.
+    pub(super) fn source(&self, e: ExprId, start: usize, findings: &mut Vec<BindFinding>) -> bool {
         let spec = self.spec;
         let ExprKind::Source(source) = &spec.expr(e).kind else {
-            return;
+            return true;
         };
         let Some(variable) = name(spec, source.variable) else {
-            return;
+            return true;
         };
         let at = path(spec, e);
-        self.read(&at, variable, findings);
-        let joined = variable
-            .split_once('.')
-            .is_some_and(|(owner, _)| self.lookup(owner).is_none() && self.joined(owner));
-        let Some(value) = source
+        let bound = self.read(&at, variable, findings);
+        let owner = variable.split_once('.').map(|(owner, _)| owner);
+        let lookup = owner.and_then(|owner| self.lookup(owner));
+        if owner.is_none_or(|owner| lookup.is_some() || !self.joined(owner)) {
+            if bound && findings.len() == start && lookup.is_none_or(|index| !self.deferred(index))
+            {
+                super::declared::join_options(spec, e, findings);
+            }
+        } else if let Some(value) = source
             .between
             .as_ref()
-            .filter(|_| joined)
             .and_then(|between| name(spec, between.value))
-        else {
-            return;
-        };
-        let at = format!("{at}.between.value");
-        match value.split_once('.') {
-            Some((owner, _)) if self.drivers.contains(&owner) => self.group(&at, value, findings),
-            Some(_) => {}
-            None => self.bare(&at, value, findings),
+        {
+            let at = format!("{at}.between.value");
+            match value.split_once('.') {
+                Some((owner, _)) if self.drivers.contains(&owner) => {
+                    self.group(&at, value, findings);
+                }
+                Some(_) => {}
+                None => {
+                    self.bare(&at, value, findings);
+                }
+            }
         }
+        bound && findings.len() == start
     }
 
     /// Each key match value of the lookup at `index`, at the path binding
@@ -424,19 +479,45 @@ impl<'a> Reads<'a> {
     }
 
     /// The read at `path` of the lookup at `index`, as binding admits it
-    /// there: each key value in order, refused when it reads a column the
-    /// row template leaves to the column phase (LOOKUP-2) or another input's
-    /// record than the driver's (LOOKUP-5); then, once its keys are admitted,
-    /// each other column it matches on that the template leaves there,
-    /// naming each range value followed (LOOKUP-2). One site reports a phase
-    /// boundary once. A value read from the primary input's record is
+    /// there (`row_intermediates::bind`). True when it binds, as far as the
+    /// declarations decide; a read that does not marks the reads unbound
+    /// ([`Self::bound`]).
+    fn lookup_read(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) -> bool {
+        let bound = self.lookup_binds(index, path, findings);
+        if !bound {
+            self.unbound.set(true);
+        }
+        bound
+    }
+
+    /// A lookup whose key types fail binds nothing, and a 1.0 row driver,
+    /// which declares no key, fails at its `key` wherever it is read as a
+    /// lookup (LOOKUP-3, ROW-2). Otherwise each key value in order, refused
+    /// when it reads a column the row template leaves to the column phase
+    /// (LOOKUP-2) or another input's record than the driver's (LOOKUP-5);
+    /// then, once its keys are admitted, each other column it matches on that
+    /// the template leaves there, naming each range value followed
+    /// (LOOKUP-2). One site reports a phase boundary once, and it still
+    /// refuses the read. A value read from the primary input's record is
     /// admitted for every row that reads the lookup once the rows are bound
     /// ([`super::scopes`]).
-    fn lookup_read(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) {
+    fn lookup_binds(&self, index: usize, path: &str, findings: &mut Vec<BindFinding>) -> bool {
         let spec = self.spec;
         let item = &spec.intermediates[index];
+        if self.refused.contains(&index) {
+            return false;
+        }
+        if item.key.is_none() && !spec.header.surface.infers_join_keys() {
+            findings.push(BindFinding::Lookup(LookupFinding::from_diagnostic(
+                crate::diagnostic::lookup::key_required(&format!(
+                    "{}.key",
+                    render(spec, item.meta)
+                )),
+            )));
+            return false;
+        }
         let Some(keys) = self.keys(index).filter(|_| !self.deferred(index)) else {
-            return;
+            return true;
         };
         let primary = self.prepared.source().name.as_str();
         // A bare value that names no column, or a value qualified by no
@@ -449,7 +530,7 @@ impl<'a> Reads<'a> {
                 Some((owner, _)) => !self.input(owner),
             })
         {
-            return;
+            return false;
         }
         let push = |finding: BindFinding, findings: &mut Vec<BindFinding>| {
             if !row_intermediates::reported(findings, &finding) {
@@ -483,16 +564,20 @@ impl<'a> Reads<'a> {
                 }
             }
         }
-        let Some((row, _)) = self.row.filter(|_| !refused && findings.len() == start) else {
-            return;
+        if refused || findings.len() != start {
+            return false;
+        }
+        let Some((row, _)) = self.row else {
+            return true;
         };
         let mut dependencies = BTreeSet::new();
         if self
             .dependencies(index, &mut Vec::new(), &mut dependencies)
             .is_none()
         {
-            return;
+            return true;
         }
+        let mut bound = true;
         for column in dependencies
             .into_iter()
             .filter(|&column| !self.available(column))
@@ -512,7 +597,9 @@ impl<'a> Reads<'a> {
                 finding.extend_paths(sites);
             }
             push(BindFinding::Lookup(finding), findings);
+            bound = false;
         }
+        bound
     }
 
     /// A grouped row template's filter, before its derivations bind: each
@@ -570,11 +657,7 @@ impl<'a> Reads<'a> {
                 Some(_) if grouped => {}
                 Some((owner, _)) => {
                     if let Some(index) = self.lookup(owner) {
-                        if self.refused.contains(&index) {
-                            self.unbound.set(true);
-                        } else {
-                            self.lookup_read(index, path, findings);
-                        }
+                        self.lookup_read(index, path, findings);
                     }
                 }
                 None => {
