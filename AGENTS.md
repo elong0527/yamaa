@@ -87,10 +87,12 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Pull requests
 
-- One issue per pull request, referenced with `Closes #N`. Branch from and
-  target `main`; `release/1.0.0` is cut only to qualify release candidates.
-  The planning issue is #3030, for 1.0.0; #2848 tracks the 0.5.0 GitHub
-  release.
+- One theme per pull request (D171 on #3030). Group related issues into
+  one pull request of about 1,500 to 3,000 changed lines and under 300
+  files, with one `Closes #N` line for each issue it completes; the issues
+  stay as the specifications. Branch from and target `main`;
+  `release/1.0.0` is cut only to qualify release candidates. The planning
+  issue is #3030, for 1.0.0; #2848 tracks the 0.5.0 GitHub release.
 - Before merging, bring the branch up to date with its base and wait for
   green CI on that exact head. A pull request that is green against an older
   base can still fail to compile against the current one.
@@ -102,15 +104,17 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Parallel sessions
 
-Several agent sessions work the 1.0 plan at once, one issue per session.
+Several agent sessions work the 1.0 plan at once, each on its own batch
+of issues.
 These rules keep them from colliding; `CONTRIBUTING.md` owns the merge
 steps and the review gate.
 
-- **Claim before you start.** Assign yourself to the issue, or comment
-  "Claimed by <session>" when you cannot assign, before creating a
-  branch, and leave an issue another session has claimed. A follow-up
-  found in review goes to the session that owns the chain it belongs to.
-- **One worktree per issue, with its own Cargo target.** Create the
+- **Claim before you start.** Assign yourself to each issue of the
+  batch, or comment "Claimed by <session>" when you cannot assign, before
+  creating a branch, and leave an issue another session has claimed. A
+  follow-up found in review goes to the session that owns the chain it
+  belongs to.
+- **One worktree per pull request, with its own Cargo target.** Create the
   branch with `git worktree add --no-track -b <branch> .worktrees/<name>
   origin/main` and push with an explicit refspec,
   `git push -u origin HEAD:refs/heads/<branch>`: a branch that tracks
@@ -120,8 +124,8 @@ steps and the review gate.
   worktree, or its target, when its pull request merges.
 - **Closing keywords close.** GitHub reads `Closes #N` inside a negation
   too; "does not close #N" once closed the planning issue. Write a
-  closing keyword only for the pull request's own issue, and name every
-  other issue without one.
+  closing keyword only for an issue the pull request completes, and name
+  every other issue without one.
 - **Open pull requests ready for review.** A pull request opens ready for
   review, not as a draft, once it builds and its nearest tests pass (D148
   on #3030). The one exception is a pull request that cannot merge until
