@@ -7,10 +7,12 @@
 //! phase), column order, the lookup ranges each row reads, and the scopes of
 //! the lookups and aggregate keys the rows read ([`super::scopes`]). Under
 //! row templates each derivation is checked node by node in binding's order,
-//! with what binding decides of each read ([`super::boundaries`]). A read of
-//! another 1.0 input that declares no `key`, through its implicit join or by
-//! a qualified aggregate without `key`, fails at the read in either
-//! construction, whatever the input stores (D111).
+//! with what binding decides of each read ([`super::boundaries`]), and so is
+//! each lookup's own derivation and each aggregate's derive binding, over the
+//! donor's records ([`super::donors`]). A read of another 1.0 input that
+//! declares no `key`, through its implicit join or by a qualified aggregate
+//! without `key`, fails at the read in either construction, whatever the
+//! input stores (D111).
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -657,8 +659,45 @@ impl Checks<'_> {
         if scope.is_some() && findings.len() != start {
             return Ok(());
         }
-        for binding in &aggregate.bindings {
-            self.derivation(binding.derivation.expr, None, false, findings)?;
+        // Each derive binding reads the relation the aggregate reduces, in
+        // an ungrouped row phase ([`Self::donor_walk`]), typed by the
+        // relation's stored fields and the earlier bindings' declared types.
+        let derived = aggregate
+            .bindings
+            .iter()
+            .map(|binding| binding.name.name.as_str())
+            .collect::<Vec<_>>();
+        let typing = |name: &str| match name.split_once('.') {
+            None => aggregate
+                .bindings
+                .iter()
+                .find(|binding| binding.name.name == name)
+                .and_then(|binding| binding.declared),
+            Some(_) => self.declared.name(name).column_type(),
+        };
+        for (at, binding) in aggregate.bindings.iter().enumerate() {
+            let (Some(_), Some(relation)) = (scope, relation) else {
+                self.derivation(binding.derivation.expr, None, false, findings)?;
+                continue;
+            };
+            let drivers = [relation];
+            let donor = Scope {
+                drivers: &drivers,
+                row: None,
+                phase: Some(Phase::Row { group_by: None }),
+                available: None,
+            };
+            let reads = super::donors::DonorReads::derive(
+                spec,
+                self.prepared,
+                relation,
+                &derived,
+                at,
+                &self.refused,
+                &typing,
+            );
+            self.defects(binding.derivation.expr, findings)?;
+            self.donor_walk(&reads, donor, binding.derivation.expr, findings)?;
         }
         Ok(())
     }
@@ -784,21 +823,182 @@ impl Checks<'_> {
         Ok(())
     }
 
+    /// One derivation of a lookup, or one derive binding of an aggregate,
+    /// node by node in binding's order over the donor's records, which
+    /// `scope` names ([`super::donors`]): a structured source's declaration
+    /// and filter before its read, and its join options once the read binds;
+    /// each other read where binding reads it; a mapping's source type and a
+    /// placeholder's type once their read binds; a window's defects before
+    /// its reads; and an aggregate as in any ungrouped row. The authored
+    /// defects precede it.
+    fn donor_walk(
+        &self,
+        reads: &super::donors::DonorReads<'_>,
+        scope: Scope<'_>,
+        e: ExprId,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let spec = self.spec;
+        // A source operand: a structured binding unless its declaration or
+        // filter stops binding before its variable, or a name. True when it
+        // binds.
+        let source = |e: ExprId, findings: &mut Vec<BindFinding>| -> Result<bool, BindError> {
+            Ok(match &spec.expr(e).kind {
+                ExprKind::Source(source) => {
+                    let start = findings.len();
+                    if self.source(e, Some(scope), findings)? {
+                        return Ok(false);
+                    }
+                    let variable = name(spec, source.variable).unwrap_or_default();
+                    let bound =
+                        reads.read(&path(spec, e), variable, findings) && findings.len() == start;
+                    if bound {
+                        join_options(spec, e, findings);
+                    }
+                    bound
+                }
+                ExprKind::Ref(read) => reads.read(&path(spec, e), read.as_str(), findings),
+                _ => true,
+            })
+        };
+        match &spec.expr(e).kind {
+            ExprKind::Literal(_) | ExprKind::Unsupported(_) | ExprKind::Call { .. } => {}
+            ExprKind::Ref(_) | ExprKind::Source(_) => {
+                source(e, findings)?;
+            }
+            ExprKind::Formula(_) => {
+                for (at, read) in names(spec, e) {
+                    reads.read(&at, read, findings);
+                }
+            }
+            ExprKind::Case(arms) => {
+                for arm in arms {
+                    for (at, read) in arm
+                        .condition
+                        .map(|condition| names(spec, condition))
+                        .unwrap_or_default()
+                    {
+                        reads.predicate(&at, read, false, findings);
+                    }
+                    self.donor_walk(reads, scope, arm.result, findings)?;
+                }
+            }
+            ExprKind::Flag { condition, .. } => {
+                for (at, read) in names(spec, *condition) {
+                    reads.predicate(&at, read, true, findings);
+                }
+            }
+            ExprKind::FirstAvailable { sources, .. } => {
+                for &operand in sources {
+                    source(operand, findings)?;
+                }
+            }
+            ExprKind::Scalar {
+                op: ScalarOp::Mapping { .. } | ScalarOp::Cut { .. },
+                operands,
+                ..
+            } => {
+                for operand in operands {
+                    if source(operand.expr, findings)? {
+                        let kind = variable(spec, operand.expr).and_then(|name| reads.kind(name));
+                        self.source_type(e, kind, findings)?;
+                    }
+                }
+            }
+            // Each placeholder is read at the template's text, then typed
+            // once it binds (TEXT-1).
+            ExprKind::Scalar {
+                op: ScalarOp::StrTemplate { .. },
+                operands,
+                ..
+            } => {
+                let at = format!("{}.template", path(spec, e));
+                let template = str_template::from_tree(spec, e).map_err(|_| BindError::Internal)?;
+                for (index, operand) in operands.iter().enumerate() {
+                    let Some(read) = name(spec, operand.expr) else {
+                        continue;
+                    };
+                    if let Some(kind) = reads
+                        .read(&at, read, findings)
+                        .then(|| reads.kind(read))
+                        .flatten()
+                        .filter(|&kind| kind != ColumnType::Str)
+                    {
+                        findings.extend(
+                            template
+                                .input_diagnostic(index, type_name(kind))
+                                .map(BindFinding::TextTemplate),
+                        );
+                    }
+                }
+            }
+            ExprKind::Scalar { operands, .. } => {
+                for operand in operands {
+                    self.donor_walk(reads, scope, operand.expr, findings)?;
+                }
+            }
+            // The window's defects, then its operands and each name of its
+            // filter once, in sorted order.
+            ExprKind::Window(window) => {
+                self.window(e, window, None, findings)?;
+                let filtered = window
+                    .filter
+                    .and_then(|filter| match &spec.expr(filter).kind {
+                        ExprKind::Formula(ast::Formula {
+                            compiled: Ok(plan),
+                            text,
+                            ..
+                        }) => Some((plan, render(spec, text.meta))),
+                        _ => None,
+                    })
+                    .into_iter()
+                    .flat_map(|(plan, path)| {
+                        let names = plan.identifiers().collect::<BTreeSet<_>>();
+                        names.into_iter().map(move |name| (name, path.clone()))
+                    });
+                for (read, at) in window_operands(spec, window).into_iter().chain(filtered) {
+                    reads.window(&at, read, findings);
+                }
+            }
+            ExprKind::Aggregate(aggregate) => {
+                self.reduction(e, aggregate, Some(scope), findings)?;
+            }
+            ExprKind::Odm(read) => {
+                if let Some(filter) = read.filter {
+                    self.grammar(filter, findings)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// A mapping or cut reads a source of a type it accepts (EXPR-11,
-    /// EXPR-13): a bare output column's or a stored field's declared type.
+    /// EXPR-13): here a bare output column's or a stored field's declared
+    /// type.
     fn mapping_type(
         &self,
         e: ExprId,
         source: ExprId,
         findings: &mut Vec<BindFinding>,
     ) -> Result<(), BindError> {
-        let Some(kind) = variable(self.spec, source)
+        let kind = variable(self.spec, source)
             .filter(|name| {
                 name.split_once('.')
                     .is_none_or(|(owner, _)| !self.prepared.intermediates.contains(owner))
             })
-            .and_then(|name| self.declared.name(name).column_type())
-        else {
+            .and_then(|name| self.declared.name(name).column_type());
+        self.source_type(e, kind, findings)
+    }
+
+    /// A mapping or cut at `e` refuses a source of `kind`, when known, that
+    /// it does not accept (EXPR-11, EXPR-13).
+    fn source_type(
+        &self,
+        e: ExprId,
+        kind: Option<ColumnType>,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let Some(kind) = kind else {
             return Ok(());
         };
         let declaration = mapping_cut::from_tree(self.spec, e).map_err(|_| BindError::Internal)?;
@@ -1816,11 +2016,13 @@ impl Checks<'_> {
         })
     }
 
-    /// Each intermediate in the order it is derived: its filter's grammar,
-    /// each derivation's defects, selections and conversion (VALUE-24), its
-    /// filter's operand types, its key types and its range's types, over the
-    /// declared types of its donor and of earlier intermediates. Returns the
-    /// intermediates whose key types fail, which binding does not bind.
+    /// Each intermediate in the order it is derived, as binding binds it
+    /// (`intermediates::bind_one`): each derivation's defects, then its nodes
+    /// over the donor's records ([`Self::donor_walk`]) and, once it binds,
+    /// its conversion (VALUE-24); then its key types, its filter's grammar
+    /// and operand types, and its range's types, over the declared types of
+    /// its donor and of earlier intermediates. Returns the intermediates
+    /// whose key types fail, which binding does not bind.
     fn intermediates(&self, findings: &mut Vec<BindFinding>) -> Result<BTreeSet<usize>, BindError> {
         let spec = self.spec;
         let declared = &self.declared;
@@ -1853,23 +2055,59 @@ impl Checks<'_> {
         for (position, donor) in donors.iter().enumerate() {
             let (index, item) = (donor.index, donor.item);
             let identifier = item.id.name.as_str();
-            if let Some(filter) = item.filter {
-                self.grammar(filter, findings)?;
-            }
-            for (binding, &result) in item.bindings.iter().zip(&donor.results) {
-                self.derivation(binding.derivation.expr, None, false, findings)?;
-                if let (Some(typed), None) = (binding.declared, &binding.derivation.unconvertible) {
+            // The derivations read the donor's records in an ungrouped row
+            // phase, typed as binding's captured types type them: a field of
+            // the donor record, of another lookup's, or of an input's.
+            let relation = item.dataset.name.as_str();
+            let drivers = [relation];
+            let scope = Scope {
+                drivers: &drivers,
+                row: None,
+                phase: Some(Phase::Row { group_by: None }),
+                available: None,
+            };
+            let derived = item
+                .bindings
+                .iter()
+                .map(|binding| binding.name.name.as_str())
+                .collect::<Vec<_>>();
+            let typing = |name: &str| {
+                let (owner, field) = name.split_once('.').unwrap_or((relation, name));
+                if owner == relation {
+                    donor.field(field, &stored)
+                } else if let Some(other) = donors.iter().find(|other| other.item.id.name == owner)
+                {
+                    other.field(field, &stored)
+                } else {
+                    current(owner, field)
+                }
+                .and_then(ResultType::column_type)
+            };
+            for (at, (binding, &result)) in item.bindings.iter().zip(&donor.results).enumerate() {
+                let start = findings.len();
+                let reads = super::donors::DonorReads::lookup(
+                    spec,
+                    self.prepared,
+                    relation,
+                    identifier,
+                    &derived,
+                    at,
+                    &refused,
+                    &typing,
+                );
+                self.defects(binding.derivation.expr, findings)?;
+                self.donor_walk(&reads, scope, binding.derivation.expr, findings)?;
+                if let (Some(typed), None, true) = (
+                    binding.declared,
+                    &binding.derivation.unconvertible,
+                    findings.len() == start,
+                ) {
                     findings.extend(
                         types::conversion_finding(&render(spec, binding.meta), result, typed)
                             .map(BindFinding::Scalar),
                     );
                 }
             }
-            findings.extend(
-                self.filter_types(donor, &stored, &current)
-                    .into_iter()
-                    .map(BindFinding::Predicate),
-            );
             // A key compares each donor column with its current-row value: a
             // listed column with the same-named value, a written name with
             // that name, and any other value by its result type (LOOKUP-6).
@@ -1915,6 +2153,14 @@ impl Checks<'_> {
                     )));
                 }
             }
+            if let Some(filter) = item.filter {
+                self.grammar(filter, findings)?;
+            }
+            findings.extend(
+                self.filter_types(donor, &stored, &current)
+                    .into_iter()
+                    .map(BindFinding::Predicate),
+            );
             // A range's value is a value of the reading row: an output
             // column, else a field of the primary input's record, or a field
             // of an earlier intermediate or of an input. Its bounds are donor

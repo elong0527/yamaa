@@ -13,14 +13,16 @@
 //! reports each of them from binding, in binding's order, together with
 //! what only the captured schemas decide. Among them are what binding
 //! decides of each read of a row template or the column phase
-//! ([`boundaries`]) and the scopes it admits once the rows are bound
-//! ([`scopes`]).
+//! ([`boundaries`]), of each read of a lookup's own derivations or an
+//! aggregate's derive bindings ([`donors`]), and the scopes it admits once
+//! the rows are bound ([`scopes`]).
 //!
 //! A check that needs an operation's executor type constructs it from the
 //! tree, as binding does.
 
 pub(super) mod boundaries;
 pub(super) mod declared;
+pub(super) mod donors;
 pub(super) mod lookups;
 pub(super) mod odm;
 pub(super) mod root;
