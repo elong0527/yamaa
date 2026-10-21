@@ -206,7 +206,9 @@ Fails: `publication_failed`.
 Evidence: `rust/crates/yamaa-adapters/src/file_publication.rs::replacing_the_parent_temporary_entry_does_not_replace_checked_bytes`, `rust/crates/yamaa-adapters/src/file_publication.rs::failed_cleanup_preserves_the_operation_error_and_foreign_entries`, `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_new_file_takes_0666_less_the_umask`, `rust/crates/yamaa-adapters/src/file_publication.rs::a_replaced_file_keeps_its_permission_bits`, `rust/crates/yamaa-adapters/src/file_publication.rs::the_staging_directory_stays_private_under_any_umask`.
 
 A failed atomic replacement fails and reports the target; the run produces no
-artifact and the previous one is unchanged.
+artifact and the previous one is unchanged. A target the save cannot reach, in
+a directory that does not exist, at a directory or through a link, fails as
+[FILE-11](reference/files.md#file-11) states.
 
 The temporary file is regular and stays in the target's own filesystem, in the
 target's directory or a private staging directory beneath it. A private

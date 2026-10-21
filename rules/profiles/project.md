@@ -24,8 +24,8 @@ directory or a host default, and a specification cannot select, replace or
 override its project. A run without a project file has no project functions,
 no terminology and no dataset inventory.
 
-Fails: `project_environment_missing`, `project_environment_invalid`.
-Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::the_converted_project_files_lower_to_the_roots_of_their_sources`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`.
+Fails: `project_environment_invalid`.
+Evidence: `schema-functions`, `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::a_project_lists_function_files_and_holds_each_host_lock`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::the_converted_project_files_lower_to_the_roots_of_their_sources`, `rust/crates/yamaa-adapters/tests/project_scope.rs::an_unreadable_project_fails_as_a_check_reports_it`, `rust/crates/yamaa/tests/project_operations.rs::a_project_spelled_through_a_linked_directory_keeps_its_authority`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`.
 
 A project file declares `yamaa`, `type`, `functions`, `environments`,
 `codelists`, `study`, and the `sdtm`, `adam` and `send` sections, each optional
@@ -35,7 +35,11 @@ of a codelist file, which declares `type: codelists`
 against the project schema fails, before any activation or study read, with
 the conditions of [SCHEMA-12](../reference/schema-language.md#schema-12) and
 [SCHEMA-13](../reference/schema-language.md#schema-13) at its own paths; the
-project file has no condition of its own. A specification checked or run
+project file has no condition of its own. A project file that cannot be read
+is a path the caller passes: before any activation or study read, it fails
+with `resource_path_missing`, `resource_path_not_regular_file` or
+`resource_path_symlink`, naming the path as given
+([FILE-1](../reference/files.md#file-1)). A specification checked or run
 without a project file fails validation at each function call, codelist
 binding and inventory vocabulary it declares, all of which only a project file
 supplies ([CT-13](terminology.md#ct-13)).
@@ -44,12 +48,10 @@ A project file that declares `schema_version` declares `environments`,
 `codelists`, `study` and the sections instead, and is read under the rules at
 the `yamaa-v0.5.0` tag ([Rules](../README.md)): one that does not validate
 against `schema_project.yaml` fails with `project_environment_invalid`
-([FUNC-2](functions.md#func-2)). Until that path goes, a project file that
-cannot be read, and so declares neither, fails with
-`project_environment_missing` ([FUNC-1](functions.md#func-1)), before any
-activation or study read. A specification that declares `schema_version`,
-checked or run without a project file, reads no codelist binding and names no
-declared function in a call ([FUNC-4](functions.md#func-4)).
+([FUNC-2](functions.md#func-2)). A specification that declares
+`schema_version`, checked or run without a project file, reads no codelist
+binding and names no declared function in a call
+([FUNC-4](functions.md#func-4)).
 
 <a id="project-2"></a>
 

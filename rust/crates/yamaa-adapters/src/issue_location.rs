@@ -773,7 +773,7 @@ pub fn workflow(error: &crate::file_workflow::Error) -> Locator {
             locator.sources(&rejected.retained_metadata_sources());
         }
         Error::Environment(rejected) => locator.sources(&rejected.retained_metadata_sources()),
-        Error::Configuration(_) | Error::Schema(_) => {}
+        Error::Caller { .. } | Error::Schema(_) => {}
     }
     locator
 }

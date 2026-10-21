@@ -58,7 +58,7 @@ impl AnchoredTarget {
                         bytes: None,
                         limit: None,
                     })
-                    .map_err(file::Error::Host)?;
+                    .map_err(target_refusal)?;
                 if reply.reference != *reference || (reply.bytes.is_some() || reply.frame.is_some())
                 {
                     return Err(file::Error::Host(Failure::Changed));
@@ -80,6 +80,17 @@ impl AnchoredTarget {
             Self::Host { reference, .. } => reference,
         }
     }
+}
+/// A caller's resolver's refusal of a target: a kind it reports is the walk's
+/// refusal, as the local file resolver's is (FILE-7, FILE-8), and any other
+/// failure stays the resolver's own.
+fn target_refusal(failure: Failure) -> file::Error {
+    failure
+        .resource_kind()
+        .and_then(|kind| {
+            crate::file_resources::resource_failure(&crate::file_resources::Error::from_kind(kind))
+        })
+        .map_or(file::Error::Host(failure), file::Error::Unreachable)
 }
 /// A staged file: the file publisher's private temporary file, or the staging
 /// token a caller's resolver returned.
