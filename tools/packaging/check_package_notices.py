@@ -21,7 +21,8 @@ source package's followed by the one rust-std row that the package's
 configure step appends when R installs it, for the pinned toolchain that
 builds the release binaries (installed_inventory). A command-line archive's
 is the command line's committed inventory, which names that toolchain's
-standard library, as the wheels' does.
+standard library, as the wheels' does, and the musl C library that the
+archives for the musl targets alone link (#3030 D168).
 
 No text in a package names a GNU license, apart from the clause of the LLVM
 exception that names GPLv2 (generate_third_party_notices.gnu_licenses). That

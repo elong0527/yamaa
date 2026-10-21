@@ -963,7 +963,12 @@ the licensing statement and the in-tree licenses and copyright holders; and
 from the toolchain's `rust-src` component, which that notice does not fully
 cover, the third-party crates that the standard library links on the supported
 targets, such as `addr2line` and `object`, each with its one license and the
-texts that its package ships (#3369). No package notice names a GNU license;
+texts that its package ships (#3369). From the same component, it also lists
+the in-tree crates that the standard library links whose manifests declare a
+license that the notice does not give them: `compiler_builtins`, a port of
+LLVM's compiler-rt with the code of libm, relied on under MIT AND Apache-2.0
+WITH LLVM-exception, with the license files of its sources (#3494). No
+package notice names a GNU license;
 the only GPL wording that remains is the clause of the LLVM exception to
 Apache-2.0, a permissive license, which names GPLv2. The command line keeps
 only that file, its component inventory and `LICENSE-MUSL.txt` beside its
@@ -1015,7 +1020,11 @@ those that no supported target compiles, and the C code that those crates
 compile from sources that they carry: ReadStat in `yamaa-adapters` and the
 zstd library that `zstd-sys` bundles. The inventory of the wheels and of
 the command-line binaries also lists `rust-std`, the Rust standard library
-of the pinned toolchain that builds them, which they link. A source archive links the standard library of
+of the pinned toolchain that builds them, which they link. The command
+line's also lists musl, the C library that the pinned toolchain bundles for
+the musl targets and that only the executables for those targets link, at
+the release that `MUSL` pairs with that toolchain (#3493, #3030 D168). A
+source archive links the standard library of
 whatever toolchain builds it, so the Python source archive carries the
 wheels' inventory without that row, and the R source package's inventory has
 none. Instead, the R package's `configure`, which already runs
