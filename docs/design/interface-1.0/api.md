@@ -276,7 +276,10 @@ Global flags: `--format text|json` (default `text`, before or after the
 command), `--help` and `--version`. No configuration file, environment
 variable or colour. Standard output carries the command's output, or with
 `--format json` exactly one canonical JSON document (RFC 8785, one line) and
-a LF; standard error carries only usage errors.
+a LF; standard error carries only usage errors. One exception (D142): a
+panic inside a `selftest` case fails that case, so the command exits 1, and
+Rust's default panic hook writes the panic message, which shows where the
+engine panicked, to standard error.
 
 | Exit status | Meaning |
 | --- | --- |
