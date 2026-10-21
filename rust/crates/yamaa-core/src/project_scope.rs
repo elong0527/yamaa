@@ -83,6 +83,20 @@ pub fn unknown_name(name: &str, available: &[&str]) -> Diagnostic {
     )
 }
 
+/// The requested section is not one the project declares: a name outside
+/// `sdtm`, `adam` and `send`, or one of them the project does not declare.
+/// The context names every section the project declares, sorted.
+pub fn unknown_section(section: &str, declared: &[&str]) -> Diagnostic {
+    let mut declared = declared.to_vec();
+    declared.sort_unstable();
+    declared.dedup();
+    finding(
+        ConditionCode::ProjectUnknownSection,
+        Vec::new(),
+        vec![("section", text(section)), ("sections", texts(declared))],
+    )
+}
+
 /// An input without `schema` reads the file a specification in the run scope
 /// produces. `written` is the input's path as declared and `producer` the
 /// specification whose `output.path` names that file.

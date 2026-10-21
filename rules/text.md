@@ -113,8 +113,8 @@ dependencies. A placeholder that does not bind fails under the
 [Column derivation](columns.md) and
 [Name binding](names.md). A value that is not a string fails
 under [VALUE-2](values.md#value-2). `missing` answers when any placeholder
-value is missing; without it, the missing value fails as `missing_input` on
-the `mapping` stage, and a template never gives missing by default
+value is missing; without it, the missing value fails as `missing_input` in
+the `mapping` phase, and a template never gives missing by default
 ([COLUMN-10](columns.md#column-10)). The concatenation is exact under
 [VALUE-12](values.md#value-12).
 

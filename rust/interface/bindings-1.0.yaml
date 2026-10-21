@@ -530,7 +530,7 @@ cli:
   exit_status:
     0: "the command completed and its status is succeeded; for resolve, schema and --version, the output was printed"
     1: "the command completed with findings: a status of failed or skipped, remaining lint findings, a failed selftest case, or a refusal that carries issues"
-    2: "the command could not run as asked: invalid usage or arguments, an unknown section or file type, a PATH whose declared type the command does not take, or a failure to write to stdout; a file problem the engine reports as an issue exits 1"
+    2: "the command could not run as asked: invalid usage or arguments, an unknown file type, a PATH whose declared type the command does not take, or a failure to write to stdout; a file problem the engine reports as an issue exits 1"
   interrupt: "Ctrl+C stops the command and publishes nothing (D46); the process ends by the signal, which POSIX shells report as status 130"
   commands:
     - name: check
