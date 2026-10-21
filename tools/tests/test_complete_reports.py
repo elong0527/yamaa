@@ -466,5 +466,221 @@ class InstalledOwnerReview(unittest.TestCase):
             self.fixture.compare()
 
 
+class CommandLineCohort(unittest.TestCase):
+    """The command line's saved outputs join its platform's comparison, beside
+    the owners it ran with; synthetic runs are never evidence."""
+
+    def setUp(self):
+        self.fixture = CompletePublicTruth("runTest")
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.cli = self.fixture.directory / "cli"
+        cohort.write(
+            self.cli / "observed/run.json",
+            {
+                "protocol": "public-conformance/1",
+                "runtime": "cli",
+                "version": "yamaa fixture-engine\nlanguage versions: 1.0\n",
+                "source_revision": self.fixture.revision,
+                "evidence": "unit:unqualified",
+            },
+        )
+        cohort.write(
+            self.cli / "inventory.json",
+            {
+                "runtime": "cli",
+                "source_revision": self.fixture.revision,
+                "gate": {"mode": "all-active-must-pass", "failing": []},
+            },
+        )
+        # Each run saved what the authored truth publishes, in its order.
+        for name in cohort.COHORT:
+            truth = cohort.read(ROOT / cohort.TRUTH_PATHS[name])
+            paths = []
+            for artifact in truth["artifacts"]:
+                self.assertEqual(artifact["profile"], "csv")
+                path = f"{artifact['name']}.csv"
+                saved = self.cli / "observed/work" / name / path
+                saved.parent.mkdir(parents=True, exist_ok=True)
+                saved.write_bytes(artifact["content"].encode("utf-8"))
+                paths.append(path)
+            succeeded = truth["outcome"] == "success"
+            self.write_run(name, 0 if succeeded else 1, paths)
+
+    def write_run(self, name, exit_status, paths):
+        status = "succeeded" if exit_status == 0 else "failed"
+        call = {
+            "specification": "spec.yaml",
+            "environment": None,
+            "arguments": ["run", "spec.yaml"],
+            "exit_status": exit_status,
+            "stderr": "",
+            "not_implemented": False,
+            "document": {"status": status, "issues": [], "paths": paths},
+        }
+        cohort.write(
+            self.cli / "observed/records" / f"{name}.json",
+            {"example": name, "excluded": None, "calls": [call], "error": None},
+        )
+
+    def compare(self):
+        self.fixture.compare()
+        return cohort.compare_cli_outputs(
+            self.cli, self.fixture.output, self.fixture.revision
+        )
+
+    def rows(self, name):
+        coverage = cohort.read(self.fixture.output / "cli/coverage.json")
+        return [row for row in coverage["coverage"] if row["example"] == name]
+
+    def test_saved_outputs_equal_both_hosts_reports_case_by_case(self):
+        result = self.compare()
+        count = len(cohort.COHORT)
+        self.assertEqual(result["summary"], {"python": count, "r": count})
+        self.assertEqual(len(result["coverage"]), 2 * count)
+        output = self.fixture.output
+        self.assertEqual(cohort.read(output / "cli/coverage.json"), result)
+        for name in ("observed/run.json", "inventory.json"):
+            self.assertEqual(
+                (output / "cli" / Path(name).name).read_bytes(),
+                (self.cli / name).read_bytes(),
+            )
+        [python, r] = self.rows("schema-verification-log")
+        self.assertEqual((python["compared_with"], r["compared_with"]), ("python", "r"))
+        self.assertEqual(
+            python["saved"],
+            [
+                "cli/saved/schema-verification-log/adsl-checks.csv",
+                "cli/saved/schema-verification-log/adsl.csv",
+            ],
+        )
+        for saved in python["saved"]:
+            source = self.cli / "observed/work" / Path(saved).relative_to("cli/saved")
+            self.assertEqual((output / saved).read_bytes(), source.read_bytes())
+
+    def test_a_saved_byte_that_differs_from_either_host_fails(self):
+        saved = self.cli / "observed/work/schema-lookup/adsl.csv"
+        saved.write_bytes(saved.read_bytes().replace(b"\n01,", b"\n02,"))
+        with self.assertRaisesRegex(ValueError, "differ.*: schema-lookup$"):
+            self.compare()
+        for row in self.rows("schema-lookup"):
+            self.assertEqual(row["result"], "mismatch")
+            self.assertIn(
+                "artifact.record", [finding["kind"] for finding in row["findings"]]
+            )
+
+    def test_a_missing_artifact_or_another_outcome_fails(self):
+        self.write_run("schema-lookup", 0, [])
+        self.write_run("negative-zero-division", 0, [])
+        with self.assertRaisesRegex(
+            ValueError, ": negative-zero-division, schema-lookup$"
+        ):
+            self.compare()
+        kinds = {
+            name: {
+                finding["kind"]
+                for row in self.rows(name)
+                for finding in row["findings"]
+            }
+            for name in ("schema-lookup", "negative-zero-division")
+        }
+        self.assertEqual(
+            kinds,
+            {"schema-lookup": {"artifacts"}, "negative-zero-division": {"outcome"}},
+        )
+
+    def test_the_run_names_this_revision_core_and_actions_run_and_passed(self):
+        self.fixture.compare()
+        for name, key, value, message in (
+            ("observed/run.json", "source_revision", "b" * 40, "stale or foreign"),
+            ("observed/run.json", "version", "yamaa 0.0.1\n", "engine differs"),
+            ("observed/run.json", "evidence", "unit:other", "ran apart"),
+            ("inventory.json", "gate", {"failing": ["schema-lookup"]}, "did not pass"),
+            ("inventory.json", "source_revision", "b" * 40, "did not pass"),
+        ):
+            path = self.cli / name
+            original = path.read_bytes()
+            raw = cohort.read(path)
+            raw[key] = value
+            cohort.write(path, raw)
+            try:
+                with self.subTest(file=name, key=key):
+                    with self.assertRaisesRegex(ValueError, message):
+                        cohort.compare_cli_outputs(
+                            self.cli, self.fixture.output, self.fixture.revision
+                        )
+            finally:
+                path.write_bytes(original)
+        self.assertFalse((self.fixture.output / "cli").exists())
+
+    def test_an_excluded_case_is_named_with_its_reason(self):
+        cohort.write(
+            self.cli / "observed/records/schema-lookup.json",
+            {
+                "example": "schema-lookup",
+                "excluded": "excepted by the 1.0 conversion gate: a decided item",
+                "calls": [],
+                "error": None,
+            },
+        )
+        result = self.compare()
+        count = len(cohort.COHORT) - 1
+        self.assertEqual(result["summary"], {"python": count, "r": count})
+        self.assertEqual(
+            {(row["result"], row["reason"]) for row in self.rows("schema-lookup")},
+            {("excluded", "excepted by the 1.0 conversion gate: a decided item")},
+        )
+
+    def test_the_command_compares_the_command_line_beside_the_owners(self):
+        # Synthetic runs exercise the real command, never qualification.
+        revision = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+        ).strip()
+        evidence = self.fixture.evidence
+        for path in (
+            evidence / "python/supplemental/supplemental.json",
+            evidence / "r/supplemental.json",
+        ):
+            record = cohort.read(path)
+            record["evidence"]["source_revision"] = revision
+            cohort.write(path, record)
+        for name in ("observed/run.json", "inventory.json"):
+            raw = cohort.read(self.cli / name)
+            raw["source_revision"] = revision
+            cohort.write(self.cli / name, raw)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.conformance.public_conformance",
+                "complete-reports",
+                "--fixtures",
+                str(ROOT / "benchmarks"),
+                "--python-evidence",
+                str(evidence / "python"),
+                "--r-evidence",
+                str(evidence / "r"),
+                "--cli-evidence",
+                str(self.cli),
+                "--output",
+                str(self.fixture.output),
+                "--source-revision",
+                revision,
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        count = len(cohort.COHORT)
+        self.assertIn(
+            json.dumps({"cli": {"python": count, "r": count}}, indent=2), result.stdout
+        )
+        self.assertEqual(
+            cohort.read(self.fixture.output / "cli/coverage.json")["source_revision"],
+            revision,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -475,8 +475,8 @@ release publishes and installs each with no Rust, Rtools or network (its
 incoming checks on the R source archive that a release publishes (its
 `native-cran` jobs). It also builds the command-line binaries that a release
 publishes, statically on Linux and Windows, and runs each archive's
-`yamaa selftest` on a fresh runner of its platform (its `native-cli` and
-`native-cli-install` jobs). Passing ordinary CI does not qualify a release. The final
+`yamaa selftest` and then the conformance corpus on a fresh runner of its
+platform (its `native-cli` and `native-cli-install` jobs). Passing ordinary CI does not qualify a release. The final
 merged revision needs complete native evidence, including the R package
 checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
