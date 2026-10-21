@@ -111,6 +111,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     &[],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
+                    &|| false,
                 );
                 assert!(attempt.handler_counts.is_empty());
                 let error = attempt.result.unwrap_err();
@@ -149,6 +150,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     &[],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
+                    &|| false,
                 )
                 .result
                 .unwrap();
@@ -171,6 +173,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 &[],
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
+                &|| false,
             );
             assert!(attempt.handler_counts.is_empty());
             let dataset::ExecutionError::MultipleValues {
@@ -944,6 +947,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     &[],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
+                    &|| false,
                 )
                 .result
                 .unwrap();
@@ -1871,6 +1875,7 @@ output: {{path: output.csv, columns: [I, S]}}
                         &secondary,
                         &mut yamaa_core::function_invocation::NoFunctions::new(),
                         None,
+                        &|| false,
                     );
                     let execution = attempt.result.unwrap();
                     let bytes = yamaa_adapters::csv_artifact::render(

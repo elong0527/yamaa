@@ -523,7 +523,7 @@ mod project {
                 trace: Rc::clone(&trace),
                 raised: None,
             };
-            let attempt = plan.execute(&Untouched, &[], &mut bindings, None);
+            let attempt = plan.execute(&Untouched, &[], &mut bindings, None, &|| false);
             assert!(matches!(
                 *attempt.result.unwrap_err(),
                 ExecutionError::FunctionBinding { slot: 0 }
@@ -597,6 +597,7 @@ mod project {
                 &[],
                 &mut yamaa_core::function_invocation::NoFunctions::new(),
                 None,
+                &|| false,
             );
             // The selection's default substitution is registered at zero; the
             // failing operand read is never answered by it.
@@ -1857,6 +1858,7 @@ mod project {
                     &[],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
+                    &|| false,
                 );
                 let ExecutionError::VerificationFailures(records) = *attempt.result.unwrap_err()
                 else {
@@ -1903,6 +1905,7 @@ mod project {
                         &[],
                         &mut yamaa_core::function_invocation::NoFunctions::new(),
                         None,
+                        &|| false,
                     )
                     .result
                     .unwrap();

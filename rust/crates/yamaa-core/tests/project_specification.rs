@@ -1105,6 +1105,7 @@ mod project {
                     &[&alt_table, &grp_table],
                     &mut yamaa_core::function_invocation::NoFunctions::new(),
                     None,
+                    &|| false,
                 );
                 assert_eq!(attempt.result.unwrap().dataset.rows(), expected.as_slice());
             }

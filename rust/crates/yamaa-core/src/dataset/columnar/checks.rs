@@ -366,6 +366,7 @@ pub(super) fn verify_output<'a, E>(
         outcome: crate::application_observer::Outcome::Succeeded,
     });
     observer(ExecutionEvent::Phase(ExecutionPhase::OutputKeys));
+    run.poll(crate::dataset::resolved::Step::OutputKeys)?;
     let keys = key_columns(plan);
     let rows = frame.rows();
     let schema = &plan.region(RegionId::DATASET).output;
@@ -427,6 +428,7 @@ pub(super) fn verify_output<'a, E>(
         .map(|(index, _)| CheckId::try_from(index).expect("a check slot"))
         .collect();
     for check in checks {
+        run.poll(crate::dataset::resolved::Step::Checks(check))?;
         let node = plan.check(check);
         let path = node.path.to_string();
         let record = match declared(plan, check) {
