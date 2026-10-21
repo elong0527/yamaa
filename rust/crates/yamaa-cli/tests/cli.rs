@@ -1670,7 +1670,8 @@ fn read_odm_saves_parquet_and_both_files_hold_what_a_run_saves() {
 ///
 /// - The save refuses an extension outside OUTPUT-5's closed mapping, or
 ///   none, before it writes anything, and a target that cannot be written,
-///   as a run's save refuses it (D99): a missing directory or a directory.
+///   as a run's save refuses it (D99, D189): a missing directory or a
+///   directory, with FILE-7's conditions naming OUT as given.
 ///   The items were read, so the JSON `status` is `succeeded`, its `rows`
 ///   counts them, and its `issues` hold the save's refusal.
 /// - The reader refuses a file that does not exist, a bound below its
@@ -1688,14 +1689,10 @@ fn a_refused_read_or_save_prints_its_error_text_and_exits_1() {
     let engine = engine();
     let table = engine.read_odm(&source, &OdmOptions::new()).unwrap();
     for (name, condition, code) in [
-        ("items.txt", "unknown_artifact_profile", None),
+        ("items.txt", "unknown_artifact_profile", None::<&str>),
         ("items", "unknown_artifact_profile", None),
-        (
-            "absent/items.csv",
-            "engine_rejected",
-            Some("invalid_target"),
-        ),
-        ("folder.csv", "engine_rejected", Some("invalid_target")),
+        ("absent/items.csv", "resource_path_missing", None),
+        ("folder.csv", "resource_path_not_regular_file", None),
     ] {
         let out = study.path(name);
         let refused = engine.save_table(&table, &out).unwrap_err();

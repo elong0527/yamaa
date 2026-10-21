@@ -6,11 +6,18 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
+use yamaa_core::resource::ResourceFailure;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug)]
 pub enum Error {
     Host(crate::host_resources::Failure),
     InvalidTarget,
+    /// The walk to the target stopped at an entry FILE-7 or FILE-8 refuses:
+    /// a directory on its way that is missing (`Missing`), is not a
+    /// directory (`NotRegularFile`) or is a reparse point (`Symlink`), or a
+    /// target that is a reparse point or another entry that is not a regular
+    /// file.
+    Unreachable(ResourceFailure),
     PathMismatch,
     Limit(yamaa_core::limits::LimitExceeded),
     StagingCollision,
@@ -27,6 +34,7 @@ impl Error {
         match self {
             Self::Host(_) => "host resource publication failed",
             Self::InvalidTarget => "invalid explicit publication target",
+            Self::Unreachable(_) => "publication target cannot be reached",
             Self::PathMismatch => "publication path does not match explicit target",
             Self::Limit(_) => "publication output byte limit",
             Self::StagingCollision => "publication temporary names already exist",
@@ -93,9 +101,17 @@ impl AnchoredTarget {
         let mut witnesses = Vec::new();
         for name in parents {
             let parent = directories.last().unwrap_or(&self.root);
-            let initial = parent.inspect(name).map_err(|_| Error::InvalidTarget)?;
-            if initial.kind != Kind::Directory {
-                return Err(Error::InvalidTarget);
+            let initial = parent.inspect(name).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    Error::Unreachable(ResourceFailure::Missing)
+                } else {
+                    Error::InvalidTarget
+                }
+            })?;
+            match initial.kind {
+                Kind::Directory => {}
+                Kind::Symlink => return Err(Error::Unreachable(ResourceFailure::Symlink)),
+                _ => return Err(Error::Unreachable(ResourceFailure::NotRegularFile)),
             }
             let opened = parent.directory(name).map_err(|_| Error::InvalidTarget)?;
             if opened.identity()? != initial.identity {
@@ -185,11 +201,16 @@ impl Publisher {
         publisher.check_target()?;
         Ok(publisher)
     }
+    /// Admit an absent target or a regular file; a reparse point or another
+    /// entry is unreachable.
     fn check_target(&self) -> Result<(), Error> {
         match self.parent.inspect(&self.name) {
             Ok(status) if status.kind == Kind::RegularFile => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Ok(_) => Err(Error::InvalidTarget),
+            Ok(status) if status.kind == Kind::Symlink => {
+                Err(Error::Unreachable(ResourceFailure::Symlink))
+            }
+            Ok(_) => Err(Error::Unreachable(ResourceFailure::NotRegularFile)),
             Err(error) => Err(error.into()),
         }
     }

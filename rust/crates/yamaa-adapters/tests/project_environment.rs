@@ -364,7 +364,7 @@ mod project {
                     crate::support::rows(&rows),
                     [
                         yamaa_adapters::json!({"phase": "engine", "condition": "engine_rejected", "rule": null, "spec_paths": ["codelists[1]"], "context": json!({
-                            "stage": "environment", "code": "resource_limit",
+                            "step": "environment", "code": "resource_limit",
                             "resource": "spec_bytes", "limit": Limits::SPEC_BYTES,
                             "actual": Limits::SPEC_BYTES + 1,
                         })})

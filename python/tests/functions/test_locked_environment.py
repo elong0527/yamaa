@@ -128,7 +128,7 @@ def run(study):
 def problems(result):
     """Each issue's condition and the facts of its context that a lock
     verification decides."""
-    facts = ("package", "reason", "expected", "actual", "stage", "code")
+    facts = ("package", "reason", "expected", "actual", "step", "code")
     return [
         (
             issue["condition"],
@@ -225,7 +225,7 @@ def test_a_lock_the_engine_cannot_read_refuses_the_run_before_any_version(
     result = run(study)
     assert result.output is None
     assert problems(result) == [
-        ("engine_rejected", {"stage": "build", "code": "opaque_host"})
+        ("engine_rejected", {"step": "build", "code": "opaque_host"})
     ]
 
 
@@ -234,7 +234,7 @@ def test_a_version_number_past_the_integer_limit_refuses_the_run(study, monkeypa
     so packaging refused a version with a longer number: locked, installed or
     read by a marker's version comparison."""
     at, past = "1" * 4300, "1" * 4301
-    refused = [("engine_rejected", {"stage": "build", "code": "opaque_host"})]
+    refused = [("engine_rejected", {"step": "build", "code": "opaque_host"})]
     lock(study, (past, None))
     assert problems(run(study)) == refused
     lock(study, (INSTALLED, [f"python_version == '{past}'"]))
@@ -253,7 +253,7 @@ def test_the_interpreter_s_own_integer_limit_decides(study, monkeypatch, integer
     reads the interpreter's own when a number of more than 640 digits needs
     it."""
     past, beyond = "1" * 4301, "1" * 641
-    refused = [("engine_rejected", {"stage": "build", "code": "opaque_host"})]
+    refused = [("engine_rejected", {"step": "build", "code": "opaque_host"})]
     for limit in (0, 10_000):
         integer_limit(limit)
         monkeypatch.setattr(m, "installed_version", lambda name: past)
