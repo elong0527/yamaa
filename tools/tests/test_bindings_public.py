@@ -3,6 +3,7 @@
 import ast
 import copy
 import unittest
+from unittest.mock import patch
 
 from tools.packaging import bindings_public as public
 from tools.packaging import generate_bindings as generator
@@ -54,11 +55,11 @@ class RenderingTests(unittest.TestCase):
         for expected in (
             "return Run(_call(_native._spec_run, self._path, self._project, self._plans))",
             "return Spec(_call(_native._project_spec, self._path, name), self._path)",
-            "return _optional_table(_call(self._native.output, self._name))",
+            "return _call(self._native.output, self._name)",
             "        return _call(self._native.save)\n",
             "            _call(self._native.member_issues, name)  # raises",
             "        return MemberRun(self._native, name)",
-            "        self.issues = _table(table)",
+            "        self.issues = table",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -129,7 +130,7 @@ class RenderingTests(unittest.TestCase):
             "    def status(self) -> str:\n        "
             '"""`failed` when a case failed, and `succeeded` otherwise."""\n'
             "        return self._native.status()",
-            "        return _table(self._native.cases())",
+            "        return self._native.cases()",
             "    def info(self) -> dict:",
         ):
             with self.subTest(expected=expected):
@@ -146,10 +147,8 @@ class RenderingTests(unittest.TestCase):
 
     def test_a_path_list_converts_each_path_in_both_hosts(self):
         python = self.public.render_python([])
-        self.assertIn("def lint(paths, fix: bool = False) -> _pl.DataFrame:", python)
-        self.assertIn(
-            "return _table(_call(_native._lint, _fspaths(paths), fix))", python
-        )
+        self.assertIn("def lint(paths, fix: bool = False) -> Table:", python)
+        self.assertIn("return _call(_native._lint, _fspaths(paths), fix)", python)
         self.assertIn(
             'yamaa_lint <- function(paths, fix = FALSE) .reply(.native_lint(.texts(paths, "paths"), fix))',
             self.public.render_r([]),
@@ -185,16 +184,20 @@ class RenderingTests(unittest.TestCase):
             short,
         )
 
-    def test_a_long_helper_import_is_split_one_name_per_line(self):
+    def test_the_helper_import_names_the_helpers_used_and_wraps_when_long(self):
         text = self.public.render_python([])
-        self.assertIn("from yamaa._support import (\n    __version__,\n", text)
+        self.assertIn(
+            "from yamaa._support import __version__, _fspath, _fspaths, _Lazy\n", text
+        )
+        # lint() alone converts a list of paths.
         candidate = copy.deepcopy(self.definition)
         candidate["public"]["functions"].remove(function(candidate, "lint"))
         short = public.Public(candidate).render_python([])
+        self.assertIn("from yamaa._support import __version__, _fspath, _Lazy\n", short)
+        with patch.object(public, "_PY_WIDTH", 60):
+            narrow = public.Public(self.definition).render_python([])
         self.assertIn(
-            "from yamaa._support import __version__, _fspath, _Lazy, _optional_table, "
-            "_pl, _table\n",
-            short,
+            "from yamaa._support import (\n    __version__,\n    _fspath,\n", narrow
         )
 
     def test_a_removed_function_leaves_both_hosts_and_the_namespace(self):
@@ -225,16 +228,20 @@ class RenderingTests(unittest.TestCase):
         self.assertNotIn("Table", self.public.render_namespace([]))
         self.assertEqual(self.public.kind("Table"), "native")
         self.assertEqual(
-            list(self.public.r_classes()),
+            list(self.public.delegating_classes()),
             [name for name in self.definition["public"]["classes"] if name != "Table"],
         )
-        # Without a Python-only class the module imports nothing from the
-        # native module by name.
-        candidate = copy.deepcopy(self.definition)
-        del candidate["public"]["classes"]["Table"]
-        text = public.Public(candidate).render_python([])
-        self.assertNotIn("from yamaa._native import", text)
-        self.assertNotIn('"Table"', text)
+        # Every table is that class: annotations name it, and nothing wraps
+        # the table that a native call returns.
+        self.assertIn("    def issues(self) -> Table:\n", python)
+        self.assertIn("    def output(self) -> Table | None:\n", python)
+        self.assertIn(
+            "    def __init__(self, message: str, issues: Table, paths: list[str]):",
+            python,
+        )
+        self.assertIn(
+            'str(error), getattr(error, "issues"), getattr(error, "paths")', python
+        )
 
     def test_generated_python_is_valid_and_ascii(self):
         text = self.public.render_python(generator._PYI_HEADER)
@@ -487,6 +494,11 @@ class ValidationTests(unittest.TestCase):
                 "tables.lint.line has a type",
                 lambda d: d["tables"]["lint"]["columns"][1].update(type="decimal"),
             ),
+            # The table token annotates the class every table is.
+            (
+                "public.classes.Table, the class every table is, is missing",
+                lambda d: d["public"]["classes"].pop("Table"),
+            ),
         ]
         for message, mutate in cases:
             with self.subTest(message=message):
@@ -535,7 +547,7 @@ class ManifestTests(unittest.TestCase):
     def test_public_lines_leave_out_private_and_native_details(self):
         lines = public.Public(generator._load_definition()).manifest_lines()
         for expected in (
-            "public.types.table: python polars.DataFrame; r data.frame",
+            "public.types.table: python yamaa.Table; r data.frame",
             "public.functions.read_odm: python yamaa.read_odm; r yamaa_read_odm; "
             "returns table; table odm_items; raises refusal",
             "public.functions.read_odm.args[2]: max_archive_members: count = 10000; "

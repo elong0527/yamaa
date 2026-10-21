@@ -259,8 +259,8 @@ public:
       r: "character(), the same paths; save() returns them invisibly"
     tree: {python: dict, r: named list}
     json_text: {python: "str, canonical JSON (RFC 8785)", r: "character(1), canonical JSON (RFC 8785)"}
-    table: {python: polars.DataFrame, r: data.frame}
-    optional_table: {python: "polars.DataFrame | None", r: data.frame or NULL}
+    table: {python: yamaa.Table, r: data.frame}
+    optional_table: {python: "yamaa.Table | None", r: data.frame or NULL}
     status: {python: "str, one of values.status", r: "character(1), one of values.status"}
     file_type: {python: "str, one of values.file_type", r: "character(1), one of values.file_type"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
@@ -525,7 +525,8 @@ public:
     # yamaa._native, which the public module exports as it is, so each member
     # is a native method that host_only names. R's tables are data frames
     # (D44), so the class is Python's alone. A conversion imports its library
-    # only when it is called; to_pylist() imports nothing.
+    # only when it is called; to_pylist() imports nothing, and the package
+    # has no runtime dependency.
     Table:
       python: yamaa.Table
       hosts: [python]

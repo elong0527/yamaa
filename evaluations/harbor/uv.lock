@@ -2795,9 +2795,6 @@ wheels = [
 name = "yamaa"
 version = "0.5.0"
 source = { directory = "../../python" }
-dependencies = [
-    { name = "polars" },
-]
 
 [package.optional-dependencies]
 test = [
@@ -2805,6 +2802,7 @@ test = [
     { name = "lxml" },
     { name = "packaging" },
     { name = "pandas" },
+    { name = "polars" },
     { name = "py-yaml12" },
     { name = "pyarrow" },
     { name = "pydantic" },
@@ -2822,8 +2820,8 @@ requires-dist = [
     { name = "packaging", marker = "extra == 'test'", specifier = ">=25" },
     { name = "pandas", marker = "python_full_version >= '3.15' and extra == 'test'", specifier = ">=3.0.6" },
     { name = "pandas", marker = "python_full_version < '3.15' and extra == 'test'", specifier = ">=2.3.3" },
-    { name = "polars", marker = "python_full_version < '3.15'", specifier = ">=1.35.2" },
-    { name = "polars", marker = "python_full_version >= '3.15'", specifier = ">=2.0.0" },
+    { name = "polars", marker = "python_full_version >= '3.15' and extra == 'test'", specifier = ">=2.0.0" },
+    { name = "polars", marker = "python_full_version < '3.15' and extra == 'test'", specifier = ">=1.35.2" },
     { name = "py-yaml12", marker = "extra == 'test'", specifier = ">=0.2" },
     { name = "pyarrow", marker = "python_full_version >= '3.15' and extra == 'test'", specifier = ">=26.0.0" },
     { name = "pyarrow", marker = "python_full_version < '3.15' and extra == 'test'", specifier = ">=23.0.1" },

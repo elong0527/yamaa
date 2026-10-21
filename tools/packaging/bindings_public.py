@@ -13,15 +13,16 @@ with their members, the refusal error and the type tokens. From it
 - the ``public`` lines of the normalized manifest.
 
 Generated code only delegates. The handwritten rest stays where it was:
-Python's Polars table conversion, path conversion, lazy-object pickling and
-version lookup in ``python/src/yamaa/_support.py``; R's reply and argument
+Python's path conversion, lazy-object pickling and version lookup in
+``python/src/yamaa/_support.py``; R's reply and argument
 conversions, host-function capabilities, interrupt rethrow and locked-object
 helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
 
 A class with ``hosts: [python]`` is a native class of ``yamaa._native`` that
-the public module exports as it is: today only ``yamaa.Table``. Each of its
-members is a method of that class, which ``host_only`` names, and the
-generator writes no code for it beyond the export.
+the public module exports as it is: today only ``yamaa.Table``, which every
+call returns for a table, as the native call does. Each of its members is a
+method of that class, which ``host_only`` names, and the generator writes no
+code for it beyond the export.
 
 Delegation is declared, never written as code. A class ``holds`` an ordered
 set of values, each named by what it fills: ``handle``, the native handle the
@@ -56,8 +57,9 @@ _PY_ANNOTATION = {
     "paths_written": "list[str]",
     "tree": "dict",
     "json_text": "str",
-    "table": "_pl.DataFrame",
-    "optional_table": "_pl.DataFrame | None",
+    # A table is the native yamaa.Table that the native call returns.
+    "table": "Table",
+    "optional_table": "Table | None",
     "status": "str",
     "file_type": "str",
     "info": "dict",
@@ -97,7 +99,6 @@ _DEFAULTS = {
     "count": None,  # a nonnegative integer
 }
 # Handwritten conversions the generated code calls.
-_PY_RESULT = {"table": "_table", "optional_table": "_optional_table"}
 _PY_ARGUMENT = {"path": "_fspath", "path_list": "_fspaths"}
 _R_ARGUMENT = {
     "path": ".text",
@@ -257,6 +258,11 @@ class Public:
             else:
                 self._validate_class(name, cls, defined)
             defined.add(name)
+        # The table tokens annotate the class that every table is.
+        if "Table" not in self.classes or not self.python_only("Table"):
+            raise ValueError(
+                "public.classes.Table, the class every table is, is missing"
+            )
         if not isinstance(self.functions, list) or not self.functions:
             raise ValueError("public.functions must be a nonempty list")
         names = set()
@@ -658,8 +664,9 @@ class Public:
         """Whether `name` is a Python-only class, a native class exported as is."""
         return self.classes[name].get("hosts") == ["python"]
 
-    def r_classes(self):
-        """The classes R has, by name, in definition order."""
+    def delegating_classes(self):
+        """The classes the generator writes in both hosts, each delegating to
+        its native calls, by name in definition order."""
         return {
             name: cls
             for name, cls in self.classes.items()
@@ -829,8 +836,7 @@ class Public:
             ] != self._native_class(returns):
                 raise ValueError(f"{what} returns {native['returns']}, not {returns}")
             return self._py_construct(returns, call, class_name, args, what)
-        helper = _PY_RESULT.get(returns)
-        return _Call(helper, [call]) if helper else call
+        return call
 
     def _py_signature(self, entry, first=None):
         parts = [first] if first else []
@@ -862,9 +868,7 @@ class Public:
             else:
                 params.append(hold)
             if role in members and members[role]["kind"] == "field":
-                helper = _PY_RESULT.get(members[role]["returns"])
-                value = f"{helper}({hold})" if helper else hold
-                body.append(f"self.{role} = {value}")
+                body.append(f"self.{role} = {hold}")
             elif kind == "lazy" and index == 0:
                 body.append(f"self._{hold} = _fspath({hold})")
             else:
@@ -994,11 +998,7 @@ class Public:
         body += _py_def("__init__", signature, None, "    ")
         body.append("        super().__init__(message)")
         body += [f"        self.{name} = {name}" for name in attributes]
-        mapped = []
-        for name, token in attributes.items():
-            value = f'getattr(error, "{name}")'
-            helper = _PY_RESULT.get(token)
-            mapped.append(_Call(helper, [value]) if helper else value)
+        mapped = [f'getattr(error, "{name}")' for name in attributes]
         body += [
             "",
             "",
@@ -1015,7 +1015,7 @@ class Public:
                 " from None",
             ),
         ]
-        for name in self.r_classes():
+        for name in self.delegating_classes():
             body += ["", "", *self._py_class(name)]
         for function in self.functions:
             body += ["", "", *self._py_function(function)]
@@ -1023,14 +1023,7 @@ class Public:
         # Import exactly the handwritten helpers the generated code uses.
         helpers = [
             name
-            for name in (
-                "_fspath",
-                "_fspaths",
-                "_Lazy",
-                "_optional_table",
-                "_pl",
-                "_table",
-            )
+            for name in ("_fspath", "_fspaths", "_Lazy")
             if re.search(rf"(?<![\w.]){name}\b", text)
         ]
         imported = ["__version__", *helpers]
@@ -1288,7 +1281,7 @@ class Public:
 
     def render_r(self, header):
         lines = list(header)
-        for name in self.r_classes():
+        for name in self.delegating_classes():
             lines += ["", *self._r_constructor(name), *self._r_extras(name)]
         for function in self.functions:
             lines += ["", *self._r_function(function)]
@@ -1297,7 +1290,7 @@ class Public:
     def render_namespace(self, header):
         lines = [*header, f"useDynLib({self.package}, .registration = TRUE)"]
         lines += [f"export({function['r']})" for function in self.functions]
-        for cls in self.r_classes().values():
+        for cls in self.delegating_classes().values():
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f'S3method("{member["r"]}", {cls["r"]})')
@@ -1379,7 +1372,7 @@ class Public:
         )
         lines += [f"public.python.exports.{name}" for name in self.python_names()]
         lines += [f"public.r.exports.{function['r']}" for function in self.functions]
-        for cls in self.r_classes().values():
+        for cls in self.delegating_classes().values():
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f"public.r.s3methods.{cls['r']}.{member['r']}")

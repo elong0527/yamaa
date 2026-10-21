@@ -15,6 +15,7 @@ SDTM and ADaM datasets and define.xml files.
 | Check without data | `spec$check()$issues` | `spec.check().issues` |
 | See the resolved specification | `spec$resolve()` | `spec.resolve()` |
 | Run report | `run$report` | `run.report` |
+| A table in Polars or pandas | `run$output` is a data frame | `run.output.to_polars()`, `run.output.to_pandas()` |
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
 | Lint specifications | `yamaa_lint(paths)` | `yamaa.lint(paths)` |
@@ -129,6 +130,46 @@ columns:
     run.issues    # identified errors
     run.report    # run report
     run.save()    # save run report and dataset; returns their paths
+    ```
+
+## Tables
+
+Every table that yamaa returns is a data frame in R. In Python it is a
+`yamaa.Table`, which needs no other package: printing it shows its column
+names and types and its first and last rows, `len()` and `num_rows` count its
+rows, `column_names` names its columns, and `to_pylist()` gives one dict per
+row. `to_polars()`, `to_pandas()` and `to_arrow()` convert it to the table
+library you use, which must be installed: Polars, pandas with PyArrow, or
+PyArrow. A library that reads the Arrow PyCapsule interface, such as
+`polars.DataFrame(table)` or `pyarrow.table(table)`, reads it directly.
+
+| Column type | R | Python value | Arrow |
+|---|---|---|---|
+| `str` | character | `str` | Utf8 |
+| `int` | double; an error beyond 2^53 | `int` | Int64 |
+| `float` | double | `float` | Float64 |
+| `date` | `Date` | `datetime.date` | Date32 |
+| `datetime` | `POSIXct` in UTC | `datetime.datetime`, without a time zone | Timestamp, in seconds |
+| list, in `issues` | list column | `list` | List |
+
+A missing value is `NA` in R, `NULL` for a missing list, and `None` in
+Python. `to_pandas()` keeps each column's Arrow type as a `pandas.ArrowDtype`,
+so an integer column with a missing value keeps its exact integers.
+
+=== "R"
+
+    ```r
+    dm <- run$output
+    nrow(dm)
+    ```
+
+=== "Python"
+
+    ```python
+    dm = run.output              # prints a preview
+    dm.num_rows
+    rows = dm.to_pylist()        # [{"STUDYID": "STUDY01", ...}, ...]
+    frame = dm.to_polars()       # or dm.to_pandas(), dm.to_arrow()
     ```
 
 ## Check a specification without data

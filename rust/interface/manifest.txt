@@ -125,8 +125,8 @@ public.types.names: python list[str]; r character()
 public.types.paths_written: python list[str], absolute with forward slashes, in publication order; r character(), the same paths; save() returns them invisibly
 public.types.tree: python dict; r named list
 public.types.json_text: python str, canonical JSON (RFC 8785); r character(1), canonical JSON (RFC 8785)
-public.types.table: python polars.DataFrame; r data.frame
-public.types.optional_table: python polars.DataFrame | None; r data.frame or NULL
+public.types.table: python yamaa.Table; r data.frame
+public.types.optional_table: python yamaa.Table | None; r data.frame or NULL
 public.types.status: python str, one of values.status; r character(1), one of values.status
 public.types.file_type: python str, one of values.file_type; r character(1), one of values.file_type
 public.types.info: python dict, keys in records.info order; r named list, names in records.info order

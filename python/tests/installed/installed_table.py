@@ -1,11 +1,12 @@
 """Installed yamaa.Table: the native table of every Python result (#3030 D11,
 D43).
 
-Each member: the counts and names, the printed preview the facade renders
-(D167), the Arrow PyCapsule stream, `to_pylist()`, which builds Python values
-in Rust and imports nothing, and `to_arrow()`, `to_polars()` and `to_pandas()`,
-which import their library only when called. Each column type reaches Python
-as the interface's `public.value_types` project it.
+Every table the package returns is one. Each member: the counts and names, the
+printed preview the facade renders (D167), the Arrow PyCapsule stream,
+`to_pylist()`, which builds Python values in Rust and imports nothing, and
+`to_arrow()`, `to_polars()` and `to_pandas()`, which import their library only
+when called. Each column type reaches Python as the interface's
+`public.value_types` project it, and the package needs no table library.
 """
 
 import datetime
@@ -162,12 +163,12 @@ class Table(unittest.TestCase):
 
     def run_spec(self):
         run = yamaa.spec(self.root / "spec.yaml").run()
-        self.assertEqual(run._native.issues().num_rows, 0)
+        self.assertEqual(run.issues.num_rows, 0)
         return run
 
     def output(self):
-        """The output of ROWS as the native table."""
-        return self.run_spec()._native.output()
+        """The output of ROWS."""
+        return self.run_spec().output
 
     def division(self, expression):
         """The issues table of a run whose RATIO divides by zero."""
@@ -175,8 +176,8 @@ class Table(unittest.TestCase):
         path.write_text(DIVISION.replace("EXPRESSION", expression), encoding="utf-8")
         (self.root / "input.csv").write_bytes(b"ID,VALUE,ZERO\na,2.5,0\n")
         run = yamaa.spec(path).run()
-        self.assertIsNone(run._native.output())
-        return run._native.issues()
+        self.assertIsNone(run.output)
+        return run.issues
 
     def test_the_native_class_is_exported_as_it_is_and_cannot_be_made(self):
         self.assertIs(yamaa.Table, _native.Table)
@@ -203,6 +204,40 @@ class Table(unittest.TestCase):
             ],
         )
 
+    def test_every_table_the_package_returns_is_a_table(self):
+        run = self.run_spec()
+        check = yamaa.spec(self.root / "spec.yaml").check()
+        (self.root / "project.yaml").write_text(
+            "schema_version: '1.0'\nadam: {specs: [spec.yaml]}\n", encoding="utf-8"
+        )
+        project = yamaa.project(self.root / "project.yaml")
+        runs = project.run()
+        submission = project.submission("adam", created="2026-10-21T00:00:00")
+        (self.root / "items.xml").write_text(odm(1), encoding="utf-8")
+        with self.assertRaises(yamaa.Error) as refused:
+            project.spec("ABSENT")
+        tables = {
+            "Check.issues": check.issues,
+            "Run.output": run.output,
+            "Run.issues": run.issues,
+            "Run.report": run.report,
+            "MemberRun.output": runs["TEST"].output,
+            "MemberRun.issues": runs["TEST"].issues,
+            "MemberRun.report": runs["TEST"].report,
+            "ProjectRun.issues": runs.issues,
+            "ProjectRun.report": runs.report,
+            "Submission.issues": submission.issues,
+            "SelfTest.cases": yamaa.selftest().cases,
+            "read_odm()": yamaa.read_odm(self.root / "items.xml"),
+            "lint()": yamaa.lint(self.root / "spec.yaml"),
+            "Error.issues": refused.exception.issues,
+        }
+        for name, table in tables.items():
+            with self.subTest(table=name):
+                self.assertIs(type(table), yamaa.Table)
+        self.assertEqual(tables["MemberRun.output"].to_pylist(), ROWS)
+        self.assertEqual(tables["Error.issues"].num_rows, 1)
+
     def test_counts_and_names(self):
         table = self.output()
         self.assertEqual(table.num_rows, 3)
@@ -210,7 +245,7 @@ class Table(unittest.TestCase):
         self.assertEqual(table.column_names, COLUMNS)
         self.assertTrue(table)
         # A clean run's issues: no rows, every column, and false as len() is 0.
-        issues = self.run_spec()._native.issues()
+        issues = self.run_spec().issues
         self.assertEqual((issues.num_rows, len(issues)), (0, 0))
         self.assertEqual(issues.column_names, ISSUE_COLUMNS)
         self.assertFalse(issues)
@@ -223,7 +258,7 @@ class Table(unittest.TestCase):
         self.assertTrue(repr(table).isascii())
         # Past 8 columns the name and type rows end in a `...` column.
         self.assertEqual(
-            repr(self.run_spec()._native.issues()),
+            repr(self.run_spec().issues),
             "\n".join(
                 [
                     "yamaa.Table: 0 rows x 12 columns",
@@ -291,7 +326,7 @@ class Table(unittest.TestCase):
         # The ODM reader returns its items in batches of 65,536 rows.
         path = self.root / "items.xml"
         path.write_text(odm(65_537), encoding="utf-8")
-        table = _native._read_odm(str(path))
+        table = yamaa.read_odm(path)
         self.assertEqual((table.num_rows, len(table)), (65_537, 65_537))
         self.assertEqual(len(pa.table(table).to_batches()), 2)
         rows = table.to_pylist()
@@ -396,8 +431,7 @@ class Table(unittest.TestCase):
             import sys
             from pathlib import Path
 
-            libraries = {"polars", "pyarrow", "pandas"}
-            blocked = {"pyarrow", "pandas"}
+            blocked = {"polars", "pyarrow", "pandas"}
 
             class Unavailable(importlib.abc.MetaPathFinder):
                 def find_spec(self, fullname, path=None, target=None):
@@ -408,24 +442,25 @@ class Table(unittest.TestCase):
             sys.meta_path.insert(0, Unavailable())
             import yamaa
 
-            before = set(sys.modules)
             root = Path(sys.argv[1])
-            table = yamaa.spec(root / "spec.yaml").run()._native.output()
+            table = yamaa.spec(root / "spec.yaml").run().output
             rows = table.to_pylist()
             assert rows[2]["I"] == 2**63 - 1, rows
             assert (table.num_rows, len(table), table.column_names[0]) == (3, 3, "ID")
             assert repr(table).startswith("yamaa.Table: 3 rows x 6 columns")
             del rows
             table.__arrow_c_stream__()
-            for convert, package in ((table.to_arrow, "pyarrow"), (table.to_pandas, "pandas")):
+            for convert, package in (
+                (table.to_arrow, "pyarrow"),
+                (table.to_polars, "polars"),
+                (table.to_pandas, "pandas"),
+            ):
                 try:
                     convert()
                 except ModuleNotFoundError as error:
                     assert error.name == package, error
                 else:
                     raise AssertionError(package)
-            loaded = {name.split(".")[0] for name in set(sys.modules) - before}
-            assert not loaded & libraries, loaded
             assert not {name.split(".")[0] for name in sys.modules} & blocked
             """
         )

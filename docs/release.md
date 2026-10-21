@@ -359,7 +359,8 @@ The minimum supported independent readers are:
 | R jsonlite | 2.0.0 | Dataset-JSON 1.1, with `bigint_as_char = TRUE` |
 | Python lxml | 6.1.3 | Define-XML 2.1 |
 
-Python package dependencies and R package `Suggests` declare these floors.
+The Python package's `test` extra and R package `Suggests` declare these
+floors.
 The R readers are optional: public Build and Save use the shared native codecs.
 CSV carries text rather than an embedded schema; controls supply an explicit
 text schema and check exact authored CSV bytes. Its empty-field ingestion
@@ -439,8 +440,9 @@ the engine's own GZIP decoding, for Parquet page admission and ODM archives,
 uses zlib-rs as well. zlib-rs is pure Rust under the Zlib license, which the
 license notices now accept.
 
-Python supports CPython 3.12 through 3.15 with the runtime ranges in
-`python/pyproject.toml`. On CPython 3.12 to 3.14, their declared floors are
+Python supports CPython 3.12 through 3.15. The package has no runtime
+dependency, and on CPython 3.12 to 3.14 the declared floors of the `test`
+extra in `python/pyproject.toml` are
 lxml 6.1.3, pandas 2.3.3, Polars 1.35.2, py-yaml12 0.2, PyArrow 23.0.1,
 Pydantic 2.12.4, packaging 25 and PyYAML 6.0.3.
 The Parquet 55.2.0 writer records only type-defined column orders, which

@@ -107,8 +107,8 @@ its native mapping, and the delegating classes and functions), and R's
 `R/yamaa/R/public-bindings.R` (the exported functions, the constructors of the
 result and lazy objects, S3 methods and private accessors) and
 `R/yamaa/NAMESPACE`. The handwritten rest stays beside them:
-`python/src/yamaa/_support.py` holds the Polars table conversion, path
-conversion, lazy-object pickling and the version lookup, and `R/yamaa/R/api.R`
+`python/src/yamaa/_support.py` holds path conversion, lazy-object pickling and
+the version lookup, and `R/yamaa/R/api.R`
 holds the reply and argument conversions, the host-function capabilities, the
 interrupt rethrow and the locked-object helpers. Docstrings come from `doc`;
 R's help pages stay handwritten under `R/yamaa/man/`.
@@ -201,9 +201,8 @@ one native exception, version metadata and the ODM reader. The `python` section
 holds only `module`, `registration` and `exports`, and the generator refuses any
 other key. There is no issue-record declaration: the Rust facade builds the
 twelve-column issues table of #3030 D28 once, and every issues view crosses the
-boundary as a table like any output or report. Python reads it from a
-`Table` as a Polars DataFrame, and the R binding converts it natively into a
-data.frame.
+boundary as a table like any output or report. Python returns it as the
+native `Table`, and the R binding converts it natively into a data.frame.
 `context_object` is the owned tree `spec_resolve` returns, a `dict[str, object]`
 of text, booleans, exact integers, floats, `None`, lists and nested objects.
 `r_reply` describes the existing `{value, error}` list, whose error carries a
@@ -419,9 +418,11 @@ valid if a later call on the build is cancelled.
 ## Arrow C Data/Stream handoff
 
 Use the existing [host handoff](../README.md#arrow-host-handoff) implemented in
-[the shared bridge](../crates/yamaa-adapters/src/arrow_bridge.rs), with PyArrow
->=23.0.1 and Polars >=1.35.2. Tables only leave the engine: Python receives each
-output, issues and report table as a `yamaa.Table` and reads it into Polars,
+[the shared bridge](../crates/yamaa-adapters/src/arrow_bridge.rs). Tables only
+leave the engine: Python returns each output, issues and report table as a
+`yamaa.Table`, whose `to_arrow()`, `to_polars()` and `to_pandas()` read it
+through this stream with PyArrow >=23.0.1, Polars >=1.35.2 or pandas
+>=2.3.3, and whose `to_pylist()` reads it in Rust,
 while the R binding copies each table into plain R vectors in Rust, so no Arrow
 stream crosses the R boundary. No host passes a table into the engine. The
 generated declarations must preserve these shapes:
@@ -452,11 +453,12 @@ nulls, slices, empty batches and chunks. Public dates use Date32 days and
 zone-free datetimes whole TimestampSecond values. Requested Python export
 schema conversion is refused. Nonfinite floats become missing under the
 existing engine rule. Buffer sharing covers retained public Arrow
-value/validity buffers. Build materialization, Polars conversion and R
-data-frame conversion can copy. Conversions preserve values or raise an error:
-R raises for an integer beyond 2^53 or text containing NUL, which no plain R
-vector holds exactly. The generator must reuse these adapters rather than
-promise zero copies for those conversions.
+value/validity buffers. Build materialization, `to_pylist()`, the Polars and
+pandas conversions and R data-frame conversion can copy. Conversions preserve
+values or raise an error: `to_pandas()` keeps each Arrow type as a
+`pandas.ArrowDtype`, and R raises for an integer beyond 2^53 or text containing
+NUL, which no plain R vector holds exactly. The generator must reuse these
+adapters rather than promise zero copies for those conversions.
 
 ## Follow-up verification
 
