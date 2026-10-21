@@ -451,14 +451,15 @@ this grammar is not widened to reach them.
 
 <a id="formula-14"></a>
 
-### FORMULA-14. NULL propagates through every operator and function except NULLIF
+### FORMULA-14. A missing operand makes arithmetic and numeric functions missing, except NULLIF's second argument
 
-A `NULL` argument to an operator or function produces a `NULL` result, except
-`NULLIF`, whose argument-level behavior [FORMULA-13](#formula-13) defines. A
-`compute` derivation therefore needs no guarding predicate to survive a
-missing input. A formula that must yield missing rather than fail uses
-`NULLIF`: percentage change against a zero base is
-`100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
+An arithmetic operator or a numeric function with a missing operand yields
+missing, with one exception: `NULLIF(x, y)` yields `x` when only `y` is
+missing ([FORMULA-13](#formula-13)). A derivation therefore needs no guarding
+predicate to survive a missing input, and a formula that must yield missing
+rather than fail uses `NULLIF`: percentage change against a zero base is
+`100 * (VALUE - BASE) / NULLIF(BASE, 0)`. Predicates and their logical
+operators follow [FORMULA-4](#formula-4) instead.
 
 Evidence: `rust/crates/yamaa-core/tests/fixtures/numeric_selection.tsv`, `rust/crates/yamaa-core/tests/fixtures/evaluation.tsv`, `adam-adsl-bmi`.
 
@@ -708,15 +709,15 @@ result type ([EXPR-14](expressions.md#expr-14)).
 
 <a id="formula-24"></a>
 
-### FORMULA-24. A reduction skips missing values, and a group with nothing to reduce yields missing
+### FORMULA-24. Value reducers skip missing values, and a group with no record reduces to missing
 
-Inside a reduction's argument `NULL` propagates, so a record whose operand is
-missing contributes a missing value rather than a zero:
-`SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor. A reduction
-then ignores missing values. A group with no record after `filter` yields
-missing. When every value is missing, `SUM`, `MIN`, `MAX` and `MEAN` yield
-missing, never zero, and `COUNT(x)` yields `0`. An uncollected quantity is
-never reported as a measured zero.
+Inside a reduction's argument a missing operand propagates, so a record whose
+operand is missing contributes a missing value rather than a zero:
+`SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor. `SUM`,
+`COUNT(x)`, `MIN`, `MAX` and `MEAN` then ignore missing values, while `ONLY`
+counts records ([FORMULA-20](#formula-20)). A group with no record after
+`filter` yields missing. When every value is missing, `SUM`, `MIN`, `MAX` and
+`MEAN` yield missing, never zero, and `COUNT(x)` yields `0`.
 
 Evidence: `adam-adex-uncollected`, `rust/crates/yamaa-core/tests/fixtures/reduction.tsv`.
 
@@ -729,9 +730,10 @@ Evidence: `adam-adex-uncollected`, `rust/crates/yamaa-core/tests/fixtures/reduct
 | No record in the group -- `ONLY(x)` | missing |
 | One record whose value is missing -- `ONLY(x)` | missing |
 
-An absent record remains distinguishable from a collected missing value.
-`MEAN` returns missing before its division when no non-missing value remains,
-so an all-missing group does not fail with division by zero. Arithmetic over
+An absent record remains distinguishable from a collected missing value, and
+an uncollected quantity is never reported as a measured zero. `MEAN` returns
+missing before its division when no non-missing value remains, so an
+all-missing group does not fail with division by zero. Arithmetic over
 reduction results follows [FORMULA-14](#formula-14): a missing reduction
 propagates through an operator, and a formula that must yield missing rather
 than fail says so with `NULLIF`.
