@@ -41,8 +41,10 @@ lto = "thin"
 
 # The Python wheels and the command-line binaries build with this profile:
 # release, without the symbol table. The R package builds with release and
-# keeps its symbols, as CRAN's Repository Policy asks;
-# tools/packaging/check_cargo_lock.py checks that the R build strips nothing.
+# strips nothing itself, as CRAN's Repository Policy asks and
+# tools/packaging/check_cargo_lock.py checks. Its shared object keeps its
+# symbols on Linux and macOS, and on Windows R's own toolchain links every
+# package DLL with `-s` (#3030 D140).
 # The R bundle's manifest leaves out this table with this comment
 # (tools/staging/engine_bundle.py), so keep them one block.
 [profile.dist]
