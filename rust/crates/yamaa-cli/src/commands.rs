@@ -35,7 +35,7 @@ use std::ffi::OsStr;
 
 use yamaa::{
     Action, CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Failure, Host,
-    HostLanguage, LintFinding, ProjectRun, Status, Summary,
+    LintFinding, ProjectRun, Status, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -222,17 +222,13 @@ fn not_implemented(what: &str) -> Execution {
     Execution::NotImplemented(what.to_owned())
 }
 
-/// The command line's engine: the local file resolver and no project
-/// functions, so a build that calls one is refused before it reads data and
-/// every other build runs as a host runs it (#3030 section 2.3, D110).
-///
-/// The facade asks every engine for a host language, which picks the
-/// environment a project links for its functions. The command line claims
-/// none (section 2.10), so the facade's default here is a stopgap until the
-/// facade offers a neutral engine (#3324).
+/// The command line's engine: the local file resolver, and no host language
+/// (#3030 section 2.10, D123). It reads no project's `environments.<host>`
+/// entry, so it verifies no lock and activates nothing: a build that calls a
+/// project function is refused before it reads data, and every other build
+/// runs as a host runs it (section 2.3, D110).
 fn engine() -> Engine {
-    Engine::new(EngineOptions::new(
-        HostLanguage::default(),
+    Engine::new(EngineOptions::neutral(
         Host::Cli.as_str().to_owned(),
         String::new(),
     ))
