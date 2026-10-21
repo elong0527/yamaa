@@ -4,5 +4,5 @@ spec_paths:
   - columns.TRTDURM.derivation.diff.closed
 rule: TIME-5
 context:
-  value: inclusive
-  permitted: [exclusive]
+  value: both
+  permitted: [right]
