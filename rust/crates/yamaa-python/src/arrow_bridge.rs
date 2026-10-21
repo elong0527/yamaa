@@ -1,20 +1,73 @@
-//! Python Arrow PyCapsule protocol; no IPC serialization at the host boundary.
-use pyo3::{prelude::*, types::PyCapsule};
-use yamaa::Table;
+//! `yamaa.Table`, the table that every Python call returns (#3030 D11, D43).
+//!
+//! It holds the facade's table and shares its immutable Arrow buffers through
+//! the Arrow PyCapsule stream interface, never through IPC serialization. Its
+//! counts, names and printed preview come from the facade, `to_pylist()`
+//! builds Python values here without importing anything, and `to_arrow()`,
+//! `to_polars()` and `to_pandas()` import their library only when called.
+use pyo3::{
+    exceptions::{PyModuleNotFoundError, PyNotImplementedError, PyTypeError, PyValueError},
+    prelude::*,
+    types::{PyCapsule, PyDate, PyDateTime, PyDict, PyList, PyModule, PyString},
+    IntoPyObjectExt,
+};
+use yamaa::{
+    Array, DataType, Date32Array, Float64Array, Int64Array, LargeStringArray, ListArray,
+    StringArray, StringViewArray, TimeUnit, TimestampSecondArray,
+};
 
-#[pyclass(frozen, module = "yamaa._native", name = "_ArrowTable")]
-pub struct ArrowTable {
-    table: Table,
+/// A table that yamaa returned: immutable columns of str, int, float, date,
+/// datetime or list values, any of which may be missing.
+///
+/// `len()` and `num_rows` count its rows, `column_names` names its columns,
+/// and `repr()` prints a preview. `to_pylist()` gives its rows as Python
+/// values and needs no other package. `to_arrow()`, `to_polars()` and
+/// `to_pandas()` convert it with PyArrow, Polars or pandas, which they import
+/// only when called, and any library that reads the Arrow PyCapsule stream
+/// interface reads it directly.
+#[pyclass(frozen, module = "yamaa", name = "Table")]
+pub struct Table {
+    table: yamaa::Table,
 }
-impl From<&Table> for ArrowTable {
-    fn from(table: &Table) -> Self {
+
+impl From<&yamaa::Table> for Table {
+    fn from(table: &yamaa::Table) -> Self {
         Self {
             table: table.clone(),
         }
     }
 }
+
 #[pymethods]
-impl ArrowTable {
+impl Table {
+    /// The number of rows.
+    #[getter]
+    fn num_rows(&self) -> usize {
+        self.table.rows()
+    }
+
+    /// The column names, in order.
+    #[getter]
+    fn column_names(&self) -> Vec<String> {
+        self.table
+            .columns()
+            .iter()
+            .map(|field| field.name().clone())
+            .collect()
+    }
+
+    /// The number of rows.
+    fn __len__(&self) -> usize {
+        self.table.rows()
+    }
+
+    /// The table's preview, the same text in every host (#3030 D167).
+    fn __repr__(&self) -> String {
+        self.table.preview()
+    }
+
+    /// A fresh Arrow C stream over the held buffers, as a PyCapsule named
+    /// `arrow_array_stream`. A requested schema is refused.
     #[pyo3(signature=(requested_schema=None))]
     // `PyCapsule::new` builds on the PyO3 0.27.2 floor; 0.29 renamed it
     // `new_with_value`, with the same pointer and drop behaviour.
@@ -25,7 +78,7 @@ impl ArrowTable {
         requested_schema: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyCapsule>> {
         if requested_schema.is_some_and(|schema| !schema.is_none()) {
-            return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            return Err(PyNotImplementedError::new_err(
                 "Arrow schema conversion is not supported; import the preserved schema first",
             ));
         }
@@ -34,5 +87,168 @@ impl ArrowTable {
         // release; dropping the consumed capsule then only frees the shell.
         // Unconsumed capsules release their reader and buffers on destruction.
         PyCapsule::new(py, self.table.stream(), Some(c"arrow_array_stream".into()))
+    }
+
+    /// The rows as a list of dicts, each keyed by the column names in order.
+    /// A value is a str, int, float, datetime.date, naive datetime.datetime
+    /// or list, and a missing value is None. Imports nothing.
+    fn to_pylist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let names = self
+            .table
+            .columns()
+            .iter()
+            .map(|field| PyString::intern(py, field.name()))
+            .collect::<Vec<_>>();
+        let rows = PyList::empty(py);
+        for batch in self.table.batches() {
+            let columns = batch
+                .columns()
+                .iter()
+                .map(|array| values(py, array.as_ref()))
+                .collect::<PyResult<Vec<_>>>()?;
+            for row in 0..batch.num_rows() {
+                let record = PyDict::new(py);
+                for (name, column) in names.iter().zip(&columns) {
+                    record.set_item(name, &column[row])?;
+                }
+                rows.append(record)?;
+            }
+        }
+        Ok(rows)
+    }
+
+    /// The table as a `pyarrow.Table`, with the columns' Arrow types.
+    fn to_arrow<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        import(slf.py(), "pyarrow", "to_arrow()")?.call_method1("table", (slf,))
+    }
+
+    /// The table as a `polars.DataFrame`.
+    fn to_polars<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        import(slf.py(), "polars", "to_polars()")?.call_method1("DataFrame", (slf,))
+    }
+
+    /// The table as a `pandas.DataFrame` whose columns keep their Arrow types
+    /// as `pandas.ArrowDtype`, so that every value, and every missing value,
+    /// stays as it is. Needs pandas and PyArrow.
+    fn to_pandas<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let pandas = import(py, "pandas", "to_pandas()")?;
+        let pyarrow = import(py, "pyarrow", "to_pandas()")?;
+        let options = PyDict::new(py);
+        options.set_item("types_mapper", pandas.getattr("ArrowDtype")?)?;
+        pyarrow
+            .call_method1("table", (slf,))?
+            .call_method("to_pandas", (), Some(&options))
+    }
+}
+
+/// Import `package` for `method`. A package that is not installed raises a
+/// `ModuleNotFoundError` naming it, chained to the import's own; an installed
+/// package that fails to import raises its own error.
+fn import<'py>(py: Python<'py>, package: &str, method: &str) -> PyResult<Bound<'py, PyModule>> {
+    let error = match PyModule::import(py, package) {
+        Ok(module) => return Ok(module),
+        Err(error) => error,
+    };
+    let missing = error.is_instance_of::<PyModuleNotFoundError>(py)
+        && error
+            .value(py)
+            .getattr("name")
+            .and_then(|name| name.extract::<String>())
+            .is_ok_and(|name| name == package);
+    if !missing {
+        return Err(error);
+    }
+    let options = PyDict::new(py);
+    options.set_item("name", package)?;
+    let raised = PyErr::from_value(py.get_type::<PyModuleNotFoundError>().call(
+        (format!("{method} needs {package}, which is not installed"),),
+        Some(&options),
+    )?);
+    raised.set_cause(py, Some(error));
+    Err(raised)
+}
+
+/// The Python values of one Arrow column, in row order; None for a missing
+/// value. A column of a type that no engine table has is refused.
+fn values<'py>(py: Python<'py>, array: &dyn Array) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    fn cast<T: 'static>(array: &dyn Array) -> PyResult<&T> {
+        array.as_any().downcast_ref::<T>().ok_or_else(|| {
+            PyTypeError::new_err(format!(
+                "Arrow array does not match its {} field",
+                array.data_type()
+            ))
+        })
+    }
+    fn each<'py, T>(
+        py: Python<'py>,
+        values: impl Iterator<Item = Option<T>>,
+        convert: impl Fn(T) -> PyResult<Bound<'py, PyAny>>,
+    ) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        values
+            .map(|value| match value {
+                Some(value) => convert(value),
+                None => Ok(py.None().into_bound(py)),
+            })
+            .collect()
+    }
+    let text = |value: &str| Ok(PyString::new(py, value).into_any());
+    match array.data_type() {
+        DataType::Utf8 => each(py, cast::<StringArray>(array)?.iter(), text),
+        DataType::LargeUtf8 => each(py, cast::<LargeStringArray>(array)?.iter(), text),
+        DataType::Utf8View => each(py, cast::<StringViewArray>(array)?.iter(), text),
+        DataType::Int64 => each(py, cast::<Int64Array>(array)?.iter(), |value| {
+            value.into_bound_py_any(py)
+        }),
+        DataType::Float64 => each(py, cast::<Float64Array>(array)?.iter(), |value| {
+            value.into_bound_py_any(py)
+        }),
+        DataType::Date32 => each(py, cast::<Date32Array>(array)?.iter(), |days| {
+            let date = yamaa::Date::from_epoch_days(i64::from(days)).ok_or_else(|| {
+                PyValueError::new_err(format!(
+                    "the date {days} days after 1970-01-01 is outside the years 1 to 9999"
+                ))
+            })?;
+            let (year, month, day) = date.fields();
+            Ok(PyDate::new(py, i32::from(year), month, day)?.into_any())
+        }),
+        DataType::Timestamp(TimeUnit::Second, None) => {
+            each(py, cast::<TimestampSecondArray>(array)?.iter(), |seconds| {
+                let moment = yamaa::DateTime::from_epoch_seconds(seconds).ok_or_else(|| {
+                    PyValueError::new_err(format!(
+                        "the datetime {seconds} seconds after 1970-01-01T00:00:00 is \
+                         outside the years 1 to 9999"
+                    ))
+                })?;
+                let (year, month, day, hour, minute, second) = moment.fields();
+                Ok(PyDateTime::new(
+                    py,
+                    i32::from(year),
+                    month,
+                    day,
+                    hour,
+                    minute,
+                    second,
+                    0,
+                    None,
+                )?
+                .into_any())
+            })
+        }
+        DataType::List(_) => {
+            let lists = cast::<ListArray>(array)?;
+            (0..lists.len())
+                .map(|row| {
+                    if lists.is_null(row) {
+                        Ok(py.None().into_bound(py))
+                    } else {
+                        Ok(PyList::new(py, values(py, lists.value(row).as_ref())?)?.into_any())
+                    }
+                })
+                .collect()
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "unsupported Arrow column type {other}"
+        ))),
     }
 }

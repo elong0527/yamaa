@@ -3,14 +3,31 @@
 //! each row construction proves about the rows an entry selects. Shared by the
 //! domain build, which reads the typed tree, and by composition, which still
 //! reads each specification's document; no study, host or data access.
-use crate::ast::{self, CodelistType, ExprId, ExprKind, Literal};
+use crate::ast::{self, CodelistType, Comparator, ExprId, ExprKind, Literal};
 use crate::project_terminology::Catalogue;
 use crate::schema::{Document, DocumentNode as N};
 use crate::value::Value;
 use std::collections::BTreeSet;
 
-/// One where clause as written: each column and the values it admits.
-pub(crate) type Clause<'a> = Vec<(&'a str, Vec<&'a str>)>;
+/// One where column as written: its name, its comparator and the values it
+/// lists (SUB-12).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Term<'a> {
+    pub(crate) column: &'a str,
+    pub(crate) comparator: Comparator,
+    pub(crate) values: Vec<&'a str>,
+}
+impl Term<'_> {
+    /// Whether the term selects a row whose column holds `value`, `None`
+    /// when it is missing: one of the values, or under `NE` and `NOTIN` none
+    /// of them, a missing value included.
+    pub(crate) fn selects(&self, value: Option<&str>) -> bool {
+        value.is_some_and(|value| self.values.contains(&value)) != self.comparator.excludes()
+    }
+}
+
+/// One where clause as written: each column, in written order.
+pub(crate) type Clause<'a> = Vec<Term<'a>>;
 
 /// One value-level entry as written: its identifier, its where clause in
 /// written order and its mapping node.
@@ -55,21 +72,27 @@ pub(crate) fn entries(d: &Document, column: usize) -> Vec<Entry<'_>> {
                 .iter()
                 .map(|&(column, values)| {
                     // A resolved 1.0 specification holds a where condition in
-                    // its long form, `{values: [...]}`; a comparator is refused
-                    // before any composition reads it (#3030 D76, P1-14).
-                    let values = match &d.nodes()[values] {
-                        N::Mapping(_) if present(d, values, "comparator").is_none() => {
-                            present(d, values, "values").unwrap_or(values)
-                        }
-                        _ => values,
+                    // its long form, `{values: [...]}`, with an `NE` or
+                    // `NOTIN` comparator when one is written (P-VLM-1).
+                    let (comparator, values) = match &d.nodes()[values] {
+                        N::Mapping(_) => (
+                            match present(d, values, "comparator").and_then(|id| text(d, id)) {
+                                Some("NE") => Comparator::Ne,
+                                Some(_) => Comparator::NotIn,
+                                None => Comparator::In,
+                            },
+                            present(d, values, "values").unwrap_or(values),
+                        ),
+                        _ => (Comparator::In, values),
                     };
-                    Some((
-                        text(d, column)?,
-                        items(d, Some(values))
+                    Some(Term {
+                        column: text(d, column)?,
+                        comparator,
+                        values: items(d, Some(values))
                             .iter()
                             .map(|&value| text(d, value))
                             .collect::<Option<Vec<_>>>()?,
-                    ))
+                    })
                 })
                 .collect::<Option<Vec<_>>>()?;
             Some(Entry { id, node, clause })
@@ -97,6 +120,9 @@ pub(crate) enum WhereFault<'a> {
     NotText,
     /// A clause column lists no value.
     NoValues,
+    /// A clause column lists a number of values its comparator does not
+    /// take: `NE` takes one and `NOTIN` two or more.
+    ValueCount(Comparator),
     /// A clause column lists one value twice.
     DuplicateValue,
     /// A clause column lists values its codelists do not admit: those
@@ -112,6 +138,7 @@ impl<'a> WhereFault<'a> {
             Self::NotOutput => "not_output",
             Self::NotText => "not_str",
             Self::NoValues => "no_values",
+            Self::ValueCount(_) => "value_count",
             Self::DuplicateValue => "duplicate_value",
             Self::NotInCodelist(_) => "not_in_codelist",
         }
@@ -121,6 +148,14 @@ impl<'a> WhereFault<'a> {
     pub(crate) fn values(&self) -> Option<&[&'a str]> {
         match self {
             Self::NotInCodelist(values) => Some(values),
+            _ => None,
+        }
+    }
+    /// The written comparator whose value count the fault refuses, which only
+    /// `value_count` reports.
+    pub(crate) fn comparator(&self) -> Option<&'static str> {
+        match self {
+            Self::ValueCount(comparator) => comparator.written(),
             _ => None,
         }
     }
@@ -207,7 +242,12 @@ where
                 fault: WhereFault::NoColumns,
             });
         }
-        for (name, values) in clause {
+        for Term {
+            column: name,
+            comparator,
+            values,
+        } in clause
+        {
             let mut codelist = None;
             let fault = if *name == column {
                 Some(WhereFault::Itself)
@@ -223,6 +263,9 @@ where
                 }
             }
             .or_else(|| values.is_empty().then_some(WhereFault::NoValues))
+            .or_else(|| {
+                (!comparator.takes(values.len())).then_some(WhereFault::ValueCount(*comparator))
+            })
             .or_else(|| {
                 values
                     .iter()
@@ -262,18 +305,36 @@ where
 /// one clause's columns are all columns of the other, and every column they
 /// share admits a common value. Two clauses over columns neither of which
 /// contains the other are left to the build, which fails a row both select.
-pub(crate) fn overlap(left: &[(&str, Vec<&str>)], right: &[(&str, Vec<&str>)]) -> bool {
-    fn columns<'a>(clause: &[(&'a str, Vec<&'a str>)]) -> BTreeSet<&'a str> {
-        clause.iter().map(|(name, _)| *name).collect()
+pub(crate) fn overlap(left: &[Term<'_>], right: &[Term<'_>]) -> bool {
+    fn columns<'a>(clause: &[Term<'a>]) -> BTreeSet<&'a str> {
+        clause.iter().map(|term| term.column).collect()
     }
     let (a, b) = (columns(left), columns(right));
     (a.is_subset(&b) || b.is_subset(&a))
         && left.iter().all(
-            |(name, values)| match right.iter().find(|(other, _)| other == name) {
-                Some((_, others)) => values.iter().any(|value| others.contains(value)),
+            |term| match right.iter().find(|other| other.column == term.column) {
+                Some(other) => share(term, other),
                 None => true,
             },
         )
+}
+
+/// Whether two terms over one column admit a common value: two lists that
+/// meet, a list holding a value an exclusion does not list, and any two
+/// exclusions, which both select the missing value (SUB-12).
+fn share(left: &Term<'_>, right: &Term<'_>) -> bool {
+    match (left.comparator.excludes(), right.comparator.excludes()) {
+        (false, false) => left.values.iter().any(|value| right.values.contains(value)),
+        (false, true) => left
+            .values
+            .iter()
+            .any(|value| !right.values.contains(value)),
+        (true, false) => right
+            .values
+            .iter()
+            .any(|value| !left.values.contains(value)),
+        (true, true) => true,
+    }
 }
 
 /// What one row construction proves about the rows an entry selects.
@@ -294,15 +355,14 @@ pub(crate) fn clause(entry: &ast::ValueLevel) -> Clause<'_> {
     entry
         .conditions
         .iter()
-        .map(|condition| {
-            (
-                condition.column.name.as_str(),
-                condition
-                    .values
-                    .iter()
-                    .map(|value| value.text.as_str())
-                    .collect(),
-            )
+        .map(|condition| Term {
+            column: condition.column.name.as_str(),
+            comparator: condition.comparator,
+            values: condition
+                .values
+                .iter()
+                .map(|value| value.text.as_str())
+                .collect(),
         })
         .collect()
 }
@@ -340,18 +400,19 @@ fn derivation_of(construction: Option<&ast::Template>, column: &ast::Column) -> 
 }
 
 /// What a construction proves about the rows a where clause selects.
-fn reach_of(
-    spec: &ast::Spec,
-    construction: Option<&ast::Template>,
-    clause: &[(&str, Vec<&str>)],
-) -> Reach {
+fn reach_of(spec: &ast::Spec, construction: Option<&ast::Template>, clause: &[Term<'_>]) -> Reach {
     let mut every = true;
-    for (name, values) in clause {
-        let Some(column) = spec.columns.iter().find(|column| column.name.name == *name) else {
+    for term in clause {
+        let Some(column) = spec
+            .columns
+            .iter()
+            .find(|column| column.name.name == term.column)
+        else {
             every = false;
             continue;
         };
-        // A bare `literal` gives every row the same value.
+        // A bare `literal` gives every row the same value, which an `NE` or
+        // `NOTIN` term selects when it is missing.
         let literal =
             derivation_of(construction, column).and_then(|expr| match &spec.expr(expr).kind {
                 ExprKind::Literal(Literal::Text(value)) => Some(Some(value.as_str())),
@@ -359,7 +420,7 @@ fn reach_of(
                 _ => None,
             });
         match literal {
-            Some(Some(value)) if values.contains(&value) => {}
+            Some(value) if term.selects(value) => {}
             Some(_) => return Reach::Never,
             None => every = false,
         }
@@ -414,8 +475,88 @@ mod tests {
     fn clause<'a>(terms: &[(&'a str, &[&'a str])]) -> Clause<'a> {
         terms
             .iter()
-            .map(|(name, values)| (*name, values.to_vec()))
+            .map(|(name, values)| Term {
+                column: name,
+                comparator: Comparator::In,
+                values: values.to_vec(),
+            })
             .collect()
+    }
+
+    /// One term over `column` under `comparator`.
+    fn compared<'a>(column: &'a str, comparator: Comparator, values: &[&'a str]) -> Clause<'a> {
+        vec![Term {
+            column,
+            comparator,
+            values: values.to_vec(),
+        }]
+    }
+
+    #[test]
+    fn an_exclusion_shares_the_values_it_does_not_list_and_the_missing_value() {
+        let average = clause(&[("DTYPE", &["AVERAGE"])]);
+        let observed = compared("DTYPE", Comparator::Ne, &["AVERAGE"]);
+        // `NE [X]` and `[X]` on one column share no value.
+        assert!(!overlap(&observed, &average));
+        assert!(!overlap(&average, &observed));
+        // A list holding another value meets the exclusion.
+        let both = clause(&[("DTYPE", &["AVERAGE", "LOCF"])]);
+        assert!(overlap(&observed, &both));
+        assert!(overlap(&both, &observed));
+        // Two exclusions on one column always share the missing value.
+        let not_locf = compared("DTYPE", Comparator::Ne, &["LOCF"]);
+        assert!(overlap(&observed, &not_locf));
+        let neither = compared("DTYPE", Comparator::NotIn, &["AVERAGE", "LOCF"]);
+        assert!(overlap(&neither, &observed));
+        // NOTIN [X, Y] and [X, Y] share no value.
+        assert!(!overlap(&neither, &both));
+    }
+
+    #[test]
+    fn ne_takes_one_value_and_notin_two_or_more() {
+        let declared = |_: &str| {
+            Some(Declared {
+                output: true,
+                text: true,
+                codelist: None,
+            })
+        };
+        let entries = [
+            ("ONE", compared("DTYPE", Comparator::Ne, &["AVERAGE"])),
+            ("TWO", compared("PARAMCD", Comparator::NotIn, &["X", "Y"])),
+            ("NE2", compared("AVISIT", Comparator::Ne, &["V1", "V2"])),
+            ("NOTIN1", compared("PARCAT1", Comparator::NotIn, &["CHEM"])),
+            ("EMPTY", compared("PARCAT2", Comparator::Ne, &[])),
+        ];
+        let fault = |id, column, fault| Finding::Where {
+            id,
+            column: Some(column),
+            fault,
+        };
+        assert_eq!(
+            admit(
+                entries.iter().map(|(id, clause)| (*id, clause)),
+                "AVAL",
+                declared
+            ),
+            [
+                fault("NE2", "AVISIT", WhereFault::ValueCount(Comparator::Ne)),
+                fault(
+                    "NOTIN1",
+                    "PARCAT1",
+                    WhereFault::ValueCount(Comparator::NotIn)
+                ),
+                fault("EMPTY", "PARCAT2", WhereFault::NoValues),
+            ]
+        );
+        assert_eq!(
+            WhereFault::ValueCount(Comparator::Ne).comparator(),
+            Some("NE")
+        );
+        assert_eq!(
+            WhereFault::ValueCount(Comparator::Ne).reason(),
+            "value_count"
+        );
     }
 
     #[test]

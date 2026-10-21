@@ -674,7 +674,7 @@ fn a_scoped_check_waits_for_a_where_column_the_column_phase_completes() {
     use crate::dataset::{RowScope, WhereClause};
     let scope = || RowScope {
         clauses: vec![WhereClause {
-            terms: vec![(2, vec!["ONSET".into()])],
+            terms: vec![crate::dataset::WhereTerm::listed(2, vec!["ONSET".into()])],
         }],
         include: true,
     };

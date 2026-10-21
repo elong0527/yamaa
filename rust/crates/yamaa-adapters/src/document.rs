@@ -12,10 +12,9 @@
 //!
 //! The engine reads language version 1.0 (#3030 D76, P1-9): every public call
 //! decodes the files it reads here, and a specification that declares the
-//! header is prepared by [`VersionedDocument::prepare_specification`]. A 1.0
-//! feature the engine does not build yet is refused as `unsupported_operation`
-//! before binding or rendering. Rewrite 3 routes every document read through
-//! this decoder and retires the decode ports each read site has today.
+//! header is prepared by [`VersionedDocument::prepare_specification`].
+//! Rewrite 3 routes every document read through this decoder and retires the
+//! decode ports each read site has today.
 use crate::shipped_schema;
 use crate::specification_source::{
     CapturedFindings, CapturedParent, CapturedSchema, Error, InheritancePort, Source, SourceFailure,
@@ -33,7 +32,6 @@ use yamaa_core::schema::{
     Document, LayerNodeOrigin, LayerProvenance, NormalizationError, NormalizedDocument,
     SchemaDiagnostic, SchemaSource,
 };
-use yamaa_core::specification::UnsupportedFeature;
 
 /// The 1.0 closure of each file type.
 #[derive(Clone, Debug)]
@@ -387,10 +385,6 @@ pub enum SpecificationError<E> {
     /// The producing specification a copy entry copies from could not be
     /// read (SPEC-9).
     Producer(ProducerFailure<E>),
-    /// The specification writes a 1.0 feature the engine does not build yet,
-    /// refused as `unsupported_operation` (COLUMN-15, #3030 D76), on the
-    /// public route on the lowered specification (`front_end::checks::unbuilt`).
-    Unsupported(Vec<UnsupportedFeature>),
 }
 
 /// Why the producing specification a copy entry copies from was not read

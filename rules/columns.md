@@ -18,9 +18,8 @@ Row construction evaluates the `rows` entries and may change the row count.
 
 Evidence: `schema-lifecycle`.
 
-Derivation has two phases: row construction under
-[Row construction](rows.md), then column derivation under
-[COLUMN-2](#column-2).
+Row construction under [Row construction](rows.md) comes before column
+derivation under [COLUMN-2](#column-2).
 
 <a id="column-2"></a>
 
@@ -90,10 +89,10 @@ an implicit join, read the applicable output keys.
 
 <a id="column-4"></a>
 
-### COLUMN-4. Row derivations follow their template's dependency graph and never read a column-phase value
+### COLUMN-4. Row derivations follow their template's dependency graph and never read a value only column derivation produces
 
 For each row template, row derivations evaluate using a dependency graph. A
-row derivation cannot depend on a value produced only during the column phase.
+row derivation cannot depend on a value produced only during column derivation.
 Every unqualified identifier in a grouped `row.filter` must resolve to a column
 derived by that row template. The grouped `filter` is not a derivation: it adds
 no graph edge between columns and runs only after all columns have completed.
@@ -101,7 +100,7 @@ no graph edge between columns and runs only after all columns have completed.
 Fails: `phase_boundary`.
 Evidence: `negative-row-phase-flag`, `rust/crates/yamaa-core/tests/project_specification.rs::row_reads_of_nonlocal_columns_return_complete_phase_findings_before_lowering`, `rust/crates/yamaa-adapters/tests/check_row_phase_boundaries.rs::an_aggregate_in_a_case_result_is_not_row_local_in_either_spelling`.
 
-A row dependency on a later-phase value fails as `phase_boundary`.
+A row dependency on such a value fails as `phase_boundary`.
 
 <a id="column-5"></a>
 
@@ -466,7 +465,7 @@ built, not the output rows. The run builds them at most once, when the
 intermediate is first read, and again: for each current record when a
 derivation reads the current input record; after each row template for a
 `SELF` intermediate, whose completed rows grow
-([LOOKUP-7](lookup.md#lookup-7)); for the column phase when the
+([LOOKUP-7](lookup.md#lookup-7)); for column derivation when the
 intermediate's key, or the key of an intermediate its current-record operands
 read, depends on a window over the completed rows; and inside each build of
 another intermediate whose derivation reads it

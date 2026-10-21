@@ -1,8 +1,8 @@
 //! Public calls read language version 1.0 (SCHEMA-2, #3030 D76): a file that
 //! declares `yamaa: "1.0"` passes `check`, `run`, `resolve`, `submission` and
 //! `lint` beside the 0.5 files, which keep their meaning. A newer version
-//! fails as `unsupported_language_version`, and a 1.0 feature the engine does
-//! not build yet as `unsupported_operation`, naming it.
+//! fails as `unsupported_language_version`. Every 1.0 form is built, so none
+//! is refused as `unsupported_operation` any longer (D76).
 #![cfg(feature = "yaml")]
 
 use std::path::PathBuf;
@@ -245,61 +245,6 @@ fn absent_answers_a_variable_the_input_does_not_hold_only_in_0_5() {
     assert_eq!(rule.as_deref(), Some("NAME-3"));
     assert_eq!(paths, &["columns.V.derivation.source"]);
     assert_eq!(context["identifier"], Value::String("RAW.UNKNOWN".into()));
-}
-
-/// The `unsupported_operation` refusals of a check of `spec`, with `project`.
-fn refusals(study: &Study, spec: &str, project: Option<&str>) -> Vec<(String, Vec<String>)> {
-    let project = project.map(|project| study.path(project));
-    rows(
-        &engine()
-            .spec_check(
-                &study.path(spec),
-                project.as_deref(),
-                &CancellationToken::new(),
-            )
-            .unwrap()
-            .issues(),
-    )
-    .into_iter()
-    .map(|(condition, rule, paths, context)| {
-        assert_eq!(
-            condition, "unsupported_operation",
-            "{spec}: {paths:?} {context:?}"
-        );
-        assert_eq!(rule, None);
-        let Value::String(operation) = &context["operation"] else {
-            panic!("an operation: {context:?}")
-        };
-        (operation.clone(), paths)
-    })
-    .collect()
-}
-
-fn refusal(operation: &str, path: &str) -> (String, Vec<String>) {
-    (operation.into(), vec![path.into()])
-}
-
-#[test]
-fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
-    let study = Study::new();
-    let submission = "\n    submission:\n      core: Req\n      length: 8\n      origins:\n        - {type: Assigned, source: Sponsor}\n";
-    let spec = |columns: &str| {
-        format!("yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\noutput: {{path: dm.csv, columns: [USUBJID]}}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID{columns}")
-    };
-    // A value-level comparator (P1-14).
-    study.write(
-        "spec.yaml",
-        &spec(&format!(
-            "{submission}      value_level:\n        - {{id: OTHER, where: {{USUBJID: {{comparator: NE, values: [P1]}}}}}}\n"
-        )),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal(
-            "value_level_comparator",
-            "columns.USUBJID.submission.value_level.OTHER.where.USUBJID.comparator"
-        )]
-    );
 }
 
 /// A 1.0 project whose `sdtm` section composes one dataset, published as
@@ -614,6 +559,144 @@ fn not_available_is_an_origin_of_send_alone() {
         &unavailable.replace("model: SDTM", "model: SEND"),
     );
     assert_eq!(check("dm.yaml"), []);
+}
+
+/// SUB-12 (D66, P-VLM-1): a value-level `NE` or `NOTIN` selects the rows
+/// whose where column holds none of its values, a missing value included,
+/// and Define-XML writes it as the `RangeCheck` comparator (DEFINE-27).
+#[test]
+fn a_value_level_entry_selects_the_rows_that_hold_none_of_its_values() {
+    let study = Study::new();
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nstudy: {id: S01, name: S01, description: Example study, protocol_name: S01}\nsdtm:\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [xx.yaml]\n  define: define.xml\n",
+    );
+    let spec = |entries: &str| {
+        format!(
+            "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: XX\nkeys: [USUBJID]\ninput: {{RAW: raw.csv}}\noutput: {{path: xx.csv, columns: [USUBJID, KIND, VALUE]}}\nsubmission: {{label: Example, class: FINDINGS, structure: One record per subject, repeating: false}}\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Subject\n    derivation: RAW.USUBJID\n    submission: {{core: Req, role: Identifier, length: 2, origins: [{{type: Assigned, source: Sponsor}}]}}\n  - name: KIND\n    type: str\n    label: Kind\n    derivation: RAW.KIND\n    submission: {{core: Perm, role: Record Qualifier, length: 1, origins: [{{type: Assigned, source: Sponsor}}]}}\n  - name: VALUE\n    type: str\n    label: Value\n    derivation: RAW.VALUE\n    submission:\n      core: Perm\n      role: Result Qualifier\n      length: 1\n      origins: [{{type: Assigned, source: Sponsor}}]\n      value_level:\n{entries}"
+        )
+    };
+    let entries = |other: &str, listed: &str| {
+        format!(
+            "        - {{id: OTHER, where: {{KIND: {other}}}, mandatory: true}}\n        - {{id: LISTED, where: {{KIND: {listed}}}}}\n"
+        )
+    };
+    let engine = engine();
+    let token = CancellationToken::new();
+    let check = || {
+        rows(
+            &engine
+                .spec_check(&study.path("xx.yaml"), None, &token)
+                .unwrap()
+                .issues(),
+        )
+    };
+    // `NE [X]` and `[X]` on one column share no value, so they do not overlap.
+    study.write(
+        "xx.yaml",
+        &spec(&entries("{comparator: NE, values: [X]}", "[X]")),
+    );
+    assert_eq!(check(), []);
+    // The NE entry selects the row whose kind is missing, and requires its
+    // value there.
+    study.write("raw.csv", "USUBJID,KIND,VALUE\nP1,X,A\nP2,,B\nP3,Y,C\n");
+    let mut run = engine
+        .spec_run(&study.path("xx.yaml"), None, &token)
+        .unwrap();
+    assert_eq!(rows(&run.issues()), []);
+    run.save().unwrap();
+    study.write("raw.csv", "USUBJID,KIND,VALUE\nP1,X,A\nP2,,\nP3,Y,C\n");
+    let issues = rows(
+        &engine
+            .spec_run(&study.path("xx.yaml"), None, &token)
+            .unwrap()
+            .issues(),
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|(condition, rule, _, _)| condition == "not_missing_failed"
+                && rule.as_deref() == Some("SUB-11")),
+        "{issues:?}"
+    );
+    // The document writes each comparator.
+    let mut submission = engine
+        .project_submission(
+            &study.path("project.yaml"),
+            Some("sdtm"),
+            Some("2026-09-11T00:00:00"),
+            "0.4.0",
+            &token,
+        )
+        .unwrap();
+    assert_eq!(rows(&submission.issues()), []);
+    submission.save().unwrap();
+    let define = String::from_utf8(study.read("define.xml")).unwrap();
+    for comparator in ["NE", "EQ"] {
+        assert!(
+            define.contains(&format!(
+                "<RangeCheck Comparator=\"{comparator}\" SoftHard=\"Soft\" def:ItemOID=\"IT.XX.KIND\">"
+            )),
+            "{define}"
+        );
+    }
+    // NOTIN takes two or more values and NE one.
+    for (other, comparator) in [
+        ("{comparator: NOTIN, values: [X]}", "NOTIN"),
+        ("{comparator: NE, values: [X, Y]}", "NE"),
+    ] {
+        study.write("xx.yaml", &spec(&entries(other, "[Z]")));
+        let issues = check();
+        let [(condition, rule, paths, context)] = issues.as_slice() else {
+            panic!("one issue: {issues:?}")
+        };
+        assert_eq!(condition, "value_level_where_invalid");
+        assert_eq!(rule.as_deref(), Some("SUB-12"));
+        assert_eq!(
+            paths,
+            &["columns.VALUE.submission.value_level.OTHER.where.KIND"]
+        );
+        assert_eq!(context["reason"], Value::String("value_count".into()));
+        assert_eq!(context["comparator"], Value::String(comparator.into()));
+    }
+    // NOTIN [X, Y] and [X] share no value; two exclusions on one column
+    // always share the missing value.
+    study.write(
+        "xx.yaml",
+        &spec(&entries("{comparator: NOTIN, values: [X, Y]}", "[X]")),
+    );
+    assert_eq!(check(), []);
+    study.write(
+        "xx.yaml",
+        &spec(&entries(
+            "{comparator: NE, values: [X]}",
+            "{comparator: NE, values: [Y]}",
+        )),
+    );
+    let issues = check();
+    let [(condition, rule, _, context)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "value_level_overlap");
+    assert_eq!(rule.as_deref(), Some("SUB-12"));
+    assert_eq!(
+        context["entries"],
+        Value::Array(vec![
+            Value::String("OTHER".into()),
+            Value::String("LISTED".into())
+        ])
+    );
+    // A comparison class without a comparator restates the list (SCHEMA-15).
+    study.write("xx.yaml", &spec(&entries("{values: [X]}", "[Y]")));
+    let issues = check();
+    let [(condition, _, paths, _)] = issues.as_slice() else {
+        panic!("one issue: {issues:?}")
+    };
+    assert_eq!(condition, "redundant_long_form");
+    assert_eq!(
+        paths,
+        &["columns.VALUE.submission.value_level.OTHER.where.KIND"]
+    );
 }
 
 /// SUB-2: a dataset's `standard` is governed in 1.0, so a 1.0 root

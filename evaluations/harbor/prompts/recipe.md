@@ -29,8 +29,9 @@ golden files.
   write, several for domains built together (DM and SUPPDM). A benchmark
   whose golden is a run report (`schema-adsl-age-quality`) is not built yet.
   A generated document (`define.xml`) is not graded; only its datasets
-  are. A project function (`environment.yaml`) is the agent's to compute:
-  state what the value is, as for any other column.
+  are. A project function (the function file its project lists, such as
+  `functions/bmi.yaml`) is the agent's to compute: state what the value is,
+  as for any other column.
 - **Where.** `evaluations/harbor/prompts/<name>/full.md`, beside the
   benchmark's other prompt tiers: `conventions.md`, written from it alone,
   keeps only the sponsor's conventions of the outcome block, and the brief

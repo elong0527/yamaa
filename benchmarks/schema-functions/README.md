@@ -7,8 +7,8 @@ percentage.
 
 **Input:** `spec.yaml` reads a small test file (`input/source.csv`)
 carrying a numerator (`NUM`), a denominator (`DEN`), and an optional
-adjustment (`ADJ`), and calls the ratio routine from the benchmark's
-own Python project root (`python/`); the expected result is
+adjustment (`ADJ`), and calls the ratio routine that the function file
+`functions/project_ratio.yaml` declares; the expected result is
 `expected/test.csv`.
 
 **Variables:**

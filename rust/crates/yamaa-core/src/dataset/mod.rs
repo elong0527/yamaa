@@ -436,21 +436,49 @@ pub enum Check {
 }
 
 /// One value-level where clause over completed `str` columns: a row is
-/// selected when every term's column holds one of the term's values. A
-/// missing value matches no term.
+/// selected when every term selects it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WhereClause {
-    pub terms: Vec<(usize, Vec<String>)>,
+    pub terms: Vec<WhereTerm>,
 }
 impl WhereClause {
     pub fn selects(&self, row: &[Value]) -> bool {
-        self.terms.iter().all(
-            |(column, values)| matches!(&row[*column], Value::Str(value) if values.contains(value)),
-        )
+        self.terms.iter().all(|term| {
+            term.selects(match &row[term.column] {
+                Value::Str(value) => Some(value),
+                _ => None,
+            })
+        })
     }
     /// The columns the clause reads.
     pub fn columns(&self) -> impl Iterator<Item = usize> + '_ {
-        self.terms.iter().map(|(column, _)| *column)
+        self.terms.iter().map(|term| term.column)
+    }
+}
+
+/// One where column of a clause and the values it lists (SUB-12). A term
+/// selects a row whose column holds one of the values, or, when it
+/// `excludes` (NE and NOTIN), a row whose column holds none of them, a
+/// missing value included.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WhereTerm {
+    pub column: usize,
+    pub values: Vec<String>,
+    pub excludes: bool,
+}
+impl WhereTerm {
+    /// A term over `column` listing `values`, as a bare list writes it.
+    pub fn listed(column: usize, values: Vec<String>) -> Self {
+        Self {
+            column,
+            values,
+            excludes: false,
+        }
+    }
+    /// Whether the term selects a row whose column holds `value`, `None`
+    /// when the value is missing.
+    pub fn selects(&self, value: Option<&str>) -> bool {
+        value.is_some_and(|value| self.values.iter().any(|listed| listed == value)) != self.excludes
     }
 }
 

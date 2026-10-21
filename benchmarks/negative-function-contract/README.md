@@ -18,7 +18,7 @@ artifact is accepted.
 
 ## How to fix
 
-Supply the required argument declared by the environment:
+Supply the required argument the function file declares:
 
 ```yaml
 function:

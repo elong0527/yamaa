@@ -1,0 +1,56 @@
+yamaa: "1.0"
+type: function
+name: numeric_constant
+description: Return the numeric constant the named kind spells.
+params:
+- name: kind
+  type: str
+returns: float
+may_return_missing: true
+implementations:
+  python: yamaa_benchmarks.numeric_constant
+  r: yamaabenchmarks::numeric_constant
+
+tests:
+- id: unit
+  covers:
+  - normal
+  - numeric-comparison
+  args:
+    kind: one
+  result: 1.0
+
+- id: zero-boundary
+  covers:
+  - boundary
+  args:
+    kind: zero
+  result: 0.0
+
+- id: positive-infinity-is-not-a-value
+  covers:
+  - nullable-output
+  args:
+    kind: positive-infinity
+  result: null
+
+- id: negative-infinity-is-not-a-value
+  covers:
+  - nullable-output
+  args:
+    kind: negative-infinity
+  result: null
+
+- id: not-a-number-is-not-a-value
+  covers:
+  - nullable-output
+  args:
+    kind: nan
+  result: null
+
+- id: missing-kind-short-circuits
+  covers:
+  - short-circuit-missing:kind
+  args:
+    kind: null
+  result: null

@@ -10,19 +10,14 @@ from and every one is unchanged, and compiles again otherwise.
 """
 
 from yamaa import _native
-from yamaa._support import (
-    __version__,
-    _fspath,
-    _fspaths,
-    _Lazy,
-    _optional_table,
-    _pl,
-    _table,
-)
+from yamaa._native import Table
+from yamaa._support import __version__, _fspath, _fspaths, _Lazy
 
 __all__ = [
     "Error",
+    "Table",
     "__version__",
+    "info",
     "lint",
     "project",
     "read_odm",
@@ -35,7 +30,7 @@ __all__ = [
 class Error(Exception):
     """A yamaa operation could not complete; `issues` says why, and `paths` lists the files a refused save wrote first."""
 
-    def __init__(self, message: str, issues: _pl.DataFrame, paths: list[str]):
+    def __init__(self, message: str, issues: Table, paths: list[str]):
         super().__init__(message)
         self.issues = issues
         self.paths = paths
@@ -48,15 +43,27 @@ def _call(function, *args):
         # The binding sets the refusal's attributes on the native
         # exception, so they are read as dynamic attributes.
         raise Error(
-            str(error), _table(getattr(error, "issues")), getattr(error, "paths")
+            str(error), getattr(error, "issues"), getattr(error, "paths")
         ) from None
 
 
 class Check:
     """Static findings; `issues` is empty when nothing is wrong."""
 
-    def __init__(self, table):
-        self.issues = _table(table)
+    def __init__(self, native):
+        self._native = native
+
+    @property
+    def status(self) -> str:
+        """`failed` when the check found an issue, and `succeeded` otherwise."""
+        return self._native.status()
+
+    @property
+    def issues(self) -> Table:
+        return self._native.issues()
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Run:
@@ -66,23 +73,31 @@ class Run:
         self._native = native
 
     @property
-    def output(self) -> _pl.DataFrame | None:
+    def status(self) -> str:
+        """`succeeded` when the run built its output with no issue, and `failed` otherwise."""
+        return self._native.status()
+
+    @property
+    def output(self) -> Table | None:
         """The output dataset, or None when the run failed."""
-        return _optional_table(self._native.output())
+        return self._native.output()
 
     @property
-    def issues(self) -> _pl.DataFrame:
+    def issues(self) -> Table:
         """What is wrong, one row per finding."""
-        return _table(self._native.issues())
+        return self._native.issues()
 
     @property
-    def report(self) -> _pl.DataFrame | None:
+    def report(self) -> Table | None:
         """What the run read, counted and checked."""
-        return _optional_table(self._native.report())
+        return self._native.report()
 
     def save(self) -> list[str]:
         """Write the declared report file, then the output dataset; return the paths written."""
         return _call(self._native.save)
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class MemberRun:
@@ -93,16 +108,24 @@ class MemberRun:
         self._name = name
 
     @property
-    def output(self) -> _pl.DataFrame | None:
-        return _optional_table(_call(self._native.output, self._name))
+    def status(self) -> str:
+        """As a run's, or `skipped` when a producer in the project run did not complete."""
+        return _call(self._native.member_status, self._name)
 
     @property
-    def issues(self) -> _pl.DataFrame:
-        return _table(_call(self._native.member_issues, self._name))
+    def output(self) -> Table | None:
+        return _call(self._native.output, self._name)
 
     @property
-    def report(self) -> _pl.DataFrame | None:
-        return _optional_table(_call(self._native.member_report, self._name))
+    def issues(self) -> Table:
+        return _call(self._native.member_issues, self._name)
+
+    @property
+    def report(self) -> Table | None:
+        return _call(self._native.member_report, self._name)
+
+    def __repr__(self) -> str:
+        return self._native.member_summary(self._name)
 
 
 class ProjectRun:
@@ -110,6 +133,11 @@ class ProjectRun:
 
     def __init__(self, native):
         self._native = native
+
+    @property
+    def status(self) -> str:
+        """`succeeded` when every specification succeeded and no project finding refused the run."""
+        return self._native.status()
 
     @property
     def names(self) -> list[str]:
@@ -128,17 +156,24 @@ class ProjectRun:
         """The names, as `names` lists them."""
         return iter(self._native.names())
 
-    @property
-    def issues(self) -> _pl.DataFrame:
-        return _table(self._native.issues())
+    def __len__(self) -> int:
+        """The number of names."""
+        return len(self._native.names())
 
     @property
-    def report(self) -> _pl.DataFrame:
-        return _table(self._native.report())
+    def issues(self) -> Table:
+        return self._native.issues()
+
+    @property
+    def report(self) -> Table:
+        return self._native.report()
 
     def save(self) -> list[str]:
         """Write each report file, then each output unless a run failed; return the paths written."""
         return _call(self._native.save)
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Submission:
@@ -148,12 +183,25 @@ class Submission:
         self._native = native
 
     @property
-    def issues(self) -> _pl.DataFrame:
-        return _table(self._native.issues())
+    def status(self) -> str:
+        """`succeeded` when every selected section composed with no issue, and `failed` otherwise."""
+        return self._native.status()
+
+    @property
+    def created(self) -> str:
+        """The ISO 8601 creation time the documents carry, as given or as read once for every section."""
+        return self._native.created()
+
+    @property
+    def issues(self) -> Table:
+        return self._native.issues()
 
     def save(self) -> list[str]:
         """Write each section's transport files, then its define.xml; return the paths written."""
         return _call(self._native.save)
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Spec(_Lazy):
@@ -176,6 +224,9 @@ class Spec(_Lazy):
         """Build the dataset in memory."""
         return Run(_call(_native._spec_run, self._path, self._project, self._plans))
 
+    def __repr__(self) -> str:
+        return _native._spec_summary(self._path)
+
 
 class Project(_Lazy):
     """A study's project file, read only when a method runs."""
@@ -187,6 +238,11 @@ class Project(_Lazy):
     def spec(self, name: str) -> Spec:
         """The listed specification whose `domain` is `name`."""
         return Spec(_call(_native._project_spec, self._path, name), self._path)
+
+    @property
+    def names(self) -> list[str]:
+        """The listed specifications by `domain` name, in run order, read without study data."""
+        return _call(_native._project_names, self._path)
 
     def check(self) -> Check:
         return Check(_call(_native._project_check, self._path))
@@ -202,6 +258,9 @@ class Project(_Lazy):
             _call(_native._project_submission, self._path, section, created)
         )
 
+    def __repr__(self) -> str:
+        return _native._project_summary(self._path)
+
 
 class SelfTest:
     """The selftest cases run through this installation's engine; printing it gives the report."""
@@ -215,9 +274,9 @@ class SelfTest:
         return self._native.status()
 
     @property
-    def cases(self) -> _pl.DataFrame:
+    def cases(self) -> Table:
         """One row per case, in the order the cases are listed."""
-        return _table(self._native.cases())
+        return self._native.cases()
 
     @property
     def info(self) -> dict:
@@ -245,28 +304,31 @@ def read_odm(
     max_archive_members: int = 10000,
     max_expanded_bytes: int = 268435456,
     max_xml_depth: int = 64,
-) -> _pl.DataFrame:
+) -> Table:
     """Read the clinical items of an ODM XML file, or of one member of a TAR."""
-    return _table(
-        _call(
-            _native._read_odm,
-            _fspath(source),
-            archive_member,
-            max_archive_members,
-            max_expanded_bytes,
-            max_xml_depth,
-        )
+    return _call(
+        _native._read_odm,
+        _fspath(source),
+        archive_member,
+        max_archive_members,
+        max_expanded_bytes,
+        max_xml_depth,
     )
 
 
-def lint(paths, fix: bool = False) -> _pl.DataFrame:
+def lint(paths, fix: bool = False) -> Table:
     """Lint yamaa files, first applying the proved fixes when fix is true."""
-    return _table(_call(_native._lint, _fspaths(paths), fix))
+    return _call(_native._lint, _fspaths(paths), fix)
 
 
 def schema(file_type: str) -> str:
     """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
     return _call(_native._schema, file_type)
+
+
+def info() -> dict:
+    """The engine version, the language versions it reads, its features, the host and the platform."""
+    return _native._info()
 
 
 def selftest() -> SelfTest:

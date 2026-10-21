@@ -166,6 +166,26 @@ impl Version {
         )
     }
 
+    /// The significant digits of the longest number that this version's
+    /// normalized text prints: the epoch only when it is not zero.
+    fn printed_digits(&self) -> usize {
+        let epoch = (!self.epoch.is_zero()).then_some(&self.epoch);
+        let local = self.local.iter().flatten().filter_map(|part| match part {
+            Local::Number(number) => Some(number),
+            Local::Text(_) => None,
+        });
+        self.release
+            .iter()
+            .chain(epoch)
+            .chain(self.pre.as_ref().map(|(_, number)| number))
+            .chain(self.post.as_ref())
+            .chain(self.dev.as_ref())
+            .chain(local)
+            .map(|number| number.0.len())
+            .max()
+            .unwrap_or(0)
+    }
+
     pub(crate) fn is_prerelease(&self) -> bool {
         self.pre.is_some() || self.dev.is_some()
     }
@@ -547,6 +567,23 @@ pub(crate) fn version(text: &str, limit: Limit) -> Result<Version, Refusal> {
     let parsed = parse(text, Grammar::Version).ok_or(Refusal::Invalid)?;
     limit.check(parsed.longest)?;
     Ok(parsed.version)
+}
+
+/// Print a version's normalized text, as `str(Version)` does under the
+/// interpreter's integer limit `limit`: CPython converts an integer of more
+/// than [`THRESHOLD`] digits back to text only within the limit too, counting
+/// its significant digits. A version whose number the limit refuses, or that
+/// needs the limit while it is unread, does not print.
+///
+/// CPython checks an integer of more than about 9,000 digits only coarsely on
+/// its way back to text, which this does not reproduce. That matters only
+/// when the limit was lowered after the version was read; under one limit, a
+/// version that converts to an integer prints, having no more significant
+/// digits than it was written with, and no observation of the Python host
+/// changes the limit.
+pub(crate) fn printed(version: &Version, limit: Limit) -> Result<String, Refusal> {
+    limit.check(version.printed_digits())?;
+    Ok(version.to_string())
 }
 
 /// The smallest version there is, `0.dev0`.

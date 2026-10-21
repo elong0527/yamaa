@@ -370,10 +370,18 @@ mod quiet {
 
     thread_local! {
         /// How many `contain_decode` calls the current thread is inside.
+        #[cfg(not(all(windows, target_env = "gnu")))]
         static DEPTH: Cell<usize> = const { Cell::new(0) };
+        // Windows GNU uses the lazy TLS backend even for const initializers.
+        // Default keeps that backend's expansion out of Clippy's const hint.
+        #[cfg(all(windows, target_env = "gnu"))]
+        static DEPTH: Cell<usize> = Cell::default();
         /// Whether the panic of the innermost `contain_decode` call on the
         /// current thread is unwinding.
+        #[cfg(not(all(windows, target_env = "gnu")))]
         static UNWINDING: Cell<bool> = const { Cell::new(false) };
+        #[cfg(all(windows, target_env = "gnu"))]
+        static UNWINDING: Cell<bool> = Cell::default();
     }
 
     /// Whether the current thread is inside `contain_decode`.

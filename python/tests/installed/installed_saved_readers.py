@@ -135,14 +135,15 @@ class SavedReaders(unittest.TestCase):
         if empty:
             # A transported dataset without rows must declare it has no data.
             self.assertEqual(
-                document.issues["condition"].to_list(), ["transport_dataset_empty"]
+                document.issues.to_polars()["condition"].to_list(),
+                ["transport_dataset_empty"],
             )
             with self.assertRaises(yamaa.Error):
                 document.save()
             self.assertFalse((root / "test.json").exists())
             self.assertFalse((root / "define.xml").exists())
             return
-        self.assertTrue(document.issues.is_empty(), document.issues)
+        self.assertEqual(document.issues.num_rows, 0, document.issues)
         for name in ("spec.yaml", "project.yaml", f"output.{profile}"):
             (root / name).unlink()
         document.save()
@@ -231,9 +232,9 @@ class SavedReaders(unittest.TestCase):
                         encoding="utf-8",
                     )
                     built = yamaa.spec(root / "spec.yaml").run()
-                    self.assertTrue(built.issues.is_empty(), built.issues)
+                    self.assertEqual(built.issues.num_rows, 0, built.issues)
                     self.assert_values(
-                        built.output.to_dict(as_series=False), empty=empty
+                        built.output.to_polars().to_dict(as_series=False), empty=empty
                     )
                     output = root / f"output.{profile}"
                     self.assertFalse(output.exists())

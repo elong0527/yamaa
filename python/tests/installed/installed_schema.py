@@ -54,7 +54,7 @@ class Schema(unittest.TestCase):
                 error = caught.exception
                 self.assertEqual(str(error), refusal["message"])
                 self.assertEqual(error.paths, [])
-                [issue] = error.issues.to_dicts()
+                [issue] = error.issues.to_pylist()
                 self.assertEqual(issue["condition"], refusal["condition"])
                 self.assertEqual(issue["rule"], refusal["rule"])
                 self.assertEqual(issue["message"], refusal["issue_message"])

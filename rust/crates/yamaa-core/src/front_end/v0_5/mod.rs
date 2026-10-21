@@ -1006,17 +1006,19 @@ impl<'d> Lower<'d> {
                         let meta =
                             self.meta(clause_meta, Segment::Key(column.into()), Some(values));
                         // 1.0 holds the list in its comparison class, beside
-                        // an optional NE or NOTIN (P-VLM-1). Each selects
-                        // none of its values: NE is `NotIn` with its one
-                        // value, as EQ is `In` with one, and NOTIN is
-                        // `NotIn`. The switch refuses both until P1-14 builds
-                        // them (P1-9, D66). A class holding only `values` is
-                        // the expanded list written bare (SCHEMA-15), whose
-                        // values keep their written paths.
+                        // an optional NE or NOTIN (P-VLM-1), and the tree
+                        // keeps which one was written: SUB-12 gives NE one
+                        // value and NOTIN two or more. A class holding only
+                        // `values` is the expanded list written bare
+                        // (SCHEMA-15), whose values keep their written paths.
                         let (comparator, list, list_meta) = match self.field(values, "values") {
                             Some(list) => match self.text_of(values, "comparator") {
-                                Some(_) => (
-                                    Comparator::NotIn,
+                                Some(written) => (
+                                    if written == "NE" {
+                                        Comparator::Ne
+                                    } else {
+                                        Comparator::NotIn
+                                    },
                                     list,
                                     self.field_meta(meta, "values", list),
                                 ),

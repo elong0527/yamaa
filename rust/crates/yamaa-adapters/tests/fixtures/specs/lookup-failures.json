@@ -9,7 +9,7 @@
         "condition": "invalid_expression",
         "rule": "FORMULA-1",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.DEATHEV.filter"
         ],
         "context": {
           "position": 10,
@@ -29,7 +29,7 @@
         "condition": "unknown_field",
         "rule": "LOOKUP-7",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.DEATHEV.filter"
         ],
         "context": {
           "identifier": "AE.ABSENT",
@@ -71,7 +71,7 @@
         "condition": "unknown_field",
         "rule": "LOOKUP-7",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.DEATHEV.filter"
         ],
         "context": {
           "identifier": "AEOUT",
@@ -114,7 +114,7 @@
         "condition": "incompatible_input_type",
         "rule": "FORMULA-5",
         "spec_paths": [
-          "intermediates[0].filter"
+          "intermediates.DEATHEV.filter"
         ],
         "context": {
           "left_type": "str",
@@ -154,7 +154,7 @@
         "condition": "unknown_field",
         "rule": "LOOKUP-5",
         "spec_paths": [
-          "intermediates[1].key"
+          "intermediates.MEDDRA_PT.key"
         ],
         "context": {
           "identifier": "MEDDRA.ABSENT",
@@ -185,7 +185,7 @@
         "condition": "unknown_field",
         "rule": "LOOKUP-5",
         "spec_paths": [
-          "intermediates[1].key"
+          "intermediates.MEDDRA_PT.key"
         ],
         "context": {
           "identifier": "ABSENT",
@@ -216,7 +216,7 @@
         "condition": "incompatible_input_type",
         "rule": "LOOKUP-9",
         "spec_paths": [
-          "intermediates[1].key"
+          "intermediates.MEDDRA_PT.key"
         ],
         "context": {
           "actual": "str",
@@ -249,7 +249,7 @@
         "condition": "unknown_field",
         "rule": "LOOKUP-7",
         "spec_paths": [
-          "intermediates[0].order_by[0]"
+          "intermediates.DEATHEV.order_by[0]"
         ],
         "context": {
           "identifier": "AE.ABSENT",
@@ -291,7 +291,7 @@
         "condition": "unknown_field",
         "rule": "LOOKUP-7",
         "spec_paths": [
-          "intermediates[0].order_by[0]"
+          "intermediates.DEATHEV.order_by[0]"
         ],
         "context": {
           "identifier": "AEDY",
@@ -334,7 +334,7 @@
         "condition": "multiple_matches",
         "rule": "LOOKUP-10",
         "spec_paths": [
-          "intermediates[0]"
+          "intermediates.DEATHEV"
         ],
         "context": {
           "dataset": "AE",
@@ -374,15 +374,15 @@
   },
   {
     "name": "require_match",
-    "before": "    no_match: {literal: null}\n",
-    "after": "    require_match: true\n",
+    "before": "    keep: last\n\n  - id: MEDDRA_PT\n    dataset: MEDDRA\n    key: {LLTNAME: DTHCAUS}\n",
+    "after": "    keep: last\n    require_match: true\n\n  - id: MEDDRA_PT\n    dataset: MEDDRA\n    key: {LLTNAME: DTHCAUS}\n    require_match: true\n",
     "diagnostics": [
       {
         "phase": "join",
         "condition": "unmatched_key",
         "rule": "LOOKUP-24",
         "spec_paths": [
-          "intermediates[0]"
+          "intermediates.DEATHEV"
         ],
         "context": {
           "dataset": "AE",

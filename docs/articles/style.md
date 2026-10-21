@@ -310,7 +310,7 @@ column whose column-level derivation is not row-local, a structured
 `source`'s `between` value among its reads. A read through the implicit join
 or of an intermediate an input backs is row-local. A derivation reading a
 driver dataset also stays when the templates build from different inputs,
-since the driver read and the column-phase implicit join bind different
+since the driver read and column derivation's implicit join bind different
 records; only a literal is driver-independent across drivers: quoted text, a
 YAML number or null. A column read by any row `filter` stays as well, since a
 filter resolves only columns its own template derives. A single row template,

@@ -604,6 +604,96 @@ fn admit(facts: &Facts) -> Result<(), Error> {
     Ok(())
 }
 
+/// What a saved run report records of its run and its inputs, read back from
+/// the file a specification declares in `output.report` (PROJECT-15).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Recorded {
+    /// The `ARTIFACT` of every row: the run's `output.path`, as declared.
+    pub artifact: String,
+    /// The `run` row: the rows the run built, or the condition that failed it.
+    pub run: Run,
+    /// The `input` rows, in report order.
+    pub inputs: Vec<RecordedInput>,
+}
+/// One `input` row of a saved report (CHECK-24).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordedInput {
+    /// `NAME`: the input dataset.
+    pub name: String,
+    /// `COUNT`: the records the run decoded, absent for an input never read.
+    pub records: Option<usize>,
+    /// `DETAILS.bytes`: the byte length the run read, absent when `null`.
+    pub bytes: Option<usize>,
+}
+
+/// Read what a decoded report table records: its first row, the run, and its
+/// input rows. `bytes` reads an input row's `DETAILS` text: the value of its
+/// `bytes` member, `Some(None)` for `null`, or `None` when the text holds no
+/// such member. `None` when the table is not a run report: other columns, a
+/// first row that is not a run row, a row naming another artifact, or a cell
+/// of a type or value [`verify`] would refuse.
+pub fn recorded<T: TableAccess>(
+    table: &T,
+    mut bytes: impl FnMut(&str) -> Option<Option<usize>>,
+) -> Option<Recorded> {
+    let names = table.schema().columns().iter().map(|c| c.name.as_str());
+    if !names.eq(COLUMNS.iter().copied()) {
+        return None;
+    }
+    let artifact = recorded_text(table, 0, 0)??;
+    if recorded_text(table, 0, 1)? != Some(Kind::Run.name()) {
+        return None;
+    }
+    let run = match (
+        recorded_text(table, 0, 8)?,
+        recorded_text(table, 0, 9)?,
+        recorded_count(table, 0, COUNT)?,
+    ) {
+        (Some(SUCCEEDED), None, Some(rows)) => Run::Succeeded { rows },
+        (Some(FAILED), Some(condition), None) => Run::Failed {
+            condition: condition.into(),
+        },
+        _ => return None,
+    };
+    let mut inputs = Vec::new();
+    for row in 1..table.row_count() {
+        if recorded_text(table, row, 0)? != Some(artifact) {
+            return None;
+        }
+        if recorded_text(table, row, 1)? != Some(Kind::Input.name()) {
+            continue;
+        }
+        inputs.push(RecordedInput {
+            name: recorded_text(table, row, 3)??.into(),
+            records: recorded_count(table, row, COUNT)?,
+            bytes: bytes(recorded_text(table, row, 13)??)?,
+        });
+    }
+    Some(Recorded {
+        artifact: artifact.into(),
+        run,
+        inputs,
+    })
+}
+/// A `str` cell of a saved report: `Some(None)` when missing, `None` when it
+/// holds another type.
+fn recorded_text<T: TableAccess>(table: &T, row: usize, column: usize) -> Option<Option<&str>> {
+    match table.cell(row, column).ok()? {
+        ValueRef::Missing => Some(None),
+        ValueRef::Str(value) => Some(Some(value)),
+        _ => None,
+    }
+}
+/// An `int` cell of a saved report: `Some(None)` when missing, `None` when it
+/// holds another type or a negative count.
+fn recorded_count<T: TableAccess>(table: &T, row: usize, column: usize) -> Option<Option<usize>> {
+    match table.cell(row, column).ok()? {
+        ValueRef::Missing => Some(None),
+        ValueRef::Int(value) => usize::try_from(value).ok().map(Some),
+        _ => None,
+    }
+}
+
 fn str_cell(report: &Report, row: usize, column: usize) -> Result<Option<&str>, Error> {
     match report.cell(row, column).map_err(|_| Error::InvalidRecord)? {
         ValueRef::Missing => Ok(None),

@@ -439,16 +439,19 @@ pub struct ValueEntry {
     pub origin: Origin,
     pub fields: Vec<Origin>,
     pub id: Field<String>,
-    /// The where clause: every listed column holds one of its values.
+    /// The where clause: every listed column holds one of its values, or
+    /// under `NE` and `NOTIN` none of them (SUB-12).
     pub clause: Vec<WhereTerm>,
     /// The description of the value-level definition, when declared.
     pub label: Option<Field<String>>,
     pub metadata: ColumnSubmission,
 }
-/// One column of a where clause and the values it admits, in written order.
+/// One column of a where clause, its comparator and the values it lists, in
+/// written order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WhereTerm {
     pub column: Field<String>,
+    pub comparator: crate::ast::Comparator,
     pub values: Vec<Field<String>>,
 }
 impl ColumnSubmission {

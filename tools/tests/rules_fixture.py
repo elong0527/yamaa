@@ -75,7 +75,6 @@ version: "1.0"
 conditions:
   inheritance_cycle: {phases: [validation]}
   conversion_failed: {phases: [convert]}
-  orphan_condition: {phases: [validation]}
 """
 
 FILES = {

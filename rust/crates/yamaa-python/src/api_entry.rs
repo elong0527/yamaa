@@ -5,7 +5,7 @@ use pyo3::{exceptions::PyException, prelude::*, types::PyDict};
 use std::sync::{Arc, Mutex};
 use yamaa::{Action, CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage};
 
-use crate::arrow_bridge::ArrowTable;
+use crate::arrow_bridge::Table;
 
 pyo3::create_exception!(yamaa, _Error, PyException);
 
@@ -15,7 +15,7 @@ fn raise(py: Python<'_>, failure: Failure) -> PyErr {
     let error = _Error::new_err(failure.message);
     let value = error.value(py);
     match value
-        .setattr("issues", ArrowTable::from(&failure.issues))
+        .setattr("issues", Table::from(&failure.issues))
         .and_then(|()| value.setattr("paths", failure.paths))
     {
         Ok(()) => error,
@@ -72,17 +72,21 @@ impl Run {
 
 #[pymethods]
 impl Run {
-    fn output(&self) -> PyResult<Option<ArrowTable>> {
+    fn status(&self) -> PyResult<&'static str> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.output().map(ArrowTable::from))
+        Ok(guard.status().as_str())
     }
-    fn issues(&self) -> PyResult<ArrowTable> {
+    fn output(&self) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(ArrowTable::from(&guard.issues()))
+        Ok(guard.output().map(Table::from))
     }
-    fn report(&self) -> PyResult<Option<ArrowTable>> {
+    fn issues(&self) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.report().map(ArrowTable::from))
+        Ok(Table::from(&guard.issues()))
+    }
+    fn report(&self) -> PyResult<Option<Table>> {
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        Ok(guard.report().map(Table::from))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
@@ -92,6 +96,11 @@ impl Run {
             .save(&CancellationToken::new());
         saved.map_err(|failure| raise(py, failure))
     }
+    /// The printed text (D37), which `repr()` returns.
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        Ok(guard.summary().to_string())
+    }
     /// Private installed-run evidence for qualification suites.
     #[pyo3(signature=(include_measurements=false))]
     fn observations(&self, include_measurements: bool) -> PyResult<Option<String>> {
@@ -100,18 +109,64 @@ impl Run {
     }
 }
 
+fn check_poisoned() -> PyErr {
+    pyo3::exceptions::PyRuntimeError::new_err("check handle is in use or poisoned")
+}
+
+/// The static check of a specification or a project (D36, D37): the facade's
+/// result, whose status, issues and printed text the public class returns as
+/// they are.
+#[pyclass(frozen, module = "yamaa._native", name = "_Check")]
+pub struct Check {
+    inner: Mutex<yamaa::Check>,
+}
+
+impl Check {
+    fn new(check: yamaa::Check) -> Self {
+        Self {
+            inner: Mutex::new(check),
+        }
+    }
+}
+
+#[pymethods]
+impl Check {
+    fn status(&self) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| check_poisoned())?;
+        Ok(guard.status().as_str())
+    }
+    fn issues(&self) -> PyResult<Table> {
+        let guard = self.inner.try_lock().map_err(|_| check_poisoned())?;
+        Ok(Table::from(&guard.issues()))
+    }
+    /// The printed text (D37), which `repr()` returns.
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| check_poisoned())?;
+        Ok(guard.summary().to_string())
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature=(specification, project=None))]
-pub fn _spec_check(
-    py: Python<'_>,
-    specification: &str,
-    project: Option<&str>,
-) -> PyResult<ArrowTable> {
+pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Check> {
     let token = CancellationToken::new();
     engine(py)
         .spec_check(specification, project, &token)
-        .map(|check| ArrowTable::from(&check.issues()))
+        .map(Check::new)
         .map_err(|error| raise_error(py, Action::Read(specification), error))
+}
+
+/// The printed text of a lazy specification object, which has read nothing
+/// (D37): `yamaa spec <path>`, with the path as given.
+#[pyfunction]
+pub fn _spec_summary(specification: &str) -> String {
+    yamaa::Summary::spec(specification).to_string()
+}
+
+/// The printed text of a lazy project object: `yamaa project <path>`.
+#[pyfunction]
+pub fn _project_summary(project: &str) -> String {
+    yamaa::Summary::project(project).to_string()
 }
 
 /// The compiled plans one lazy specification or project object keeps between
@@ -171,7 +226,7 @@ pub fn _read_odm(
     max_archive_members: usize,
     max_expanded_bytes: usize,
     max_xml_depth: usize,
-) -> PyResult<ArrowTable> {
+) -> PyResult<Table> {
     // The shared option validation refuses limits below its minimums, so
     // every host reports the same refusal.
     let mut options = yamaa::OdmOptions::new()
@@ -182,7 +237,7 @@ pub fn _read_odm(
         options = options.with_archive_member(member);
     }
     yamaa::read_odm(std::path::Path::new(source), &options)
-        .map(|table| ArrowTable::from(&table))
+        .map(|table| Table::from(&table))
         .map_err(|error| raise_error(py, Action::Read(source), error))
 }
 
@@ -190,9 +245,9 @@ pub fn _read_odm(
 /// is true; a file that cannot be read or admitted raises `_Error`.
 #[pyfunction]
 #[pyo3(signature=(paths, fix=false))]
-pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<ArrowTable> {
+pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
     yamaa::lint(&paths, fix)
-        .map(|lint| ArrowTable::from(&lint.table()))
+        .map(|lint| Table::from(&lint.table()))
         .map_err(|failure| raise(py, failure))
 }
 
@@ -216,40 +271,60 @@ impl SelfTest {
     fn status(&self) -> &'static str {
         self.inner.status().as_str()
     }
-    fn cases(&self) -> ArrowTable {
-        ArrowTable::from(&self.inner.table())
+    fn cases(&self) -> Table {
+        Table::from(&self.inner.table())
     }
-    /// The engine information, keyed in the facade's field order.
+    /// The engine information that ran the cases, as `info()` gives it.
     fn info<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let info = self.inner.info();
-        let fields = PyDict::new(py);
-        fields.set_item("version", info.version)?;
-        fields.set_item("language_versions", &info.language_versions)?;
-        fields.set_item("features", &info.features)?;
-        fields.set_item("host", info.host.as_str())?;
-        fields.set_item("host_version", info.host_version.as_deref())?;
-        fields.set_item("platform", &info.platform)?;
-        Ok(fields)
+        info_dict(py, self.inner.info())
     }
     fn summary(&self) -> String {
         self.inner.summary().to_string()
     }
 }
 
-/// Run every selftest case through this engine as the Python host, with the
-/// running interpreter's version, such as `3.12.4`.
-#[pyfunction]
-pub fn _selftest(py: Python<'_>) -> SelfTest {
+/// The running interpreter's version, such as `3.12.4`, spelled as
+/// `platform.python_version()` spells it.
+fn python_version(py: Python<'_>) -> String {
     let version = py.version_info();
-    let version = format!(
+    format!(
         "{}.{}.{}{}",
         version.major,
         version.minor,
         version.patch,
         version.suffix.unwrap_or_default()
-    );
+    )
+}
+
+/// The engine information as a dict keyed in the facade's field order: the
+/// one construction that `info()` and a selftest's `info` share (D41).
+fn info_dict<'py>(py: Python<'py>, info: &yamaa::Info) -> PyResult<Bound<'py, PyDict>> {
+    let fields = PyDict::new(py);
+    fields.set_item("version", info.version)?;
+    fields.set_item("language_versions", &info.language_versions)?;
+    fields.set_item("features", &info.features)?;
+    fields.set_item("host", info.host.as_str())?;
+    fields.set_item("host_version", info.host_version.as_deref())?;
+    fields.set_item("platform", &info.platform)?;
+    Ok(fields)
+}
+
+/// What this engine is and where it runs, as the Python host on the running
+/// interpreter (D41, P-INFO-1).
+#[pyfunction]
+pub fn _info(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    info_dict(
+        py,
+        &yamaa::info(yamaa::Host::Python, Some(&python_version(py))),
+    )
+}
+
+/// Run every selftest case through this engine as the Python host, with the
+/// running interpreter's version.
+#[pyfunction]
+pub fn _selftest(py: Python<'_>) -> SelfTest {
     SelfTest {
-        inner: yamaa::selftest(yamaa::Host::Python, Some(&version)),
+        inner: yamaa::selftest(yamaa::Host::Python, Some(&python_version(py))),
     }
 }
 
@@ -264,6 +339,10 @@ pub struct ProjectRun {
 
 #[pymethods]
 impl ProjectRun {
+    fn status(&self) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.status().as_str())
+    }
     fn names(&self) -> PyResult<Vec<String>> {
         Ok(self
             .inner
@@ -271,28 +350,39 @@ impl ProjectRun {
             .map_err(|_| project_poisoned())?
             .names())
     }
-    fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
+    fn member_status(&self, py: Python<'_>, name: &str) -> PyResult<&'static str> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
-        Ok(run.output().map(ArrowTable::from))
+        Ok(run.status().as_str())
     }
-    fn member_issues(&self, py: Python<'_>, name: &str) -> PyResult<ArrowTable> {
+    fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
-        Ok(ArrowTable::from(&run.issues()))
+        Ok(run.output().map(Table::from))
     }
-    fn member_report(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
+    fn member_issues(&self, py: Python<'_>, name: &str) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
-        Ok(run.report().map(ArrowTable::from))
+        Ok(Table::from(&run.issues()))
     }
-    fn issues(&self) -> PyResult<ArrowTable> {
+    fn member_report(&self, py: Python<'_>, name: &str) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
-        Ok(ArrowTable::from(&guard.issues()))
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(run.report().map(Table::from))
     }
-    fn report(&self) -> PyResult<ArrowTable> {
+    /// One member's printed text, its run's under its name (D37).
+    fn member_summary(&self, py: Python<'_>, name: &str) -> PyResult<String> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
-        Ok(ArrowTable::from(&guard.report()))
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(run.summary().to_string())
+    }
+    fn issues(&self) -> PyResult<Table> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(Table::from(&guard.issues()))
+    }
+    fn report(&self) -> PyResult<Table> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(Table::from(&guard.report()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
@@ -301,6 +391,11 @@ impl ProjectRun {
             .map_err(|_| project_poisoned())?
             .save(&CancellationToken::new());
         saved.map_err(|failure| raise(py, failure))
+    }
+    /// The printed text with one line per member (D37).
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.summary().to_string())
     }
 }
 
@@ -311,9 +406,18 @@ pub struct Submission {
 
 #[pymethods]
 impl Submission {
-    fn issues(&self) -> PyResult<ArrowTable> {
+    fn status(&self) -> PyResult<&'static str> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
-        Ok(ArrowTable::from(&guard.issues()))
+        Ok(guard.status().as_str())
+    }
+    /// The creation time the documents carry (D69, D129).
+    fn created(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.created().to_owned())
+    }
+    fn issues(&self) -> PyResult<Table> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(Table::from(&guard.issues()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
@@ -322,6 +426,11 @@ impl Submission {
             .map_err(|_| project_poisoned())?
             .save(&CancellationToken::new());
         saved.map_err(|failure| raise(py, failure))
+    }
+    /// The printed text (D37).
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.summary().to_string())
     }
 }
 
@@ -332,11 +441,19 @@ pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<Stri
         .map_err(|failure| raise(py, failure))
 }
 
+/// The listed specifications' names in run order, read without data (D45).
 #[pyfunction]
-pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<ArrowTable> {
+pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
+    engine(py)
+        .project_names(project)
+        .map_err(|failure| raise(py, failure))
+}
+
+#[pyfunction]
+pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<Check> {
     engine(py)
         .project_check(project, &CancellationToken::new())
-        .map(|check| ArrowTable::from(&check.issues()))
+        .map(Check::new)
         .map_err(|error| raise_error(py, Action::Read(project), error))
 }
 
