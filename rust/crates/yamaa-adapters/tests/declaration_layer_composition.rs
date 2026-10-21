@@ -754,7 +754,7 @@ columns:
         fn the_converted_schema_inheritance_clear_resolves_as_its_source() {
             let source = repository_file("benchmarks/schema-inheritance-clear/spec_study.yaml");
             let artifact =
-                resolved_artifact::resolve(&source, None, Language::Python, None).unwrap();
+                resolved_artifact::resolve(&source, None, Some(Language::Python), None).unwrap();
             let legacy = &artifact.entries()[0].specification;
             // The converter's output for the benchmark: its YAML values are
             // the example's (`tools/tests/test_migrate.py`).

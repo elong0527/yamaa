@@ -294,21 +294,82 @@ fn a_project_spelled_through_a_linked_directory_keeps_its_authority() {
     assert_eq!(conditions(&run.issues()), ["resource_path_symlink"]);
 }
 
-#[test]
-fn unknown_sections_are_refused_arguments() {
-    let study = study();
-    let token = CancellationToken::new();
-    let error = engine()
-        .project_run(&study.project(), Some("adm"), &token)
-        .err()
-        .unwrap();
-    let yamaa::Error::Rejected(report) = error else {
-        panic!("an unknown section is a refused argument")
-    };
-    assert_eq!(report.diagnostics[0].code, "engine_rejected");
+/// The issue of a call refused for selecting `section`, which the project
+/// does not declare; `declared` are the sections it does, sorted.
+fn assert_unknown_section(error: Option<yamaa::Error>, section: &str, declared: &[&str]) {
+    let error = error.unwrap_or_else(|| panic!("selecting {section} refuses the call"));
+    assert!(matches!(error, yamaa::Error::Rejected(_)), "{error:?}");
+    let failure = yamaa::Failure::from_error(yamaa::Action::Select(section), &error);
     assert_eq!(
-        report.diagnostics[0].context.get("section"),
-        Some(&yamaa::ContextValue::Text("adm".into()))
+        failure.message,
+        format!(
+            "cannot select {section}: the project declares no section {section} \
+             [unknown_section, PROJECT-14]"
+        )
+    );
+    let issues = rows(&failure.issues);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].phase, "validation");
+    assert_eq!(issues[0].condition, "unknown_section");
+    assert_eq!(issues[0].rule.as_deref(), Some("PROJECT-14"));
+    assert!(issues[0].spec_paths.is_empty());
+    assert_eq!(issues[0].context["section"], text(section));
+    assert_eq!(
+        issues[0].context["sections"],
+        Value::Array(declared.iter().map(|section| text(section)).collect())
+    );
+}
+
+/// A project run or submission accepts only a section the project declares:
+/// a name outside `sdtm`, `adam` and `send`, and one of them the project does
+/// not declare, both refuse the call before anything builds (PROJECT-14,
+/// #3030 D73 and D98).
+#[test]
+fn a_section_the_project_does_not_declare_refuses_the_call() {
+    let study = study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let project = study.project();
+    for section in ["send", "adm", "SDTM"] {
+        assert_unknown_section(
+            engine.project_run(&project, Some(section), &token).err(),
+            section,
+            &["adam", "sdtm"],
+        );
+        assert_unknown_section(
+            engine
+                .project_submission(&project, Some(section), None, "0.4.0", &token)
+                .err(),
+            section,
+            &["adam", "sdtm"],
+        );
+    }
+    assert_eq!(std::fs::read_dir(study.0.join("out")).unwrap().count(), 0);
+    // A 1.0 project file declares its sections the same way; one whose
+    // `specs` is empty is declared, and selecting it builds nothing.
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nsend: {specs: []}\nadam: {specs: []}\n",
+    );
+    assert_unknown_section(
+        engine.project_run(&project, Some("sdtm"), &token).err(),
+        "sdtm",
+        &["adam", "send"],
+    );
+    let send = engine.project_run(&project, Some("send"), &token).unwrap();
+    assert!(send.names().is_empty());
+    assert_eq!(send.issues().rows(), 0);
+    // The project file is read first: one that cannot be read reports its
+    // own findings as the result's issues, and no section is checked.
+    let absent = study.path("absent.yaml");
+    let run = engine.project_run(&absent, Some("adm"), &token).unwrap();
+    assert_eq!(conditions(&run.issues()), ["project_environment_missing"]);
+    let submission = engine
+        .project_submission(&absent, Some("adm"), None, "0.4.0", &token)
+        .unwrap();
+    assert_eq!(
+        conditions(&submission.issues()),
+        ["project_environment_missing"]
     );
 }
 
@@ -384,9 +445,10 @@ fn assert_nothing_to_save(issues: &Table, rule: &str) {
 #[test]
 fn a_save_that_would_write_nothing_fails() {
     let study = study();
+    // The `send` section lists no specification: the run builds nothing.
+    study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let engine = engine();
     let token = CancellationToken::new();
-    // The project declares no `send` section: the run builds nothing.
     let mut send = engine
         .project_run(&study.project(), Some("send"), &token)
         .unwrap();
@@ -455,6 +517,7 @@ fn a_project_run_refuses_a_name_it_did_not_build() {
         );
     }
     // A run that built nothing has no name to offer.
+    study.write("project.yaml", format!("{PROJECT}send:\n  specs: []\n"));
     let send = engine
         .project_run(&study.project(), Some("send"), &token)
         .unwrap();
@@ -1036,6 +1099,101 @@ fn an_engine_without_functions_runs_every_build_that_calls_no_project_function()
         found[0].context.get("operation"),
         Some(&text("environment"))
     );
+    // An engine that claims no host language reads no 0.5 environment file,
+    // so it knows no function the project declares and refuses the call while
+    // the specification compiles (#3030 section 2.10).
+    let neutral = Engine::new(EngineOptions::neutral("cli".into(), String::new()));
+    let check = neutral
+        .spec_check(&study.path("one.yaml"), Some(&study.project()), &token)
+        .unwrap();
+    let found = rows(&check.issues());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].condition, "unsupported_operation");
+    assert_eq!(found[0].spec_paths, ["columns.W.derivation.function.name"]);
+    assert_eq!(
+        found[0].context.get("operation"),
+        Some(&text("environment"))
+    );
+}
+
+/// An engine that claims no host language, as the command line's does,
+/// reads no project's `environments.<host>` entry, so it verifies no lock
+/// and activates nothing (#3030 section 2.10). Through a 1.0 project whose
+/// Python lock does not exist, it runs the specification that calls no
+/// function. It checks and resolves the one that calls the project's
+/// function, and refuses to run it before reading any input, as
+/// `unsupported_operation` (D110). An engine that claims Python reads the same
+/// project's lock, and fails where the lock is missing.
+#[test]
+fn an_engine_without_a_host_language_reads_no_lock_and_refuses_each_function_call() {
+    let study = Study::new();
+    study.write("raw.csv", "ID,V\n1,a\n");
+    study.write(
+        "functions/shout.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: shout\ndescription: The value in capitals.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.shout}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: A}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    );
+    study.write(
+        "plain.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: PLAIN\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: plain.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: V, type: str, label: Value, derivation: RAW.V}\n",
+    );
+    // The input this one names does not exist, so a run that read it would
+    // fail there.
+    study.write(
+        "calls.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: CALLS\nkeys: [ID]\ninput: {RAW: absent.csv}\noutput: {path: calls.csv, columns: [ID, LOUD]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: LOUD, type: str, label: Loud, derivation: {function: {name: shout, args: {x: RAW.V}}}}\n",
+    );
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/shout.yaml]\nenvironments:\n  python: {lock: missing/uv.lock}\nadam: {specs: [plain.yaml, calls.yaml]}\n",
+    );
+    let neutral = Engine::new(EngineOptions::neutral("cli".into(), String::new()));
+    let token = CancellationToken::new();
+    let project = study.project();
+    let (plain, calls) = (study.path("plain.yaml"), study.path("calls.yaml"));
+
+    let run = neutral.spec_run(&plain, Some(&project), &token).unwrap();
+    assert_eq!(conditions(&run.issues()), Vec::<String>::new());
+    assert_eq!(run.status(), Status::Succeeded);
+    assert_eq!(run.output().unwrap().rows(), 1);
+    let check = neutral.spec_check(&calls, Some(&project), &token).unwrap();
+    assert_eq!(conditions(&check.issues()), Vec::<String>::new());
+    assert!(neutral.spec_resolve(&calls, Some(&project)).is_ok());
+    let refused = neutral.spec_run(&calls, Some(&project), &token).unwrap();
+    assert_eq!(refused.status(), Status::Failed);
+    assert!(refused.output().is_none() && refused.report().is_none());
+    let found = rows(&refused.issues());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (found[0].phase.as_str(), found[0].condition.as_str()),
+        ("planning", "unsupported_operation")
+    );
+    assert_eq!(found[0].spec_paths, ["environment"]);
+    assert_eq!(
+        found[0].context.get("operation"),
+        Some(&text("environment"))
+    );
+    let runs = neutral.project_run(&project, None, &token).unwrap();
+    assert_eq!(runs.names(), ["PLAIN", "CALLS"]);
+    assert_eq!(runs.get("PLAIN").unwrap().status(), Status::Succeeded);
+    assert_eq!(
+        conditions(&runs.get("CALLS").unwrap().issues()),
+        ["unsupported_operation"]
+    );
+
+    // An engine that claims Python reads its own lock, which does not exist.
+    let python = Engine::new(EngineOptions::new(
+        HostLanguage::Python,
+        "project-test".into(),
+        "0".into(),
+    ));
+    for spec in [&plain, &calls] {
+        let check = python.spec_check(spec, Some(&project), &token).unwrap();
+        let found = rows(&check.issues());
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].condition, "resource_path_missing");
+        assert_eq!(found[0].spec_paths, ["environments.python.lock"]);
+        assert_eq!(found[0].context.get("path"), Some(&text("missing/uv.lock")));
+    }
 }
 
 fn define_study() -> Study {

@@ -27,10 +27,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import yaml
 from tools.conformance import supplemental_inventory as inventory
 from tools.packaging import generate_third_party_notices as notices
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle, vendor_crates
+from tools.surface import declares_header
 
 REPOSITORY = ROOT
 VENDOR_ARCHIVE = "src/rust/vendor.tar.xz"
@@ -233,6 +235,15 @@ def authors_text(metadata, crates, listed, locked):
     return "\n".join(lines)
 
 
+def r_callables(case: Path) -> list[Path]:
+    """The files that name a study's R callables: the function files a 1.x
+    project lists (#3030 D8), or the R environment file a 0.5 project links."""
+    project = yaml.safe_load((case / "project.yaml").read_text(encoding="utf-8"))
+    if declares_header(project):
+        return [case / path for path in project.get("functions") or []]
+    return [case / project["environments"]["r"]]
+
+
 def stage_projects(projects: Path) -> None:
     """Stage the project studies that the R suites read into a new directory.
 
@@ -251,14 +262,14 @@ def stage_projects(projects: Path) -> None:
     project_helper.stage_case(
         REPOSITORY / "benchmarks/negative-function-contract", negative
     )
-    environment = negative / "r/environment.yaml"
-    environment.write_text(
-        environment.read_text(encoding="utf-8").replace(
-            "yamaabenchmarks::project_value", "base::identity"
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
+    for definitions in r_callables(negative):
+        definitions.write_text(
+            definitions.read_text(encoding="utf-8").replace(
+                "yamaabenchmarks::project_value", "base::identity"
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
     lock = json.loads((negative / "r/renv.lock").read_text(encoding="utf-8"))
     del lock["Packages"]["yamaabenchmarks"]
     for case in (negative, projects / "base-round"):

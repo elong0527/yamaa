@@ -21,7 +21,8 @@ class CommittedList(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertEqual(SELFTEST.main([]), 0)
-        self.assertIn("not covered: odm, readstat", output.getvalue())
+        self.assertIn("not covered: odm", output.getvalue())
+        self.assertNotIn("readstat", output.getvalue())
 
     def test_every_excepted_name_is_a_benchmark(self):
         # A retired or renamed case leaves the shared exception list with it.

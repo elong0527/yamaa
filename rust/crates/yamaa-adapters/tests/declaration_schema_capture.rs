@@ -2891,7 +2891,7 @@ mod declaration {
             .unwrap()
             .into_owned();
             assert_eq!((port.environments, port.locks), (1, 1));
-            assert_eq!(environment.environment().host(), Language::R);
+            assert_eq!(environment.environment().host(), Some(Language::R));
             assert_eq!(environment.environment().language(), Some(Language::R));
             assert_eq!(
                 environment.environment_file().unwrap().source().identity,

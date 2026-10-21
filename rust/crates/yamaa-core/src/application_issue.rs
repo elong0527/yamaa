@@ -127,9 +127,6 @@ vocabulary! {
         TargetChanged => "target_changed",
         Transport => "transport",
         UnknownClass => "unknown_class",
-        /// A section name the project scope does not define; D73 moves it to a
-        /// validation condition of its own.
-        UnknownSection => "unknown_section",
         ValidationPolicy => "validation_policy",
         VersionedRootRequired => "versioned_root_required",
         YamlAdmission => "yaml_admission",

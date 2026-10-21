@@ -17,7 +17,7 @@ uncompressed, RLE (`SASYZCRL`) and RDC (`SASYZCR2`) storage. Transport files
 admit versions 5 and 8 and contain exactly one dataset member. These profiles
 add no output format; publication remains CSV or Parquet.
 
-Evidence: `negative-output-transport`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::rle_and_rdc_compression_equal_independent_upstream_csv_truth`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::reject_multiple_members_in_both_transport_versions`.
+Evidence: `negative-output-transport`, `schema-source-xpt`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::rle_and_rdc_compression_equal_independent_upstream_csv_truth`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::reject_multiple_members_in_both_transport_versions`.
 
 A study document's submission section writes version 5 transport files from
 published artifacts under [SAS Transport](../profiles/xpt.md); that is not an
@@ -35,7 +35,7 @@ host locale. Encoding is absent on CSV and Parquet inputs. A missing SAS
 encoding, or an encoding declaration on another profile, fails validation.
 
 Fails: `source_encoding_required`.
-Evidence: `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_run`.
+Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::declared_decoders_reject_incomplete_or_undefined_text`, `python/tests/installed/installed_sas_sources.py::test_static_encoding_contract_is_shared_by_check_and_run`.
 
 The failure reports `source_encoding_required` at `input.<dataset>.encoding`.
 
@@ -61,7 +61,7 @@ numeric field to `int`, `date` or `datetime`. Any other physical/type pair
 fails ingestion.
 
 Fails: `source_sas_invalid`, `unknown_field`.
-Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit`, `rust/tests/host-fixtures/sas-cases.json::character-cannot-be-int`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::malformed_truncated_encoding_and_unknown_fields_fail_before_execution`.
+Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::sas_dataset_numeric_date_formats_never_infer_and_epoch_narrowing_is_explicit`, `rust/tests/host-fixtures/sas-cases.json::character-cannot-be-int`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::malformed_truncated_encoding_and_unknown_fields_fail_before_execution`.
 
 A disallowed physical/type pair fails with `source_sas_invalid`
 ([SAS-7](#sas-7)). A `types` entry naming an unknown field still
@@ -80,7 +80,7 @@ SAS value. A numeric `date` counts whole days from 1960-01-01, and a numeric
 `datetime` whole seconds from 1960-01-01T00:00:00, without a timezone.
 
 Fails: `field_parse_failed`.
-Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::ordinary_float_keeps_readstat_conversion_while_exact_narrowing_is_guarded`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::narrowing_never_truncates_or_accepts_an_ibm_precision_loss`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::numeric_narrowing_has_exact_bounds_and_epoch`.
+Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::ordinary_float_keeps_readstat_conversion_while_exact_narrowing_is_guarded`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::narrowing_never_truncates_or_accepts_an_ibm_precision_loss`, `rust/crates/yamaa-adapters/src/sas_source/native.rs::numeric_narrowing_has_exact_bounds_and_epoch`.
 
 An IBM transport number whose stored precision cannot be represented exactly
 in binary64 cannot narrow, even if decoding would produce an integral binary64
@@ -105,7 +105,7 @@ Strings such as `.` and `NA` remain ordinary text, and embedded NUL bytes are
 rejected.
 
 Fails: `source_sas_invalid`.
-Evidence: `rust/crates/yamaa-adapters/tests/table_sas_source.rs::all_numeric_missing_tags_map_to_missing`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::both_xport_versions_preserve_order_padding_unicode_and_default_float`, `rust/tests/host-fixtures/sas-cases.json::embedded-nul-is-refused`.
+Evidence: `schema-source-xpt`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::all_numeric_missing_tags_map_to_missing`, `rust/crates/yamaa-adapters/tests/table_sas_source.rs::both_xport_versions_preserve_order_padding_unicode_and_default_float`, `rust/tests/host-fixtures/sas-cases.json::embedded-nul-is-refused`.
 
 Under an omitted or `missing` `empty_string`, a zero-length character value is
 missing; under `present` it is the present empty string. An embedded NUL byte

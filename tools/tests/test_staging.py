@@ -308,12 +308,12 @@ class StagingTests(unittest.TestCase):
             for case in ("negative-function-contract", "base-round"):
                 lock = json.loads((projects / case / "r/renv.lock").read_text())
                 self.assertEqual(set(lock["Packages"]), {"yamaa"})
-            self.assertIn(
-                "base::identity",
-                (
-                    projects / "negative-function-contract/r/environment.yaml"
-                ).read_text(),
-            )
+            # The R callable is named in the R environment file a 0.5 project
+            # links, or in the function files a 1.x project lists (D8).
+            callables = staging.r_callables(projects / "negative-function-contract")
+            self.assertTrue(callables)
+            for path in callables:
+                self.assertIn("base::identity", path.read_text(), str(path))
             self.assertIn(
                 "base::signif", (projects / "base-round/r/environment.yaml").read_text()
             )
@@ -347,6 +347,24 @@ class StagingTests(unittest.TestCase):
             with tarfile.open(built, "w:gz", compresslevel=1) as output:
                 output.add(destination, arcname="yamaa")
             self.assertEqual(check_cargo_lock.check_bundle_archive(built), ("r", kept))
+
+    def test_r_callables_are_read_from_either_project_language(self):
+        with tempfile.TemporaryDirectory() as directory:
+            case = Path(directory)
+            (case / "project.yaml").write_text(
+                'schema_version: "1.0"\n'
+                "environments: {python: py/environment.yaml, r: code/r.yaml}\n"
+            )
+            self.assertEqual(staging.r_callables(case), [case / "code/r.yaml"])
+            (case / "project.yaml").write_text(
+                'yamaa: "1.0"\ntype: project\n'
+                "functions: [functions/a.yaml, functions/b.yaml]\n"
+                "environments: {r: {lock: r/renv.lock}}\n"
+            )
+            self.assertEqual(
+                staging.r_callables(case),
+                [case / "functions/a.yaml", case / "functions/b.yaml"],
+            )
 
     def test_shared_specification_inputs_keep_both_preparation_copies(self):
         """Both copies retain the fixture-owned facts and rule citations."""

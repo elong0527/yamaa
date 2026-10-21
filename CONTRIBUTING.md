@@ -121,7 +121,9 @@ and `R/yamaa/inst/COMPONENTS.tsv` from each host's trimmed lock, the crates'
 declared licenses, those purposes and the provenance that the vendored YAML
 parser, ReadStat and zstd record. The Python one, which the wheels carry, also
 names the standard library of the pinned toolchain; the Python source archive
-carries it without that row. `make check-repository` fails while either
+carries it without that row. The R one names none: the R package's
+`configure` appends the row of the `rustc` that builds the installation to
+the copy that R installs. `make check-repository` fails while either
 differs from what they give. After changing the lock, a purpose, a vendored
 component or the pinned toolchain, regenerate both and commit the results:
 
@@ -248,8 +250,15 @@ item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
 the gate lists each one. CI's `conversion` job runs the gate on Python for a
 pull request whose diff reaches the 1.0 front end
 (`rust/crates/yamaa-core/src/front_end/`), the converter (`tools/migrate/`),
-the 1.0 schemas (`yaml/v1/`) or the gate itself, and otherwise passes with a
-notice; a weekly schedule and a dispatch run it on both hosts.
+the 1.0 schemas (`yaml/v1/`) or the gate itself, with the conformance planner
+and runner it drives, and otherwise passes with a notice; a weekly schedule
+and a dispatch run it on both hosts.
+The repository tools that read benchmarks read each file by its own header,
+as the engine does (`tools/surface.py`): the benchmark runner, project and
+input staging, the conformance planner, the dashboard renderer and the
+vocabulary coverage check. `tools/tests/test_both_surfaces.py` converts the
+corpus and requires each of them to read the original and the conversion
+alike, so the corpus can move to 1.0 one prefix at a time (P2-5 to P2-8).
 `make probe-executor` times one specification at 10,000, 100,000 and
 1,000,000 rows, with and without one keyed intermediate lookup;
 `examples/executor_probe.rs` in the `yamaa` crate documents its shapes and

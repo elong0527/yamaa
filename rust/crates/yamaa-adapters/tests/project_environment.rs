@@ -1166,7 +1166,7 @@ mod project {
                 finding(Reason::InvalidInstalledVersion, &["1.0"], Some("bad\0🙂")),
                 finding(Reason::VersionMismatch, &["1.0"], Some("2.0")),
             ];
-            let records = issues(&environment, Language::Python, &facts).unwrap();
+            let records = issues(&environment, Some(Language::Python), &facts).unwrap();
             assert_eq!(records.len(), 7);
             let expected = [
                 (
@@ -1218,7 +1218,7 @@ mod project {
                 );
             }
             assert_eq!(
-                issues(&environment, Language::Python, &facts).unwrap(),
+                issues(&environment, Some(Language::Python), &facts).unwrap(),
                 records
             );
             assert_eq!((capture.environments, capture.locks), (1, 1));
@@ -1243,7 +1243,7 @@ mod project {
                 finding(Reason::InvalidLockedVersion, &[], None),
                 finding(Reason::VersionMismatch, &["1.0"], Some("1.0.0")),
             ];
-            let records = issues(&environment, Language::Python, &facts).unwrap();
+            let records = issues(&environment, Some(Language::Python), &facts).unwrap();
             assert_eq!(records.len(), 3);
             let context = yamaa_core::json::Value::Object(records[2].context.clone());
             assert_eq!(context["expected"], yamaa_adapters::json!(["1.0"]));
@@ -1253,10 +1253,12 @@ mod project {
         #[test]
         fn absent_lock_and_contradictory_facts_refuse_the_complete_projection() {
             for (unlocked, _) in [environment(false), without_environment()] {
-                assert!(issues(&unlocked, Language::Python, &[]).unwrap().is_empty());
+                assert!(issues(&unlocked, Some(Language::Python), &[])
+                    .unwrap()
+                    .is_empty());
                 let fact = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
                 assert_eq!(
-                    issues(&unlocked, Language::Python, &[fact]),
+                    issues(&unlocked, Some(Language::Python), &[fact]),
                     Err(Error::InvalidContext)
                 );
             }
@@ -1269,7 +1271,7 @@ mod project {
             ] {
                 let first = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
                 assert_eq!(
-                    issues(&environment, Language::Python, &[first, bad]),
+                    issues(&environment, Some(Language::Python), &[first, bad]),
                     Err(Error::InvalidContext)
                 );
             }
@@ -1281,20 +1283,20 @@ mod project {
             let (environment, _) = environment(true);
             let first = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
             assert_eq!(
-                issues(&environment, Language::Python, &[first])
+                issues(&environment, Some(Language::Python), &[first])
                     .unwrap()
                     .len(),
                 1
             );
             let first = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
             let second = finding(Reason::VersionMismatch, &["1.0"], Some("2.0"));
-            let result = issues(&environment, Language::Python, &[first, second]).unwrap();
+            let result = issues(&environment, Some(Language::Python), &[first, second]).unwrap();
             assert_eq!(result.len(), 2);
             assert_eq!(result[0], result[1]);
             let wide = "é\0🙂".repeat(1_025);
             let result = issues(
                 &environment,
-                Language::Python,
+                Some(Language::Python),
                 &[finding(
                     Reason::InvalidInstalledVersion,
                     &["1.0"],
@@ -1307,7 +1309,7 @@ mod project {
             let facts = (0..2_050)
                 .map(|_| finding(Reason::VersionNotLocked, &[], None))
                 .collect::<Vec<_>>();
-            let result = issues(&environment, Language::Python, &facts).unwrap();
+            let result = issues(&environment, Some(Language::Python), &facts).unwrap();
             assert_eq!(result.len(), 2_050);
             assert_eq!(result[0], result[2_049]);
         }
@@ -1317,7 +1319,10 @@ mod project {
             for ((environment, capture), environments) in
                 [(environment(false), 1), (without_environment(), 0)]
             {
-                assert_eq!(issues(&environment, Language::Python, &[]).unwrap(), vec![]);
+                assert_eq!(
+                    issues(&environment, Some(Language::Python), &[]).unwrap(),
+                    vec![]
+                );
                 assert_eq!((capture.environments, capture.locks), (environments, 0));
             }
         }

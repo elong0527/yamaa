@@ -14,6 +14,10 @@
 //!   language's lock in `environments.<host>.lock` (D8). Each listed function
 //!   file is read, whichever host languages it implements; the host reads only
 //!   its own lock (PROJECT-2).
+//!
+//! An engine that claims no host language, such as the command line's, reads
+//! no `environments` entry of either surface: no environment file and no lock
+//! (#3030 section 2.10).
 use crate::{
     ast::{self, CodelistSource, FunctionSource},
     front_end::{v0_5::project as lower, v1::project as lower_v1},
@@ -167,7 +171,8 @@ pub struct PreparedEnvironment<D> {
 }
 #[derive(Debug)]
 pub struct RejectedEnvironment<E, D, X> {
-    pub host: Language,
+    /// The host language, or none for an engine that claims no host language.
+    pub host: Option<Language>,
     /// The project file lowered, with the environment file the host reads
     /// when that file lowered.
     pub project: ast::Project,
@@ -310,10 +315,12 @@ fn collect<E, D, X, T>(
     }
 }
 
+/// Prepare the project file `source` for the host language `host`, or for an
+/// engine that claims none (`None`), which reads no `environments` entry.
 pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
     decoder: &mut D,
     source: Source,
-    host: Language,
+    host: Option<Language>,
     port: &mut P,
 ) -> PreparationResult<P::Error, D::Document, D::Error> {
     Limits::spec_bytes(source.bytes.len()).map_err(Failure::RootLimit)?;
@@ -345,12 +352,16 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
     let (language, environment_file, declaring) = if versioned {
         // One host language runs the whole build, and a 1.0 project's paths
         // all resolve from the project file (D8).
-        (Some(host), None, entry.clone())
+        (host, None, entry.clone())
     } else {
         // The key states the language; an absent key leaves the host without code.
-        let language = project.environment(host).map(|_| host);
-        let environment_file =
-            capture_environment(port, decoder, &mut project, host, &entry, &mut collected)?;
+        let language = host.filter(|&host| project.environment(host).is_some());
+        let environment_file = match host {
+            Some(host) => {
+                capture_environment(port, decoder, &mut project, host, &entry, &mut collected)?
+            }
+            None => None,
+        };
         // An environment file's own paths resolve from that file.
         let declaring = environment_file
             .as_ref()
@@ -358,8 +369,10 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
             .clone();
         (language, environment_file, declaring)
     };
-    let written_lock = project
-        .environment(host)
+    // The host reads only its own lock (PROJECT-2), and an engine that claims
+    // no host language reads none.
+    let written_lock = host
+        .and_then(|host| project.environment(host))
         .and_then(|environment| environment.lock.as_ref())
         .map(|lock| lock.text.clone());
     let mut lock = None;
@@ -370,10 +383,14 @@ pub fn prepare<P: ProjectCapturePort, D: ProjectDecodePort>(
         })();
         lock = collect(&mut collected.failures, (Origin::Lock, written), result)?;
     }
-    let functions = if versioned {
-        capture_function_files(port, decoder, &project, &declaring, &mut collected)?
-    } else {
-        capture_functions(port, decoder, &project, host, &declaring, &mut collected)?
+    // A 0.5 project's functions come from the environment file the host's key
+    // links, so a preparation without a host language has none.
+    let functions = match (versioned, host) {
+        (true, _) => capture_function_files(port, decoder, &project, &declaring, &mut collected)?,
+        (false, Some(host)) => {
+            capture_functions(port, decoder, &project, host, &declaring, &mut collected)?
+        }
+        (false, None) => None,
     };
     let codelists = capture_codelists(port, decoder, &project, &entry, versioned, &mut collected)?;
     let draft = Draft {

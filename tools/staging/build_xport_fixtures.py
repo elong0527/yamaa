@@ -2,14 +2,30 @@
 
 This fixture writer does not import or invoke ReadStat or the yamaa reader.
 The accompanying literal expected tables are the independent test oracle.
+
+It also writes the transport input of the benchmark `schema-source-xpt`
+(`benchmark_input`), which every package ships as a selftest case: one member
+as SAS writes it, with labels, display formats and header times, encoded from
+the literal table below by the repository's transport oracle
+(`tools/conformance/xpt_oracle.py`). The benchmark's expected output is
+authored by hand from the same table and the rules, never read from a reader.
 """
 
+import datetime
 import struct
 from fractions import Fraction
 
+from tools.conformance.xpt_oracle import (
+    Format,
+    Variable,
+    encode,
+    sas_date,
+    sas_datetime,
+)
 from tools.paths import ROOT
 
 FIXTURES = ROOT / "rust/crates/yamaa-adapters/tests/fixtures/sas"
+BENCHMARK_INPUT = ROOT / "benchmarks/schema-source-xpt/input/adsl_raw.xpt"
 
 
 def record(value):
@@ -78,6 +94,69 @@ def xport(version, rows, columns):
     return output.ljust((len(output) + 79) // 80 * 80, b" ")
 
 
+# schema-source-xpt's input: subject-level data in Windows-1252 text. Each
+# character field is wider than its values, so they are stored blank padded,
+# and TRT01A is blanks for the subject never treated. A numeric None is the
+# ordinary SAS missing value. TRTSDT counts days and TRTSDTM seconds from
+# 1960-01-01. An IBM double's leading hexadecimal digit holds one to four
+# significant bits, so its fraction is aligned differently in binary64; the
+# values give each alignment: AGE 24 (0x18), 52 (0x34) and 67 (0x43), and
+# HEIGHTBL (0xA...), whose 165.2 binary64 holds only approximately, so the
+# stored value must come back bit for bit.
+BENCHMARK_CREATED = datetime.datetime(2025, 3, 10, 12, 0, 0)
+BENCHMARK_VARIABLES = [
+    Variable("STUDYID", "Study Identifier", True, width=8),
+    Variable("USUBJID", "Unique Subject Identifier", True, width=12),
+    Variable("TRT01A", "Actual Treatment for Period 01", True, width=20),
+    Variable("AGE", "Age", False, format=Format("", 3)),
+    Variable("HEIGHTBL", "Baseline Height (cm)", False, format=Format("", 5, 1)),
+    Variable(
+        "TRTSDT",
+        "Date of First Exposure to Treatment",
+        False,
+        format=Format("DATE", 9),
+    ),
+    Variable(
+        "TRTSDTM",
+        "Datetime of First Exposure to Treatment",
+        False,
+        format=Format("DATETIME", 20),
+    ),
+]
+BENCHMARK_ROWS = [
+    [
+        "PILOT7",
+        "P7-741",
+        "Drug A",
+        24,
+        172.5,
+        sas_date(datetime.date(2025, 3, 4)),
+        sas_datetime(datetime.datetime(2025, 3, 4, 9, 15, 0)),
+    ],
+    [
+        "PILOT7",
+        "P7-742",
+        "Placebo",
+        67,
+        None,
+        sas_date(datetime.date(2025, 3, 5)),
+        sas_datetime(datetime.datetime(2025, 3, 5, 14, 2, 37)),
+    ],
+    ["PILOT7", "P7-743", None, 52, 165.2, None, None],
+]
+
+
+def benchmark_input():
+    """The bytes of schema-source-xpt's transport input, from the table above."""
+    return encode(
+        "ADSL_RAW",
+        "Subject-Level Raw Data",
+        BENCHMARK_CREATED,
+        BENCHMARK_VARIABLES,
+        BENCHMARK_ROWS,
+    )
+
+
 if __name__ == "__main__":
     columns = [
         ("ID", False, 8),
@@ -141,3 +220,5 @@ if __name__ == "__main__":
         (FIXTURES / "unsupported-compression.sas7bdat").write_bytes(
             sas.replace(b"SASYZCRL", b"UNKNOWN!", 1)
         )
+    BENCHMARK_INPUT.parent.mkdir(parents=True, exist_ok=True)
+    BENCHMARK_INPUT.write_bytes(benchmark_input())

@@ -259,11 +259,15 @@ class SdtmMappingTests(unittest.TestCase):
             rule,
         )
 
-    def test_mapping_rule_with_no_handlers_names_both_events_as_errors(self):
+    def test_mapping_rule_with_no_handlers_keeps_missing_and_fails_unlisted(self):
+        # An omitted `missing` gives the missing value; an omitted
+        # `unmapped` fails (COLUMN-10).
         rule = mapping_doc.describe_mapping(
             {"source": "RS.OVRLRESP", "dict": {"CR": "COMPLETE RESPONSE"}}
         )
-        self.assertTrue(rule.endswith("; missing or unlisted values are errors."))
+        self.assertTrue(
+            rule.endswith("; missing values stay missing; unlisted values are errors.")
+        )
 
 
 class AdamMappingTests(unittest.TestCase):
@@ -897,6 +901,447 @@ class DerivationShapeTests(unittest.TestCase):
         self.assertIn("cannot be converted", rule)
 
 
+V1 = {"yamaa": "1.0", "type": "spec"}
+V1_CONTEXT = mapping_doc.SpecContext(V1)
+
+
+class BothSurfacesTests(unittest.TestCase):
+    """A 1.x specification renders the rules of its 0.5 counterpart (#3030
+    P2-3), so moving a benchmark to 1.0 changes no sheet."""
+
+    def assertSameRule(self, legacy, current, ctx=V1_CONTEXT, legacy_ctx=None):
+        self.assertEqual(
+            mapping_doc.describe_derivation(legacy, legacy_ctx),
+            mapping_doc.describe_derivation(current, ctx),
+        )
+
+    def test_expression_fields_read_as_their_0_5_spelling(self):
+        pairs = (
+            ({"literal": "DM"}, "'DM'"),
+            ({"literal": "it's"}, "'it''s'"),
+            ({"literal": 0}, 0),
+            ({"literal": None}, None),
+            ({"compute": {"expr": "100 * A / B"}}, "100 * A / B"),
+            ("DM.AGE", "DM.AGE"),
+            (
+                {
+                    "case": [
+                        {"when": "X = 1", "then": {"literal": "Y"}},
+                        {"when": "X = 2", "then": {"compute": {"expr": "A + 1"}}},
+                        {"when": "X = 3", "then": "B"},
+                        {"otherwise": {"literal": None}},
+                    ]
+                },
+                {
+                    "case": [
+                        {"when": "X = 1", "then": "'Y'"},
+                        {"when": "X = 2", "then": "A + 1"},
+                        {"when": "X = 3", "then": "B"},
+                        {"otherwise": None},
+                    ]
+                },
+            ),
+            (
+                {"value": {"literal": "5"}, "unconvertible": {"literal": None}},
+                {"value": "'5'", "unconvertible": None},
+            ),
+        )
+        for legacy, current in pairs:
+            with self.subTest(current=current):
+                self.assertSameRule(legacy, current)
+                if current is not None:
+                    self.assertEqual(
+                        mapping_doc.classify_origin(legacy, {"DM"}),
+                        mapping_doc.classify_origin(current, {"DM"}, V1_CONTEXT),
+                    )
+        self.assertEqual(
+            mapping_doc.classify_origin("'DM'", {"DM"}, V1_CONTEXT), "Assigned"
+        )
+        self.assertEqual(
+            mapping_doc.classify_origin("A / B", {"DM"}, V1_CONTEXT), "Derived"
+        )
+
+    def test_a_1_x_null_declares_the_missing_answer(self):
+        # A YAML null is the missing value in a 1.x file (D18), where a 0.5
+        # null leaves the handler absent (LAYER-9).
+        self.assertSameRule(
+            {
+                "mapping": {
+                    "source": "SEX",
+                    "dict": {"M": "1"},
+                    "unmapped": {"literal": None},
+                }
+            },
+            {"mapping": {"source": "SEX", "dict": {"M": "1"}, "unmapped": None}},
+        )
+        self.assertSameRule(
+            {"mapping": {"source": "SEX", "dict": {"M": "1", "U": {"literal": None}}}},
+            {"mapping": {"source": "SEX", "dict": {"M": "1", "U": None}}},
+        )
+        self.assertSameRule(
+            {
+                "impute": {
+                    "source": "AESTDTC",
+                    "day": 15,
+                    "minimum_source_precision": "month",
+                    "invalid": {"literal": None},
+                }
+            },
+            {"impute": {"source": "AESTDTC", "day": 15, "invalid": None}},
+        )
+        legacy = {"flag": {"condition": "X > 1", "true_value": None}}
+        self.assertIn('"Y" when X > 1', mapping_doc.describe_derivation(legacy))
+        current = {"flag": {"condition": "X > 1", "true_value": None}}
+        self.assertIn(
+            "blank when X > 1", mapping_doc.describe_derivation(current, V1_CONTEXT)
+        )
+
+    def test_a_restated_missing_default_is_stated_in_neither_language(self):
+        # The converter drops a declared missing answer where omitting it
+        # gives the missing value (P-HND-3), so neither sheet states it.
+        for legacy, current, omitted in (
+            (
+                {
+                    "str_case": {
+                        "source": "X",
+                        "to": "upper",
+                        "missing": {"literal": None},
+                    }
+                },
+                {"str_case": {"source": "X", "to": "upper", "missing": None}},
+                {"str_case": {"source": "X", "to": "upper"}},
+            ),
+            (
+                {
+                    "cut": {
+                        "source": "AGE",
+                        "breaks": [65],
+                        "labels": ["A", "B"],
+                        "missing": {"literal": None},
+                    }
+                },
+                {
+                    "cut": {
+                        "source": "AGE",
+                        "breaks": [65],
+                        "labels": ["A", "B"],
+                        "missing": None,
+                    }
+                },
+                {"cut": {"source": "AGE", "breaks": [65], "labels": ["A", "B"]}},
+            ),
+            (
+                {
+                    "mapping": {
+                        "source": "SEX",
+                        "dict": {"M": "1"},
+                        "missing": {"literal": None},
+                    }
+                },
+                {"mapping": {"source": "SEX", "dict": {"M": "1"}, "missing": None}},
+                {"mapping": {"source": "SEX", "dict": {"M": "1"}}},
+            ),
+            (
+                {"source": {"variable": "EX.EXDOSE", "absent": {"literal": None}}},
+                {"source": {"variable": "EX.EXDOSE", "absent": None}},
+                {"source": {"variable": "EX.EXDOSE"}},
+            ),
+        ):
+            with self.subTest(omitted=omitted):
+                rule = mapping_doc.describe_derivation(omitted)
+                self.assertEqual(mapping_doc.describe_derivation(legacy), rule)
+                self.assertEqual(
+                    mapping_doc.describe_derivation(current, V1_CONTEXT), rule
+                )
+                self.assertEqual(
+                    mapping_doc.describe_derivation(omitted, V1_CONTEXT), rule
+                )
+        # Where the input requires a match, a missing absence answer exempts
+        # the read (LOOKUP-24), so it is stated.
+        required = {"input": {"EX": {"path": "ex.csv", "require_match": True}}}
+        for header, absent in (({}, {"literal": None}), (V1, None)):
+            ctx = mapping_doc.SpecContext({**header, **required})
+            rule = mapping_doc.describe_derivation(
+                {"source": {"variable": "EX.EXDOSE", "absent": absent}}, ctx
+            )
+            self.assertEqual(
+                rule,
+                "Copy value from EX.EXDOSE; an absent source "
+                + mapping_doc.ARROW
+                + " blank.",
+            )
+
+    def test_renamed_operands_read_as_their_0_5_names(self):
+        pairs = (
+            (
+                {"study_day": {"date": "ADT", "reference": "TRTSDT"}},
+                {"study_day": {"source": "ADT", "reference": "TRTSDT"}},
+            ),
+            (
+                {
+                    "baseline_flag": {
+                        "date": "ADT",
+                        "reference_date": "TRTSDT",
+                        "value": "AVAL",
+                        "tie_break": ["ATM"],
+                        "window": {"group_by": ["USUBJID"]},
+                    }
+                },
+                {
+                    "baseline_flag": {
+                        "date": "ADT",
+                        "reference": "TRTSDT",
+                        "source": "AVAL",
+                        "window": {"group_by": ["USUBJID"], "order_by": ["ADT", "ATM"]},
+                    }
+                },
+            ),
+            (
+                {
+                    "baseline_flag": {
+                        "date": "ADT",
+                        "reference_date": "TRTSDT",
+                        "value": "AVAL",
+                        "window": {"group_by": ["USUBJID"]},
+                    }
+                },
+                {
+                    "baseline_flag": {
+                        "date": "ADT",
+                        "reference": "TRTSDT",
+                        "source": "AVAL",
+                        "window": {"group_by": ["USUBJID"]},
+                    }
+                },
+            ),
+            (
+                {"diff": {"start": "A", "end": "B", "unit": "day"}},
+                {"diff": {"start": "A", "end": "B", "unit": "day"}},
+            ),
+            (
+                {
+                    "diff": {
+                        "start": "A",
+                        "end": "B",
+                        "unit": "day",
+                        "bounds": "inclusive",
+                    }
+                },
+                {"diff": {"start": "A", "end": "B", "unit": "day", "closed": "both"}},
+            ),
+            (
+                {
+                    "diff": {
+                        "start": "A",
+                        "end": "B",
+                        "unit": "day",
+                        "bounds": "between",
+                    }
+                },
+                {
+                    "diff": {
+                        "start": "A",
+                        "end": "B",
+                        "unit": "day",
+                        "closed": "neither",
+                    }
+                },
+            ),
+            (
+                {
+                    "cut": {
+                        "source": "AGE",
+                        "breaks": [65],
+                        "labels": ["A", "B"],
+                        "right": True,
+                    }
+                },
+                {
+                    "cut": {
+                        "source": "AGE",
+                        "breaks": [65],
+                        "labels": ["A", "B"],
+                        "closed": "right",
+                    }
+                },
+            ),
+            (
+                {
+                    "aggregate": {
+                        "expr": "SUM(X)",
+                        "derive": [
+                            {"name": "X", "type": "int", "derivation": {"literal": 1}}
+                        ],
+                    }
+                },
+                {
+                    "aggregate": {
+                        "expr": "SUM(X)",
+                        "derivations": {"X": {"type": "int", "derivation": 1}},
+                    }
+                },
+            ),
+            (
+                {
+                    "function": {
+                        "name": "f",
+                        "args": {
+                            "a": "X",
+                            "b": {"literal": "t"},
+                            "c": {"date": "2025-01-31"},
+                            "d": {"literal": None},
+                        },
+                    }
+                },
+                {
+                    "function": {
+                        "name": "f",
+                        "args": {
+                            "a": "X",
+                            "b": "'t'",
+                            "c": "DATE '2025-01-31'",
+                            "d": None,
+                        },
+                    }
+                },
+            ),
+            (
+                {"impute": {"source": "X", "month": 6, "day": 15}},
+                {"impute": {"source": "X", "month": 6, "day": 15}},
+            ),
+            (
+                {
+                    "impute": {
+                        "source": "X",
+                        "type": "datetime",
+                        "time": "first",
+                        "minimum_source_precision": "day",
+                    }
+                },
+                {"impute": {"source": "X", "type": "datetime", "time": "first"}},
+            ),
+        )
+        for legacy, current in pairs:
+            with self.subTest(current=current):
+                self.assertSameRule(legacy, current)
+
+    def test_a_lookup_reads_its_absence_answer_and_derivations(self):
+        legacy = mapping_doc.SpecContext(
+            {
+                "intermediates": [
+                    {
+                        "id": "PK",
+                        "dataset": "PC",
+                        "key": ["USUBJID"],
+                        "no_match": {"literal": 0},
+                        "derivations": {"SAMPLED": {"literal": 1}},
+                    }
+                ]
+            }
+        )
+        current = mapping_doc.SpecContext(
+            {
+                **V1,
+                "intermediates": [
+                    {
+                        "id": "PK",
+                        "dataset": "PC",
+                        "key": ["USUBJID"],
+                        "absent": 0,
+                        "derivations": {"SAMPLED": 1},
+                    }
+                ],
+            }
+        )
+        for derivation in ("PK.SAMPLED", {"flag": "PK.SAMPLED = 1"}):
+            self.assertEqual(
+                mapping_doc.describe_derivation(derivation, legacy),
+                mapping_doc.describe_derivation(derivation, current),
+            )
+        self.assertIn(
+            'no match yields "0"',
+            mapping_doc.describe_derivation("PK.SAMPLED", current),
+        )
+
+    def test_a_1_x_specification_renders_its_0_5_counterpart_s_sheets(self):
+        legacy = {
+            "schema_version": "1.0",
+            "domain": "DM",
+            "keys": ["STUDYID", "USUBJID"],
+            "input": {"RAW": "raw.csv"},
+            "base": "RAW",
+            "output": {
+                "path": "dm.csv",
+                "columns": ["DOMAIN", "STUDYID", "USUBJID", "AGE", "AGEGR1"],
+            },
+            "columns": [
+                {"name": "DOMAIN", "type": "str", "derivation": {"literal": "DM"}},
+                {
+                    "name": "STUDYID",
+                    "type": "str",
+                    "derivation": "RAW.STUDYID",
+                    "submission": {
+                        "origin": {"type": "Collected", "source": "Investigator"}
+                    },
+                },
+                {"name": "USUBJID", "type": "str", "derivation": "RAW.USUBJID"},
+                {
+                    "name": "AGE",
+                    "type": "int",
+                    "derivation": {"compute": {"expr": "RAW.AGE + 0"}},
+                },
+                {
+                    "name": "AGEGR1",
+                    "type": "str",
+                    "derivation": {
+                        "mapping": {"source": "RAW.AGEGRP", "dict": {"1": "<65"}}
+                    },
+                },
+            ],
+            "rows": [
+                {"id": "a", "derivations": {"AGE": {"literal": None}}},
+                {
+                    "id": "b",
+                    "derivations": {"AGE": {"literal": 1}, "AGEGR1": "RAW.AGEGRP"},
+                },
+            ],
+        }
+        current = {
+            **V1,
+            "model": "SDTM",
+            **{key: value for key, value in legacy.items() if key != "schema_version"},
+            "columns": [
+                {"name": "DOMAIN", "type": "str", "derivation": "'DM'"},
+                {
+                    "name": "STUDYID",
+                    "type": "str",
+                    "derivation": "RAW.STUDYID",
+                    "submission": {
+                        "origins": [{"type": "Collected", "source": "Investigator"}]
+                    },
+                },
+                {"name": "USUBJID", "type": "str", "derivation": "RAW.USUBJID"},
+                {"name": "AGE", "type": "int", "derivation": "RAW.AGE + 0"},
+                {
+                    "name": "AGEGR1",
+                    "type": "str",
+                    "derivation": {
+                        "mapping": {"source": "RAW.AGEGRP", "dict": {"1": "<65"}}
+                    },
+                },
+            ],
+            "rows": [
+                {"id": "a", "derivations": {"AGE": None}},
+                {"id": "b", "derivations": {"AGE": 1, "AGEGR1": "RAW.AGEGRP"}},
+            ],
+        }
+        self.assertEqual(
+            mapping_doc.mapping_sheets(legacy), mapping_doc.mapping_sheets(current)
+        )
+        _, _, _, rows = mapping_doc.mapping_sheets(current)[1]
+        self.assertEqual(rows[0][2:], ['Constant "None"', "None"])
+
+
 class RevisionHistoryTests(unittest.TestCase):
     def test_history_tracks_the_renderer_newest_first(self):
         sheets = {
@@ -957,10 +1402,24 @@ class NoDerivationTests(unittest.TestCase):
         self.assertEqual(rules["AVAL"], mapping_doc.ROW_TEMPLATE_RULE)
 
     def test_inherited_column_says_so(self):
-        self.assertEqual(
-            method_column("negative-property-clear")["USUBJID"],
-            mapping_doc.INHERITED_RULE,
-        )
+        # A child layer that restates a column without its derivation, in
+        # either language; a 0.5 null leaves the derivation absent too.
+        for header in ({"schema_version": "1.0"}, {"yamaa": "1.0", "type": "spec"}):
+            spec = {
+                **header,
+                "parent": "base.yaml",
+                "domain": "ADSL",
+                "output": {"columns": ["USUBJID"]},
+                "columns": [{"name": "USUBJID", "label": "Unique Subject Identifier"}],
+            }
+            _, _, _, rows = mapping_doc.mapping_sheets(spec)[0]
+            self.assertEqual(rows[0][6], mapping_doc.INHERITED_RULE, header)
+        spec["columns"][0]["derivation"] = None
+        _, _, _, rows = mapping_doc.mapping_sheets(spec)[0]
+        self.assertEqual(rows[0][6], 'Set constant value "None".')
+        del spec["yamaa"], spec["type"]
+        _, _, _, rows = mapping_doc.mapping_sheets(spec)[0]
+        self.assertEqual(rows[0][6], mapping_doc.INHERITED_RULE)
 
     def test_no_benchmark_prints_none_into_a_method_cell(self):
         empty = []

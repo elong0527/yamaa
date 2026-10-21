@@ -114,6 +114,30 @@ pub(crate) fn resource_fault(error: &crate::file_resources::Error) -> Fault {
         E::Limit(_) => Fault::ResourceLimit,
     }
 }
+/// The refusal of a file a caller names that cannot be read: a classified
+/// failure is its file rule's condition naming the path as given (FILE-7,
+/// FILE-8, FILE-11), and any other stays an opaque resource refusal.
+pub(crate) fn caller_read_failure(path: &str, error: &crate::file_resources::Error) -> Diagnostic {
+    use yamaa_core::resource::ResourceFailure;
+    match crate::file_resources::resource_failure(error) {
+        Some(ResourceFailure::Boundary(limit)) => yamaa_core::application_issue::resource_rejected(
+            Stage::Prepare,
+            Fault::ResourceLimit,
+            limit.resource,
+            limit.limit,
+            limit.actual,
+            Vec::new(),
+        ),
+        Some(failure) => Diagnostic {
+            code: failure.code(),
+            spec_paths: Vec::new(),
+            context: [("path".to_owned(), Value::String(path.into()))].into(),
+            source_span: None,
+            operand_route: None,
+        },
+        None => yamaa_core::application_issue::rejected(Stage::Prepare, resource_fault(error)),
+    }
+}
 /// The closed code a refused publication reports, selected from its typed cause.
 pub(crate) fn publication_fault(error: &crate::file_publication::Error) -> Fault {
     use crate::file_publication::Error as E;
@@ -559,9 +583,11 @@ fn result<E>(
     Ok(Domain::new(result, prepared, run))
 }
 
-/// Prepare one request through `resolver`, or the local file resolver.
+/// Prepare one request through `resolver`, or the local file resolver, for
+/// the host language `host`, or for an engine that claims none, which reads
+/// no project's `environments` entry (#3030 section 2.10).
 pub fn select(
-    host: Language,
+    host: Option<Language>,
     request: Request<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<FileSpecification, crate::file_workflow::SelectionError> {
@@ -572,12 +598,12 @@ pub fn select(
 }
 
 pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
-    check_with_resolver(host, request, identity, None)
+    check_with_resolver(Some(host), request, identity, None)
 }
 /// The static check of one request: preparation findings, or the compiled
 /// specification's own findings. No study input is read.
 pub fn check_with_resolver(
-    host: Language,
+    host: Option<Language>,
     request: Request<'_>,
     _identity: Identity<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
@@ -585,6 +611,36 @@ pub fn check_with_resolver(
     collect(match select(host, request, resolver) {
         Ok(prepared) => crate::specification_check::issues(prepared.run()),
         Err(error) => crate::project_application::selection_failure(&error),
+    })
+}
+/// The type the file `written` names declares, read before any call reads
+/// it: what the command line dispatches on (#3030 D122). The file is
+/// captured once, through `resolver` or else through the local file resolver
+/// from its parent directory, so a path that reaches no regular file, or
+/// reaches a link, fails as any read does (FILE-7, FILE-8), naming the path
+/// as given (FILE-11). Its header is read as [`crate::document::file_type`]
+/// reads it; a refused header, or text that is not YAML, reports the issues
+/// a call that reads the file as its entry reports (SCHEMA-2, SCHEMA-3).
+pub fn file_type(
+    written: &str,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> Result<yamaa_core::language::FileType, Failure> {
+    let unreadable = |error| vec![caller_read_failure(written, &error)];
+    let (mut resources, name) = match resolver {
+        Some(resolver) => (
+            crate::file_resources::Resources::with_resolver(resolver, written),
+            written.to_owned(),
+        ),
+        None => crate::file_configuration::resources(written)
+            .map_err(|crate::file_configuration::Error::Path(error)| unreadable(error))?,
+    };
+    let (bytes, _) = resources.capture_metadata(&name).map_err(unreadable)?;
+    let source = crate::specification_source::Source {
+        identity: written.to_owned(),
+        bytes: bytes.to_vec(),
+    };
+    crate::document::file_type(source, yamaa_core::language::LANGUAGE_VERSION).map_err(|error| {
+        collect(crate::specification_diagnostics::capture_failure(&error).into_issues())
     })
 }
 /// Prepare and run one request with no project functions: a request with a
@@ -605,7 +661,7 @@ fn domain_observed(
     domain_entry::domain(
         scope,
         || {
-            select(host, request, None)
+            select(Some(host), request, None)
                 .map_err(|error| crate::project_application::selection_failure(&error))
         },
         |prepared| {

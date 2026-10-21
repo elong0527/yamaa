@@ -363,7 +363,7 @@ mod service {
                     }),
                 });
                 let environment =
-                    metadata::prepare(&mut decoder, source, Language::Python, &mut port)
+                    metadata::prepare(&mut decoder, source, Some(Language::Python), &mut port)
                         .map_err(|error| Failure::Metadata(Box::new(error)))?
                         .environment
                         .into_execution();

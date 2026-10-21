@@ -217,7 +217,7 @@ pub struct Engine { /* resolver + host configuration, Arc-shared */ }
 #[non_exhaustive]
 pub struct EngineOptions {
     pub resolver: Option<Arc<dyn ResourceResolver>>,
-    pub host_language: HostLanguage,
+    pub host_language: Option<HostLanguage>,  // none: a neutral engine
     pub runtime_name: String,      // folds in specification_report::Identity
     pub runtime_version: String,
     pub functions: Option<Arc<dyn ProjectFunctions>>,
@@ -230,6 +230,7 @@ impl EngineOptions {
         runtime_name: String,
         runtime_version: String,
     ) -> Self;
+    pub fn neutral(runtime_name: String, runtime_version: String) -> Self;
     pub fn with_resolver(mut self, resolver: Arc<dyn ResourceResolver>) -> Self;
     pub fn with_functions(mut self, functions: Arc<dyn ProjectFunctions>) -> Self;
     pub fn with_observer(mut self, observer: Arc<dyn Progress>) -> Self;
@@ -259,6 +260,7 @@ impl Engine {
     pub fn resolve_specification(&self, request: &Request<'_>)
         -> Result<ResolvedSpecification, Error>;
     pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>;
+    pub fn file_type(&self, path: &str) -> Result<FileType, Failure>;
 }
 
 #[derive(Clone)]
@@ -315,6 +317,13 @@ impl DefineBuild {
   `#[non_exhaustive]`, so external crates cannot use struct literals; the
   `new` plus `with_*` constructors above are the only way to build them, which
   keeps additive field changes non-breaking.
+- `EngineOptions::new` claims a host language, as the Python and R hosts do.
+  `EngineOptions::neutral`, which `EngineOptions::default()` also gives,
+  claims none, for the command line and a bare Rust embedder (#3030 section
+  2.10). It reads no project's `environments.<host>` entry, so it verifies no
+  lock and activates nothing; a build that calls a project function is refused
+  before any input is read as `unsupported_operation` with operation
+  `environment`, and every other build runs as a host runs it.
 - `check` reports admission and preparation failures as diagnostics in the
   returned `Report`, as today's `check_with_resolver` does, never as a second
   error channel. Only cancellation fails it: a cancelled call returns
@@ -331,7 +340,8 @@ impl DefineBuild {
   It is the only mutating operation and publishes through the resolver.
 - `define` mirrors `file_define::Define::prepare` plus its save step.
 - Every operation reads through the engine's resolver: checks, builds,
-  plans, project reads, `define`, `resolve_specification` and `read_odm`.
+  plans, project reads, `define`, `resolve_specification`, `read_odm` and
+  `file_type`.
   Without one, the engine's local file resolver serves the same requests, so a
   resolver that records them sees every access. A resolver serves a regular
   file or reports what else a name reaches with
@@ -347,6 +357,11 @@ impl DefineBuild {
   streamed and never held whole, and a local plain XML file over
   `max_expanded_bytes` is refused before it is read; one within that bound
   is held whole.
+- `file_type` captures a file once and interprets only its `yamaa` and
+  `type` header, returning the type it declares, which the command line
+  dispatches on (#3030 D122). A file that declares `schema_version` has no
+  type and is refused as `unsupported_language_version` at `schema_version`
+  (D125).
 - `resolve_specification` stays public, as decided for 0.4.0 in #2725. The
   facade type is `ResolvedSpecification`; the internal `ResolvedArtifact`
   (above) is its implementation and wire format, not a public type.

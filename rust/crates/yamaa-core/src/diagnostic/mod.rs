@@ -334,6 +334,7 @@ conditions! {
     ProducerContractMismatch => ("validation", "producer_contract_mismatch", Some("INPUT-11")),
     ProjectDuplicateName => ("validation", "duplicate_specification_name", Some("PROJECT-5")),
     ProjectUnknownName => ("validation", "unknown_specification_name", Some("PROJECT-6")),
+    ProjectUnknownSection => ("validation", "unknown_section", Some("PROJECT-14")),
     ProjectUnlinkedProducer => ("validation", "unlinked_producer", Some("PROJECT-10")),
     ProjectProducerNotCompleted => ("validation", "producer_not_completed", Some("PROJECT-11")),
     ProducerWorkflowCycle => ("validation", "producer_workflow_cycle", Some("PROJECT-8")),

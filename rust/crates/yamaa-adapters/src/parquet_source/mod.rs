@@ -161,6 +161,35 @@ pub fn parse_odm(content: &[u8]) -> Result<ArrowTable, Error> {
     convert(reader::read_odm(content)?)
 }
 
+/// One stored column's schema, as the public conformance runner compares two
+/// Parquet files (`parquet_signature`): its path, physical type, logical and
+/// converted type annotations with a decimal's precision and scale, and its
+/// maximum definition and repetition levels, which say whether it holds
+/// missing values and whether it repeats. [`parse`] reads several of these
+/// alike, INT32 and INT64 as one integer type and a column whatever its
+/// nullability, so two equal tables can be stored differently. Annotations
+/// are kept as stored: a legacy converted type alone differs from the logical
+/// type that the runner's reader derives from it. Each type is spelled as the
+/// Parquet crate names it, which is stable within one build.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ColumnSignature {
+    pub path: String,
+    pub physical_type: String,
+    pub logical_type: Option<String>,
+    pub converted_type: String,
+    pub precision: i32,
+    pub scale: i32,
+    pub max_definition_level: i16,
+    pub max_repetition_level: i16,
+}
+
+/// Each stored column's [`ColumnSignature`], in schema order, read from the
+/// footer alone through the same bounded admission as [`parse`].
+#[cfg(feature = "parquet")]
+pub fn signature(content: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
+    Ok(reader::signature(content)?)
+}
+
 #[cfg(feature = "parquet")]
 fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
     table::convert(decoded).map_err(|error| match error {
@@ -175,6 +204,71 @@ fn convert(decoded: reader::Decoded) -> Result<ArrowTable, Error> {
 #[cfg(all(test, feature = "parquet"))]
 mod tests {
     use super::*;
+    use arrow_array::{ArrayRef, Int32Array, Int64Array, RecordBatch, StringArray};
+    use arrow_schema::{DataType, Field, Schema};
+    use parquet::arrow::ArrowWriter;
+    use std::sync::Arc;
+    use yamaa_core::table::TableAccess;
+
+    /// A file of one column, `field`, holding `values`.
+    fn written(field: Field, values: ArrayRef) -> Vec<u8> {
+        let schema = Arc::new(Schema::new(vec![field]));
+        let batch = RecordBatch::try_new(schema.clone(), vec![values]).unwrap();
+        let mut bytes = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut bytes, schema, None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+        bytes
+    }
+
+    /// The signature tells apart what the reader reads alike: an INT32 from
+    /// an INT64 column, and a required column from an optional one.
+    #[test]
+    fn the_signature_holds_what_the_reader_reads_alike() {
+        let wide = written(
+            Field::new("AGE", DataType::Int64, true),
+            Arc::new(Int64Array::from(vec![34, 51])),
+        );
+        let narrow = written(
+            Field::new("AGE", DataType::Int32, true),
+            Arc::new(Int32Array::from(vec![34, 51])),
+        );
+        let required = written(
+            Field::new("AGE", DataType::Int64, false),
+            Arc::new(Int64Array::from(vec![34, 51])),
+        );
+        let text = written(
+            Field::new("NAME", DataType::Utf8, true),
+            Arc::new(StringArray::from(vec![Some("ab"), None])),
+        );
+        for (left, right) in [(&wide, &narrow), (&wide, &required)] {
+            let (left_table, right_table) = (parse(left).unwrap(), parse(right).unwrap());
+            assert_eq!(left_table.schema(), right_table.schema());
+            assert_eq!(left_table.row_count(), right_table.row_count());
+            for row in 0..left_table.row_count() {
+                assert_eq!(
+                    left_table.cell(row, 0).unwrap(),
+                    right_table.cell(row, 0).unwrap()
+                );
+            }
+            assert_ne!(signature(left).unwrap(), signature(right).unwrap());
+        }
+        let [column] = signature(&wide).unwrap().try_into().unwrap();
+        assert_eq!(column.path, "AGE");
+        assert_eq!(column.physical_type, "INT64");
+        assert_eq!(column.max_definition_level, 1);
+        assert_eq!(column.max_repetition_level, 0);
+        assert_eq!(signature(&narrow).unwrap()[0].physical_type, "INT32");
+        assert_eq!(signature(&required).unwrap()[0].max_definition_level, 0);
+        let [name] = signature(&text).unwrap().try_into().unwrap();
+        assert_eq!(name.physical_type, "BYTE_ARRAY");
+        assert!(name.logical_type.is_some());
+        // A file signs alike however often it is read, and a file that does
+        // not admit has no signature.
+        assert_eq!(signature(&wide).unwrap(), signature(&wide).unwrap());
+        assert!(signature(b"PAR1").is_err());
+        assert!(signature(&wide[..wide.len() - 1]).is_err());
+    }
 
     #[test]
     fn unsupported_text_representation_has_no_invalid_parquet_finding() {
@@ -196,5 +290,9 @@ pub fn parse(_: &[u8]) -> Result<ArrowTable, Error> {
 }
 #[cfg(not(feature = "parquet"))]
 pub fn parse_odm(_: &[u8]) -> Result<ArrowTable, Error> {
+    Err(Error::ReaderUnavailable)
+}
+#[cfg(not(feature = "parquet"))]
+pub fn signature(_: &[u8]) -> Result<Vec<ColumnSignature>, Error> {
     Err(Error::ReaderUnavailable)
 }

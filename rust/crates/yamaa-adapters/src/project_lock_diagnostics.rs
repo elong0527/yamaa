@@ -11,10 +11,11 @@ pub enum Error {
 /// The lock findings of `host`, the language that verified the lock, each at
 /// the field that declares the lock: the linked environment file's `lock` in
 /// 0.5, and the project file's `environments.<host>.lock` in 1.0, where the
-/// lock's path resolves from (FUNC-3, D8).
+/// lock's path resolves from (FUNC-3, D8). Only a host language verifies a
+/// lock, so without one no finding has an origin.
 pub fn issues(
     environment: &CapturedEnvironment,
-    host: Language,
+    host: Option<Language>,
     findings: &[Finding],
 ) -> Result<Vec<Diagnostic>, Error> {
     let entry = environment
@@ -22,6 +23,7 @@ pub fn issues(
         .map(|root| &root.source().identity);
     let origins = environment.lock().and_then(|lock| {
         let project = environment.project()?;
+        let host = host?;
         let written = project.environment(host)?.lock.as_ref()?;
         let (source, field) = match project.header.surface {
             Surface::V0_5 => (&environment.environment_file()?.source().identity, "lock"),

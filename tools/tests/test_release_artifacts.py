@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import yaml
 from tools.ci import publish_release as publisher
-from tools.ci import release_assets
+from tools.ci import release_assets, toolchain
 from tools.ci import select_release_artifacts as release
 from tools.packaging import generate_component_inventory as inventory
 from tools.packaging import release_identity
@@ -198,6 +198,18 @@ def downloads(root, identity=IDENTITY):
     # The R package's notices are the same, apart from its third-party notices
     # and component inventory, which list its own crates.
     r_licenses = {name: (ROOT / "R/yamaa/inst" / name).read_bytes() for name in NOTICES}
+    # An R binary package's inventory also names the standard library of the
+    # pinned toolchain that builds it, which configure appends when R
+    # installs the package.
+    r_inventory = r_licenses[inventory.NAME].decode("utf-8")
+    r_binary_licenses = dict(
+        r_licenses,
+        **{
+            inventory.NAME: inventory.installed_inventory(
+                r_inventory, toolchain.channel()
+            ).encode()
+        },
+    )
     python, r = identity.python, identity.r
     metadata = f"Metadata-Version: 2.4\nName: yamaa\nVersion: {python}\n\n".encode()
     for asset in release_assets.declared(MATRIX.coverage()):
@@ -239,7 +251,8 @@ def downloads(root, identity=IDENTITY):
                     "yamaa/libs/yamaa": b"independent native fixture\0"
                     + asset.artifact.encode(),
                     **{
-                        f"yamaa/{name}": payload for name, payload in r_licenses.items()
+                        f"yamaa/{name}": payload
+                        for name, payload in r_binary_licenses.items()
                     },
                 },
             )
@@ -712,6 +725,18 @@ class DownloadedPackages(unittest.TestCase):
                     "not built with",
                 ),
                 ("notices left in inst", moved, "required notice"),
+                (
+                    "the source package's inventory",
+                    dict(
+                        members,
+                        **{
+                            f"yamaa/{inventory.NAME}": (
+                                ROOT / "R/yamaa/inst" / inventory.NAME
+                            ).read_bytes()
+                        },
+                    ),
+                    f"required notice differs or is missing: yamaa/{inventory.NAME}",
+                ),
             ):
                 r_binary(path, replaced)
                 try:

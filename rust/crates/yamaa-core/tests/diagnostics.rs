@@ -210,7 +210,6 @@ mod diagnostics {
                     "target_changed",
                     "transport",
                     "unknown_class",
-                    "unknown_section",
                     "validation_policy",
                     "versioned_root_required",
                     "yaml_admission",

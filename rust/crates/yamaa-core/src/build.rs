@@ -8,7 +8,7 @@ pub struct Request<'a> {
 /// An absent project has no declarations, captures, lock or activation
 /// requirements. It does not manufacture a source file or discovery location.
 pub fn without_environment(
-    host: crate::project_function::Language,
+    host: Option<crate::project_function::Language>,
 ) -> crate::project_environment::ExecutionEnvironment {
     crate::project_environment::ExecutionEnvironment::without_project(host)
 }
@@ -68,7 +68,7 @@ pub fn prepare_environment<R, D: crate::project_preparation::ProjectDecodePort>(
     reader: &mut R,
     decoder: &mut D,
     written: &str,
-    host: crate::project_function::Language,
+    host: Option<crate::project_function::Language>,
 ) -> EnvironmentPreparation<R, D>
 where
     R: MetadataAdmissionPort
