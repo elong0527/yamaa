@@ -57,7 +57,7 @@ class RenderingTests(unittest.TestCase):
             "        return _call(self._native.save)\n",
             "            _call(self._native.member_issues, name)  # raises",
             "        return MemberRun(self._native, name)",
-            "        self.issues = _table(table)",
+            "        return Check(_call(_native._project_check, self._path))",
             "class Spec(_Lazy):",
             "    def __init__(self, path, project=None):",
             "    def __init__(self, native, name: str):",
@@ -79,7 +79,21 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_lint)",
                 "export(yamaa_schema)",
                 "export(yamaa_selftest)",
+                "S3method(print, yamaa_check)",
+                "S3method(format, yamaa_check)",
+                "S3method(print, yamaa_run)",
+                "S3method(format, yamaa_run)",
+                "S3method(print, yamaa_member_run)",
+                "S3method(format, yamaa_member_run)",
                 'S3method("[[", yamaa_project_run)',
+                "S3method(print, yamaa_project_run)",
+                "S3method(format, yamaa_project_run)",
+                "S3method(print, yamaa_submission)",
+                "S3method(format, yamaa_submission)",
+                "S3method(print, yamaa_spec)",
+                "S3method(format, yamaa_spec)",
+                "S3method(print, yamaa_project)",
+                "S3method(format, yamaa_project)",
                 "S3method(print, yamaa_selftest)",
                 "S3method(format, yamaa_selftest)",
             ],
@@ -95,8 +109,8 @@ class RenderingTests(unittest.TestCase):
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
-        # Only objects an S3 method or a private accessor reaches keep a handle.
-        self.assertEqual(text.count("object$.handle <- native"), 3)
+        # Every result prints, so every result keeps its handle for format().
+        self.assertEqual(text.count("object$.handle <- native"), 6)
 
     def test_a_printing_member_returns_the_text_rust_renders(self):
         python = self.public.render_python([])
@@ -118,6 +132,43 @@ class RenderingTests(unittest.TestCase):
             "  .reply(.native_selftest_summary(native))\n"
             "}\n",
             r,
+        )
+
+    def test_a_lazy_object_prints_the_path_it_holds(self):
+        python = self.public.render_python([])
+        for name in ("spec", "project"):
+            with self.subTest(name=name):
+                self.assertIn(
+                    "    def __repr__(self) -> str:\n"
+                    f"        return _native._{name}_summary(self._path)\n",
+                    python,
+                )
+        r = self.public.render_r([])
+        # The object keeps the path an S3 method reads in a hidden binding.
+        self.assertEqual(r.count("  object$.path <- path\n"), 2)
+        self.assertIn(
+            "format.yamaa_spec <- function(x, ...) {\n"
+            '  path <- get(".path", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_spec_summary(path))\n"
+            "}\n",
+            r,
+        )
+
+    def test_an_s3_method_reads_every_held_value_its_call_takes(self):
+        r = self.public.render_r([])
+        self.assertIn("  object$.handle <- native\n  object$.name <- name\n", r)
+        self.assertIn(
+            "format.yamaa_member_run <- function(x, ...) {\n"
+            '  native <- get(".handle", envir = x, inherits = FALSE)\n'
+            '  name <- get(".name", envir = x, inherits = FALSE)\n'
+            "  .reply(.native_project_run_member_summary(native, name))\n"
+            "}\n",
+            r,
+        )
+        self.assertIn(
+            "    def __repr__(self) -> str:\n"
+            "        return self._native.member_summary(self._name)\n",
+            self.public.render_python([]),
         )
 
     def test_selftest_delegates_to_its_native_result(self):
@@ -298,10 +349,12 @@ class ValidationTests(unittest.TestCase):
                 ),
             ),
             (
-                "Spec.summary reaches a handle",
-                lambda d: classes(d)["Spec"]["members"].append(
-                    copy.deepcopy(member(d, "SelfTest", "summary"))
-                ),
+                "Spec.summary calls _SelfTest.summary without holding a handle",
+                lambda d: member(d, "Spec", "summary").update(calls="selftest_summary"),
+            ),
+            (
+                "nothing fills the Python argument specification",
+                lambda d: classes(d)["Spec"].update(holds={"path": "project"}),
             ),
             (
                 "keyword_only",
@@ -330,9 +383,10 @@ class ValidationTests(unittest.TestCase):
                     holds={"name": "name", "native": "handle"}
                 ),
             ),
+            # A held value is a handle or a path; `field` is no member kind.
             (
-                "must fill each field",
-                lambda d: classes(d)["Check"].update(holds={"table": "rows"}),
+                "unknown kind",
+                lambda d: member(d, "Check", "issues").update(kind="field"),
             ),
             (
                 "defined later",
@@ -348,7 +402,9 @@ class ValidationTests(unittest.TestCase):
             ),
             (
                 "needs a names member",
-                lambda d: classes(d)["ProjectRun"]["members"].pop(0),
+                lambda d: classes(d)["ProjectRun"]["members"].remove(
+                    member(d, "ProjectRun", "names")
+                ),
             ),
             (
                 "reaches a handle",
@@ -391,7 +447,7 @@ class ValidationTests(unittest.TestCase):
             ),
             # A result made from the wrong native type.
             (
-                "returns _ArrowTable, not Run",
+                "returns _Check, not Run",
                 lambda d: member(d, "Spec", "run").update(calls="spec_check"),
             ),
             # Members of one handle class call one native class.
@@ -425,6 +481,10 @@ class ManifestTests(unittest.TestCase):
             "public.classes.SelfTest.summary: printing; python __repr__; r print, format",
             "public.r.s3methods.yamaa_selftest.print",
             "public.r.s3methods.yamaa_selftest.format",
+            "public.classes.Check.status: property; returns status",
+            "public.classes.MemberRun.status: property; returns status; raises refusal",
+            "public.classes.Spec.summary: printing; python __repr__; r print, format",
+            "public.r.s3methods.yamaa_spec.format",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, lines)

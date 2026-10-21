@@ -13,6 +13,7 @@ SDTM and ADaM datasets and define.xml files.
 | Build every ADaM dataset | `project$run("adam")$save()` | `project.run("adam").save()` |
 | One dataset of a project run | `runs[["ADSL"]]$output` | `runs["ADSL"].output` |
 | Check without data | `spec$check()$issues` | `spec.check().issues` |
+| Did it succeed? | `run$status` | `run.status` |
 | See the resolved specification | `spec$resolve()` | `spec.resolve()` |
 | Run report | `run$report` | `run.report` |
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
@@ -113,6 +114,7 @@ columns:
     ```r
     spec <- yamaa_spec("sdtm/dm.yaml")
     run <- spec$run()
+    run$status    # "succeeded" or "failed"
     run$output    # generated dataset
     run$issues    # identified errors
     run$report    # run report
@@ -124,6 +126,7 @@ columns:
     ```python
     spec = yamaa.spec("sdtm/dm.yaml")
     run = spec.run()
+    run.status    # "succeeded" or "failed"
     run.output    # generated dataset
     run.issues    # identified errors
     run.report    # run report
@@ -157,6 +160,52 @@ every row.
     ```python
     yamaa.spec("sdtm/dm.yaml").check().issues
     ```
+
+## Status and printed results
+
+Every result has a `status`. A check succeeds when it finds no issue, and a
+run when it builds its dataset with no issue. A project run succeeds when
+every specification in it succeeds, and a submission when every section
+composes with no issue; anything else is `failed`. A specification of a
+project run that did not run, because a specification it reads from did not
+complete, is `skipped`.
+
+Printing a result shows its status, its size, its issue count and its first
+issue. The engine writes the text, so R, Python and the command line print the
+same words. A project run lists each specification on a line of its own, and
+one of its runs prints like any run:
+
+=== "R"
+
+    ```r
+    runs <- yamaa_project("project.yaml")$run("adam")
+    runs$status        # "failed"
+    runs               # the summary below
+    runs[["ADTTE"]]
+    ```
+
+=== "Python"
+
+    ```python
+    runs = yamaa.project("project.yaml").run("adam")
+    runs.status        # "failed"
+    print(runs)        # the summary below
+    print(runs["ADTTE"])
+    ```
+
+```text
+yamaa project run of project.yaml, section adam: failed, 3 specifications, 2 issues
+  ADSL   succeeded  254 rows x 48 columns, 0 issues
+  ADAE   failed     no output, 1 issue
+  ADTTE  skipped    no output, 1 issue
+first issue: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]
+yamaa run of ADTTE: skipped, no output, 1 issue
+first issue: this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]
+```
+
+`yamaa_spec()`, `yamaa.spec()` and the project functions read nothing, so
+their objects print only the path you gave, such as `yamaa spec
+sdtm/dm.yaml`. In R, `format()` returns the printed lines.
 
 ## See the resolved specification
 

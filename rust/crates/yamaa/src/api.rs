@@ -1133,10 +1133,15 @@ mod tests {
 
     #[test]
     fn statuses_are_the_statuses_in_order() {
-        assert_eq!(
-            [Status::Succeeded, Status::Failed, Status::Skipped].map(Status::as_str),
-            STATUSES
-        );
+        let statuses = [Status::Succeeded, Status::Failed, Status::Skipped];
+        for status in statuses {
+            // Exhaustive: a new status fails to compile here until it is
+            // listed above, and so in STATUSES.
+            match status {
+                Status::Succeeded | Status::Failed | Status::Skipped => {}
+            }
+        }
+        assert_eq!(statuses.map(Status::as_str), STATUSES);
     }
 
     /// Resolved facts the engine cannot represent are refused as the

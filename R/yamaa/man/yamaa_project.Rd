@@ -1,6 +1,14 @@
 \name{yamaa_project}
 \alias{yamaa_project}
 \alias{[[.yamaa_project_run}
+\alias{print.yamaa_project}
+\alias{format.yamaa_project}
+\alias{print.yamaa_project_run}
+\alias{format.yamaa_project_run}
+\alias{print.yamaa_member_run}
+\alias{format.yamaa_member_run}
+\alias{print.yamaa_submission}
+\alias{format.yamaa_submission}
 \title{A project file, read only when a method runs}
 \description{
 Holds the path of a \code{project.yaml}: the study's specifications, codelists,
@@ -11,10 +19,27 @@ a method runs.
 yamaa_project(path)
 
 \method{[[}{yamaa_project_run}(x, i, ...)
+
+\method{print}{yamaa_project}(x, ...)
+
+\method{format}{yamaa_project}(x, ...)
+
+\method{print}{yamaa_project_run}(x, ...)
+
+\method{format}{yamaa_project_run}(x, ...)
+
+\method{print}{yamaa_member_run}(x, ...)
+
+\method{format}{yamaa_member_run}(x, ...)
+
+\method{print}{yamaa_submission}(x, ...)
+
+\method{format}{yamaa_submission}(x, ...)
 }
 \arguments{
   \item{path}{Path of a \code{project.yaml}.}
-  \item{x}{A project run.}
+  \item{x}{A project, a project run, one specification's run of a project run,
+    or a submission.}
   \item{i}{The \code{domain} name of a specification the run built.}
   \item{...}{Unused.}
 }
@@ -23,29 +48,44 @@ An object with four methods:
 \describe{
   \item{\code{$spec(name)}}{The listed specification whose \code{domain} is
     \code{name}, with the project's codelists and functions.}
-  \item{\code{$check()}}{Static findings for every listed specification.}
+  \item{\code{$check()}}{Static findings for every listed specification, with
+    \code{$status} and \code{$issues}.}
   \item{\code{$run(section = NULL)}}{Builds every specification of one section
     (\code{"sdtm"}, \code{"adam"} or \code{"send"}), or of all sections. The
-    project run has \code{$names}, \code{$issues}, \code{$report} and
+    project run has \code{$status}, \code{"succeeded"} when every
+    specification succeeded, \code{$names}, \code{$issues}, \code{$report} and
     \code{$save()}, which writes each declared report file and then each output
     dataset in run order, only the reports when a specification failed;
-    \code{runs[["ADSL"]]} is one specification's run, with \code{$output},
-    \code{$issues} and \code{$report}.}
+    \code{runs[["ADSL"]]} is one specification's run, with \code{$status},
+    \code{$output}, \code{$issues} and \code{$report}. Its status is
+    \code{"skipped"} when a specification that it reads from did not
+    complete.}
   \item{\code{$submission(section = NULL, created = NULL)}}{define.xml, and
     a Dataset-JSON or SAS Transport version 5 file per dataset where a section
-    sets \code{datasets: json} or \code{datasets: xpt}, with \code{$issues}
-    and \code{$save()}, which writes each section's transport files and then
-    its define.xml.}
+    sets \code{datasets: json} or \code{datasets: xpt}, with \code{$status},
+    \code{$issues} and \code{$save()}, which writes each section's transport
+    files and then its define.xml.}
 }
 Each \code{$save()} returns the absolute paths it wrote invisibly, in
 publication order. A failure raises a condition of class \code{yamaa_error}
 whose \code{issues} data frame says why; for a refused \code{$save()}, its
 \code{paths} lists the files written before the refusal.
+
+\code{format()} returns the lines that the engine renders for an object, the
+same words that Python and the command line print, and \code{print()} writes
+them and returns the object invisibly. A project prints
+\code{yamaa project <path>}, since it has read nothing. A project run prints
+its status, its number of specifications and its issue count, then one line
+per specification with its status, size and issue count, then its first
+issue; one specification's run prints as a run does. A submission prints its
+status, its define.xml and transport files and its issue count.
 }
 \examples{
 \dontrun{
 project <- yamaa_project("project.yaml")
-project$run("sdtm")$save()
+runs <- project$run("sdtm")
+runs
+runs$save()
 project$submission("sdtm")$save()
 }
 }

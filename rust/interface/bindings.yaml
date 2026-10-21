@@ -321,15 +321,22 @@ public:
       doc: Run the bundled selftest cases through this installation's engine, comparing each with its expected files.
 
   # Result and lazy classes, in definition order: a class is defined before
-  # any class that returns it.
+  # any class that returns it. Every result has a `status` (D36, P-STATUS-1)
+  # and every class prints the text Rust renders for it (D37, P-PRINT-1).
   classes:
     Check:
       python: yamaa.Check
       r: yamaa_check
-      holds: {table: issues}
+      holds: {native: handle}
       doc: Static findings; `issues` is empty when nothing is wrong.
       members:
-        - {name: issues, kind: field, returns: table, table: issues}
+        - name: status
+          kind: property
+          returns: status
+          calls: check_status
+          doc: "`failed` when the check found an issue, and `succeeded` otherwise."
+        - {name: issues, kind: property, returns: table, table: issues, calls: check_issues}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: check_summary}
     Run:
       python: yamaa.Run
       r: yamaa_run
@@ -337,6 +344,11 @@ public:
       interrupt: run_interrupt
       doc: One specification run; nothing is written until `save()`.
       members:
+        - name: status
+          kind: property
+          returns: status
+          calls: run_status
+          doc: "`succeeded` when the run built its output with no issue, and `failed` otherwise."
         - name: output
           kind: property
           returns: optional_table
@@ -360,6 +372,7 @@ public:
           raises: refusal
           calls: run_save
           doc: Write the declared report file, then the output dataset; return the paths written.
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: run_summary}
         # Installed-run evidence for qualification suites: R's
         # `.run_observations(run)`; Python reads `run._native.observations()`.
         - name: observations
@@ -373,6 +386,12 @@ public:
       holds: {native: handle, name: name}
       doc: One specification's run inside a project run; save the project run.
       members:
+        - name: status
+          kind: property
+          returns: status
+          raises: refusal
+          calls: project_run_member_status
+          doc: "As a run's, or `skipped` when a producer in the project run did not complete."
         - {name: output, kind: property, returns: optional_table, raises: refusal, calls: project_run_output}
         - name: issues
           kind: property
@@ -386,6 +405,11 @@ public:
           table: report
           raises: refusal
           calls: project_run_member_report
+        - name: summary
+          kind: printing
+          python: __repr__
+          r: [print, format]
+          calls: project_run_member_summary
     ProjectRun:
       python: yamaa.ProjectRun
       r: yamaa_project_run
@@ -393,6 +417,11 @@ public:
       interrupt: project_run_interrupt
       doc: Every specification a project run built, by `domain` name.
       members:
+        - name: status
+          kind: property
+          returns: status
+          calls: project_run_status
+          doc: "`succeeded` when every specification succeeded and no project finding refused the run."
         - name: names
           kind: property
           returns: names
@@ -417,12 +446,18 @@ public:
           raises: refusal
           calls: project_run_save
           doc: Write each report file, then each output unless a run failed; return the paths written.
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: project_run_summary}
     Submission:
       python: yamaa.Submission
       r: yamaa_submission
       holds: {native: handle}
       doc: define.xml and each selected section's Dataset-JSON or SAS Transport files.
       members:
+        - name: status
+          kind: property
+          returns: status
+          calls: submission_status
+          doc: "`succeeded` when every selected section composed with no issue, and `failed` otherwise."
         - {name: issues, kind: property, returns: table, table: issues, calls: submission_issues}
         - name: save
           kind: method
@@ -430,6 +465,9 @@ public:
           raises: refusal
           calls: submission_save
           doc: Write each section's transport files, then its define.xml; return the paths written.
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: submission_summary}
+    # A lazy object prints the path it holds, as given (D37): it has read
+    # nothing to say more about.
     Spec:
       python: yamaa.Spec
       r: yamaa_spec
@@ -449,6 +487,7 @@ public:
           calls: spec_resolve
           doc: The specification after its layers are composed.
         - {name: run, kind: method, returns: Run, raises: refusal, calls: spec_run, doc: Build the dataset in memory.}
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: spec_summary}
     Project:
       python: yamaa.Project
       r: yamaa_project
@@ -477,6 +516,7 @@ public:
           returns: Submission
           raises: refusal
           calls: project_submission
+        - {name: summary, kind: printing, python: __repr__, r: [print, format], calls: project_summary}
     # The installation self-test (D28, D119). Its printed text is the report:
     # the summary line, the first failure, the adapters no case covered and
     # the information line, rendered in Rust.
@@ -551,34 +591,50 @@ python:
       rust: api_entry::_Error
       base: Exception
     - kind: class
+      name: _Check
+      rust: api_entry::Check
+      constructible: false
+      methods:
+        - {name: status, args: {}, returns: text}
+        - {name: issues, args: {}, returns: _ArrowTable}
+        - {name: summary, args: {}, returns: text}
+    - kind: class
       name: _Run
       rust: api_entry::Run
       constructible: false
       methods:
+        - {name: status, args: {}, returns: text}
         - {name: output, args: {}, returns: "optional<_ArrowTable>"}
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: report, args: {}, returns: "optional<_ArrowTable>"}
         - {name: save, args: {}, returns: "list<text>"}
+        - {name: summary, args: {}, returns: text}
         - {name: observations, args: {include_measurements: "bool = false"}, returns: "optional<text>"}
     - kind: class
       name: _ProjectRun
       rust: api_entry::ProjectRun
       constructible: false
       methods:
+        - {name: status, args: {}, returns: text}
         - {name: names, args: {}, returns: "list<text>"}
+        - {name: member_status, args: {name: text}, returns: text}
         - {name: output, args: {name: text}, returns: "optional<_ArrowTable>"}
         - {name: member_issues, args: {name: text}, returns: _ArrowTable}
         - {name: member_report, args: {name: text}, returns: "optional<_ArrowTable>"}
+        - {name: member_summary, args: {name: text}, returns: text}
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: report, args: {}, returns: _ArrowTable}
         - {name: save, args: {}, returns: "list<text>"}
+        - {name: summary, args: {}, returns: text}
     - kind: class
       name: _Submission
       rust: api_entry::Submission
       constructible: false
       methods:
+        - {name: status, args: {}, returns: text}
         - {name: issues, args: {}, returns: _ArrowTable}
         - {name: save, args: {}, returns: "list<text>"}
+        - {name: summary, args: {}, returns: text}
     - kind: class
       name: _SelfTest
       rust: api_entry::SelfTest
@@ -602,7 +658,12 @@ python:
       name: _spec_check
       rust: api_entry::_spec_check
       args: {specification: text, project: "optional<text> = None"}
-      returns: _ArrowTable
+      returns: _Check
+    - kind: function
+      name: _spec_summary
+      rust: api_entry::_spec_summary
+      args: {specification: text}
+      returns: text
     - kind: function
       name: _spec_run
       rust: api_entry::_spec_run
@@ -619,10 +680,15 @@ python:
       args: {project: text, name: text}
       returns: text
     - kind: function
+      name: _project_summary
+      rust: api_entry::_project_summary
+      args: {project: text}
+      returns: text
+    - kind: function
       name: _project_check
       rust: api_entry::_project_check
       args: {project: text}
-      returns: _ArrowTable
+      returns: _Check
     - kind: function
       name: _project_run
       rust: api_entry::_project_run
@@ -673,6 +739,10 @@ r:
       source: rust/crates/yamaa-r/src/api_entry.rs
       functions:
         - {name: spec_check, args: {specification: raw, project: robj, version: raw}, returns: r_reply}
+        - {name: check_status, args: {handle: robj}, returns: r_reply}
+        - {name: check_issues, args: {handle: robj}, returns: r_reply}
+        - {name: check_summary, args: {handle: robj}, returns: r_reply}
+        - {name: spec_summary, args: {specification: raw}, returns: r_reply}
         - {name: plans, args: {handle: robj}, returns: r_reply}
         - name: spec_run
           args: {specification: raw, project: robj, version: raw, capabilities: r_list, plans: robj}
@@ -681,30 +751,39 @@ r:
         - name: read_odm
           args: {source: raw, archive_member: robj, max_archive_members: index, max_expanded_bytes: index, max_xml_depth: index}
           returns: r_reply
+        - {name: run_status, args: {handle: robj}, returns: r_reply}
         - {name: run_output, args: {handle: robj}, returns: r_reply}
         - {name: run_issues, args: {handle: robj}, returns: r_reply}
         - {name: run_report, args: {handle: robj}, returns: r_reply}
         - {name: run_save, args: {handle: robj}, returns: r_reply}
+        - {name: run_summary, args: {handle: robj}, returns: r_reply}
         - {name: run_observations, args: {handle: robj, include_measurements: bool}, returns: r_reply}
         - {name: run_interrupt, args: {handle: robj}, returns: r_reply}
         - {name: project_spec, args: {project: raw, name: raw, version: raw}, returns: r_reply}
+        - {name: project_summary, args: {project: raw}, returns: r_reply}
         - {name: project_check, args: {project: raw, version: raw}, returns: r_reply}
         - name: project_run
           args: {project: raw, section: robj, version: raw, capabilities: r_list, plans: robj}
           returns: r_reply
+        - {name: project_run_status, args: {handle: robj}, returns: r_reply}
         - {name: project_run_names, args: {handle: robj}, returns: r_reply}
+        - {name: project_run_member_status, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_output, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_issues, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_member_report, args: {handle: robj, name: raw}, returns: r_reply}
+        - {name: project_run_member_summary, args: {handle: robj, name: raw}, returns: r_reply}
         - {name: project_run_issues, args: {handle: robj}, returns: r_reply}
         - {name: project_run_report, args: {handle: robj}, returns: r_reply}
         - {name: project_run_save, args: {handle: robj}, returns: r_reply}
+        - {name: project_run_summary, args: {handle: robj}, returns: r_reply}
         - {name: project_run_interrupt, args: {handle: robj}, returns: r_reply}
         - name: project_submission
           args: {project: raw, section: robj, created: robj, version: raw}
           returns: r_reply
+        - {name: submission_status, args: {handle: robj}, returns: r_reply}
         - {name: submission_issues, args: {handle: robj}, returns: r_reply}
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
+        - {name: submission_summary, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
         - {name: schema, args: {file_type: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
@@ -719,27 +798,40 @@ operations:
   core_version: {python: [_CORE_VERSION], r: [core_version]}
   plans: {python: [_plans], r: [plans]}
   spec_check: {python: [_spec_check], r: [spec_check]}
+  check_status: {python: [_Check.status], r: [check_status]}
+  check_issues: {python: [_Check.issues], r: [check_issues]}
+  check_summary: {python: [_Check.summary], r: [check_summary]}
+  spec_summary: {python: [_spec_summary], r: [spec_summary]}
   spec_run: {python: [_spec_run], r: [spec_run]}
   spec_resolve: {python: [_spec_resolve], r: [spec_resolve]}
   read_odm: {python: [_read_odm], r: [read_odm]}
+  run_status: {python: [_Run.status], r: [run_status]}
   run_output: {python: [_Run.output], r: [run_output]}
   run_issues: {python: [_Run.issues], r: [run_issues]}
   run_report: {python: [_Run.report], r: [run_report]}
   run_save: {python: [_Run.save], r: [run_save]}
+  run_summary: {python: [_Run.summary], r: [run_summary]}
   run_observations: {python: [_Run.observations], r: [run_observations]}
   project_spec: {python: [_project_spec], r: [project_spec]}
+  project_summary: {python: [_project_summary], r: [project_summary]}
   project_check: {python: [_project_check], r: [project_check]}
   project_run: {python: [_project_run], r: [project_run]}
+  project_run_status: {python: [_ProjectRun.status], r: [project_run_status]}
   project_run_names: {python: [_ProjectRun.names], r: [project_run_names]}
+  project_run_member_status: {python: [_ProjectRun.member_status], r: [project_run_member_status]}
   project_run_output: {python: [_ProjectRun.output], r: [project_run_output]}
   project_run_member_issues: {python: [_ProjectRun.member_issues], r: [project_run_member_issues]}
   project_run_member_report: {python: [_ProjectRun.member_report], r: [project_run_member_report]}
+  project_run_member_summary: {python: [_ProjectRun.member_summary], r: [project_run_member_summary]}
   project_run_issues: {python: [_ProjectRun.issues], r: [project_run_issues]}
   project_run_report: {python: [_ProjectRun.report], r: [project_run_report]}
   project_run_save: {python: [_ProjectRun.save], r: [project_run_save]}
+  project_run_summary: {python: [_ProjectRun.summary], r: [project_run_summary]}
   project_submission: {python: [_project_submission], r: [project_submission]}
+  submission_status: {python: [_Submission.status], r: [submission_status]}
   submission_issues: {python: [_Submission.issues], r: [submission_issues]}
   submission_save: {python: [_Submission.save], r: [submission_save]}
+  submission_summary: {python: [_Submission.summary], r: [submission_summary]}
   lint: {python: [_lint], r: [lint]}
   schema: {python: [_schema], r: [schema]}
   selftest: {python: [_selftest], r: [selftest]}

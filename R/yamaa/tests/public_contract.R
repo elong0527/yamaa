@@ -30,7 +30,11 @@ stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
     c("yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema", "yamaa_selftest",
       "yamaa_spec")),
   identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
-    c("[[.yamaa_project_run", "print.yamaa_selftest", "format.yamaa_selftest")))
+    c("print.yamaa_check", "format.yamaa_check", "print.yamaa_run", "format.yamaa_run",
+      "print.yamaa_member_run", "format.yamaa_member_run", "[[.yamaa_project_run",
+      "print.yamaa_project_run", "format.yamaa_project_run", "print.yamaa_submission",
+      "format.yamaa_submission", "print.yamaa_spec", "format.yamaa_spec", "print.yamaa_project",
+      "format.yamaa_project", "print.yamaa_selftest", "format.yamaa_selftest")))
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",
   "yamaa_read_resolved_specification", "yamaa_resource_resolver", "yamaa_memory_resolver",
   "yamaa_synthetic_remote_resolver", "yamaa_resource_result", "yamaa_resource_failure",

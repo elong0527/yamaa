@@ -20,16 +20,15 @@ helpers in ``R/yamaa/R/api.R``; and every native body in the binding crates.
 
 Delegation is declared, never written as code. A class ``holds`` an ordered
 set of values, each named by what it fills: ``handle``, the native handle the
-object wraps; the name of one of its ``field`` members; or the name of a
-native argument, which the value fills in the object's native calls. A class
-that holds neither a handle nor a field is lazy: it holds paths, and it keeps
-a plans handle when a native call it makes takes ``plans``. A member or a
-function ``calls`` an operation of the ``operations`` table, and each native
-argument of that operation's Python and R exports is bound by name: to the
-member's own arguments, to a held value, to the plans handle, or in R to the
-host's ``version`` and ``capabilities``. A member that returns a class makes
-it from the call's result and the values it holds. README.md lists the member
-kinds and these rules.
+object wraps, or the name of a native argument, which the value fills in the
+object's native calls. A class that holds no handle is lazy: it holds paths,
+and it keeps a plans handle when a native call it makes takes ``plans``. A
+member or a function ``calls`` an operation of the ``operations`` table, and
+each native argument of that operation's Python and R exports is bound by
+name: to the member's own arguments, to a held value, to the plans handle, or
+in R to the host's ``version`` and ``capabilities``. A member that returns a
+class makes it from the call's result and the values it holds. README.md lists
+the member kinds and these rules.
 """
 
 import re
@@ -90,7 +89,7 @@ _R_ARGUMENT = {
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
-_KINDS = {"property", "method", "field", "index", "protocol", "private", "printing"}
+_KINDS = {"property", "method", "index", "protocol", "private", "printing"}
 _PROTOCOLS = {"__contains__", "__iter__"}
 # How a printing member is spelled: Python's repr() and str() return the text
 # its operation renders, and R's format() returns those lines and print()
@@ -411,9 +410,6 @@ class Public:
             if member["name"] in names:
                 raise ValueError(f"{what} declares {member['name']} twice")
             names.add(member["name"])
-        fields = {m["name"] for m in members if m["kind"] == "field"}
-        if {role for role in roles if role in fields} != fields:
-            raise ValueError(f"{what}.holds must fill each field")
         for member in members:
             self._validate_member(
                 name, cls, member, f"{what}.{member['name']}", defined
@@ -465,8 +461,8 @@ class Public:
                     f"{what} must be spelled __repr__ and [print, format] and call "
                     "the operation that renders its text"
                 )
-            if "handle" not in cls["holds"].values():
-                raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
+            # A result's text comes from its handle and a lazy object's from
+            # the paths it holds; the call's binding is checked as it renders.
             if member["calls"] not in self.operations:
                 raise ValueError(
                     f"{what} calls an unknown operation: {member['calls']!r}"
@@ -496,10 +492,7 @@ class Public:
             )
         if kind in {"index", "private"} and "handle" not in cls["holds"].values():
             raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
-        if kind == "field":
-            if "calls" in member or member.get("args"):
-                raise ValueError(f"{what} is held, so it calls nothing")
-        elif "calls" not in member:
+        if "calls" not in member:
             raise ValueError(f"{what} must name the operation it calls")
         if kind == "property" and member.get("args"):
             raise ValueError(f"{what} is a property and takes no arguments")
@@ -512,13 +505,8 @@ class Public:
         return list(self.classes[name]["holds"].items())
 
     def kind(self, name):
-        roles = set(self.classes[name]["holds"].values())
-        if "handle" in roles:
-            return "handle"
-        fields = {
-            m["name"] for m in self.classes[name]["members"] if m["kind"] == "field"
-        }
-        return "value" if roles & fields else "lazy"
+        """`handle` for a result, which wraps a native handle, else `lazy`."""
+        return "handle" if "handle" in self.classes[name]["holds"].values() else "lazy"
 
     def _handle(self, name):
         for hold, role in self.holds(name):
@@ -692,7 +680,6 @@ class Public:
 
     def _py_init(self, name):
         kind = self.kind(name)
-        members = {m["name"]: m for m in self.classes[name]["members"]}
         params, body = [], []
         for index, (hold, role) in enumerate(self.holds(name)):
             if kind == "lazy" and index > 0:
@@ -701,11 +688,7 @@ class Public:
                 params.append(f"{hold}: {self._held_annotation(name, role)}")
             else:
                 params.append(hold)
-            if role in members and members[role]["kind"] == "field":
-                helper = _PY_RESULT.get(members[role]["returns"])
-                value = f"{helper}({hold})" if helper else hold
-                body.append(f"self.{role} = {value}")
-            elif kind == "lazy" and index == 0:
+            if kind == "lazy" and index == 0:
                 body.append(f"self._{hold} = _fspath({hold})")
             else:
                 body.append(f"self._{hold} = {hold}")
@@ -789,7 +772,7 @@ class Public:
             lines += [f'    """{cls["doc"]}"""', ""]
         lines += self._py_init(name)
         for member in cls["members"]:
-            if member["kind"] in {"field", "private"}:
+            if member["kind"] == "private":
                 continue
             lines += ["", *self._py_member(name, member)]
         return lines
@@ -1003,6 +986,43 @@ class Public:
             )
         return ", ".join(parts)
 
+    def _r_bound(self, entry, class_name):
+        """The held values that the R call of `entry` takes."""
+        _, reference = self._operation(entry["calls"], class_name)
+        args = entry.get("args", {})
+        bound = set()
+        for native in self.r_functions[reference]["args"]:
+            if native in args or native in {"version", "capabilities", "plans"}:
+                continue
+            bound.update(
+                hold for hold, role in self.holds(class_name) if role == native
+            )
+        return bound
+
+    def _r_binding(self, name, hold):
+        """The hidden binding that keeps `hold`: `.handle` for the handle."""
+        return ".handle" if hold == self._handle(name) else f".{hold}"
+
+    def _r_hidden(self, name):
+        """The held values that an S3 method or a private accessor reaches,
+        in hold order; the object keeps each in its hidden binding."""
+        reached = set()
+        for member in self.classes[name]["members"]:
+            if member["kind"] in {"index", "private", "printing"}:
+                reached |= self._r_bound(member, name)
+        return [hold for hold, _ in self.holds(name) if hold in reached]
+
+    def _r_reads(self, name, entry, envir):
+        """Lines reading each held value the call of `entry` takes from its
+        hidden binding in `envir`, as a variable named for the value."""
+        bound = self._r_bound(entry, name)
+        return [
+            f'  {hold} <- get("{self._r_binding(name, hold)}", envir = {envir}, '
+            "inherits = FALSE)"
+            for hold, _ in self.holds(name)
+            if hold in bound
+        ]
+
     def _r_constructor(self, name):
         cls = self.classes[name]
         holds = [hold for hold, _ in self.holds(name)]
@@ -1014,9 +1034,10 @@ class Public:
         if self.plans(name):
             lines.append("  plans <- NULL")
         lines.append("  object <- new.env(parent = emptyenv())")
-        kinds = {member["kind"] for member in cls["members"]}
-        if handle and kinds & {"index", "private", "printing"}:
-            lines.append(f"  object$.handle <- {handle}")
+        lines += [
+            f"  object${self._r_binding(name, hold)} <- {hold}"
+            for hold in self._r_hidden(name)
+        ]
         for member in cls["members"]:
             lines += self._r_member(name, member, handle)
         lines += [f'  .object(object, "{cls["r"]}")', "}"]
@@ -1025,9 +1046,6 @@ class Public:
     def _r_member(self, name, member, handle):
         what = f"public.classes.{name}.{member['name']}"
         kind = member["kind"]
-        if kind == "field":
-            held = next(h for h, role in self.holds(name) if role == member["name"])
-            return [f"  object${member['name']} <- {held}"]
         if kind not in {"property", "method"}:
             return []
         call, plans = self._r_call(member, name, what, handle=handle)
@@ -1089,9 +1107,10 @@ class Public:
                     "}",
                 ]
             elif member["kind"] == "printing":
-                # format() returns the lines Rust renders; print() writes them,
+                # format() returns the lines Rust renders, from the handle of
+                # a result or the path of a lazy object; print() writes them,
                 # each ended by a line feed, and returns the object invisibly.
-                call, _ = self._r_call(member, name, what, handle="native")
+                call, _ = self._r_call(member, name, what, handle=self._handle(name))
                 lines += [
                     "",
                     f"print.{cls['r']} <- function(x, ...) {{",
@@ -1100,7 +1119,7 @@ class Public:
                     "}",
                     "",
                     f"format.{cls['r']} <- function(x, ...) {{",
-                    '  native <- get(".handle", envir = x, inherits = FALSE)',
+                    *self._r_reads(name, member, "x"),
                     *_r_lines(call, "  "),
                     "}",
                 ]

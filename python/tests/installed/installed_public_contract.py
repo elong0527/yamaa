@@ -201,6 +201,7 @@ class PublicContract(unittest.TestCase):
             [
                 "_ArrowTable",
                 "_CORE_VERSION",
+                "_Check",
                 "_Error",
                 "_Plans",
                 "_ProjectRun",
@@ -213,12 +214,14 @@ class PublicContract(unittest.TestCase):
                 "_project_run",
                 "_project_spec",
                 "_project_submission",
+                "_project_summary",
                 "_read_odm",
                 "_schema",
                 "_selftest",
                 "_spec_check",
                 "_spec_resolve",
                 "_spec_run",
+                "_spec_summary",
             ],
         )
         self.assertEqual(yamaa.__version__, "0.5.0")

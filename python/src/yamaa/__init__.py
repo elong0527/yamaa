@@ -55,8 +55,20 @@ def _call(function, *args):
 class Check:
     """Static findings; `issues` is empty when nothing is wrong."""
 
-    def __init__(self, table):
-        self.issues = _table(table)
+    def __init__(self, native):
+        self._native = native
+
+    @property
+    def status(self) -> str:
+        """`failed` when the check found an issue, and `succeeded` otherwise."""
+        return self._native.status()
+
+    @property
+    def issues(self) -> _pl.DataFrame:
+        return _table(self._native.issues())
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Run:
@@ -64,6 +76,11 @@ class Run:
 
     def __init__(self, native):
         self._native = native
+
+    @property
+    def status(self) -> str:
+        """`succeeded` when the run built its output with no issue, and `failed` otherwise."""
+        return self._native.status()
 
     @property
     def output(self) -> _pl.DataFrame | None:
@@ -84,6 +101,9 @@ class Run:
         """Write the declared report file, then the output dataset; return the paths written."""
         return _call(self._native.save)
 
+    def __repr__(self) -> str:
+        return self._native.summary()
+
 
 class MemberRun:
     """One specification's run inside a project run; save the project run."""
@@ -91,6 +111,11 @@ class MemberRun:
     def __init__(self, native, name: str):
         self._native = native
         self._name = name
+
+    @property
+    def status(self) -> str:
+        """As a run's, or `skipped` when a producer in the project run did not complete."""
+        return _call(self._native.member_status, self._name)
 
     @property
     def output(self) -> _pl.DataFrame | None:
@@ -104,12 +129,20 @@ class MemberRun:
     def report(self) -> _pl.DataFrame | None:
         return _optional_table(_call(self._native.member_report, self._name))
 
+    def __repr__(self) -> str:
+        return self._native.member_summary(self._name)
+
 
 class ProjectRun:
     """Every specification a project run built, by `domain` name."""
 
     def __init__(self, native):
         self._native = native
+
+    @property
+    def status(self) -> str:
+        """`succeeded` when every specification succeeded and no project finding refused the run."""
+        return self._native.status()
 
     @property
     def names(self) -> list[str]:
@@ -140,6 +173,9 @@ class ProjectRun:
         """Write each report file, then each output unless a run failed; return the paths written."""
         return _call(self._native.save)
 
+    def __repr__(self) -> str:
+        return self._native.summary()
+
 
 class Submission:
     """define.xml and each selected section's Dataset-JSON or SAS Transport files."""
@@ -148,12 +184,20 @@ class Submission:
         self._native = native
 
     @property
+    def status(self) -> str:
+        """`succeeded` when every selected section composed with no issue, and `failed` otherwise."""
+        return self._native.status()
+
+    @property
     def issues(self) -> _pl.DataFrame:
         return _table(self._native.issues())
 
     def save(self) -> list[str]:
         """Write each section's transport files, then its define.xml; return the paths written."""
         return _call(self._native.save)
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Spec(_Lazy):
@@ -175,6 +219,9 @@ class Spec(_Lazy):
     def run(self) -> Run:
         """Build the dataset in memory."""
         return Run(_call(_native._spec_run, self._path, self._project, self._plans))
+
+    def __repr__(self) -> str:
+        return _native._spec_summary(self._path)
 
 
 class Project(_Lazy):
@@ -201,6 +248,9 @@ class Project(_Lazy):
         return Submission(
             _call(_native._project_submission, self._path, section, created)
         )
+
+    def __repr__(self) -> str:
+        return _native._project_summary(self._path)
 
 
 class SelfTest:

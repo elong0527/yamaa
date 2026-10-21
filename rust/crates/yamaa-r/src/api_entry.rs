@@ -179,6 +179,14 @@ macro_rules! registry {
 
 registry!(RUNS, RunHandle, store, run, yamaa::Run, "run");
 registry!(
+    CHECKS,
+    CheckHandle,
+    store_check,
+    check_of,
+    yamaa::Check,
+    "check"
+);
+registry!(
     PROJECT_RUNS,
     ProjectRunHandle,
     store_project_run,
@@ -231,6 +239,11 @@ fn table(table: Option<&yamaa::Table>) -> std::result::Result<Robj, Refusal> {
     }
 }
 
+/// A result's printed lines (D37), which `format()` returns.
+fn summary_lines(summary: &yamaa::Summary) -> Robj {
+    Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj()
+}
+
 #[extendr]
 fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
     reply(|| {
@@ -243,8 +256,48 @@ fn spec_check(specification: Raw, project: Robj, version: Raw) -> List {
                 &CancellationToken::new(),
             )
             .map_err(|error| from_error(Action::Read(&specification), &error))?;
+        store_check(check)
+    })
+}
+
+#[extendr]
+fn check_status(handle: Robj) -> List {
+    reply(|| {
+        let check = check_of(&handle)?;
+        let check = check.try_borrow().map_err(|_| "check handle in use")?;
+        Ok(r!(check.status().as_str()))
+    })
+}
+
+#[extendr]
+fn check_issues(handle: Robj) -> List {
+    reply(|| {
+        let check = check_of(&handle)?;
+        let check = check.try_borrow().map_err(|_| "check handle in use")?;
         Ok(crate::public_table::frame(&check.issues())?)
     })
+}
+
+#[extendr]
+fn check_summary(handle: Robj) -> List {
+    reply(|| {
+        let check = check_of(&handle)?;
+        let check = check.try_borrow().map_err(|_| "check handle in use")?;
+        Ok(summary_lines(&check.summary()))
+    })
+}
+
+/// The printed line of a lazy specification object, which has read nothing
+/// (D37): `yamaa spec <path>`, with the path as given.
+#[extendr]
+fn spec_summary(specification: Raw) -> List {
+    reply(|| Ok(summary_lines(&yamaa::Summary::spec(&text(&specification)?))))
+}
+
+/// The printed line of a lazy project object: `yamaa project <path>`.
+#[extendr]
+fn project_summary(project: Raw) -> List {
+    reply(|| Ok(summary_lines(&yamaa::Summary::project(&text(&project)?))))
 }
 
 /// The holder for the compiled plans one lazy object keeps between its runs
@@ -367,6 +420,15 @@ fn schema(file_type: Raw) -> List {
 }
 
 #[extendr]
+fn run_status(handle: Robj) -> List {
+    reply(|| {
+        let run = run(&handle)?;
+        let run = run.try_borrow().map_err(|_| "run handle in use")?;
+        Ok(r!(run.status().as_str()))
+    })
+}
+
+#[extendr]
 fn run_output(handle: Robj) -> List {
     reply(|| {
         let run = run(&handle)?;
@@ -400,6 +462,15 @@ fn run_save(handle: Robj) -> List {
         let mut run = run.try_borrow_mut().map_err(|_| "run handle in use")?;
         let paths = run.save().map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
+    })
+}
+
+#[extendr]
+fn run_summary(handle: Robj) -> List {
+    reply(|| {
+        let run = run(&handle)?;
+        let run = run.try_borrow().map_err(|_| "run handle in use")?;
+        Ok(summary_lines(&run.summary()))
     })
 }
 
@@ -443,7 +514,7 @@ fn project_check(project: Raw, version: Raw) -> List {
         let check = engine(&version, None)?
             .project_check(&project, &CancellationToken::new())
             .map_err(|error| from_error(Action::Read(&project), &error))?;
-        Ok(crate::public_table::frame(&check.issues())?)
+        store_check(check)
     })
 }
 
@@ -472,11 +543,30 @@ fn project_run(project: Raw, section: Robj, version: Raw, capabilities: List, pl
 }
 
 #[extendr]
+fn project_run_status(handle: Robj) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        Ok(r!(runs.status().as_str()))
+    })
+}
+
+#[extendr]
 fn project_run_names(handle: Robj) -> List {
     reply(|| {
         let runs = project_run_of(&handle)?;
         let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
         Ok(Strings::from_values(runs.names()).into_robj())
+    })
+}
+
+#[extendr]
+fn project_run_member_status(handle: Robj, name: Raw) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
+        Ok(r!(run.status().as_str()))
     })
 }
 
@@ -510,6 +600,17 @@ fn project_run_member_report(handle: Robj, name: Raw) -> List {
     })
 }
 
+/// One member's printed lines, its run's under its name (D37).
+#[extendr]
+fn project_run_member_summary(handle: Robj, name: Raw) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        let run = runs.member(&text(&name)?).map_err(Refusal::Failure)?;
+        Ok(summary_lines(&run.summary()))
+    })
+}
+
 #[extendr]
 fn project_run_issues(handle: Robj) -> List {
     reply(|| {
@@ -537,6 +638,16 @@ fn project_run_save(handle: Robj) -> List {
             .map_err(|_| "project run handle in use")?;
         let paths = runs.save().map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
+    })
+}
+
+/// The printed lines, with one line per member (D37).
+#[extendr]
+fn project_run_summary(handle: Robj) -> List {
+    reply(|| {
+        let runs = project_run_of(&handle)?;
+        let runs = runs.try_borrow().map_err(|_| "project run handle in use")?;
+        Ok(summary_lines(&runs.summary()))
     })
 }
 
@@ -581,6 +692,17 @@ fn project_submission(project: Raw, section: Robj, created: Robj, version: Raw) 
 }
 
 #[extendr]
+fn submission_status(handle: Robj) -> List {
+    reply(|| {
+        let submission = submission_of(&handle)?;
+        let submission = submission
+            .try_borrow()
+            .map_err(|_| "submission handle in use")?;
+        Ok(r!(submission.status().as_str()))
+    })
+}
+
+#[extendr]
 fn submission_issues(handle: Robj) -> List {
     reply(|| {
         let submission = submission_of(&handle)?;
@@ -600,6 +722,17 @@ fn submission_save(handle: Robj) -> List {
             .map_err(|_| "submission handle in use")?;
         let paths = submission.save().map_err(Refusal::Failure)?;
         Ok(Strings::from_values(paths).into_robj())
+    })
+}
+
+#[extendr]
+fn submission_summary(handle: Robj) -> List {
+    reply(|| {
+        let submission = submission_of(&handle)?;
+        let submission = submission
+            .try_borrow()
+            .map_err(|_| "submission handle in use")?;
+        Ok(summary_lines(&submission.summary()))
     })
 }
 
@@ -666,8 +799,7 @@ fn selftest_summary(handle: Robj) -> List {
         let selftest = selftest
             .try_borrow()
             .map_err(|_| "selftest handle in use")?;
-        let summary = selftest.summary();
-        Ok(Strings::from_values(summary.lines().collect::<Vec<_>>()).into_robj())
+        Ok(summary_lines(&selftest.summary()))
     })
 }
 

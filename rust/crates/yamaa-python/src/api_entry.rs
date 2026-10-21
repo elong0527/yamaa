@@ -72,6 +72,10 @@ impl Run {
 
 #[pymethods]
 impl Run {
+    fn status(&self) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        Ok(guard.status().as_str())
+    }
     fn output(&self) -> PyResult<Option<ArrowTable>> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
         Ok(guard.output().map(ArrowTable::from))
@@ -88,6 +92,11 @@ impl Run {
         let saved = self.inner.try_lock().map_err(|_| poisoned())?.save();
         saved.map_err(|failure| raise(py, failure))
     }
+    /// The printed text (D37), which `repr()` returns.
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| poisoned())?;
+        Ok(guard.summary().to_string())
+    }
     /// Private installed-run evidence for qualification suites.
     #[pyo3(signature=(include_measurements=false))]
     fn observations(&self, include_measurements: bool) -> PyResult<Option<String>> {
@@ -96,18 +105,64 @@ impl Run {
     }
 }
 
+fn check_poisoned() -> PyErr {
+    pyo3::exceptions::PyRuntimeError::new_err("check handle is in use or poisoned")
+}
+
+/// The static check of a specification or a project (D36, D37): the facade's
+/// result, whose status, issues and printed text the public class returns as
+/// they are.
+#[pyclass(frozen, module = "yamaa._native", name = "_Check")]
+pub struct Check {
+    inner: Mutex<yamaa::Check>,
+}
+
+impl Check {
+    fn new(check: yamaa::Check) -> Self {
+        Self {
+            inner: Mutex::new(check),
+        }
+    }
+}
+
+#[pymethods]
+impl Check {
+    fn status(&self) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| check_poisoned())?;
+        Ok(guard.status().as_str())
+    }
+    fn issues(&self) -> PyResult<ArrowTable> {
+        let guard = self.inner.try_lock().map_err(|_| check_poisoned())?;
+        Ok(ArrowTable::from(&guard.issues()))
+    }
+    /// The printed text (D37), which `repr()` returns.
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| check_poisoned())?;
+        Ok(guard.summary().to_string())
+    }
+}
+
 #[pyfunction]
 #[pyo3(signature=(specification, project=None))]
-pub fn _spec_check(
-    py: Python<'_>,
-    specification: &str,
-    project: Option<&str>,
-) -> PyResult<ArrowTable> {
+pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Check> {
     let token = CancellationToken::new();
     engine(py)
         .spec_check(specification, project, &token)
-        .map(|check| ArrowTable::from(&check.issues()))
+        .map(Check::new)
         .map_err(|error| raise_error(py, Action::Read(specification), error))
+}
+
+/// The printed text of a lazy specification object, which has read nothing
+/// (D37): `yamaa spec <path>`, with the path as given.
+#[pyfunction]
+pub fn _spec_summary(specification: &str) -> String {
+    yamaa::Summary::spec(specification).to_string()
+}
+
+/// The printed text of a lazy project object: `yamaa project <path>`.
+#[pyfunction]
+pub fn _project_summary(project: &str) -> String {
+    yamaa::Summary::project(project).to_string()
 }
 
 /// The compiled plans one lazy specification or project object keeps between
@@ -260,12 +315,21 @@ pub struct ProjectRun {
 
 #[pymethods]
 impl ProjectRun {
+    fn status(&self) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.status().as_str())
+    }
     fn names(&self) -> PyResult<Vec<String>> {
         Ok(self
             .inner
             .try_lock()
             .map_err(|_| project_poisoned())?
             .names())
+    }
+    fn member_status(&self, py: Python<'_>, name: &str) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(run.status().as_str())
     }
     fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
@@ -281,6 +345,12 @@ impl ProjectRun {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
         Ok(run.report().map(ArrowTable::from))
+    }
+    /// One member's printed text, its run's under its name (D37).
+    fn member_summary(&self, py: Python<'_>, name: &str) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        let run = guard.member(name).map_err(|failure| raise(py, failure))?;
+        Ok(run.summary().to_string())
     }
     fn issues(&self) -> PyResult<ArrowTable> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
@@ -298,6 +368,11 @@ impl ProjectRun {
             .save();
         saved.map_err(|failure| raise(py, failure))
     }
+    /// The printed text with one line per member (D37).
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.summary().to_string())
+    }
 }
 
 #[pyclass(frozen, module = "yamaa._native", name = "_Submission")]
@@ -307,6 +382,10 @@ pub struct Submission {
 
 #[pymethods]
 impl Submission {
+    fn status(&self) -> PyResult<&'static str> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.status().as_str())
+    }
     fn issues(&self) -> PyResult<ArrowTable> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         Ok(ArrowTable::from(&guard.issues()))
@@ -319,6 +398,11 @@ impl Submission {
             .save();
         saved.map_err(|failure| raise(py, failure))
     }
+    /// The printed text (D37).
+    fn summary(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.summary().to_string())
+    }
 }
 
 #[pyfunction]
@@ -329,10 +413,10 @@ pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<Stri
 }
 
 #[pyfunction]
-pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<ArrowTable> {
+pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<Check> {
     engine(py)
         .project_check(project, &CancellationToken::new())
-        .map(|check| ArrowTable::from(&check.issues()))
+        .map(Check::new)
         .map_err(|error| raise_error(py, Action::Read(project), error))
 }
 

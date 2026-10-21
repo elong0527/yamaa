@@ -1,34 +1,70 @@
 \name{yamaa_spec}
 \alias{yamaa_spec}
+\alias{print.yamaa_spec}
+\alias{format.yamaa_spec}
+\alias{print.yamaa_check}
+\alias{format.yamaa_check}
+\alias{print.yamaa_run}
+\alias{format.yamaa_run}
 \title{One specification, read only when a method runs}
 \description{
 Holds the path of one specification. Nothing is read until a method runs, and
 each method rereads the files.
 }
-\usage{yamaa_spec(path)}
+\usage{
+yamaa_spec(path)
+
+\method{print}{yamaa_spec}(x, ...)
+
+\method{format}{yamaa_spec}(x, ...)
+
+\method{print}{yamaa_check}(x, ...)
+
+\method{format}{yamaa_check}(x, ...)
+
+\method{print}{yamaa_run}(x, ...)
+
+\method{format}{yamaa_run}(x, ...)
+}
 \arguments{
   \item{path}{Path of a specification file.}
+  \item{x}{A specification, a check or a run.}
+  \item{...}{Unused.}
 }
 \value{
 An object with three methods:
 \describe{
-  \item{\code{$check()}}{An object whose \code{$issues} data frame lists the
-    problems found without reading study data or running project code.}
+  \item{\code{$check()}}{A check: \code{$status} is \code{"failed"} when the
+    check found a problem, and \code{"succeeded"} otherwise, and the
+    \code{$issues} data frame lists the problems found without reading study
+    data or running project code.}
   \item{\code{$resolve()}}{The specification after its layers are composed, as
     a named list.}
-  \item{\code{$run()}}{A run: \code{$output} is the dataset (\code{NULL} when
-    the run failed), \code{$issues} what is wrong, \code{$report} what the run
-    read, counted and checked, and \code{$save()} writes the declared report
-    file, then the output dataset, and returns their absolute paths
-    invisibly, in that order. A failed run writes only its report file.}
+  \item{\code{$run()}}{A run: \code{$status} is \code{"succeeded"} when the run
+    built its dataset with no issue, and \code{"failed"} otherwise,
+    \code{$output} is the dataset (\code{NULL} when the run failed),
+    \code{$issues} what is wrong, \code{$report} what the run read, counted
+    and checked, and \code{$save()} writes the declared report file, then the
+    output dataset, and returns their absolute paths invisibly, in that order.
+    A failed run writes only its report file.}
 }
 A failure raises a condition of class \code{yamaa_error} whose \code{issues}
 data frame says why; for a refused \code{$save()}, its \code{paths} lists
 the files written before the refusal.
+
+\code{format()} returns the lines that the engine renders for an object, the
+same words that Python and the command line print, and \code{print()} writes
+them and returns the object invisibly. A specification prints
+\code{yamaa spec <path>}, with the path as given, since it has read nothing.
+A check prints \code{yamaa check of <path>: <status>, <n> issues}, and a run
+\code{yamaa run of <dataset>: <status>, <size>, <n> issues}, where the size
+is \code{<r> rows x <c> columns} or \code{no output}; either then prints its
+first issue on a line of its own.
 }
 \examples{
 \dontrun{
 run <- yamaa_spec("sdtm/dm.yaml")$run()
+run
 run$output
 run$save()
 }

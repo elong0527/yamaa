@@ -148,17 +148,24 @@ public.functions.schema: python yamaa.schema; r yamaa_schema; returns json_text;
 public.functions.schema.args[0]: file_type: file_type
 public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
-public.classes.Check.issues: field; returns table; table issues
+public.classes.Check.status: property; returns status
+public.classes.Check.issues: property; returns table; table issues
+public.classes.Check.summary: printing; python __repr__; r print, format
 public.classes.Run: python yamaa.Run; r yamaa_run
+public.classes.Run.status: property; returns status
 public.classes.Run.output: property; returns optional_table
 public.classes.Run.issues: property; returns table; table issues
 public.classes.Run.report: property; returns optional_table; table report
 public.classes.Run.save: method; returns paths_written; raises refusal
+public.classes.Run.summary: printing; python __repr__; r print, format
 public.classes.MemberRun: python yamaa.MemberRun; r yamaa_member_run
+public.classes.MemberRun.status: property; returns status; raises refusal
 public.classes.MemberRun.output: property; returns optional_table; raises refusal
 public.classes.MemberRun.issues: property; returns table; table issues; raises refusal
 public.classes.MemberRun.report: property; returns optional_table; table report; raises refusal
+public.classes.MemberRun.summary: printing; python __repr__; r print, format
 public.classes.ProjectRun: python yamaa.ProjectRun; r yamaa_project_run
+public.classes.ProjectRun.status: property; returns status
 public.classes.ProjectRun.names: property; returns names
 public.classes.ProjectRun.member: index; python __getitem__; r [[; returns MemberRun; raises refusal
 public.classes.ProjectRun.member.args[0]: name: text
@@ -167,13 +174,17 @@ public.classes.ProjectRun.iterate: protocol; python __iter__
 public.classes.ProjectRun.issues: property; returns table; table issues
 public.classes.ProjectRun.report: property; returns table; table report
 public.classes.ProjectRun.save: method; returns paths_written; raises refusal
+public.classes.ProjectRun.summary: printing; python __repr__; r print, format
 public.classes.Submission: python yamaa.Submission; r yamaa_submission
+public.classes.Submission.status: property; returns status
 public.classes.Submission.issues: property; returns table; table issues
 public.classes.Submission.save: method; returns paths_written; raises refusal
+public.classes.Submission.summary: printing; python __repr__; r print, format
 public.classes.Spec: python yamaa.Spec; r yamaa_spec
 public.classes.Spec.check: method; returns Check; raises refusal
 public.classes.Spec.resolve: method; returns tree; raises refusal
 public.classes.Spec.run: method; returns Run; raises refusal
+public.classes.Spec.summary: printing; python __repr__; r print, format
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal
 public.classes.Project.spec.args[0]: name: text
@@ -183,6 +194,7 @@ public.classes.Project.run.args[0]: section: optional_text = None
 public.classes.Project.submission: method; returns Submission; raises refusal
 public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
+public.classes.Project.summary: printing; python __repr__; r print, format
 public.classes.SelfTest: python yamaa.SelfTest; r yamaa_selftest
 public.classes.SelfTest.status: property; returns status
 public.classes.SelfTest.cases: property; returns table; table selftest_cases
@@ -203,6 +215,20 @@ public.r.exports.yamaa_read_odm
 public.r.exports.yamaa_lint
 public.r.exports.yamaa_schema
 public.r.exports.yamaa_selftest
+public.r.s3methods.yamaa_check.print
+public.r.s3methods.yamaa_check.format
+public.r.s3methods.yamaa_run.print
+public.r.s3methods.yamaa_run.format
+public.r.s3methods.yamaa_member_run.print
+public.r.s3methods.yamaa_member_run.format
 public.r.s3methods.yamaa_project_run.[[
+public.r.s3methods.yamaa_project_run.print
+public.r.s3methods.yamaa_project_run.format
+public.r.s3methods.yamaa_submission.print
+public.r.s3methods.yamaa_submission.format
+public.r.s3methods.yamaa_spec.print
+public.r.s3methods.yamaa_spec.format
+public.r.s3methods.yamaa_project.print
+public.r.s3methods.yamaa_project.format
 public.r.s3methods.yamaa_selftest.print
 public.r.s3methods.yamaa_selftest.format
