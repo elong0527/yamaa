@@ -44,7 +44,9 @@ def no_activation():
     """Fail on any lock audit or binding: the call must run no project code."""
     with (
         patch.object(
-            host, "verify_versions", side_effect=AssertionError("unexpected activation")
+            host,
+            "_installed_providers",
+            side_effect=AssertionError("unexpected activation"),
         ),
         patch.object(
             host, "resolve_callable", side_effect=AssertionError("unexpected binding")
@@ -788,7 +790,9 @@ class PublicEnvironment(unittest.TestCase):
         (case / "python/uv.lock").unlink(missing_ok=True)
         project = self.project(case)
         with patch.object(
-            host, "verify_versions", side_effect=AssertionError("unexpected lock audit")
+            host,
+            "_installed_providers",
+            side_effect=AssertionError("unexpected lock audit"),
         ):
             self.assertTrue(project.check().issues.is_empty())
             result = project.spec("ADSL").run()
@@ -960,7 +964,7 @@ class PublicEnvironment(unittest.TestCase):
         spec_path.write_text(yaml.safe_dump(spec, sort_keys=False))
         shutil.rmtree(case / "input")
         with patch.object(
-            host, "verify_versions", side_effect=AssertionError("activation")
+            host, "_installed_providers", side_effect=AssertionError("activation")
         ):
             rows = project.spec("TEST").check().issues.to_dicts()
         self.assertEqual({row["rule"] for row in rows}, {"FUNC-5", "CT-1"})
@@ -1036,7 +1040,7 @@ class PublicEnvironment(unittest.TestCase):
         for call in (lambda: project.spec("TEST").run(), project.run):
             original = KeyboardInterrupt("original project interruption")
             with (
-                patch.object(host, "verify_versions", side_effect=original),
+                patch.object(host, "installed_version", side_effect=original),
                 self.assertRaises(KeyboardInterrupt) as seen,
             ):
                 call()
@@ -1085,7 +1089,7 @@ class PublicEnvironment(unittest.TestCase):
 
         original = LockHostError("original lock host error")
         reference = weakref.ref(original)
-        with patch.object(host, "verify_versions", side_effect=original):
+        with patch.object(host, "installed_version", side_effect=original):
             result = self.project(case).spec("TEST").run()
         self.assertIsNone(result.output)
         self.assertIsNone(result.report)

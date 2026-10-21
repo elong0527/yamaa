@@ -37,7 +37,6 @@ dependencies = [
   # which Polars 1.35.2 reads; the IEEE 754 total-order form needs 1.43.2.
   "polars>=1.35.2; python_version < '3.15'",
   "polars>=2.0.0; python_version >= '3.15'",
-  "packaging>=25",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +54,9 @@ test = [
   "pydantic>=2.14.0; python_version >= '3.15'",
   # Independent Dataset-JSON validation belongs to qualification, not runtime.
   "jsonschema>=4.25",
+  # The dependency-graph tools read requirements with it; the package's lock
+  # verification is the engine's own.
+  "packaging>=25",
   "pytest>=9.1.1",
   "ruff>=0.16.7",
   "pyrefly>=1.4.0",

@@ -1,6 +1,7 @@
 """Installed metadata, native project results and original failure facts."""
 
 import json
+import sys
 import tempfile
 import unittest
 from importlib import metadata
@@ -13,33 +14,28 @@ ROOT = Path(__file__).parent
 
 
 class InstalledLockedHostCapabilities(unittest.TestCase):
-    def test_actual_yamaa_versions_repeat_without_importing_called_code(self):
+    def test_actual_yamaa_metadata_repeats_without_importing_called_code(self):
         from yamaa import _locked_functions as host
 
-        installed_version = metadata.version("yamaa")
-        raw = (
-            'version = 1\n[[package]]\nname = "yamaa"\n'
-            f'version = "{installed_version}"\n'
-        ).encode()
+        # The engine compares the lock; the host only reports what the
+        # interpreter has installed, the same way on every activation.
         with patch.object(
             host.importlib,
             "import_module",
             side_effect=AssertionError("lock verification must not import called code"),
         ):
             for _ in range(2):
-                self.assertEqual(host.verify_versions(raw, ["yamaa.spec"]), ())
-            wrong = raw.replace(
-                f'version = "{installed_version}"'.encode(),
-                b'version = "999999.0"',
-            )
-            self.assertEqual(
-                host.verify_versions(wrong, ["yamaa.spec"]),
-                (
-                    host.Finding(
-                        "yamaa", "version_mismatch", ("999999.0",), installed_version
-                    ),
-                ),
-            )
+                self.assertEqual(
+                    host._installed_providers(("yamaa",)), {"yamaa": ["yamaa"]}
+                )
+                self.assertEqual(
+                    host.installed_version("yamaa"), metadata.version("yamaa")
+                )
+                self.assertFalse(host.is_standard_library("yamaa"))
+                self.assertEqual(
+                    host.marker_environment()["python_version"],
+                    "%d.%d" % sys.version_info[:2],
+                )
         bound = host.resolve_callable("yamaa.spec", ["path"])
         self.assertIs(bound, __import__("yamaa").spec)
 
@@ -163,24 +159,18 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
             self.assertNotIn(module, sys.modules)
             try:
                 bad = raw.replace(b'"1.2"', b'"9.0"')
-                self.assertEqual(
-                    host.verify_versions(bad, [module + ".calculate"]),
-                    (
-                        host.Finding(
-                            "yamaa-lock-witness-programs",
-                            "version_mismatch",
-                            ("9.0",),
-                            "1.2.0",
-                        ),
-                    ),
-                )
-                self.assertFalse(marker.exists())
-                self.assertNotIn(module, sys.modules)
+                # The host observes the installed wheel without importing it.
                 for _ in range(2):
                     self.assertEqual(
-                        host.verify_versions(raw, [module + ".calculate"]), ()
+                        host._installed_providers((module,)),
+                        {module: ["yamaa-lock-witness-programs"]},
+                    )
+                    self.assertEqual(
+                        host.installed_version("yamaa-lock-witness-programs"),
+                        "1.2.0",
                     )
                 self.assertFalse(marker.exists())
+                self.assertNotIn(module, sys.modules)
                 bound = host.resolve_callable(module + ".calculate", ["x", "y"])
                 self.assertEqual(marker.read_text(encoding="utf-8"), "imported")
                 self.assertEqual(sys.modules[module].calls, [])
@@ -224,6 +214,35 @@ class InstalledLockedHostCapabilities(unittest.TestCase):
                 def listed():
                     return yamaa.project(project).spec("TEST")
 
+                def mismatch(result):
+                    """The one issue a mismatched witness version reports."""
+                    self.assertIsNone(result.output)
+                    (issue,) = result.issues.to_dicts()
+                    context = json.loads(issue["context"])
+                    return (
+                        issue["condition"],
+                        context["package"],
+                        context["reason"],
+                        context["expected"],
+                        context["actual"],
+                    )
+
+                # The engine verifies the lock before it imports called code.
+                (root / "uv.lock").write_bytes(bad)
+                for _ in range(2):
+                    self.assertEqual(
+                        mismatch(listed().run()),
+                        (
+                            "runtime_artifact_mismatch",
+                            "yamaa-lock-witness-programs",
+                            "version_mismatch",
+                            ["9.0"],
+                            "1.2.0",
+                        ),
+                    )
+                self.assertFalse(marker.exists())
+                self.assertNotIn(module, sys.modules)
+                (root / "uv.lock").write_bytes(raw)
                 checked = listed().check()
                 self.assertTrue(checked.issues.is_empty(), checked.issues)
                 self.assertNotIn(module, sys.modules)

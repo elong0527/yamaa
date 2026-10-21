@@ -1,14 +1,15 @@
 //! Installed Python metadata, normal callable resolution and exact scalar IO.
-//! The shared engine owns activation order, defaults, tests and comparisons.
+//! The shared engine owns activation order, defaults, tests and comparisons,
+//! the uv lock's included: Python reports only what is installed.
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyList, PyString, PyTuple},
+    types::{PyDict, PyList, PyString, PyTuple},
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use yamaa::{
     Argument, BatchArgument, CallError, FunctionError, FunctionHandle, FunctionIdentity,
-    HostLanguage, LockContext, LockFinding, LockKind, LockReason, ProjectFunctions, Scalar,
-    Signature,
+    HostLanguage, InstalledDistributions, InstalledVersion, LockContext, LockKind,
+    ProjectFunctions, Scalar, Signature,
 };
 
 /// Borrow the exact captured lock snapshot for this activation. No construction
@@ -32,6 +33,96 @@ fn text(value: &Bound<'_, PyAny>) -> Result<String, FunctionError> {
         .map_err(|error| crate::function_callback::host_error(value.py(), error))
 }
 
+/// The interpreter's installation, which the helper module observes through
+/// `importlib.metadata`, `sys` and `platform`. Each observation looks its
+/// helper up when it runs, and a raised exception keeps its identity.
+struct Installed<'py> {
+    py: Python<'py>,
+}
+
+impl<'py> Installed<'py> {
+    fn helper(&self, name: &str) -> Result<Bound<'py, PyAny>, FunctionError> {
+        Port::helper(self.py)
+            .and_then(|module| module.getattr(name))
+            .map_err(|error| crate::function_callback::host_error(self.py, error))
+    }
+
+    fn host(&self, error: PyErr) -> FunctionError {
+        crate::function_callback::host_error(self.py, error)
+    }
+}
+
+impl InstalledDistributions for Installed<'_> {
+    fn providers(
+        &self,
+        modules: &[String],
+    ) -> Result<BTreeMap<String, Vec<String>>, FunctionError> {
+        let roots = PyTuple::new(self.py, modules).map_err(|error| self.host(error))?;
+        let mapping = self
+            .helper("_installed_providers")?
+            .call1((roots,))
+            .map_err(|error| self.host(error))?;
+        let mut providers = BTreeMap::new();
+        for module in modules {
+            let names = mapping
+                .call_method1("get", (module,))
+                .map_err(|error| self.host(error))?;
+            if !names.is_truthy().map_err(|error| self.host(error))? {
+                continue;
+            }
+            let names = names
+                .try_iter()
+                .map_err(|error| self.host(error))?
+                .map(|name| text(&name.map_err(|error| self.host(error))?))
+                .collect::<Result<Vec<_>, _>>()?;
+            providers.insert(module.clone(), names);
+        }
+        Ok(providers)
+    }
+
+    fn standard_library(&self, module: &str) -> Result<bool, FunctionError> {
+        self.helper("is_standard_library")?
+            .call1((module,))
+            .and_then(|reply| reply.is_truthy())
+            .map_err(|error| self.host(error))
+    }
+
+    fn version(&self, distribution: &str) -> Result<InstalledVersion, FunctionError> {
+        match self.helper("installed_version")?.call1((distribution,)) {
+            Ok(reply) if reply.is_instance_of::<PyString>() => {
+                text(&reply).map(InstalledVersion::Version)
+            }
+            Ok(_) => Ok(InstalledVersion::Unreadable),
+            Err(error) => {
+                let missing = self
+                    .py
+                    .import("importlib.metadata")
+                    .and_then(|metadata| metadata.getattr("PackageNotFoundError"))
+                    .map_err(|error| self.host(error))?;
+                if error.is_instance(self.py, &missing) {
+                    Ok(InstalledVersion::Missing)
+                } else {
+                    Err(self.host(error))
+                }
+            }
+        }
+    }
+
+    fn environment(&self) -> Result<BTreeMap<String, String>, FunctionError> {
+        let reply = self
+            .helper("marker_environment")?
+            .call0()
+            .map_err(|error| self.host(error))?;
+        let values = reply
+            .cast::<PyDict>()
+            .map_err(|_| FunctionError::Protocol)?;
+        values
+            .iter()
+            .map(|(name, value)| Ok((text(&name)?, text(&value)?)))
+            .collect()
+    }
+}
+
 impl ProjectFunctions for Port {
     fn verify_lock(
         &self,
@@ -42,56 +133,7 @@ impl ProjectFunctions for Port {
             if lock.language != HostLanguage::Python || lock.kind != LockKind::Uv {
                 return Err(FunctionError::Protocol);
             }
-            let calls = PyList::new(py, functions.iter().map(|f| &f.call))
-                .map_err(|error| crate::function_callback::host_error(py, error))?;
-            let reply = Self::helper(py)
-                .map_err(|error| crate::function_callback::host_error(py, error))?
-                .getattr("verify_versions")
-                .map_err(|error| crate::function_callback::host_error(py, error))?
-                .call1((PyBytes::new(py, lock.bytes), calls))
-                .map_err(|error| crate::function_callback::host_error(py, error))?;
-            let rows = reply
-                .cast::<PyTuple>()
-                .map_err(|_| FunctionError::Protocol)?;
-            let mut findings = Vec::with_capacity(rows.len());
-            for row in rows {
-                let expected = row
-                    .getattr("expected")
-                    .map_err(|error| crate::function_callback::host_error(py, error))?;
-                let expected = expected
-                    .cast::<PyTuple>()
-                    .map_err(|_| FunctionError::Protocol)?;
-                let expected = expected
-                    .iter()
-                    .map(|value| text(&value))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let actual = row
-                    .getattr("actual")
-                    .map_err(|error| crate::function_callback::host_error(py, error))?;
-                let finding = LockFinding::new(
-                    text(
-                        &row.getattr("package")
-                            .map_err(|error| crate::function_callback::host_error(py, error))?,
-                    )?,
-                    LockReason::parse(&text(
-                        &row.getattr("reason")
-                            .map_err(|error| crate::function_callback::host_error(py, error))?,
-                    )?)
-                    .ok_or(FunctionError::Protocol)?,
-                    expected,
-                    if actual.is_none() {
-                        None
-                    } else {
-                        Some(text(&actual)?)
-                    },
-                );
-                findings.push(finding);
-            }
-            if findings.is_empty() {
-                Ok(())
-            } else {
-                Err(FunctionError::Lock(findings))
-            }
+            yamaa::verify_uv_lock(lock.bytes, functions, &Installed { py })
         })
     }
 
