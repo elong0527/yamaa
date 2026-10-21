@@ -7,6 +7,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import tomllib
@@ -1416,6 +1417,31 @@ class ReleaseWorkflow(unittest.TestCase):
         self.assertIn(
             '--destination "${RUNNER_TEMP}/qualified-release"', runs[selection]
         )
+
+    def test_the_selector_and_the_notice_check_import_without_pyyaml(self):
+        # This workflow and the rehearsal run the selector on a bare
+        # setup-python, and each native-r-binary job checks its binary's
+        # notices without PyYAML. Without site-packages there is none, and
+        # `import yaml` from the repository root finds its yaml/ directory, so
+        # neither may import YAML at all (#3347).
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]); "
+                "import tools.ci.select_release_artifacts; "
+                "import tools.packaging.check_package_notices; "
+                "print('yaml' in sys.modules)",
+                str(ROOT),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "False\n")
 
 
 class ReleaseRehearsalWorkflow(unittest.TestCase):

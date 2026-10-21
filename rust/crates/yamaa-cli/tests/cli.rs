@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use yamaa::{CancellationToken, Diagnostic, Engine, EngineOptions, Host, HostLanguage};
+use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Host};
 
 const HINT: &str = "run 'yamaa --help' for usage\n";
 
@@ -49,11 +49,10 @@ fn printed(status: i32, stdout: String) -> (Option<i32>, String, String) {
     (Some(status), stdout, String::new())
 }
 
-/// The engine the binary configures: the local files and no project
-/// functions (D110).
+/// The engine the binary configures: the local files and no host language,
+/// so no project functions (D110, D123).
 fn engine() -> Engine {
-    Engine::new(EngineOptions::new(
-        HostLanguage::default(),
+    Engine::new(EngineOptions::neutral(
         Host::Cli.as_str().to_owned(),
         String::new(),
     ))
@@ -564,6 +563,54 @@ fn a_save_with_nothing_to_write_prints_its_issue_and_exits_1() {
     );
 }
 
+/// A save that cannot write a target stops before it writes any file
+/// (D99). Here DM's files go to a directory that does not exist, which every
+/// platform refuses. The run succeeded, so its status stays `succeeded`;
+/// the save's issue joins the run's issues and prints once, with no path,
+/// and the command exits 1.
+#[test]
+fn a_save_that_cannot_write_its_target_prints_why_and_exits_1() {
+    let study = Study::new();
+    study.write("sdtm/dm.yaml", DM.replace("../out/", "../missing/"));
+    let project = study.path("project.yaml");
+    let engine = engine();
+    let dm = engine.project_spec(&project, "DM").unwrap();
+    let mut run = engine
+        .spec_run(&dm, Some(&project), &CancellationToken::new())
+        .unwrap();
+    assert!(run.diagnostics().is_empty());
+    let refusal = run.save().unwrap_err();
+    assert!(refusal.paths.is_empty());
+    let issues = run.diagnostics();
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues, refusal.diagnostics);
+    assert_eq!(
+        outcome(&yamaa(&["run", &project, "--spec", "DM"])),
+        printed(
+            1,
+            format!(
+                "yamaa run of DM: succeeded, 2 rows x 2 columns, 1 issue\n{}",
+                lines(&issues)
+            )
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa(&[
+            "run", &project, "--spec", "DM", "--format", "json"
+        ])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{project}\",\
+                 \"paths\":[],\"section\":null,\"spec\":\"DM\",\"status\":\"succeeded\"}}\n",
+                json(&issues)
+            )
+        )
+    );
+    assert!(!study.exists("missing"));
+    assert!(study.files("out").is_empty());
+}
+
 #[test]
 fn check_of_a_listed_specification_prints_its_summary_and_every_issue() {
     let study = Study::new();
@@ -732,23 +779,79 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
     assert!(study.files("out").is_empty());
 }
 
+/// A refusal with two issues prints D39's text, which carries the first
+/// issue's line and counts the other, then the other issue's line alone, so
+/// each issue prints exactly once (D39, D103); its JSON holds both.
+#[test]
+fn a_refusal_with_two_issues_prints_the_second_after_its_error_text() {
+    let study = Study::new();
+    // Two fields the project schema does not know give two findings.
+    study.write("project.yaml", format!("{PROJECT}bogus: 1\nother: 2\n"));
+    let project = study.path("project.yaml");
+    let refusal = engine().project_spec(&project, "DM").unwrap_err();
+    let [first, second] = refusal.diagnostics.as_slice() else {
+        panic!("two issues: {:?}", refusal.diagnostics);
+    };
+    assert!(refusal.message.starts_with("cannot select DM: "));
+    assert!(
+        refusal.message.contains(&first.text()),
+        "{}",
+        refusal.message
+    );
+    assert!(refusal.message.ends_with(" (and 1 more issue)"));
+    assert_eq!(
+        outcome(&yamaa(&["check", &project, "--spec", "DM"])),
+        printed(1, format!("{}\n{}\n", refusal.message, second.text()))
+    );
+    assert_eq!(
+        outcome(&yamaa(&[
+            "check", &project, "--spec", "DM", "--format", "json"
+        ])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"check\",\"issues\":{},\"path\":\"{project}\",\
+                 \"spec\":\"DM\",\"status\":\"failed\"}}\n",
+                json(&refusal.diagnostics)
+            )
+        )
+    );
+}
+
+/// The authored benchmark whose project composes one SDTM define.xml.
+fn define_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/sdtm-dm-metadata")
+}
+
+/// A copy of that benchmark's inputs with its DM dataset saved, which a
+/// submission reads.
+fn define_study() -> Study {
+    let study = Study::empty();
+    let fixture = define_fixture();
+    for name in ["spec.yaml", "project.yaml", "input/dm_raw.csv"] {
+        study.write(name, std::fs::read(fixture.join(name)).unwrap());
+    }
+    assert_eq!(
+        outcome(&yamaa(&[
+            "run",
+            &study.path("project.yaml"),
+            "--spec",
+            "DM"
+        ]))
+        .0,
+        Some(0)
+    );
+    study
+}
+
 /// A submission saves each section's transport files, then its define.xml
 /// (JSON-14), and prints them in that order; with the creation time given,
 /// they hold the bytes the benchmark's authors wrote.
 #[test]
 fn a_submission_prints_its_summary_and_the_files_in_publication_order() {
-    let study = Study::empty();
-    let fixture =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/sdtm-dm-metadata");
-    for name in ["spec.yaml", "project.yaml", "input/dm_raw.csv"] {
-        study.write(name, std::fs::read(fixture.join(name)).unwrap());
-    }
+    let study = define_study();
+    let fixture = define_fixture();
     let project = study.path("project.yaml");
-    // The submission reads the saved DM dataset, so DM runs first.
-    assert_eq!(
-        outcome(&yamaa(&["run", &project, "--spec", "DM"])).0,
-        Some(0)
-    );
     let (transport, define) = (study.path("dm.json"), study.path("define.xml"));
     let arguments = [
         "submission",
@@ -782,6 +885,39 @@ fn a_submission_prints_its_summary_and_the_files_in_publication_order() {
             format!(
                 "{{\"command\":\"submission\",\"issues\":[],\"path\":\"{project}\",\
                  \"paths\":[\"{transport}\",\"{define}\"],\"section\":\"sdtm\",\
+                 \"status\":\"succeeded\"}}\n"
+            )
+        )
+    );
+}
+
+/// Without `--section`, a submission composes each section that names its
+/// define.xml, and its summary and JSON name no section; without
+/// `--created`, the documents carry the time the submission used, so only
+/// the files are checked here, not their bytes.
+#[test]
+fn a_submission_without_a_section_or_a_time_composes_every_declared_section() {
+    let study = define_study();
+    let project = study.path("project.yaml");
+    let (transport, define) = (study.path("dm.json"), study.path("define.xml"));
+    assert_eq!(
+        outcome(&yamaa(&["submission", &project])),
+        printed(
+            0,
+            format!(
+                "yamaa submission of {project}: succeeded, 1 define.xml and 1 transport file, \
+                 0 issues\n{transport}\n{define}\n"
+            )
+        )
+    );
+    assert!(study.exists("dm.json") && study.exists("define.xml"));
+    assert_eq!(
+        outcome(&yamaa(&["submission", &project, "--format", "json"])),
+        printed(
+            0,
+            format!(
+                "{{\"command\":\"submission\",\"issues\":[],\"path\":\"{project}\",\
+                 \"paths\":[\"{transport}\",\"{define}\"],\"section\":null,\
                  \"status\":\"succeeded\"}}\n"
             )
         )
@@ -860,6 +996,94 @@ fn lint_prints_each_finding_then_its_summary() {
             )
         )
     );
+}
+
+/// The binary's engine claims no host language (#3030 section 2.10, D123):
+/// it reads no project's `environments.<host>` entry, so through a 1.0
+/// project whose Python lock does not exist it checks both specifications
+/// and runs the one that calls no function. A run of the one that calls a
+/// project function is refused before it reads any input, which does not
+/// exist either, as `unsupported_operation` with operation `environment`
+/// (D110), and writes nothing.
+#[test]
+fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
+    let study = Study::empty();
+    study.write("raw.csv", "ID,V\n1,a\n");
+    study.write(
+        "functions/shout.yaml",
+        "yamaa: \"1.0\"\ntype: function\nname: shout\ndescription: The value in capitals.\nparams: [{name: x, type: str}]\nreturns: str\nimplementations: {python: pkg.shout}\ntests:\n  - {id: normal, covers: [normal], args: {x: a}, result: A}\n  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+    );
+    study.write(
+        "plain.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: PLAIN\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput: {path: plain.csv, columns: [ID, V]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: V, type: str, label: Value, derivation: RAW.V}\n",
+    );
+    study.write(
+        "calls.yaml",
+        "yamaa: \"1.0\"\ntype: spec\ndomain: CALLS\nkeys: [ID]\ninput: {RAW: absent.csv}\noutput: {path: calls.csv, columns: [ID, LOUD]}\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\n  - {name: LOUD, type: str, label: Loud, derivation: {function: {name: shout, args: {x: RAW.V}}}}\n",
+    );
+    study.write(
+        "project.yaml",
+        "yamaa: \"1.0\"\ntype: project\nfunctions: [functions/shout.yaml]\nenvironments:\n  python: {lock: missing/uv.lock}\nadam: {specs: [plain.yaml, calls.yaml]}\n",
+    );
+    let project = study.path("project.yaml");
+    let engine = engine();
+    for name in ["PLAIN", "CALLS"] {
+        let spec = engine.project_spec(&project, name).unwrap();
+        assert_eq!(
+            outcome(&yamaa(&["check", &project, "--spec", name])),
+            printed(0, format!("yamaa check of {spec}: succeeded, 0 issues\n")),
+            "{name}"
+        );
+    }
+    assert_eq!(
+        outcome(&yamaa(&["run", &project, "--spec", "PLAIN"])),
+        printed(
+            0,
+            format!(
+                "yamaa run of PLAIN: succeeded, 1 row x 2 columns, 0 issues\n{}\n",
+                study.path("plain.csv")
+            )
+        )
+    );
+    let calls = engine.project_spec(&project, "CALLS").unwrap();
+    let issues = engine
+        .spec_run(&calls, Some(&project), &CancellationToken::new())
+        .unwrap()
+        .diagnostics();
+    let [refused] = issues.as_slice() else {
+        panic!("one issue: {issues:?}");
+    };
+    assert_eq!(
+        (refused.code.as_str(), refused.context.get("operation")),
+        (
+            "unsupported_operation",
+            Some(&ContextValue::Text("environment".to_owned()))
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa(&["run", &project, "--spec", "CALLS"])),
+        printed(
+            1,
+            format!(
+                "yamaa run of CALLS: failed, no output, 1 issue\n{}",
+                lines(&issues)
+            )
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa(&[
+            "--format", "json", "run", &project, "--spec", "CALLS"
+        ])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{project}\",\
+                 \"paths\":[],\"section\":null,\"spec\":\"CALLS\",\"status\":\"failed\"}}\n",
+                json(&issues)
+            )
+        )
+    );
+    assert!(!study.exists("calls.csv"));
 }
 
 /// The facade takes paths and names as UTF-8 text, so a PATH or a value

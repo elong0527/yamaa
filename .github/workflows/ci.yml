@@ -74,6 +74,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The conversion job repeats this step and must read the same diff
+      # (D124); change the two together.
       - name: Decide whether the diff reaches the gate's paths
         id: paths
         env:
@@ -118,9 +120,9 @@ jobs:
   conversion:
     # The 1.0 conversion gate (#3030 P1-9, D76): every benchmark, converted to
     # 1.0 by tools/migrate, must give its expected result on a fresh install.
-    # A pull request runs it on Python when its diff reaches the 1.0 front end,
-    # the converter, the 1.0 schemas or the gate, and otherwise passes with a
-    # notice; the weekly schedule and a dispatch run it on both hosts.
+    # A pull request runs it on Python unless its diff changes only
+    # documentation, by the equivalence job's rule (D124), and otherwise passes
+    # with a notice; the weekly schedule and a dispatch run it on both hosts.
     if: >-
       github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' ||
       github.event.schedule == '23 4 * * 1'
@@ -132,6 +134,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The equivalence job's step, repeated so that both gates read the same
+      # diff (D124); tools/tests/test_equivalence_workflow.py runs both. A
+      # local action or script would be read from the pull-request head, and a
+      # head that predates it would fail both gates.
       - name: Decide whether the diff reaches the gate's paths
         id: paths
         env:
@@ -149,21 +155,17 @@ jobs:
             exit 1
           fi
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
-          changed=$(git diff --no-renames --name-only "$base" "$HEAD_SHA" -- \
-            rust/crates/yamaa-core/src/front_end \
-            tools/migrate \
-            yaml/v1 \
-            tools/commands/conversion.py \
-            tools/conformance/public_conformance.py \
-            tools/surface.py \
-            python/tests/installed/conversion_define.py \
-            python/tests/installed/public_conformance.py)
+          changed=$(git diff --no-renames --name-only "$base" "$HEAD_SHA" -- . \
+            ':(top,exclude)README.md' \
+            ':(top,exclude)CONTRIBUTING.md' \
+            ':(top,exclude)AGENTS.md' \
+            ':(top,exclude,glob)docs/**/*.md')
           echo "hosts=python" >> "$GITHUB_OUTPUT"
           if [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::The diff reaches neither the 1.0 front end, the converter, the 1.0 schemas nor the gate, so the conversion gate did not run."
+            echo "::notice::The diff changes only documentation, so the conversion gate did not run."
           fi
       # The gate builds each host from the checkout; R conformance reads the
       # package's test dependencies.

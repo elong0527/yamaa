@@ -38,6 +38,8 @@ struct Input {
 pub struct Listed {
     section: Submission,
     index: usize,
+    /// The path as the project file writes it.
+    written: String,
     location: String,
     identity: Option<String>,
     name: Option<String>,
@@ -51,6 +53,11 @@ impl Listed {
     /// The specification file, as checks and builds receive it.
     pub fn path(&self) -> &str {
         &self.location
+    }
+    /// The specification file as the project file writes it, such as
+    /// `adam/adsl.yaml`.
+    pub fn written(&self) -> &str {
+        &self.written
     }
     /// The canonical identity of the specification, or its location when the
     /// specification could not be read.
@@ -436,6 +443,7 @@ fn read_listing(
     let mut listed = Listed {
         section,
         index,
+        written: written.to_owned(),
         location: written.to_owned(),
         identity: None,
         name: None,

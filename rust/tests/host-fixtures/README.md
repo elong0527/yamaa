@@ -38,6 +38,7 @@ the held bytes.
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
+| selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, the report's lines and the layout of its information line, the engine information's fields in order, and a shipped build's features and language versions |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
 `run()` compiles and later runs reuse the plan, so study A, then B, then A on
@@ -86,6 +87,13 @@ these bytes still reach the panic. The second file holds the INT64 values 1
 and 2, which a later run in the same process reads and saves. Each suite also
 runs both specifications in a fresh process and requires its stderr to be
 empty, so the R suite proves containment on the Windows GNU build too.
+
+`selftest` pairs the installed Python and R selftest suites. Its cases are
+the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of
+#3030 D119 for a shipped build, which compiles every feature, so every case
+passes and only the adapter that the list leaves uncovered is named. Each
+host fills the information line from its own facts: the compiled core
+version, its interpreter's version, and the platform its interpreter reports.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid

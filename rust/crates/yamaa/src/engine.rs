@@ -600,8 +600,9 @@ pub struct Build {
     project_failures: Option<Vec<AttemptFailure>>,
     interrupt: Option<FunctionError>,
     /// What the build's printed text and refusals name (P-PRINT-1): a
-    /// project run member's name, or the dataset name once read, or else the
-    /// path as given.
+    /// project run member's listed name, or the path the project file lists
+    /// for a member whose listing could not be read (D130); otherwise the
+    /// dataset name once read, or else the path as given.
     subject: String,
 }
 

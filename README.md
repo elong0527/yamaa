@@ -132,6 +132,15 @@ Linux and none of the suggested packages, and in a CRAN-like Fedora
 container). Release assets come from that workflow. CRAN and r-universe
 publication are later distribution work.
 
+After installing either package, run `yamaa.selftest()` in Python or
+`yamaa_selftest()` in R. It runs the cases that the package carries,
+benchmarks with independently authored expected files, through the installed
+engine and compares each result with its expected files, writing no file and
+using no network. Its printed report says whether every case passed, names
+any adapter that no case covers, and gives the engine version, the language
+versions, the host and its version, and the platform: keep it as the
+installation and operational qualification evidence of that installation.
+
 ## Where to go next
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.

@@ -108,3 +108,23 @@
 .native_lint <- function(paths, fix) {
   .Call(wrap__lint, paths, fix)
 }
+
+.native_selftest <- function(version) {
+  .Call(wrap__selftest, version)
+}
+
+.native_selftest_status <- function(handle) {
+  .Call(wrap__selftest_status, handle)
+}
+
+.native_selftest_cases <- function(handle) {
+  .Call(wrap__selftest_cases, handle)
+}
+
+.native_selftest_info <- function(handle) {
+  .Call(wrap__selftest_info, handle)
+}
+
+.native_selftest_summary <- function(handle) {
+  .Call(wrap__selftest_summary, handle)
+}

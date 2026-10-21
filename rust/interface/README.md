@@ -77,15 +77,18 @@ draft.
 
 `values` holds the closed vocabularies of the public surface, `tables` the
 columns of each table a host returns, in order, and `records` the named
-records a host returns as a dict or named list (none today). Each vocabulary
-and table names, as `rust: yamaa::NAME`, the facade constant that owns it: the
-issues, run report and lint columns, the ODM item columns, the phases, the
-report's kinds and outcomes, the severities and the lint findings. The
-generator reads the constant from the facade sources, following an alias such
-as `pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
+records a host returns as a dict or named list: today `info`, the engine
+information of a selftest (D41). Each vocabulary and table names, as
+`rust: yamaa::NAME`, the facade constant that owns it: the statuses, the
+issues, run report, lint and selftest columns, the ODM item columns, the
+phases, the report's kinds and outcomes, the severities and the lint
+findings. The generator reads the constant from the facade sources,
+following an alias such as
+`pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
 the core or adapters crate, and refuses a declaration that differs from it in
-any value or column, or in their order. A value or column added in Rust therefore fails
-generation until it is declared here. A column or record field has a `name`,
+any value or column, or in their order. A value or column added in Rust
+therefore fails generation until it is declared here. A column or record
+field has a `name`,
 the language's column `type` (`str`, `int`, `float`, `date` or `datetime`,
 with `list<T>` and `optional<T>`), and optionally the vocabulary its `values`
 come from (or `yaml/conditions.yaml`, the condition registry) and a `meaning`.
@@ -132,13 +135,18 @@ Member kinds are `property` (a read-only view, an active binding in R),
 `method`, `field` (a value the object holds when made), `index` (Python's
 `__getitem__` and R's `[[` S3 method: the key is checked against the class's
 `names`, and an absent one raises the refusal its `calls` operation gives),
-`protocol` (Python's `__contains__` and `__iter__` over `names`) and `private`
-(a qualification accessor such as R's `.run_observations(run)`, which Python
-reaches through the handle; the manifest leaves it out). A class's
-`interrupt` names the R host-only export it asks for a retained project
-interrupt before it is returned, which `.rethrow_interrupt` signals again;
-Python checks inside the native call. An R object keeps its handle in the
-hidden `.handle` binding when an S3 method or a private accessor reaches it.
+`protocol` (Python's `__contains__` and `__iter__` over `names`), `printing`
+(Python's `__repr__`, which `str()` falls back to, and R's `print` and
+`format` S3 methods: `format()` returns the lines its `calls` operation
+renders in Rust and `print()` writes them, so no host formats a result; D37)
+and `private` (a qualification accessor such as R's `.run_observations(run)`,
+which Python reaches through the handle; the manifest leaves it out). A
+member that returns a record token (`info`) names the record it returns as
+`record`. A class's `interrupt` names the R host-only export it asks for a
+retained project interrupt before it is returned, which `.rethrow_interrupt`
+signals again; Python checks inside the native call. An R object keeps its
+handle in the hidden `.handle` binding when an S3 method or a private
+accessor reaches it.
 
 ### Command line
 

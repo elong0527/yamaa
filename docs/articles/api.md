@@ -18,6 +18,7 @@ SDTM and ADaM datasets and define.xml files.
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
 | Lint specifications | `yamaa_lint(paths)` | `yamaa.lint(paths)` |
+| Check an installation | `yamaa_selftest()` | `yamaa.selftest()` |
 
 Examples in R and Python are shown in tabs, R first; pick a language once and
 every tab on the page follows. Both packages run the same Rust engine, so the
@@ -399,6 +400,34 @@ as the same values with the same comments, and returns what remains.
     findings = yamaa.lint(["sdtm/dm.yaml", "adam/"])
     remaining = yamaa.lint("sdtm/dm.yaml", fix=True)
     ```
+
+## Check an installation
+
+`selftest()` runs the cases that the package carries through the installed
+engine and compares each result with its independently authored expected
+files; it writes no file and uses no network. `status` is `failed` when a case
+failed, `cases` has one row per case, and `info` names the engine, its
+language versions and features, the host and the platform. Printing the
+result gives its report, the installation and operational qualification
+evidence of the installation:
+
+=== "R"
+
+    ```r
+    yamaa_selftest()
+    ```
+
+=== "Python"
+
+    ```python
+    print(yamaa.selftest())
+    ```
+
+```text
+yamaa selftest: succeeded, 4 of 4 cases passed
+not covered: odm
+engine 1.0.0, language 1.0, python 3.12.4, linux-x86_64
+```
 
 ## Inputs, outputs and paths
 

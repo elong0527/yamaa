@@ -20,7 +20,7 @@ from yamaa._support import (
     _table,
 )
 
-__all__ = ["Error", "__version__", "lint", "project", "read_odm", "spec"]
+__all__ = ["Error", "__version__", "lint", "project", "read_odm", "selftest", "spec"]
 
 
 class Error(Exception):
@@ -194,6 +194,31 @@ class Project(_Lazy):
         )
 
 
+class SelfTest:
+    """The selftest cases run through this installation's engine; printing it gives the report."""
+
+    def __init__(self, native):
+        self._native = native
+
+    @property
+    def status(self) -> str:
+        """`failed` when a case failed, and `succeeded` otherwise."""
+        return self._native.status()
+
+    @property
+    def cases(self) -> _pl.DataFrame:
+        """One row per case, in the order the cases are listed."""
+        return _table(self._native.cases())
+
+    @property
+    def info(self) -> dict:
+        """The engine, language versions, features, host and platform that ran the cases."""
+        return self._native.info()
+
+    def __repr__(self) -> str:
+        return self._native.summary()
+
+
 def spec(path) -> Spec:
     """One specification; nothing is read until a method runs."""
     return Spec(path)
@@ -228,3 +253,8 @@ def read_odm(
 def lint(paths, fix: bool = False) -> _pl.DataFrame:
     """Lint specification files, first applying the proved layout fixes when fix is true."""
     return _table(_call(_native._lint, _fspaths(paths), fix))
+
+
+def selftest() -> SelfTest:
+    """Run the bundled selftest cases through this installation's engine, comparing each with its expected files."""
+    return SelfTest(_native._selftest())
