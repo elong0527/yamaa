@@ -1,4 +1,4 @@
-# Reject Uninferable Key
+# Reject a Lookup That Names No Match Columns
 
 **Goal:** attach the reference-range upper limit (`LBSTNRHI`) to
 each collected result, carrying its test code and sex.
@@ -12,11 +12,10 @@ table carrying the upper limit (`NRHI`) by test code and sex.
 - `LBSTNRHI` would contain the upper limit value from the
   reference-limit table for the test code and sex of the result.
 
-**Note:** the limit-table columns to match on are not stated, so
-the match falls back to the output identifiers (`STUDYID`,
-`USUBJID`, `LBSEQ`), and the limit table carries none of them. With
-nothing to match on, the run is rejected before any data is read and
-no artifact is accepted.
+**Note:** the limit-table columns to match on are not stated, and
+they are never guessed from the output identifiers or from the
+columns the two tables share, so the run is rejected before any data
+is read and no artifact is accepted.
 
 ## How to fix
 
@@ -31,5 +30,5 @@ intermediates:
 
 Each listed column matches the same-named current-row value. When the
 current-row name differs, map the column to it, as in
-`key: {TESTCD: LBTESTCD, SEX: SEX}`. Omit `key` only when the intended match
-is on the output keys that the lookup table also carries.
+`key: {TESTCD: LBTESTCD, SEX: SEX}`. A lookup always states its match: it
+never falls back to the output keys or to the input's declared `key`.
