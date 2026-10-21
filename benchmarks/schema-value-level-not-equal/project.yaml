@@ -1,0 +1,17 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: BP01
+  name: BP01
+  description: Example study averaging each subject's blood pressure
+  protocol_name: BP-01
+adam:
+  standards:
+    - name: ADaMIG
+      version: "1.3"
+      status: Final
+  specs:
+    - spec.yaml
+  define: define.xml
+  source_system_version: "1.0"
