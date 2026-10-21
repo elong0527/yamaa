@@ -165,20 +165,25 @@ declares, and every library that the binary loads must be the system's.
 Each job archives its binary with the command line's notices and checks the
 archive with `tools/packaging/cli_archive.py` and
 `tools.packaging.check_package_notices`. Its `native-cli-install` jobs then
-unpack each archive on a fresh runner of its platform and, before setting up
-anything else, run `yamaa --version`, whose first line must name the
-archive's version, and `yamaa selftest`, which must succeed; the log keeps
-both reports. Each job then checks out the repository and sets up Python,
-but no Rust, and runs the conformance corpus through the unpacked binary
-with `tools.commands.cli_conformance`. The binary reads only 1.x files, so
-the converter writes every benchmark as 1.0 (#3030 D122), leaving out those
-that the 1.0 conversion gate excepts and those whose project supplies
-project functions, which the binary cannot call. The comparator judges each
-run against the expected files, and the job fails on any difference. The
-cohort comparison reads each archive's saved outputs beside its platform's
-wheel with the build Python and the R reports beside that wheel: for each
-case of the complete-report cohort, the command line's outcome and saved
-files must equal both installed hosts' reports, CSV byte for byte.
+unpack and run each archive on a fresh runner of its platform with the
+network disabled. While the network is up, each job checks out the
+repository and sets up Python, but no Rust, and
+`tools.commands.cli_conformance` prepares the conformance corpus. The binary
+reads only 1.x files, so the converter writes every benchmark as 1.0 (#3030
+D122), leaving out those that the 1.0 conversion gate excepts and those
+whose project supplies project functions, which the binary cannot call.
+Then the job unpacks the archive and runs `yamaa --version`, whose first
+line must name the archive's version, and `yamaa selftest`, which must
+succeed; the log keeps both reports. It then runs the corpus through the
+unpacked binary, and the comparator judges each run against the expected
+files: the job fails on any difference. The unpacking and every run of the
+binary have no network: on Linux they run in containers without a network,
+from the manylinux_2_28 image, whose Python runs the conformance runner, and
+on macOS and Windows behind the refusing proxy. The cohort comparison reads
+each archive's saved outputs beside its platform's wheel with the build
+Python and the R reports beside that wheel: for each case of the
+complete-report cohort, the command line's outcome and saved files must
+equal both installed hosts' reports, CSV byte for byte.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
