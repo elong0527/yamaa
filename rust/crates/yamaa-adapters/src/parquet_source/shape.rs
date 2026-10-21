@@ -9,8 +9,9 @@ use parquet::{
 #[derive(Clone, Debug)]
 pub(super) struct List {
     repetition: i16,
+    /// The definition level of the list's repeated field: an element is
+    /// present from this level on.
     definition: i16,
-    parent_definition: i16,
     expected: usize,
     count: Option<usize>,
 }
@@ -19,7 +20,10 @@ impl List {
     pub fn observe(&mut self, definition: i16, repetition: i16) -> Result<(), Error> {
         if repetition < self.repetition {
             self.finish()?;
-            self.count = (definition >= self.parent_definition).then_some(0);
+            // The list is present from one level below its repeated field. A
+            // lower level is a null list, or a null struct or list element
+            // above it, which has no size to check: pyarrow reads it as null.
+            self.count = (definition >= self.definition - 1).then_some(0);
         }
         if definition >= self.definition && repetition <= self.repetition {
             let count = self.count.as_mut().ok_or(Error::Malformed)?;
@@ -108,11 +112,6 @@ pub(super) fn constraints(
                     Ok(List {
                         repetition: i16::try_from(level + 1).map_err(|_| Error::Malformed)?,
                         definition: *repeated.get(level).ok_or(Error::Malformed)?,
-                        parent_definition: if level == 0 {
-                            0
-                        } else {
-                            *repeated.get(level - 1).ok_or(Error::Malformed)?
-                        },
                         expected: usize::try_from(size).map_err(|_| Error::Malformed)?,
                         count: None,
                     })
@@ -125,11 +124,12 @@ pub(super) fn constraints(
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// An optional list of three optional values: a null list is defined at
+    /// level 0, an empty one at 1, a null value at 2 and a value at 3.
     fn flat() -> List {
         List {
             repetition: 1,
             definition: 2,
-            parent_definition: 0,
             expected: 3,
             count: None,
         }
@@ -145,23 +145,44 @@ mod tests {
         short.observe(3, 0).unwrap();
         short.observe(3, 1).unwrap();
         assert_eq!(short.finish(), Err(Error::Malformed));
-        let mut null = flat();
-        null.observe(0, 0).unwrap();
-        assert_eq!(null.finish(), Err(Error::Malformed));
     }
+    /// A null list has no size, wherever it falls (#3366). An empty list is
+    /// present and too short, and a value cannot continue a null list.
     #[test]
-    fn absent_outer_elements_do_not_invent_inner_lists() {
-        let mut list = List {
-            repetition: 2,
-            definition: 4,
-            parent_definition: 2,
-            ..flat()
-        };
-        list.observe(0, 0).unwrap();
-        list.observe(1, 0).unwrap();
-        for (definition, repetition) in [(5, 0), (5, 2), (4, 2), (5, 1), (5, 2), (5, 2)] {
+    fn null_rows_have_no_size_and_empty_rows_are_too_short() {
+        let mut list = flat();
+        for (definition, repetition) in [(0, 0), (3, 0), (3, 1), (3, 1), (0, 0)] {
             list.observe(definition, repetition).unwrap();
         }
         list.finish().unwrap();
+        let mut empty = flat();
+        empty.observe(1, 0).unwrap();
+        assert_eq!(empty.finish(), Err(Error::Malformed));
+        let mut continued = flat();
+        continued.observe(0, 0).unwrap();
+        assert_eq!(continued.observe(3, 1), Err(Error::Malformed));
+    }
+    /// The inner list of an optional list of optional lists: a level below
+    /// 3 holds no inner list, and level 3 an empty one.
+    #[test]
+    fn absent_outer_elements_do_not_invent_inner_lists() {
+        let nested = || List {
+            repetition: 2,
+            definition: 4,
+            ..flat()
+        };
+        let mut list = nested();
+        list.observe(0, 0).unwrap();
+        list.observe(1, 0).unwrap();
+        for (definition, repetition) in [(5, 0), (5, 2), (4, 2), (2, 1), (5, 1), (5, 2), (5, 2)] {
+            list.observe(definition, repetition).unwrap();
+        }
+        list.finish().unwrap();
+        let mut empty = nested();
+        empty.observe(5, 0).unwrap();
+        empty.observe(5, 2).unwrap();
+        empty.observe(5, 2).unwrap();
+        empty.observe(3, 1).unwrap();
+        assert_eq!(empty.finish(), Err(Error::Malformed));
     }
 }
