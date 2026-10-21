@@ -10,13 +10,13 @@ use std::collections::BTreeMap;
 use crate::error::{FunctionError, LockSyntaxError};
 use crate::scalar::{Scalar, ScalarRef};
 
-/// The host language selecting function admission. An engine that claims no
-/// host language, such as the command line's, is configured with
+/// The host language selecting function admission. A host names its own
+/// language; there is no default. An engine that claims no host language,
+/// such as the command line's, is configured with
 /// [`EngineOptions::neutral`](crate::EngineOptions::neutral) instead.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostLanguage {
-    #[default]
     Python,
     R,
 }
