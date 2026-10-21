@@ -667,15 +667,24 @@ Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
 root, the R source package in `inst/`, which R installs at the package
 root, and each R binary package at that root. `LICENSE.txt` is the project's
-MIT license. `LICENSE-THIRD-PARTY.txt` reproduces the license, copyright and NOTICE texts of every third-party crate
-in the normal and build dependency closure of its host's binding crate, for
-every platform, and names the license relied on where a crate offers a
-choice: the Python packages' copy covers the Python binding's crates, and the
-R package's copy the R binding's, which are exactly the crates that the R
-source package bundles. It also reproduces the notice that the Rust project
-ships for the standard library of the pinned toolchain,
-`share/doc/rust/COPYRIGHT-library.html`, because the native extension links
-that library. `LICENSE-READSTAT.txt`,
+MIT license. `LICENSE-THIRD-PARTY.txt` lists the third-party crates that its
+host's binding crate links: its normal dependency closure on each supported
+target, without procedural macros. Crates that only build scripts or
+procedural macros use, and crates of other platforms, are not linked and are
+not listed; the source packages carry their license files with their vendored
+sources. Each entry names the one license that yamaa relies on, never the
+choice that the crate offers, and reproduces the license, copyright and
+NOTICE texts that the crate ships for it (#3364). The Python packages' copy
+covers the Python binding's crates, and the R package's copy the R binding's,
+all of which the R source package bundles. It also gives the standard
+library's licensing from the notice that the Rust project ships with the
+pinned toolchain, `share/doc/rust/COPYRIGHT-library.html`, because the native
+extension links that library: the licensing statement, the in-tree licenses
+and copyright holders, and of the notice's out-of-tree crates those that the
+standard library links on the supported targets. No package notice names a
+GNU license; the only GPL wording that remains is the clause of the LLVM
+exception to Apache-2.0, a permissive license, which names GPLv2.
+`LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
@@ -688,13 +697,18 @@ relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 notices from `rust/Cargo.lock` and the standard library section from the
 toolchain that `rust/rust-toolchain.toml` pins, and it derives that
 expression from the Python binding's linked crates. The repository check
-fails when a binding's locked graph gains or loses a crate without a matching
-notice entry in its host's copy, when `rustc` in `rust/` is not the pinned
-toolchain, and when the committed section differs from that toolchain's
-notice. Staging the R source package fails while its notices name a crate
-that it does not bundle, or miss one that it does. Native qualification and
-the release selector require every wheel, source package and R binary
-package to carry its own host's notices unchanged.
+fails when a binding gains or loses a linked crate without a matching notice
+entry in its host's copy, when `rustc` in `rust/` is not the pinned
+toolchain, when the committed section differs from that toolchain's notice,
+and when a notice would name a GNU license. Staging the R source package
+fails while its notices name a crate that it does not bundle. Native
+qualification and the release selector require every wheel, source package
+and R binary package to carry its own host's notices unchanged, and refuse a
+package with any text that names a GNU license, the files inside the R
+source package's `vendor.tar.xz` included. The only exception is the
+unchanged upstream files of the vendored crates that
+`tools/packaging/check_package_notices.py` lists with its reasons: zstd's
+dual-licensed C sources, `r-efi`, and README or changelog prose.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the
@@ -716,9 +730,9 @@ Every R installation therefore names the standard library that it linked: an
 installation from source names the toolchain that built it, and the R binary
 packages, which the pinned toolchain builds, name that one. Each
 inventory is tab-separated text with a header row and one row per component,
-giving its name and version; its license, the SPDX expression that a crate's
-manifest declares, with Cargo's legacy `/` written as `OR`, or the upstream
-license of the C code or the standard library; its source, `crates.io` or
+giving its name and version; its license, the one license that yamaa relies
+on of those that the crate's manifest declares, or that it relies on for the
+C code (`BSD-3-Clause` for zstd) or the standard library (`MIT`); its source, `crates.io` or
 the component's directory in this repository, with the upstream repository and
 commit of vendored code, the crate that bundles it, or the Rust repository at
 the release's tag; and its purpose, from `tools/packaging/crate_purposes.toml`

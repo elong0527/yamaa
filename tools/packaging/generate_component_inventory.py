@@ -35,9 +35,11 @@ configure step appends follows them), with these columns:
 - name and version: the locked crate's, the C code's upstream release, or
   rust-std and the Rust release that rust/rust-toolchain.toml pins, or for
   the row that configure appends, the release that rustc reports;
-- license: the SPDX expression that the crate's manifest declares, with
-  Cargo's legacy `/` written as OR, or the C code's or the standard library's
-  upstream license;
+- license: the license that yamaa relies on, as the notices choose it from
+  the expression that the crate's manifest declares
+  (generate_third_party_notices.relied_on), or that it relies on for the C
+  code or the standard library; never a license that is offered but not
+  relied on, so no row names a GNU license;
 - source: crates.io for a registry crate; for a path crate, its directory in
   the yamaa repository, followed for a vendored copy of third-party code by
   the upstream repository and the commit that its provenance names; for
@@ -83,9 +85,10 @@ REGISTRY = "crates.io"
 # R package's configure step appends the row to the copy that R installs
 # (installed_inventory).
 BINARY_HOSTS = frozenset({"python"})
-# The standard library's row: rustup's name for the component that holds it.
+# The standard library's row: rustup's name for the component that holds it,
+# and the license that yamaa relies on of its MIT OR Apache-2.0.
 STANDARD_LIBRARY = "rust-std"
-STANDARD_LIBRARY_LICENSE = "MIT OR Apache-2.0"
+STANDARD_LIBRARY_LICENSE = "MIT"
 RUST_REPOSITORY = "https://github.com/rust-lang/rust"
 # The row's purpose in the wheels' inventory, and in an installed R package's.
 # R/yamaa/tools/configure.R writes the second as STANDARD_LIBRARY_PURPOSE, and
@@ -93,7 +96,7 @@ RUST_REPOSITORY = "https://github.com/rust-lang/rust"
 WHEEL_PURPOSE = (
     "the Rust standard library (core, alloc and std) of the pinned toolchain "
     "that builds this package, statically linked into its native code; "
-    "LICENSE-THIRD-PARTY.txt reproduces its notice"
+    "LICENSE-THIRD-PARTY.txt carries its notices"
 )
 INSTALLED_PURPOSE = (
     "the Rust standard library (core, alloc and std) of the toolchain that "
@@ -185,9 +188,9 @@ VENDORED = (
     Vendored(
         name="libzstd",
         crate="zstd-sys",
-        # zstd is offered under either license; the notices rely on
+        # zstd is offered under BSD-3-Clause or GPL-2.0-only; yamaa relies on
         # BSD-3-Clause (EXTRA_FILES in generate_third_party_notices.py).
-        license="BSD-3-Clause OR GPL-2.0-only",
+        license="BSD-3-Clause",
         purpose=(
             "the Zstandard C library that zstd-sys compiles and links: the zstd "
             "codec of Parquet pages (the parquet feature)"
@@ -213,15 +216,6 @@ def standard_library(release, purpose=WHEEL_PURPOSE):
         f"{RUST_REPOSITORY} at {release}",
         purpose,
     )
-
-
-def license_expression(declared, label):
-    """A crate's declared license as an SPDX expression; `/` is Cargo's OR."""
-    if not declared or not declared.strip():
-        raise ValueError(f"{label}: declares no license expression; review it")
-    expression = " OR ".join(part.strip() for part in declared.split("/"))
-    notices.parse_expression(expression)
-    return expression
 
 
 def crate_source(package):
@@ -271,7 +265,7 @@ def components(kept, metadata, crate_purposes, release=None):
             Component(
                 name,
                 version,
-                license_expression(package.get("license"), label),
+                notices.relied_on(package, metadata),
                 crate_source(package),
                 purpose.strip(),
             )
@@ -314,7 +308,8 @@ def row_line(row):
 
 def render(rows):
     """The inventory's text: a header row, then one row per component."""
-    return "\n".join(["\t".join(COLUMNS), *map(row_line, rows)]) + "\n"
+    text = "\n".join(["\t".join(COLUMNS), *map(row_line, rows)]) + "\n"
+    return notices.refuse_gnu(text, f"the {NAME} rows")
 
 
 def generate(hosts):
