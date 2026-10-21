@@ -1,51 +1,13 @@
 //! Rules of the 1.0 surface that its schema cannot state, checked on the
 //! lowered tree before any input is read. Their findings belong to
 //! validation, as the schema's do, and name the 1.0 paths (P-CLR-2).
-//!
-//! [`unbuilt`] lists what a 1.0 specification writes that the engine does not
-//! build yet; each is refused as `unsupported_operation` (COLUMN-15) until its
-//! pull request lands (#3030 D76).
 
 use crate::ast::{
-    Comparator, Direction, ExprId, ExprKind, Origin, Profile, ScalarOp, Spec, SubmissionMetadata,
-    Window, WindowFunction,
+    Direction, ExprId, ExprKind, Origin, Profile, ScalarOp, Spec, SubmissionMetadata, Window,
+    WindowFunction,
 };
 use crate::diagnostic::ConditionCode;
 use crate::schema::{SchemaContext as C, SchemaDiagnostic};
-use crate::specification::UnsupportedFeature;
-
-/// A value-level `where` comparator, NE or NOTIN (P-VLM-1), refused until
-/// P1-14.
-pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
-
-fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
-    UnsupportedFeature {
-        operation: operation.into(),
-        path,
-    }
-}
-
-/// What a lowered 1.0 specification writes that the engine does not build
-/// yet: a value-level comparator.
-pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
-    let mut found = Vec::new();
-    for column in &spec.columns {
-        let Some(submission) = &column.submission else {
-            continue;
-        };
-        for entry in &submission.value_level {
-            for clause in &entry.conditions {
-                if clause.comparator == Comparator::NotIn {
-                    found.push(unsupported(
-                        VALUE_LEVEL_COMPARATOR,
-                        format!("{}.comparator", spec.cite(clause.meta)),
-                    ));
-                }
-            }
-        }
-    }
-    found
-}
 
 /// SUB-14 (D69): each origin of `metadata` that conflicts with an earlier one,
 /// at its own position: one with the same type and source as an earlier

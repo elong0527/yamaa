@@ -246,8 +246,8 @@ During ungrouped row construction an identifier in expression-field text is
 either a variable of the row template's input dataset, qualified exactly as
 `row.filter` qualifies a variable, or an unqualified column derived by the
 same `rows` entry. A value from another dataset reaches the expression only
-through such a column, bound by a row-phase source or lookup under
-[LOOKUP-2](lookup.md#lookup-2).
+through such a column, which a source or lookup binds during row construction
+under [LOOKUP-2](lookup.md#lookup-2).
 
 During grouped row construction an identifier qualified to the row template's
 input dataset must be one of the enclosing `row.group_by` variables. Other

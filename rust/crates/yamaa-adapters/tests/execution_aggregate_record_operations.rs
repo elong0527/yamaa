@@ -1330,7 +1330,7 @@ S1,002,2024-06
         /// what decides it. `domain` reaches each of them once it reads or binds
         /// the inputs. The list may only shrink: a case that `check` starts to
         /// report fails until it leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 9] = [
+        const NOT_REPORTED_BY_CHECK: &[(&str, &str)] = &[
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
@@ -1465,6 +1465,11 @@ S1,002,2024-06
                 };
                 let oracle = expected(&case.join("expected/error.yaml"));
                 if phase != "validation" {
+                    // This harness passes no project file. A 1.x
+                    // specification that binds a codelist through its
+                    // project is then refused for want of it (CT-13, D32),
+                    // as a 0.5 one is not; nothing else may be reported.
+                    let project = case.join("project.yaml").is_file();
                     for runtime in ["python", "r"] {
                         let spec = specification(runtime);
                         let checked = file_application::check(
@@ -1476,7 +1481,10 @@ S1,002,2024-06
                             identity(runtime, name, &spec),
                         );
                         assert!(
-                            checked.is_empty(),
+                            checked
+                                .iter()
+                                .all(|issue| project
+                                    && issue.condition() == "project_binding_missing"),
                             "{name} ({runtime}): a {phase} negative, check reports {:?}",
                             checked.iter().map(issue).collect::<Vec<_>>()
                         );
@@ -1905,7 +1913,7 @@ S1,002,2024-06
                 Intermediate, ResolvedPlan, WindowKind,
             },
             schema::DocumentNode as N,
-            specification::{PrepareError, PreparedSpecification},
+            specification::PrepareError,
             table::TableSchema,
             value::ColumnType as T,
         };
@@ -2163,7 +2171,7 @@ S1,002,2024-06
                         vec![]
                     }
                 );
-                let compiled = PreparedSpecification::prepare(document.model()).unwrap();
+                let compiled = crate::support::specification_run::compile(&document).unwrap();
                 let plan = compiled
                     .bind_sources(&schemas.iter().collect::<Vec<_>>())
                     .unwrap();
@@ -2367,7 +2375,14 @@ S1,002,2024-06
                             intermediates[0].keys,
                             [yamaa_core::dataset::IntermediateKey {
                                 source_column: 0,
-                                path: "intermediates[0].key".into(),
+                                // In the notation of the language the
+                                // benchmark is written in (P-CLR-2).
+                                path: if document.legacy_model().is_some() {
+                                    "intermediates[0].key"
+                                } else {
+                                    "intermediates.DEATHEV.key"
+                                }
+                                .into(),
                                 value: yamaa_core::dataset::MatchValue::Variable(
                                     yamaa_core::dataset::MatchRead::Output {
                                         column: 0,
@@ -2380,7 +2395,12 @@ S1,002,2024-06
                             intermediates[1].keys,
                             [yamaa_core::dataset::IntermediateKey {
                                 source_column: 0,
-                                path: "intermediates[1].key".into(),
+                                path: if document.legacy_model().is_some() {
+                                    "intermediates[1].key"
+                                } else {
+                                    "intermediates.MEDDRA_PT.key"
+                                }
+                                .into(),
                                 value: yamaa_core::dataset::MatchValue::Variable(
                                     yamaa_core::dataset::MatchRead::Output {
                                         column: 2,
@@ -2425,7 +2445,7 @@ S1,002,2024-06
         fn inherited_unknown_profile_retains_written_layer_and_location_before_study_effects() {
             let (document, parents) = prepare("schema-inheritance", true);
             let Err(PrepareError::Invalid(findings)) =
-                PreparedSpecification::prepare(document.model())
+                crate::support::specification_run::compile(&document)
             else {
                 panic!("unknown source profile")
             };
@@ -2468,7 +2488,13 @@ S1,002,2024-06
             let node = raw.field(input, "LB").unwrap();
             assert_eq!(raw.nodes()[node], N::Text("input/lb.xlsx".into()));
             let position = parent.raw().locations[node];
-            assert_eq!(position.line, 3);
+            // The line the layer writes the input on, after its header.
+            let line = std::str::from_utf8(&parent.source().bytes)
+                .unwrap()
+                .lines()
+                .position(|line| line.trim() == "LB: input/lb.xlsx")
+                .unwrap();
+            assert_eq!(position.line, line + 1);
             assert!(position.offset < parent.source().bytes.len());
             assert_eq!(
                 parents.reads,

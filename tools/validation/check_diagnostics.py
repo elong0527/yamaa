@@ -18,6 +18,15 @@ miss an issue row built with a condition the registry does not have.
 A diagnostic record crosses Rust modules typed, so JSON text is decoded only
 in a codec that owns its format. Wire helpers and serde JSON readers, including
 imports and field deserializers, are refused elsewhere outside test-only code.
+
+Every registered condition also has a parity case (#2846): a negative
+benchmark whose expected/error.yaml names it, or a case of the shared host
+fixtures, the JSON files of rust/tests/host-fixtures/, that names it. A
+condition without one is listed in rust/tests/host-fixtures/
+unreached-conditions.yaml, unreachable by design with its reason or not
+covered yet under the family issue that adds its case. An entry for a
+condition that a case reaches, or that is not registered, is refused, so the
+list shrinks as cases arrive.
 """
 
 import argparse
@@ -105,6 +114,10 @@ SPACE = re.compile(r"\s*")
 # A module item's keyword and name: out of line or inline.
 MODULE_ITEM = re.compile(rf"\bmod\s+({RUST_NAME})\s*([;{{])")
 VISIBILITY = re.compile(r"\bpub(?:\s*\([^)]*\))?\s*\Z")
+# The registered conditions that no parity case reaches (#2846), beside the
+# shared host fixtures whose cases count as parity cases.
+UNREACHED = "rust/tests/host-fixtures/unreached-conditions.yaml"
+FAMILY_ISSUE = re.compile(r"#[1-9][0-9]*")
 
 
 def cause_pattern(identifier: re.Pattern) -> re.Pattern:
@@ -1454,16 +1467,154 @@ def violations(root: Path) -> list[str]:
     return errors
 
 
+def json_cases(value, path=()):
+    """Yield (path, condition) for each object in JSON data that names a
+    condition, with the keys and indexes that lead to it."""
+    if isinstance(value, dict):
+        if isinstance(value.get("condition"), str):
+            yield path, value["condition"]
+        for key, item in value.items():
+            yield from json_cases(item, (*path, str(key)))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from json_cases(item, (*path, str(index)))
+
+
+def parity_cases(root: Path) -> dict[str, str]:
+    """The first parity case that reaches each condition: a negative
+    benchmark's expected/error.yaml, or a case of a shared host fixture (a
+    JSON file beside the unreached list) that names it."""
+    cases = {}
+    for path in sorted((root / "benchmarks").glob("negative-*/expected/error.yaml")):
+        try:
+            contract = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue  # The repository validator reports unreadable fixtures.
+        if isinstance(contract, dict) and isinstance(contract.get("condition"), str):
+            benchmark = path.parent.parent.relative_to(root).as_posix()
+            cases.setdefault(contract["condition"], benchmark)
+    for path in sorted((root / UNREACHED).parent.glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue  # The host suites and the supplemental inventory read them.
+        fixture = path.relative_to(root).as_posix()
+        for keys, condition in json_cases(document):
+            cases.setdefault(condition, f"{fixture} at /{'/'.join(keys)}")
+    return cases
+
+
+def unreached_entries(root: Path) -> tuple[dict[str, str], list[str]]:
+    """Each condition the unreached list names, with where it names it
+    (`unreachable.<condition>` or `not_covered.<issue>`), and the list's
+    errors of form."""
+    try:
+        document = yaml.load(
+            (root / UNREACHED).read_text(encoding="utf-8"), Loader=UniqueKeyLoader
+        )
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        return {}, [f"{UNREACHED}: unreadable list: {error}"]
+    if not isinstance(document, dict):
+        return {}, [f"{UNREACHED}: expected a mapping of unreachable and not_covered"]
+    errors = [
+        f"{UNREACHED}: {field}: unknown field"
+        for field in sorted(set(document) - {"unreachable", "not_covered"}, key=str)
+    ]
+    entries = {}
+
+    def add(condition, where):
+        if condition in entries:
+            errors.append(
+                f"{UNREACHED}: {where}: {condition} is already listed at "
+                f"{entries[condition]}"
+            )
+        else:
+            entries[condition] = where
+
+    unreachable = document.get("unreachable") or {}
+    if not isinstance(unreachable, dict):
+        errors.append(f"{UNREACHED}: unreachable: expected conditions with reasons")
+        unreachable = {}
+    if list(unreachable) != sorted(unreachable, key=str):
+        errors.append(f"{UNREACHED}: unreachable: expected sorted conditions")
+    for condition, reason in unreachable.items():
+        where = f"unreachable.{condition}"
+        if not (isinstance(reason, str) and reason.strip() and "\n" not in reason):
+            errors.append(
+                f"{UNREACHED}: {where}: expected a one-line reason why no case "
+                "can reach it"
+            )
+        add(condition, where)
+    not_covered = document.get("not_covered") or {}
+    if not isinstance(not_covered, dict):
+        errors.append(
+            f"{UNREACHED}: not_covered: expected family issues (#N) with their "
+            "conditions"
+        )
+        not_covered = {}
+    for issue, conditions in not_covered.items():
+        where = f"not_covered.{issue}"
+        if not (isinstance(issue, str) and FAMILY_ISSUE.fullmatch(issue)):
+            errors.append(f"{UNREACHED}: {where}: expected a family issue as #N")
+        if not (
+            isinstance(conditions, list)
+            and conditions
+            and all(isinstance(condition, str) for condition in conditions)
+        ):
+            errors.append(f"{UNREACHED}: {where}: expected a list of conditions")
+            continue
+        if conditions != sorted(conditions):
+            errors.append(f"{UNREACHED}: {where}: expected sorted conditions")
+        for condition in conditions:
+            add(condition, where)
+    return entries, errors
+
+
+def parity_errors(root: Path) -> list[str]:
+    """Every registered condition has a parity case or an entry in the
+    unreached list, and every entry names a registered condition that no case
+    reaches (#2846). An unreadable registry is reported by `violations`."""
+    root = root.resolve()
+    registered, registry_errors = vocabulary(root)
+    if registry_errors:
+        return []
+    entries, errors = unreached_entries(root)
+    cases = parity_cases(root)
+    for condition, where in entries.items():
+        if condition not in registered:
+            errors.append(
+                f"{UNREACHED}: {where}: {condition} is not registered in "
+                "yaml/conditions.yaml"
+            )
+        elif condition in cases:
+            errors.append(
+                f"{UNREACHED}: {where}: {cases[condition]} reaches {condition}; "
+                "remove its entry"
+            )
+    errors.extend(
+        f"yaml/conditions.yaml: {condition} has no parity case: add a negative "
+        "benchmark or a host-fixture case that reaches it, or list it in "
+        f"{UNREACHED}"
+        for condition in registered
+        if condition not in cases and condition not in entries
+    )
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     arguments = parser.parse_args()
-    errors = violations(arguments.root)
+    errors = violations(arguments.root) + parity_errors(arguments.root)
     for error in errors:
         print(error)
     if errors:
         return 1
-    print("PASS: diagnostic mappings are registered and literals stay in the registry.")
+    print(
+        "PASS: diagnostic mappings are registered, literals stay in the registry, "
+        "and every registered condition has a parity case or an entry in "
+        f"{UNREACHED}."
+    )
     return 0
 
 

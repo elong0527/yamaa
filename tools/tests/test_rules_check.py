@@ -33,17 +33,17 @@ class RuleCheckTests(unittest.TestCase):
         errors = self.errors()
         self.assertTrue(any(expected in error for error in errors), errors)
 
-    def test_valid_repository_passes_and_reports_unnamed_conditions(self):
-        report = check(self.root)
-        self.assertEqual(report.errors, [])
-        self.assertEqual(report.unnamed_conditions, ["orphan_condition"])
+    def test_valid_repository_passes(self):
+        self.assertEqual(self.errors(), [])
 
-    def test_command_line_reports_errors_and_notes(self):
+    def test_command_line_reports_errors(self):
         command = [sys.executable, "-m", "tools.rules.check", "--root", str(self.root)]
         result = subprocess.run(command, capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("NOTE:   orphan_condition", result.stdout)
-        self.assertIn("PASS: 4 cards;", result.stdout)
+        self.assertIn(
+            "PASS: 4 cards name every registered condition on a Fails line;",
+            result.stdout,
+        )
         self.replace("rules/inheritance.md", '<a id="layer-2">', '<a id="layer-9">')
         result = subprocess.run(command, capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 1)
@@ -268,6 +268,48 @@ class RuleCheckTests(unittest.TestCase):
             "rules/inheritance.md:14: LAYER-1: Fails item 'cycle' is not a `condition`",
             errors,
         )
+
+    def test_every_registered_condition_is_named_on_a_fails_line(self):
+        self.replace(
+            "yaml/conditions.yaml",
+            "  conversion_failed: {phases: [convert]}\n",
+            "  conversion_failed: {phases: [convert]}\n"
+            "  orphan_condition: {phases: [validation]}\n",
+        )
+        uncited = (
+            "yaml/conditions.yaml:5: orphan_condition is registered, but no "
+            "card's Fails line names it"
+        )
+        self.assertEqual(self.errors(), [uncited])
+        # A statement or detail that mentions the condition does not cite it.
+        self.replace(
+            "rules/values/types.md",
+            "A column has one type.\n",
+            "A column has one type, or fails with `orphan_condition`.\n",
+        )
+        self.replace(
+            "rules/inheritance.md",
+            "A cycle reports its path.",
+            "A cycle reports its path, never `orphan_condition`.",
+        )
+        self.assertEqual(self.errors(), [uncited])
+        self.replace(
+            "rules/values/types.md",
+            "Fails: `conversion_failed`.",
+            "Fails: `conversion_failed`, `orphan_condition`.",
+        )
+        self.assertEqual(self.errors(), [])
+
+    def test_an_unreadable_registry_cites_nothing(self):
+        # A registry without a conditions mapping is reported once, against the
+        # cards that name conditions, and leaves no condition uncited.
+        for text in ('version: "1.0"\n', "conditions: [a, b]\n", "- a\n", ""):
+            with self.subTest(text=text):
+                self.write("yaml/conditions.yaml", text)
+                self.assertEqual(
+                    self.errors(),
+                    ["yaml/conditions.yaml: cannot read the registered conditions"],
+                )
 
     def test_evidence_items_exist(self):
         cases = {

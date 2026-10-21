@@ -947,9 +947,16 @@ rows:
             ));
             let case = dir.join("case");
             copy_dir(&root.join(benchmark), &case);
+            // The child is written in its parent's language, as every layer
+            // of a chain is (LAYER-4).
+            let written = fs::read(case.join("spec.yaml")).unwrap();
             fs::write(
                 case.join("__child.yaml"),
-                "schema_version: \"1.0\"\nparent: spec.yaml\n",
+                if crate::support::benchmarks::declares_header(&written) {
+                    "yamaa: \"1.0\"\ntype: spec\nparent: spec.yaml\n"
+                } else {
+                    "schema_version: \"1.0\"\nparent: spec.yaml\n"
+                },
             )
             .unwrap();
             let parent = first_issue(&case.join("spec.yaml"));

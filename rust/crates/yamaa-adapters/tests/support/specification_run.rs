@@ -94,19 +94,67 @@ pub(crate) fn schema(root: &Path) -> Arc<CapturedSchema> {
     visit(root, "schema.yaml", &mut modules);
     CapturedSchema::admit(modules, 0).unwrap()
 }
+/// A specification without parents, prepared in the language it is written
+/// in: a 0.5 file by `schema`, and a file that declares the 1.x header by the
+/// 1.0 closures the package ships (#3030 D76). The benchmarks these tests
+/// read move to 1.0 one prefix at a time (#3422).
 pub(crate) fn prepare(schema: &Arc<CapturedSchema>, source: &[u8]) -> PreparedDocument {
-    schema
-        .prepare_standalone(Source {
-            identity: "spec.yaml".into(),
-            bytes: source.to_vec(),
-        })
-        .unwrap()
+    try_prepare(schema, source).unwrap_or_else(|error| panic!("{error}"))
 }
-pub(crate) fn lower(spec: &SpecificationDocument, source: &TableSchema) -> ResolvedPlan {
-    yamaa_core::specification::PreparedSpecification::prepare(spec)
-        .unwrap()
-        .bind(source)
-        .unwrap()
+/// [`prepare`], or why the specification is refused.
+pub(crate) fn try_prepare(
+    schema: &Arc<CapturedSchema>,
+    source: &[u8],
+) -> Result<PreparedDocument, String> {
+    use yamaa_core::inheritance::{Source as Layer, SourceError};
+    struct Standalone;
+    impl yamaa_adapters::specification_source::InheritancePort for Standalone {
+        type Error = std::convert::Infallible;
+        fn canonicalize(&mut self, _: &str, _: &str) -> Result<Layer, SourceError<Self::Error>> {
+            Err(SourceError::Unavailable)
+        }
+        fn capture(&mut self, _: &Layer) -> Result<Vec<u8>, SourceError<Self::Error>> {
+            Err(SourceError::Unavailable)
+        }
+        fn rebase(&mut self, _: &Layer, _: &Layer, written: &str) -> Result<String, Self::Error> {
+            Ok(written.into())
+        }
+    }
+    let source = Source {
+        identity: "spec.yaml".into(),
+        bytes: source.to_vec(),
+    };
+    if crate::support::benchmarks::declares_header(&source.bytes) {
+        schema
+            .prepare_document(source, "spec.yaml".into(), &mut Standalone)
+            .map_err(|error| format!("{error:?}"))
+    } else {
+        schema
+            .prepare_standalone(source)
+            .map_err(|error| format!("{error:?}"))
+    }
+}
+/// Compile a prepared specification without an environment or linked
+/// producers, in the language it is written in: a 0.5 model, or the tree a
+/// 1.x specification's front end lowered (#3030 D76).
+pub(crate) fn compile(
+    document: &PreparedDocument,
+) -> Result<yamaa_core::specification::PreparedSpecification, yamaa_core::specification::PrepareError>
+{
+    use yamaa_adapters::specification_source::Compilation;
+    use yamaa_core::specification::PreparedSpecification;
+    match document.compilation() {
+        Compilation::Legacy(model) => PreparedSpecification::prepare(model),
+        Compilation::Versioned { tree, document } => PreparedSpecification::prepare_tree_linked(
+            tree.clone(),
+            document,
+            None,
+            Default::default(),
+        ),
+    }
+}
+pub(crate) fn lower(document: &PreparedDocument, source: &TableSchema) -> ResolvedPlan {
+    compile(document).unwrap().bind(source).unwrap()
 }
 
 pub(crate) fn independent_failed_reports(
