@@ -22,8 +22,10 @@ packaging checks. Python and R usage lives in the
 in [python/README.md](../python/README.md) and
 [R/yamaa/README.md](../R/yamaa/README.md).
 
-Expected benchmark data and Parquet fixtures are authored truth. Preserve their
-bytes when changing implementation or repository structure.
+Expected benchmark data is authored truth. Preserve its bytes when changing
+implementation or repository structure. The adapters' Parquet test inputs are
+written when the tests run (`crates/yamaa-adapters/tests/support/parquet_files.rs`),
+since binary files live only under `benchmarks/`.
 
 Layer composition and null handling follow the
 [composition contract](../rules/inheritance.md).
@@ -608,7 +610,7 @@ was removed. Any module not listed here is internal by default.
 | `issue_rows` | Removed -- core's `Diagnostic` is the one record; the facade's `Diagnostic` and `Report` are its public form. |
 | `project_application` | Internal -- selection failures convert into diagnostics. |
 | `project_attempt` | Internal -- host-failure traversal; failures surface as `Error::Host`. |
-| `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types and `decode_renv_lock` is the public renv admission; lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
+| `project_lock` | Facade -- `LockFinding`/`LockReason` are the public lock-finding types, `decode_renv_lock` is the public renv admission, and `verify_uv_lock` compares a uv lock with the installation an `InstalledDistributions` reports (#3030 D172); lock-kind detection stays internal (the engine supplies `LockKind` through `LockContext`). |
 | `project_report` | Internal -- the activation and project-function half of the one result builder; `Classified` stays an internal constructor. |
 | `project_run` | Removed -- `specification_run::PreparedRun` is the one prepared run, alone or with a project; `Plan` wraps it (#2821), and it stays internal with its `Attempt`. |
 | `public_table` | Facade -- `Table`. |

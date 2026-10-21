@@ -311,6 +311,15 @@ impl LockFinding {
             actual: self.actual,
         }
     }
+
+    pub(crate) fn from_core(finding: yamaa_core::diagnostic::LockFinding) -> Self {
+        Self {
+            package: finding.package,
+            reason: LockReason::from_core(finding.reason),
+            expected: finding.expected,
+            actual: finding.actual,
+        }
+    }
 }
 
 /// A closed classified lock token, the public form of the lock reason.

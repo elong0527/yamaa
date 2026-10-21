@@ -1,8 +1,11 @@
-"""Host metadata checks for the new locked environment activation port.
+"""Host metadata for locked environment activation.
 
-The shared engine supplies already admitted callable names. This module reads
-packaging-tool metadata and installed versions; it does not import project code,
-construct a semantic plan, install anything or cache activation success.
+The shared engine reads a function's uv lock and compares versions. This module
+only reports what the interpreter has installed: the distributions that provide
+each called module, a distribution's installed version and the marker
+environment. It does not import project code, construct a semantic plan,
+install anything or cache activation success, and it imports no third-party
+module.
 """
 
 from __future__ import annotations
@@ -10,19 +13,19 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
+import os
+import platform
 import sys
-import tomllib
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
 from importlib import metadata
 from pathlib import Path
 from types import FunctionType, MethodType
 from urllib.parse import urlsplit
 from urllib.request import url2pathname
 
-from packaging.markers import InvalidMarker, Marker
-from packaging.utils import InvalidName, canonicalize_name
-from packaging.version import InvalidVersion, Version
+
+class InvalidMetadata(ValueError):
+    """Installed metadata cannot identify the distribution of a called module."""
 
 
 def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
@@ -41,13 +44,13 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
         try:
             raw = distribution.read_text("direct_url.json")
         except UnicodeDecodeError as error:
-            raise InvalidLock("invalid editable metadata") from error
+            raise InvalidMetadata("invalid editable metadata") from error
         if raw is None:
             continue
         try:
             direct = json.loads(raw)
         except (ValueError, RecursionError) as error:
-            raise InvalidLock("invalid editable metadata") from error
+            raise InvalidMetadata("invalid editable metadata") from error
         if (
             not isinstance(direct, dict)
             or not isinstance(direct.get("dir_info"), dict)
@@ -56,7 +59,7 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
             continue
         url = direct.get("url")
         if not isinstance(url, str):
-            raise InvalidLock("invalid editable source identity")
+            raise InvalidMetadata("invalid editable source identity")
         parsed = urlsplit(url)
         if (
             parsed.scheme != "file"
@@ -64,11 +67,11 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
             or parsed.query
             or parsed.fragment
         ):
-            raise InvalidLock("editable source is not a local file URL")
+            raise InvalidMetadata("editable source is not a local file URL")
         project = Path(url2pathname(parsed.path)).resolve()
         name = distribution.metadata.get("Name")
         if not isinstance(name, str):
-            raise InvalidLock("invalid editable distribution identity")
+            raise InvalidMetadata("invalid editable distribution identity")
         for entry in distribution.files or ():
             if entry.suffix != ".pth":
                 continue
@@ -82,7 +85,7 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
             try:
                 lines = held.decode("utf-8").splitlines()
             except UnicodeDecodeError as error:
-                raise InvalidLock("invalid editable path metadata") from error
+                raise InvalidMetadata("invalid editable path metadata") from error
             for line in lines:
                 line = line.strip()
                 if not line or line.startswith(("#", "import ", "import\t")):
@@ -98,142 +101,43 @@ def _installed_providers(roots: Sequence[str]) -> Mapping[str, list[str]]:
     return mapping
 
 
-@dataclass(frozen=True, slots=True)
-class Finding:
-    package: str
-    reason: str
-    expected: tuple[str, ...] = ()
-    actual: str | None = None
+def is_standard_library(module: str) -> bool:
+    """Whether `module` names a module of the interpreter's standard library."""
+    return module in sys.stdlib_module_names
 
 
-class InvalidLock(ValueError):
-    """Held bytes cannot be interpreted as a uv packaging lock."""
+def installed_version(distribution: str) -> object:
+    """The installed version of `distribution`, as its metadata records it.
 
-
-def _read(raw: bytes) -> dict:
-    try:
-        document = tomllib.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError, RecursionError) as error:
-        raise InvalidLock("invalid uv lock syntax") from error
-    records = document.get("package")
-    if type(document.get("version")) is not int or document["version"] != 1:
-        raise InvalidLock("unsupported uv lock format")
-    if not isinstance(records, list):
-        raise InvalidLock("invalid uv package array")
-    return document
-
-
-def _selected(record: dict, environment: Mapping[str, str] | None) -> bool:
-    markers = record.get("resolution-markers")
-    if markers is None:
-        return True
-    if not isinstance(markers, list) or not markers:
-        raise InvalidLock("invalid resolution markers")
-    results = []
-    for text in markers:
-        if not isinstance(text, str):
-            raise InvalidLock("invalid resolution marker")
-        try:
-            results.append(
-                Marker(text).evaluate(environment=environment, context="lock_file")
-            )
-        except (InvalidMarker, KeyError, ValueError, RecursionError) as error:
-            raise InvalidLock("invalid resolution marker") from error
-    return any(results)
-
-
-def verify_versions(
-    raw: bytes,
-    calls: Sequence[str],
-    *,
-    installed_version: Callable[[str], str] | None = None,
-    package_providers: Callable[[], Mapping[str, list[str]]] | None = None,
-    environment: Mapping[str, str] | None = None,
-) -> tuple[Finding, ...]:
-    """Verify yamaa and every called distribution before callable import.
-
-    No called functions means no lock parsing or host metadata observations.
-    Namespace providers are all checked; unrelated packages are not audited.
-    Ambiguous applicable versions are rejected rather than chosen by what happens
-    to be installed. Version comparison uses the packaging tool's PEP 440 rules.
+    The engine reports a value that is not text as an unreadable version, and
+    `metadata.PackageNotFoundError` as a distribution that is not installed.
+    Every other exception, and an interrupt, keeps its identity.
     """
-    if not calls:
-        return ()
-    document = _read(raw)
-    version = metadata.version if installed_version is None else installed_version
-    needed = {"yamaa"}
-    findings = []
-    roots = tuple(dict.fromkeys(call.split(".", 1)[0] for call in calls))
-    if roots:
-        mapping = (
-            _installed_providers(roots)
-            if package_providers is None
-            else package_providers()
-        )
-        for root in roots:
-            distributions = mapping.get(root)
-            if not distributions:
-                if root in sys.stdlib_module_names:
-                    continue
-                findings.append(Finding(root, "distribution_not_identified"))
-                continue
-            for distribution in distributions:
-                if not isinstance(distribution, str):
-                    raise InvalidLock("invalid installed distribution identity")
-                try:
-                    needed.add(canonicalize_name(distribution, validate=True))
-                except InvalidName as error:
-                    raise InvalidLock(
-                        "invalid installed distribution identity"
-                    ) from error
-    records: dict[str, list[dict]] = {}
-    for record in document["package"]:
-        if not isinstance(record, dict) or not isinstance(record.get("name"), str):
-            raise InvalidLock("invalid uv package identity")
-        try:
-            name = canonicalize_name(record["name"], validate=True)
-        except InvalidName as error:
-            raise InvalidLock("invalid uv package identity") from error
-        if name in needed:
-            records.setdefault(name, []).append(record)
-    for name in sorted(needed):
-        expected = set()
-        for record in records.get(name, ()):
-            if not _selected(record, environment):
-                continue
-            raw_version = record.get("version")
-            if not isinstance(raw_version, str):
-                raise InvalidLock("called package has no locked version")
-            try:
-                expected.add(Version(raw_version))
-            except InvalidVersion as error:
-                raise InvalidLock("invalid locked package version") from error
-        choices = tuple(str(value) for value in sorted(expected))
-        if len(expected) != 1:
-            findings.append(
-                Finding(
-                    name,
-                    "version_not_locked" if not expected else "ambiguous_lock_version",
-                    choices,
-                )
-            )
-            continue
-        try:
-            actual = version(name)
-        except metadata.PackageNotFoundError:
-            findings.append(Finding(name, "package_not_installed", choices))
-            continue
-        if not isinstance(actual, str):
-            findings.append(Finding(name, "invalid_installed_version", choices))
-            continue
-        try:
-            parsed = Version(actual)
-        except InvalidVersion:
-            findings.append(Finding(name, "invalid_installed_version", choices, actual))
-            continue
-        if parsed not in expected:
-            findings.append(Finding(name, "version_mismatch", choices, actual))
-    return tuple(findings)
+    return metadata.version(distribution)
+
+
+def marker_environment() -> dict[str, str]:
+    """The values that PEP 508 markers name, read as Python's packaging reads them.
+
+    The engine evaluates a lock's `resolution-markers` against them.
+    """
+    implementation = sys.implementation.version
+    version = f"{implementation.major}.{implementation.minor}.{implementation.micro}"
+    if implementation.releaselevel != "final":
+        version += implementation.releaselevel[0] + str(implementation.serial)
+    return {
+        "implementation_name": sys.implementation.name,
+        "implementation_version": version,
+        "os_name": os.name,
+        "platform_machine": platform.machine(),
+        "platform_release": platform.release(),
+        "platform_system": platform.system(),
+        "platform_version": platform.version(),
+        "python_full_version": platform.python_version(),
+        "platform_python_implementation": platform.python_implementation(),
+        "python_version": ".".join(platform.python_version_tuple()[:2]),
+        "sys_platform": sys.platform,
+    }
 
 
 class InvalidBinding(ValueError):

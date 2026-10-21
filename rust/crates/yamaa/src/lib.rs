@@ -79,9 +79,9 @@ pub use error::{
 };
 pub use file_type::{FileType, FILE_TYPES};
 pub use functions::{
-    decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
-    Signature,
+    decode_renv_lock, verify_uv_lock, Argument, BatchArgument, CallError, ColumnType,
+    FunctionHandle, FunctionIdentity, HostLanguage, InstalledDistributions, InstalledVersion,
+    LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
 };
 pub use info::{info, Host, Info};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};
