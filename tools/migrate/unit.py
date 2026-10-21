@@ -62,6 +62,10 @@ PROJECT_FIELDS = frozenset(
     {"environments", "codelists", "study", "sdtm", "adam", "send"}
 )
 ENVIRONMENT_FIELDS = frozenset({"functions", "lock"})
+SPEC_FIELDS = frozenset(schema.bundle("spec").classes["root_class"].fields) - {
+    "schema_version"
+}
+NAMED_KINDS = {"project.yaml": "project", "environment.yaml": "environment"}
 SECTION_MODELS = {"sdtm": "SDTM", "adam": "ADaM", "send": "SEND"}
 STANDARD_MODELS = {"SDTM": "SDTM", "ADaM": "ADaM", "SEND": "SEND"}
 HOSTS = ("python", "r")
@@ -179,6 +183,10 @@ def classify(path, root):
         return "environment"
     if names & PROJECT_FIELDS:
         return "project"
+    if not names & SPEC_FIELDS and path.name in NAMED_KINDS:
+        # A header that names no field of any file type, such as a test's
+        # empty project, takes the type its file name gives.
+        return NAMED_KINDS[path.name]
     return "spec"
 
 
