@@ -28,6 +28,7 @@ from tools.benchmark import directories as benchmark_directories
 from tools.benchmark import entries as benchmark_entries
 from tools.benchmark import load_metadata
 from tools.paths import ROOT
+from tools.surface import declares_header, expression
 
 PROTOCOL = "public-conformance/1"
 FIELD_REFERENCE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
@@ -90,7 +91,7 @@ def supplies_functions(case, entries):
         except Exception:  # noqa: BLE001 -- an unreadable project supplies no functions
             continue
         if isinstance(document, dict):
-            key = "functions" if "yamaa" in document else "environments"
+            key = "functions" if declares_header(document) else "environments"
             if document.get(key):
                 return True
     return False
@@ -147,12 +148,31 @@ def json_round_trippable(value):
     return False
 
 
+def reads_a_field_or_literal(derivation, v1):
+    """Whether a derivation reads one qualified input field or is a literal.
+
+    In a 1.x file an expression field holds grammar text, where a bare name
+    is a reference and quoted text a literal, or a YAML number, Boolean or
+    null literal (EXPR-5); a 0.5 file writes the field as text and the
+    literal as `{literal: X}`.
+    """
+    if v1:
+        kind, value = expression(derivation)
+        return kind == "literal" or (
+            kind == "reference" and bool(FIELD_REFERENCE.fullmatch(value))
+        )
+    if isinstance(derivation, str):
+        return bool(FIELD_REFERENCE.fullmatch(derivation))
+    return isinstance(derivation, dict) and set(derivation) == {"literal"}
+
+
 def key_order_texts(document):
     """JSON control/permuted texts for the key-order check, or None.
 
     Eligible documents have no `rows` and no `parent`, at least two keys,
     and every key column reading one input field or a literal, so key columns
-    may be declared in any order (COLUMN-5, OUTPUT-1, OUTPUT-2).
+    may be declared in any order (COLUMN-5, OUTPUT-1, OUTPUT-2). The texts
+    keep the document's language.
     """
     if (
         not isinstance(document, dict)
@@ -171,15 +191,10 @@ def key_order_texts(document):
         if not isinstance(column, dict) or not isinstance(column.get("name"), str):
             return None
         by_name.setdefault(column["name"], column)
+    v1 = declares_header(document)
     for key in keys:
         column = by_name.get(key)
-        if column is None:
-            return None
-        derivation = column.get("derivation")
-        if isinstance(derivation, str):
-            if not FIELD_REFERENCE.fullmatch(derivation):
-                return None
-        elif not (isinstance(derivation, dict) and set(derivation) == {"literal"}):
+        if column is None or not reads_a_field_or_literal(column.get("derivation"), v1):
             return None
     control = json.dumps(document, indent=2, ensure_ascii=True) + "\n"
     permuted = json.loads(control)
@@ -193,11 +208,7 @@ def key_order_texts(document):
 def empty_child(document, parent):
     """An empty child layer of `parent`, written in its parent's language: a
     1.x parent declares `yamaa`, which its child declares too (LAYER-4)."""
-    if (
-        isinstance(document, dict)
-        and "yamaa" in document
-        and "schema_version" not in document
-    ):
+    if declares_header(document):
         return f'yamaa: "1.0"\ntype: spec\nparent: {parent}\n'
     return f'schema_version: "1.0"\nparent: {parent}\n'
 
@@ -348,7 +359,11 @@ def load_yaml(path):
 
 
 def declarations(path, active=()):
-    """Read independent declared types/output paths, never derivations."""
+    """Read independent declared types/output paths, never derivations.
+
+    A 1.x child layer removes an inherited output field by listing its path
+    in `clear` (LAYER-9), where a 0.5 child writes the field as YAML null.
+    """
     if path.resolve() in active:
         raise ValueError("cyclic declarations")
     data = load_yaml(path)
@@ -362,6 +377,11 @@ def declarations(path, active=()):
         )
         types.update(inherited_types)
         output.update(inherited_output)
+    if declares_header(data):
+        for cleared in data.get("clear") or []:
+            head, _, field = str(cleared).partition(".")
+            if head == "output":
+                output.pop(field, None)
     for column in data.get("columns", []):
         if "type" in column:
             types[column["name"]] = column["type"]

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 import yaml
-from tools.benchmark import directories, load_metadata
+from tools.benchmark import check_standard_model, directories, load_metadata
 from tools.benchmark import entries as benchmark_entries
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
@@ -50,6 +50,7 @@ def load_validation_fixtures(root: Path):
         try:
             metadata = load_metadata(case)
             benchmark_entries(case, metadata)
+            check_standard_model(case, metadata)
         except ValueError as error:
             errors.append(f"ERROR: {label}: {error}")
             continue
