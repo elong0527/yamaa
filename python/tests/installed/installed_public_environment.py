@@ -1200,7 +1200,7 @@ class PublicEnvironment(unittest.TestCase):
         shutil.copyfile(case / "r/renv.lock", case / "python/uv.lock")
         with no_activation():
             self.assertEqual(
-                project.check().issues.to_dicts(),
+                project.check().issues.to_pylist(),
                 [
                     issue(
                         "function_file_invalid",
