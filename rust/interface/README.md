@@ -78,11 +78,11 @@ draft.
 `values` holds the closed vocabularies of the public surface, `tables` the
 columns of each table a host returns, in order, and `records` the named
 records a host returns as a dict or named list: today `info`, the engine
-information of a selftest (D41). Each vocabulary and table names, as
+information that `info()` returns and a selftest holds (D41). Each vocabulary and table names, as
 `rust: yamaa::NAME`, the facade constant that owns it: the statuses, the
 issues, run report, lint and selftest columns, the ODM item columns, the
-phases, the report's kinds and outcomes, the severities, the lint findings
-and the file types. The generator reads the constant from the facade sources,
+phases, the report's kinds and outcomes, the severities, the lint findings,
+the file types, the features and the hosts. The generator reads the constant from the facade sources,
 following an alias such as
 `pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
 the core or adapters crate, and refuses a declaration that differs from it in
@@ -116,11 +116,10 @@ R's help pages stay handwritten under `R/yamaa/man/`.
 Generated code only delegates, and the delegation is declared, never written:
 
 - A class `holds` an ordered set of values, each named by what it fills:
-  `handle`, the native handle the object wraps; one of its `field` members;
-  or a native argument, which the value fills in the object's native calls. A
-  class that holds neither a handle nor a field is lazy: it holds paths,
-  converts its own path when it is made, and keeps a plans handle when a native
-  call it makes takes `plans` (#2821).
+  `handle`, the native handle a result wraps, or a native argument, which the
+  value fills in the object's native calls. A class that holds no handle is
+  lazy: it holds paths, converts its own path when it is made, and keeps a
+  plans handle when a native call it makes takes `plans` (#2821).
 - A member or function `calls` an operation of `operations`. Each native
   argument of that operation's Python and R exports is bound by name: to the
   member's own arguments, converted by their type token; to a held value; to
@@ -134,21 +133,30 @@ Generated code only delegates, and the delegation is declared, never written:
   `nothing` or `paths_written`, as `save()` does, returns it invisibly.
 
 Member kinds are `property` (a read-only view, an active binding in R),
-`method`, `field` (a value the object holds when made), `index` (Python's
-`__getitem__` and R's `[[` S3 method: the key is checked against the class's
-`names`, and an absent one raises the refusal its `calls` operation gives),
-`protocol` (Python's `__contains__` and `__iter__` over `names`), `printing`
-(Python's `__repr__`, which `str()` falls back to, and R's `print` and
-`format` S3 methods: `format()` returns the lines its `calls` operation
-renders in Rust and `print()` writes them, so no host formats a result; D37)
+`method`, `index` (Python's `__getitem__` and R's `[[` S3 method: the key is
+checked against the class's `names`, and an absent one raises the refusal its
+`calls` operation gives), `protocol` (Python's `__contains__`, `__iter__` and
+`__len__` over `names`), `printing` (Python's `__repr__`, which `str()` falls
+back to, and R's `print` and `format` S3 methods: `format()` returns the lines
+its `calls` operation renders in Rust and `print()` writes them, so no host
+formats a result or a lazy object, which prints from the path it holds; D37)
 and `private` (a qualification accessor such as R's `.run_observations(run)`,
-which Python reaches through the handle; the manifest leaves it out). A
-member that returns a record token (`info`) names the record it returns as
-`record`. A class's `interrupt` names the R host-only export it asks for a
-retained project interrupt before it is returned, which `.rethrow_interrupt`
-signals again; Python checks inside the native call. An R object keeps its
-handle in the hidden `.handle` binding when an S3 method or a private
-accessor reaches it.
+which Python reaches through the handle; the manifest leaves it out). A member
+that returns a record token (`info`) names the record it returns as `record`.
+A class's `interrupt` names the R host-only export it asks for a retained
+project interrupt before it is returned, which `.rethrow_interrupt` signals
+again; Python checks inside the native call. An R object keeps each held value
+that an S3 method or a private accessor reaches in a hidden binding: its
+handle in `.handle`, and any other value under its own name with a leading
+dot, such as a lazy object's `.path` or a project-run member's `.name`.
+
+Every result, a class that holds a handle, also has R `names()` and `length()`
+S3 methods, which nothing declares (D44): the generator derives them. A result
+with an `index` member names the keys its `names` member gives; any other
+names its `property` and `method` members in declaration order, never its
+hidden bindings. `length()` counts the names. The manifest records each
+result's names, so a reordered member changes a frozen line. A lazy object
+keeps R's own `names()` and `length()` of an environment.
 
 A class with `hosts: [python]` is Python's alone: a native class of
 `yamaa._native` that the public module imports and exports as it is, today

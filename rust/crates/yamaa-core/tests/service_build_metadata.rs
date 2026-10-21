@@ -701,6 +701,21 @@ mod service {
             fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
                 panic!("no codec selected")
             }
+            fn read_report(
+                &mut self,
+                _: &str,
+                _: &str,
+                _: &str,
+            ) -> Result<Option<yamaa_core::run_report::Recorded>, Opaque> {
+                panic!("no dataset selected")
+            }
+            fn count_records(
+                &mut self,
+                _: &yamaa_core::specification::SourceDeclaration,
+                _: &[u8],
+            ) -> Option<usize> {
+                panic!("no dataset selected")
+            }
             fn target(&self, path: &str, declaring: &str, written: &str) -> Result<String, Opaque> {
                 assert_eq!(
                     (path, declaring, written),

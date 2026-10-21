@@ -20,11 +20,11 @@ tracker, one work item per root cause.
         README.md                  # the data contract
         spec.yaml                  # one entry specification
         spec_<name>.yaml ...       # alternatives, parents or producers
-        project.yaml               # environments, terminology and sections
+        project.yaml               # functions, locks, terminology, sections
         input/                     # independently authored source files
         expected/                  # exact output, logs, documents or error
-        python/environment.yaml    # when Python calls a project function
-        r/environment.yaml         # when R calls a project function
+        functions/<name>.yaml      # when a spec calls a project function
+        r/renv.lock                # the R lock the project names
 
 Every case has one `benchmark.yaml`; README prose supplies no configuration.
 Start a case with:
@@ -37,13 +37,12 @@ domain: DM
 
 A case with one `spec*.yaml` runs that file in both hosts. When present, the
 root `project.yaml` is the project every call passes, in both hosts. Its
-`environments` map links `python/environment.yaml` and `r/environment.yaml`,
-and each host reads only its own entry; its `codelists`, `study` and
-`sdtm`/`adam`/`send` sections carry the study metadata. Project function
-definitions, parameters and tests stay in the explicit environment files,
-which declare no language: the `environments` key states it. A section needs
-only `specs` to run; `study`, `standard` and `define` are required only by
-Define-XML. No other file is selected implicitly.
+`functions` list names the project's function files; its `environments` map
+names each host's packaging lock, and each host reads only its own entry; its
+`codelists`, `study` and `sdtm`/`adam`/`send` sections carry the study
+metadata. A section needs only `specs` to run; `study`, `standards` and
+`define` are required only by Define-XML. No other file is selected
+implicitly.
 
 A case with several specifications declares the public calls in order. Both
 hosts must be present; each call names its specification and may override its
@@ -158,19 +157,24 @@ for another reason.
 ## A benchmark that needs project code
 
 A `function` call names a logical function with arguments only. A benchmark
-passes an explicit project file whose `environments` map links one environment
-file per host language. Each environment file declares that host's packaging
-lock and inline or file-backed function definitions and tests; its lock and
-function paths resolve from the environment file, and the project's own paths
-resolve from `project.yaml`. Equivalent Python/R examples carry equivalent
-definitions, independently written in each host's syntax, and share the
-unchanged specification, project and expected outputs:
+passes an explicit project file whose `functions` list names one function file
+per function: a `type: function` file with the function's parameters and
+tests, and, under `implementations`, the callable that implements it in each
+host language. The project's `environments` map names each host's packaging
+lock, and the project's paths, its function files and locks among them,
+resolve from `project.yaml`. One function file serves both hosts, so the
+independently written Python and R implementations run the same tests and
+share the unchanged specification, project and expected outputs:
 
 ```yaml
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
+functions:
+- functions/bmi.yaml
 environments:
-  python: python/environment.yaml
-  r: r/environment.yaml
+  r:
+    lock: r/renv.lock
+
 adam:
   specs:
   - spec.yaml
@@ -180,9 +184,9 @@ Function implementations are ordinary installed packages. The benchmark program
 packages live in `rust/tests/project-programs/`; no vendored runtime artifact,
 contract fingerprint or activation cache is used. The original function
 studies are copied outside the checkout by `tools/staging/stage_project_inputs.py`.
-It copies the sole existing `python/uv.lock` beside the Python environment file
-the project links; committed R locks contain versions without hashes. The
-subdirectories are fixture organization, not implicit project-root selection.
+It copies the sole existing `python/uv.lock` to the Python lock a project
+names; committed R locks contain versions without hashes. The subdirectories
+are fixture organization, not implicit project-root selection.
 
 An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward

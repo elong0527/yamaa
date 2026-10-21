@@ -477,6 +477,34 @@ fn check_reports_a_lookup_derivation_s_read_of_a_lookup_it_cannot_match_as_domai
             &[at],
             "validation phase_boundary Some(\"LOOKUP-16\")",
         ),
+        // Binding binds nothing of a lookup whose key types fail, so each
+        // read of it is unknown (LOOKUP-16), and unknown to a predicate
+        // (FORMULA-9) (#3542).
+        (
+            spec(
+                "  - {id: R, dataset: PLAN, key: {DOSENUM: VS.USUBJID}}\n",
+                "D: R.PLANDOSE",
+                "P.D",
+                "\"'A'\"",
+                "0",
+            ),
+            &["intermediates.R.key", at],
+            "validation incompatible_input_type Some(\"LOOKUP-9\")",
+        ),
+        (
+            spec(
+                "  - {id: R, dataset: PLAN, key: {DOSENUM: VS.USUBJID}}\n",
+                "D: {case: [{when: \"R.PLANDOSE > 1\", then: 1.0}, {otherwise: 2.0}]}",
+                "P.D",
+                "\"'A'\"",
+                "0",
+            ),
+            &[
+                "intermediates.R.key",
+                "intermediates.P.derivations.D.case[0].when",
+            ],
+            "validation incompatible_input_type Some(\"LOOKUP-9\")",
+        ),
     ]);
     // A key value read from the donor record matches there.
     assert_clean(&[spec(
@@ -519,30 +547,17 @@ fn check_lists_a_lookup_s_issues_in_binding_s_order() {
     ]);
     // Its key types come between its derivations and its filter. Binding
     // binds nothing of a lookup whose key types fail and then names the
-    // column's read of it unknown, which `check` leaves out (as before).
-    let fixture = Fixture::new(&lookup(
-        "key: {DOSENUM: VS.USUBJID}, filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}",
-    ));
-    for host in [Language::Python, Language::R] {
-        let (checked, built) = fixture.issues(host);
-        let paths = |issues: &Issues| {
-            issues
-                .iter()
-                .map(|(_, paths)| paths.join(", "))
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            paths(&checked),
-            [required, "intermediates.P.key", "intermediates.P.filter"],
-            "{host:?}"
-        );
-        assert_eq!(checked, built[..checked.len()], "{host:?}");
-        assert_eq!(
-            paths(&built)[checked.len()..],
-            ["columns.X.derivation.source"],
-            "{host:?}"
-        );
-    }
+    // column's read of it unknown (#3542).
+    assert_cases(&[(
+        lookup("key: {DOSENUM: VS.USUBJID}, filter: \"PLAN.FIRST > 'a'\", derivations: {D: {source: {variable: PLAN.FIRST, require_match: true}}}"),
+        &[
+            required,
+            "intermediates.P.key",
+            "intermediates.P.filter",
+            "columns.X.derivation.source",
+        ],
+        REQUIRED,
+    )]);
 }
 
 #[test]

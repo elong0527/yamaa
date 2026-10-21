@@ -376,7 +376,9 @@ failed run's report records the failure and makes nothing publishable.
 [OUTPUT-9](output.md#output-9) rejects a report path that collides with
 `output.path` or whose extension names no profile, and
 [OUTPUT-10](output.md#output-10) orders its publication. Publication replaces
-a stale report from an earlier run.
+a stale report from an earlier run. A project submission compares a declared
+report with the artifact and the inputs it composes
+([PROJECT-15](profiles/project.md#project-15)).
 
 <a id="check-23"></a>
 

@@ -4666,33 +4666,40 @@
         ],
         "project": [
           "check",
+          "names",
           "run",
           "spec",
           "submission"
         ],
         "check": [
-          "issues"
+          "issues",
+          "status"
         ],
         "run": [
           "issues",
           "output",
           "report",
-          "save"
+          "save",
+          "status"
         ],
         "project_run": [
           "issues",
           "names",
           "report",
-          "save"
+          "save",
+          "status"
         ],
         "member_run": [
           "issues",
           "output",
-          "report"
+          "report",
+          "status"
         ],
         "submission": [
+          "created",
           "issues",
-          "save"
+          "save",
+          "status"
         ]
       },
       "arguments": {
@@ -4738,21 +4745,26 @@
       },
       "read_only_views": {
         "run": [
+          "status",
           "output",
           "issues",
           "report"
         ],
         "member_run": [
+          "status",
           "output",
           "issues",
           "report"
         ],
         "project_run": [
+          "status",
           "names",
           "issues",
           "report"
         ],
         "submission": [
+          "status",
+          "created",
           "issues"
         ]
       },
@@ -4761,6 +4773,7 @@
         "missing_run_save": "cannot save {path}: {path} does not exist [resource_path_missing, FILE-7]",
         "resolve": "cannot resolve {path}: {path} does not exist [resource_path_missing, FILE-7]",
         "unread_project": "cannot select TEST: {path} does not exist [resource_path_missing, FILE-7]",
+        "unread_project_names": "cannot read {path}: {path} does not exist [resource_path_missing, FILE-7]",
         "unknown_section_run": "cannot select bogus: the project declares no section bogus [unknown_section, PROJECT-14]",
         "unknown_section_submission": "cannot select bogus: the project declares no section bogus [unknown_section, PROJECT-14]",
         "refused_project_run_save": "cannot save {path}: {path} does not exist [resource_path_missing, FILE-7]",
@@ -4825,7 +4838,32 @@
         "9007199254740993",
         "7",
         null
-      ]
+      ],
+      "r_names": {
+        "check": [
+          "status",
+          "issues"
+        ],
+        "run": [
+          "status",
+          "output",
+          "issues",
+          "report",
+          "save"
+        ],
+        "member_run": [
+          "status",
+          "output",
+          "issues",
+          "report"
+        ],
+        "submission": [
+          "status",
+          "created",
+          "issues",
+          "save"
+        ]
+      }
     },
     "public-grammar": {
       "grammar_conditions": {
@@ -5619,22 +5657,10 @@
         "yamaa selftest: succeeded, 5 of 5 cases passed"
       ],
       "information_line": "engine {version}, language {language_versions}, {host} {host_version}, {platform}",
-      "info_fields": [
-        "version",
-        "language_versions",
-        "features",
-        "host",
-        "host_version",
-        "platform"
-      ],
-      "language_versions": [
-        "1.0"
-      ],
-      "features": [
-        "odm",
-        "parquet",
-        "readstat",
-        "yaml"
+      "r_names": [
+        "status",
+        "cases",
+        "info"
       ]
     },
     "schema": {
@@ -5691,6 +5717,151 @@
           "issue_message": "a Spec file is given where a spec, project, codelists, function file is expected",
           "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"function\"],\"type\":\"Spec\"}"
         }
+      ]
+    },
+    "printing": {
+      "files": {
+        "dm.csv": "USUBJID,AGE\nS1,30\nS2,41\n",
+        "ae.csv": "USUBJID,TRTSDT\nS1,3\nS2,4\n",
+        "adsl.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADSL\nkeys: [USUBJID]\ninput:\n  DM: {path: dm.csv, types: {AGE: int}}\noutput: {path: adsl.csv, columns: [USUBJID, AGE]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: DM.AGE}\n",
+        "adae.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADAE\nkeys: [USUBJID]\ninput:\n  AE: {path: ae.csv, types: {TRTSDT: int}}\noutput: {path: adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: ASTDY, type: int, label: Study Day, derivation: \"TRTSDT + 1\"}\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\n",
+        "adtte.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: ADTTE\nkeys: [USUBJID]\ninput:\n  ADAE: {path: adae.csv, schema: adae.yaml}\noutput: {path: adtte.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADAE.USUBJID}\n",
+        "project.yaml": "yamaa: \"1.0\"\ntype: project\nadam:\n  specs: [adsl.yaml, adae.yaml, adtte.yaml]\n"
+      },
+      "lazy": {
+        "spec": {
+          "path": "adsl.yaml",
+          "lines": [
+            "yamaa spec {path}"
+          ]
+        },
+        "project": {
+          "path": "project.yaml",
+          "lines": [
+            "yamaa project {path}"
+          ]
+        }
+      },
+      "cases": [
+        {
+          "name": "check",
+          "call": "check",
+          "path": "adsl.yaml",
+          "status": "succeeded",
+          "lines": [
+            "yamaa check of {path}: succeeded, 0 issues"
+          ]
+        },
+        {
+          "name": "failed check",
+          "call": "check",
+          "path": "adae.yaml",
+          "status": "failed",
+          "lines": [
+            "yamaa check of {path}: failed, 1 issue",
+            "first issue: {root}/adae.yaml:10:48: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]"
+          ]
+        },
+        {
+          "name": "project check",
+          "call": "project_check",
+          "path": "project.yaml",
+          "status": "failed",
+          "lines": [
+            "yamaa check of {path}: failed, 1 issue",
+            "first issue: {root}/adae.yaml:10:48: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]"
+          ]
+        },
+        {
+          "name": "run",
+          "call": "run",
+          "path": "adsl.yaml",
+          "status": "succeeded",
+          "lines": [
+            "yamaa run of ADSL: succeeded, 2 rows x 2 columns, 0 issues"
+          ]
+        },
+        {
+          "name": "failed run",
+          "call": "run",
+          "path": "adae.yaml",
+          "status": "failed",
+          "lines": [
+            "yamaa run of ADAE: failed, no output, 1 issue",
+            "first issue: {root}/adae.yaml:10:48: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]"
+          ]
+        },
+        {
+          "name": "project run",
+          "call": "project_run",
+          "path": "project.yaml",
+          "section": "adam",
+          "status": "failed",
+          "lines": [
+            "yamaa project run of {path}, section adam: failed, 3 specifications, 2 issues",
+            "  ADSL   succeeded  2 rows x 2 columns, 0 issues",
+            "  ADAE   failed     no output, 1 issue",
+            "  ADTTE  skipped    no output, 1 issue",
+            "first issue: {root}/adae.yaml:10:48: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]"
+          ],
+          "members": [
+            {
+              "name": "ADSL",
+              "status": "succeeded",
+              "lines": [
+                "yamaa run of ADSL: succeeded, 2 rows x 2 columns, 0 issues"
+              ]
+            },
+            {
+              "name": "ADAE",
+              "status": "failed",
+              "lines": [
+                "yamaa run of ADAE: failed, no output, 1 issue",
+                "first issue: {root}/adae.yaml:10:48: column ASTDY reads TRTSDT, which is declared after it [forward_reference, COLUMN-5]"
+              ]
+            },
+            {
+              "name": "ADTTE",
+              "status": "skipped",
+              "lines": [
+                "yamaa run of ADTTE: skipped, no output, 1 issue",
+                "first issue: {root}/adtte.yaml:6:26: this specification did not run because the producer of its input ADAE did not complete [producer_not_completed, PROJECT-11]"
+              ]
+            }
+          ]
+        }
+      ],
+      "submission": {
+        "case": "sdtm-dm-metadata",
+        "section": "sdtm",
+        "status": "succeeded",
+        "lines": [
+          "yamaa submission of {path}, section sdtm: succeeded, 1 define.xml and 1 transport file, 0 issues"
+        ]
+      }
+    },
+    "info": {
+      "fields": [
+        "version",
+        "language_versions",
+        "features",
+        "host",
+        "host_version",
+        "platform"
+      ],
+      "hosts": [
+        "python",
+        "r",
+        "cli"
+      ],
+      "language_versions": [
+        "1.0"
+      ],
+      "features": [
+        "odm",
+        "parquet",
+        "readstat",
+        "yaml"
       ]
     },
     "issue-locations": {

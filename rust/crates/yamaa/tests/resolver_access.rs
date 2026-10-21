@@ -3,7 +3,7 @@
 //! root `/`, names that exist nowhere on disk, keeps what a save publishes,
 //! and records every request. Each use case succeeds and reproduces the
 //! case's authored files, so it read nothing else; the record shows exactly
-//! what it read and wrote.
+//! what it read and wrote, and which requests asked for input data.
 #![cfg(feature = "yaml")]
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 use yamaa::{
     Argument, CallError, CancellationToken, Engine, EngineOptions, FunctionError, FunctionHandle,
     FunctionIdentity, HostLanguage, LockContext, MemoryResolver, OdmOptions, ProjectFunctions,
-    ResolverFailure, ResolverOperation, ResolverReply, ResolverRequest, ResourceResolver, Scalar,
-    Signature,
+    ResolverFailure, ResolverKind, ResolverOperation, ResolverReply, ResolverRequest,
+    ResourceResolver, Scalar, Signature,
 };
 
 const CREATED: &str = "2026-09-11T00:00:00";
@@ -27,6 +27,8 @@ struct Counting {
     files: BTreeMap<String, Arc<[u8]>>,
     published: MemoryResolver,
     log: Mutex<Vec<Access>>,
+    /// The location of every request for input data, in order.
+    inputs: Mutex<Vec<String>>,
 }
 
 /// The lexical location `written` names from `declaring`.
@@ -62,6 +64,9 @@ impl ResourceResolver for Counting {
             .lock()
             .unwrap()
             .push((request.operation.name(), named.clone()));
+        if request.kind == ResolverKind::Input {
+            self.inputs.lock().unwrap().push(named.clone());
+        }
         match request.operation {
             ResolverOperation::Inspect | ResolverOperation::Capture => {
                 let bytes = self
@@ -118,6 +123,7 @@ impl Case {
                 files,
                 published: MemoryResolver::new(),
                 log: Mutex::new(Vec::new()),
+                inputs: Mutex::new(Vec::new()),
             }),
         }
     }
@@ -128,6 +134,21 @@ impl Case {
                 .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>)
                 .with_functions(Arc::new(NoFunctions)),
         )
+    }
+
+    /// An engine that claims no host, which refuses a project function call
+    /// instead of making one, for cases whose specifications call some.
+    fn neutral(&self) -> Engine {
+        Engine::new(
+            EngineOptions::neutral("resolver-test".into(), "0".into())
+                .with_resolver(Arc::clone(&self.resolver) as Arc<dyn ResourceResolver>),
+        )
+    }
+
+    /// Every location asked for as input data since the last call, with the
+    /// record cleared.
+    fn inputs(&self) -> Vec<String> {
+        std::mem::take(&mut *self.resolver.inputs.lock().unwrap())
     }
 
     fn expected(&self, name: &str) -> Vec<u8> {
@@ -232,6 +253,61 @@ fn a_check_reads_only_metadata_through_the_resolver() {
         "/spec.yaml"
     );
     assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
+    assert_eq!(engine.project_names("project.yaml").unwrap(), ["DM"]);
+    assert_eq!(case.accesses(), set(&[PROJECT, SPEC].concat()));
+}
+
+/// D45: a project's names come from the project file and its
+/// specifications' metadata alone. On every project benchmark they capture no
+/// input data, and they are the names of a run of every section, which reads
+/// the inputs; a project that the names refuse runs nothing.
+#[test]
+fn project_names_read_no_input_data_and_name_what_a_run_builds() {
+    let benchmarks = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
+    let mut projects = Vec::new();
+    for benchmark in std::fs::read_dir(&benchmarks).unwrap().flatten() {
+        if !benchmark.file_type().unwrap().is_dir() {
+            continue;
+        }
+        for file in std::fs::read_dir(benchmark.path()).unwrap().flatten() {
+            let file = file.file_name().to_string_lossy().into_owned();
+            if file.ends_with("project.yaml") {
+                let benchmark = benchmark.file_name().to_string_lossy().into_owned();
+                projects.push((benchmark, file));
+            }
+        }
+    }
+    projects.sort();
+    assert!(projects.len() > 30, "{projects:?}");
+    let token = CancellationToken::new();
+    // The runs that read input data, which shows that the record sees it.
+    let mut reading = 0;
+    for (benchmark, project) in &projects {
+        let case = Case::new(benchmark, &[]);
+        let engine = case.neutral();
+        let names = engine.project_names(project);
+        assert_eq!(case.inputs(), Vec::<String>::new(), "{benchmark}");
+        let runs = engine.project_run(project, None, &token).unwrap();
+        reading += usize::from(!case.inputs().is_empty());
+        match names {
+            Ok(names) => assert_eq!(names, runs.names(), "{benchmark}"),
+            Err(failure) => {
+                assert!(runs.names().is_empty(), "{benchmark}");
+                assert!(
+                    failure
+                        .message
+                        .starts_with(&format!("cannot read {project}: ")),
+                    "{benchmark}: {}",
+                    failure.message
+                );
+            }
+        }
+    }
+    assert!(
+        reading > projects.len() / 2,
+        "{reading} of {}",
+        projects.len()
+    );
 }
 
 #[test]

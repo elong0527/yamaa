@@ -25,6 +25,7 @@ each hold one non-finite value.
 converted to a numeric type.
 
 **Engines:** `numeric_constant` belongs to the ordinary installed packages
-in `rust/tests/project-programs`. The explicit `python/environment.yaml` and
-`r/environment.yaml` carry equivalent versionless definitions and inline tests.
-Both return the same three non-finite constants.
+in `rust/tests/project-programs`. The function file
+`functions/numeric_constant.yaml` declares it once, with its inline tests, and
+names the Python and R implementations, which return the same three
+non-finite constants.

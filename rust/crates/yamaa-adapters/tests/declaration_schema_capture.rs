@@ -2827,32 +2827,29 @@ mod declaration {
         };
         use yamaa_core::{project_environment::LockKind, project_function::Language};
 
-        /// Serves the authored R environment file the benchmark project links.
-        struct DeclaredEnvironment {
+        /// Serves the function files and the R lock the benchmark project
+        /// names (D8); every path resolves from the project file.
+        struct DeclaredProject {
             case: PathBuf,
             project: String,
-            environment: String,
-            environments: usize,
+            functions: usize,
             locks: usize,
         }
-        impl ProjectCapturePort for DeclaredEnvironment {
+        impl ProjectCapturePort for DeclaredProject {
             type Error = Infallible;
             fn capture(&mut self, request: Request<'_>) -> Result<Reply, Self::Error> {
+                assert_eq!(request.declaring_source, self.project);
                 match request.kind {
-                    // The R host reads only the `r` link; the Python link stays unopened.
-                    Kind::Environment => {
-                        assert_eq!(request.declaring_source, self.project);
-                        assert_eq!(request.written, "r/environment.yaml");
-                        self.environments += 1;
+                    Kind::Function => {
+                        self.functions += 1;
                         Ok(Reply::Document(Source {
-                            identity: self.environment.clone(),
+                            identity: self.project.replace("project.yaml", request.written),
                             bytes: std::fs::read(self.case.join(request.written)).unwrap(),
                         }))
                     }
+                    // The R host reads only its own lock; the Python lock stays unopened.
                     Kind::Lock => {
-                        // The lock path resolves from the environment file that writes it.
-                        assert_eq!(request.declaring_source, self.environment);
-                        assert_eq!(request.written, "renv.lock");
+                        assert_eq!(request.written, "r/renv.lock");
                         self.locks += 1;
                         // Static admission borrows only the declared lock format. This authored
                         // codec fixture grants no installed-package or verification evidence.
@@ -2872,11 +2869,10 @@ mod declaration {
         fn replay(name: &str, expected: Option<(&str, &str, &str)>) {
             let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
             let case = root.join(name);
-            let mut port = DeclaredEnvironment {
+            let mut port = DeclaredProject {
                 case: case.clone(),
                 project: format!("benchmarks/{name}/project.yaml"),
-                environment: format!("benchmarks/{name}/r/environment.yaml"),
-                environments: 0,
+                functions: 0,
                 locks: 0,
             };
             let environment = project_source::prepare(
@@ -2890,20 +2886,16 @@ mod declaration {
             )
             .unwrap()
             .into_owned();
-            assert_eq!((port.environments, port.locks), (1, 1));
+            // The project's one function file and its R lock; no environment
+            // file exists in 1.0.
+            assert_eq!((port.functions, port.locks), (1, 1));
             assert_eq!(environment.environment().host(), Some(Language::R));
             assert_eq!(environment.environment().language(), Some(Language::R));
-            assert_eq!(
-                environment.environment_file().unwrap().source().identity,
-                port.environment
+            assert!(environment.environment_file().is_none());
+            let document = crate::support::specification_run::prepare(
+                &shipped_schema::capture().unwrap(),
+                &std::fs::read(case.join("spec.yaml")).unwrap(),
             );
-            let document = shipped_schema::capture()
-                .unwrap()
-                .prepare_standalone(Source {
-                    identity: format!("benchmarks/{name}/spec.yaml"),
-                    bytes: std::fs::read(case.join("spec.yaml")).unwrap(),
-                })
-                .unwrap();
             let rows = match PreparedRun::prepare_with_environment(document, environment) {
                 Ok(run) => specification_check::issues(&run),
                 Err(run) => specification_check::rejected(&run).unwrap(),
@@ -2924,7 +2916,7 @@ mod declaration {
                 }
             }
             // No activation, source-data or publication port exists in this replay.
-            assert_eq!((port.environments, port.locks), (1, 1));
+            assert_eq!((port.functions, port.locks), (1, 1));
         }
 
         #[test]

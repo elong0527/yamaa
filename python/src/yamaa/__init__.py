@@ -17,6 +17,7 @@ __all__ = [
     "Error",
     "Table",
     "__version__",
+    "info",
     "lint",
     "project",
     "read_odm",
@@ -49,8 +50,20 @@ def _call(function, *args):
 class Check:
     """Static findings; `issues` is empty when nothing is wrong."""
 
-    def __init__(self, table):
-        self.issues = table
+    def __init__(self, native):
+        self._native = native
+
+    @property
+    def status(self) -> str:
+        """`failed` when the check found an issue, and `succeeded` otherwise."""
+        return self._native.status()
+
+    @property
+    def issues(self) -> Table:
+        return self._native.issues()
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Run:
@@ -58,6 +71,11 @@ class Run:
 
     def __init__(self, native):
         self._native = native
+
+    @property
+    def status(self) -> str:
+        """`succeeded` when the run built its output with no issue, and `failed` otherwise."""
+        return self._native.status()
 
     @property
     def output(self) -> Table | None:
@@ -78,6 +96,9 @@ class Run:
         """Write the declared report file, then the output dataset; return the paths written."""
         return _call(self._native.save)
 
+    def __repr__(self) -> str:
+        return self._native.summary()
+
 
 class MemberRun:
     """One specification's run inside a project run; save the project run."""
@@ -85,6 +106,11 @@ class MemberRun:
     def __init__(self, native, name: str):
         self._native = native
         self._name = name
+
+    @property
+    def status(self) -> str:
+        """As a run's, or `skipped` when a producer in the project run did not complete."""
+        return _call(self._native.member_status, self._name)
 
     @property
     def output(self) -> Table | None:
@@ -98,12 +124,20 @@ class MemberRun:
     def report(self) -> Table | None:
         return _call(self._native.member_report, self._name)
 
+    def __repr__(self) -> str:
+        return self._native.member_summary(self._name)
+
 
 class ProjectRun:
     """Every specification a project run built, by `domain` name."""
 
     def __init__(self, native):
         self._native = native
+
+    @property
+    def status(self) -> str:
+        """`succeeded` when every specification succeeded and no project finding refused the run."""
+        return self._native.status()
 
     @property
     def names(self) -> list[str]:
@@ -122,6 +156,10 @@ class ProjectRun:
         """The names, as `names` lists them."""
         return iter(self._native.names())
 
+    def __len__(self) -> int:
+        """The number of names."""
+        return len(self._native.names())
+
     @property
     def issues(self) -> Table:
         return self._native.issues()
@@ -134,6 +172,9 @@ class ProjectRun:
         """Write each report file, then each output unless a run failed; return the paths written."""
         return _call(self._native.save)
 
+    def __repr__(self) -> str:
+        return self._native.summary()
+
 
 class Submission:
     """define.xml and each selected section's Dataset-JSON or SAS Transport files."""
@@ -142,12 +183,25 @@ class Submission:
         self._native = native
 
     @property
+    def status(self) -> str:
+        """`succeeded` when every selected section composed with no issue, and `failed` otherwise."""
+        return self._native.status()
+
+    @property
+    def created(self) -> str:
+        """The ISO 8601 creation time the documents carry, as given or as read once for every section."""
+        return self._native.created()
+
+    @property
     def issues(self) -> Table:
         return self._native.issues()
 
     def save(self) -> list[str]:
         """Write each section's transport files, then its define.xml; return the paths written."""
         return _call(self._native.save)
+
+    def __repr__(self) -> str:
+        return self._native.summary()
 
 
 class Spec(_Lazy):
@@ -170,6 +224,9 @@ class Spec(_Lazy):
         """Build the dataset in memory."""
         return Run(_call(_native._spec_run, self._path, self._project, self._plans))
 
+    def __repr__(self) -> str:
+        return _native._spec_summary(self._path)
+
 
 class Project(_Lazy):
     """A study's project file, read only when a method runs."""
@@ -181,6 +238,11 @@ class Project(_Lazy):
     def spec(self, name: str) -> Spec:
         """The listed specification whose `domain` is `name`."""
         return Spec(_call(_native._project_spec, self._path, name), self._path)
+
+    @property
+    def names(self) -> list[str]:
+        """The listed specifications by `domain` name, in run order, read without study data."""
+        return _call(_native._project_names, self._path)
 
     def check(self) -> Check:
         return Check(_call(_native._project_check, self._path))
@@ -195,6 +257,9 @@ class Project(_Lazy):
         return Submission(
             _call(_native._project_submission, self._path, section, created)
         )
+
+    def __repr__(self) -> str:
+        return _native._project_summary(self._path)
 
 
 class SelfTest:
@@ -259,6 +324,11 @@ def lint(paths, fix: bool = False) -> Table:
 def schema(file_type: str) -> str:
     """The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text."""
     return _call(_native._schema, file_type)
+
+
+def info() -> dict:
+    """The engine version, the language versions it reads, its features, the host and the platform."""
+    return _native._info()
 
 
 def selftest() -> SelfTest:

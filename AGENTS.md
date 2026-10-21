@@ -198,12 +198,54 @@ When a CI job fails, reproduce it with that job's own target from
 native release qualification is a separate route described in
 `CONTRIBUTING.md`.
 
+## Writing tests
+
+A test proves one authored expectation of one behaviour through the
+surface its crate or package owns. `CONTRIBUTING.md#writing-tests` has
+the patterns and helpers of each language; these are the rules.
+
+- **Author the expectation; never capture it.** An expected value is
+  written by hand or read from authored truth: `rust/tests/host-fixtures/`,
+  a crate's `tests/fixtures/`, or what a benchmark itself states. Never
+  paste what the implementation printed, and never add a snapshot library.
+- **Name the behaviour.** A test's name is the one sentence it proves,
+  such as `case_otherwise_reports_inside_the_otherwise_member`, under
+  the modules or classes that give it a path; a test a rule card cites
+  as evidence keeps its name. A file holds one family, named in its
+  first comment, and nothing registers a file: a new family is a new
+  `tests/<area>.rs`, `test_<area>.py` or `<area>.R`.
+- **Use the owned helpers.** Build inputs with the crate's
+  `tests/support/` factories, `tools/tests/rules_fixture.py` and the
+  readers beside `rust/tests/host-fixtures/cases.json`. The second file
+  that needs a helper moves it there; a helper stays in the crate or
+  package whose tests use it.
+- **Assert the whole record, once, with a label.** Compare the complete
+  observable value, such as a diagnostic's phase, condition, rule, paths
+  and context, a table or saved bytes, with one authored literal, and
+  name the case in the message, rather than chaining partial checks or
+  `assertTrue(any(...))`.
+- **Cases that differ in one value share one body.** Loop over a table
+  of input, expectation and label in Rust, use `subTest(case=...)` in
+  Python and a vector of cases in R. A separate test exists only when
+  its setup differs.
+- **Stay hermetic and cheap.** A scratch directory comes from the owned
+  helper and is removed when the test ends. A test never sleeps, reads
+  the network or depends on the environment beyond a declared skip with
+  its reason, and spawns a program only when that program is its
+  subject. A walk of the benchmark corpus or a build runs once per
+  module, never once per test.
+- **Keep each behaviour tested once.** A behaviour moved or rewritten
+  takes its tests with it. A case both hosts check lives once, in the
+  shared `host-fixtures` truth that each host's suite reads. Split a
+  file by feature before it passes about 3,000 lines (#2413).
+
 ## Pointers
 
 - Language contracts and terminology: `rules/README.md`
 - Schemas, grammars, and conformance fixtures: `yaml/README.md`
 - Benchmark authoring: `benchmarks/AGENTS.md`
 - Architecture, crate boundaries, and local verification: `CONTRIBUTING.md`
+- Writing tests: `CONTRIBUTING.md#writing-tests`
 - Rust workspace entry point: `rust/README.md`
 - Host usage: `docs/articles/api.md`
 - Site build and canonical pages: `CONTRIBUTING.md#documentation`

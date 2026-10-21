@@ -1,7 +1,13 @@
-schema_version: '1.0'
+yamaa: "1.0"
+type: project
+functions:
+- functions/project_value.yaml
 environments:
-  python: python/environment.yaml
-  r: r/environment.yaml
+  python:
+    lock: python/uv.lock
+  r:
+    lock: r/renv.lock
+
 sdtm:
   specs:
   - spec.yaml

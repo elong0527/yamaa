@@ -82,3 +82,79 @@ pub fn caller_identity(written: &str) -> Result<String, Error> {
     crate::file_resolver::file_identity(&parent, name)
         .ok_or(Error::Path(ResourceError::InvalidPath))
 }
+
+/// The identity compilation gives the existing directory `path` names,
+/// resolved now: canonical, as [`resources`] selects an entry's directory, in
+/// the engine's spelling with a trailing separator. It starts the identity of
+/// every file compilation reads beneath the directory, such as the `file` of
+/// an issue's location, and every spelling of the directory has it: a path
+/// through a link, and on Windows 8.3 short names, another letter case,
+/// forward slashes or the verbatim prefix. Reads no file.
+pub fn directory_identity(path: &Path) -> Result<String, Error> {
+    let canonical = crate::canonical_path::canonicalize(path)
+        .map_err(|_| Error::Path(ResourceError::Missing))?;
+    crate::file_resolver::canonical_directory_identity(&canonical)
+        .ok_or(Error::Path(ResourceError::InvalidPath))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_spelling_of_a_directory_has_one_identity() {
+        // The temporary directory as the environment spells it: on Windows
+        // runners an 8.3 short path, such as `C:\Users\RUNNER~1\...`.
+        let directory =
+            std::env::temp_dir().join(format!("yamaa-directory-identity-{}", std::process::id()));
+        std::fs::create_dir_all(directory.join("nested")).unwrap();
+        let canonical = crate::canonical_path::canonicalize(&directory).unwrap();
+        let mut spellings = vec![
+            directory.clone(),
+            canonical.clone(),
+            directory.join("."),
+            directory.join("nested").join(".."),
+        ];
+        #[cfg(unix)]
+        let link = directory.with_extension("link");
+        #[cfg(unix)]
+        {
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(&directory, &link).unwrap();
+            spellings.push(link.clone());
+        }
+        #[cfg(windows)]
+        {
+            // Another drive-letter case, every name in capitals, forward
+            // slashes, the verbatim prefix, and the 8.3 short names.
+            let text = canonical.to_str().unwrap();
+            let (drive, rest) = text.split_at(1);
+            spellings.extend(
+                [
+                    format!("{}{rest}", drive.to_ascii_lowercase()),
+                    text.to_uppercase(),
+                    text.replace('\\', "/"),
+                    format!(r"\\?\{text}"),
+                ]
+                .map(std::path::PathBuf::from),
+            );
+            spellings.push(crate::windows_file::short_path(&canonical).unwrap());
+        }
+        let identities = spellings
+            .iter()
+            .map(|spelling| directory_identity(spelling).ok())
+            .collect::<Vec<_>>();
+        let file = caller_identity(directory.join("spec.yaml").to_str().unwrap()).ok();
+        #[cfg(unix)]
+        std::fs::remove_file(&link).unwrap();
+        std::fs::remove_dir_all(&directory).unwrap();
+        // The canonical path in the engine's spelling, with a trailing `/`...
+        let identity = format!("{}/", canonical.to_str().unwrap().replace('\\', "/"));
+        for (spelling, found) in spellings.iter().zip(&identities) {
+            assert_eq!(found.as_ref(), Some(&identity), "{}", spelling.display());
+        }
+        // ...which starts the identity of each file compilation reads in it.
+        assert_eq!(file, Some(format!("{identity}spec.yaml")));
+        assert!(directory_identity(&directory).is_err());
+    }
+}
