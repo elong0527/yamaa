@@ -89,7 +89,7 @@ A section needs only `specs`. `study` and the section's `standards` and
 ([DEFINE-28](define-xml.md#define-28)). A run does not open a section's
 document links or generate a Define-XML document.
 
-Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_section_guide_and_target_before_reading_specifications`.
+Evidence: `sdtm-dm-metadata`, `sdtm-lb-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_every_missing_study_guide_and_target_before_reading_specifications`.
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready. A section's `transport` requests the transport
