@@ -1,4 +1,5 @@
-"""Controls for the independent SAS Transport version 5 oracle and its goldens."""
+"""Controls for the independent SAS Transport version 5 oracle, its goldens and
+the transport input of schema-source-xpt that it encodes."""
 
 import datetime
 import importlib.util
@@ -8,6 +9,7 @@ import unittest
 from tools.conformance import xpt_goldens, xpt_oracle
 from tools.conformance.xpt_oracle import Format, Variable
 from tools.paths import ROOT
+from tools.staging import build_xport_fixtures
 
 CREATED = datetime.datetime(2026, 9, 11, 7, 8, 9)
 
@@ -169,6 +171,23 @@ class Goldens(unittest.TestCase):
             )
             self.assertEqual(list(frame.columns), [v.name for v in variables])
             self.assertEqual(len(frame), len(rows))
+
+
+class BenchmarkInput(unittest.TestCase):
+    def test_the_committed_input_is_the_authored_table(self):
+        # The selftest case reads it through the SAS reader, so its bytes come
+        # from the literal table and the public layout, never from a reader.
+        self.assertEqual(
+            build_xport_fixtures.BENCHMARK_INPUT.read_bytes(),
+            build_xport_fixtures.benchmark_input(),
+        )
+        self.assertEqual(
+            len(build_xport_fixtures.benchmark_input()),
+            xpt_oracle.file_size(
+                build_xport_fixtures.BENCHMARK_VARIABLES,
+                len(build_xport_fixtures.BENCHMARK_ROWS),
+            ),
+        )
 
 
 if __name__ == "__main__":
