@@ -1,22 +1,27 @@
-//! The specification lint: departures from the written form the style guide
-//! (`docs/articles/style.md`) fixes, and the layout fixes proved safe.
+//! The yamaa file lint: departures from the written form the style guide
+//! (`docs/articles/style.md`) fixes, and the fixes proved safe.
 //!
 //! A lint finding names how a file is written, never what it means: it has no
-//! phase and no condition, and a file with findings stays valid and runs as
-//! its canonical form does. Each file is read once through the local file
-//! resolver, admitted by the shared YAML document admission, and judged from
-//! the shared scanner's located events with the positions a reader sees.
+//! phase and no condition, and a file runs as its canonical form does. Each
+//! file is read once through the local file resolver, admitted by the shared
+//! YAML document admission, and judged from the shared scanner's located
+//! events with the positions a reader sees; a 1.x file is also read through
+//! its file type's schema, as validation reads it.
 //!
 //! [`lint`] returns each file's findings in file order, then by line, column
 //! and finding. With `fix`, a file is rewritten only when the edited text
-//! reads, under that same admission, as exactly the values of the original
-//! with the same comment lines, and does not change when it is fixed again;
-//! each rewritten file is replaced atomically. Every file is read and admitted
+//! reads, under that same admission, as exactly the values of the original,
+//! or for a canonical rewrite as exactly those values with that rewrite
+//! applied, with the same comment lines, and does not change when it is fixed
+//! again; a fixed 1.x file gives no validation finding the original did not.
+//! Each rewritten file is replaced atomically. Every file is read and admitted
 //! before any is written, so a file that cannot be read or admitted refuses
 //! the whole call and writes nothing.
 
 #[cfg(feature = "yaml")]
 mod authoring;
+#[cfg(feature = "yaml")]
+mod canonical;
 #[cfg(feature = "yaml")]
 mod checks;
 #[cfg(feature = "yaml")]
@@ -36,7 +41,7 @@ use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
-pub const FINDINGS: [&str; 9] = [
+pub const FINDINGS: [&str; 14] = [
     "field_order",
     "root_spacing",
     "entry_spacing",
@@ -46,6 +51,11 @@ pub const FINDINGS: [&str; 9] = [
     "repeated_row_derivation",
     "redundant_intermediate",
     "missing_label",
+    "redundant_long_form",
+    "restated_default",
+    "scalar_as_text",
+    "unused_input_key",
+    "equality_filter",
 ];
 
 /// One departure, at the one-based line and column where it starts.
@@ -209,11 +219,11 @@ fn write_code(error: &crate::file_publication::Error) -> Fault {
 }
 
 /// Lint every file `paths` names, in argument order; a directory names the
-/// specification files beneath it in sorted path order, leaving out hidden
+/// yamaa files beneath it in sorted path order, leaving out hidden
 /// directories and any `.yaml` file whose root neither declares the 1.x header
-/// with `type: spec` nor holds `schema_version` and only 0.5 root fields, and
-/// refuses when it cannot be listed or such a file cannot be read. With `fix`,
-/// apply the proved layout fixes first.
+/// with a `type` naming a file type nor holds `schema_version` and only 0.5
+/// root fields, and refuses when it cannot be listed or such a file cannot be
+/// read. With `fix`, apply the proved fixes first.
 pub fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
     #[cfg(feature = "yaml")]
     {

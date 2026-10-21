@@ -442,9 +442,12 @@ unchanged or trimmed and verified against them, and the repository check keeps
 the committed notices equal to those generated from the canonical lock; these
 compatibility lanes supplement [native qualification](rust/qualification/README.md).
 
-Before every merge into `main` or a `release/X.Y.Z` branch, run a fresh
-read-only review check with an authenticated GitHub CLI, supplying the exact
-final commit:
+Before every merge into `main` or a `release/X.Y.Z` branch, bring the branch up
+to date with its base and wait until CI is green on the exact head, the
+`equivalence` legs and `conversion` included. Never merge while a required job
+is queued, running or cancelled (D176 on #3030). Then run a fresh read-only
+review check with an authenticated GitHub CLI, supplying the exact final
+commit:
 
 ```sh
 python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head <full-commit>
@@ -453,15 +456,17 @@ python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head
 Use that command when GitHub CLI API access is available. If environment policy
 blocks it, approved authenticated GitHub connector reads must prove every same
 predicate from fresh API evidence: the exact head and base, this PR's authentic
-completed status and walkthrough/footer chronology, unchanged base history,
-and all resolved threads. Re-read the PR head and status immediately before
-merging. Large PRs require the complete bounded proof below through those
-reads as well. An unavailable CLI does not waive review requirements.
+completed status, its walkthrough and final reviewed footer, no review in
+progress, unchanged base history, and all resolved threads. Re-read the PR
+head and status immediately before merging. Large PRs require the complete
+bounded proof below through those reads as well. An unavailable CLI does not
+waive review requirements.
 
 This requires CodeRabbit's authentic `Review completed` status on that commit
 and resolved review threads. The PR must have its own authentic summary and
-walkthrough, with a final reviewed footer naming that exact head; completion
-must follow the walkthrough's last update. The reviewed range must end at that
+walkthrough, with a final reviewed footer naming that exact head and no review
+in progress. A later edit of a finished summary, such as an offer to fix
+failing CI, does not start a new review. The reviewed range must end at that
 head. If the summary omits the range, an authentic formal review on this PR,
 submitted for this commit before completion, can supply it. A conflicting or
 ambiguous summary range cannot use that fallback. Incremental review ranges
@@ -472,7 +477,10 @@ PRs above 300 changed files require bounded coverage below, including when a
 shared head already has a successful status. Triage findings outside inline
 threads as well.
 The fresh manual check above remains mandatory before every merge, except when
-CodeRabbit cannot review the PR; AGENTS.md states what replaces it then.
+CodeRabbit cannot review the PR (its free reviews are exhausted, or it skips
+the PR). Merging then does not wait for it: the owner's maintenance session
+(D175 on #3030) records its review of the exact diff on the PR as
+`## Review of <full sha>`.
 An atomic change above CodeRabbit's 300-file review limit can use bounded
 review-only PRs. Each review PR must have a distinct head commit with the
 **complete target head tree**, a synthetic base in this repository, and at
@@ -495,9 +503,9 @@ cannot use it. Every batch still needs its own authentic `Review completed`
 status and resolved threads; target threads must also be resolved. The gate
 also binds each completion to this PR's exact base/head review range and final
 reviewed summary footer. The range can come from the summary or the authentic
-formal review for that commit. Completion must follow both the summary's last
-update and the formal review's submission when that receipt is used. Missing
-evidence, another PR sharing the head, or any recorded
+formal review for that commit. Completion must follow the formal review's
+submission when that receipt is used. Missing evidence, another PR sharing the
+head, or any recorded
 base retarget/force-push history requires a fresh review PR and head. This
 prevents a completion for an earlier base from covering a different diff.
 The gate checks complete Git trees and paginated PR files through the authenticated API,

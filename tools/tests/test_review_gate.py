@@ -474,7 +474,7 @@ class OrdinaryReviewScope(unittest.TestCase):
             with self.subTest(count=count):
                 self.assertEqual(gate.verify(api, NUMBER).state, expected)
 
-    def test_own_walkthrough_identity_head_footer_and_chronology_are_required(self):
+    def test_own_walkthrough_identity_head_and_footer_are_required(self):
         for mutation in [
             "wrong-issue",
             "forged-user",
@@ -484,7 +484,6 @@ class OrdinaryReviewScope(unittest.TestCase):
             "authentic-reply",
             "quoted-summary",
             "no-walkthrough",
-            "newer-than-status",
             "in-progress",
         ]:
             api = Evidence()
@@ -509,8 +508,6 @@ class OrdinaryReviewScope(unittest.TestCase):
                 comment["body"] = comment["body"].replace(
                     "<!-- walkthrough_start -->", ""
                 )
-            elif mutation == "newer-than-status":
-                comment["updated_at"] = "2026-10-15T14:16:06Z"
             else:
                 comment["body"] += (
                     "\n<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
@@ -771,15 +768,11 @@ class FormalReviewRange(unittest.TestCase):
                 gate.verify(api, NUMBER)
             self.assertNotIn(("pages", f"pulls/{NUMBER}/reviews"), api.history)
 
-    def test_formal_review_never_overrides_updated_pending_or_wrong_footer_summary(
-        self,
-    ):
-        for mutation in ["late-summary", "in-progress", "old-footer"]:
+    def test_formal_review_never_overrides_pending_or_wrong_footer_summary(self):
+        for mutation in ["in-progress", "old-footer"]:
             api = self.evidence()
             comment = api.page_values[f"issues/{NUMBER}/comments"][0]
-            if mutation == "late-summary":
-                comment["updated_at"] = "2026-10-15T14:16:06Z"
-            elif mutation == "in-progress":
+            if mutation == "in-progress":
                 comment["body"] += (
                     "\n<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
                 )
@@ -847,6 +840,109 @@ class FormalReviewRange(unittest.TestCase):
         review = api.page_values[f"pulls/{NUMBER}/reviews"][0]
         review["body"] = "```text\n<!--\n```\n<!--\n~~~~\n-->\n" + review["body"]
         self.assertEqual(gate.verify(api, NUMBER).state, "success")
+
+
+# CodeRabbit on #3361's head, which no push moved: its review started and
+# completed, and fifteen minutes later it edited the finished summary to offer
+# a fix for failing CI. A full review requested later restarted the review:
+# first its pending status, then the summary marked in progress.
+STARTED, COMPLETED = "2026-10-21T08:02:18Z", "2026-10-21T08:07:42Z"
+CREATED, EDITED = "2026-10-21T08:02:39Z", "2026-10-21T08:22:45Z"
+RESTARTED, RESTART_EDITED = "2026-10-21T10:08:16Z", "2026-10-21T10:08:25Z"
+FIX_CI_OFFER = (
+    "\n<!-- finishing_touch_suggestion:fix_ci -->\n"
+    "<details open>\n<summary><strong>Fix failing CI checks</strong></summary>\n"
+    "</details>"
+)
+RESTART_IN_PROGRESS = (
+    "<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->\n"
+    "> Reviewing files that changed from the base of the PR and between "
+    f"{OTHER} and {HEAD}.\n"
+    "<!-- end of auto-generated comment: review in progress by coderabbit.ai -->\n"
+)
+
+
+class SummaryEditedAfterCompletion(unittest.TestCase):
+    """A later edit of a finished summary is not a new review cycle (#3362)."""
+
+    @staticmethod
+    def evidence(*later_statuses):
+        started = status(
+            1, state="pending", description="Review in progress", created_at=STARTED
+        )
+        api = Evidence(
+            statuses=[[started, status(2, created_at=COMPLETED), *later_statuses]]
+        )
+        comment = api.page_values[f"issues/{NUMBER}/comments"][0]
+        comment.update(
+            created_at=CREATED,
+            updated_at=EDITED,
+            body=f"{GENERATED}\n\n{comment['body']}{FIX_CI_OFFER}",
+        )
+        return api, comment
+
+    def test_a_summary_edited_after_its_completed_review_passes(self):
+        for source in ["summary", "formal-review"]:
+            api, comment = self.evidence()
+            if source == "formal-review":
+                comment["body"] = comment["body"].replace(
+                    f"Reviewing files that changed from the base of the PR and between {OTHER} and {HEAD}.\n",
+                    "",
+                )
+                review = formal_review()
+                review["submitted_at"] = "2026-10-21T08:07:38Z"
+                api.page_values[f"pulls/{NUMBER}/reviews"] = [review]
+            with self.subTest(source=source):
+                self.assertEqual(
+                    gate.verify(api, NUMBER, expected_head=HEAD).state, "success"
+                )
+
+    def test_a_new_review_cycle_in_progress_still_refuses(self):
+        restarted = status(
+            3, state="pending", description="Review in progress", created_at=RESTARTED
+        )
+        for later_statuses in [(restarted,), ()]:
+            api, comment = self.evidence(*later_statuses)
+            # The restarted summary keeps the earlier footer for this head.
+            comment["updated_at"] = RESTART_EDITED
+            comment["body"] = comment["body"].replace(
+                "<!-- walkthrough_start -->",
+                RESTART_IN_PROGRESS + "<!-- walkthrough_start -->",
+            )
+            with self.subTest(pending_status=bool(later_statuses)):
+                if later_statuses:
+                    self.assertEqual(
+                        gate.verify(api, NUMBER, publish=True).state, "pending"
+                    )
+                else:
+                    # The statuses were read just before the restart's own.
+                    with self.assertRaisesRegex(gate.GateError, "in progress"):
+                        gate.verify(api, NUMBER, publish=True)
+                self.assertNotIn("success", [v.state for v in api.published])
+
+    def test_a_new_review_cycle_covering_an_older_head_still_refuses(self):
+        older = "c" * 40
+        for mutation in ["older-head", "older-covered-commit"]:
+            api, comment = self.evidence()
+            api.page_values[f"issues/{NUMBER}/timeline"].insert(
+                0, {"event": "committed", "sha": older}
+            )
+            if mutation == "older-head":
+                # As on #3316, where an attempt on a newer head left the
+                # summary on the head before it.
+                comment["body"] = comment["body"].replace(HEAD, older)
+            else:
+                comment["body"] = comment["body"].replace(
+                    f'"coveredCommitId": "{HEAD}"', f'"coveredCommitId": "{older}"'
+                )
+            with (
+                self.subTest(mutation=mutation),
+                self.assertRaisesRegex(
+                    gate.GateError, "does not cover the exact current head"
+                ),
+            ):
+                gate.verify(api, NUMBER, publish=True)
+            self.assertNotIn("success", [v.state for v in api.published])
 
 
 class TrustedRouting(unittest.TestCase):
