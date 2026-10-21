@@ -279,12 +279,19 @@ fn located(location: &Location, directory: &[String]) -> String {
 /// spellings ([`current_directory`]); the file and each spelling are
 /// absolute, with forward slashes. Resolve only the file's parent for this
 /// display projection: a caller can name it through a different directory
-/// alias. The leaf is never read or followed, and capture keeps its own path.
+/// alias. Append the literal suffix, including a refused path's trailing
+/// separator. The leaf is never read or followed; capture keeps its own path.
 pub(crate) fn relative<'a>(file: &'a str, directory: &[String]) -> Cow<'a, str> {
     if directory.is_empty() {
         return Cow::Borrowed(file);
     }
-    let identity = yamaa_adapters::file_configuration::caller_identity(file).ok();
+    let identity = Path::new(file).parent().and_then(|parent| {
+        let suffix = file
+            .strip_prefix(parent.to_str()?.trim_end_matches('/'))?
+            .strip_prefix('/')?;
+        let directory = yamaa_adapters::file_configuration::directory_identity(parent).ok()?;
+        Some(format!("{directory}{suffix}"))
+    });
     let displayed = identity.as_deref().unwrap_or(file);
     let relative = directory.iter().find_map(|spelling| {
         displayed
@@ -730,6 +737,17 @@ mod tests {
         let outside_file = study.join("outside-alias/spec.yaml");
         for (file, expected, label) in [
             (alias.join("spec.yaml"), "spec.yaml", "parent alias"),
+            (alias.join("spec.yaml/"), "spec.yaml/", "trailing separator"),
+            (
+                alias.join("missing.yaml/"),
+                "missing.yaml/",
+                "missing leaf trailing separator",
+            ),
+            (
+                alias.join("leaf.yaml/"),
+                "leaf.yaml/",
+                "link leaf trailing separator",
+            ),
             (
                 alias.join("nested/spec.yaml"),
                 "nested/spec.yaml",
