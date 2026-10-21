@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -27,7 +29,6 @@ intermediates:
       SEVN:
         mapping:
           source: AE.AESEV
-          missing: {literal: null}
           dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
       # Competition rank of the event within its subject: worst numeric
       # severity first, later onset date first. Events tied on both

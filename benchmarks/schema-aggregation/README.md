@@ -18,8 +18,9 @@ missing dose.
   and `MAXDOSE` are the total, mean and largest of the present doses.
 - `DRUGDOSE` sums only the `DRUG` records; `PLACDOSE` sums only the
   `PLACEBO` records, so subjects with no placebo record read as missing.
-- `TOTDOSE_MG` binds each record's dose in milligrams first (a `derive`
-  step whose second binding reads the first) and then sums the bound values.
+- `TOTDOSE_MG` binds each record's dose in milligrams first (a
+  `derivations` map whose second binding reads the first) and then sums the
+  bound values.
 - `AVGNDOSE` is unqualified: it averages `NDOSE` over the built rows
   within each treatment group and broadcasts the result to every row of
   the group. Subject `04`'s missing `NDOSE` is excluded from the average.

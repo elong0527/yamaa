@@ -1,6 +1,6 @@
-# Aggregate Derive Reads an Intermediate
+# Aggregate Derivations Read an Intermediate
 
-**Goal:** demonstrate the aggregate `derive` step for #789: a
+**Goal:** demonstrate the aggregate `derivations` map for #789: a
 binding reads a named intermediate that declares `keep`, so one
 row-scoped value is visible to every record the aggregate reduces.
 
@@ -17,7 +17,7 @@ have more than one of.
 
 **Mechanism:** the `DOSECAP` intermediate sorts each subject's cap
 records by `CAPDOSE` and keeps the first, the lowest cap, so it
-holds one record per subject. The `derive` step binds `CAP` from
+holds one record per subject. The `derivations` map binds `CAP` from
 `DOSECAP.CAPDOSE` for each exposure record, caps that record's
 `DOSE` with `least`, which ignores a missing value, and the reducer
 sums the capped values. The `keep` declaration is what makes the

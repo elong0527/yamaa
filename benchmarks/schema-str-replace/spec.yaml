@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -46,7 +48,7 @@ columns:
         pattern: '^ | $'
         replacement: ""
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: AESPID
     type: str
@@ -64,4 +66,3 @@ columns:
         source: AESPID
         pattern: '[^0-9]'
         replacement: ""
-        missing: {literal: null}

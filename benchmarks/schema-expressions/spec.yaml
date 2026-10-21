@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [USUBJID]
 input:
@@ -15,10 +17,10 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {literal: YAMAA-01}
+    derivation: "'YAMAA-01'"
 
-  # A bare string is the source shorthand: it desugars to
-  # {source: DM.USUBJID} before registry dispatch.
+  # Text that holds only a name is a reference: it reads DM.USUBJID
+  # through the canonical source binding.
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
@@ -51,8 +53,8 @@ columns:
     derivation:
       case:
         - when: "DM.RFXSTDTC IS NOT NULL"
-          then: {literal: Y}
-        - otherwise: {literal: N}
+          then: "'Y'"
+        - otherwise: "'N'"
 
   # First_available returns the first non-missing source, or the declared
   # missing value when every source is missing.
