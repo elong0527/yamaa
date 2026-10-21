@@ -225,8 +225,15 @@ class StagingTests(unittest.TestCase):
                 },
                 registry | {("yamaa-saphyr-parser", "0.2.1")},
             )
-            # The notices cover exactly the crates that the package bundles.
-            self.assertEqual(listed, registry | {("yamaa-saphyr-parser", "0.2.1")})
+            # The notices cover the bundled crates that the R binding links,
+            # not the procedural macros or the crates of other platforms, and
+            # the inventory names one license each.
+            self.assertLess(listed, registry | {("yamaa-saphyr-parser", "0.2.1")})
+            names = {name for name, _ in listed}
+            self.assertIn("extendr-api", names)
+            self.assertNotIn("extendr-macros", names)
+            self.assertNotIn("r-efi", names)
+            self.assertNotIn(" OR ", authors)
             original = tests / "specification-original"
             for module in (original / "schema").glob("*.yaml"):
                 self.assertEqual(

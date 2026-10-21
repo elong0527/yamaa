@@ -526,7 +526,7 @@ cli:
     - {name: --help, effect: print usage and exit 0}
   streams:
     stdout: "the command's output: text, or with --format json exactly one canonical JSON document (RFC 8785) followed by one LF"
-    stderr: usage and argument errors (exit status 2), never anything else
+    stderr: "usage and argument errors (exit status 2), with one exception (D142): a panic inside a selftest case fails that case, so the command exits 1, and Rust's default panic hook writes the panic message, which shows where the engine panicked, to stderr"
   exit_status:
     0: "the command completed and its status is succeeded; for resolve, schema and --version, the output was printed"
     1: "the command completed with findings: a status of failed or skipped, remaining lint findings, a failed selftest case, or a refusal that carries issues"

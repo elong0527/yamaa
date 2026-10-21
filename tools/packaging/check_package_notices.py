@@ -14,9 +14,17 @@ standard library that the wheels link (source_inventory in the latter). An R
 binary package's is the R source package's followed by the one rust-std row
 that the package's configure step appends when R installs it, for the pinned
 toolchain that builds the release binaries (installed_inventory).
+
+No text in a package names a GNU license, apart from the clause of the LLVM
+exception that names GPLv2 (generate_third_party_notices.gnu_licenses). That
+covers every text member of the archive, and of the xz-compressed tar archive
+of vendored crates inside the R source package. The one exception is the
+upstream files of the vendored crates in VENDORED_GNU, which the packages
+carry unchanged, as `cargo vendor` writes them.
 """
 
 import argparse
+import io
 import re
 import tarfile
 import tomllib
@@ -25,8 +33,32 @@ from pathlib import Path
 
 from tools.ci import toolchain
 from tools.packaging import generate_component_inventory as inventory
+from tools.packaging import generate_third_party_notices as notices
 from tools.packaging import release_identity
 from tools.paths import ROOT
+
+# Vendored crates whose upstream files name a GNU license, by crate name, with
+# the reason that the source packages may carry those files. yamaa relies on
+# each crate under the license that the notices and inventory name.
+VENDORED_GNU = {
+    "zstd-sys": (
+        "the bundled zstd C sources say that zstd is offered under BSD-3-Clause "
+        "or GPL-2.0-only, and zstd/COPYING holds the GPL-2.0 text; yamaa relies "
+        "on BSD-3-Clause"
+    ),
+    "zstd": "its Readme says that the zstd C library is dual BSD/GPLv2 licensed",
+    "r-efi": (
+        "offered under MIT, Apache-2.0 or LGPL-2.1-or-later; yamaa relies on MIT, "
+        "and no supported target compiles it"
+    ),
+    "pyo3": "its changelog says that the MIT OR Apache-2.0 license is GPLv2-compatible",
+    "num-bigint": "its README names the license of rug, another crate",
+}
+# A vendored crate's directory, as `cargo vendor --versioned-dirs` names it,
+# at the root of an archive inside the package (after its name and !) or below.
+VENDORED_CRATE = re.compile(
+    r"(?:^|[/!])vendor/([A-Za-z0-9_-]+?)-[0-9]+\.[0-9]+\.[0-9]+[^/]*/"
+)
 
 
 def package_notices(root=ROOT):
@@ -99,10 +131,61 @@ def read_members(path, wanted):
         }
 
 
+def archive_files(name, data):
+    """Yield (name, bytes) for every regular member of a package archive, and
+    for every member of an xz-compressed tar archive inside it, named after
+    the archive that holds it, as in `inner.tar.xz!vendor/crate/file`."""
+    if name.endswith((".whl", ".zip")):
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            members = (
+                (member.filename, lambda member=member: archive.read(member))
+                for member in archive.infolist()
+                if not member.is_dir()
+            )
+            yield from expanded(members)
+    else:
+        mode = "r:xz" if name.endswith(".tar.xz") else "r:gz"
+        with tarfile.open(fileobj=io.BytesIO(data), mode=mode) as archive:
+            members = (
+                (member.name, lambda member=member: archive.extractfile(member).read())
+                for member in archive
+                if member.isfile()
+            )
+            yield from expanded(members)
+
+
+def expanded(members):
+    """Yield each (name, bytes) member, opening the xz-compressed tar archives
+    among them; `members` pairs each name with a reader of its bytes."""
+    for member, read in members:
+        if member.endswith(".tar.xz"):
+            for inner, contents in archive_files(member, read()):
+                yield f"{member}!{inner}", contents
+        else:
+            yield member, read()
+
+
+def gnu_findings(name, data):
+    """Return a message for each text member of a package archive that names
+    a GNU license, outside the vendored crates of VENDORED_GNU."""
+    findings = []
+    for member, payload in archive_files(name, data):
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            continue  # Compiled code and images hold no license text to read.
+        found = notices.gnu_licenses(text)
+        crate = VENDORED_CRATE.search(member)
+        if found and (crate is None or crate[1] not in VENDORED_GNU):
+            findings.append(f"{name}: {member} names a GNU license ({found[0]})")
+    return findings
+
+
 def check_archive(path, root=ROOT):
-    """Raise ValueError unless the package carries every notice unchanged."""
-    identity, notices = package_notices(root)
-    form, copies, members = notice_members(path.name, identity, notices)
+    """Raise ValueError unless the package carries every notice unchanged and
+    no text in it names a GNU license outside VENDORED_GNU."""
+    identity, names = package_notices(root)
+    form, copies, members = notice_members(path.name, identity, names)
     payloads = read_members(path, set(members.values()))
     for notice, member in members.items():
         expected = (root / copies / notice).read_bytes()
@@ -112,6 +195,9 @@ def check_archive(path, root=ROOT):
             raise ValueError(
                 f"{path.name}: required notice differs or is missing: {member}"
             )
+    findings = gnu_findings(path.name, path.read_bytes())
+    if findings:
+        raise ValueError("\n".join(findings))
     return members
 
 
