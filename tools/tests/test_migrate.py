@@ -508,6 +508,32 @@ class KeyTests(unittest.TestCase):
         self.assertEqual(result.stats["input key declarations (P-JOIN-1)"], 2)
         self.assertEqual(result.stats["intermediate keys (D23)"], 1)
 
+    def test_a_declared_input_key_goes_before_require_match(self):
+        # The 1.0 schema writes an input's `key` before `require_match`, the
+        # one input field it orders after it, so the lint's field order holds
+        # for a converted input in either style (#3326).
+        spec = (
+            "schema_version: '1.0'\ndomain: ADAE\nkeys: [USUBJID]\n"
+            "input:\n"
+            "  ADSL: {path: adsl.csv, types: {TRTSDT: date}, require_match: true}\n"
+            "  DM:\n    path: dm.csv\n    # Every subject has a record.\n"
+            "    require_match: true\n"
+            "  LAYER: {require_match: true}\n"
+        )
+        keys = {name: ["USUBJID"] for name in ("ADSL", "DM", "LAYER")}
+        text, _ = run(spec, input_keys=keys)
+        self.assertIn(
+            "  ADSL: {path: adsl.csv, types: {TRTSDT: date},\n"
+            "         key: [USUBJID], require_match: true}\n",
+            text,
+        )
+        self.assertIn(
+            "  DM:\n    path: dm.csv\n    key: [USUBJID]\n"
+            "    # Every subject has a record.\n    require_match: true\n",
+            text,
+        )
+        self.assertIn("  LAYER: {key: [USUBJID], require_match: true}\n", text)
+
     def test_row_template_drivers_stay_keyless_and_a_missing_key_is_listed(self):
         spec = (
             "schema_version: '1.0'\ndomain: VS\nkeys: [USUBJID, VSSEQ]\n"

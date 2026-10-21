@@ -153,6 +153,7 @@ class TestTextSourceBoundary(unittest.TestCase):
                 "python/LICENSE-UNICODE.txt",
                 "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
                 "python/LICENSE-THIRD-PARTY.txt",
+                "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt",
             ):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,6 +162,7 @@ class TestTextSourceBoundary(unittest.TestCase):
                 "LICENSE-UNICODE.txt",
                 "LICENSE-THIRD-PARTY.txt",
                 "rust/crates/yamaa-core/unicode/notes.md",
+                "rust/crates/yamaa-cli/README.md",
             ):
                 (root / relative).write_text(chr(0x00A9), encoding="utf-8")
             errors = OWNER_EDITORIAL.validate_ascii_sources(root)
@@ -169,6 +171,7 @@ class TestTextSourceBoundary(unittest.TestCase):
             [
                 "ERROR: LICENSE-THIRD-PARTY.txt:1:1: non_ascii_source byte 0xC2",
                 "ERROR: LICENSE-UNICODE.txt:1:1: non_ascii_source byte 0xC2",
+                "ERROR: rust/crates/yamaa-cli/README.md:1:1: non_ascii_source byte 0xC2",
                 "ERROR: rust/crates/yamaa-core/unicode/notes.md:1:1: non_ascii_source byte 0xC2",
             ],
         )

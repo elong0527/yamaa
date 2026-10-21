@@ -17,10 +17,12 @@ from dataclasses import dataclass
 from tools.ci import native
 
 # Placeholders in a declared file name. In a wheel's platform tag, `*` stands
-# for the platform version, such as the 11_0 of macosx_11_0_arm64.
+# for the platform version, such as the 11_0 of macosx_11_0_arm64. The Cargo
+# version is the engine's, which `yamaa --version` prints.
 PLACEHOLDERS = {
     "<Python version>": lambda identity: re.escape(identity.python),
     "<R version>": lambda identity: re.escape(identity.r),
+    "<Cargo version>": lambda identity: re.escape(identity.cargo),
     "*": lambda identity: "[0-9]+_[0-9]+",
 }
 
@@ -44,13 +46,22 @@ R_BINARY_PLATFORMS = {
     "windows-2025": ("Windows x64", "zip", "x86_64-w64-mingw32"),
 }
 
+# The platform that each command-line lane builds its binary for; the lane
+# names the Rust target (tools/ci/native.py).
+CLI_PLATFORMS = {
+    "ubuntu-24.04": "Linux x86_64",
+    "macos-15": "macOS arm64",
+    "windows-2025": "Windows x64",
+    "ubuntu-24.04-arm": "Linux aarch64",
+}
+
 
 @dataclass(frozen=True)
 class Asset:
     """One file that a release publishes, and the native artifact holding it."""
 
-    # What the selector checks inside the file: "wheel", "sdist", "r-source"
-    # or "r-binary".
+    # What the selector checks inside the file: "wheel", "sdist", "r-source",
+    # "r-binary" or "cli".
     kind: str
     title: str
     # The file name, with the placeholders above.
@@ -132,6 +143,19 @@ def declared(coverage=None):
                     f"R {version}; {r_platform}",
                 )
             )
+    # One command-line archive per target (#3030 D12), named with the engine's
+    # version and the target, as tools/packaging/cli_archive.py writes it.
+    for lane in coverage["cli"]["include"]:
+        platform, target = lane["os"], lane["target"]
+        assets.append(
+            Asset(
+                "cli",
+                f"Command-line binary for {CLI_PLATFORMS[platform]}",
+                f"yamaa-<Cargo version>-{target}.zip",
+                f"native-cli-{target}",
+                f"native-cli ({platform}, {target})",
+            )
+        )
     return assets
 
 

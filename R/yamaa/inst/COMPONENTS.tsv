@@ -136,7 +136,7 @@ windows-strings	0.5.1	MIT	crates.io	not compiled: transitive dependency of windo
 windows-sys	0.61.2	MIT	crates.io	handle-relative file IO and atomic publication on Windows (yamaa-adapters)
 winnow	1.0.4	MIT	crates.io	transitive dependency of toml and toml_parser: parser combinators
 wit-bindgen	0.46.0	MIT	crates.io	not compiled: transitive dependency of wasip2 (WASI preview 2 only)
-yamaa	0.5.0	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which both host bindings depend on
+yamaa	0.5.0	MIT	rust/crates/yamaa	the Rust facade over yamaa-core and yamaa-adapters, which the host bindings and the command line depend on
 yamaa-adapters	0.5.0	MIT	rust/crates/yamaa-adapters	the engine's codecs, storage formats, physical IO and filesystem environment capture
 yamaa-core	0.5.0	MIT AND Unicode-3.0	rust/crates/yamaa-core	the language engine: specification admission, expressions, dataset execution, project lifecycle, verification and Define rendering
 yamaa-r	0.5.0	MIT	rust/crates/yamaa-r	the R binding: the static library that the R package links

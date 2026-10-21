@@ -186,7 +186,28 @@ impl FileResolver {
     ) -> Result<Arc<[u8]>, Failure> {
         capture(|| self.named(base, name), limit, None).map(|(_, bytes)| bytes)
     }
+    /// The caller's own file `name` in the selected directory `base` as a
+    /// publication target: one name below that directory's held descriptor,
+    /// as [`Self::open_named`] reads one. The name is checked as
+    /// [`Self::open_named`] checks it; the publisher refuses, when it opens
+    /// the target, a name that is anything but absent or a regular file
+    /// (OUTPUT-8, FILE-8).
+    pub(crate) fn publication_target_named(
+        &self,
+        base: &str,
+        name: &str,
+    ) -> Result<crate::file_publication::AnchoredTarget, Failure> {
+        let anchor = self.named_anchor(base, name)?;
+        Ok(crate::file_publication::AnchoredTarget::new(
+            anchor.descriptor,
+            anchor.remainder,
+            path_text(&anchor.key),
+        ))
+    }
     fn named(&self, base: &str, name: &str) -> Result<Opened, Failure> {
+        open_anchor(self.named_anchor(base, name)?)
+    }
+    fn named_anchor(&self, base: &str, name: &str) -> Result<Anchor, Failure> {
         let separators: &[char] = if cfg!(windows) {
             &['/', '\\', ':', '\0']
         } else {
@@ -196,11 +217,8 @@ impl FileResolver {
             return Err(Failure::Path(PathRefusal::Invalid));
         }
         let base = declaring_directory(base).ok_or(Failure::Path(PathRefusal::Invalid))?;
-        let anchor = {
-            let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
-            relative_anchor(&roots, &base, name).map_err(refusal)?
-        };
-        open_anchor(anchor)
+        let roots = self.roots.read().unwrap_or_else(PoisonError::into_inner);
+        relative_anchor(&roots, &base, name).map_err(refusal)
     }
     fn is_caller(&self, written: &str) -> bool {
         self.callers

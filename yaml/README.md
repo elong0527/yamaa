@@ -107,12 +107,14 @@ Schema checks what one layer may write
 checks a complete specification. The engine embeds them byte for byte, and
 `schema(file_type)` gives each as canonical JSON text, one line with its
 members in key order. After changing a file in `v1/`, regenerate them, then
-the copy of `v1/` and its JSON Schemas that the engine embeds, which
-`make quick` also compares:
+the copy of `v1/` and its JSON Schemas that the engine embeds and the field
+orders the lint reads from the specification classes, which `make quick`
+also compares:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_json_schema --write
 uv run --project python --no-sync python -m tools.packaging.generate_shipped_schema --write
+uv run --project python --no-sync python -m tools.packaging.generate_style_orders --write
 ```
 
 ## Execution overview
