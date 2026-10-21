@@ -1,0 +1,9 @@
+phase: validation
+condition: standard_model_mismatch
+spec_paths:
+  - sdtm.specs[0].model
+rule: SUB-3
+context:
+  value: ADaM
+  model: SDTM
+  section: sdtm
