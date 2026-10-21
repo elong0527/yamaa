@@ -28,8 +28,8 @@ items, and every non-missing value must equal one of them:
   derivation: DM_RAW.SEX
   submission:
     codelist: SEX
-    origin:
-      type: Collected
+    origins:
+      - type: Collected
 ```
 
 To accept fewer codes than the published list, bind a sponsor codelist

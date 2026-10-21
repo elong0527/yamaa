@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
@@ -56,7 +58,7 @@ rows:
       PARAM: ADEG_RAW.PARAM
       AVAL: ADEG_RAW.AVAL
       AVALU: ADEG_RAW.AVALU
-      _PROVENANCE: {literal: collected}
+      _PROVENANCE: "'collected'"
 
   # One RR record per heart-rate record that can be inverted:
   # 60000 ms per minute divided by beats per minute.
@@ -66,13 +68,11 @@ rows:
       AND ADEG_RAW.AVAL IS NOT NULL
       AND ADEG_RAW.AVAL <> 0
     derivations:
-      PARAMCD: {literal: RRR}
-      PARAM: {literal: RR Duration Rederived (ms)}
-      AVAL:
-        compute:
-          expr: "60000 / NULLIF(ADEG_RAW.AVAL, 0)"
-      AVALU: {literal: ms}
-      _PROVENANCE: {literal: derived}
+      PARAMCD: "'RRR'"
+      PARAM: "'RR Duration Rederived (ms)'"
+      AVAL: "60000 / NULLIF(ADEG_RAW.AVAL, 0)"
+      AVALU: "'ms'"
+      _PROVENANCE: "'derived'"
 
 verifications:
   - assert:
