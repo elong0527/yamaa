@@ -5,7 +5,8 @@
 //!
 //! Each case's entry specifications (its `benchmark.yaml` entries, or its
 //! one `spec*.yaml`) are prepared with the shipped schema, standalone or
-//! through their parents. Every admitted model lowers without an
+//! through their parents; a 1.x specification is read in the lowering the
+//! 1.0 front end prepared. Every admitted model lowers without an
 //! unsupported node, its sites partition the expression arena, every
 //! expression carries the position its layer's decoder recorded, and every
 //! spec path the case's expected first issue names is a lowered node's
@@ -281,17 +282,26 @@ fn lowering_is_total_on_every_benchmark_specification() {
                 continue;
             };
             admitted += 1;
-            let lowered = lower(document.model(), Some(&positions(&document)));
-            let spec = lowered.spec();
+            // A 0.5 model is lowered here; a 1.x specification is read in
+            // the lowering the 1.0 front end prepared, with its positions.
+            let legacy;
+            let spec = match document.legacy_model() {
+                Some(model) => {
+                    legacy = lower(model, Some(&positions(&document)));
+                    legacy.spec()
+                }
+                None => document.tree(),
+            };
             check_tree(&label, spec, &mut failures);
             // A composed root is no layer's node, so only the layers are known.
             if spec.files.is_empty() {
                 failures.push(format!("{label}: lowered without its files"));
             }
+            // An expected error cites paths in its specification's notation.
             rendered.extend(
                 spec.paths
                     .ids()
-                    .map(|path| spec.render(path, Notation::V0_5)),
+                    .map(|path| spec.render(path, spec.notation())),
             );
             let resources = Resources::for_entry(case.to_str().unwrap()).unwrap();
             if FileSpecification::prepare(resources, &entry).is_ok() {

@@ -100,11 +100,17 @@ root as the Python and R records keep them (#3312). For the command line, the
 plan excludes each benchmark whose project supplies project functions: the
 binary has no project-function implementation, so a specification that calls
 one fails before it reads data (#3030 section 2.3). Each excluded case still
-gets a record that names the reason. Until the facade reads a PATH's `type:`
-header, the binary refuses `yamaa run SPEC` as not implemented and the runner
-records that; the comparator does not judge command-line records yet.
+gets a record that names the reason. The comparator does not judge
+command-line records yet.
+
+The binary dispatches on the type a PATH declares in its `type:` header and
+reads only 1.x files (#3030 D122, D125), so until the corpus moves to 1.0
+(P2-5 to P2-8) the runner runs converted copies.
+`tools.commands.cli_conformance` writes every benchmark as 1.0, as the
+conversion gate does, excludes each benchmark the gate excepts, plans the
+converted corpus and runs the runner over it, keeping the copies, the plan
+and the records under its output directory:
 
 ```sh
-python -I rust/tests/public_conformance_cli.py --plan /tmp/public-plan --fixtures benchmarks \
-  --binary rust/target/debug/yamaa --output /tmp/public-cli --source-revision REVISION
+python -m tools.commands.cli_conformance --binary rust/target/debug/yamaa --output /tmp/public-cli
 ```

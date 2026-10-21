@@ -1,0 +1,7 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - input.DM.byte_order_mark
+rule: CSV-10
+context:
+  dataset: DM

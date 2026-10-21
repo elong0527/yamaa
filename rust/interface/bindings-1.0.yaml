@@ -530,7 +530,7 @@ cli:
   exit_status:
     0: "the command completed and its status is succeeded; for resolve, schema and --version, the output was printed"
     1: "the command completed with findings: a status of failed or skipped, remaining lint findings, a failed selftest case, or a refusal that carries issues"
-    2: "the command could not run as asked: invalid usage or arguments, an unknown file type, a PATH whose declared type the command does not take, or a failure to write to stdout; a file problem the engine reports as an issue exits 1"
+    2: "the command could not run as asked: invalid usage or arguments, a PATH whose declared type the command does not take, or a failure to write to stdout; a file problem the engine reports as an issue exits 1"
   interrupt: "Ctrl+C stops the command and publishes nothing (D46); the process ends by the signal, which POSIX shells report as status 130"
   commands:
     - name: check
@@ -559,7 +559,7 @@ cli:
         - {name: --created, value: TIME, meaning: "ISO 8601 creation time; omitted, the time used is printed"}
       operations: [project_submission, submission_save]
       effect: composes, then saves
-      text: the summary, one line per issue, then one written path per line
+      text: "the summary, `created: TIME` when --created is omitted, one line per issue, then one written path per line"
       json_keys: [command, path, section, created, status, issues, paths]
     - name: resolve
       synopsis: yamaa resolve PATH [--spec NAME]
@@ -597,7 +597,7 @@ cli:
     - name: selftest
       synopsis: yamaa selftest
       operations: [selftest]
-      text: the selftest summary, then one line per failed case
+      text: "the facade's report, as the hosts print it (D119): the summary line, `first failure: <case>: <message>` when a case failed, `not covered: <adapters>` when an adapter is not covered, then the engine, language, host and platform"
       json_keys: [command, status, info, cases]
   json:
     issue_keys: [severity, phase, condition, rule, spec_paths, file, line, column, message, context, source_span, operand_route]

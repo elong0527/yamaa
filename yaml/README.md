@@ -197,8 +197,8 @@ rule, grammar, or fixture:
   project file, like the retired `yamaa-project.yaml`, does not change
   document resource locations.
 - Write every fixture under the source profile its extension selects. CSV
-  fixtures follow the [CSV profile](../rules/reference/csv.md): UTF-8 without a
-  byte-order mark, comma-separated
+  fixtures follow the [CSV profile](../rules/reference/csv.md): UTF-8, with a
+  byte-order mark only where the input declares one, comma-separated
   fields, a named non-empty field per column, and the same field count in
   every record. Parquet fixtures follow the closed
   [Parquet profile](../rules/reference/parquet.md).

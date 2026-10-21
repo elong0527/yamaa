@@ -1,6 +1,9 @@
 //! The closed CSV profile and declared typing: undeclared under both source
 //! interpretations, then every admitted field declared as each typed column
-//! type in turn, so each conversion runs over text the fuzzer controls.
+//! type in turn, so each conversion runs over text the fuzzer controls. A
+//! declared byte-order mark is skipped once (CSV-10): the mark followed by
+//! the input reads as the input alone, unless the input starts with a mark of
+//! its own.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
@@ -14,6 +17,16 @@ fuzz_target!(|data: &[u8]| {
     let undeclared = source(SourceProfile::Csv, Vec::new(), None);
     for interpretation in [SourceInterpretation::Ordinary, SourceInterpretation::Odm] {
         let _ = decode(&undeclared, data, interpretation);
+    }
+    let mut marked = undeclared.clone();
+    marked.byte_order_mark = true;
+    let _ = decode(&marked, data, SourceInterpretation::Ordinary);
+    if !data.starts_with(b"\xef\xbb\xbf") {
+        let declared = [b"\xef\xbb\xbf".as_slice(), data].concat();
+        assert_eq!(
+            yamaa_adapters::csv_source::parse_declared(&declared, true),
+            yamaa_adapters::csv_source::parse(data)
+        );
     }
     let Ok(parsed) = yamaa_adapters::csv_source::parse(data) else {
         return;

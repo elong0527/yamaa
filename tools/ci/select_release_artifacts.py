@@ -292,7 +292,8 @@ def required_jobs(coverage):
     for platform in coverage["cran_container"]["platform"]:
         jobs[f"native-cran ({platform})"] = ("Check the R source package as CRAN does",)
     # Each source archive that a release publishes, built and installed with
-    # the network disabled on every platform, then run on the conformance corpus.
+    # the network disabled on every platform, where the installed package
+    # passes its selftest and then runs the conformance corpus.
     offline_steps = {
         "python": (
             "Install the Python source archive without a network",
@@ -305,11 +306,28 @@ def required_jobs(coverage):
     }
     for platform in coverage["offline_source"]["os"]:
         for host in coverage["offline_source"]["host"]:
-            jobs[f"native-offline-source ({platform}, {host})"] = offline_steps[host]
+            install, conformance = offline_steps[host]
+            jobs[f"native-offline-source ({platform}, {host})"] = (
+                install,
+                "Run the installed package's selftest",
+                conformance,
+            )
+    # The offline toolchain route on Linux: the minimum Rust, installed from
+    # its standalone installer with no rustup and no network, then each
+    # published source archive built and installed with it as above.
+    for platform in coverage["offline_toolchain"]["os"]:
+        for host in coverage["offline_toolchain"]["host"]:
+            install, conformance = offline_steps[host]
+            jobs[f"native-offline-toolchain ({platform}, {host})"] = (
+                "Install Rust from its standalone installer without a network",
+                install,
+                "Run the installed package's selftest",
+                conformance,
+            )
     # Each R binary package that a release publishes, built from the R source
     # archive that it publishes, then installed on a runner with no Rust, no
-    # Rtools and no network, where it runs the conformance corpus and the
-    # installed R suites.
+    # Rtools and no network, where it passes its selftest and runs the
+    # conformance corpus and the installed R suites.
     for platform in coverage["r_binary"]["os"]:
         for version in coverage["r_binary"]["r"]:
             jobs[f"native-r-binary ({platform}, R {version})"] = (
@@ -319,6 +337,7 @@ def required_jobs(coverage):
             jobs[f"native-r-binary-install ({platform}, R {version})"] = (
                 "Remove Rust and Rtools from the runner",
                 "Install the R binary package without a network",
+                "Run the installed package's selftest",
                 "Report installed R public benchmark conformance",
                 "Run installed R supplemental suites outside checkout",
             )

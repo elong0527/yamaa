@@ -26,7 +26,11 @@ pub enum Error {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProfileCause {
     InvalidText,
-    ByteOrderMark,
+    /// A leading byte-order mark the input does not declare, or a declared
+    /// one that is absent (CSV-10); `declared` is the input's declaration.
+    ByteOrderMark {
+        declared: bool,
+    },
     HeaderAbsent,
     FieldNameEmpty,
     FieldNameDuplicate,
@@ -41,7 +45,7 @@ impl ProfileCause {
         use crate::diagnostic::ConditionCode as C;
         match self {
             Self::InvalidText => C::CsvInvalidText,
-            Self::ByteOrderMark => C::CsvByteOrderMark,
+            Self::ByteOrderMark { .. } => C::CsvByteOrderMark,
             Self::HeaderAbsent => C::CsvHeaderAbsent,
             Self::FieldNameEmpty => C::CsvFieldNameEmpty,
             Self::FieldNameDuplicate => C::CsvFieldNameDuplicate,
@@ -138,16 +142,37 @@ fn coordinates(prefix: &[u8]) -> (usize, usize) {
     (record, field)
 }
 
+/// The UTF-8 byte-order mark, `EF BB BF` (CSV-10).
+const BYTE_ORDER_MARK: char = '\u{feff}';
+
+/// Read a source whose input declares no byte-order mark: a leading mark is
+/// refused (CSV-10).
+pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
+    parse_declared(content, false)
+}
+
 /// Decode completely, then scan all syntax before header and row-width findings.
 /// File and table boundaries precede retaining the corresponding bytes or shape.
-pub fn parse(content: &[u8]) -> Result<CsvSource, Error> {
+///
+/// `byte_order_mark` is the input's declaration (CSV-10): when it is true the
+/// source must begin with one mark, which is skipped, and the first record
+/// starts after it. Any other mark at the start, including a second one after
+/// the declared mark, is refused: the declaration decides, never the file.
+pub fn parse_declared(content: &[u8], byte_order_mark: bool) -> Result<CsvSource, Error> {
     crate::limits::Limits::source_bytes(content.len()).map_err(limit_failure)?;
     let text = std::str::from_utf8(content).map_err(|error| {
         let (record, field) = coordinates(&content[..error.valid_up_to()]);
         failure(ProfileCause::InvalidText, record, field)
     })?;
-    if text.starts_with('\u{feff}') {
-        return Err(failure(ProfileCause::ByteOrderMark, 1, 1));
+    let mark = |declared| failure(ProfileCause::ByteOrderMark { declared }, 1, 1);
+    let text = if byte_order_mark {
+        text.strip_prefix(BYTE_ORDER_MARK)
+            .ok_or_else(|| mark(true))?
+    } else {
+        text
+    };
+    if text.starts_with(BYTE_ORDER_MARK) {
+        return Err(mark(byte_order_mark));
     }
     if text.is_empty() {
         return Err(failure(ProfileCause::HeaderAbsent, 1, 1));

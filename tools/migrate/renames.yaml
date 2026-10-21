@@ -76,7 +76,9 @@
 #
 # How it was approved. The owner approved the table as a whole on #3030
 # (D58), so every entry the RFC proposed is decided. A later change to this
-# file needs the owner's approval on #3030 in the same way.
+# file needs the owner's approval on #3030 in the same way (D27); an entry
+# added so names the decision that approved it, as
+# new.spec.input.byte_order_mark names D79.
 
 format: yamaa.rename-table
 format_version: 1
@@ -84,11 +86,11 @@ status: approved
 measured_at: 1758ad145
 design: docs/design/interface-1.0.md
 summary:
-  entries: 638
-  changes: 69
+  entries: 639
+  changes: 70
   by_kind_and_decision:
     keep, decided: 569
-    new, decided: 23
+    new, decided: 24
     removed, decided: 13
     rename, decided: 9
     reshape, decided: 19
@@ -7268,6 +7270,22 @@ entries:
     in 76 specifications; no input infers two keys.'
   field_kind: identifier
   convert: {action: transform, transform: declare_input_key}
+- id: new.spec.input.byte_order_mark
+  file_type: spec
+  path: input.*.byte_order_mark
+  today: null
+  kind: new
+  proposed: 'byte_order_mark: true'
+  decision: decided (D79)
+  reason: 'An addition to the approved table under D27, whose spelling the owner confirmed on 2026-10-20
+    (D79). D15 admits a leading UTF-8 byte-order mark on a CSV input only where the input declares it.
+    Optional and additive (I5): when true, the csv source must begin with one mark, which is skipped, and
+    a source without one fails as source_byte_order_mark; absent, a mark fails as it does in 0.5.0; on
+    an input that another profile reads, the field fails as value_not_permitted (CSV-10). A CSV `encoding`
+    value was not taken, because `encoding` stays SAS-only (P-UNU-1, SAS-2). No 0.5 file declares a
+    mark, so the converter writes none.'
+  field_kind: value
+  convert: {action: none}
 - id: new.spec.odm_input
   file_type: spec
   path: input.*.path

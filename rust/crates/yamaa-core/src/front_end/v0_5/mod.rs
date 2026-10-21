@@ -457,13 +457,15 @@ impl<'d> Lower<'d> {
                 profile,
                 types,
                 encoding: self.text_field(meta, source, "encoding"),
+                // Only the 1.0 schema admits the field (CSV-10).
+                byte_order_mark: self.boolean(source, "byte_order_mark", false),
                 schema: self.text_field(meta, source, "schema"),
                 empty_string: match self.text_of(source, "empty_string") {
                     Some("present") => EmptyString::Present,
                     _ => EmptyString::Missing,
                 },
                 ordinal: self.named(meta, source, "ordinal"),
-                written: self.written(source, &["types"]),
+                written: self.written(source, &["types", "byte_order_mark"]),
                 path,
             };
             // A 1.0 input declares the key its implicit joins and keyless

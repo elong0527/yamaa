@@ -17,11 +17,14 @@ project functions: the binary has no project-function implementation, so a
 specification that calls one fails before it reads data (#3030 section 2.3).
 Each excluded benchmark still gets a record that names the reason.
 
-The binary runs `yamaa run PROJECT --spec NAME`, the plan's call for a
-benchmark with a project. It still refuses `yamaa run SPEC` as not
-implemented (D96), until the facade reads a PATH's `type:` header; such a run
-is recorded as `not_implemented`. Any other run must exit with status 0 or 1
-and print one JSON document, or its record is an error. The comparator
+Each call is `yamaa run SPEC`, or `yamaa run PROJECT --spec NAME` for a
+benchmark with a project. The binary dispatches on the type a PATH declares
+in its `type:` header and reads only 1.x files (#3030 D122, D125), so until
+the corpus moves to 1.0 the runner runs converted copies, which
+`python -m tools.commands.cli_conformance` writes and plans before it runs
+this runner over them. A call the binary refuses as not implemented yet
+(D96) is recorded as `not_implemented`; any other run must exit with status 0
+or 1 and print one JSON document, or its record is an error. The comparator
 judges no command-line record yet.
 """
 

@@ -453,7 +453,9 @@ combinations on dispatch, on a `qualification/issue-*` push and weekly on
 main. It checks public benchmark conformance, installed host suites,
 packaging, optimized Rust behavior and portable math, installs both source
 archives that a release publishes with the network disabled on every platform
-(its `native-offline-source` jobs), builds the R binary packages that a
+(its `native-offline-source` jobs) and again on Linux with the minimum Rust,
+installed from its standalone installer with no rustup or network (its
+`native-offline-toolchain` jobs), builds the R binary packages that a
 release publishes and installs each with no Rust, Rtools or network (its
 `native-r-binary` and `native-r-binary-install` jobs), and runs CRAN's
 incoming checks on the R source archive that a release publishes (its

@@ -437,7 +437,7 @@ yamaa::functions::FunctionIdentity: pub struct FunctionIdentity [derive(Clone, D
 yamaa::functions::FunctionIdentity::call: pub call: String
 yamaa::functions::FunctionIdentity::name: pub name: String
 yamaa::functions::HostLanguage: impl HostLanguage
-yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Default, Eq, PartialEq)] [non_exhaustive]
+yamaa::functions::HostLanguage: pub enum HostLanguage [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
 yamaa::functions::HostLanguage::Python: Python
 yamaa::functions::HostLanguage::R: R
 yamaa::functions::LockContext: pub struct LockContext<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
