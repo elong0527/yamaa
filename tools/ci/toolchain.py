@@ -8,12 +8,14 @@ from pathlib import Path
 
 from tools.paths import WORKSPACE
 
-# Repository checks lint and format with the first two, and read the third,
-# the standard library's sources, for the crates that the third-party notices
-# list (tools/packaging/generate_third_party_notices.py). The toolchain file
-# names only what a build needs, so rustup adds them only where these checks
-# run; no package build or installation needs them.
-CHECK_COMPONENTS = ("clippy", "rustfmt", "rust-src")
+# Repository checks lint and format with these. The toolchain file names only
+# what a build needs, so rustup adds them only where these checks run.
+CHECK_COMPONENTS = ("clippy", "rustfmt")
+# The third-party notices generator reads the standard library's sources for
+# the crates that the notices list (tools/packaging/generate_third_party_notices.py).
+# Only the jobs that run the generator add them, with --notices (#3030 D157):
+# no package build, installation, test or lint needs them (#3528).
+NOTICE_COMPONENTS = ("rust-src",)
 
 
 def declaration(workspace=WORKSPACE):
@@ -31,9 +33,16 @@ def minimum():
     return ".".join((version.split(".") + ["0", "0"])[:3])
 
 
-def install_command(toolchain):
-    """The rustup command that installs a toolchain for repository checks."""
-    components = dict.fromkeys([*toolchain.get("components", []), *CHECK_COMPONENTS])
+def install_command(toolchain, notices=False):
+    """The rustup command that installs a toolchain for repository checks, with
+    the components that the notices generator reads when `notices` is true."""
+    components = dict.fromkeys(
+        [
+            *toolchain.get("components", []),
+            *CHECK_COMPONENTS,
+            *(NOTICE_COMPONENTS if notices else ()),
+        ]
+    )
     return [
         "rustup",
         "toolchain",
@@ -50,7 +59,7 @@ def install_command(toolchain):
     ]
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install", action="store_true")
     parser.add_argument(
@@ -58,12 +67,18 @@ def main():
         action="store_true",
         help="use the workspace rust-version instead of the pinned channel",
     )
-    arguments = parser.parse_args()
+    parser.add_argument(
+        "--notices",
+        action="store_true",
+        help="with --install, also add the components that the third-party "
+        "notices generator reads",
+    )
+    arguments = parser.parse_args(argv)
     toolchain = declaration()
     if arguments.minimum:
         toolchain["channel"] = minimum()
     if arguments.install:
-        subprocess.run(install_command(toolchain), check=True)
+        subprocess.run(install_command(toolchain, arguments.notices), check=True)
     if github_environment := os.environ.get("GITHUB_ENV"):
         with Path(github_environment).open("a") as output:
             output.write(f"RUSTUP_TOOLCHAIN={toolchain['channel']}\n")

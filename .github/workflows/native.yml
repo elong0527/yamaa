@@ -196,10 +196,11 @@ jobs:
         run: python -m tools.packaging.check_benchmark_sdk_versions
       # Staging the engine bundle, for the source archive and for the checks
       # that compare it and the component inventories with the bundle, reads
-      # the selftest list, benchmarks/selftest.yaml, with PyYAML.
+      # the selftest list, benchmarks/selftest.yaml, with PyYAML. The notices
+      # check runs the third-party notices generator, hence --notices.
       - name: Install build tools
         run: |
-          python -m tools.ci.toolchain --install
+          python -m tools.ci.toolchain --install --notices
           python -m pip install maturin==1.9.6 hatchling==1.27.0 pyyaml==6.0.3
       - name: Generate Python caches before packaging
         run: |
@@ -2206,12 +2207,13 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # Ubuntu's musl-tools gives the Linux targets their C compiler, musl-gcc.
       # The inventory check stages each host's engine bundle, which reads the
-      # selftest list with PyYAML.
+      # selftest list with PyYAML. The archive check runs the third-party
+      # notices generator, hence --notices.
       - name: Install build tools
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          python -m tools.ci.toolchain --install
+          python -m tools.ci.toolchain --install --notices
           rustup target add "${TARGET}"
           python -m pip install pyyaml==6.0.3
           if [ "${RUNNER_OS}" = Linux ]; then
