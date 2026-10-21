@@ -1,21 +1,28 @@
 """Run the benchmark corpus through an installed `yamaa` command-line binary.
 
-The command line's public conformance runner (#3060), still a skeleton. It
-reads the plan that `python -m tools.conformance.public_conformance plan`
-writes, stages each benchmark without its expected files, runs the binary for
-each call the plan gives the command line, and records the exit status and
-both streams of each run. Run it with python -I: it needs the standard library
-alone, and the comparator stays the only reader of expected truth.
+The command line's public conformance runner (#3060). It reads the plan that
+`python -m tools.conformance.public_conformance plan` writes, stages each
+benchmark without its expected files, runs the binary with `--format json` for
+each call the plan gives the command line, and records the exit status,
+standard error and the JSON document of each run: its `status`, its issues and
+the `paths` its save wrote, in publication order. As the Python and R runners
+do (#3312), the record keeps those paths relative to the case's root, so it
+reads the same on every machine, container and operating system; the document
+stands in for the standard output it was read from, whose paths are absolute.
+Run it with python -I: it needs the standard library alone, and the comparator
+stays the only reader of expected truth.
 
 The plan excludes, for the command line, each benchmark whose project supplies
 project functions: the binary has no project-function implementation, so a
 specification that calls one fails before it reads data (#3030 section 2.3).
 Each excluded benchmark still gets a record that names the reason.
 
-Today the binary refuses `run`, the only command the plan gives it, as not
-implemented, until the commands print their results (#3247, #3248). Such a
-run is recorded as `not_implemented`, and the comparator judges no
-command-line record yet.
+The binary runs `yamaa run PROJECT --spec NAME`, the plan's call for a
+benchmark with a project. It still refuses `yamaa run SPEC` as not
+implemented (D96), until the facade reads a PATH's `type:` header; such a run
+is recorded as `not_implemented`. Any other run must exit with status 0 or 1
+and print one JSON document, or its record is an error. The comparator
+judges no command-line record yet.
 """
 
 from __future__ import annotations
@@ -77,12 +84,51 @@ def observe(example, fixtures, work, binary):
                 f"the plan gives {call['specification']} no command line: "
                 "its specification names no domain for --spec"
             )
-        ran = invoke(binary, call["arguments"], case)
+        ran = invoke(binary, ["--format", "json", *call["arguments"]], case)
+        stdout = ran.pop("stdout")
         ran["not_implemented"] = ran["exit_status"] == 2 and ran["stderr"].endswith(
             NOT_IMPLEMENTED
         )
+        ran["document"] = (
+            None if ran["not_implemented"] else document(ran, stdout, case)
+        )
         record["calls"].append({**call, **ran})
     return record
+
+
+def document(ran, stdout, case):
+    """The JSON document a run printed: exactly one, on one line, after
+    which it exited with status 0 or 1. Its `paths` are kept relative to
+    `case`."""
+    if ran["exit_status"] not in (0, 1):
+        raise ValueError(
+            f"yamaa exited with status {ran['exit_status']}: {ran['stderr']}"
+        )
+    if not stdout.endswith("\n") or "\n" in stdout[:-1]:
+        raise ValueError("yamaa printed no single JSON line")
+    printed = json.loads(stdout)
+    if isinstance(printed, dict) and isinstance(printed.get("paths"), list):
+        printed["paths"] = relative(printed["paths"], case)
+    return printed
+
+
+def relative(paths, case):
+    """The paths a save wrote, relative to the case's root.
+
+    The binary prints absolute paths with forward slashes (D38). A path that
+    has a backslash, or that is not below the case, stays as printed, for the
+    comparator to refuse, as the Python and R runners keep it.
+    """
+
+    def one(path):
+        if not isinstance(path, str) or "\\" in path:
+            return path
+        try:
+            return Path(path).relative_to(case).as_posix()
+        except ValueError:
+            return path
+
+    return [one(path) for path in paths]
 
 
 def state(record):

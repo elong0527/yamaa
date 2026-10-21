@@ -1,4 +1,4 @@
-"""The command line's conformance runner skeleton (#3060), over stand-in binaries."""
+"""The command line's conformance runner (#3060), over stand-in binaries."""
 
 import json
 import os
@@ -21,16 +21,24 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
 """
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
-# Prints what it was asked and where, then refuses `run` as the binary does
-# today.
-NOT_IMPLEMENTED = """import json, os, sys
+# Behaves as the binary does today: refuses `run SPEC` as not implemented,
+# and for `run PROJECT --spec NAME` prints one JSON document, here naming what
+# it was asked and where, and exits 1 as a run with findings does. Its save
+# wrote, as absolute paths with forward slashes, one file below the case and
+# one beside it; a path with a backslash is not one the binary prints.
+BINARY = """import json, os, sys
 arguments = sys.argv[1:]
 if arguments == ["--version"]:
     sys.stdout.write("yamaa 0.0.0\\n")
     sys.exit(0)
-sys.stdout.write(json.dumps({"arguments": arguments, "cwd": os.getcwd()}))
-sys.stderr.write("yamaa: run is not implemented yet\\n")
-sys.exit(2)
+if "--spec" not in arguments:
+    sys.stderr.write("yamaa: run without --spec or --section is not implemented yet\\n")
+    sys.exit(2)
+case = os.getcwd().replace(os.sep, "/")
+paths = [case + "/out/test-report.csv", case + "-beside.csv", "out\\\\test.csv"]
+document = {"arguments": arguments, "cwd": os.getcwd(), "paths": paths, "status": "failed"}
+sys.stdout.write(json.dumps(document) + "\\n")
+sys.exit(1)
 """
 # Refuses every command as a usage error, which is not a refusal of a command
 # not implemented yet.
@@ -40,6 +48,14 @@ if sys.argv[1:] == ["--version"]:
     sys.exit(0)
 sys.stderr.write("yamaa: run: missing PATH\\nrun 'yamaa --help' for usage\\n")
 sys.exit(2)
+"""
+# Runs every command but prints text, not the JSON document asked for.
+TEXT = """import sys
+if sys.argv[1:] == ["--version"]:
+    sys.stdout.write("yamaa 0.0.0\\n")
+    sys.exit(0)
+sys.stdout.write("yamaa run of TEST: succeeded, 1 row x 1 column, 0 issues\\n")
+sys.exit(0)
 """
 
 
@@ -53,12 +69,17 @@ class CommandLineRunner(unittest.TestCase):
         plain = self.fixtures / "plain"
         (plain / "expected").mkdir(parents=True)
         (plain / "expected/result.csv").write_text("ID\n1\n")
+        project = self.fixtures / "project"
+        project.mkdir()
+        (project / "project.yaml").write_text(
+            'schema_version: "1.0"\nsdtm:\n  specs: [spec.yaml]\n'
+        )
         functions = self.fixtures / "functions"
         functions.mkdir()
         (functions / "project.yaml").write_text(
             'schema_version: "1.0"\nenvironments:\n  python: python/environment.yaml\n'
         )
-        for case in (plain, functions):
+        for case in (plain, project, functions):
             (case / "spec.yaml").write_text(SPEC)
             (case / "benchmark.yaml").write_text(METADATA)
         self.plan = self.root / "plan"
@@ -102,7 +123,7 @@ class CommandLineRunner(unittest.TestCase):
 
     def test_each_call_runs_in_its_staged_case_and_each_exclusion_is_named(self):
         output = self.root / "observed"
-        result = self.runner(self.binary("yamaa", NOT_IMPLEMENTED), output)
+        result = self.runner(self.binary("yamaa", BINARY), output)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             self.summary(result),
@@ -110,7 +131,7 @@ class CommandLineRunner(unittest.TestCase):
                 "runtime": "cli",
                 "excluded": 1,
                 "not_implemented": 1,
-                "observed": 0,
+                "observed": 1,
                 "error": 0,
             },
         )
@@ -127,29 +148,69 @@ class CommandLineRunner(unittest.TestCase):
                 "error": None,
             },
         )
-        [call] = self.record(output, "plain")["calls"]
-        case = output / "work/plain"
-        asked = json.loads(call["stdout"])
-        self.assertEqual(asked["arguments"], ["run", "spec.yaml"])
-        self.assertEqual(Path(asked["cwd"]).resolve(), case)
-        self.assertEqual((call["exit_status"], call["not_implemented"]), (2, True))
+        # A call with a project runs in its staged case and asks for JSON,
+        # whose document the record keeps in place of the standard output.
+        [call] = self.record(output, "project")["calls"]
+        case = output / "work/project"
+        document = call["document"]
+        self.assertEqual(
+            document["arguments"],
+            ["--format", "json", "run", "project.yaml", "--spec", "TEST"],
+        )
+        self.assertEqual(Path(document["cwd"]).resolve(), case)
+        self.assertEqual(document["status"], "failed")
+        self.assertEqual((call["exit_status"], call["not_implemented"]), (1, False))
+        self.assertNotIn("stdout", call)
+        # The record keeps a written path relative to the case's root (#3312);
+        # one beside the case, or with a backslash, stays as printed for the
+        # comparator to refuse.
+        beside = Path(document["cwd"]).as_posix() + "-beside.csv"
+        self.assertEqual(
+            document["paths"], ["out/test-report.csv", beside, "out\\test.csv"]
+        )
         # Expected truth never enters the staged case.
         self.assertTrue((case / "spec.yaml").is_file())
         self.assertFalse((case / "expected").exists())
         self.assertFalse((case / "benchmark.yaml").exists())
+        # A call the binary does not run yet is recorded as such.
+        [call] = self.record(output, "plain")["calls"]
+        self.assertEqual(call["arguments"], ["run", "spec.yaml"])
+        self.assertEqual(
+            (call["exit_status"], call["not_implemented"], call["document"]),
+            (2, True, None),
+        )
+        self.assertFalse((output / "work/plain/expected").exists())
 
-    def test_a_usage_error_is_not_mistaken_for_a_command_not_implemented(self):
+    def test_a_usage_error_is_neither_a_command_not_implemented_nor_an_observation(
+        self,
+    ):
         output = self.root / "observed"
         result = self.runner(self.binary("usage", USAGE), output)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.summary(result)["observed"], 1)
-        [call] = self.record(output, "plain")["calls"]
-        self.assertEqual((call["exit_status"], call["not_implemented"]), (2, False))
+        self.assertEqual(
+            {key: self.summary(result)[key] for key in ("observed", "error")},
+            {"observed": 0, "error": 2},
+        )
+        record = self.record(output, "plain")
+        self.assertEqual(
+            record["error"],
+            "ValueError: yamaa exited with status 2: yamaa: run: missing PATH\n"
+            "run 'yamaa --help' for usage\n",
+        )
+
+    def test_a_run_must_print_one_json_document(self):
+        output = self.root / "observed"
+        result = self.runner(self.binary("text", TEXT), output)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.summary(result)["error"], 2)
+        self.assertTrue(
+            self.record(output, "project")["error"].startswith("JSONDecodeError: ")
+        )
 
     def test_the_output_must_be_fresh(self):
         output = self.root / "observed"
         output.mkdir()
-        result = self.runner(self.binary("yamaa", NOT_IMPLEMENTED), output)
+        result = self.runner(self.binary("yamaa", BINARY), output)
         self.assertEqual(result.returncode, 2)
         self.assertIn("output must be a fresh directory", result.stderr)
 

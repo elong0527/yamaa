@@ -1,36 +1,45 @@
 //! The `yamaa` command line (#3030 D12, section 2.8): one binary over the
 //! `yamaa` facade alone (section 2.10).
 //!
-//! Standard output carries what a command prints; standard error carries only
-//! the refusals of exit status 2, never anything else. The exit status is:
+//! Standard output carries what a command prints, as text or, with
+//! `--format json`, as one canonical JSON document; standard error carries
+//! only the refusals of exit status 2, never anything else. The exit status
+//! is:
 //!
 //! - 0 when the command completed and succeeded, or `--help` or `--version`
 //!   printed its text;
-//! - 1 when the command completed with findings; no command reports any yet;
-//! - 2 when the command could not run as asked (D68): a usage error or a
-//!   failed write to standard output, and, for now, a command not
-//!   implemented yet.
+//! - 1 when the command completed with findings: a `failed` or `skipped`
+//!   status, remaining lint findings, or a refusal, such as an unknown
+//!   section (D98), which the facade explains with its issues;
+//! - 2 when the command could not run as asked (D68): a usage error, an
+//!   argument the facade cannot take, or a failed write to standard output,
+//!   and, for now, a command not implemented yet (D96).
 //!
 //! No configuration file, environment variable or colour changes what it
 //! does. Ctrl+C ends the process by the signal and publishes nothing (D46).
 //!
-//! Only `--help` and `--version` work so far. Every command checks its
-//! arguments and then refuses as not implemented yet, and so does
-//! `--format json`: the commands print the summaries and JSON of #3248 and
-//! save through #3247, which the facade does not offer yet. This refusal is
-//! temporary; each command drops it when it lands.
+//! What each command prints is in [`commands`]. `read-odm`, `schema` and
+//! `selftest`, and `check`, `run` and `resolve` of a PATH given neither
+//! `--spec` nor `--section`, check their arguments and then refuse as not
+//! implemented yet; see [`commands`] for why. Each drops the refusal when it
+//! lands.
 #![forbid(unsafe_code)]
 
 mod arguments;
+mod commands;
 
 use std::ffi::OsString;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
 use arguments::{Format, Invocation, Usage, COMMANDS};
+use commands::Execution;
+use yamaa::ContextValue;
 
 /// Exit status 0: the command completed and succeeded.
 const SUCCEEDED: u8 = 0;
+/// Exit status 1: the command completed with findings.
+const FINDINGS: u8 = 1;
 /// Exit status 2: the command could not run as asked.
 const NOT_RUN: u8 = 2;
 
@@ -49,21 +58,32 @@ fn main() -> ExitCode {
 fn run(arguments: &[OsString], stdout: &mut dyn Write, stderr: &mut dyn Write) -> u8 {
     match arguments::parse(arguments) {
         Ok(Invocation::Help) => print(stdout, stderr, &help()),
-        Ok(Invocation::Version(Format::Text)) => print(stdout, stderr, &version()),
-        Ok(Invocation::Version(Format::Json) | Invocation::Command(_, Format::Json)) => {
-            not_implemented(stderr, "--format json")
-        }
-        Ok(Invocation::Command(name, Format::Text)) => not_implemented(stderr, name),
-        Err(Usage(message)) => {
-            // Standard error is the last stream to report on, so a failed
-            // write to it is not reported.
-            let _ = writeln!(stderr, "yamaa: {message}\nrun 'yamaa --help' for usage");
-            NOT_RUN
-        }
+        Ok(Invocation::Version(format)) => print(stdout, stderr, &version(format)),
+        Ok(Invocation::Command(call, format)) => match commands::execute(&call, format) {
+            Execution::Ran {
+                stdout: text,
+                status,
+            } => match print(stdout, stderr, &text) {
+                SUCCEEDED => status,
+                failed => failed,
+            },
+            Execution::Refused(usage) => refuse(stderr, &usage),
+            Execution::NotImplemented(what) => not_implemented(stderr, &what),
+        },
+        Err(usage) => refuse(stderr, &usage),
     }
 }
 
-/// Write `text` to standard output; a failed write exits with status 2.
+/// Refuse a usage error with exit status 2.
+fn refuse(stderr: &mut dyn Write, Usage(message): &Usage) -> u8 {
+    // Standard error is the last stream to report on, so a failed write to
+    // it is not reported.
+    let _ = writeln!(stderr, "yamaa: {message}\nrun 'yamaa --help' for usage");
+    NOT_RUN
+}
+
+/// Write `text` to standard output, returning status 0; a failed write
+/// exits with status 2.
 fn print(stdout: &mut dyn Write, stderr: &mut dyn Write, text: &str) -> u8 {
     match stdout
         .write_all(text.as_bytes())
@@ -84,19 +104,53 @@ fn not_implemented(stderr: &mut dyn Write, what: &str) -> u8 {
     NOT_RUN
 }
 
-/// `yamaa --version`: the engine information (D41, P-INFO-1), one field per
-/// line. The command line runs on no interpreter, so it has no host version
-/// line.
-fn version() -> String {
+/// `yamaa --version`: the engine information (D41, P-INFO-1). As text, one
+/// field per line; the command line runs on no interpreter, so it has no
+/// host version line. As JSON, one object with `cli.json.info_keys`, whose
+/// `host_version` is null.
+fn version(format: Format) -> String {
     let info = yamaa::info(yamaa::Host::Cli, None);
-    format!(
-        "yamaa {}\nlanguage versions: {}\nfeatures: {}\nhost: {}\nplatform: {}\n",
-        info.version,
-        info.language_versions.join(", "),
-        info.features.join(", "),
-        info.host.as_str(),
-        info.platform,
-    )
+    match format {
+        Format::Text => format!(
+            "yamaa {}\nlanguage versions: {}\nfeatures: {}\nhost: {}\nplatform: {}\n",
+            info.version,
+            info.language_versions.join(", "),
+            info.features.join(", "),
+            info.host.as_str(),
+            info.platform,
+        ),
+        Format::Json => {
+            let text = |value: &str| ContextValue::Text(value.to_owned());
+            let texts = |values: &[&str]| {
+                ContextValue::List(values.iter().map(|value| text(value)).collect())
+            };
+            let languages = info
+                .language_versions
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            let document = [
+                ("version", text(info.version)),
+                ("language_versions", texts(&languages)),
+                ("features", texts(&info.features)),
+                ("host", text(info.host.as_str())),
+                (
+                    "host_version",
+                    info.host_version
+                        .as_deref()
+                        .map_or(ContextValue::Null, text),
+                ),
+                ("platform", text(&info.platform)),
+            ];
+            let document = ContextValue::Map(
+                document
+                    .into_iter()
+                    .map(|(key, value)| (key.to_owned(), value))
+                    .collect(),
+            );
+            format!("{}\n", document.to_json())
+        }
+    }
 }
 
 /// `yamaa --help`: the synopses, the commands and the exit statuses.
@@ -112,7 +166,8 @@ fn help() -> String {
         text.push('\n');
     }
     text.push_str(
-        "\nThe commands and --format json are not implemented yet: each checks its\n\
+        "\nNot implemented yet: read-odm, schema and selftest, and check, run and\n\
+         resolve of a PATH given neither --spec nor --section. Each checks its\n\
          arguments, then exits with status 2.\n\n\
          exit status: 0 succeeded, 1 completed with findings, 2 could not run as asked\n",
     );
@@ -157,9 +212,25 @@ mod tests {
         words.iter().map(OsString::from).collect()
     }
 
+    /// A failed write exits 2 whatever the command found: here a lint whose
+    /// finding would otherwise exit 1.
     #[test]
     fn a_failed_write_to_standard_output_exits_with_status_2() {
-        for arguments in [&["--version"][..], &["--help"]] {
+        let spec =
+            std::env::temp_dir().join(format!("yamaa-cli-write-{}.yaml", std::process::id()));
+        std::fs::write(
+            &spec,
+            "schema_version: '1.0'\ndomain: DM\noutput:\n  path: dm.csv\n",
+        )
+        .unwrap();
+        let spec = spec.to_str().unwrap().to_owned();
+        for arguments in [
+            &["--version"][..],
+            &["--version", "--format", "json"],
+            &["--help"],
+            &["lint", &spec],
+            &["lint", &spec, "--format", "json"],
+        ] {
             let mut stderr = Vec::new();
             assert_eq!(run(&words(arguments), &mut Refusing, &mut stderr), 2);
             assert_eq!(
@@ -173,16 +244,42 @@ mod tests {
                 "yamaa: cannot write to standard output: the disk is full\n"
             );
         }
+        std::fs::remove_file(spec).unwrap();
     }
 
     #[test]
     fn version_and_help_write_only_to_standard_output() {
-        for (arguments, expected) in [(&["--version"][..], version()), (&["--help"], help())] {
+        for (arguments, expected) in [
+            (&["--version"][..], version(Format::Text)),
+            (&["--version", "--format", "json"], version(Format::Json)),
+            (&["--help"], help()),
+        ] {
             let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
             assert_eq!(run(&words(arguments), &mut stdout, &mut stderr), 0);
             assert_eq!(String::from_utf8(stdout).unwrap(), expected);
             assert!(stderr.is_empty());
         }
+    }
+
+    /// `--format json` prints `info()` as one object, with `host_version`
+    /// null for the command line.
+    #[test]
+    fn version_as_json_holds_the_six_fields_of_info() {
+        let info = yamaa::info(yamaa::Host::Cli, None);
+        assert_eq!(
+            version(Format::Json),
+            format!(
+                "{{\"features\":[{}],\"host\":\"cli\",\"host_version\":null,\
+                 \"language_versions\":[\"1.0\"],\"platform\":\"{}\",\"version\":\"{}\"}}\n",
+                info.features
+                    .iter()
+                    .map(|feature| format!("\"{feature}\""))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                info.platform,
+                yamaa::VERSION
+            )
+        );
     }
 
     #[test]

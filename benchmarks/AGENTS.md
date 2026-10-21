@@ -457,6 +457,15 @@ Some benchmarks are the only exercise of a construct or a rule, so removing one
 silently drops coverage. Check what a benchmark uniquely covers before deleting
 or merging it, and replace the coverage in the same change.
 
+## Selftest cases
+
+The benchmarks that `selftest.yaml` lists are the selftest cases (#3030 D105,
+D108): the facade embeds their files when it builds, so every package ships
+them. A change that adds, removes or renames a file of a listed case, or that
+changes the list, reruns
+`uv run --project python --no-sync python -m tools.packaging.generate_selftest_cases --write`
+in the same change; `make quick` fails until the facade's table matches.
+
 ## Adding an expression
 
 An expression enters the vocabulary when a benchmark needs it, a negative
