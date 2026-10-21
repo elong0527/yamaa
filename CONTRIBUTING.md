@@ -478,7 +478,10 @@ checks below. A release tag publishes the native run that its
 `Qualified-Run` trailer names, and the `Release rehearsal` workflow, dispatched
 before tagging, runs the same selection against the latest successful main run
 without publishing;
-see [publication](docs/release.md#publication).
+see [publication](docs/release.md#publication). After each PyPI upload, the
+`PyPI install` workflow, dispatched with the release's Python version, installs
+it from PyPI on each wheel platform and runs its selftest; see
+[PyPI upload](docs/release.md#pypi-upload).
 
 Every R package check, in CI's `r` job (`make test-r`), native
 qualification, the `R-CMD-check` workflow and the `r (minimum toolchain)` job,

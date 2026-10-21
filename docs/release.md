@@ -376,6 +376,10 @@ Before pushing the release tag, confirm on the final commit:
 
 Record the outcome on the release's planning issue.
 
+After the tag, announce the release only once its Python packages are on
+PyPI and the [PyPI check and the PyPI install test](#pypi-upload) have passed.
+Record those outcomes on the planning issue too.
+
 ## Publication
 
 After the final commit is on main and its complete native qualification has
@@ -544,6 +548,26 @@ release's Python packages or serves any other file, and when the release does
 not hold exactly the assets that the tag's `tools/ci/release_assets.py`
 declares. It compares the bytes themselves and ignores the digests that PyPI
 and GitHub list.
+
+Then install the release from PyPI as its users do, with the `PyPI install`
+workflow:
+
+```sh
+gh workflow run pypi-install.yml --repo elong0527/yamaa -f version=<Python version>
+```
+
+Each of its jobs installs `yamaa==<Python version>` with pip into a fresh
+virtual environment outside any checkout, with `--pre` for a candidate, as the
+candidate's release body installs it. Its wheel jobs run on every platform
+that the release has a wheel for, with the oldest and the newest supported
+CPython, and pass `--only-binary=:all:`, so pip installs a wheel and never
+builds a source archive. Its source job builds the source archive from PyPI
+with `--no-binary yamaa` on Linux x86_64, with the runner's Rust. Each job then
+checks the installed version and runs `yamaa.selftest()`, whose report the log
+keeps, and fails unless the selftest reports `succeeded`. Announce the release
+only once every job has passed. With `-f index=testpypi` the workflow
+rehearses an upload to TestPyPI: its wheel jobs install yamaa from TestPyPI
+and its dependencies from PyPI, and its source job is skipped.
 
 A final release is then installed with `pip install yamaa`. A candidate's
 version is a PyPI pre-release, which a bare `pip install yamaa` does not
