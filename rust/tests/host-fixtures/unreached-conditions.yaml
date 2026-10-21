@@ -96,7 +96,6 @@ not_covered:
     - unknown_reference
     - unknown_section
     - unknown_specification_name
-    - unknown_standard
     - unknown_standard_family
     - unlinked_producer
     - xpt_display_format_invalid
