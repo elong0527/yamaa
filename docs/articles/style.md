@@ -61,6 +61,8 @@ language applies to it.
 
 ## The findings
 
+The findings, in the order the lint lists them:
+
 | Finding | Reported where | Fixed by `fix` |
 | --- | --- | --- |
 | `field_order` | A field written after one its class orders later | yes |
@@ -69,12 +71,12 @@ language applies to it.
 | `blank_lines` | A leading, trailing, repeated or misplaced blank line | yes |
 | `line_width` | A line longer than 79 characters | when it can wrap |
 | `invalid_suppression` | A suppression comment that suppresses nothing | no |
-| `redundant_long_form` | A long form that only restates its shorthand | yes |
-| `restated_default` | A field or handler that writes its default | yes |
-| `scalar_as_text` | Grammar text for a missing value, number or Boolean | yes |
 | `repeated_row_derivation` | A derivation repeated in every row template | no |
 | `redundant_intermediate` | A named intermediate equal to the implicit join | no |
 | `missing_label` | An output column without a label | no |
+| `redundant_long_form` | A long form that only restates its shorthand | yes |
+| `restated_default` | A field or handler that writes its default | yes |
+| `scalar_as_text` | Grammar text for a missing value, number or Boolean | yes |
 | `unused_input_key` | An input's `key` that no read uses | no |
 | `equality_filter` | A lookup filter comparing a donor field and a row value | no |
 
