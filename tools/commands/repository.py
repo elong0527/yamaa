@@ -35,6 +35,7 @@ CHECKS = (
     "tools.validation.check_cdisc_vocabulary",
     "tools.rules.check",
     "tools.validation.check_documentation",
+    "tools.validation.check_supported_platforms",
     "tools.validation.check_diagnostics",
 )
 

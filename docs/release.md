@@ -6,47 +6,60 @@ open gates live in GitHub issues and pull requests, not here.
 
 ## Supported platforms
 
-- CPython 3.12, 3.13, 3.14 and 3.15 wheels and source builds on Linux
-  x86_64 and aarch64, macOS arm64 and Windows x64. The Linux wheels are
-  `manylinux_2_28` and need glibc 2.28 or later, for example RHEL 8, Ubuntu
-  20.04 or Debian 10; older systems build from the Python source archive.
-  Each Linux wheel is built in the manylinux_2_28 container of its
-  architecture, and native qualification also installs it on AlmaLinux 8,
-  which has glibc 2.28, and runs the conformance corpus there with that
-  system's Python 3.12.
-- R source builds with R 4.4.0 or later on Linux x86_64, macOS arm64 and
-  Windows x64, each passing `R CMD check --as-cran` with only the notes that
+Each row is a platform, and each column a package form that a release
+publishes. A cell names the CPython or R series with which native
+qualification installs and tests that form on that platform, with the oldest
+glibc that a Linux wheel needs, or the Rust target that the command-line
+binary is built for. A floor, as in R 4.4 or later, is qualified with the floor
+and R-release, and a cell that says "no" means that a release has no such
+package for that platform. `tools.validation.check_supported_platforms`, which
+`make check-repository` runs, fails when the table and the native matrix that
+`tools/ci/native.py` declares disagree.
+
+| Platform | Python wheel | Python source archive | R source package | R binary package | Command-line binary |
+| --- | --- | --- | --- | --- | --- |
+| Linux x86_64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.4 or later | no | `x86_64-unknown-linux-musl` |
+| Linux aarch64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.6 | no | `aarch64-unknown-linux-musl` |
+| macOS arm64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.4 or later | R 4.5 and 4.6 | `aarch64-apple-darwin` |
+| Windows x64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.4 or later | R 4.5 and 4.6 | `x86_64-pc-windows-msvc` |
+
+- The Linux wheels are `manylinux_2_28`, so they need glibc 2.28 or later,
+  for example RHEL 8, Ubuntu 20.04 or Debian 10; older systems build from the
+  Python source archive. Each Linux wheel is built in the manylinux_2_28
+  container of its architecture, and native qualification also installs it
+  on AlmaLinux 8, which has glibc 2.28, and runs the conformance corpus there
+  with that system's Python 3.12.
+- The R source package needs R 4.4.0 or later, a floor that follows an audit
+  of the R C API that the binding calls. On Linux x86_64, macOS arm64 and
+  Windows x64 it passes `R CMD check --as-cran` with only the notes that
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
-  checks with R-devel, R-release and R 4.4 and the minimum Rust. The floor
-  follows an audit of the R C API that the binding calls.
-- R source builds with R 4.6.1 on Linux aarch64. There, with the network
-  disabled, native qualification builds and installs the R source package
-  that a release publishes and runs the conformance corpus with it: its
+  checks with R-devel, R-release and R 4.4 and the minimum Rust.
+- On Linux aarch64, native qualification uses R-release alone. With the
+  network disabled, it builds and installs the R source package that a
+  release publishes and runs the conformance corpus with it: its
   `native-offline-source` job, with the pinned Rust, and its
   `native-offline-toolchain` job, with the minimum Rust installed from its
   standalone installer. No `R CMD check --as-cran` runs on aarch64, and no
   lane there uses R 4.4.
-- R binary packages for R-release and R-oldrel, today R 4.6 and R 4.5, on
-  Windows x64 and macOS arm64, as CRAN builds them (#3030 D48). Each is built
-  for one R series and works only with R of that series, and the macOS
-  binaries need macOS 11 or later, the first macOS for Apple silicon;
-  `install.packages()` installs each with no Rust, Rtools or network. With any
-  other R series, R 4.4 among them, and on Linux, which gets no binary
-  packages (D54), users install from source: the R source package of the
-  GitHub release, which builds with its vendored crates and a Rust
-  toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without Rust
-  1.82 or later, the offline toolchain route, which carries Rust in from its
-  standalone installers without rustup or a network
+- The R binary packages are for R-release and R-oldrel, as CRAN builds them
+  (#3030 D48). Each is built for one R series and works only with R of that
+  series, and the macOS binaries need macOS 11 or later, the first macOS for
+  Apple silicon; `install.packages()` installs each with no Rust, Rtools or
+  network. With any other R series, R 4.4 among them, and on Linux, which
+  gets no binary packages (D54), users install from source: the R source
+  package of the GitHub release, which builds with its vendored crates and a
+  Rust toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without
+  Rust 1.82 or later, the offline toolchain route, which carries Rust in from
+  its standalone installers without rustup or a network
   ([Installing in a restricted environment](articles/restricted-environments.md#the-offline-rust-toolchain-route)).
-- The `yamaa` command line as standalone binaries, which need no Python, R
-  or Rust (#3030 D12, D49): for Linux x86_64 and aarch64, built for the
-  `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` targets and
-  linked statically with the musl C library, so they run on any Linux of
-  their architecture; for Windows x64, built for `x86_64-pc-windows-msvc`
-  with the C runtime linked statically; and for macOS arm64, built for
-  `aarch64-apple-darwin`, on macOS 11 or later. Each is a GitHub release
-  asset, `yamaa-<version>-<target>.zip`, with no installer, and ships
-  unsigned, as [command-line binaries](#command-line-binaries) describes.
+- The `yamaa` command line ships as standalone binaries, which need no
+  Python, R or Rust (#3030 D12, D49). The Linux binaries link the musl C
+  library statically, so they run on any Linux of their architecture; the
+  Windows binary links the C runtime statically; and the macOS binary needs
+  macOS 11 or later. Each is a GitHub release asset,
+  `yamaa-<version>-<target>.zip` for its target above, with no installer,
+  and ships unsigned, as [command-line binaries](#command-line-binaries)
+  describes.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49;
   CRAN may still build the R package there), free-threaded Python, and the
   Python and R packages on musl systems such as Alpine Linux, are not
