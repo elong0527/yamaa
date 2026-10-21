@@ -171,7 +171,7 @@ impl Run {
     #[pyo3(signature=(include_measurements=false))]
     fn observations(&self, include_measurements: bool) -> PyResult<Option<String>> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.build().observations(include_measurements))
+        Ok(guard.observations(include_measurements))
     }
 }
 
@@ -255,7 +255,8 @@ pub fn _read_odm(
     if let Some(member) = archive_member {
         options = options.with_archive_member(member);
     }
-    yamaa::read_odm(std::path::Path::new(source), &options)
+    engine(py, &Interrupt::new())
+        .read_odm(source, &options)
         .map(|table| ArrowTable::from(&table))
         .map_err(|error| raise_error(py, Action::Read(source), error))
 }

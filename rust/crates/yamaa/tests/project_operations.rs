@@ -990,10 +990,7 @@ fn a_specification_runs_alike_alone_and_in_a_project_run_with_computed_statuses(
         member.report().unwrap().ipc().unwrap(),
         alone.report().unwrap().ipc().unwrap()
     );
-    assert_eq!(
-        member.build().observations(false),
-        alone.build().observations(false)
-    );
+    assert_eq!(member.observations(false), alone.observations(false));
     // A failed input fails the run but not the check, which reads no data.
     study.write("raw/dm.csv", "USUBJID,AGE\nS1,thirty\n");
     assert_eq!(
