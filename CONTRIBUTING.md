@@ -349,8 +349,9 @@ test.
   as evidence (`Evidence: <path>::<name>`) keeps that name.
 - Arrange with the owned factories, act once, then compare the whole
   observable record with an authored literal: a diagnostic is its phase,
-  condition, rule, spec paths and context together; a table is its
-  schema and rows; a saved artifact is its bytes. A chain of partial
+  condition, rule, spec paths and context together, including optional
+  `source_span` and `operand_route` and whether each is absent; a table
+  is its schema and rows; a saved artifact is its bytes. A chain of partial
   checks, or `any(...)` over a list of findings, hides what was
   produced.
 - An assertion inside a loop carries the case's label, so a failure
@@ -379,7 +380,7 @@ the AST roots a project file produces, `support::ports` (core) holds the
 scripted ports that log each effect and panic on an unexpected request,
 `support::specification_run` (adapters) prepares, compiles and lowers a
 document and replays authored reports against it, the `check` helpers
-of `support::diagnostic` (core) compare a diagnostic's five fields and
+of `support::diagnostic` (core) compare a diagnostic's five base fields and
 return its rendered code, `support::benchmarks` (adapters) reads what a
 live benchmark states (D120), and `support::odm_files::Scratch`
 (adapters) is a scratch directory removed on drop. The core and adapters
@@ -427,8 +428,9 @@ change to one is made to both.
 new file keeps that form: a module docstring naming the family, one class
 per subject, `setUp` creating a `tempfile.TemporaryDirectory` registered
 with `addCleanup`, and `subTest(case=name)` around each case of a table.
-`python/tests` is plain pytest with `tmp_path` and `parametrize`. Fixture
-text is a module constant or an authored file; a fixture repository
+Outside `python/tests/installed/`, `python/tests` is plain pytest with
+`tmp_path` and `parametrize`. Fixture text is a module constant or an
+authored file; a fixture repository
 comes from a builder such as `write_repository` in
 `tools/tests/rules_fixture.py`, and the repository root is
 `tools.paths.ROOT`. Mock the name the module under test looks up, inside
@@ -442,9 +444,15 @@ Prefer `assertEqual` on the whole list or dictionary and
 `assertRaisesRegex` on the message to `assertIn`, `assertTrue(any(...))`
 or a bare `assertRaises`.
 
-The installed suites under `python/tests/installed/` run outside the
-checkout against an installed package: they import `yamaa` and the
-staged `host_fixtures` reader and nothing from `tools/`.
+The installed suites under `python/tests/installed/` are named
+`installed_<area>.py`. The runner stages and executes each file directly
+with Python, so its entry point must run its checks. Existing unittest
+suites use `unittest.TestCase` and call `unittest.main()` under
+`if __name__ == "__main__":`; `installed_public_grammar.py` instead calls
+its own `main()` with plain assertions. Preserve each suite's pattern:
+pytest-only functions and fixtures are not executed by this runner. These
+suites run outside the checkout against an installed package: they import
+`yamaa` and the staged `host_fixtures` reader and nothing from `tools/`.
 
 ### R
 
