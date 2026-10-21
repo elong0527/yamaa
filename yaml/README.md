@@ -104,8 +104,11 @@ field that declares `since` carries it as `x-yamaa-since`. A
 specification file may be one layer of an inheritance chain, so the spec JSON
 Schema checks what one layer may write
 ([LAYER-4](../rules/inheritance.md#layer-4)), and its `$defs/root_class`
-checks a complete specification. After changing a file in `v1/`, regenerate
-them and the copy of `v1/` the engine embeds, which `make quick` also compares:
+checks a complete specification. The engine embeds them byte for byte, and
+`schema(file_type)` gives each as canonical JSON text, one line with its
+members in key order. After changing a file in `v1/`, regenerate them, then
+the copy of `v1/` and its JSON Schemas that the engine embeds, which
+`make quick` also compares:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_json_schema --write

@@ -166,6 +166,30 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         ]
     );
 
+    // A file type a call takes as its argument, the type whose JSON Schema
+    // `schema` gives: unexpected as an unknown `type` header is, with no spec
+    // path, since no file is read (SCHEMA-2, #3030 D136).
+    let finding = yamaa_core::language::unknown_file_type("specs");
+    assert_eq!(finding.code, ConditionCode::ArgumentFileType);
+    assert_eq!(
+        defined(finding.code),
+        mapping("unexpected_file_type", "SCHEMA-2")
+    );
+    assert!(finding.spec_paths.is_empty());
+    assert_eq!(
+        finding.context,
+        [
+            ("type".to_string(), text("specs")),
+            (
+                "expected".to_string(),
+                texts(&["spec", "project", "codelists", "function"])
+            ),
+        ]
+        .into()
+    );
+    assert!(finding.source_span.is_none() && finding.operand_route.is_none());
+    reached.insert(rendered(&finding));
+
     // The file a referencing field names: at that field (SCHEMA-2).
     let reference = Reference {
         field: "functions[0]".into(),

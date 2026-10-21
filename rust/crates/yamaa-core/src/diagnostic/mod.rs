@@ -271,6 +271,9 @@ conditions! {
     HeaderFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
     ReferenceLanguageVersion => ("validation", "unsupported_language_version", Some("SCHEMA-2")),
     ReferenceFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
+    // A file type a call takes as its argument, which names no file: the type
+    // whose JSON Schema `schema` gives.
+    ArgumentFileType => ("validation", "unexpected_file_type", Some("SCHEMA-2")),
     SchemaUnknownFieldSince => ("validation", "unknown_field", Some("SCHEMA-2")),
     SchemaBareDerivationScalar => ("validation", "bare_derivation_scalar", Some("EXPR-5")),
     SchemaRedundantLongForm => ("validation", "redundant_long_form", Some("SCHEMA-15")),

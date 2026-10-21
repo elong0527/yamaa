@@ -96,6 +96,11 @@ values:
       - repeated_row_derivation
       - redundant_intermediate
       - missing_label
+  # The file types a yamaa file declares in `type` (SCHEMA-2), as schema()
+  # takes them (D136).
+  file_type:
+    rust: yamaa::FILE_TYPES
+    values: [spec, project, codelists, function]
 
 # Table columns, in order. Each table names the facade constant that holds
 # its column names, and the generator refuses any difference. Column types are
@@ -253,9 +258,11 @@ public:
       python: "list[str], absolute with forward slashes, in publication order"
       r: "character(), the same paths; save() returns them invisibly"
     tree: {python: dict, r: named list}
+    json_text: {python: "str, canonical JSON (RFC 8785)", r: "character(1), canonical JSON (RFC 8785)"}
     table: {python: polars.DataFrame, r: data.frame}
     optional_table: {python: "polars.DataFrame | None", r: data.frame or NULL}
     status: {python: "str, one of values.status", r: "character(1), one of values.status"}
+    file_type: {python: "str, one of values.file_type", r: "character(1), one of values.file_type"}
     info: {python: "dict, keys in records.info order", r: "named list, names in records.info order"}
     nothing: {python: None, r: "NULL, invisibly"}
 
@@ -296,6 +303,16 @@ public:
       raises: refusal
       calls: lint
       doc: Lint specification files, first applying the proved layout fixes when fix is true.
+    # D136: the JSON Schema of yaml/v1/json/, as canonical JSON text; any other
+    # type is refused as unexpected_file_type (SCHEMA-2).
+    - name: schema
+      python: yamaa.schema
+      r: yamaa_schema
+      args: {file_type: file_type}
+      returns: json_text
+      raises: refusal
+      calls: schema
+      doc: The JSON Schema of a file type, spec, project, codelists or function, as canonical JSON text.
     - name: selftest
       python: yamaa.selftest
       r: yamaa_selftest
@@ -632,6 +649,11 @@ python:
       args: {paths: "list<text>", fix: "bool = false"}
       returns: _ArrowTable
     - kind: function
+      name: _schema
+      rust: api_entry::_schema
+      args: {file_type: text}
+      returns: text
+    - kind: function
       name: _selftest
       rust: api_entry::_selftest
       args: {}
@@ -684,6 +706,7 @@ r:
         - {name: submission_issues, args: {handle: robj}, returns: r_reply}
         - {name: submission_save, args: {handle: robj}, returns: r_reply}
         - {name: lint, args: {paths: robj, fix: bool}, returns: r_reply}
+        - {name: schema, args: {file_type: raw}, returns: r_reply}
         - {name: selftest, args: {version: raw}, returns: r_reply}
         - {name: selftest_status, args: {handle: robj}, returns: r_reply}
         - {name: selftest_cases, args: {handle: robj}, returns: r_reply}
@@ -718,6 +741,7 @@ operations:
   submission_issues: {python: [_Submission.issues], r: [submission_issues]}
   submission_save: {python: [_Submission.save], r: [submission_save]}
   lint: {python: [_lint], r: [lint]}
+  schema: {python: [_schema], r: [schema]}
   selftest: {python: [_selftest], r: [selftest]}
   selftest_status: {python: [_SelfTest.status], r: [selftest_status]}
   selftest_cases: {python: [_SelfTest.cases], r: [selftest_cases]}

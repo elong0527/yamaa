@@ -39,6 +39,7 @@ the held bytes.
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, the report's lines and the layout of its information line, the engine information's fields in order, and a shipped build's features and language versions |
+| schema | The four file types, each JSON Schema's dialect, title and `$ref`, the canonical order of its top-level keys, and two refusals with their error text and issue rows |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
 `run()` compiles and later runs reuse the plan, so study A, then B, then A on
@@ -94,6 +95,14 @@ the list in `benchmarks/selftest.yaml`, and its lines are the printed lines of
 passes and only the adapter that the list leaves uncovered is named. Each
 host fills the information line from its own facts: the compiled core
 version, its interpreter's version, and the platform its interpreter reports.
+
+`schema` pairs the installed Python and R `schema()` suites (#3030 D136). Its
+facts were read by hand from the JSON Schemas committed in `yaml/v1/json/`,
+and its refusal text was written from D39's prefix and the template that
+`yaml/conditions.yaml` holds for `unexpected_file_type`. The suites check that
+each schema is one ASCII line whose top-level keys come in key order, as
+canonical JSON text keeps them; the facade's tests compare the whole text
+with the committed files.
 
 The R grammar suite's conditional failure and original
 CSV preservation controls also remain. Exact float bit witnesses, NUL/invalid

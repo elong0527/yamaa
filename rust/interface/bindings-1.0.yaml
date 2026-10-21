@@ -85,7 +85,7 @@ values:
     - output
     - engine
   # Section 2.1; `codelists` is RFC item P-TYPE-1.
-  file_type: [project, spec, codelists, function]
+  file_type: [spec, project, codelists, function]
   section: [sdtm, adam, send]
   host: [python, r, cli]
   # The facade's Cargo features (rust/crates/yamaa/Cargo.toml), all four on in

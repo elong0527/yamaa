@@ -18,6 +18,7 @@ SDTM and ADaM datasets and define.xml files.
 | define.xml and transport files | `project$submission("sdtm")$save()` | `project.submission("sdtm").save()` |
 | Read ODM XML | `yamaa_read_odm(path)` | `yamaa.read_odm(path)` |
 | Lint specifications | `yamaa_lint(paths)` | `yamaa.lint(paths)` |
+| JSON Schema of a file type | `yamaa_schema("spec")` | `yamaa.schema("spec")` |
 | Check an installation | `yamaa_selftest()` | `yamaa.selftest()` |
 
 Examples in R and Python are shown in tabs, R first; pick a language once and
@@ -399,6 +400,32 @@ as the same values with the same comments, and returns what remains.
     ```python
     findings = yamaa.lint(["sdtm/dm.yaml", "adam/"])
     remaining = yamaa.lint("sdtm/dm.yaml", fix=True)
+    ```
+
+## JSON Schema of a file type
+
+`schema()` returns the JSON Schema of a file type, `spec`, `project`,
+`codelists` or `function`, as canonical JSON text: one line, with its members
+in key order. Save it, and an editor that validates YAML against a JSON Schema
+checks and completes yamaa files as you type. The schema is part of the
+installed engine, so every installation of one release gives the same text. A
+specification file may be one layer of an inheritance chain, so the `spec`
+schema checks what one layer may write. Any other file type raises
+`yamaa.Error` in Python or signals a `yamaa_error` condition in R, whose issue
+names the condition `unexpected_file_type`.
+
+=== "R"
+
+    ```r
+    writeLines(yamaa_schema("spec"), "spec.schema.json")
+    ```
+
+=== "Python"
+
+    ```python
+    from pathlib import Path
+
+    Path("spec.schema.json").write_text(yamaa.schema("spec") + "\n")
     ```
 
 ## Check an installation
