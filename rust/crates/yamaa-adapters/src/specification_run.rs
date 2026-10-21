@@ -481,7 +481,9 @@ pub(crate) fn decode_source(
             // validation before any typed cell conversion.
             let types = yamaa_core::typed_csv::PreparedTypes::new(&source.types)
                 .map_err(|error| typed_source_error(crate::typed_csv::Error::Typing(error)))?;
-            let parsed = csv_source::parse(bytes)
+            // The input's declaration decides whether the source begins with
+            // a byte-order mark (CSV-10).
+            let parsed = csv_source::parse_declared(bytes, source.byte_order_mark)
                 .map_err(|error| Error::Source(TextTableError::Csv(error)))?;
             if odm {
                 let fields = parsed
@@ -700,6 +702,7 @@ mod empty_string_tests {
             types: vec![],
             profile: SourceProfile::Parquet,
             encoding: None,
+            byte_order_mark: false,
             empty_string_present,
             ordinal: None,
         }
@@ -783,6 +786,7 @@ mod width_tests {
             types: vec![],
             profile: SourceProfile::Parquet,
             encoding: None,
+            byte_order_mark: false,
             empty_string_present: false,
             ordinal: None,
         };
@@ -822,6 +826,7 @@ mod width_tests {
             types: vec![],
             profile: SourceProfile::Parquet,
             encoding: None,
+            byte_order_mark: false,
             empty_string_present: false,
             ordinal: None,
         };
@@ -882,6 +887,7 @@ mod width_tests {
                 },
                 profile: SourceProfile::Csv,
                 encoding: None,
+                byte_order_mark: false,
                 empty_string_present: false,
                 ordinal: None,
             };

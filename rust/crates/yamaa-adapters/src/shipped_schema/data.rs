@@ -3573,6 +3573,10 @@ dataset_class:
         required: false
         values: [utf-8, windows-1252, iso-8859-1, ascii]
         description: Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).
+    - byte_order_mark:
+        type: bool
+        required: false
+        description: When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).
     - schema:
         type: project_path
         required: false
@@ -4325,6 +4329,12 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "description": "Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "byte_order_mark": {
+          "type": "boolean",
+          "description": "When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "schema": {
           "$ref": "#/$defs/project_path",
@@ -5156,6 +5166,12 @@ pub(super) const V1_JSON_SCHEMAS: &[(&str, &str)] = &[
           "description": "Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "byte_order_mark": {
+          "type": "boolean",
+          "description": "When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "schema": {
           "$ref": "#/$defs/project_path",

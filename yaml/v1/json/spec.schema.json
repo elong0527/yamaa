@@ -475,6 +475,12 @@
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
         },
+        "byte_order_mark": {
+          "type": "boolean",
+          "description": "When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
+        },
         "schema": {
           "$ref": "#/$defs/project_path",
           "description": "Producing specification whose output contract supplies the source fields and types (INPUT-10).",
@@ -1305,6 +1311,12 @@
           "description": "Declared text encoding of a SAS or Transport input, absent on every other input (SAS-2).",
           "x-yamaa-kind": "value",
           "x-yamaa-type": "str"
+        },
+        "byte_order_mark": {
+          "type": "boolean",
+          "description": "When true, the csv source begins with one UTF-8 byte-order mark, which is skipped; absent on an input that another profile reads (CSV-10).",
+          "x-yamaa-kind": "value",
+          "x-yamaa-type": "bool"
         },
         "schema": {
           "$ref": "#/$defs/project_path",

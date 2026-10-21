@@ -65,10 +65,19 @@ pub(super) enum Payload {
 #[derive(Debug)]
 pub(super) struct Framing<'a> {
     pub metadata: &'a [u8],
+    /// How the native decoder is shown the footer (`wire::Presentation`).
+    pub footer: wire::Presentation,
+    /// The leaf columns, in schema order, whose variant, geometry or
+    /// geography annotation the footer's presentation removes: they still
+    /// fall outside the closed mapping (PARQUET-7).
+    pub annotated: Vec<usize>,
     pub pages: Vec<Page<'a>>,
     /// Each page header's byte range in the held file and the end of the
     /// page's body, in page order.
     pub headers: Vec<(std::ops::Range<usize>, usize)>,
+    /// Where page headers hold a skipped binary whose bytes are not UTF-8,
+    /// in the held file: shown to the native decoder as zero bytes.
+    pub opaque: Vec<std::ops::Range<usize>>,
 }
 
 fn integer(value: Option<Value<'_>>) -> Result<i64, Error> {
@@ -95,9 +104,11 @@ fn sequence(value: Option<Value<'_>>) -> Result<Sequence<'_>, Error> {
 // Admission therefore holds the claims of all open groups together to the
 // elements left in the list, so that those reservations stay within the
 // schema's length. Returns the primitive leaves, the schema's physical
-// columns.
-fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
+// columns, and which of them are among the `annotated` elements (ascending
+// positions in the schema list).
+fn admit_schema(schema: Sequence<'_>, annotated: &[usize]) -> Result<(usize, Vec<usize>), Error> {
     let mut leaves = 0;
+    let mut annotated_leaves = Vec::new();
     // Every element without children but the message root: a primitive leaf
     // or an empty group. An empty group holds no physical column, but the
     // native decoder builds it like a leaf, so it counts toward the column
@@ -132,6 +143,9 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
         if index != 0 && children.is_none_or(|count| count == 0) {
             childless += 1;
             if matches!(element.field(1)?, Some(Value::Integer(_))) {
+                if annotated.binary_search(&index).is_ok() {
+                    annotated_leaves.push(leaves);
+                }
                 leaves += 1;
             }
         }
@@ -150,7 +164,7 @@ fn admit_schema(schema: Sequence<'_>) -> Result<usize, Error> {
         }
     }
     yamaa_core::limits::Limits::columns(childless)?;
-    Ok(leaves)
+    Ok((leaves, annotated_leaves))
 }
 
 /// Refuse a footer that lists more row groups than the row limit allows rows,
@@ -178,11 +192,12 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     let metadata = &bytes[start..footer];
     let (root, _) = compact::parse(metadata)?;
     // Every field the native decoder knows holds its declared type, once.
-    let lists = wire::check(root, Shape::FileMetaData)?;
+    let footer = wire::check(root, Shape::FileMetaData)?;
+    let lists = footer.lists;
     let declared_rows = count(root.field(3)?)?;
     let groups = sequence(root.field(4)?)?;
     let schema = sequence(root.field(2)?)?;
-    let leaves = admit_schema(schema)?;
+    let (leaves, annotated) = admit_schema(schema, &footer.annotated)?;
     yamaa_core::limits::Limits::table(declared_rows, leaves)?;
     admit_row_groups(groups.len())?;
     // The column orders follow the leaves one for one: the native decoder
@@ -195,8 +210,11 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
     }
     let mut result = Framing {
         metadata,
+        footer: footer.presentation,
+        annotated,
         pages: Vec::new(),
         headers: Vec::new(),
+        opaque: Vec::new(),
     };
     let mut rows = 0usize;
     for (row_group, group) in groups.into_iter().enumerate() {
@@ -226,8 +244,13 @@ pub(super) fn admit(bytes: &[u8]) -> Result<Framing<'_>, Error> {
             }
             while offset < end {
                 let (header, used) = compact::parse(&bytes[offset..end])?;
-                // A page header holds no list that `wire::Lists` reports.
-                wire::check(header, Shape::PageHeader)?;
+                // A page header holds no list that `wire::Lists` reports, and
+                // nothing that the presentation splices.
+                let shown = wire::check(header, Shape::PageHeader)?.presentation;
+                let opaque = shown.opaque.into_iter();
+                result
+                    .opaque
+                    .extend(opaque.map(|range| offset + range.start..offset + range.end));
                 let uncompressed = count(header.field(2)?)?;
                 let compressed = count(header.field(3)?)?;
                 let payload = match integer(header.field(1)?)? {
@@ -435,7 +458,7 @@ mod tests {
         let bytes = [0x19, 0x3c, 0x55, 4, 0, 0x55, 0, 0, 0x15, 4, 0, 0];
         let (root, _) = compact::parse(&bytes).unwrap();
         let schema = sequence(root.field(1).unwrap()).unwrap();
-        assert_eq!(admit_schema(schema).unwrap(), 1);
+        assert_eq!(admit_schema(schema, &[]).unwrap(), (1, Vec::new()));
     }
 
     #[test]
@@ -454,7 +477,7 @@ mod tests {
             bytes.resize(bytes.len() + empty, 0);
             bytes.push(0);
             let (root, _) = compact::parse(&bytes)?;
-            admit_schema(sequence(root.field(1)?)?)
+            admit_schema(sequence(root.field(1)?)?, &[]).map(|(leaves, _)| leaves)
         }
         let columns = |actual| {
             move |result: Result<usize, Error>| {
@@ -592,7 +615,7 @@ mod tests {
         }
         bytes.push(0);
         let (root, _) = compact::parse(&bytes)?;
-        admit_schema(sequence(root.field(1)?)?)
+        admit_schema(sequence(root.field(1)?)?, &[]).map(|(leaves, _)| leaves)
     }
 
     #[test]

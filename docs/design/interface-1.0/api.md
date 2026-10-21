@@ -282,7 +282,7 @@ a LF; standard error carries only usage errors.
 | --- | --- |
 | 0 | the command completed and its status is `succeeded`; for `resolve`, `schema` and `--version`, the output was printed |
 | 1 | the command completed with findings: a `failed` or `skipped` status, remaining lint findings, a failed selftest case, or a refusal that carries issues; a missing or unreadable PATH is an issue (`resource_path_missing`), as the hosts return it |
-| 2 | the command could not run as asked: invalid usage or arguments, an unknown file type, a PATH whose type the command does not take, `--spec` or `--section` with a spec PATH, or a failed write to standard output |
+| 2 | the command could not run as asked: invalid usage or arguments, a PATH whose type the command does not take, `--spec` or `--section` with a spec PATH, or a failed write to standard output |
 
 D12 says 2 is for "usage or IO errors". This design reads "IO errors" as the
 command line's own input and output. A file problem the engine reports as an

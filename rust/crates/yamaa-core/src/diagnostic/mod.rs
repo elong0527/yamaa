@@ -381,6 +381,8 @@ conditions! {
     OdmRowNotUnique => ("row_construction", "odm_not_unique", Some("NAME-13")),
     CsvInvalidText => ("ingest", "invalid_text", Some("CSV-10")),
     CsvByteOrderMark => ("ingest", "source_byte_order_mark", Some("CSV-16")),
+    // A byte-order mark declared on an input that another profile reads.
+    CsvByteOrderMarkProfile => ("validation", "value_not_permitted", Some("CSV-10")),
     CsvHeaderAbsent => ("ingest", "source_header_absent", Some("CSV-16")),
     CsvFieldNameEmpty => ("ingest", "source_field_name_empty", Some("CSV-16")),
     CsvFieldNameDuplicate => ("ingest", "source_field_name_duplicate", Some("CSV-16")),

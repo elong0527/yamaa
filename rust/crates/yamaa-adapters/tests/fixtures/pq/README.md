@@ -12,7 +12,12 @@ inputs exercise empty tables, nonfinite normalization and diagnostic precedence.
 The three `utf8*` containers have one deliberately corrupted string payload.
 Ten unsupported-type containers pin full type names independently read by
 PyArrow, including nested and fixed-size-list shapes, timestamp units/timezones
-and decimal precision. `date64` pins the writer's physical DATE normalization.
+and decimal precision. Seven more, authored by PyArrow 26.0.0, pin the types
+that the pinned Arrow and Parquet releases do not know, as PyArrow 26.0.0
+reads them: 32- and 64-bit decimals and list views, which only the embedded
+Arrow schema names, and the GEOMETRY, GEOGRAPHY and VARIANT logical types.
+PyArrow cannot write VARIANT, so the builder annotates the group of a struct
+it wrote in the footer. `date64` pins the writer's physical DATE normalization.
 Four mixed flat/nested inputs pin each nested root's own field diagnostic and
 the earlier empty/duplicate-name precedence, including maps and two-child structs.
 

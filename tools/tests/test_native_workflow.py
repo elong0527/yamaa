@@ -354,7 +354,7 @@ class NativeWorkflowContract(unittest.TestCase):
             "python": ("native-python-", python_source),
             "r": ("native-r-", r_source),
         }
-        for job, host in self.offline_source_jobs():
+        for job, host in self.offline_source_jobs() + self.offline_toolchain_jobs():
             prefix, source = sources[host]
             with self.subTest(job=job):
                 self.assertEqual(
@@ -374,6 +374,14 @@ class NativeWorkflowContract(unittest.TestCase):
             for host in self.coverage["offline_source"]["host"]
         ]
 
+    def offline_toolchain_jobs(self):
+        """List each offline toolchain lane's job name with its host."""
+        return [
+            (f"native-offline-toolchain ({platform}, {host})", host)
+            for platform in self.coverage["offline_toolchain"]["os"]
+            for host in self.coverage["offline_toolchain"]["host"]
+        ]
+
     def test_both_source_archives_install_offline_on_every_platform(self):
         # Each platform that a wheel is built for also builds and installs
         # both published source archives with the network disabled (#3030
@@ -386,11 +394,12 @@ class NativeWorkflowContract(unittest.TestCase):
             sorted(self.coverage["offline_source"]["host"]), ["python", "r"]
         )
 
-    def test_offline_source_lanes_refuse_the_network_while_they_install_and_run(self):
-        # The steps that build the archive and run the installed package go
-        # behind a proxy that refuses every connection (macOS and Windows) and
-        # run every container without a network and with a read-only root
-        # (Linux). The steps before them reach package mirrors.
+    def test_offline_lanes_refuse_the_network_while_they_install_and_run(self):
+        # The steps that install the standalone Rust (the toolchain lanes),
+        # build the archive and run the installed package go behind a proxy
+        # that refuses every connection (macOS and Windows) and run every
+        # container without a network and with a read-only root (Linux). The
+        # steps before them reach package mirrors and static.rust-lang.org.
         proxy = {
             "http_proxy": "http://127.0.0.1:9",
             "HTTPS_PROXY": "http://127.0.0.1:9",
@@ -399,7 +408,7 @@ class NativeWorkflowContract(unittest.TestCase):
         }
         names = {name.lower() for name in proxy}
         required = release.required_jobs(self.coverage)
-        for job, _ in self.offline_source_jobs():
+        for job, _ in self.offline_source_jobs() + self.offline_toolchain_jobs():
             with self.subTest(job=job):
                 inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
                 self.assertFalse(names & inherited)
@@ -441,10 +450,130 @@ class NativeWorkflowContract(unittest.TestCase):
         required = release.required_jobs(self.coverage)
         for job, host in self.offline_source_jobs():
             steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
-            install, conformance = required[job]
+            install, _, conformance = required[job]
             with self.subTest(job=job):
                 self.assertEqual(steps[install]["run"].count(commands[host]), 2)
                 self.assertIn("public_conformance compare", steps[conformance]["run"])
+
+    def test_the_offline_toolchain_route_is_proved_on_every_linux_platform(self):
+        # #3030 D54: a Linux machine without a modern Rust carries Rust in from
+        # its standalone installer, so both published source archives build
+        # with it on each Linux platform that a wheel is built for.
+        linux = sorted(
+            lane["os"]
+            for lane in self.coverage["build"]["include"]
+            if lane["os"].startswith("ubuntu-")
+        )
+        self.assertEqual(linux, ["ubuntu-24.04", "ubuntu-24.04-arm"])
+        self.assertEqual(sorted(self.coverage["offline_toolchain"]["os"]), linux)
+        self.assertEqual(
+            sorted(self.coverage["offline_toolchain"]["host"]), ["python", "r"]
+        )
+
+    def test_offline_toolchain_lanes_verify_the_installer_of_the_minimum_rust(self):
+        # While the network is up, each lane downloads the standalone installer
+        # archive of the workspace's rust-version for the runner's target, and
+        # gpg checks the signature beside it, with a keyring that holds the
+        # committed Rust signing key alone, before the archive is unpacked.
+        # A replaced download must not supply its own verification key.
+        name = "Download and verify the standalone Rust installer"
+        scripts = set()
+        for job, _ in self.offline_toolchain_jobs():
+            steps = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in steps]
+            download = steps[names.index(name)]
+            run = download["run"]
+            scripts.add(run)
+            with self.subTest(job=job):
+                self.assertNotIn("if", download)
+                self.assertIn("from tools.ci.toolchain import minimum", run)
+                self.assertIn('target="$(uname -m)-unknown-linux-gnu"', run)
+                self.assertIn('installer="rust-${version}-${target}.tar.xz"', run)
+                self.assertIn(
+                    'for file in "dist/${installer}" "dist/${installer}.asc"; do',
+                    run,
+                )
+                self.assertIn('"https://static.rust-lang.org/${file}"', run)
+                self.assertIn('export GNUPGHOME="${PWD}/gnupg"', run)
+                self.assertIn(
+                    'gpg --batch --import "${GITHUB_WORKSPACE}/tools/ci/keys/rust-key.gpg.ascii"',
+                    run,
+                )
+                verify = (
+                    "gpg --batch --no-auto-key-retrieve --verify "
+                    '"${installer}.asc" "${installer}"'
+                )
+                self.assertLess(run.index(verify), run.index('tar -xJf "${installer}"'))
+                self.assertLess(
+                    names.index(name),
+                    names.index(
+                        "Install Rust from its standalone installer without a network"
+                    ),
+                )
+        # Every lane runs the same script.
+        self.assertEqual(len(scripts), 1)
+
+    def test_offline_toolchain_lanes_build_with_the_standalone_rust_alone(self):
+        # The archive's own install.sh installs Rust into /opt/rust with no
+        # rustup, in a container without a network. The build mounts it
+        # read-only and finds no rustup and no other cargo or rustc, as the
+        # install guidance describes, and the installed package runs the
+        # conformance corpus. No step installs or activates the runner's Rust.
+        commands = {
+            "python": "pip install --no-build-isolation --no-index --no-cache-dir "
+            "native-dist/yamaa-*.tar.gz",
+            "r": "R CMD INSTALL --library=/work/library /work/yamaa_*.tar.gz",
+        }
+        offline = "for state in /sys/class/net/*/operstate; do"
+        required = release.required_jobs(self.coverage)
+        for job, host in self.offline_toolchain_jobs():
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            toolchain, build, _, conformance = required[job]
+            # Each command on one line, with single spaces.
+            installation, compilation = (
+                " ".join(steps[name]["run"].replace("\\\n", " ").split())
+                for name in (toolchain, build)
+            )
+            scripts = "\n".join(step.get("run", "") for step in steps.values())
+            with self.subTest(job=job):
+                self.assertEqual(
+                    toolchain,
+                    "Install Rust from its standalone installer without a network",
+                )
+                self.assertIn(
+                    '"rust-${STANDALONE_RUST_VERSION}-${STANDALONE_RUST_TARGET}'
+                    '/install.sh" --prefix=/opt/rust '
+                    '--components="rustc,cargo,rust-std-${STANDALONE_RUST_TARGET}" '
+                    "--disable-ldconfig",
+                    installation,
+                )
+                self.assertIn('--volume "${PWD}/rust:/opt/rust" ', installation)
+                for tool in ("rustc", "cargo"):
+                    self.assertIn(
+                        f"/opt/rust/bin/{tool} --version | "
+                        f'grep -F "{tool} ${{STANDALONE_RUST_VERSION}} "',
+                        installation,
+                    )
+                self.assertIn('--volume "${PWD}/rust:/opt/rust:ro"', compilation)
+                self.assertIn('test -z "$(command -v rustup)"', compilation)
+                for tool in ("cargo", "rustc"):
+                    self.assertIn(
+                        f'test "$(command -v {tool})" = /opt/rust/bin/{tool}',
+                        compilation,
+                    )
+                self.assertEqual(compilation.count(commands[host]), 1)
+                self.assertLess(
+                    compilation.index("command -v rustc"),
+                    compilation.index(commands[host]),
+                )
+                self.assertIn("public_conformance compare", steps[conformance]["run"])
+                # Each container that installs Rust or builds the archive first
+                # finds no network interface but the loopback up.
+                for run in (installation, compilation):
+                    self.assertEqual(run.count(offline), run.count("docker run"))
+                self.assertNotIn("python -m tools.ci.toolchain", scripts)
+                self.assertNotIn("--print sysroot", scripts)
+                self.assertNotIn("rustup", scripts.replace("command -v rustup", ""))
 
     def test_cran_checks_run_on_the_published_r_source_archive(self):
         # CRAN's incoming checks judge the bytes that a release publishes.
@@ -710,10 +839,11 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertIn("> toolchain-free-path", steps[removal]["run"])
                 self.assertIn("libgcc_s_seh-1.dll", steps[removal]["run"])
                 clean = 'export PATH="$(cat toolchain-free-path)"'
+                selftest = titles.index("Run the installed package's selftest")
                 conformance = titles.index(
                     "Report installed R public benchmark conformance"
                 )
-                for index in (install, conformance):
+                for index in (install, selftest, conformance):
                     self.assertIn(clean, steps[index]["run"])
                 self.assertIn("-e 'library(yamaa)'", steps[install]["run"])
                 inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
@@ -772,6 +902,52 @@ class NativeWorkflowContract(unittest.TestCase):
                     f"native-r-binary-qualification-{platform}-{version}",
                     self.jobs[job]["uploads"],
                 )
+
+    def test_each_install_without_a_network_gates_on_the_installed_selftest(self):
+        # #3062: right after the installation, and before the conformance
+        # corpus, each lane that installs a package without a network runs
+        # the installed package's selftest with the host's own call. The call
+        # prints the report, the facade's lines, to the log and fails the lane
+        # unless the status is succeeded, and a release requires the step.
+        # An offline source lane runs it twice: in the Linux container, and
+        # on macOS and Windows.
+        selftest = "Run the installed package's selftest"
+        calls = {
+            "python": "import sys, yamaa; r = yamaa.selftest(); print(r); "
+            'sys.exit(r.status != "succeeded")',
+            "r": "r <- yamaa::yamaa_selftest(); print(r); "
+            'quit(status = r$status != "succeeded")',
+        }
+        lanes = (
+            [(job, host, 2) for job, host in self.offline_source_jobs()]
+            + [(job, host, 1) for job, host in self.offline_toolchain_jobs()]
+            + [
+                (f"native-r-binary-install ({platform}, R {version})", "r", 1)
+                for platform, version in self.r_binary_lanes()
+            ]
+        )
+        required = release.required_jobs(self.coverage)
+        for job, host, runs in lanes:
+            steps = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in steps]
+            with self.subTest(job=job):
+                self.assertEqual(names.count(selftest), 1)
+                index = names.index(selftest)
+                self.assertNotIn("if", steps[index])
+                self.assertRegex(
+                    names[index - 1], r"^Install the .+ without a network$"
+                )
+                self.assertRegex(
+                    names[index + 1],
+                    r"^Report installed .+ public benchmark conformance$",
+                )
+                position = required[job].index(selftest)
+                self.assertEqual(
+                    required[job][position - 1 : position + 2],
+                    tuple(names[index - 1 : index + 2]),
+                )
+                script = " ".join(steps[index]["run"].replace("\\\n", " ").split())
+                self.assertEqual(script.count(f"'{calls[host]}'"), runs)
 
     def test_every_r_binary_install_joins_the_cohort_comparison(self):
         # Each binary's reports are compared beside the wheel lane of its

@@ -140,6 +140,7 @@ impl SourceFinding<'_> {
                 unreachable!("ODM has its own complete projection")
             }
             Self::Csv {
+                cause,
                 record,
                 field,
                 path,
@@ -154,6 +155,11 @@ impl SourceFinding<'_> {
                         Field::Name(name) => text(name),
                     },
                 );
+                // Whether the input declares the mark tells a mark it does
+                // not declare from a declared one that is absent (CSV-10).
+                if let ProfileCause::ByteOrderMark { declared } = cause {
+                    context.insert("declared".into(), V::Bool(declared));
+                }
                 format!("input.{dataset}.path")
             }
             Self::UnknownField { field, .. } => {
