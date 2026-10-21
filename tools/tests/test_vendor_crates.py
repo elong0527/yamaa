@@ -305,17 +305,32 @@ class VendorTests(unittest.TestCase):
 
 
 class AuthorsTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        # zeta 1.9.0 offers a GNU license too, which yamaa does not rely on.
+        self.licenses = {"zeta 1.9.0": "MIT OR Apache-2.0 OR LGPL-2.1-or-later"}
+
     def metadata(self):
         def package(name, version, source, **fields):
+            directory = self.root / f"{name}-{version}"
+            directory.mkdir(exist_ok=True)
+            (directory / "LICENSE-MIT").write_text(
+                f"Copyright {name}\n\nPermission is hereby granted, free of "
+                "charge, to any person obtaining a copy\n"
+            )
             return {
                 "id": f"{name} {version}",
                 "name": name,
                 "version": version,
                 "source": source,
                 "authors": fields.get("authors", []),
-                "license": fields.get("license", "MIT"),
+                "license": self.licenses.get(f"{name} {version}", "MIT"),
                 "repository": fields.get("repository"),
-                "manifest_path": fields.get("manifest_path", "/x/Cargo.toml"),
+                "manifest_path": fields.get(
+                    "manifest_path", str(directory / "Cargo.toml")
+                ),
             }
 
         registry = staging.notices.CRATES_IO
@@ -349,12 +364,8 @@ class AuthorsTests(unittest.TestCase):
             ("zeta", "1.9.0", []),
             ("zeta", "1.10.0", []),
         ]
-        listed = {
-            ("alpha", "0.1.0"),
-            ("zeta", "1.9.0"),
-            ("zeta", "1.10.0"),
-            ("parser", "0.2.1"),
-        }
+        # The notices list only the crates that the R binding links.
+        listed = {("alpha", "0.1.0"), ("zeta", "1.10.0"), ("parser", "0.2.1")}
         text = staging.authors_text(self.metadata(), crates, listed, self.LOCKED)
         entries = text.split("\nCrate: ")[1:]
         self.assertEqual(
@@ -367,6 +378,9 @@ class AuthorsTests(unittest.TestCase):
         self.assertIn("    Authors: none declared\n", entries[2])
         self.assertIn("    Repository: https://example.org/z\n", entries[2])
         self.assertIn("    Repository: none declared\n", entries[3])
+        # Each entry names the one license that yamaa relies on.
+        self.assertIn("    License: MIT\n", entries[2])
+        self.assertNotIn(" OR ", text)
         self.assertNotIn("yamaa-r", text)
         # A canonical package outside the bundle's lock is not bundled.
         self.assertNotIn("pyo3", text)
@@ -384,13 +398,12 @@ class AuthorsTests(unittest.TestCase):
             ValueError, "zeta 1.10.0: the vendored crates differ"
         ):
             staging.authors_text(self.metadata(), crates[:2], listed, self.LOCKED)
-        with self.assertRaisesRegex(ValueError, "parser 0.2.1: LICENSE-THIRD-PARTY"):
-            staging.authors_text(
-                self.metadata(),
-                crates,
-                listed - {("parser", "0.2.1")},
-                self.LOCKED,
-            )
+        # A bundled crate that offers only a license that yamaa does not
+        # accept stops it.
+        self.licenses["alpha 0.1.0"] = "LGPL-2.1-or-later"
+        with self.assertRaisesRegex(ValueError, "alpha 0.1.0: review the license"):
+            staging.authors_text(self.metadata(), crates, listed, self.LOCKED)
+        del self.licenses["alpha 0.1.0"]
         # Notices that name a crate the package does not bundle, such as the
         # canonical graph's Python binding crates, stop it too.
         with self.assertRaisesRegex(

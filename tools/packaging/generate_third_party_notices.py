@@ -1,19 +1,28 @@
 """Generate the license notices for the third-party code in the native packages.
 
 The yamaa wheels and the installed R package statically link Rust crates from
-the locked graph. Each host's LICENSE-THIRD-PARTY.txt lists every third-party
-crate in the normal and build dependency closure of that host's shipped
-binding crate, for every target platform, with the license, copyright and
-NOTICE texts that the crate ships: python/ holds the copy of the Python
-packages, which covers yamaa-python, and R/yamaa/inst/ the copy of the R
-package, which covers yamaa-r. The inventory comes from `cargo metadata
+the locked graph. Each host's LICENSE-THIRD-PARTY.txt lists the third-party
+crates that the host's shipped binding crate links: its normal dependency
+closure on each of the supported TARGETS, without procedural macros, which run
+inside the compiler. Crates that only build scripts or procedural macros use,
+and the crates of other platforms, are not linked and are not listed; the
+source packages carry their license files with their vendored sources.
+python/ holds the copy of the Python packages, which covers yamaa-python, and
+R/yamaa/inst/ the copy of the R package, which covers yamaa-r. Each entry names
+the one license that yamaa relies on, with the license, copyright and NOTICE
+texts that the crate ships for it. The inventory comes from `cargo metadata
 --locked` for rust/Cargo.lock and the texts from the crate packages Cargo
 unpacks.
 
 The native extension also links the Rust standard library of the toolchain
 that rust/rust-toolchain.toml pins. Its notices come from the notice that the
 Rust project ships with that toolchain, share/doc/rust/COPYRIGHT-library.html,
-and the license texts beside it. No license text is looked up anywhere else.
+and the license texts beside it, of whose out-of-tree crates they keep those
+that LIBRARY_LINKED names. No license text is looked up anywhere else.
+
+No notice names a GNU license: generation stops when a reproduced text would
+(gnu_licenses), apart from the clause of the LLVM exception, an accepted
+license, that names GPLv2.
 
 By default this checks the committed copies against the locked graph and the
 pinned toolchain, the package copies of the project license and notices
@@ -33,6 +42,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from tools.ci import toolchain
+from tools.packaging import check_minimum_rust
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle
 
@@ -54,6 +64,9 @@ LINKED_BY = {
     "r": ("The installed yamaa R package links", "its"),
 }
 CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
+# The targets whose linked crates the notices list: those that the wheels, the
+# command-line binaries and the R package are built for.
+TARGETS = check_minimum_rust.TARGETS
 SPDX_TEXTS = Path(__file__).with_name("spdx")
 SPDX_RELEASE = "3.29.0"
 WIDTH = 78
@@ -96,6 +109,27 @@ MARKERS = {
         "permission is granted to anyone to use this software for any purpose",
     ),
 }
+
+# A GNU license named in a text: its full name, or an abbreviation such as
+# GPLv2, LGPL-2.1-or-later or AGPL. The abbreviations match in capitals only,
+# so that an identifier such as `lgpl` is not one.
+GNU_LICENSE = re.compile(
+    r"(?i:\bGNU\s+(?:Lesser\s+|Library\s+|Affero\s+)?General\s+Public\s+Licen[cs]e)"
+    r"|\b[AL]?GPL(?:v?[0-9](?:\.[0-9])?)?\b"
+)
+# The clause of the LLVM exception that names GPLv2, with its whitespace
+# collapsed. It waives parts of Apache-2.0 for code combined with GPLv2 code
+# and grants no GNU license; Apache-2.0 WITH LLVM-exception is in ACCEPTED.
+LLVM_EXCEPTION_CLAUSE = re.compile(
+    r"In addition, if you combine or link compiled forms of this Software with "
+    r'software that is licensed under the GPLv2 \("Combined Software"\) and if '
+    r"a court of competent jurisdiction determines that the patent provision "
+    r"\(Section 3\), the indemnity provision \(Section 9\) or other Section of "
+    r"the License conflicts with the conditions of the GPLv2, you may "
+    r"retroactively and prospectively choose to deem waived or otherwise "
+    r"exclude such Section\(s\) of the License, but only in their entirety and "
+    r"only with respect to the Combined Software\."
+)
 
 # Root files named for one license of a crate's choice, by lowercase name. Each
 # is reproduced only when the crate is relied on under that license.
@@ -172,6 +206,24 @@ LIBRARY_SECTIONS = (
     "in-tree-files",
     "out-of-tree-dependencies",
 )
+# The out-of-tree crates of the standard library notice that the standard
+# library links on TARGETS, by name and version. The notice also names the
+# crates of the compiler's tools, of the test harness and of other targets,
+# such as r-efi for UEFI, which the packages never link. Review this table
+# with every toolchain update, against the dependencies that
+# library/std/Cargo.toml in the rust-src component declares for TARGETS, at
+# the versions that library/Cargo.lock locks. The standard library of Rust
+# 1.99.1 also links addr2line, adler2, miniz_oxide, object and memchr 2.8.3,
+# which its notice does not name; memchr 2.8.0, which it names, stands for
+# the last.
+LIBRARY_LINKED = (
+    ("cfg-if", "1.0.4"),
+    ("gimli", "0.34.0"),
+    ("hashbrown", "0.17.1"),
+    ("libc", "0.2.189"),
+    ("memchr", "2.8.0"),
+    ("rustc-demangle", "0.1.28"),
+)
 
 
 class LicenseReview(ValueError):
@@ -183,7 +235,6 @@ class Notice:
     name: str
     version: str
     source: str | None
-    declared: str
     relied: tuple[str, ...]
     texts: tuple[tuple[str, str], ...]
     fallbacks: tuple[str, ...]
@@ -218,13 +269,19 @@ class StandardLibrary:
     crates: tuple[LibraryCrate, ...]
 
 
-def locked_metadata():
-    """Resolve the locked graph with every feature of every workspace member."""
-    output = subprocess.check_output(
-        ["cargo", "metadata", "--locked", "--all-features", "--format-version", "1"],
-        cwd=WORKSPACE,
-    )
-    return json.loads(output)
+def locked_metadata(target=None):
+    """Resolve the locked graph with every feature of every workspace member,
+    for every platform or, given a target, for that target alone."""
+    command = ["cargo", "metadata", "--locked", "--all-features"]
+    command += ["--format-version", "1"]
+    if target is not None:
+        command += ["--filter-platform", target]
+    return json.loads(subprocess.check_output(command, cwd=WORKSPACE))
+
+
+def linked_metadata():
+    """The locked graph of each of TARGETS, by target."""
+    return {target: locked_metadata(target) for target in TARGETS}
 
 
 def parse_expression(text):
@@ -325,6 +382,24 @@ def detect(text):
     )
 
 
+def gnu_licenses(text):
+    """Return the GNU license names in a text, in order, apart from the LLVM
+    exception's GPLv2 clause."""
+    flat = LLVM_EXCEPTION_CLAUSE.sub("", " ".join(text.split()))
+    return [match.group(0) for match in GNU_LICENSE.finditer(flat)]
+
+
+def refuse_gnu(text, label):
+    """Stop generation when a notice names a GNU license."""
+    found = gnu_licenses(text)
+    if found:
+        raise ValueError(
+            f"{label}: names a GNU license ({found[0]}); yamaa relies only on "
+            "the licenses in ACCEPTED, so review the text that brought it in"
+        )
+    return text
+
+
 def normalized(text):
     """Give a notice LF line endings and a final newline."""
     text = text.replace("\r\n", "\n")
@@ -350,12 +425,13 @@ def copies():
     return {"python": PYTHON, "r": R_INST}
 
 
-def dependency_closure(metadata, crate, linked=False):
-    """Return the package IDs that a shipped crate depends on, itself included.
+def dependency_closure(metadata, crate):
+    """Return the package IDs that a shipped crate links, itself included.
 
-    The default follows normal and build edges for every target platform. The
-    linked closure follows only normal edges and stops at procedural macros,
-    which run inside the compiler instead of the shipped binaries.
+    The closure follows normal edges and stops at procedural macros, which run
+    inside the compiler instead of the shipped binaries; build scripts and
+    their dependencies run only while compiling. A graph that `cargo metadata
+    --filter-platform` resolved for one target holds only that target's edges.
     """
     packages = {package["id"]: package for package in metadata["packages"]}
     nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
@@ -375,25 +451,31 @@ def dependency_closure(metadata, crate, linked=False):
         for dependency in nodes[identity]["deps"]:
             kinds = {kind["kind"] for kind in dependency["dep_kinds"]}
             target = packages[dependency["pkg"]]
-            if linked:
-                follow = None in kinds and not any(
-                    "proc-macro" in item["kind"] for item in target["targets"]
-                )
-            else:
-                follow = bool(kinds - {"dev"})
-            if follow:
+            if None in kinds and not any(
+                "proc-macro" in item["kind"] for item in target["targets"]
+            ):
                 pending.append(dependency["pkg"])
     return seen
 
 
-def third_party(metadata, crate):
-    """Return the third-party packages of a shipped crate's closure in a stable
-    order."""
-    packages = {package["id"]: package for package in metadata["packages"]}
-    members = set(metadata["workspace_members"])
+def linked_closure(graphs, crate):
+    """Return the package IDs that a shipped crate links on any target;
+    `graphs` maps each of TARGETS to its locked graph."""
+    return set().union(*(dependency_closure(graph, crate) for graph in graphs.values()))
+
+
+def third_party(graphs, crate):
+    """Return the third-party packages that a shipped crate links on any
+    target, in a stable order."""
+    packages = {
+        package["id"]: package
+        for graph in graphs.values()
+        for package in graph["packages"]
+    }
+    members = set().union(*(graph["workspace_members"] for graph in graphs.values()))
     selected = [
         packages[identity]
-        for identity in dependency_closure(metadata, crate)
+        for identity in linked_closure(graphs, crate)
         if identity not in members
     ]
     return sorted(
@@ -402,25 +484,26 @@ def third_party(metadata, crate):
     )
 
 
-def crate_files(package):
-    """Return the crate root and its notice files with the license each carries.
+def classify(name, label):
+    """Return the license that a notice file carries by its name, or None for
+    a general file, which is reproduced under any choice."""
+    lowered = name.lower()
+    if lowered in GENERAL_FILES:
+        return None
+    if lowered in NAMED_FILES:
+        return NAMED_FILES[lowered]
+    raise ValueError(f"{label}: classify the license file {name}")
 
-    The license is None for a general file, which is reproduced under any
-    choice.
-    """
+
+def crate_files(package):
+    """Return the crate root and its notice files with the license each carries."""
     root = Path(package["manifest_path"]).parent
     label = f"{package['name']} {package['version']}"
-    files = []
-    for path in sorted(root.iterdir(), key=lambda path: path.name.lower()):
-        if not LICENSE_LIKE.match(path.name) or not path.is_file():
-            continue
-        lowered = path.name.lower()
-        if lowered in GENERAL_FILES:
-            files.append((path.name, None))
-        elif lowered in NAMED_FILES:
-            files.append((path.name, NAMED_FILES[lowered]))
-        else:
-            raise ValueError(f"{label}: classify the license file {path.name}")
+    files = [
+        (path.name, classify(path.name, label))
+        for path in sorted(root.iterdir(), key=lambda path: path.name.lower())
+        if LICENSE_LIKE.match(path.name) and path.is_file()
+    ]
     for relative, license in sorted(EXTRA_FILES.get(package["name"], {}).items()):
         if not (root / relative).is_file():
             raise ValueError(f"{label}: the listed notice {relative} is missing")
@@ -465,6 +548,24 @@ def crate_notice(package, lender=None):
         }
     else:
         texts = {relative: read_text(root / relative) for relative, _ in files}
+    return Notice(
+        package["name"],
+        package["version"],
+        source_label(package),
+        *relied_texts(label, declared, files, texts),
+    )
+
+
+def relied_texts(label, declared, files, texts):
+    """Choose the licenses relied on under a declared expression and the texts
+    reproduced for them.
+
+    `files` pairs each notice file's name with the license it carries, None
+    for a general file, and `texts` maps the names to their texts. The general
+    files and the files of the licenses relied on are reproduced; a license
+    that none of them carries takes its canonical SPDX text. Returns the
+    licenses, the reproduced (name, text) pairs and those licenses.
+    """
     shipped = frozenset().union(*(detect(text) for text in texts.values()))
     try:
         relied = choose(parse_expression(declared), shipped)
@@ -473,13 +574,13 @@ def crate_notice(package, lender=None):
             f"{label}: review the license {declared!r} ({error})"
         ) from error
     reproduced = []
-    for relative, license in files:
+    for name, license in files:
         if license is None:
-            reproduced.append((relative, texts[relative]))
+            reproduced.append((name, texts[name]))
         elif license in relied:
-            if license not in detect(texts[relative]):
-                raise ValueError(f"{label}: {relative} lacks the {license} text")
-            reproduced.append((relative, texts[relative]))
+            if license not in detect(texts[name]):
+                raise ValueError(f"{label}: {name} lacks the {license} text")
+            reproduced.append((name, texts[name]))
     fallbacks = []
     for license in ordered(relied):
         if any(license in detect(text) for _, text in reproduced):
@@ -487,15 +588,7 @@ def crate_notice(package, lender=None):
         if not (SPDX_TEXTS / f"{license}.txt").is_file():
             raise ValueError(f"{label}: ships no {license} text to reproduce")
         fallbacks.append(license)
-    return Notice(
-        name=package["name"],
-        version=package["version"],
-        source=source_label(package),
-        declared=declared,
-        relied=ordered(relied),
-        texts=tuple(reproduced),
-        fallbacks=tuple(fallbacks),
-    )
+    return ordered(relied), tuple(reproduced), tuple(fallbacks)
 
 
 def canonical_text(license):
@@ -679,6 +772,31 @@ def standard_library():
     return read_standard_library(Path(sysroot) / LIBRARY_DOCUMENTS, channel)
 
 
+def library_notices(library):
+    """The notices of the standard library's out-of-tree crates that TARGETS
+    link, as LIBRARY_LINKED names them, with the texts that the Rust project's
+    notice reproduces for each, chosen like a locked crate's."""
+    published = {(crate.name, crate.version): crate for crate in library.crates}
+    selected = []
+    for name, version in LIBRARY_LINKED:
+        crate = published.get((name, version))
+        label = f"{name} {version} of the Rust {library.release} standard library"
+        if crate is None:
+            raise ValueError(
+                f"{label}: its notice does not name it; review LIBRARY_LINKED"
+            )
+        files = [(text, classify(text, label)) for text, _ in crate.texts]
+        selected.append(
+            Notice(
+                name,
+                version,
+                None,
+                *relied_texts(label, crate.declared, files, dict(crate.texts)),
+            )
+        )
+    return selected
+
+
 def wrapped(prefix, units, indent=""):
     """Wrap a comma-separated list at unit boundaries, never inside a unit."""
     pieces = [f"{unit}," for unit in units[:-1]] + list(units[-1:])
@@ -724,8 +842,8 @@ def render(notices, library, host):
             block["holders"].append(holder)
         return block["index"]
 
-    entries = []
-    for notice in notices:
+    def entry(notice, missing):
+        """A crate's entry: its one license and the numbered texts for it."""
         crate = f"{notice.name} {notice.version}"
         references = [
             f"[{number(text, text, f'{crate} ({relative})')}] {relative}"
@@ -733,69 +851,60 @@ def render(notices, library, host):
         ]
         for license in notice.fallbacks:
             index = number(("canonical", license), canonical_text(license), crate)
-            references.append(
-                f"[{index}] canonical {license} text; the crate package ships none"
-            )
-        entries.append(f"Crate: {crate}")
+            references.append(f"[{index}] canonical {license} text; {missing}")
+        lines = [f"Crate: {crate}"]
         if notice.source is not None:
-            entries.append(f"    Source: {notice.source}")
-        entries.append(f"    License: {notice.declared}")
-        entries.append(f"    Relied on: {' AND '.join(notice.relied)}")
-        entries += wrapped("Texts:", references, indent="    ")
-        entries.append("")
+            lines.append(f"    Source: {notice.source}")
+        lines.append(f"    License: {' AND '.join(notice.relied)}")
+        return lines + wrapped("Texts:", references, indent="    ") + [""]
+
+    entries = []
+    for notice in notices:
+        entries += entry(notice, "the crate package ships none")
 
     release = library.release
     notice = f"{LIBRARY_DOCUMENTS}/{LIBRARY_NOTICE}"
     standard = [f"From {notice} of Rust {release}:", ""]
     for statement in library.statement:
         standard += paragraph(statement)
-    for entry in library.files:
-        standard += library_tree(entry) + [""]
+    for tree in library.files:
+        standard += library_tree(tree) + [""]
     licenses = f"{LIBRARY_DOCUMENTS}/{LIBRARY_LICENSES}"
     references = [
         f"[{number(text, text, f'Rust {release} ({licenses}/{license}.txt)')}] {license}"
         for license, text in library.licenses
     ]
     standard += wrapped("License texts:", references) + [""]
-    for crate in library.crates:
-        label = f"{crate.name} {crate.version}"
-        references = [
-            f"[{number(text, text, f'{label} ({name})')}] {name}"
-            for name, text in crate.texts
-        ]
-        standard += [f"Crate: {label}", f"    License: {crate.declared}"]
-        if references:
-            standard += wrapped("Texts:", references, indent="    ")
-        else:
-            standard.append("    Texts: none in the Rust project's notice")
-        standard.append("")
+    for crate in library_notices(library):
+        standard += entry(crate, "the Rust project's notice reproduces none")
 
     subject, possessive = LINKED_BY[host]
     lines = ["yamaa third-party notices", "=" * 25, ""]
     lines += paragraph(
         f"{subject} third-party Rust crates and the Rust standard library into "
         f"{possessive} native extension. "
-        "This file lists those crates with the license, copyright and NOTICE "
-        "texts that each crate ships, and reproduces the standard library's "
-        "notice. "
+        "This file lists those crates with the license that yamaa relies on and "
+        "the license, copyright and NOTICE texts that each crate ships for it, "
+        "and the standard library's licensing from the Rust project's notice. "
         f"The project's own license is in {PROJECT_LICENSE}; LICENSE-READSTAT.txt, "
         "LICENSE-UNICODE.txt and LICENSE-YAML.txt carry the notices for the "
         "vendored ReadStat sources, the Unicode data in yamaa's own tables and "
         "the vendored saphyr-parser crate."
     )
     lines += paragraph(
-        "The list covers every third-party crate in the normal and build "
-        f"dependency closure of the shipped crate {engine_bundle.BINDINGS[host]}, "
-        "for every target platform, as locked in rust/Cargo.lock. Crates that run "
-        "only while compiling, such as build scripts and procedural macros, and "
-        "crates used only on other platforms are listed too. Crates come from "
-        "crates.io unless an entry names another source."
+        "The list covers the third-party crates that the shipped crate "
+        f"{engine_bundle.BINDINGS[host]} links, as locked in rust/Cargo.lock: its "
+        f"normal dependency closure on each of the targets {', '.join(TARGETS)}, "
+        "without procedural macros. Crates that only build scripts or procedural "
+        "macros use, and crates of other platforms, are not linked, so they are "
+        "not listed. Crates come from crates.io unless an entry names another "
+        "source."
     )
     lines += paragraph(
         "Where a crate offers a choice of licenses, yamaa relies on the first "
         "license in this order that the crate offers and whose text the crate "
-        f"ships: {', '.join(ACCEPTED)}. Each entry names the license relied on. "
-        "Texts that only grant an alternative license are not reproduced; the "
+        f"ships: {', '.join(ACCEPTED)}. Each entry names only the license relied "
+        "on. Texts that only grant another license are not reproduced; the "
         "crate's general license, copyright, NOTICE and AUTHORS files are."
     )
     lines += paragraph(
@@ -809,16 +918,16 @@ def render(notices, library, host):
         "reproduced instead, with its placeholders unfilled."
     )
     lines += paragraph(
-        "The Rust standard library section reproduces the notice that Rust "
+        "The Rust standard library section gives the Rust project's licensing "
+        "statement and the licenses and copyright holders of the standard "
+        "library's own files, with the license texts that the toolchain ships in "
+        f"{LIBRARY_DOCUMENTS}/{LIBRARY_LICENSES}, from the notice that Rust "
         f"{release}, the toolchain that builds the released packages, ships as "
-        f"{notice}: the Rust project's licensing statement, the licenses and "
-        "copyright holders of the standard library's own files with the license "
-        f"texts that the toolchain ships in {LIBRARY_DOCUMENTS}/{LIBRARY_LICENSES}, "
-        "and every out-of-tree crate used to build the standard library with the "
-        "notice texts that the Rust project reproduces for it. That list covers "
-        "every target and the tools that build the standard library, so it names "
-        "crates that the native extension does not link. Its entries are "
-        "reproduced as published, without a choice of license."
+        f"{notice}. That notice also names every out-of-tree crate used to build "
+        "the standard library, for every target and for the tools that build it. "
+        "This section lists those that the standard library links on the targets "
+        "above, with the texts that the Rust project reproduces for each, chosen "
+        "like a crate's."
     )
     lines += paragraph(
         "This file is generated by tools/packaging/generate_third_party_notices.py "
@@ -839,7 +948,7 @@ def render(notices, library, host):
         lines += ["=" * WIDTH, *wrapped(prefix, block["holders"]), "=" * WIDTH, ""]
         # Each text ends with exactly the newline that the join restores.
         lines += [block["text"][:-1], ""]
-    return "\n".join(lines)
+    return refuse_gnu("\n".join(lines), f"the {host} notices")
 
 
 def lender(package, packages):
@@ -863,10 +972,21 @@ def lender(package, packages):
     return lenders[0]
 
 
-def notices_for(metadata, crate):
-    """The notices of the third-party crates in a shipped crate's closure."""
-    packages = third_party(metadata, crate)
+def notices_for(graphs, crate):
+    """The notices of the third-party crates that a shipped crate links."""
+    packages = third_party(graphs, crate)
     return [crate_notice(package, lender(package, packages)) for package in packages]
+
+
+def relied_on(package, metadata):
+    """The license that yamaa relies on for a package of the locked graph, as
+    an SPDX expression: a workspace member's own license, and for any other
+    crate the licenses that a notice entry for it names."""
+    if package["id"] in metadata["workspace_members"]:
+        relied = choose(parse_expression(package["license"]), frozenset(ACCEPTED))
+        return " AND ".join(ordered(relied))
+    notice = crate_notice(package, lender(package, metadata["packages"]))
+    return " AND ".join(notice.relied)
 
 
 def committed_entries(text):
@@ -881,12 +1001,16 @@ def committed_entries(text):
     }
 
 
-def license_expression(metadata, notices):
+def license_expression(graphs, notices):
     """Combine the licenses of the members that the Python binding links with
     those its linked crates rely on; `notices` are the Python host's."""
-    packages = {package["id"]: package for package in metadata["packages"]}
-    members = set(metadata["workspace_members"])
-    linked = dependency_closure(metadata, engine_bundle.BINDINGS["python"], linked=True)
+    packages = {
+        package["id"]: package
+        for graph in graphs.values()
+        for package in graph["packages"]
+    }
+    members = set().union(*(graph["workspace_members"] for graph in graphs.values()))
+    linked = linked_closure(graphs, engine_bundle.BINDINGS["python"])
     licenses = set()
     for identity in linked & members:
         member = packages[identity]
@@ -939,15 +1063,15 @@ def check_copies(project):
     return errors
 
 
-def check(metadata, library):
+def check(graphs, library):
     """Return each host's notices and every finding for the committed notices
-    and license copies."""
+    and license copies; `graphs` maps each of TARGETS to its locked graph."""
     selected, errors = {}, []
     for host, directory in copies().items():
         crate = engine_bundle.BINDINGS[host]
-        selected[host] = notices_for(metadata, crate)
+        selected[host] = notices_for(graphs, crate)
         expected = render(selected[host], library, host).encode("utf-8")
-        shipped = {(notice.name, notice.version) for notice in selected[host]}
+        linked = {(notice.name, notice.version) for notice in selected[host]}
         path = directory / NOTICES
         relative = path.relative_to(ROOT).as_posix()
         if not path.is_file():
@@ -955,15 +1079,13 @@ def check(metadata, library):
             continue
         committed = path.read_bytes()
         listed = committed_entries(committed.decode("utf-8"))
-        for name, version in sorted(shipped - listed):
+        for name, version in sorted(linked - listed):
             errors.append(
-                f"{relative}: no entry for {name} {version}, which the locked "
-                f"graph of {crate} ships"
+                f"{relative}: no entry for {name} {version}, which {crate} links"
             )
-        for name, version in sorted(listed - shipped):
+        for name, version in sorted(listed - linked):
             errors.append(
-                f"{relative}: lists {name} {version}, which the locked graph of "
-                f"{crate} does not ship"
+                f"{relative}: lists {name} {version}, which {crate} does not link"
             )
         if committed != expected:
             errors.append(
@@ -972,7 +1094,7 @@ def check(metadata, library):
             )
     project = python_project()
     errors += check_copies(project)
-    expression = license_expression(metadata, selected["python"])
+    expression = license_expression(graphs, selected["python"])
     if project["license"] != expression:
         errors.append(
             f"python/pyproject.toml: license must be {expression!r} to cover the "
@@ -981,13 +1103,13 @@ def check(metadata, library):
     return selected, errors
 
 
-def write(metadata, library):
+def write(graphs, library):
     """Write each host's notices and project license copy; return each host's
     notices."""
     project_license = (ROOT / "LICENSE").read_bytes()
     selected = {}
     for host, directory in copies().items():
-        selected[host] = notices_for(metadata, engine_bundle.BINDINGS[host])
+        selected[host] = notices_for(graphs, engine_bundle.BINDINGS[host])
         payload = render(selected[host], library, host).encode("utf-8")
         (directory / NOTICES).write_bytes(payload)
         (directory / PROJECT_LICENSE).write_bytes(project_license)
@@ -1004,12 +1126,12 @@ def main():
     args = parser.parse_args()
     errors = []
     try:
-        metadata = locked_metadata()
+        graphs = linked_metadata()
         library = standard_library()
         if args.write:
-            selected = write(metadata, library)
+            selected = write(graphs, library)
         else:
-            selected, errors = check(metadata, library)
+            selected, errors = check(graphs, library)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}\n")
     if errors:
