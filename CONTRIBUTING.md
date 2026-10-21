@@ -245,12 +245,10 @@ benchmark conformance on the conversion, as the equivalence gate does on the
 originals, and composes each Define benchmark's documents at its fixed time.
 `HOSTS=python,r` adds the R host. A benchmark whose expected files a decided
 item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
-the gate lists each one. CI's `conversion` job runs the gate on Python for a
-pull request whose diff reaches the 1.0 front end
-(`rust/crates/yamaa-core/src/front_end/`), the converter (`tools/migrate/`),
-the 1.0 schemas (`yaml/v1/`) or the gate itself, with the conformance planner
-and runner it drives, and otherwise passes with a notice; a weekly schedule
-and a dispatch run it on both hosts.
+the gate lists each one. CI's `conversion` job runs the gate on Python on
+every pull request that the `equivalence` job runs on, by the same rule
+(#3030 D124), and a documentation-only pull request passes it with a notice;
+a weekly schedule and a dispatch run it on both hosts.
 The repository tools that read benchmarks read each file by its own header,
 as the engine does (`tools/surface.py`): the benchmark runner, project and
 input staging, the conformance planner, the dashboard renderer and the
@@ -280,8 +278,9 @@ Pin external actions to complete commit IDs with exact release comments.
 PRs and the main schedule run four development jobs: repository checks
 (including lint), the Rust workspace, and the Python and R hosts on Linux.
 These four checks are required to merge into main.
-The additional `equivalence` job runs the executor gate on the paths described
-above and on dispatch; on other pull requests it passes with a skip notice.
+The additional `equivalence` and `conversion` jobs run their gates on the pull
+requests described above and on dispatch, and `conversion` also weekly; a
+documentation-only pull request passes both with a skip notice.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
