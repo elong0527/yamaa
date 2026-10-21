@@ -254,7 +254,8 @@ inherited handler only by listing its path in `clear`
 ([LAYER-9](inheritance.md#layer-9)). The same values are those of a `flag`'s
 `true_value`, `false_value` and `missing`, of `first_available`'s `missing`
 and of an inline `mapping` dictionary entry, and a `function` argument passes
-the missing value as YAML null.
+the missing value as YAML null. A handler that restates its default is the
+lint finding `restated_default`, never a refusal.
 
 The table states, for each handler, the phase in which its condition arises
 ([COLUMN-16](#column-16)), the condition, and what the condition gives when
