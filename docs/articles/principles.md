@@ -32,8 +32,8 @@ input datasets are given. The contract covers two things:
   more. There is no free text field for derivations. There is no "you know
   what I mean."
 - **derive**: the derivation semantics. It says what each written item means.
-  Numbered rules fix the meaning, so the R engine and the Python engine
-  cannot read the same spec in two ways.
+  Numbered rules fix the meaning, so R, Python and the command line cannot
+  read the same spec in two ways.
 
 ## Built for AI agents
 
@@ -49,8 +49,12 @@ This is also why the vocabulary is closed. The typical AI failure is confident
 invention: text that reads well but runs wrong, and then needs heavy review.
 Talking with AI can cost as much as talking with another person, or more. A closed
 vocabulary limits what the AI can write. Every line is either valid or caught
-by validation. Working with an AI agent to complete CDISC data standardization
-becomes an iterative way to review generated datasets and improve the specification with minimal code changes.
+by validation. The files are plain text, and each names its language version
+and its type. `lint` keeps one layout with the comments intact, and `check`
+names each problem's condition, rule and spec path without reading data, so
+an agent can work from the findings. Working with an AI agent to complete
+CDISC data standardization becomes an iterative way to review generated
+datasets and improve the specification with minimal code changes.
 
 ## Principles
 
@@ -58,20 +62,30 @@ These four principles follow from the core principle of one execution:
 
 - **Inheritance**: Each specification names at most one parent, and the chain
   combines in a fixed order, from its root ancestor to the entry, into one final
-  specification; a cycle fails instead of resolving. A company standard is
-  shared, not copied into files that then change separately.
+  specification; a cycle fails instead of resolving. Every layer is a `spec`
+  file, and a layer removes an inherited value only by naming it in `clear`.
+  A company standard is shared, not copied into files that then change
+  separately.
 - **Language neutral**: The same specification with the same inputs generates the
-  same output dataset in R and in Python, wherever the project links an
-  environment for that language. A specification that calls a project function
-  fails before reading data when the project links no environment for the
-  running language, rather than approximating the result.
+  same output dataset, to the byte, in R, in Python and from the command line,
+  on every supported operating system. No host has its own semantics, global
+  options or environment variables. A specification that calls a project
+  function fails before reading data when the running host has no
+  implementation of it, rather than approximating the result; the command line
+  runs no host language, so it refuses such a specification.
 - **Explicit**: Nothing reaches the output unless the specification put it
-  there. Each declared column is derived in exactly one place.
+  there. Each declared column is derived in exactly one place. Nothing is
+  inferred either: every file names its language version and type, a join
+  names its keys, and text in an expression is quoted, so a bare word there is
+  always a reference, never text. What a specification needs from its project,
+  it names: checked or run without its project, a specification that binds a
+  codelist or calls a project function fails before reading data.
 - **Extension**: A specification holds no code from R or Python. It has one
-  extension point: a named contract. A project function is declared in each
-  language's environment file, with the same parameters and tests, and called
-  by its logical name where it is used; its implementation is written once per
-  language.
+  extension point: a named contract. A project function is declared once, in a
+  function file, with its parameters, return type and tests, and the callable
+  that implements it in each host language. A specification calls it by its
+  logical name, and the host that runs the study runs the same tests before it
+  reads any data.
 
 Following the principles, the goal is to move most of the AI agents' work into
 building the yamaa specification with people, where unclear points are cheap
