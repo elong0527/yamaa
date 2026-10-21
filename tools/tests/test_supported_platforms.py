@@ -465,6 +465,29 @@ class LanesTest(unittest.TestCase):
                 if item.form == SOURCE and name in offline:
                     self.assertEqual((item.kind, item.value), ("form", None))
 
+    def test_each_offline_wheel_lane_proves_its_wheel_with_its_cpython(self):
+        # The lanes that install each wheel with no network declare their
+        # CPython, so each proves that series of its platform's wheel.
+        coverage = native.coverage()["offline_wheel"]
+        self.assertEqual(
+            [
+                item
+                for item in platforms.lanes()
+                if item.job.startswith("native-offline-wheel ")
+            ],
+            [
+                lane(
+                    f"native-offline-wheel ({runner}, {python})",
+                    platforms.PLATFORMS[runner],
+                    WHEEL,
+                    "series",
+                    python,
+                )
+                for runner in coverage["os"]
+                for python in coverage["python"]
+            ],
+        )
+
     def test_the_oldest_glibc_is_the_one_the_manylinux_policy_admits(self):
         self.assertEqual(platforms.oldest_glibc(), "2.28")
         with mock.patch.object(manylinux, "POLICY", "manylinux_2_34"):

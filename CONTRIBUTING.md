@@ -479,9 +479,11 @@ Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source and binary
 combinations on dispatch, on a `qualification/issue-*` push and weekly on
 main. It checks public benchmark conformance, installed host suites,
-packaging, optimized Rust behavior and portable math, installs both source
-archives that a release publishes with the network disabled on every platform
-(its `native-offline-source` jobs) and again on Linux with the minimum Rust,
+packaging, optimized Rust behavior and portable math, installs each wheel
+that a release publishes from local files with the network disabled (its
+`native-offline-wheel` jobs), installs both source archives that a release
+publishes with the network disabled on every platform (its
+`native-offline-source` jobs) and again on Linux with the minimum Rust,
 installed from its standalone installer with no rustup or network (its
 `native-offline-toolchain` jobs), builds the R binary packages that a
 release publishes and installs each with no Rust, Rtools or network (its
