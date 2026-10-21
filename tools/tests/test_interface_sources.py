@@ -294,7 +294,7 @@ class Benchmarks(Temporary):
         )
 
     @unittest.skipUnless(hasattr(os, "symlink"), "needs symbolic links")
-    def test_a_symbolic_link_compares_its_target(self):
+    def test_a_symbolic_link_stays_a_link_to_its_target(self):
         directory = "benchmarks/negative-path-symlink"
         self.repo.benchmark(directory)
         self.repo.write(f"{directory}/input/reference/lbref.csv", "LBTESTCD\n")
@@ -306,10 +306,36 @@ class Benchmarks(Temporary):
         link.unlink()
         link.symlink_to("reference/other.csv")
         self.assertEqual(self.repo.changes(compare_benchmarks), changed)
-        # A file with the target's bytes is no link to it.
-        link.unlink()
-        self.repo.write(f"{directory}/input/lbref.csv", "LBTESTCD\n")
-        self.assertEqual(self.repo.changes(compare_benchmarks), changed)
+        # A regular file in the link's place, even one that holds the bytes
+        # Git stores for the link, is no longer the case FILE-8 refuses.
+        for data in ("LBTESTCD\n", "reference/lbref.csv"):
+            with self.subTest(data=data):
+                link.unlink()
+                self.repo.write(f"{directory}/input/lbref.csv", data)
+                self.assertEqual(self.repo.changes(compare_benchmarks), changed)
+        self.repo.release("1.0.1")
+        status, output = self.repo.check()
+        self.assertEqual(status, 1, output)
+        self.assertIn(f"benchmarks: {directory}/input/lbref.csv: changed\n", output)
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symbolic links")
+    def test_a_regular_file_stays_regular_whatever_its_mode(self):
+        path = f"{BASIC}/input/lbref.csv"
+        file = self.repo.root / path
+        self.repo.benchmark(BASIC)
+        self.repo.write(path, "reference/lbref.csv")
+        file.chmod(0o755)
+        self.repo.tag()
+        self.assertIn(b"100755 blob", git(self.repo.root, "ls-tree", TAG, path))
+        file.chmod(0o644)
+        self.assertEqual(self.repo.changes(compare_benchmarks), [])
+        # A link that Git stores with the file's bytes is no regular file.
+        file.unlink()
+        file.symlink_to("reference/lbref.csv")
+        self.assertEqual(
+            self.repo.changes(compare_benchmarks),
+            [("benchmarks", path, "changed", True)],
+        )
 
     def test_a_tag_is_read_with_two_git_calls(self):
         self.repo.tag("yamaa-v0.9.0")
@@ -332,7 +358,7 @@ class Benchmarks(Temporary):
         # working tree's reader the same.
         paths = [path for path in tag.files("benchmarks") if path.count("/") > 1]
         self.assertEqual(len(paths), 10 * len(BENCHMARK))
-        self.assertEqual(files, {path: tag.read(path) for path in paths})
+        self.assertEqual(files, {path: ("regular", tag.read(path)) for path in paths})
         self.assertEqual(files, SOURCES.benchmark_files(Tree(self.repo.root)))
         self.assertEqual(
             SOURCES.benchmark_files(Tree(self.repo.root, "yamaa-v0.9.0")), {}
