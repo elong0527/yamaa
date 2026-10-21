@@ -71,6 +71,7 @@ pub mod file_resolver;
 pub mod file_resources;
 pub mod file_workflow;
 pub mod host_resources;
+pub mod issue_location;
 pub mod publication;
 pub mod resolved_artifact;
 pub mod table_artifact;
@@ -79,6 +80,7 @@ pub mod project_source;
 
 pub mod project_lock;
 pub mod project_lock_diagnostics;
+mod python_packaging;
 
 pub mod project_environment_diagnostics;
 

@@ -223,6 +223,9 @@ fn project_names_list_the_run_order_and_refuse_as_a_read() {
         PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/dm.yaml]"),
     );
     let duplicate = engine.project_names(&study.project()).unwrap_err();
+    // Listing and selecting report the same located duplicate-name finding.
+    let selected = engine.project_spec(&study.project(), "DM").unwrap_err();
+    assert_eq!(duplicate.diagnostics, selected.diagnostics);
     assert!(
         duplicate.message.starts_with(&format!("cannot read {}: ", study.project()))
             && duplicate

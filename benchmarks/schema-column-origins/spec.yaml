@@ -1,0 +1,99 @@
+yamaa: "1.0"
+
+type: spec
+
+model: SDTM
+domain: LB
+keys: [STUDYID, USUBJID, LBTESTCD]
+input:
+  LAB: input/lab.csv
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBTESTCD, LBTEST, LBORRES]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: "'LB'"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LAB.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 5
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LAB.USUBJID
+    submission:
+      core: Req
+      role: Identifier
+      length: 9
+      origins:
+        - type: Assigned
+          source: Sponsor
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation: LAB.LBTESTCD
+    submission:
+      core: Req
+      role: Topic
+      length: 3
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+    derivation: LAB.LBTEST
+    submission:
+      core: Req
+      role: Synonym Qualifier
+      length: 10
+      origins:
+        - type: Protocol
+          source: Sponsor
+
+  # The central laboratory reports most results; a site whose sample could not
+  # be shipped records its own laboratory's result on the case report form.
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation: LAB.LBORRES
+    submission:
+      core: Exp
+      role: Result Qualifier
+      length: 4
+      origins:
+        - type: Collected
+          source: Vendor
+        - type: Collected
+          source: Investigator
+          documents:
+            - document: acrf
+              pages: {type: PhysicalRef, refs: "12"}
+
+submission:
+  label: Laboratory Test Results
+  class: FINDINGS
+  structure: One record per lab test per subject
+  repeating: true

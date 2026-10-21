@@ -35,6 +35,9 @@ pub enum Error {
     Ordinal(yamaa_core::source_ordinal::Error),
     OdmFields(Vec<yamaa_core::odm_source::SchemaError>),
     OdmValues(Vec<yamaa_core::odm_source::MissingValues>),
+    /// The ODM XML profile's read of an `.xml` input (ODM-1), or a build
+    /// without its reader.
+    OdmSource(crate::odm_xml::Error),
     ProducerContract(yamaa_core::producer_contract::Error),
     ProducerMetadata(yamaa_core::diagnostic::Diagnostic),
     Sources(Vec<(SourceDeclaration, Error)>),
@@ -376,7 +379,7 @@ impl application::SourceDecoder for SourceDecoder {
                     crate::sas_source::Error::Invalid(_) | crate::sas_source::Error::Typing(_)
                 )
                 | Error::OdmValues(_)
-        )
+        ) || matches!(error, Error::OdmSource(error) if error.refuses_document())
     }
     fn decode(
         &mut self,
@@ -475,6 +478,13 @@ pub(crate) fn decode_source(
             } else {
                 table
             }
+        }
+        yamaa_core::specification::SourceProfile::OdmXml => {
+            // The fixed clinical-item table, whose fields the profile names
+            // and types; an `odm` read binds its eleven fields (NAME-8).
+            let table = crate::odm_xml::read_input(bytes).map_err(Error::OdmSource)?;
+            let table = if odm { project_odm(table)? } else { table };
+            empty_string_convention(source, table)?
         }
         yamaa_core::specification::SourceProfile::Csv => {
             // Admit declared types before scanning, retaining raw producer header

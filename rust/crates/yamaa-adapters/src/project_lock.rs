@@ -1,7 +1,9 @@
 //! Bounded packaging-lock syntax at the host adapter boundary, never core planning.
-//! R hosts can inspect renv JSON without adding an R JSON runtime dependency.
+//! R hosts can inspect renv JSON without adding an R JSON runtime dependency,
+//! and Python hosts have their uv lock verified here without `packaging`.
+use crate::python_packaging::{canonical_name, marker, version};
 use crate::yaml_decode::{decode_yaml, DecodeFailure};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use yamaa_core::json::Value;
 
 pub use yamaa_core::diagnostic::{LockFinding as Finding, LockReason as Reason};
@@ -100,4 +102,296 @@ pub fn kind(bytes: &[u8]) -> Result<yamaa_core::project_environment::LockKind, E
         }
     }
     Ok(LockKind::Uv)
+}
+
+/// What a Python host observes of its installation for uv lock verification.
+/// The engine reads the lock and compares versions; the host only reports.
+pub trait PythonInstallation {
+    type Error;
+    /// The installed distributions that provide each of the top-level
+    /// `modules`, by module. A module that no distribution provides may be
+    /// absent or have no distributions.
+    fn providers(
+        &mut self,
+        modules: &[String],
+    ) -> Result<BTreeMap<String, Vec<String>>, Self::Error>;
+    /// Whether `module` belongs to the interpreter's standard library.
+    fn standard_library(&mut self, module: &str) -> Result<bool, Self::Error>;
+    /// The installed version of the distribution with the normalized name
+    /// `distribution`.
+    fn version(&mut self, distribution: &str) -> Result<Installed, Self::Error>;
+    /// The marker environment: PEP 508's values, read from `sys`, `platform`
+    /// and `os`.
+    fn environment(&mut self) -> Result<BTreeMap<String, String>, Self::Error>;
+    /// The interpreter's limit on the digits of an integer converted from
+    /// text (`sys.get_int_max_str_digits()`), `None` when it is turned off.
+    fn integer_digits(&mut self) -> Result<Option<usize>, Self::Error>;
+}
+
+/// An installed distribution's version, as its metadata records it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Installed {
+    /// No distribution of that name is installed.
+    Missing,
+    /// The version text that its metadata records.
+    Version(String),
+    /// Its metadata records no version text.
+    Unreadable,
+}
+
+/// CPython's default limit on the digits of an integer converted from text
+/// (`sys.int_info.default_max_str_digits`).
+pub const VERSION_DIGITS: usize = version::DIGITS;
+
+/// Why uv lock verification refused instead of reporting findings.
+#[derive(Debug, PartialEq, Eq)]
+pub enum UvFailure<E> {
+    /// The lock is no uv lock that verification can read; the field says
+    /// which part.
+    Lock(&'static str),
+    /// The host reported an installed distribution whose name is no valid
+    /// distribution name.
+    Distribution,
+    /// A version that verification read has a number of `digits` digits,
+    /// more than the interpreter's integer `limit`, so `packaging` refused to
+    /// convert it; `origin` says where the version was written.
+    Digits {
+        origin: &'static str,
+        digits: usize,
+        limit: usize,
+    },
+    /// A host observation failed.
+    Host(E),
+}
+
+/// The interpreter's integer limit, which the host is asked for once, when a
+/// number of more than `version::THRESHOLD` digits first needs it: below
+/// that, CPython converts whatever its limit.
+fn read_limit<H: PythonInstallation>(
+    limit: &mut version::Limit,
+    host: &mut H,
+) -> Result<version::Limit, UvFailure<H::Error>> {
+    if *limit == version::Limit::Unread {
+        *limit = version::Limit::Read(host.integer_digits().map_err(UvFailure::Host)?);
+    }
+    Ok(*limit)
+}
+
+/// Read a version under the interpreter's integer limit, asking the host for
+/// the limit when a number of the version first needs it, so the refusal is
+/// never `Refusal::Unread`. A version that is no version, or whose number the
+/// limit refuses, is the caller's to judge.
+fn read_version<H: PythonInstallation>(
+    text: &str,
+    limit: &mut version::Limit,
+    host: &mut H,
+) -> Result<Result<version::Version, version::Refusal>, UvFailure<H::Error>> {
+    match version::version(text, *limit) {
+        Err(version::Refusal::Unread) => Ok(version::version(text, read_limit(limit, host)?)),
+        read => Ok(read),
+    }
+}
+
+fn read_uv(bytes: &[u8]) -> Result<toml::Table, &'static str> {
+    yamaa_core::limits::Limits::spec_bytes(bytes.len()).map_err(|_| "lock size")?;
+    let source = std::str::from_utf8(bytes).map_err(|_| "lock UTF-8")?;
+    let root = source.parse::<toml::Table>().map_err(|_| "uv TOML")?;
+    if root.get("version").and_then(toml::Value::as_integer) != Some(1) {
+        return Err("uv version");
+    }
+    if !root.get("package").is_some_and(toml::Value::is_array) {
+        return Err("uv package array");
+    }
+    Ok(root)
+}
+
+/// Whether a package record applies to this interpreter: it has no
+/// `resolution-markers`, or one of them holds. Every marker is evaluated, and
+/// the host's marker environment is read once, when the first is. A version
+/// comparison that needs the interpreter's integer limit has the marker
+/// evaluated again once the limit is read.
+fn selected<H: PythonInstallation>(
+    record: &toml::Table,
+    environment: &mut Option<marker::Environment>,
+    limit: &mut version::Limit,
+    host: &mut H,
+) -> Result<bool, UvFailure<H::Error>> {
+    const MARKERS: &str = "uv resolution-markers";
+    let Some(markers) = record.get("resolution-markers") else {
+        return Ok(true);
+    };
+    let markers = markers
+        .as_array()
+        .filter(|markers| !markers.is_empty())
+        .ok_or(UvFailure::Lock(MARKERS))?;
+    let mut any = false;
+    for text in markers {
+        let text = text.as_str().ok_or(UvFailure::Lock(MARKERS))?;
+        let parsed = marker::parse(text).map_err(|_| UvFailure::Lock(MARKERS))?;
+        if environment.is_none() {
+            *environment = Some(marker::Environment::new(
+                host.environment().map_err(UvFailure::Host)?,
+            ));
+        }
+        let environment = environment.as_ref().expect("read above");
+        let mut evaluated = parsed.evaluate(environment, *limit);
+        if evaluated == Err(marker::Failure::Unread) {
+            evaluated = parsed.evaluate(environment, read_limit(limit, host)?);
+        }
+        any |= evaluated.map_err(|failure| match failure {
+            marker::Failure::Digits { digits, limit } => UvFailure::Digits {
+                origin: MARKERS,
+                digits,
+                limit,
+            },
+            marker::Failure::Invalid | marker::Failure::Unread => UvFailure::Lock(MARKERS),
+        })?;
+    }
+    Ok(any)
+}
+
+/// Verify a uv lock for the called Python functions (FUNC-3): yamaa and each
+/// distribution that provides a call's top-level module must be installed at
+/// the one version the lock selects for this interpreter. A module that no
+/// distribution provides is exempt when it belongs to the standard library.
+///
+/// Findings come first for each call's module that no distribution provides,
+/// then for each needed distribution in the order of its normalized name. The
+/// host is asked in that order too: for the providers once, after the lock's
+/// syntax is read; for the marker environment at most once, when the first
+/// marker is evaluated; for the interpreter's integer limit at most once,
+/// when a version first has a number of more than 640 digits; and for a
+/// distribution's version only when the lock selects exactly one version of
+/// it. A refusal about one distribution comes
+/// after the earlier ones were asked about. No calls means neither a lock
+/// read nor an observation.
+pub fn verify_uv<H: PythonInstallation>(
+    bytes: &[u8],
+    calls: &[&str],
+    host: &mut H,
+) -> Result<Vec<Finding>, UvFailure<H::Error>> {
+    const IDENTITY: &str = "uv package identity";
+    const VERSION: &str = "uv package version";
+    if calls.is_empty() {
+        return Ok(Vec::new());
+    }
+    let root = read_uv(bytes).map_err(UvFailure::Lock)?;
+    let mut modules: Vec<String> = Vec::new();
+    for call in calls {
+        let module = call.split('.').next().unwrap_or(call);
+        if !modules.iter().any(|known| known == module) {
+            modules.push(module.to_owned());
+        }
+    }
+    let providers = host.providers(&modules).map_err(UvFailure::Host)?;
+    let mut findings = Vec::new();
+    let mut needed = BTreeSet::from(["yamaa".to_owned()]);
+    for module in &modules {
+        match providers.get(module).filter(|names| !names.is_empty()) {
+            Some(names) => {
+                for name in names {
+                    needed.insert(canonical_name(name).ok_or(UvFailure::Distribution)?);
+                }
+            }
+            None => {
+                if !host.standard_library(module).map_err(UvFailure::Host)? {
+                    findings.push(Finding {
+                        package: module.clone(),
+                        reason: Reason::DistributionNotIdentified,
+                        expected: Vec::new(),
+                        actual: None,
+                    });
+                }
+            }
+        }
+    }
+    let mut records: BTreeMap<String, Vec<&toml::Table>> = BTreeMap::new();
+    for record in root
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let record = record.as_table().ok_or(UvFailure::Lock(IDENTITY))?;
+        let name = record
+            .get("name")
+            .and_then(toml::Value::as_str)
+            .and_then(canonical_name)
+            .ok_or(UvFailure::Lock(IDENTITY))?;
+        if needed.contains(&name) {
+            records.entry(name).or_default().push(record);
+        }
+    }
+    let mut environment = None;
+    let mut limit = version::Limit::Unread;
+    for name in needed {
+        // Versions that denote the same version count once, as the first
+        // record spells it.
+        let mut expected: Vec<version::Version> = Vec::new();
+        for record in records.get(&name).into_iter().flatten() {
+            if !selected(record, &mut environment, &mut limit, host)? {
+                continue;
+            }
+            let text = record
+                .get("version")
+                .and_then(toml::Value::as_str)
+                .ok_or(UvFailure::Lock(VERSION))?;
+            let locked =
+                read_version(text, &mut limit, host)?.map_err(|refusal| match refusal {
+                    version::Refusal::Digits { digits, limit } => UvFailure::Digits {
+                        origin: VERSION,
+                        digits,
+                        limit,
+                    },
+                    version::Refusal::Invalid | version::Refusal::Unread => {
+                        UvFailure::Lock(VERSION)
+                    }
+                })?;
+            if !expected.contains(&locked) {
+                expected.push(locked);
+            }
+        }
+        expected.sort();
+        let choices = expected.iter().map(ToString::to_string).collect();
+        if expected.len() != 1 {
+            findings.push(Finding {
+                package: name,
+                reason: if expected.is_empty() {
+                    Reason::VersionNotLocked
+                } else {
+                    Reason::AmbiguousLockVersion
+                },
+                expected: choices,
+                actual: None,
+            });
+            continue;
+        }
+        let (reason, actual) = match host.version(&name).map_err(UvFailure::Host)? {
+            Installed::Missing => (Reason::PackageNotInstalled, None),
+            Installed::Unreadable => (Reason::InvalidInstalledVersion, None),
+            // A version that is no version is a finding, but one with a
+            // number too long to convert refuses, as it did in `packaging`.
+            Installed::Version(text) => match read_version(&text, &mut limit, host)? {
+                Err(version::Refusal::Invalid | version::Refusal::Unread) => {
+                    (Reason::InvalidInstalledVersion, Some(text))
+                }
+                Err(version::Refusal::Digits { digits, limit }) => {
+                    return Err(UvFailure::Digits {
+                        origin: "installed version",
+                        digits,
+                        limit,
+                    })
+                }
+                Ok(installed) if installed != expected[0] => (Reason::VersionMismatch, Some(text)),
+                Ok(_) => continue,
+            },
+        };
+        findings.push(Finding {
+            package: name,
+            reason,
+            expected: choices,
+            actual,
+        });
+    }
+    Ok(findings)
 }

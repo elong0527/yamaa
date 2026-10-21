@@ -18,9 +18,10 @@
 //! combination of them. With no format feature, CSV and Arrow routes remain.
 //! A capability a build omits fails the same way it does in adapters: the
 //! stable codes (`yaml_reader_unavailable`, `parquet_reader_unavailable`,
-//! `sas_reader_unavailable`, `parquet_codec_unavailable`) surface as
-//! diagnostics or as [`Error::Unavailable`], and [`read_odm`] without `odm`
-//! returns `Error::Unavailable { feature: "odm" }`. The facade adds no native
+//! `sas_reader_unavailable`, `odm_reader_unavailable`,
+//! `parquet_codec_unavailable`) surface as diagnostics or as
+//! [`Error::Unavailable`], and [`read_odm`] without `odm` returns
+//! `Error::Unavailable { feature: "odm" }`. The facade adds no native
 //! dependencies of its own.
 //!
 //! Malformed Parquet input can make the Parquet or Arrow crate panic. The
@@ -79,9 +80,9 @@ pub use error::{
 };
 pub use file_type::{FileType, FILE_TYPES};
 pub use functions::{
-    decode_renv_lock, Argument, BatchArgument, CallError, ColumnType, FunctionHandle,
-    FunctionIdentity, HostLanguage, LockContext, LockKind, Parameter, ProjectFunctions, RenvLock,
-    Signature,
+    decode_renv_lock, verify_uv_lock, Argument, BatchArgument, CallError, ColumnType,
+    FunctionHandle, FunctionIdentity, HostLanguage, InstalledDistributions, InstalledVersion,
+    LockContext, LockKind, Parameter, ProjectFunctions, RenvLock, Signature,
 };
 pub use info::{info, Host, Info, FEATURES, HOSTS};
 pub use lint::{lint, Lint, LintFinding, LINT_COLUMNS, LINT_FINDINGS};

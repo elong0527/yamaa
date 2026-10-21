@@ -123,11 +123,11 @@ TARGETS = {
         65536,
     ),
     # The ODM XML reader with its TAR and gzip admission, and the table it
-    # builds.
+    # builds; then the source decode of a specification's `.xml` input.
     "odm_xml": Target(
         ("*.xml",),
         (
-            "rust/crates/yamaa-adapters/src/arrow_table.rs",
+            *SOURCE_DECODE,
             "rust/crates/yamaa-adapters/src/ipc_table.rs",
             "rust/crates/yamaa-adapters/src/odm_xml/",
             "rust/crates/yamaa-adapters/src/public_table.rs",

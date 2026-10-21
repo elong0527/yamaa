@@ -878,11 +878,35 @@ class ReviewScope(unittest.TestCase):
                 gate.verify(api, NUMBER, publish=True)
             self.assertNotIn("success", [v.state for v in api.published])
 
-    def test_a_walkthrough_updated_after_completion_cannot_borrow_that_old_status(self):
-        api = Payloads()
-        api.comment_versions[BATCHES[0]][0][0]["updated_at"] = "2026-10-15T14:16:06Z"
-        with self.assertRaisesRegex(gate.GateError, "completion predates"):
-            gate.verify(api, NUMBER)
+    def test_a_walkthrough_edited_after_completion_still_binds_its_base_and_head(self):
+        # CodeRabbit edits a finished summary too, so a later edit alone is
+        # not a new review; a new cycle shows in the summary itself.
+        for mutation, message in [
+            ("edited", None),
+            ("in-progress", "in progress"),
+            ("older-covered-commit", "does not cover"),
+            ("older-base", "different base or head"),
+        ]:
+            api = Payloads()
+            comment = api.comment_versions[BATCHES[0]][0][0]
+            comment["updated_at"] = "2026-10-15T14:16:06Z"
+            if mutation == "in-progress":
+                comment["body"] += (
+                    "\n<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->"
+                )
+            elif mutation == "older-covered-commit":
+                comment["body"] = comment["body"].replace(
+                    f'"coveredCommitId":"{CHUNK_HEADS[0]}"',
+                    f'"coveredCommitId":"{HEAD}"',
+                )
+            elif mutation == "older-base":
+                comment["body"] = comment["body"].replace(CHUNK_BASES[0], ORIGINAL)
+            with self.subTest(mutation=mutation):
+                if message is None:
+                    self.assertEqual(gate.verify(api, NUMBER).state, "success")
+                else:
+                    with self.assertRaisesRegex(gate.GateError, message):
+                        gate.verify(api, NUMBER)
 
     def test_latest_authentic_walkthrough_wins_instead_of_an_older_matching_range(self):
         api = Payloads()

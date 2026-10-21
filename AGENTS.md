@@ -41,19 +41,18 @@ their prerequisites. Local targets and CI share the owned scripts under
   except the `yamaa` facade's public items, frozen from 1.0.0. Remove
   obsolete interfaces and callers together instead of adding compatibility
   aliases. From 1.0.0, the stability contract in `docs/release.md` applies.
-- **Complete review before merging.** On the exact final PR head, require
-  CodeRabbit's explicit completed review, or complete bounded reviews proved
-  by the review gate, and resolve every actionable finding. Pending, missing,
-  skipped alone or older-head reviews do not count. Run the fresh read-only
-  review gate in `CONTRIBUTING.md` before every merge, alongside CI. When
-  environment policy blocks GitHub CLI reads, approved authenticated connector
-  reads must prove the same predicates on fresh exact-head evidence. The
-  author never reviews its own PR (D148 on #3030). When CodeRabbit cannot
-  review a PR (its free reviews are exhausted, or it skips the PR), merging
-  does not wait for it: another agent reviews the exact diff and records
-  `## Review of <full sha>` (or `## Independent review of <full sha>`) on
-  the PR, and the merging agent relies on that record and still requires
-  green CI on that exact head.
+- **Complete review before merging.** The owner's maintenance session
+  reviews and merges every pull request (D175 on #3030). It merges only
+  once CI is green on the exact head, by the merge steps in
+  `CONTRIBUTING.md` (D176). On that head, require CodeRabbit's explicit
+  completed review, or complete bounded reviews proved by the review gate,
+  and resolve every actionable finding. Pending, missing, skipped alone or
+  older-head reviews do not count. When environment policy blocks GitHub
+  CLI reads, approved authenticated connector reads must prove the same
+  predicates on fresh exact-head evidence. The author never reviews its own
+  PR (D148), and a review that another agent records is welcome as a
+  review record. When CodeRabbit cannot review a PR, `CONTRIBUTING.md`
+  says what replaces its review.
 - **Expected data is truth.** Files under `benchmarks/**/expected/` are
   independently authored and define what an implementation must
   reproduce. Never regenerate them from the implementation, and never
@@ -87,10 +86,12 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Pull requests
 
-- One issue per pull request, referenced with `Closes #N`. Branch from and
-  target `main`; `release/1.0.0` is cut only to qualify release candidates.
-  The planning issue is #3030, for 1.0.0; #2848 tracks the 0.5.0 GitHub
-  release.
+- One theme per pull request (D171 on #3030). Group related issues into
+  one pull request of about 1,500 to 3,000 changed lines and under 300
+  files, with one `Closes #N` line for each issue it completes; the issues
+  stay as the specifications. Branch from and target `main`;
+  `release/1.0.0` is cut only to qualify release candidates. The planning
+  issue is #3030, for 1.0.0; #2848 tracks the 0.5.0 GitHub release.
 - Before merging, bring the branch up to date with its base and wait for
   green CI on that exact head. A pull request that is green against an older
   base can still fail to compile against the current one.
@@ -102,15 +103,17 @@ their prerequisites. Local targets and CI share the owned scripts under
 
 ## Parallel sessions
 
-Several agent sessions work the 1.0 plan at once, one issue per session.
+Several agent sessions work the 1.0 plan at once, each on its own batch
+of issues.
 These rules keep them from colliding; `CONTRIBUTING.md` owns the merge
 steps and the review gate.
 
-- **Claim before you start.** Assign yourself to the issue, or comment
-  "Claimed by <session>" when you cannot assign, before creating a
-  branch, and leave an issue another session has claimed. A follow-up
-  found in review goes to the session that owns the chain it belongs to.
-- **One worktree per issue, with its own Cargo target.** Create the
+- **Claim before you start.** Assign yourself to each issue of the
+  batch, or comment "Claimed by <session>" when you cannot assign, before
+  creating a branch, and leave an issue another session has claimed. A
+  follow-up found in review goes to the session that owns the chain it
+  belongs to.
+- **One worktree per pull request, with its own Cargo target.** Create the
   branch with `git worktree add --no-track -b <branch> .worktrees/<name>
   origin/main` and push with an explicit refspec,
   `git push -u origin HEAD:refs/heads/<branch>`: a branch that tracks
@@ -120,8 +123,8 @@ steps and the review gate.
   worktree, or its target, when its pull request merges.
 - **Closing keywords close.** GitHub reads `Closes #N` inside a negation
   too; "does not close #N" once closed the planning issue. Write a
-  closing keyword only for the pull request's own issue, and name every
-  other issue without one.
+  closing keyword only for an issue the pull request completes, and name
+  every other issue without one.
 - **Open pull requests ready for review.** A pull request opens ready for
   review, not as a draft, once it builds and its nearest tests pass (D148
   on #3030). The one exception is a pull request that cannot merge until
@@ -132,12 +135,10 @@ steps and the review gate.
   session, and no session needs to run them locally (D148 on #3030).
   The `equivalence` job means its two legs, `equivalence (python)` and
   `equivalence (r)`, both green.
-- **Bring the branch up to date before merging**, wait for green CI on
-  that exact head, then run the review gate. When no review bot can
-  review, another agent, never the author, reviews the exact diff and
-  records that review on the pull request, as the hard rules say. Main
-  broke three times on 2026-10-20 from green pull requests merged on a
-  stale base.
+- **Get CI green on the exact head, then stop.** Once its pull request is
+  open, the author gets CI green on its exact head and stops there. It
+  neither reviews nor merges the pull request: the owner's maintenance
+  session does both, as the hard rules say (D175 on #3030).
 - **Decide under the owner's standing instruction, and record it.** A
   routine decision follows the recorded plan and is written on #3030 as
   the next D-number, so the owner can see and reverse it. D-numbers come

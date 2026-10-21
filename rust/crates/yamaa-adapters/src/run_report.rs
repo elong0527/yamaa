@@ -231,6 +231,7 @@ fn profile(profile: SourceProfile) -> &'static str {
         SourceProfile::Parquet => "parquet",
         SourceProfile::Xport => "xpt",
         SourceProfile::Sas7bdat => "sas7bdat",
+        SourceProfile::OdmXml => "odm",
     }
 }
 

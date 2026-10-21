@@ -113,13 +113,16 @@ see the [contributor guide](../../CONTRIBUTING.md).
 tests, and a Cargo lock trimmed from the repository's to the crates that they
 build, so the package carries neither the Python binding nor its
 dependencies. The package bundles no prebuilt native libraries and no Rust
-toolchain file, and it carries the source of every locked crate, so
-installation needs no network: the crates.io crates in
-`src/rust/vendor.tar.xz`, written by `cargo vendor` when the package is
-staged, and the vendored parser and ReadStat sources beside the workspace. The
-archive leaves out the prebuilt WebAssembly objects of `wit-bindgen`, a crate
-that only WebAssembly targets build, and the toolchain files that some crates
-publish. `inst/AUTHORS` names every bundled crate's authors and license.
+toolchain file, and it carries the source of every locked crate that a
+supported platform compiles, so installation needs no network: the crates.io
+crates in `src/rust/vendor.tar.xz`, written by `cargo vendor` when the package
+is staged, and the vendored parser and ReadStat sources beside the workspace.
+Each locked crate that no supported platform compiles, such as `r-efi`,
+`windows-core` and the WebAssembly crates, keeps only its manifest, which
+Cargo reads to resolve the lock. The archive also leaves out the toolchain
+files that some crates publish, and zstd's text of the license that it offers
+beside BSD-3-Clause, which yamaa relies on. `inst/AUTHORS` names every bundled
+crate's authors and license.
 
 The R runtime imports `utils`, which ships with R. `arrow` and `jsonlite` are
 suggested packages: the regression scripts read their JSON truth with

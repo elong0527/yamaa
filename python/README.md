@@ -88,7 +88,7 @@ cd yamaa
 make setup
 ```
 
-The development package requires only Polars and packaging at runtime. The
+The development package requires only Polars at runtime. The
 `test` extra adds the Python YAML readers, PyArrow, lxml and Pydantic for
 independent artifact and conformance checks. `make setup` installs it.
 

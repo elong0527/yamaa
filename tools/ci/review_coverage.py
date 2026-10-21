@@ -459,7 +459,11 @@ def attest_review(api, number, head, status, authentic, *, base=None):
     Commit statuses alone do not name a PR or base. Use the authentic app's
     latest walkthrough and final reviewed footer. Ordinary reviews may be
     incremental; bounded batches additionally require their exact base.
-    A status predating the walkthrough cannot complete its newer review.
+    The app edits a finished summary too, for example to offer a fix for
+    failing CI, so its edit time is not compared with the status. A new
+    review cycle shows instead as a pending status, which the caller reads
+    again after this check, as an in-progress summary, or as a footer or
+    range that names another commit.
     """
     completed_at = timestamp(status.get("created_at"))
     candidates, identifiers = [], set()
@@ -492,12 +496,9 @@ def attest_review(api, number, head, status, authentic, *, base=None):
         candidates,
         "PR requires its own authentic completed review walkthrough",
     )
-    updated, _, body = max(candidates)
+    _, _, body = max(candidates)
     require(IN_PROGRESS.search(body) is None, "PR review is still in progress")
     require(WALKTHROUGH in body, "missing provider review walkthrough")
-    require(
-        updated <= completed_at, "completion predates the latest review walkthrough"
-    )
     markers = list(FINAL_REVIEW.finditer(body))
     require(
         body.count(FINAL_MARKER) == 1 and len(markers) == 1,

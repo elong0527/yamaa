@@ -28,6 +28,8 @@ for (name in names(truth[["files"]])) {
 # writes each line ended by a line feed and returns `value` invisibly.
 printed <- function(value, lines, path) {
   lines <- gsub("{path}", path, fixture_strings(lines), fixed = TRUE)
+  lines <- gsub("{root}", normalizePath(root, winslash = "/", mustWork = TRUE),
+    lines, fixed = TRUE)
   sunk <- rawConnection(raw(), "w")
   sink(sunk)
   shown <- withVisible(print(value))

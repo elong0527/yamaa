@@ -76,54 +76,6 @@
       ]
     },
     {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-vendor.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-vendor-malformed.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-missing.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-wrong-type.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-ambiguous.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
-      "path": "rust/crates/yamaa-adapters/tests/fixtures/pq/odm-empty.parquet",
-      "family": "odm",
-      "level": "component",
-      "consumers": [
-        "rust/crates/yamaa-adapters/tests/table_arrow_table.rs"
-      ]
-    },
-    {
       "path": "rust/crates/yamaa-adapters/tests/fixtures/odm/odm13.xml",
       "family": "odm",
       "level": "component",
@@ -1047,7 +999,9 @@
         "python/tests/installed/installed_printing.py",
         "R/yamaa/tests/printing.R",
         "python/tests/installed/installed_info.py",
-        "R/yamaa/tests/info.R"
+        "R/yamaa/tests/info.R",
+        "python/tests/installed/installed_issue_locations.py",
+        "R/yamaa/tests/issue_locations.R"
       ]
     },
     {

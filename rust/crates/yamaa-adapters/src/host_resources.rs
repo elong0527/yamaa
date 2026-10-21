@@ -586,12 +586,12 @@ impl Resources {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .len()
     }
-    pub fn sources(&self) -> Vec<(String, Arc<[u8]>)> {
+    pub fn sources(&self, kind: Option<Kind>) -> Vec<(String, Arc<[u8]>)> {
         self.snapshots
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
-            .filter(|s| s.frame.is_none())
+            .filter(|s| s.frame.is_none() && kind.is_none_or(|kind| s.kind == kind))
             .map(|s| (s.reference.clone(), Arc::clone(&s.bytes)))
             .collect()
     }

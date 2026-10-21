@@ -34,7 +34,11 @@ class Printing(unittest.TestCase):
 
     def printed(self, value, lines, path):
         """`value` prints `lines`, with `{path}` standing for `path`."""
-        text = "\n".join(lines).replace("{path}", os.fspath(path))
+        text = (
+            "\n".join(lines)
+            .replace("{path}", os.fspath(path))
+            .replace("{root}", self.root.resolve().as_posix())
+        )
         self.assertEqual(repr(value), text)
         self.assertEqual(str(value), text)
         self.assertTrue(text.isascii())

@@ -1878,12 +1878,7 @@ mod table {
                 let bytes = if fixture.is_empty() {
                     Vec::new()
                 } else {
-                    std::fs::read(
-                        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                            .join("tests/fixtures/pq")
-                            .join(format!("{fixture}.parquet")),
-                    )
-                    .unwrap()
+                    crate::support::parquet_files::file(fixture)
                 };
                 let error = Error::ParquetSource(parquet::parse(&bytes).unwrap_err());
                 let mut context = json!({"dataset":"SRC","path":"held.parquet"});

@@ -207,10 +207,11 @@ fixed: eleven fields, each of type `str`. A stored field binds to the schema
 field whose name it equals under ASCII case folding. At validation, from the
 CSV header or the Parquet schema and without reading a record, exactly one
 stored field must bind to each schema field, and each bound field must be
-stored as text. An ODM input declares no `types` and no `schema`.
+stored as text; an `.xml` input's fields come from the ODM source profile.
+An ODM input declares no `types` and no `schema`.
 
 Fails: `odm_schema_field_ambiguous`, `odm_schema_field_missing`, `odm_schema_field_type`.
-Evidence: `negative-odm-schema-missing`, `negative-odm-schema-ambiguous`, `negative-odm-schema-type`.
+Evidence: `negative-odm-schema-missing`, `negative-odm-schema-ambiguous`, `negative-odm-schema-type`, `sdtm-dm-odm-snapshot`, `rust/crates/yamaa/tests/odm_input.rs::odm_reads_bind_the_item_table_of_an_xml_input`.
 
 The fields are `StudyOID`, `MetaDataVersionOID`, `SubjectKey`,
 `StudyEventOID`, `StudyEventRepeatKey`, `FormOID`, `FormRepeatKey`,
@@ -224,7 +225,11 @@ other character unchanged. The binding does not rename the stored bytes, which
 the storage profile reads as it always does; the specification spells the
 schema's names. A stored field that binds to no schema field is a vendor
 field: an ODM input does not expose it, and an `odm` expression never reads
-it. An ODM input fails at validation with:
+it. An `.xml` input has no header to check: the
+[ODM source profile](reference/odm.md#odm-1) builds its item table with each
+schema field once, under the schema's own name and as text, so its binding
+always holds, and the table's other columns are vendor fields. An ODM input
+fails at validation with:
 
 - `odm_schema_field_missing` when it lacks a schema field;
 - `odm_schema_field_ambiguous` when it binds two stored fields to one schema
