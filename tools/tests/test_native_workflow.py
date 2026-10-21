@@ -1092,8 +1092,8 @@ class NativeWorkflowContract(unittest.TestCase):
 
     def test_each_cli_binary_builds_with_the_dist_profile_for_its_target(self):
         # The wheels' profile, release without the symbol table; never the R
-        # build's, which keeps the symbols. The toolchain is the pinned one,
-        # installed as the other native jobs install it.
+        # build's release profile, which strips nothing. The toolchain is the
+        # pinned one, installed as the other native jobs install it.
         build = (
             "cargo build --locked --profile dist --package yamaa-cli --bin yamaa "
             '--target "${TARGET}"'
