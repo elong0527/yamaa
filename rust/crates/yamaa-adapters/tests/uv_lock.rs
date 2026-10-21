@@ -15,10 +15,20 @@ struct Host {
     failure: Option<&'static str>,
     /// The interpreter's integer limit, `None` when it is turned off.
     digits: Option<usize>,
+    /// The limit that each observation, by its name, sets as it runs.
+    sets: BTreeMap<&'static str, Option<usize>>,
     trace: Vec<String>,
 }
 
 impl Host {
+    /// Apply the limit that an observation sets, as a Python callback that
+    /// calls `sys.set_int_max_str_digits` would.
+    fn observe(&mut self, observation: &str) {
+        if let Some(digits) = self.sets.get(observation) {
+            self.digits = *digits;
+        }
+    }
+
     fn new(versions: &[(&str, &str)], providers: &[(&str, &[&str])]) -> Self {
         Self {
             providers: providers
@@ -42,6 +52,7 @@ impl Host {
             environment: environment("linux"),
             failure: None,
             digits: Some(VERSION_DIGITS),
+            sets: BTreeMap::new(),
             trace: Vec::new(),
         }
     }
@@ -74,6 +85,7 @@ impl PythonInstallation for Host {
         modules: &[String],
     ) -> Result<BTreeMap<String, Vec<String>>, Self::Error> {
         self.trace.push("providers".to_owned());
+        self.observe("providers");
         Ok(self
             .providers
             .iter()
@@ -88,6 +100,7 @@ impl PythonInstallation for Host {
 
     fn version(&mut self, distribution: &str) -> Result<Installed, Self::Error> {
         self.trace.push(format!("version {distribution}"));
+        self.observe("version");
         if let Some(failure) = self.failure {
             return Err(failure);
         }
@@ -100,6 +113,7 @@ impl PythonInstallation for Host {
 
     fn environment(&mut self) -> Result<BTreeMap<String, String>, Self::Error> {
         self.trace.push("environment".to_owned());
+        self.observe("environment");
         Ok(self.environment.clone())
     }
 
@@ -598,7 +612,18 @@ fn a_locked_version_past_the_integer_limit_refuses_before_its_installed_version_
         verify_uv(&lock(&[("yamaa", &at, None)]), &["math.sqrt"], &mut host),
         Ok(Vec::new())
     );
-    assert_eq!(host.trace, ["providers", "integer digits", "version yamaa"]);
+    // The limit is read for each conversion that needs it: reading the locked
+    // version, printing it for the findings, then reading the installed one.
+    assert_eq!(
+        host.trace,
+        [
+            "providers",
+            "integer digits",
+            "integer digits",
+            "version yamaa",
+            "integer digits"
+        ]
+    );
     let mut host = Host::new(&[("yamaa", past.as_str())], &[]);
     assert_eq!(
         verify_uv(&lock(&[("yamaa", &past, None)]), &["math.sqrt"], &mut host),
@@ -730,4 +755,145 @@ fn the_interpreter_s_own_limit_decides_at_every_origin() {
         ),
         lowered("uv resolution-markers")
     );
+}
+
+#[test]
+fn the_limit_is_read_for_each_conversion_after_the_observations_before_it() {
+    // packaging converted each number under the limit of that moment, which a
+    // host observation made before it may have changed.
+    let past = "1".repeat(VERSION_DIGITS + 1);
+    let beyond = "1".repeat(641);
+    let host = |installed: &str, sets: &[(&'static str, Option<usize>)]| {
+        let mut host = Host::new(&[("yamaa", installed)], &[]);
+        host.sets = sets.iter().copied().collect();
+        host
+    };
+    // Turned off by the providers observation, then lowered to 640 by the
+    // version lookup: the locked number converts, the installed one does not.
+    let mut both = host(&past, &[("providers", None), ("version", Some(640))]);
+    assert_eq!(
+        verify_uv(&lock(&[("yamaa", &past, None)]), &["math.sqrt"], &mut both),
+        Err(UvFailure::Digits {
+            origin: "installed version",
+            digits: VERSION_DIGITS + 1,
+            limit: 640
+        })
+    );
+    assert_eq!(
+        both.trace,
+        [
+            "providers",
+            "integer digits",
+            "integer digits",
+            "version yamaa",
+            "integer digits"
+        ]
+    );
+    let mut raised = host(&past, &[("providers", None)]);
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", &past, None)]),
+            &["math.sqrt"],
+            &mut raised
+        ),
+        Ok(Vec::new())
+    );
+    let mut lowered = host("0.2.0", &[("providers", Some(640))]);
+    lowered.digits = None;
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", &beyond, None)]),
+            &["math.sqrt"],
+            &mut lowered
+        ),
+        Err(UvFailure::Digits {
+            origin: "uv package version",
+            digits: 641,
+            limit: 640
+        })
+    );
+    assert_eq!(lowered.trace, ["providers", "integer digits"]);
+    let mut after_lookup = host(&past, &[("version", None)]);
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", "1.0", None)]),
+            &["math.sqrt"],
+            &mut after_lookup
+        ),
+        Ok(vec![finding(
+            "yamaa",
+            Reason::VersionMismatch,
+            &["1.0"],
+            Some(&past)
+        )])
+    );
+    // The marker environment read comes before the comparison it serves.
+    let marker = format!("python_version == '{beyond}'");
+    let mut marked = host("1.0", &[("environment", Some(640))]);
+    marked.digits = None;
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", "1.0", Some(&[marker.as_str()]))]),
+            &["math.sqrt"],
+            &mut marked
+        ),
+        Err(UvFailure::Digits {
+            origin: "uv resolution-markers",
+            digits: 641,
+            limit: 640
+        })
+    );
+    assert_eq!(marked.trace, ["providers", "environment", "integer digits"]);
+    let marker = format!("python_version == '{past}'");
+    let mut unmarked = host("1.0", &[("environment", None)]);
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", "1.0", Some(&[marker.as_str()]))]),
+            &["math.sqrt"],
+            &mut unmarked
+        ),
+        Ok(vec![finding("yamaa", Reason::VersionNotLocked, &[], None)])
+    );
+}
+
+#[test]
+fn a_locked_version_prints_under_the_limit_of_that_moment() {
+    // packaging printed the locked versions it found, converting each number
+    // back to text: a limit lowered after the version was read refuses it
+    // there, by its significant digits.
+    let beyond = format!("1.0+{}", "1".repeat(641));
+    let mut host = Host::new(&[("yamaa", "1.0")], &[]);
+    host.digits = None;
+    host.sets.insert("environment", Some(640));
+    let raw = lock(&[
+        ("yamaa", &beyond, None),
+        ("yamaa", "1.0", Some(&["sys_platform == 'linux'"])),
+    ]);
+    assert_eq!(
+        verify_uv(&raw, &["math.sqrt"], &mut host),
+        Err(UvFailure::Digits {
+            origin: "uv package version",
+            digits: 641,
+            limit: 640
+        })
+    );
+    assert_eq!(
+        host.trace,
+        [
+            "providers",
+            "integer digits",
+            "environment",
+            "integer digits"
+        ]
+    );
+    // Leading zeros are no digits of the number printed.
+    let zeros = format!("1.{}1", "0".repeat(700));
+    let mut host = Host::new(&[("yamaa", "1.1")], &[]);
+    host.digits = None;
+    host.sets.insert("environment", Some(640));
+    let raw = lock(&[
+        ("yamaa", &zeros, None),
+        ("yamaa", "1.1", Some(&["sys_platform == 'linux'"])),
+    ]);
+    assert_eq!(verify_uv(&raw, &["math.sqrt"], &mut host), Ok(Vec::new()));
 }

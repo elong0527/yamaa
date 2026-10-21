@@ -202,6 +202,7 @@ class PublicContract(unittest.TestCase):
                 "Error",
                 "Table",
                 "__version__",
+                "info",
                 "lint",
                 "project",
                 "read_odm",
@@ -221,24 +222,29 @@ class PublicContract(unittest.TestCase):
             [
                 "Table",
                 "_CORE_VERSION",
+                "_Check",
                 "_Error",
                 "_Plans",
                 "_ProjectRun",
                 "_Run",
                 "_SelfTest",
                 "_Submission",
+                "_info",
                 "_lint",
                 "_plans",
                 "_project_check",
+                "_project_names",
                 "_project_run",
                 "_project_spec",
                 "_project_submission",
+                "_project_summary",
                 "_read_odm",
                 "_schema",
                 "_selftest",
                 "_spec_check",
                 "_spec_resolve",
                 "_spec_run",
+                "_spec_summary",
             ],
         )
         self.assertEqual(yamaa.__version__, "0.5.0")
@@ -497,7 +503,8 @@ class PublicContract(unittest.TestCase):
         source = case / "spec.yaml"
         source.write_text(
             source.read_text(encoding="utf-8").replace(
-                "args: {}", "args: {x: SOURCE.VALUE}"
+                "        name: project_value\n",
+                "        name: project_value\n        args: {x: SOURCE.VALUE}\n",
             ),
             encoding="utf-8",
         )
@@ -669,6 +676,9 @@ class PublicContract(unittest.TestCase):
         project, case = self.function_study()
         runs = project.run()
         self.assertEqual(runs.names, ["TEST"])
+        # The project names what a run of every section builds, read without
+        # data (D45).
+        self.assertEqual(project.names, runs.names)
         self.assertTrue(self.issues(runs).is_empty())
         member = runs["TEST"]
         self.assertEqual(public_names(member), TRUTH["members"]["member_run"])
@@ -684,10 +694,11 @@ class PublicContract(unittest.TestCase):
         error = self.refusal(lambda: runs["ADSL"])
         self.assertEqual(str(error), error_text("unknown_member"))
         self.assertEqual(error.issues.to_pylist(), [unknown_member('["TEST"]')])
-        # Membership and iteration go by name, like indexing.
+        # Membership, iteration and length go by name, like indexing.
         self.assertIn("TEST", runs)
         self.assertNotIn("ADSL", runs)
         self.assertEqual(list(runs), ["TEST"])
+        self.assertEqual(len(runs), len(runs.names))
         self.assertEqual(project.run("adam").names, ["TEST"])
         # A section the project does not declare refuses the run (PROJECT-14).
         error = self.refusal(lambda: project.run("sdtm"))
@@ -698,6 +709,13 @@ class PublicContract(unittest.TestCase):
         with (case / "project.yaml").open("a", encoding="utf-8") as listing:
             listing.write("sdtm:\n  specs: []\n")
         self.assertEqual(project.run("sdtm").names, [])
+        self.assertEqual(len(project.run("sdtm")), 0)
+        self.assertEqual(project.names, ["TEST"])
+        # Without a creation time the submission reads the clock once and
+        # reports the time it gave every section (D129).
+        self.assertRegex(
+            project.submission().created, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$"
+        )
         # A run or a submission that built nothing has nothing to save.
         for result, key, rule in (
             (project.run("sdtm"), "empty_project_run_save", "PROJECT-12"),
@@ -765,20 +783,26 @@ class PublicContract(unittest.TestCase):
 
     def test_callback_string_larger_than_one_mebibyte_is_owned_and_saved_exactly(self):
         _, case = self.function_study()
-        environment = case / "python/environment.yaml"
-        environment.write_text(
-            "schema_version: '1.0'\nlock: uv.lock\n"
-            "functions:\n  text:\n    function: yamaa_benchmarks.project_value\n"
-            "    description: Return text unchanged.\n"
-            "    params: [{name: x, type: str}]\n    returns: str\n    tests:\n"
-            "      - {id: normal, covers: [normal], args: {x: short}, result: short}\n"
-            "      - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
-            "      - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+        function = case / "functions/text.yaml"
+        function.write_text(
+            "yamaa: '1.0'\ntype: function\nname: text\n"
+            "description: Return text unchanged.\n"
+            "params: [{name: x, type: str}]\nreturns: str\n"
+            "implementations: {python: yamaa_benchmarks.project_value}\ntests:\n"
+            "  - {id: normal, covers: [normal], args: {x: short}, result: short}\n"
+            "  - {id: empty, covers: [boundary], args: {x: ''}, result: ''}\n"
+            "  - {id: missing, covers: ['short-circuit-missing:x'], args: {x: null}, result: null}\n",
+            encoding="utf-8",
+        )
+        (case / "project.yaml").write_text(
+            "yamaa: '1.0'\ntype: project\nfunctions: [functions/text.yaml]\n"
+            "environments: {python: {lock: python/uv.lock}}\n"
+            "adam: {specs: [spec.yaml]}\n",
             encoding="utf-8",
         )
         source = case / "spec.yaml"
         source.write_text(
-            "schema_version: '1.0'\ndomain: TEXT\nkeys: [ID]\n"
+            "yamaa: '1.0'\ntype: spec\nmodel: ADaM\ndomain: TEXT\nkeys: [ID]\n"
             "input: {SRC: {path: large.csv, types: {ID: int, V: str}}}\n"
             "columns:\n  - {name: ID, type: int, derivation: SRC.ID}\n"
             "  - {name: V, type: str, derivation: {function: {name: text, args: {x: SRC.V}}}}\n"
@@ -794,7 +818,7 @@ class PublicContract(unittest.TestCase):
         for name in (
             "spec.yaml",
             "project.yaml",
-            "python/environment.yaml",
+            "functions/text.yaml",
             "large.csv",
         ):
             (case / name).unlink()
@@ -813,6 +837,9 @@ class PublicContract(unittest.TestCase):
         )
         checked = self.issues(project.check())
         self.assertEqual(checked.to_dicts(), unread)
+        error = self.refusal(lambda: project.names)
+        self.assertEqual(str(error), error_text("unread_project_names", absent))
+        self.assertEqual(error.issues.to_pylist(), unread)
         runs = project.run()
         self.assertEqual(runs.names, [])
         self.assertEqual(self.issues(runs).to_dicts(), unread)
@@ -827,6 +854,8 @@ class PublicContract(unittest.TestCase):
         self.assertEqual(error.issues.to_pylist(), [unknown_member("[]")])
         submission = project.submission("sdtm", created="2026-09-11T00:00:00")
         self.assertEqual(public_names(submission), TRUTH["members"]["submission"])
+        # The creation time given is kept, though nothing composed (D129).
+        self.assertEqual(submission.created, "2026-09-11T00:00:00")
         self.assertEqual(self.issues(submission).to_dicts(), unread)
         for _ in range(2):
             error = self.refusal(submission.save)
@@ -837,8 +866,11 @@ class PublicContract(unittest.TestCase):
         for name in TRUTH["read_only_views"]["project_run"]:
             with self.subTest(name=name), self.assertRaises(AttributeError):
                 setattr(runs, name, None)
+        for name in TRUTH["read_only_views"]["submission"]:
+            with self.subTest(name=name), self.assertRaises(AttributeError):
+                setattr(submission, name, None)
         with self.assertRaises(AttributeError):
-            submission.issues = None
+            project.names = []
         # The project file is read first: one that cannot be read reports its
         # own findings, and no section is checked.
         self.assertEqual(self.issues(project.run("bogus")).to_dicts(), unread)

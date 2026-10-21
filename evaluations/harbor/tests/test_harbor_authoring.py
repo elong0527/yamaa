@@ -112,8 +112,7 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
         assert yaml.safe_load(spec.read_text())
     assert sorted(p.name for p in sources.glob("*.md")) == ["README.md", "skeleton.md"]
     assert not list(out.rglob("result.*"))
-    # A 0.5 benchmark hands over its environment files by host.
-    functions = (sources / "functions" / "python.yaml").read_text()
+    functions = (sources / "functions" / "bmi.yaml").read_text()
     assert "bmi" in functions and "tests" not in functions
     assert (sources / "functions" / "yamaa_benchmarks.py").is_file()
     # The inputs are the files the evaluated agent gets.
@@ -148,6 +147,48 @@ def test_a_1_0_project_hands_over_each_function_file_without_its_tests(tmp_path)
         "python": "yamaa_benchmarks.bmi",
         "r": "yamaabenchmarks::bmi",
     }
+
+
+def test_a_0_5_benchmark_hands_over_its_environment_files_by_host(tmp_path):
+    # A 0.5 study, written inline since the corpus has none: its environment
+    # files reach the writer by host, without their tests, until the 0.5
+    # branch goes with them.
+    case = tmp_path / "adam-adsl-bmi"
+    shutil.copytree(BENCHMARKS / "adam-adsl-bmi", case)
+    shutil.rmtree(case / "functions")
+    (case / "project.yaml").write_text(
+        "schema_version: '1.0'\n"
+        "environments: {python: python/environment.yaml, r: r/environment.yaml}\n"
+        "adam: {specs: [spec.yaml]}\n"
+    )
+    for host, callable_ in (
+        ("python", "yamaa_benchmarks.bmi"),
+        ("r", "yamaabenchmarks::bmi"),
+    ):
+        (case / host).mkdir(exist_ok=True)
+        (case / host / "environment.yaml").write_text(
+            "schema_version: '1.0'\nfunctions:\n  bmi:\n"
+            f"    function: {callable_}\n"
+            "    description: Body mass index.\n"
+            "    params: [{name: weight_kg, type: float}, {name: height_cm, type: float}]\n"
+            "    returns: float\n    tests:\n"
+            "    - {id: normal, covers: [normal], result: 22.857142857142858,\n"
+            "       args: {weight_kg: 70.0, height_cm: 175.0}}\n"
+        )
+    functions = packet.write(case, tmp_path / "packet") / "sources" / "functions"
+    assert sorted(p.name for p in functions.iterdir()) == [
+        "python.yaml",
+        "r.yaml",
+        "yamaa_benchmarks.py",
+    ]
+    for host in ("python", "r"):
+        declared = yaml.safe_load((functions / f"{host}.yaml").read_text())
+        assert list(declared["functions"]["bmi"]) == [
+            "function",
+            "description",
+            "params",
+            "returns",
+        ]
 
 
 @pytest.mark.parametrize("benchmark", CASES)

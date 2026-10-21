@@ -322,6 +322,160 @@ alike, so the corpus can move to 1.0 one prefix at a time (P2-5 to P2-8).
 `examples/executor_probe.rs` in the `yamaa` crate documents its shapes and
 arguments. Record its timings on an issue, never in the repository.
 
+## Writing tests
+
+AGENTS.md states the rules for a test; this section says how each
+language keeps them. A test is a claim about one behaviour: an authored
+expectation, the smallest input that reaches the behaviour through its
+owner's public surface, and one comparison of the complete result. The
+expectation is authored, or read from authored truth, and never produced
+by running the candidate: the rule for `benchmarks/**/expected/` applies
+to every fixture, so no snapshot library and no pasted output enters a
+test.
+
+### Shape
+
+- The file's first comment names the family it holds and the rules it
+  proves. Each test's name is the sentence it proves, one claim per
+  test: a name that needs `and` is two tests or one table. The comment
+  above a test cites the rule or decision it enforces (`FILE-11`, `D188
+  on #3030`) instead of restating it, and a test that a rule card cites
+  as evidence (`Evidence: <path>::<name>`) keeps that name.
+- Arrange with the owned factories, act once, then compare the whole
+  observable record with an authored literal: a diagnostic is its phase,
+  condition, rule, spec paths and context together; a table is its
+  schema and rows; a saved artifact is its bytes. A chain of partial
+  checks, or `any(...)` over a list of findings, hides what was
+  produced.
+- An assertion inside a loop carries the case's label, so a failure
+  names the case rather than an index.
+- A helper that builds returns a value and asserts nothing; a helper
+  that asserts prints the whole actual value when it fails, points at
+  its caller (`#[track_caller]` in Rust) and returns what the test needs
+  next. Both leave the test body once a second file needs them, and the
+  inner modules of one file share one fixture rather than each defining
+  their own.
+- The input is the two or three rows that reach the behaviour, with
+  names and values that make the expectation readable.
+
+### Rust
+
+Integration tests live in `tests/<family>.rs`, which Cargo discovers;
+nested `mod` blocks give a test its path, so a failure reads as
+`schema::schema_validation::case_otherwise_reports_inside_the_otherwise_member`.
+Each crate's `tests/support/` is its one helper tree, declared once per
+file as `#[allow(dead_code)] mod support;`. Reach for its factories
+before writing a local one: `support::document::Tree` builds a document
+by hand, `support::roots` lowers project functions and codelists into
+the AST roots a project file produces, `support::ports` (core) holds the
+scripted ports that log each effect and panic on an unexpected request,
+`support::specification_run` (adapters) prepares, compiles and lowers a
+document and replays authored reports against it, the `check` helpers
+of `support::diagnostic` (core) compare a diagnostic's five fields and
+return its rendered code, `support::benchmarks` (adapters) reads what a
+live benchmark states (D120), and `support::odm_files::Scratch`
+(adapters) is a scratch directory removed on drop. The core and adapters
+trees hold copies of the AST-root factories by design (#2158), so a
+change to one is made to both.
+
+- Authored controls are files under `tests/fixtures/`, read with
+  `include_str!`; assert their row count so a truncated fixture fails
+  (`tests/portable_math_golden.rs` in core).
+- A variant of a document comes from an exact-once edit, as
+  `support::odm_files::edit` is, never from `str::replace`, which does
+  nothing when its pattern is missing.
+- Tests that differ in one value are one test over a table, with the
+  label in every assertion:
+
+  ```rust
+  for (input, expected, label) in [
+      (two_rows(), vec![1, 2], "two rows"),
+      (header_only(), vec![], "header only"),
+  ] {
+      assert_eq!(behaviour(&input), expected, "{label}");
+  }
+  ```
+
+- An inline `#[cfg(test)]` module tests a private function beside its
+  code, reaches the shared builders through the crate's `#[path]`
+  includes (`crate::test_document::Tree` in core), and repeats nothing
+  an integration test proves through the public surface.
+- A scratch directory is a value removed on drop, as the adapters'
+  `Scratch` is, and its `Drop` never unwraps: a panic while unwinding
+  aborts the whole binary. A crate without such a helper adds it to
+  `support/` rather than building a `std::env::temp_dir()` path by hand.
+- No `#[ignore]` and no `thread::sleep`. An environment variable serves
+  only a declared skip with its reason, as `YAMAA_SKIP_NETWORK_SHARES`
+  does, and `Command::new` runs only the program under test: the
+  `yamaa-cli` binary, the shell whose quoting a path test proves, or the
+  converter a front-end comparison reads.
+- Run one file with `cargo test --locked -p <crate> --test <family>`,
+  and one test by appending its path.
+
+### Python
+
+`tools/tests` is `unittest.TestCase` throughout, run by pytest in
+`make test-python` and by `python -m unittest` in `make docs-test`, so a
+new file keeps that form: a module docstring naming the family, one class
+per subject, `setUp` creating a `tempfile.TemporaryDirectory` registered
+with `addCleanup`, and `subTest(case=name)` around each case of a table.
+`python/tests` is plain pytest with `tmp_path` and `parametrize`. Fixture
+text is a module constant or an authored file; a fixture repository
+comes from a builder such as `write_repository` in
+`tools/tests/rules_fixture.py`, and the repository root is
+`tools.paths.ROOT`. Mock the name the module under test looks up, inside
+the narrowest `with`, and spawn a real program only when that program is
+the subject, as the staging and command tests do; a new `main` takes
+`argv` so its test calls it in-process instead of patching `sys.argv`.
+Skip with `self.skipTest(reason)` when an optional tool is missing. A
+walk of the benchmark corpus, a conversion of it or a `cargo` invocation
+runs in `setUpClass` or a cached module function, once per module.
+Prefer `assertEqual` on the whole list or dictionary and
+`assertRaisesRegex` on the message to `assertIn`, `assertTrue(any(...))`
+or a bare `assertRaises`.
+
+The installed suites under `python/tests/installed/` run outside the
+checkout against an installed package: they import `yamaa` and the
+staged `host_fixtures` reader and nothing from `tools/`.
+
+### R
+
+`R/yamaa/tests/*.R` are plain scripts: `R CMD check` runs each in a copy
+of the tests directory with the staged inputs beside it, and the first
+failing assertion ends the file. A script finds its inputs relative to
+the working directory and sources the shared readers from
+`host-fixtures/` (`reader.R`, `context.R`); every shared R helper lives
+there, because a file in `rust/tests/host-fixtures/` is staged beside
+every suite and into the R source package. Each case is a
+`local({ ... })` block that creates its directory with `tempfile()` and
+removes it with `on.exit(unlink(dir, recursive = TRUE), add = TRUE)`.
+Name every assertion, so a failure says what was expected and for which
+case:
+
+```r
+stopifnot(
+  "the run keeps both rows" = identical(nrow(table), 2L),
+  "the first issue is the refusal" =
+    identical(issues$condition[[1]], expected$condition)
+)
+```
+
+A loop over cases wraps each case in `local()` and puts the case's name
+in its labels. A suggested package that is missing skips the file with a
+message, as the files do. A file holds one family, split by feature,
+because the first failure hides the rest.
+
+### Shared truth across hosts
+
+A case that Python and R both check is authored once, in
+`rust/tests/host-fixtures/cases.json` under a family that its README
+lists, with its consumers named in
+`rust/qualification/supplemental.json`. Each host's suite reads the
+family and asserts the same rows; neither types the expected value by
+hand. A host suite adds only what is host-specific: argument conversion,
+retained ownership, i64 and NUL handling, callbacks, interrupts and the
+host's own failure text.
+
 ## CI and release qualification
 
 The ordinary CI workflow runs the same check targets listed above for each PR,

@@ -19,6 +19,7 @@ import yamaa
 project = yamaa.project("project.yaml")
 run = project.spec("DM").run()      # one dataset, built in memory
 run.output, run.issues, run.report
+run.status                          # "succeeded" or "failed"
 dm = run.output.to_polars()         # or to_pandas(), to_arrow(), to_pylist()
 paths = run.save()                  # write the dataset and its run report
 project.run("adam").save()          # every ADaM dataset

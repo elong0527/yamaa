@@ -343,7 +343,7 @@ impl Diagnostic {
     /// command line prints each issue so; a summary's `first issue:` line and
     /// D39's error text carry the first.
     pub fn text(&self) -> String {
-        crate::text::issue_line(self, crate::text::current_directory().as_deref())
+        crate::text::issue_line(self, &crate::text::current_directory())
     }
 
     /// The issue as one JSON object with the twelve keys of the issues table,
