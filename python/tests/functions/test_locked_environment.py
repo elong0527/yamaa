@@ -1,240 +1,217 @@
-"""Independent metadata, normal binding and editable-provider boundary contracts."""
+"""Installed metadata, normal binding and editable-provider boundary contracts.
 
+The engine reads a function's uv lock and compares versions; its cases are in
+rust/crates/yamaa-adapters/tests/uv_lock.rs. This host reports only the
+installation, and a project run proves the two together.
+"""
+
+import json
 import sys
-import tomllib
 from importlib import metadata
 from pathlib import Path
 
 import pytest
+from packaging.markers import default_environment
 
+import yamaa
 from yamaa import _locked_functions as m
 
 
-def lock(*records):
-    text = "version = 1\n"
-    for name, version, markers in records:
-        text += f'\n[[package]]\nname = "{name}"\nversion = "{version}"\n'
-        if markers is not None:
-            text += (
-                "resolution-markers = ["
-                + ", ".join(repr(mark) for mark in markers)
-                + "]\n"
-            )
-    return text.encode()
+def test_standard_library_modules_are_named_by_the_interpreter():
+    assert m.is_standard_library("math")
+    assert m.is_standard_library("textwrap")
+    assert not m.is_standard_library("project_bmi")
+    assert not m.is_standard_library("yamaa")
 
 
-def verify(raw, calls, versions, providers, trace, environment=None):
-    def observed_version(name):
-        trace.append(("version", name))
-        if name not in versions:
-            raise metadata.PackageNotFoundError(name)
-        return versions[name]
-
-    def observed_providers():
-        trace.append(("providers",))
-        return providers
-
-    return m.verify_versions(
-        raw,
-        calls,
-        installed_version=observed_version,
-        package_providers=observed_providers,
-        environment=environment,
-    )
-
-
-def test_empty_selection_has_no_parsing_or_metadata_effects():
-    trace = []
-    assert verify(b"[malformed", [], {}, {}, trace) == ()
-    assert trace == []
-
-
-def test_stdlib_provider_mapping_precedes_exemption_and_yamaa_rechecks_each_activation():
-    raw = lock(("yamaa", "0.2.0", None))
-    trace = []
-    for _ in range(2):
-        assert (
-            verify(raw, ["math.sqrt", "statistics.mean"], {"yamaa": "0.2.0"}, {}, trace)
-            == ()
-        )
-    assert trace == [
-        ("providers",),
-        ("version", "yamaa"),
-        ("providers",),
-        ("version", "yamaa"),
-    ]
-
-
-def test_module_to_distribution_mapping_is_lossless_and_unrelated_packages_are_not_audited():
-    raw = lock(
-        ("yamaa", "0.2.0", None), ("project-bmi", "1.2.0", None), ("unused", "9", None)
-    )
-    trace = []
-    assert (
-        verify(
-            raw,
-            ["project_bmi.calculate", "project_bmi.other"],
-            {"yamaa": "0.2.0", "project-bmi": "1.2"},
-            {"project_bmi": ["Project_BMI"]},
-            trace,
-        )
-        == ()
-    )
-    assert trace == [("providers",), ("version", "project-bmi"), ("version", "yamaa")]
-
-
-def test_platform_forks_select_the_locked_version_independently_of_installed_version():
-    raw = lock(
-        ("yamaa", "0.2.0", None),
-        ("project", "1", ["sys_platform == 'linux'"]),
-        ("project", "2", ["sys_platform == 'win32'"]),
-    )
-    trace = []
-    result = verify(
-        raw,
-        ["project.run"],
-        {"yamaa": "0.2.0", "project": "2"},
-        {"project": ["project"]},
-        trace,
-        {"sys_platform": "linux"},
-    )
-    assert result == (m.Finding("project", "version_mismatch", ("1",), "2"),)
-    assert (
-        verify(
-            raw,
-            ["project.run"],
-            {"yamaa": "0.2.0", "project": "2"},
-            {"project": ["project"]},
-            [],
-            {"sys_platform": "win32"},
-        )
-        == ()
-    )
-
-
-def test_all_independent_package_failures_are_reported_and_namespace_providers_all_checked():
-    raw = lock(("yamaa", "0.2.0", None), ("a", "1", None), ("b", "2", None))
-    trace = []
-    result = verify(
-        raw,
-        ["shared.function", "unknown.call"],
-        {"yamaa": "0.1.0", "a": "3"},
-        {"shared": ["a", "b"]},
-        trace,
-    )
-    assert result == (
-        m.Finding("unknown", "distribution_not_identified"),
-        m.Finding("a", "version_mismatch", ("1",), "3"),
-        m.Finding("b", "package_not_installed", ("2",)),
-        m.Finding("yamaa", "version_mismatch", ("0.2.0",), "0.1.0"),
-    )
-    assert trace == [
-        ("providers",),
-        ("version", "a"),
-        ("version", "b"),
-        ("version", "yamaa"),
-    ]
-
-
-def test_ambiguous_forks_are_not_chosen_by_the_installed_version():
-    raw = lock(("yamaa", "0.2.0", None), ("project", "1", None), ("project", "2", None))
-    trace = []
-    assert verify(
-        raw,
-        ["project.run"],
-        {"yamaa": "0.2.0", "project": "2"},
-        {"project": ["project"]},
-        trace,
-    ) == (m.Finding("project", "ambiguous_lock_version", ("1", "2")),)
-    assert ("version", "project") not in trace
-
-
-@pytest.mark.parametrize(
-    "raw",
-    [
-        b"\xff",
-        b"version = true\npackage = []",
-        b"version = 2\npackage = []",
-        b"version = 1\npackage = {}",
-        b"version = 1\n[[package]\n",
-    ],
-)
-def test_invalid_lock_syntax_and_shape_precede_metadata(raw):
-    trace = []
-    with pytest.raises(m.InvalidLock):
-        verify(raw, ["project.run"], {}, {}, trace)
-    assert trace == []
-
-
-def test_deeply_nested_lock_syntax_is_an_invalid_lock():
-    depth = sys.getrecursionlimit() * 2
-    raw = f"version = 1\nx = {'[' * depth}{']' * depth}\npackage = []\n".encode()
-    trace = []
-    with pytest.raises(m.InvalidLock, match="invalid uv lock syntax"):
-        verify(raw, ["project.run"], {}, {}, trace)
-    assert trace == []
-
-
-def test_invalid_markers_and_missing_versions_do_not_become_installed_version_choices():
-    for raw in [
-        lock(("yamaa", "0.2.0", ["not a marker"])),
-        b'version = 1\n[[package]]\nname = "yamaa"\n',
-    ]:
-        with pytest.raises(m.InvalidLock):
-            verify(raw, ["math.sqrt"], {"yamaa": "0.2.0"}, {}, [])
-
-
-def test_uncalled_dynamic_package_can_omit_version_but_called_package_cannot():
-    raw = (
-        lock(("yamaa", "0.2.0", None))
-        + b'\n[[package]]\nname = "program"\nsource = {editable = "program"}\n'
-    )
-    assert verify(raw, ["math.sqrt"], {"yamaa": "0.2.0"}, {}, []) == ()
-    with pytest.raises(m.InvalidLock, match="called package has no locked version"):
-        verify(raw, ["program.value"], {"yamaa": "0.2.0"}, {"program": ["program"]}, [])
-
-
-def test_original_metadata_exception_and_interrupt_identity_are_preserved():
+def test_installed_versions_are_the_metadata_text_and_failures_keep_identity(
+    monkeypatch,
+):
+    assert m.installed_version("yamaa") == metadata.version("yamaa")
+    with pytest.raises(metadata.PackageNotFoundError):
+        m.installed_version("yamaa-no-such-distribution")
     for original in [RuntimeError("opaque metadata error"), KeyboardInterrupt("stop")]:
 
         def fail(name, original=original):
             raise original
 
+        monkeypatch.setattr(m.metadata, "version", fail)
         with pytest.raises(type(original)) as caught:
-            m.verify_versions(
-                lock(("yamaa", "0.2.0", None)), ["math.sqrt"], installed_version=fail
-            )
+            m.installed_version("yamaa")
         assert caught.value is original
 
 
-def test_missing_installed_version_is_a_finding_without_guessing_or_stopping_other_checks():
-    result = verify(
-        lock(("yamaa", "0.2.0", None), ("project", "1", None)),
-        ["project.run"],
-        {"yamaa": "0.2.0", "project": None},
-        {"project": ["project"]},
-        [],
-    )
-    assert result == (m.Finding("project", "invalid_installed_version", ("1",)),)
+def test_marker_environment_is_the_one_packaging_evaluated_markers_in():
+    assert m.marker_environment() == default_environment()
 
 
-def test_existing_repository_uv_lock_identifies_yamaa_and_a_called_distribution():
-    raw = (Path(__file__).resolve().parents[2] / "uv.lock").read_bytes()
-    versions = {
-        record["name"]: record["version"]
-        for record in tomllib.loads(raw.decode("utf-8"))["package"]
-        if record["name"] in {"yamaa", "packaging"}
-    }
-    trace = []
-    result = verify(
-        raw,
-        ["packaging.version.Version"],
-        versions,
-        {"packaging": ["packaging"]},
-        trace,
+FUNCTION = """\
+description: Text without its common leading white space.
+params: [{name: text, type: str}]
+returns: str
+tests:
+  - {id: normal, covers: [normal, boundary], args: {text: '  a'}, result: a}
+  - {id: missing, covers: ['short-circuit-missing:text'], args: {text: null}, result: null}
+"""
+SPEC = """\
+schema_version: '1.0'
+domain: TEST
+keys: [ID]
+input: {SRC: {path: input.csv, types: {ID: int, TEXT: str}}}
+columns:
+  - {name: ID, type: int, derivation: SRC.ID}
+  - {name: TEXT, type: str, derivation: {function: {name: dedent, args: {text: SRC.TEXT}}}}
+output: {path: output.csv, columns: [ID, TEXT]}
+"""
+
+
+@pytest.fixture(params=["1.0", "0.5"])
+def study(request, tmp_path):
+    """A project whose specification calls `textwrap.dedent`, with its uv lock
+    declared as a 1.0 project declares it, or as a 0.5 environment file does."""
+    if request.param == "1.0":
+        (tmp_path / "functions").mkdir()
+        (tmp_path / "functions/dedent.yaml").write_text(
+            'yamaa: "1.0"\ntype: function\nname: dedent\n'
+            + FUNCTION
+            + "implementations: {python: textwrap.dedent}\n"
+        )
+        (tmp_path / "project.yaml").write_text(
+            'yamaa: "1.0"\ntype: project\nfunctions: [functions/dedent.yaml]\n'
+            "environments:\n  python: {lock: uv.lock}\nadam:\n  specs: [spec.yaml]\n"
+        )
+    else:
+        indented = "".join("    " + line + "\n" for line in FUNCTION.splitlines())
+        (tmp_path / "environment.yaml").write_text(
+            "schema_version: '1.0'\nlock: uv.lock\nfunctions:\n  dedent:\n"
+            "    function: textwrap.dedent\n" + indented
+        )
+        (tmp_path / "project.yaml").write_text(
+            "schema_version: '1.0'\nenvironments: {python: environment.yaml}\n"
+            "adam: {specs: [spec.yaml]}\n"
+        )
+    (tmp_path / "spec.yaml").write_text(SPEC)
+    (tmp_path / "input.csv").write_text("ID,TEXT\n1,a\n")
+    return tmp_path
+
+
+def lock(study, *records):
+    """Write the study's uv lock of `(version, resolution-markers)` records
+    for yamaa."""
+    text = "version = 1\n"
+    for version, markers in records:
+        text += f'\n[[package]]\nname = "yamaa"\nversion = "{version}"\n'
+        if markers is not None:
+            text += f"resolution-markers = {json.dumps(markers)}\n"
+    (study / "uv.lock").write_text(text)
+
+
+def run(study):
+    return yamaa.project(study / "project.yaml").spec("TEST").run()
+
+
+def problems(result):
+    """Each issue's condition and the facts of its context that a lock
+    verification decides."""
+    facts = ("package", "reason", "expected", "actual", "stage", "code")
+    return [
+        (
+            issue["condition"],
+            {
+                key: value
+                for key, value in json.loads(issue["context"]).items()
+                if key in facts
+            },
+        )
+        for issue in result.issues.to_dicts()
+    ]
+
+
+def mismatch(reason, expected, actual):
+    return (
+        "runtime_artifact_mismatch",
+        {"package": "yamaa", "reason": reason, "expected": expected, "actual": actual},
     )
-    assert result == ()
-    assert trace == [("providers",), ("version", "packaging"), ("version", "yamaa")]
+
+
+INSTALLED = metadata.version("yamaa")
+
+
+def test_a_run_verifies_its_uv_lock_in_the_engine(study):
+    lock(study, (INSTALLED, None))
+    result = run(study)
+    assert problems(result) == []
+    assert result.output["TEXT"].to_list() == ["a"]
+    lock(study, ("999999.0", None))
+    result = run(study)
+    assert result.output is None
+    assert problems(result) == [mismatch("version_mismatch", ["999999.0"], INSTALLED)]
+
+
+def test_resolution_markers_select_by_the_interpreter_s_marker_environment(study):
+    here, elsewhere = f"sys_platform == '{sys.platform}'", "sys_platform == 'none'"
+    lock(study, (INSTALLED, [here]), ("999999.0", [elsewhere]))
+    assert problems(run(study)) == []
+    lock(study, (INSTALLED, [elsewhere]), ("999999.0", [here]))
+    assert problems(run(study)) == [
+        mismatch("version_mismatch", ["999999.0"], INSTALLED)
+    ]
+    lock(study, (INSTALLED, ["python_full_version < '3'"]))
+    assert problems(run(study)) == [mismatch("version_not_locked", [], None)]
+
+
+@pytest.mark.parametrize(
+    ("reply", "reason", "actual"),
+    [
+        (metadata.PackageNotFoundError("yamaa"), "package_not_installed", None),
+        (None, "invalid_installed_version", None),
+        ("not a version", "invalid_installed_version", "not a version"),
+    ],
+)
+def test_the_engine_classifies_what_the_metadata_holds(
+    study, monkeypatch, reply, reason, actual
+):
+    def observed(name):
+        assert name == "yamaa"
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    lock(study, ("1.0", None))
+    monkeypatch.setattr(m, "installed_version", observed)
+    assert problems(run(study)) == [mismatch(reason, ["1.0"], actual)]
+
+
+def test_an_original_metadata_interrupt_keeps_its_identity(study, monkeypatch):
+    original = KeyboardInterrupt("stop")
+
+    def interrupted(name):
+        raise original
+
+    lock(study, (INSTALLED, None))
+    monkeypatch.setattr(m, "installed_version", interrupted)
+    with pytest.raises(KeyboardInterrupt) as caught:
+        run(study)
+    assert caught.value is original
+
+
+def test_a_lock_the_engine_cannot_read_refuses_the_run_before_any_version(
+    study, monkeypatch
+):
+    def unexpected(*arguments):
+        raise AssertionError("observed after a refused lock")
+
+    for name in ("installed_version", "marker_environment"):
+        monkeypatch.setattr(m, name, unexpected)
+    (study / "uv.lock").write_text(
+        'version = 1\n[[package]]\nname = "yamaa"\nversion = "1"\n'
+        'resolution-markers = ["not a marker"]\n'
+    )
+    result = run(study)
+    assert result.output is None
+    assert problems(result) == [
+        ("engine_rejected", {"stage": "build", "code": "opaque_host"})
+    ]
 
 
 @pytest.fixture
@@ -474,21 +451,9 @@ def test_editable_without_top_level_names_maps_actual_recorded_module_without_im
     dist, _ = editable_metadata(tmp_path, "Clinical-Programs", "project_bmi")
     monkeypatch.setattr(m.metadata, "packages_distributions", dict)
     monkeypatch.setattr(m.metadata, "distributions", lambda: iter([dist]))
-    trace = []
-
-    def version(name):
-        trace.append(name)
-        return "0.2.0" if name == "yamaa" else "1.2.0"
-
-    assert (
-        m.verify_versions(
-            lock(("yamaa", "0.2.0", None), ("clinical-programs", "1.2", None)),
-            ["project_bmi.calculate"],
-            installed_version=version,
-        )
-        == ()
-    )
-    assert trace == ["clinical-programs", "yamaa"]
+    assert m._installed_providers(("project_bmi",)) == {
+        "project_bmi": ["Clinical-Programs"]
+    }
     assert "project_bmi" not in sys.modules
 
 
@@ -544,21 +509,7 @@ def test_missing_editable_path_does_not_obstruct_other_called_package_metadata(
         m.metadata, "packages_distributions", lambda: {"project_bmi": ["project-bmi"]}
     )
     monkeypatch.setattr(m.metadata, "distributions", lambda: iter([dist]))
-    trace = []
-
-    def version(name):
-        trace.append(name)
-        return {"yamaa": "0.2.0", "project-bmi": "1.2"}[name]
-
-    assert (
-        m.verify_versions(
-            lock(("yamaa", "0.2.0", None), ("project-bmi", "1.2", None)),
-            ["project_bmi.calculate"],
-            installed_version=version,
-        )
-        == ()
-    )
-    assert trace == ["project-bmi", "yamaa"]
+    assert m._installed_providers(("project_bmi",)) == {"project_bmi": ["project-bmi"]}
     assert "unused_programs" not in sys.modules
     assert "project_bmi" not in sys.modules
 
@@ -588,23 +539,6 @@ def test_editable_path_read_errors_and_interrupts_retain_original_identity(
     with pytest.raises(type(original)) as caught:
         m._installed_providers(("project_bmi",))
     assert caught.value is original
-
-
-def test_distribution_with_stdlib_root_name_is_version_checked_before_exemption():
-    trace = []
-    result = verify(
-        lock(("yamaa", "0.2.0", None), ("shadow-statistics", "1", None)),
-        ["statistics.mean"],
-        {"yamaa": "0.2.0", "shadow-statistics": "2"},
-        {"statistics": ["shadow-statistics"]},
-        trace,
-    )
-    assert result == (m.Finding("shadow-statistics", "version_mismatch", ("1",), "2"),)
-    assert trace == [
-        ("providers",),
-        ("version", "shadow-statistics"),
-        ("version", "yamaa"),
-    ]
 
 
 def test_many_recorded_import_lines_are_not_executed_before_a_real_editable_path(
@@ -645,7 +579,7 @@ def test_editable_metadata_original_errors_and_interrupts_are_preserved(
     assert caught.value is original
 
 
-def test_editable_metadata_invalid_utf8_is_an_invalid_lock(monkeypatch):
+def test_editable_metadata_invalid_utf8_is_invalid_metadata(monkeypatch):
     original = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
 
     class UndecodableMetadata:
@@ -656,6 +590,6 @@ def test_editable_metadata_invalid_utf8_is_an_invalid_lock(monkeypatch):
     monkeypatch.setattr(
         m.metadata, "distributions", lambda: iter([UndecodableMetadata()])
     )
-    with pytest.raises(m.InvalidLock, match="invalid editable metadata") as caught:
+    with pytest.raises(m.InvalidMetadata, match="invalid editable metadata") as caught:
         m._installed_providers(("project_bmi",))
     assert caught.value.__cause__ is original
