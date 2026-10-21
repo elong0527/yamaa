@@ -166,10 +166,12 @@ fn context(pairs: &[(&str, &str)]) -> crate::diagnostic::Context {
 
 /// A read of an input that declares no `key` fails at the read, naming the
 /// input, and its message names only what every cause of the condition
-/// records (LOOKUP-1, LOOKUP-5, D95).
+/// records (LOOKUP-1, LOOKUP-5, D95). The declarations alone decide it, so a
+/// check reports it before any input is read (D111).
 #[test]
 fn a_read_of_an_input_without_key_has_no_applicable_keys() {
     let prepared = prepare(spec(None, vec![column("AGE", "int", "DM.AGE")], vec![])).unwrap();
+    assert_eq!(prepared.check_declaration_diagnostics(), refused(&prepared));
     let [diagnostic] = refused(&prepared).try_into().unwrap();
     assert_eq!(diagnostic.code, Code::LookupNoApplicableKeys);
     assert_eq!(diagnostic.spec_paths, ["columns.AGE.derivation.source"]);
@@ -220,6 +222,10 @@ fn a_keyless_qualified_aggregate_matches_on_the_input_s_key() {
     assert_eq!(join_keys(&plan), [1]);
     let prepared = prepare(spec(None, vec![total()], vec![])).unwrap();
     let [diagnostic] = refused(&prepared).try_into().unwrap();
+    // A check decides it from the declarations alone (D111).
+    assert!(prepared
+        .check_declaration_diagnostics()
+        .contains(&diagnostic));
     assert_eq!(diagnostic.code, Code::LookupNoApplicableKeys);
     assert_eq!(
         diagnostic.spec_paths,

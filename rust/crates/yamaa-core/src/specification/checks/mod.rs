@@ -13,14 +13,16 @@
 //! reports each of them from binding, in binding's order, together with
 //! what only the captured schemas decide. Among them are what binding
 //! decides of each read of a row template or the column phase
-//! ([`boundaries`]) and the scopes it admits once the rows are bound
-//! ([`scopes`]).
+//! ([`boundaries`]), of each read of a lookup's own derivations or an
+//! aggregate's derive bindings ([`donors`]), and the scopes it admits once
+//! the rows are bound ([`scopes`]).
 //!
 //! A check that needs an operation's executor type constructs it from the
 //! tree, as binding does.
 
 pub(super) mod boundaries;
 pub(super) mod declared;
+pub(super) mod donors;
 pub(super) mod lookups;
 pub(super) mod odm;
 pub(super) mod root;
@@ -169,6 +171,24 @@ pub(super) fn template_driver<'a>(spec: &'a Spec, template: &'a ast::Template) -
             _ => None,
         },
     }
+}
+
+/// Whether the input `owner` declares no `key` on a 1.0 tree, where an
+/// implicit join of it, and a qualified aggregate over it without `key` of
+/// its own, match on that declared key (D23, D63): such a read has nothing to
+/// match on, whatever the input stores (D111). A 0.5 join infers its keys
+/// from the captured schemas.
+pub(super) fn keyless(spec: &Spec, owner: &str) -> bool {
+    !spec.header.surface.infers_join_keys() && spec.input_key(owner).is_none_or(<[_]>::is_empty)
+}
+
+/// The refusal at `path` of a read of the keyless 1.0 input `dataset` through
+/// its implicit join (`no_applicable_keys`, LOOKUP-5, D111), as binding
+/// reports it ([`crate::reference_binding::JoinedFinding::key_diagnostic`]).
+pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
+    BindFinding::Source(source_expressions::SourceFinding::from_diagnostic(
+        crate::diagnostic::lookup::undeclared_input_key(path, dataset, false),
+    ))
 }
 
 /// The name a reference reads.

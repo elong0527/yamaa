@@ -166,6 +166,16 @@ fn same_keys(a: &[(Data, Data)], b: &[(Data, Data)]) -> bool {
     a.len() == b.len() && a.iter().all(|(key, _)| lookup(b, key).is_some())
 }
 
+/// Whether a plain scalar reads as text: no null, Boolean or number.
+pub(super) fn plain_text(text: &str) -> bool {
+    matches!(resolve(text), Data::Text(_))
+}
+
+/// Whether a plain scalar reads as the Boolean true.
+pub(super) fn plain_true(text: &str) -> bool {
+    matches!(resolve(text), Data::Boolean(true))
+}
+
 /// A plain scalar's value under the reference reader's YAML 1.2 resolution.
 fn resolve(text: &str) -> Data {
     if let Some(digits) = text.strip_prefix("0x") {
@@ -341,16 +351,30 @@ fn reads_intermediate(value: &Data, intermediates: &BTreeSet<&str>) -> bool {
         })
 }
 
-/// True when `value` is a literal derivation, driver-independent.
-fn is_literal(value: &Data) -> bool {
-    value
-        .map()
-        .is_some_and(|entries| entries.len() == 1 && entries[0].0.text() == Some("literal"))
+/// True when `value` is a literal derivation, driver-independent: in a 1.x
+/// file quoted text, a YAML number or null (D18), and in a 0.5 file
+/// `{literal: X}`.
+fn is_literal(value: &Data, versioned: bool) -> bool {
+    if !versioned {
+        return value
+            .map()
+            .is_some_and(|entries| entries.len() == 1 && entries[0].0.text() == Some("literal"));
+    }
+    match value {
+        Data::Null | Data::Integer(_) | Data::Float(_) => true,
+        Data::Text(text) => yamaa_core::expression::parse(text).is_ok_and(|parsed| {
+            matches!(
+                parsed.nodes()[parsed.ungroup(parsed.root())].kind,
+                yamaa_core::expression::NodeKind::String(_)
+            )
+        }),
+        _ => false,
+    }
 }
 
-/// Column names whose column-level derivations are not row-local: a
-/// derivation that uses a dataset-level operation, reads a named
-/// intermediate, or reads another column that is not row-local.
+/// Column names whose column-level derivations are not row-local (SPEC-6):
+/// a derivation that holds an aggregate or a window operation anywhere, reads
+/// a `SELF` intermediate, or reads another column that is not row-local.
 fn blocked_columns<'a>(columns: &[&'a Data], intermediates: &BTreeSet<&str>) -> HashSet<&'a str> {
     let mut reads: Vec<(&'a str, HashSet<&'a str>)> = Vec::new();
     let mut blocked = HashSet::new();
@@ -418,7 +442,8 @@ fn mapping_at(document: &Document, field: &str, index: usize) -> Option<usize> {
     document.pairs(item).map(|_| item)
 }
 
-/// The position of an entry's `name` (or `id`) key, else of the entry itself.
+/// The position of an entry's `name` (or `id`) key, else of the entry itself,
+/// with the entry's spec path.
 fn entry_key(
     document: &Document,
     field: &str,
@@ -430,7 +455,7 @@ fn entry_key(
         Some(key) => document.node(key).start,
         None => document.node(mapping).start,
     };
-    Some((start.line, start.column, format!("{field}[{index}]")))
+    Some((start.line, start.column, document.path(mapping).to_owned()))
 }
 
 fn row_derivation_key(
@@ -442,11 +467,7 @@ fn row_derivation_key(
     let derivations = document.member(Some(mapping), "derivations")?;
     let key = document.key(Some(derivations), column)?;
     let start = document.node(key).start;
-    Some((
-        start.line,
-        start.column,
-        format!("rows[{row}].derivations.{column}"),
-    ))
+    Some((start.line, start.column, document.path(key).to_owned()))
 }
 
 /// `missing_label`: every output column declares `label:`.
@@ -504,10 +525,10 @@ fn missing_labels(document: &Document, value: &Data) -> Vec<Departure> {
 }
 
 /// `repeated_row_derivation`: a uniform row-template derivation belongs at
-/// column level. Only row-local derivations are reported; a derivation
-/// reading a driver dataset stays when the templates build from different
-/// datasets, and a column a row filter reads stays, since filters resolve
-/// only columns their own template derives.
+/// column level. Only row-local derivations are reported (SPEC-6); a
+/// derivation reading a driver dataset stays when the templates build from
+/// different datasets, and a column a row filter reads stays, since filters
+/// resolve only columns their own template derives.
 fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure> {
     let mut found = Vec::new();
     let rows = entries(value, "rows");
@@ -524,8 +545,15 @@ fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure>
         })
         .filter_map(|entry| entry.get("name").and_then(Data::text))
         .collect::<HashSet<_>>();
+    // In a 1.x file a read of a `SELF` intermediate is not row-local, and a
+    // read of an intermediate an input backs is (SPEC-6). A 0.5 file keeps
+    // the 0.5 reading, in which a read of any named intermediate uses a
+    // lookup.
     let intermediates = entries(value, "intermediates")
         .into_iter()
+        .filter(|entry| {
+            !document.versioned || entry.get("dataset").and_then(Data::text) == Some("SELF")
+        })
         .filter_map(|entry| entry.get("id").and_then(Data::text))
         .collect::<BTreeSet<_>>();
     let blocked = blocked_columns(&columns, &intermediates);
@@ -581,7 +609,7 @@ fn repeated_row_derivations(document: &Document, value: &Data) -> Vec<Departure>
         }
         // Different drivers bind different records; only a literal is
         // driver-independent.
-        if !uniform_driver && !is_literal(derivation) {
+        if !uniform_driver && !is_literal(derivation, document.versioned) {
             continue;
         }
         if strings(derivation).into_iter().any(|text| {
@@ -630,11 +658,124 @@ fn key_equals_output_keys(key: &Data, output_keys: &[&str]) -> bool {
     false
 }
 
+/// True when `key` is a mapping pairing exactly the columns `input_key`
+/// names, each with the current row's same-named value (LOOKUP-5).
+fn key_pairs_input_key(key: &Data, input_key: &[&str]) -> bool {
+    let Some(entries) = key.map() else {
+        return false;
+    };
+    let wanted = input_key.iter().copied().collect::<HashSet<_>>();
+    let names = entries
+        .iter()
+        .map(|(name, _)| name.text())
+        .collect::<Option<HashSet<_>>>();
+    names.is_some_and(|names| names == wanted)
+        && entries
+            .iter()
+            .all(|(column, item)| item.text().is_some() && column.text() == item.text())
+}
+
+/// A field among `fields` that `entry` declares with a value other than null.
+fn declares_any(entry: &Data, fields: &[&str]) -> bool {
+    fields
+        .iter()
+        .any(|field| entry.get(field).is_some_and(|value| !value.is_null()))
+}
+
+/// The fields with which a named intermediate narrows, derives or reshapes
+/// its dataset (LOOKUP-4).
+const NARROWING: [&str; 7] = [
+    "filter",
+    "between",
+    "order_by",
+    "keep",
+    "derivations",
+    "verifications",
+    "columns",
+];
+
+/// `redundant_intermediate` in a 1.x file: a named intermediate equal to the
+/// implicit join to its input (LOOKUP-1, LOOKUP-4). An intermediate that
+/// narrows nothing, answers absence with the join's missing (`absent`
+/// omitted or null), requires no match, and whose `key` pairs exactly the
+/// columns of its input's declared `key`, each with the same-named value,
+/// reads what `DATASET.COLUMN` already reads. A `key` written as that list
+/// fails validation as `rename_only_intermediate` instead, so only the
+/// mapping that spells the same pairs is reported.
+fn redundant_intermediates_1_0(document: &Document, value: &Data) -> Vec<Departure> {
+    let mut found = Vec::new();
+    for (index, entry) in indexed(value, "intermediates") {
+        let (Some(identifier), Some(dataset)) = (
+            entry.get("id").and_then(Data::text),
+            entry.get("dataset").and_then(Data::text),
+        ) else {
+            continue;
+        };
+        if dataset == "SELF" || declares_any(entry, &NARROWING) {
+            continue;
+        }
+        let Some(input) = value.get("input").and_then(|inputs| inputs.get(dataset)) else {
+            continue;
+        };
+        // An input without `key` has no implicit join to read instead, and
+        // one that requires a match fails where the intermediate answers.
+        let Some(input_key) = input
+            .get("key")
+            .and_then(Data::list)
+            .and_then(|key| key.iter().map(Data::text).collect::<Option<Vec<_>>>())
+        else {
+            continue;
+        };
+        let required = |declaration: &Data| {
+            declaration
+                .get("require_match")
+                .is_some_and(|flag| matches!(flag, Data::Boolean(true)))
+        };
+        if required(input)
+            || required(entry)
+            || entry.get("absent").is_some_and(|answer| !answer.is_null())
+        {
+            continue;
+        }
+        if !entry
+            .get("key")
+            .is_some_and(|key| key_pairs_input_key(key, &input_key))
+        {
+            continue;
+        }
+        if !strings(value)
+            .into_iter()
+            .any(|text| reads_qualified_name(text, identifier))
+        {
+            continue;
+        }
+        let Some((line, column, spec_path)) = entry_key(document, "intermediates", index, "id")
+        else {
+            continue;
+        };
+        found.push(Departure::new(
+            "redundant_intermediate",
+            line,
+            column,
+            spec_path,
+            format!(
+                "intermediate `{identifier}` reads exactly what the implicit \
+                 join to `{dataset}` reads; read `{dataset}` directly"
+            ),
+        ));
+    }
+    found
+}
+
 /// `redundant_intermediate`: a named intermediate equal to the implicit join.
 /// A simple intermediate with no filter, selection, custom key or handler
 /// that changes behavior reads what `DATASET.COLUMN` already reads; only an
-/// explicit key that restates the output keys is reported.
+/// explicit key that restates the output keys is reported. A 1.x file reads
+/// it by its 1.0 meaning ([`redundant_intermediates_1_0`]).
 fn redundant_intermediates(document: &Document, value: &Data) -> Vec<Departure> {
+    if document.versioned {
+        return redundant_intermediates_1_0(document, value);
+    }
     let mut found = Vec::new();
     let Some(keys) = value
         .get("keys")
@@ -672,18 +813,7 @@ fn redundant_intermediates(document: &Document, value: &Data) -> Vec<Departure> 
         if dataset == "SELF" || required.iter().any(|name| equal(name, &dataset_value)) {
             continue;
         }
-        if [
-            "filter",
-            "between",
-            "order_by",
-            "keep",
-            "derivations",
-            "verifications",
-            "columns",
-        ]
-        .iter()
-        .any(|field| entry.get(field).is_some_and(|value| !value.is_null()))
-        {
+        if declares_any(entry, &NARROWING) {
             continue;
         }
         let raw = raw_intermediates
@@ -742,6 +872,150 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
     let mut found = missing_labels(document, &value);
     found.extend(repeated_row_derivations(document, &value));
     found.extend(redundant_intermediates(document, &value));
+    if document.versioned {
+        found.extend(unused_input_keys(document, &value));
+    }
     sort(&mut found);
+    found
+}
+
+/// True when every row the specification builds comes from the input
+/// `dataset`: each row template's driver, or without templates the root
+/// `base`, is that input, a missing one being the sole declared input.
+fn every_row_from(value: &Data, dataset: &str) -> bool {
+    let inputs: Vec<&str> = value
+        .get("input")
+        .and_then(Data::map)
+        .map(|inputs| inputs.iter().filter_map(|(name, _)| name.text()).collect())
+        .unwrap_or_default();
+    let sole = |driver: Option<&str>| match driver {
+        Some(driver) => driver == dataset,
+        None => inputs == [dataset],
+    };
+    let rows = entries(value, "rows");
+    if rows.is_empty() {
+        return sole(value.get("base").and_then(Data::text));
+    }
+    rows.iter()
+        .all(|row| sole(row.get("dataset").and_then(Data::text)))
+}
+
+/// Every `aggregate` operation in `value`: its payload, the shorthand text or
+/// the class form.
+fn aggregates<'a>(value: &'a Data, out: &mut Vec<&'a Data>) {
+    match value {
+        Data::Map(entries) => {
+            for (key, item) in entries {
+                if key.text() == Some("aggregate") {
+                    out.push(item);
+                }
+                aggregates(item, out);
+            }
+        }
+        Data::List(items) => items.iter().for_each(|item| aggregates(item, out)),
+        _ => {}
+    }
+}
+
+/// Whether `value` reads `dataset` through a qualified name outside an
+/// aggregate that declares its own `key`, which matches the input by it.
+fn reads_joined(value: &Data, dataset: &str) -> bool {
+    match value {
+        Data::Text(text) => reads_qualified_name(text, dataset),
+        Data::List(items) => items.iter().any(|item| reads_joined(item, dataset)),
+        Data::Map(entries) => entries.iter().any(|(key, item)| {
+            let own_key = key.text() == Some("aggregate")
+                && item.get("key").is_some_and(|key| !key.is_null());
+            !own_key && (reads_joined(key, dataset) || reads_joined(item, dataset))
+        }),
+        _ => false,
+    }
+}
+
+/// `unused_input_key`: an input's declared `key` that no read uses (D111,
+/// P-JOIN-1). A read uses it when it is an implicit join, a qualified read of
+/// the input that is not a read of the current row's driver, or a qualified
+/// aggregate over the input that declares no `key` of its own (D63); a `copy`
+/// entry reads the input through the implicit join too (SPEC-9). A named
+/// intermediate over the input reads its records by its own `key`, and when
+/// every row comes from the input, a qualified read of it reads the driver.
+/// Validation admits such a key, so a shared parent layer can declare it for
+/// its children; a file that declares `parent` is not read, since its
+/// columns may come from a layer it inherits.
+fn unused_input_keys(document: &Document, value: &Data) -> Vec<Departure> {
+    let mut found = Vec::new();
+    if value.get("parent").is_some_and(|parent| !parent.is_null()) {
+        return found;
+    }
+    let Some(inputs) = value.get("input").and_then(Data::map) else {
+        return found;
+    };
+    let mut payloads = Vec::new();
+    aggregates(value, &mut payloads);
+    for (name, declaration) in inputs {
+        let (Some(dataset), Some(_)) = (name.text(), declaration.get("key")) else {
+            continue;
+        };
+        let reads = |value: &Data| {
+            strings(value)
+                .into_iter()
+                .any(|text| reads_qualified_name(text, dataset))
+        };
+        let keyless_aggregate = payloads.iter().any(|payload| match payload {
+            Data::Map(_) => {
+                payload.get("key").is_none_or(Data::is_null)
+                    && payload.get("expr").is_some_and(reads)
+            }
+            other => reads(other),
+        });
+        let copied = entries(value, "columns").iter().any(|entry| {
+            entry
+                .get("copy")
+                .and_then(|copy| copy.get("dataset"))
+                .and_then(Data::text)
+                == Some(dataset)
+        });
+        // Reads outside the input declarations and the intermediates over
+        // this input, which read its records as their donors.
+        let joined = !every_row_from(value, dataset)
+            && value.map().is_some_and(|fields| {
+                fields.iter().any(|(field, item)| match field.text() {
+                    Some("input") => false,
+                    Some("intermediates") => item.list().is_some_and(|entries| {
+                        entries.iter().any(|entry| {
+                            entry.get("dataset").and_then(Data::text) != Some(dataset)
+                                && reads_joined(entry, dataset)
+                        })
+                    }),
+                    _ => reads_joined(item, dataset),
+                })
+            });
+        if keyless_aggregate || copied || joined {
+            continue;
+        }
+        let Some(key) = document
+            .member(document.root, "input")
+            .and_then(|inputs| {
+                document
+                    .pairs(inputs)?
+                    .iter()
+                    .find(|&&(key, _)| document.scalar(key) == Some(dataset))
+            })
+            .and_then(|&(_, declaration)| document.key(Some(declaration), "key"))
+        else {
+            continue;
+        };
+        let start = document.node(key).start;
+        found.push(Departure::new(
+            "unused_input_key",
+            start.line,
+            start.column,
+            document.path(key),
+            format!(
+                "no implicit join or keyless aggregate reads input `{dataset}` by its \
+                 declared `key`; remove the `key`"
+            ),
+        ));
+    }
     found
 }

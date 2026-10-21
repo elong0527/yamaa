@@ -342,9 +342,11 @@ nothing in it, and it reports the keyword as both the field and the shorthand.
 The check runs on the document each author wrote: a standalone specification,
 and each inheritance layer before composition. A composed, pruned or resolved
 document holds the canonical class of every shorthand and is validated
-without this check. A file that declares `schema_version` is read under the
-rules at the `yamaa-v0.5.0` tag, where a bare string derivation is the source
-shorthand of EXPR-5 and a written `{source: X}` restates it.
+without this check. The lint reports a written long form as the finding
+`redundant_long_form`, and `lint --fix` writes its shorthand. A file that
+declares `schema_version` is read under the rules at the `yamaa-v0.5.0` tag,
+where a bare string derivation is the source shorthand of EXPR-5 and a written
+`{source: X}` restates it.
 
 ## Descriptors
 

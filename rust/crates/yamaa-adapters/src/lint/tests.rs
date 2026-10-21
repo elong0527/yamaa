@@ -328,7 +328,7 @@ fn a_1_0_specification_follows_the_1_0_field_order() {
                 "    keep: first\n    absent: NONE\n",
                 "    absent: NONE\n    keep: first\n",
             ),
-            "intermediates[0].keep",
+            "intermediates.FIRSTDOSE.keep",
             "write `keep` before `absent`",
         ),
     ] {
@@ -379,31 +379,213 @@ fn a_0_5_file_keeps_the_0_5_orders() {
     assert!(names(&fields).is_empty());
 }
 
-#[test]
-fn a_1_0_file_of_another_type_follows_no_specification_order() {
-    let project = r#"yamaa: "1.0"
+/// A 1.0 project file in canonical form: its header together, then one blank
+/// line before each submission section.
+const PROJECT: &str = r#"yamaa: "1.0"
 type: project
+functions: [functions/bmi.yaml]
+environments:
+  python: {lock: uv.lock}
+codelists:
+  - standard: {name: CDISC/NCI, publishing_set: SDTM, version: "2023-12-15"}
+    codelists:
+      - id: SEX
+        name: Sex
+        items: [{value: F}, {value: M}]
 study:
   id: STUDY01
-codelists:
-  - codelists.yaml
+  name: STUDY01
+  description: Example study
+  protocol_name: STUDY-01
+
 sdtm:
-  specs:
-    - spec.yaml
+  specs: [sdtm/dm.yaml]
+  standards:
+    - {name: SDTMIG, version: "3.4", status: Final}
+  define: sdtm/define.xml
+
+adam:
+  specs: [adam/adsl.yaml]
 "#;
-    let function = r#"yamaa: "1.0"
+
+/// A 1.0 function file in canonical form: one blank line before `tests` and
+/// between its entries.
+const FUNCTION: &str = r#"yamaa: "1.0"
 type: function
 name: bmi
 description: Body mass index from kilograms and centimetres.
+params:
+  - {name: weight_kg, type: float}
+  - {name: height_cm, type: float}
 returns: float
+implementations: {python: projectbmi.bmi, r: projectbmi::bmi}
+
+tests:
+  - id: normal
+    covers: [normal, numeric-comparison]
+    args: {weight_kg: 70.0, height_cm: 175.0}
+    result: 22.857142857142858
+
+  - id: zero-weight
+    covers: [boundary]
+    args: {weight_kg: 0.0, height_cm: 175.0}
+    result: 0.0
 "#;
-    for text in [project, function] {
-        assert!(names(text).is_empty());
-        // The layout every file shares is still read.
-        let doubled = text.replacen('\n', "\n\n\n", 1);
-        assert_eq!(names(&doubled), ["blank_lines"]);
-        assert_eq!(fix(&doubled), (text.replacen('\n', "\n\n", 1), vec![]));
+
+/// A 1.0 codelists file in canonical form: one blank line before `codelists`
+/// and between its entries.
+const CODELISTS: &str = r#"yamaa: "1.0"
+type: codelists
+standard: {name: CDISC/NCI, publishing_set: SDTM, version: "2023-12-15"}
+
+codelists:
+  - id: SEX
+    name: Sex
+    items:
+      - value: F
+        decode: Female
+      - value: M
+        decode: Male
+
+  - id: AGEU
+    name: Age Unit
+    items: [{value: YEARS}]
+"#;
+
+/// Each departure written into a canonical file: its finding, spec path and
+/// message, and the fix that writes the canonical file back.
+fn departures(canonical: &str, cases: &[(String, &str, &str, &str)]) {
+    assert!(findings(canonical).is_empty(), "{canonical}");
+    for (text, finding, spec_path, message) in cases {
+        let found = findings(text);
+        assert_eq!(
+            found
+                .iter()
+                .map(|item| (item.finding, item.spec_path.as_str(), item.message.as_str()))
+                .collect::<Vec<_>>(),
+            [(*finding, *spec_path, *message)],
+            "{text}"
+        );
+        assert_eq!(fix(text), (canonical.to_owned(), vec![]), "{text}");
     }
+}
+
+#[test]
+fn a_1_0_project_file_follows_the_project_schema() {
+    let study = "study:\n  id: STUDY01\n  name: STUDY01\n  description: Example study\n  \
+                 protocol_name: STUDY-01\n";
+    departures(
+        PROJECT,
+        &[
+            (
+                PROJECT
+                    .replace(study, "")
+                    .replace("codelists:\n  - ", &format!("{study}codelists:\n  - ")),
+                "field_order",
+                "codelists",
+                "write `codelists` before `study`",
+            ),
+            (
+                PROJECT.replace(
+                    "  specs: [sdtm/dm.yaml]\n  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n",
+                    "  standards:\n    - {name: SDTMIG, version: \"3.4\", status: Final}\n  specs: [sdtm/dm.yaml]\n",
+                ),
+                "field_order",
+                "sdtm.specs",
+                "write `specs` before `standards`",
+            ),
+            (
+                PROJECT.replace(
+                    "        name: Sex\n        items: [{value: F}, {value: M}]\n",
+                    "        items: [{value: F}, {value: M}]\n        name: Sex\n",
+                ),
+                "field_order",
+                "codelists[0].codelists.Sex.name",
+                "write `name` before `items`",
+            ),
+            (
+                PROJECT.replace("define.xml\n\nadam:", "define.xml\nadam:"),
+                "root_spacing",
+                "adam",
+                "leave one blank line before `adam`",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_1_0_function_file_follows_the_function_schema() {
+    departures(
+        FUNCTION,
+        &[
+            (
+                FUNCTION
+                    .replace("returns: float\n", "")
+                    .replace("description: Body", "returns: float\ndescription: Body"),
+                "field_order",
+                "description",
+                "write `description` before `returns`",
+            ),
+            (
+                FUNCTION.replace(
+                    "    args: {weight_kg: 70.0, height_cm: 175.0}\n    result: 22.857142857142858\n",
+                    "    result: 22.857142857142858\n    args: {weight_kg: 70.0, height_cm: 175.0}\n",
+                ),
+                "field_order",
+                "tests.normal.args",
+                "write `args` before `result`",
+            ),
+            (
+                FUNCTION.replace("22.857142857142858\n\n  - id:", "22.857142857142858\n  - id:"),
+                "entry_spacing",
+                "tests.zero-weight",
+                "leave one blank line between `tests` entries",
+            ),
+            (
+                FUNCTION.replace("projectbmi::bmi}\n\ntests:", "projectbmi::bmi}\ntests:"),
+                "root_spacing",
+                "tests",
+                "leave one blank line before `tests`",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn a_1_0_codelists_file_follows_the_codelists_schema() {
+    departures(
+        CODELISTS,
+        &[
+            (
+                CODELISTS.replace(
+                    "  - id: SEX\n    name: Sex\n",
+                    "  - name: Sex\n    id: SEX\n",
+                ),
+                "field_order",
+                "codelists.Sex.id",
+                "write `id` before `name`",
+            ),
+            (
+                CODELISTS.replace(
+                    "      - value: M\n        decode: Male\n",
+                    "      - decode: Male\n        value: M\n",
+                ),
+                "field_order",
+                "codelists.Sex.items[1].value",
+                "write `value` before `decode`",
+            ),
+            (
+                CODELISTS.replace("decode: Male\n\n  - id:", "decode: Male\n  - id:"),
+                "entry_spacing",
+                "codelists['Age Unit']",
+                "leave one blank line between `codelists` entries",
+            ),
+        ],
+    );
+    // The layout every file shares is read as well.
+    let doubled = CODELISTS.replacen('\n', "\n\n\n", 1);
+    assert_eq!(names(&doubled), ["blank_lines"]);
+    assert_eq!(fix(&doubled), (CODELISTS.replacen('\n', "\n\n", 1), vec![]));
 }
 
 #[test]
@@ -1188,6 +1370,924 @@ fn qualified_reads_after_escaped_unicode_preserve_identifier_boundaries() {
     }
 }
 
+/// A 1.0 specification whose two row templates, built from `DM`, derive the
+/// same three columns, none of which has a column-level derivation.
+const REPEATED_1_0: &str = r#"yamaa: "1.0"
+type: spec
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  SV: input/sv.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, DOMAIN]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+
+rows:
+  - id: a
+    dataset: DM
+    derivations:
+      STUDYID: DM.STUDYID
+      USUBJID: DM.USUBJID
+      DOMAIN: "'DM'"
+
+  - id: b
+    dataset: DM
+    derivations:
+      STUDYID: DM.STUDYID
+      USUBJID: DM.USUBJID
+      DOMAIN: "'DM'"
+"#;
+
+/// The 1.0 finding for `column`, at the first template's derivation, which
+/// the 1.x spec path notation names by the template's `id`.
+fn repeated_1_0(column: &str) -> (&'static str, String) {
+    (
+        "repeated_row_derivation",
+        format!("rows.a.derivations.{column}"),
+    )
+}
+
+/// REPEATED_1_0 with `derivation` as both templates' `DOMAIN`, and `extra`
+/// written before `output`.
+fn repeated_domain(derivation: &str, extra: &str) -> String {
+    REPEATED_1_0
+        .replace(
+            "      DOMAIN: \"'DM'\"\n",
+            &format!("      DOMAIN: {derivation}\n"),
+        )
+        .replace("\noutput:\n", &format!("{extra}\noutput:\n"))
+}
+
+#[test]
+fn a_1_0_repeated_row_derivation_follows_spec_6() {
+    assert_eq!(
+        paths(REPEATED_1_0),
+        [
+            repeated_1_0("STUDYID"),
+            repeated_1_0("USUBJID"),
+            repeated_1_0("DOMAIN")
+        ]
+    );
+    // A read of an intermediate an input backs is row-local, so it moves to
+    // column level; a read of a `SELF` intermediate is not.
+    let backed = "intermediates:\n  - id: PICK\n    dataset: SV\n    key: [STUDYID, USUBJID]\n    \
+                  filter: \"SV.VISITNUM = 1\"\n";
+    assert!(paths(&repeated_domain("PICK.SVSTDTC", backed)).contains(&repeated_1_0("DOMAIN")));
+    let earlier = "intermediates:\n  - id: PRIOR\n    dataset: SELF\n    key: [STUDYID, USUBJID]\n";
+    assert!(!paths(&repeated_domain("PRIOR.DOMAIN", earlier)).contains(&repeated_1_0("DOMAIN")));
+    // An aggregate or a window anywhere in the derivation, a `case` result
+    // included, makes it not row-local.
+    for derivation in [
+        "{aggregate: \"MAX(SV.VISITNUM)\"}",
+        "{case: [{when: \"DM.AGE > 1\", then: {aggregate: \"MAX(SV.VISITNUM)\"}}, \
+         {otherwise: null}]}",
+        "{case: [{when: \"DM.AGE > 1\", then: {row_number: {}}}, {otherwise: null}]}",
+    ] {
+        let text = repeated_domain(derivation, "");
+        assert!(!paths(&text).contains(&repeated_1_0("DOMAIN")), "{text}");
+        assert!(paths(&text).contains(&repeated_1_0("STUDYID")), "{text}");
+    }
+    // So does a read of a column whose column-level derivation is not
+    // row-local, also through a structured source's `between` value (D118).
+    let blocked = |derivation: &str| {
+        repeated_domain(derivation, "").replace(
+            "  - name: DOMAIN\n",
+            "  - name: VISITS\n    type: int\n    derivation: {aggregate: \"COUNT(SV.*)\"}\n\n  \
+             - name: DOMAIN\n",
+        )
+    };
+    for derivation in [
+        "VISITS",
+        "{source: {variable: SV.SVSTDTC, between: {value: VISITS, lower: LO, upper: HI}}}",
+    ] {
+        let text = blocked(derivation);
+        assert!(!paths(&text).contains(&repeated_1_0("DOMAIN")), "{text}");
+    }
+    assert!(paths(&blocked("SV.SVSTDTC")).contains(&repeated_1_0("DOMAIN")));
+}
+
+#[test]
+fn a_1_0_literal_is_quoted_text_a_number_or_null() {
+    // Templates built from different inputs bind different records, so only
+    // a driver-independent literal moves to column level.
+    let mixed = |derivation: &str| {
+        repeated_domain(derivation, "").replace(
+            "  - id: b\n    dataset: DM\n",
+            "  - id: b\n    dataset: SV\n",
+        )
+    };
+    for (derivation, reported) in [
+        ("\"'DM'\"", true),
+        ("1", true),
+        ("1.5", true),
+        ("null", true),
+        ("DM.DOMAIN", false),
+        ("\"DM.DOMAIN || 'X'\"", false),
+        // Grammar text for a number or the missing value is the lint's other
+        // finding; it is no quoted text.
+        ("\"NULL\"", false),
+        ("true", false),
+    ] {
+        let text = mixed(derivation);
+        let found = paths(&text);
+        assert!(!found.contains(&repeated_1_0("STUDYID")), "{text}");
+        assert_eq!(found.contains(&repeated_1_0("DOMAIN")), reported, "{text}");
+    }
+}
+
+/// A 1.0 specification with a named intermediate that pairs its input's
+/// declared key columns with the same-named values.
+const REDUNDANT_1_0: &str = r#"yamaa: "1.0"
+type: spec
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]
+
+intermediates:
+  - id: ADSL1
+    dataset: ADSL
+    key: {STUDYID: STUDYID, USUBJID: USUBJID}
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL1.AGE
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: ADSL.SEX
+"#;
+
+#[test]
+fn a_1_0_redundant_intermediate_restates_its_input_s_key() {
+    let found = findings(REDUNDANT_1_0);
+    assert_eq!(
+        found
+            .iter()
+            .map(|item| (
+                item.finding,
+                item.spec_path.as_str(),
+                item.line,
+                item.column
+            ))
+            .collect::<Vec<_>>(),
+        [("redundant_intermediate", "intermediates.ADSL1", 15, 5)]
+    );
+    assert_eq!(
+        found[0].message,
+        "intermediate `ADSL1` reads exactly what the implicit join to `ADSL` reads; read `ADSL` directly"
+    );
+    let key = "    key: {STUDYID: STUDYID, USUBJID: USUBJID}\n";
+    let with = |line: &str| REDUNDANT_1_0.replace(key, &format!("{key}{line}"));
+    let redundant = |text: &str| names(text).contains(&"redundant_intermediate");
+    // `absent` omitted or null answers with missing, as the join does; any
+    // other answer, a requirement or a narrowing step changes what is read.
+    assert!(redundant(&with("    absent: null\n")));
+    for line in [
+        "    absent: 0\n",
+        "    require_match: true\n",
+        "    filter: \"ADSL.SAFFL = 'Y'\"\n",
+        "    order_by: [ADSL.TRTSDT]\n    keep: first\n",
+    ] {
+        assert!(!redundant(&with(line)), "{line}");
+    }
+    // The 1.0 meaning compares the key with the input's declared key, not
+    // with the output keys (D111, LOOKUP-5).
+    let other_pairs = REDUNDANT_1_0.replace(key, "    key: {STUDYID: STUDYID, USUBJID: SUBJID}\n");
+    assert!(!redundant(&other_pairs));
+    let narrower_input = REDUNDANT_1_0.replace(
+        "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}",
+        "  ADSL: {path: input/adsl.csv, key: [USUBJID]}",
+    );
+    assert!(!redundant(&narrower_input));
+    let narrower_key = REDUNDANT_1_0
+        .replace(key, "    key: {USUBJID: USUBJID}\n")
+        .replace(
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}",
+            "  ADSL: {path: input/adsl.csv, key: [USUBJID]}",
+        );
+    assert!(redundant(&narrower_key));
+    // An input without `key` has no implicit join, and one that requires a
+    // match fails where the intermediate answers.
+    for input in [
+        "  ADSL: input/adsl.csv",
+        "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID], require_match: true}",
+    ] {
+        let text = REDUNDANT_1_0.replace(
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}",
+            input,
+        );
+        assert!(!redundant(&text), "{input}");
+    }
+    // The key written as the input's list fails validation as
+    // `rename_only_intermediate` (LOOKUP-4), which the lint leaves to it.
+    let listed = REDUNDANT_1_0.replace(key, "    key: [USUBJID, STUDYID]\n");
+    assert!(!redundant(&listed));
+    // An intermediate no column reads is unused, not redundant.
+    let unread = REDUNDANT_1_0.replace("derivation: ADSL1.AGE", "derivation: ADSL.AGE");
+    assert!(!redundant(&unread));
+}
+
+#[test]
+fn a_1_0_file_names_members_in_the_spec_path_notation() {
+    // A list entry that writes `name`, or else `id`, as text is named by it,
+    // as the engine's findings name it (P-CLR-2); any other by its index.
+    let packed = REDUNDANT_1_0.replace(
+        "AE.STUDYID\n\n  - name: USUBJID",
+        "AE.STUDYID\n  - name: USUBJID",
+    );
+    assert_eq!(
+        paths(&packed),
+        [
+            ("redundant_intermediate", "intermediates.ADSL1".to_owned()),
+            ("entry_spacing", "columns.USUBJID".to_owned()),
+        ]
+    );
+    let unnamed = packed.replace("  - name: USUBJID\n", "  - name: 1\n");
+    assert!(paths(&unnamed).contains(&("entry_spacing", "columns[1]".to_owned())));
+    let unlabelled = REDUNDANT_1_0.replace("    label: Age\n", "");
+    assert_eq!(
+        paths(&unlabelled),
+        [
+            ("redundant_intermediate", "intermediates.ADSL1".to_owned()),
+            ("missing_label", "columns.AGE".to_owned()),
+        ]
+    );
+    // A key that is no bare segment is quoted, and a list without identities
+    // takes indexes.
+    let long = format!(
+        "{REDUNDANT_1_0}\nmetadata:\n  study note:\n    \"{}\"\n",
+        "x".repeat(76)
+    );
+    assert!(paths(&long).contains(&("line_width", "metadata['study note']".to_owned())));
+    let order = REDUNDANT_1_0.replace(
+        "  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\n",
+        "  order_by:\n    - {variable: AESEQ, direction: desc}\n  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\n",
+    );
+    assert!(paths(&order).contains(&("field_order", "output.columns".to_owned())));
+    // A 0.5 file keeps positional paths.
+    assert_eq!(
+        paths(&packed.replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n")),
+        [("entry_spacing", "columns[1]".to_owned())]
+    );
+}
+
+/// A standalone 1.0 specification written in its canonical spellings.
+const SPELLED: &str = r#"yamaa: "1.0"
+type: spec
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+  EX: input/ex.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, TRTSDT]
+
+intermediates:
+  - id: FIRSTDOSE
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXSTDTC]
+    keep: first
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL.TRTSDT
+"#;
+
+/// A finding as (finding, spec path, message).
+type Expected<'a> = (&'a str, &'a str, &'a str);
+
+/// Each spelling written into SPELLED in place of `canonical`: the findings
+/// it gives, and that the fix writes SPELLED back.
+fn spellings(cases: &[(&str, &str, &[Expected])]) {
+    assert!(findings(SPELLED).is_empty());
+    for &(canonical, written, expected) in cases {
+        assert!(SPELLED.contains(canonical), "{canonical}");
+        let text = SPELLED.replace(canonical, written);
+        assert_eq!(
+            findings(&text)
+                .iter()
+                .map(|item| (item.finding, item.spec_path.as_str(), item.message.as_str()))
+                .collect::<Vec<_>>(),
+            expected,
+            "{text}"
+        );
+        let after = fixed(&text);
+        assert_eq!(after, SPELLED, "{text}");
+        // The fix is settled: fixing the fixed file changes nothing.
+        assert_eq!(fixed(&after), after);
+    }
+}
+
+#[test]
+fn restated_defaults_are_removed() {
+    spellings(&[
+        (
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, relative_to: declaring, key: [STUDYID, USUBJID]}\n",
+            &[(
+                "restated_default",
+                "input.ADSL.relative_to",
+                "`relative_to: declaring` restates the default; remove it",
+            )],
+        ),
+        (
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, empty_string: missing, key: [STUDYID, USUBJID]}\n",
+            &[(
+                "restated_default",
+                "input.ADSL.empty_string",
+                "`empty_string: missing` restates the default; remove it",
+            )],
+        ),
+        // The first entry of a flow mapping goes with the separator after it.
+        (
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {empty_string: missing, path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            &[
+                (
+                    "restated_default",
+                    "input.ADSL.empty_string",
+                    "`empty_string: missing` restates the default; remove it",
+                ),
+                (
+                    "field_order",
+                    "input.ADSL.path",
+                    "write `path` before `empty_string`",
+                ),
+            ],
+        ),
+        // A handler whose omission answers with missing restates it as null.
+        (
+            "    keep: first\n",
+            "    keep: first\n    absent: null\n",
+            &[(
+                "restated_default",
+                "intermediates.FIRSTDOSE.absent",
+                "`absent: null` restates the default; remove it",
+            )],
+        ),
+    ]);
+    // A source binding's own absence answer: the binding then holds only its
+    // variable, which the schema reads as no long form.
+    let source = |fields: &str| {
+        SPELLED.replace(
+            "    derivation: DM.AGE\n",
+            &format!("    derivation:\n      source: {{variable: DM.AGE{fields}}}\n"),
+        )
+    };
+    assert_eq!(
+        paths(&source(", absent: null")),
+        [(
+            "restated_default",
+            "columns.AGE.derivation.source.absent".to_owned()
+        )]
+    );
+    assert_eq!(fixed(&source(", absent: null")), source(""));
+    assert!(names(&source(", absent: 0")).is_empty());
+}
+
+#[test]
+fn a_removed_default_that_leaves_a_long_form_is_written_as_the_shorthand() {
+    // Removing `direction: asc` leaves `{variable: X}`, which the next pass
+    // writes as its shorthand.
+    let text = SPELLED.replace(
+        "    order_by: [EX.EXSTDTC]\n",
+        "    order_by:\n      - {variable: EX.EXSTDTC, direction: asc}\n",
+    );
+    assert_eq!(
+        paths(&text),
+        [(
+            "restated_default",
+            "intermediates.FIRSTDOSE.order_by[0].direction".to_owned()
+        )]
+    );
+    assert_eq!(
+        fixed(&text),
+        SPELLED.replace(
+            "    order_by: [EX.EXSTDTC]\n",
+            "    order_by:\n      - EX.EXSTDTC\n",
+        )
+    );
+    // A chain the fixes cannot finish leaves the file as written: here the
+    // comment above `path` keeps the input's long form from its key line.
+    let stuck = SPELLED.replace(
+        "  EX: input/ex.csv\n",
+        "  EX:\n    # The exposure records.\n    path: input/ex.csv\n    relative_to: declaring\n",
+    );
+    assert_eq!(names(&stuck), ["restated_default"]);
+    assert_eq!(fixed(&stuck), stuck);
+}
+
+#[test]
+fn a_restated_default_needs_its_meaning_proved() {
+    // A handler whose omission fails declares an answer when it is null.
+    let unmapped = SPELLED.replace(
+        "    derivation: DM.AGE\n",
+        "    derivation:\n      mapping: {source: DM.AGEU, dict: {Y: 1}, unmapped: null}\n",
+    );
+    assert!(!names(&unmapped).contains(&"restated_default"));
+    // A flag's `missing` beside a declared `false_value` is required (EXPR-8).
+    let flag = |fields: &str| {
+        SPELLED.replace(
+            "    derivation: DM.AGE\n",
+            &format!("    derivation:\n      flag: {{condition: \"DM.AGE > 1\", {fields}}}\n"),
+        )
+    };
+    assert!(!names(&flag("false_value: N, missing: null")).contains(&"restated_default"));
+    assert_eq!(
+        paths(&flag("false_value: null, missing: U")),
+        [(
+            "restated_default",
+            "columns.AGE.derivation.flag.false_value".to_owned()
+        )]
+    );
+    // An absence answer beside `require_match: true` conflicts with it,
+    // which validation refuses (LOOKUP-24).
+    let conflicting = SPELLED.replace(
+        "    keep: first\n",
+        "    keep: first\n    absent: null\n    require_match: true\n",
+    );
+    assert!(!names(&conflicting).contains(&"restated_default"));
+    // A layer may replace an inherited value, so it is not read.
+    let layer = SPELLED.replace("domain: ADSL\n", "parent: base.yaml\ndomain: ADSL\n");
+    let restated = layer.replace("    keep: first\n", "    keep: first\n    absent: null\n");
+    assert!(!names(&restated).contains(&"restated_default"));
+    // A comment the removal would lose keeps the entry as written.
+    let commented = SPELLED.replace(
+        "    keep: first\n",
+        "    keep: first\n    absent: null  # as the join answers\n",
+    );
+    assert_eq!(names(&commented), ["restated_default"]);
+    assert_eq!(fixed(&commented), commented);
+    // A suppression covers the entry it stands above.
+    let suppressed = SPELLED.replace(
+        "  - id: FIRSTDOSE\n",
+        "  # yamaa-lint: allow restated_default -- the answer is stated for review\n  \
+         - id: FIRSTDOSE\n",
+    );
+    let suppressed = suppressed.replace("    keep: first\n", "    keep: first\n    absent: null\n");
+    assert!(names(&suppressed).is_empty());
+    assert_eq!(fixed(&suppressed), suppressed);
+}
+
+#[test]
+fn restated_defaults_in_project_codelists_and_function_files() {
+    let project = PROJECT.replace(
+        "  define: sdtm/define.xml\n",
+        "  define: sdtm/define.xml\n  context: Submission\n  xml_lang: en\n",
+    );
+    assert_eq!(
+        paths(&project),
+        [
+            ("restated_default", "sdtm.context".to_owned()),
+            ("restated_default", "sdtm.xml_lang".to_owned()),
+        ]
+    );
+    assert_eq!(fixed(&project), PROJECT);
+    let codelists = CODELISTS.replace(
+        "    name: Age Unit\n",
+        "    name: Age Unit\n    data_type: text\n    extensible: false\n",
+    );
+    assert_eq!(
+        paths(&codelists),
+        [
+            (
+                "restated_default",
+                "codelists['Age Unit'].data_type".to_owned()
+            ),
+            (
+                "restated_default",
+                "codelists['Age Unit'].extensible".to_owned()
+            ),
+        ]
+    );
+    assert_eq!(fixed(&codelists), CODELISTS);
+    let function = FUNCTION
+        .replace(
+            "returns: float\n",
+            "returns: float\nmay_return_missing: false\n",
+        )
+        .replace(
+            "  - {name: height_cm, type: float}\n",
+            "  - {name: height_cm, type: float, required: true}\n",
+        );
+    assert_eq!(
+        paths(&function),
+        [
+            ("restated_default", "params.height_cm.required".to_owned()),
+            ("restated_default", "may_return_missing".to_owned()),
+        ]
+    );
+    assert_eq!(fixed(&function), FUNCTION);
+}
+
+#[test]
+fn grammar_text_for_a_scalar_is_written_as_the_scalar() {
+    let at = |derivation: &str| format!("    derivation: {derivation}\n");
+    for (written, scalar, what) in [
+        ("\"0\"", "0", "a number"),
+        ("\"-1.5\"", "-1.5", "a number"),
+        ("\"NULL\"", "null", "the missing value"),
+        ("\"(2)\"", "2", "a number"),
+    ] {
+        let text = SPELLED.replace(&at("DM.AGE"), &at(written));
+        assert_eq!(
+            findings(&text)
+                .iter()
+                .map(|item| (item.finding, item.spec_path.as_str(), item.message.as_str()))
+                .collect::<Vec<_>>(),
+            [(
+                "scalar_as_text",
+                "columns.AGE.derivation",
+                format!("`{written}` is grammar text for {what}; write the YAML scalar `{scalar}`")
+                    .as_str()
+            )],
+            "{text}"
+        );
+        assert_eq!(fixed(&text), SPELLED.replace(&at("DM.AGE"), &at(scalar)));
+    }
+    // A case result, a function argument and a key match value are
+    // expression fields too.
+    for (canonical, written, path) in [
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation:\n      case:\n        - when: \"DM.AGE > 1\"\n          then: \"1\"\n        \
+             - otherwise: DM.AGE\n",
+            "columns.AGE.derivation.case[0].then",
+        ),
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation:\n      function: {name: scale, args: {value: DM.AGE, by: \"2\"}}\n",
+            "columns.AGE.derivation.function.args.by",
+        ),
+        (
+            "    key: [STUDYID, USUBJID]\n    order_by",
+            "    key: {STUDYID: STUDYID, USUBJID: USUBJID, EXSEQ: \"1\"}\n    order_by",
+            "intermediates.FIRSTDOSE.key.EXSEQ",
+        ),
+    ] {
+        let text = SPELLED.replace(canonical, written);
+        assert_eq!(paths(&text), [("scalar_as_text", path.to_owned())], "{text}");
+    }
+    // Quoted text, a name, a predicate, a template and a value field keep
+    // their text.
+    for (canonical, written) in [
+        ("    derivation: DM.AGE\n", "    derivation: \"'0'\"\n"),
+        ("    derivation: DM.AGE\n", "    derivation: \"AGE\"\n"),
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation: {str_template: \"0\"}\n",
+        ),
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation: {flag: {condition: \"TRUE\", true_value: \"1\"}}\n",
+        ),
+        (
+            "    keep: first\n",
+            "    keep: first\n    filter: \"TRUE\"\n",
+        ),
+    ] {
+        let text = SPELLED.replace(canonical, written);
+        assert!(!names(&text).contains(&"scalar_as_text"), "{text}");
+    }
+}
+
+#[test]
+fn a_long_form_is_written_as_its_shorthand() {
+    spellings(&[
+        (
+            "  EX: input/ex.csv\n",
+            "  EX: {path: input/ex.csv}\n",
+            &[(
+                "redundant_long_form",
+                "input.EX",
+                "the long form of `path` only restates its shorthand; write `input/ex.csv`",
+            )],
+        ),
+        (
+            "  EX: input/ex.csv\n",
+            "  EX:\n    path: input/ex.csv\n",
+            &[(
+                "redundant_long_form",
+                "input.EX",
+                "the long form of `path` only restates its shorthand; write `input/ex.csv`",
+            )],
+        ),
+        (
+            "    order_by: [EX.EXSTDTC]\n",
+            "    order_by: [{variable: EX.EXSTDTC}]\n",
+            &[(
+                "redundant_long_form",
+                "intermediates.FIRSTDOSE.order_by[0]",
+                "the long form of `variable` only restates its shorthand; write `EX.EXSTDTC`",
+            )],
+        ),
+        (
+            "    derivation: DM.AGE\n",
+            "    derivation: {value: DM.AGE}\n",
+            &[(
+                "redundant_long_form",
+                "columns.AGE.derivation",
+                "the long form of `value` only restates its shorthand; write `DM.AGE`",
+            )],
+        ),
+    ]);
+    // A bare keyword written as an empty entry, and a block payload.
+    let verified = |check: &str| {
+        SPELLED.replace(
+            "    derivation: DM.AGE\n",
+            &format!("    derivation: DM.AGE\n    verifications:\n      - {check}\n"),
+        )
+    };
+    let text = verified("not_missing: {}");
+    assert_eq!(
+        findings(&text)
+            .iter()
+            .map(|item| (item.finding, item.spec_path.as_str(), item.message.as_str()))
+            .collect::<Vec<_>>(),
+        [(
+            "redundant_long_form",
+            "columns.AGE.verifications[0]",
+            "the long form of `not_missing` only restates its shorthand; write `not_missing`"
+        )]
+    );
+    assert_eq!(fixed(&text), verified("not_missing"));
+    let aggregate = |payload: &str| {
+        SPELLED.replace(
+            "    derivation: DM.AGE\n",
+            &format!("    derivation:\n      aggregate:{payload}\n"),
+        )
+    };
+    let text = aggregate("\n        expr: \"MAX(EX.EXDOSE)\"");
+    assert_eq!(names(&text), ["redundant_long_form"]);
+    assert_eq!(fixed(&text), aggregate(" \"MAX(EX.EXDOSE)\""));
+    // A shorthand written over several lines has no place this fix writes,
+    // so the finding stays.
+    let text = format!("{SPELLED}\nverifications:\n  - unique:\n      columns:\n        - AGE\n");
+    assert_eq!(
+        paths(&text),
+        [("redundant_long_form", "verifications[0].unique".to_owned())]
+    );
+    assert_eq!(fixed(&text), text);
+}
+
+/// A 1.0 specification built from `LB` whose two other inputs declare keys
+/// that a read uses: `ADSL` through an implicit join, `RANGES` through a
+/// keyless qualified aggregate.
+const KEYED: &str = r#"yamaa: "1.0"
+type: spec
+domain: ADLB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB: input/lb.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
+  RANGES: {path: input/ranges.csv, key: [STUDYID, USUBJID]}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, AGE, RANGES]
+
+intermediates:
+  - id: RANGE
+    dataset: RANGES
+    key: [LBTESTCD]
+    filter: "RANGES.SEX = 'F'"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL.AGE
+
+  - name: RANGES
+    type: int
+    label: Ranges per Subject
+    derivation: {aggregate: "COUNT(RANGES.*)"}
+"#;
+
+#[test]
+fn an_input_key_no_read_uses_is_reported() {
+    assert!(findings(KEYED).is_empty());
+    let message = |dataset: &str| {
+        format!(
+            "no implicit join or keyless aggregate reads input `{dataset}` by its declared \
+             `key`; remove the `key`"
+        )
+    };
+    // The base input's reads read the driver, so its key is unused.
+    let base = KEYED.replace(
+        "  LB: input/lb.csv\n",
+        "  LB: {path: input/lb.csv, key: [STUDYID, USUBJID, LBSEQ]}\n",
+    );
+    let found = findings(&base);
+    assert_eq!(
+        found
+            .iter()
+            .map(|item| (item.finding, item.spec_path.as_str(), item.message.clone()))
+            .collect::<Vec<_>>(),
+        [("unused_input_key", "input.LB.key", message("LB"))]
+    );
+    assert_eq!((found[0].line, found[0].column), (6, 28));
+    // No fix is offered: removing a key is the author's call.
+    assert_eq!(fixed(&base), base);
+    // An aggregate that declares its own key, and a named intermediate over
+    // the input, read it by their own keys.
+    let own_key = KEYED.replace(
+        "{aggregate: \"COUNT(RANGES.*)\"}",
+        "{aggregate: {key: [USUBJID], expr: \"COUNT(RANGES.*)\"}}",
+    );
+    assert_eq!(
+        paths(&own_key),
+        [("unused_input_key", "input.RANGES.key".to_owned())]
+    );
+    // A read through the implicit join uses the key, and so does a copy.
+    let unread = KEYED.replace("derivation: ADSL.AGE", "derivation: LB.AGE");
+    assert_eq!(
+        paths(&unread),
+        [("unused_input_key", "input.ADSL.key".to_owned())]
+    );
+    let copied = unread.replace(
+        "  - name: AGE\n    type: int\n    label: Age\n    derivation: LB.AGE\n",
+        "  - copy: {dataset: ADSL, columns: [AGE]}\n",
+    );
+    assert!(!names(&copied).contains(&"unused_input_key"), "{copied}");
+    // A template built from another input reads the base input through the
+    // join (NAME-4).
+    let templates = base.replace("base: LB\n", "").replace(
+        "    derivation: {aggregate: \"COUNT(RANGES.*)\"}\n",
+        "    derivation: {aggregate: \"COUNT(RANGES.*)\"}\n\nrows:\n  - id: lab\n    \
+             dataset: LB\n\n  - id: subject\n    dataset: ADSL\n    derivations:\n      \
+             LBSEQ: 0\n",
+    );
+    assert!(
+        !names(&templates).contains(&"unused_input_key"),
+        "{templates}"
+    );
+    // A layer's columns may come from the layer it inherits.
+    let layer = base.replace("domain: ADLB\n", "parent: base.yaml\ndomain: ADLB\n");
+    assert!(!names(&layer).contains(&"unused_input_key"));
+    // A 0.5 file declares no input keys.
+    let legacy = base.replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n");
+    assert!(!names(&legacy).contains(&"unused_input_key"));
+    // A shared parent layer suppresses it with a reason.
+    let shared = base.replace(
+        "  LB: {path",
+        "  # yamaa-lint: allow unused_input_key -- child layers join LB\n  LB: {path",
+    );
+    assert!(names(&shared).is_empty());
+}
+
+#[test]
+fn an_equality_with_a_current_row_value_in_a_lookup_filter_is_a_key_pair() {
+    let filtered = |filter: &str| KEYED.replace("RANGES.SEX = 'F'", filter);
+    let message = |conjunct: &str| {
+        format!(
+            "`{conjunct}` compares a donor field with a current-row value; declare the pair \
+             in `key`"
+        )
+    };
+    let found = findings(&filtered(
+        "RANGES.SEX = 'F' AND RANGES.LBTESTCD = LB.LBTESTCD",
+    ));
+    assert_eq!(
+        found
+            .iter()
+            .map(|item| (item.finding, item.spec_path.as_str(), item.message.clone()))
+            .collect::<Vec<_>>(),
+        [(
+            "equality_filter",
+            "intermediates.RANGE.filter",
+            message("RANGES.LBTESTCD = LB.LBTESTCD")
+        )]
+    );
+    assert_eq!((found[0].line, found[0].column), (19, 13));
+    assert_eq!(
+        fixed(&filtered("LB.LBTESTCD = RANGES.LBTESTCD")),
+        filtered("LB.LBTESTCD = RANGES.LBTESTCD")
+    );
+    // Either side, inside grouping, and an expression of the current row.
+    for filter in [
+        "(LB.LBTESTCD = RANGES.LBTESTCD)",
+        "RANGES.SEX = 'F' AND (RANGES.AGE = LB.AGE + 1)",
+    ] {
+        assert_eq!(names(&filtered(filter)), ["equality_filter"], "{filter}");
+    }
+    // A constant, another comparison, a disjunction, a negation and a
+    // comparison of two donor fields stay in `filter`.
+    for filter in [
+        "RANGES.SEX = 'F'",
+        "RANGES.LOW < LB.AGE",
+        "RANGES.SEX = LB.SEX OR RANGES.SEX = 'U'",
+        "NOT (RANGES.SEX = LB.SEX)",
+        "RANGES.LOW = RANGES.HIGH",
+    ] {
+        assert!(names(&filtered(filter)).is_empty(), "{filter}");
+    }
+    // A source binding's filter narrows its variable's input, and a
+    // qualified aggregate's the one input its expression reads.
+    let source = KEYED.replace(
+        "    derivation: ADSL.AGE\n",
+        "    derivation:\n      source: {variable: ADSL.AGE, filter: \"ADSL.SITEID = LB.SITEID\"}\n",
+    );
+    assert_eq!(
+        paths(&source),
+        [(
+            "equality_filter",
+            "columns.AGE.derivation.source.filter".to_owned()
+        )]
+    );
+    let aggregate = KEYED.replace(
+        "    derivation: {aggregate: \"COUNT(RANGES.*)\"}\n",
+        "    derivation:\n      aggregate:\n        filter: \"RANGES.VISIT = LB.VISIT\"\n        \
+         expr: \"COUNT(RANGES.*)\"\n",
+    );
+    assert_eq!(
+        paths(&aggregate),
+        [(
+            "equality_filter",
+            "columns.RANGES.derivation.aggregate.filter".to_owned()
+        )]
+    );
+}
+
 const MISSING_LABEL: &str = r#"schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID]
@@ -1435,7 +2535,7 @@ mod files {
     }
 
     #[test]
-    fn directories_expand_to_1_0_specifications_by_their_header() {
+    fn directories_expand_to_every_1_0_file_type_by_its_header() {
         let directory = Directory::new("expand-versioned");
         let broken = VERSIONED.replace("base: DM\n\noutput:", "base: DM\noutput:");
         let legacy = directory.write(
@@ -1446,12 +2546,20 @@ mod files {
         // A layer declares the type of the chain; its unknown field is the
         // engine's to refuse, not discovery's.
         let layer = directory.write("layers/base.yaml", &format!("{broken}\nunknown: 1\n"));
-        directory.write("project.yaml", "yamaa: \"1.0\"\ntype: project\nsdtm: {}\n");
-        directory.write(
+        let project = directory.write("project.yaml", "yamaa: \"1.0\"\ntype: project\nsdtm: {}\n");
+        let function = directory.write(
             "functions/bmi.yaml",
-            "yamaa: \"1.0\"\ntype: function\nname: bmi\n",
+            "yamaa: \"1.0\"\ntype: function\nname: bmi\ntests: []\n",
         );
+        let codelists = directory.write(
+            "codelists/sponsor.yaml",
+            "yamaa: \"1.0\"\ntype: codelists\ncodelists: []\n",
+        );
+        // A type no file has, no type, and a mapping dictionary, which
+        // declares no header, are no yamaa files.
+        directory.write("study.yaml", "yamaa: \"1.0\"\ntype: study\nsdtm: {}\n");
         directory.write("untyped.yaml", &broken.replace("type: spec\n", ""));
+        directory.write("dictionaries/sex.yaml", "F: Female\nM: Male\n");
         // `schema_version` beside `yamaa` keeps the 0.5 path, where `yamaa`
         // and `type` are no root fields.
         directory.write(
@@ -1465,13 +2573,23 @@ mod files {
         assert_eq!(
             linted
                 .iter()
-                .map(|file| file.file.clone())
+                .map(|file| (
+                    file.file.clone(),
+                    file.findings
+                        .iter()
+                        .map(|item| (item.finding, item.spec_path.as_str()))
+                        .collect::<Vec<_>>()
+                ))
                 .collect::<Vec<_>>(),
-            [display(&legacy), display(&entry), display(&layer)]
+            [
+                (display(&legacy), vec![("root_spacing", "output")]),
+                (display(&entry), vec![("root_spacing", "output")]),
+                (display(&codelists), vec![("root_spacing", "codelists")]),
+                (display(&function), vec![("root_spacing", "tests")]),
+                (display(&layer), vec![("root_spacing", "output")]),
+                (display(&project), vec![("root_spacing", "sdtm")]),
+            ]
         );
-        assert!(linted.iter().all(|file| file.findings.len() == 1
-            && file.findings[0].finding == "root_spacing"
-            && file.findings[0].spec_path == "output"));
     }
 
     #[test]
