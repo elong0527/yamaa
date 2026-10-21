@@ -46,31 +46,31 @@ pub(super) struct Layout {
     pub(super) specification: bool,
 }
 
-const LEGACY: Layout = Layout {
+static LEGACY: Layout = Layout {
     orders: fields::LEGACY_SPEC,
     sections: "output",
     spaced: &["intermediates", "columns", "rows"],
     specification: true,
 };
-const SPEC: Layout = Layout {
+static SPEC: Layout = Layout {
     orders: fields::SPEC,
     sections: "output",
     spaced: &["intermediates", "columns", "rows"],
     specification: true,
 };
-const PROJECT: Layout = Layout {
+static PROJECT: Layout = Layout {
     orders: fields::PROJECT,
     sections: "sdtm",
     spaced: &[],
     specification: false,
 };
-const CODELISTS: Layout = Layout {
+static CODELISTS: Layout = Layout {
     orders: fields::CODELISTS,
     sections: "codelists",
     spaced: &["codelists"],
     specification: false,
 };
-const FUNCTION: Layout = Layout {
+static FUNCTION: Layout = Layout {
     orders: fields::FUNCTION,
     sections: "tests",
     spaced: &["tests"],

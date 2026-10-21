@@ -50,7 +50,7 @@ class BindingsTests(unittest.TestCase):
         stub = generator._render_pyi(definition)
         self.assertNotIn("_IssueRecord", stub)
         self.assertNotIn("issue_record", definition["python"])
-        self.assertEqual(stub.count("def issues(self) -> Table: ..."), 3)
+        self.assertEqual(stub.count("def issues(self) -> Table: ..."), 4)
         self.assertIn("def member_issues(self, name: str) -> Table: ...", stub)
         # The removed row alias is neither a definition key nor a type token.
         candidate = copy.deepcopy(definition)

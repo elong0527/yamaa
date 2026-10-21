@@ -1,6 +1,7 @@
 """The frozen sections of the host interface: vocabularies, tables, records, cli."""
 
 import copy
+import json
 import shutil
 import tempfile
 import unittest
@@ -193,6 +194,23 @@ class GrammarTests(unittest.TestCase):
                 mutate(candidate)
                 with self.assertRaisesRegex(ValueError, message):
                     surface.validate_tables(candidate, values, check_rust=False)
+
+    def test_the_info_record_is_the_truth_both_hosts_read(self):
+        # The installed suites check info() against the shared truth, so its
+        # fields and the vocabularies its fields name follow the record.
+        truth = json.loads(
+            (generator.ROOT / "rust/tests/host-fixtures/cases.json").read_text(
+                encoding="utf-8"
+            )
+        )["families"]["info"]
+        record = self.definition["records"]["info"]
+        self.assertEqual([field["name"] for field in record["fields"]], truth["fields"])
+        fields = {field["name"]: field for field in record["fields"]}
+        values = self.definition["values"]
+        self.assertEqual(
+            values[fields["features"]["values"]]["values"], truth["features"]
+        )
+        self.assertEqual(values[fields["host"]["values"]]["values"], truth["hosts"])
 
     def test_the_condition_column_may_name_the_registry(self):
         columns = self.definition["tables"]["issues"]["columns"]
