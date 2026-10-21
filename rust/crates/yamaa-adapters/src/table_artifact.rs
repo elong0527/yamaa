@@ -152,9 +152,9 @@ fn unrepresentable(table: &PublicTable, error: TableError) -> Failure {
 /// The target of the file `written` names. Through the local file resolver,
 /// a path whose last segment is empty, `.` or `..` names no file, and a name
 /// that cannot be one cannot be written: each fails as `invalid_target`. A
-/// parent directory that does not exist reaches no entry, as a run's target
-/// in a missing directory does (FILE-7). Through a caller's resolver, a
-/// refused target reply fails as a run's does.
+/// parent directory that does not exist reaches no entry, and a file in its
+/// place stops the walk as not a regular file (FILE-7). Through a caller's
+/// resolver, a refused target reply fails as a run's does.
 fn target(written: &str, resolver: Option<Arc<dyn Resolver>>) -> Result<AnchoredTarget, Failure> {
     if let Some(resolver) = resolver {
         return Resources::with_resolver(resolver, written)
@@ -168,19 +168,16 @@ fn target(written: &str, resolver: Option<Arc<dyn Resolver>>) -> Result<Anchored
     ) {
         return Err(publication_failure(&PublicationError::InvalidTarget));
     }
-    let (resources, name) = crate::file_configuration::resources(written).map_err(
-        |crate::file_configuration::Error::Path(error)| match error {
-            crate::file_resources::Error::Missing => target_failure(
-                &PublicationError::Unreachable(yamaa_core::resource::ResourceFailure::Missing),
-                None,
-                written,
-            ),
-            _ => publication_failure(&PublicationError::InvalidTarget),
-        },
-    )?;
-    resources
-        .caller_target(&name)
-        .map_err(|_| publication_failure(&PublicationError::InvalidTarget))
+    let refused = |error| {
+        let cause = crate::file_resources::resource_failure(&error).map_or(
+            PublicationError::InvalidTarget,
+            PublicationError::Unreachable,
+        );
+        target_failure(&cause, None, written)
+    };
+    let (resources, name) = crate::file_configuration::resources(written)
+        .map_err(|crate::file_configuration::Error::Path(error)| refused(error))?;
+    resources.caller_target(&name).map_err(refused)
 }
 
 /// The issues of a save stopped at its one file, as a run's save records a

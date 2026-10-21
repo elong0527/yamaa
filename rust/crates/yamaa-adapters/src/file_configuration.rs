@@ -1,6 +1,6 @@
 //! Select the explicitly requested entry without project discovery.
 use crate::file_resources::{Error as ResourceError, Resources};
-use std::path::Path;
+use std::{io, path::Path};
 
 #[derive(Debug)]
 pub enum Error {
@@ -22,8 +22,13 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
     let parent = absolute
         .parent()
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
-    // Preserve caller-path failure ownership before selecting its descriptor.
-    crate::canonical_path::canonicalize(parent).map_err(|_| Error::Path(ResourceError::Missing))?;
+    // Preserve the parent's kind before descriptor selection turns a refused
+    // root into InvalidRoot. Caller-selected directory aliases are allowed.
+    let metadata =
+        std::fs::metadata(parent).map_err(|error| Error::Path(parent_failure(parent, &error)))?;
+    if !metadata.is_dir() {
+        return Err(Error::Path(ResourceError::NotRegularFile));
+    }
     let resources = Resources::for_entry(text(parent)?).map_err(Error::Path)?;
     let entry = absolute
         .file_name()
@@ -31,6 +36,25 @@ pub fn resources(written: &str) -> Result<(Resources, String), Error> {
         .filter(|name| !name.is_empty())
         .ok_or(Error::Path(ResourceError::InvalidPath))?;
     Ok((resources, entry.into()))
+}
+
+/// A file can stop the parent walk before its last segment. Inspect the
+/// nearest existing ancestor to keep that kind even on hosts that report
+/// the deeper path as not found. Other IO failures remain opaque.
+fn parent_failure(parent: &Path, error: &io::Error) -> ResourceError {
+    for ancestor in parent.ancestors().skip(1) {
+        if let Ok(metadata) = std::fs::metadata(ancestor) {
+            if !metadata.is_dir() {
+                return ResourceError::NotRegularFile;
+            }
+            break;
+        }
+    }
+    if error.kind() == io::ErrorKind::NotFound {
+        ResourceError::Missing
+    } else {
+        ResourceError::Unreadable
+    }
 }
 
 /// The identity compilation gives the file a caller path names, resolved now:

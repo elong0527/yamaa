@@ -397,6 +397,7 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
     #[cfg_attr(not(unix), allow(unused_mut))]
     let mut unreached = vec![
         ("absent/items.csv", "resource_path_missing", "FILE-7"),
+        ("absent/child/items.csv", "resource_path_missing", "FILE-7"),
         ("folder.csv", "resource_path_not_regular_file", "FILE-7"),
     ];
     #[cfg(unix)]
@@ -452,6 +453,30 @@ fn a_target_that_cannot_be_written_is_refused_as_a_run_refuses_it() {
         .unwrap()
         .next()
         .is_none());
+}
+
+/// A regular file cannot serve as a directory anywhere in the caller's
+/// target parent (FILE-7, D189). The refusal names the complete target and
+/// leaves both the blocking file and its directory unchanged.
+#[test]
+fn a_regular_file_in_a_table_targets_parent_is_not_a_missing_path() {
+    let study = Study::new();
+    let engine = engine();
+    let table = items(&study, &engine);
+    study.write("regular.csv", "kept\n");
+    for name in ["regular.csv/items.csv", "regular.csv/child/items.csv"] {
+        let out = study.path(name);
+        let failure = engine.save_table(&table, &out).unwrap_err();
+        let saved = issue(&failure);
+        assert_eq!(saved.phase, "output", "{name}");
+        assert_eq!(saved.code, "resource_path_not_regular_file", "{name}");
+        assert_eq!(saved.rule.as_deref(), Some("FILE-7"));
+        assert!(saved.spec_path.is_empty());
+        assert_eq!(saved.context.get("path"), Some(&text(&out)));
+        assert!(failure.paths.is_empty());
+        assert_eq!(study.read("regular.csv"), b"kept\n");
+        assert_eq!(study.entries(), ["odm.xml", "regular.csv"]);
+    }
 }
 
 /// A file that cannot be staged, in a directory that admits no new entry,
