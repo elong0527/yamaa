@@ -119,7 +119,6 @@ TARGETS = {
         (
             *CSV,
             "rust/crates/yamaa-adapters/src/submission_json.rs",
-            "rust/crates/yamaa-core/src/submission_json.rs",
         ),
         65536,
     ),

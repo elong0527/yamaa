@@ -1,8 +1,7 @@
 phase: validation
-condition: schema_version_mismatch
+condition: unsupported_language_version
 spec_paths:
   - parent
 rule: LAYER-4
 context:
-  entry_version: "1.0"
-  parent_version: "2.0"
+  version: "2.0"

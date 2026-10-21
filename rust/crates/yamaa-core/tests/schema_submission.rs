@@ -2134,13 +2134,14 @@ mod schema {
     }
     mod submission_values {
         //! Independently authored normalized metadata; no generator supplies expectations.
+        //! The Define-XML these entries render is checked in yamaa-adapters'
+        //! `tests/submission_encoders.rs`.
         use yamaa_core::{
             front_end::v0_5::sections::sections,
             project_terminology::Catalogue,
             schema::{Document, DocumentNode as N},
             specification_submission_document as declarations,
             submission_composition::{self, Input, Study},
-            submission_xml,
         };
 
         #[derive(Default)]
@@ -2199,7 +2200,7 @@ mod schema {
             a.finish(root)
         }
         /// One entry of `LBORRESU`, in the order the case lists them: its id,
-        /// its where clause, its origin source and its own fields.
+        /// its where clause and its origin source.
         struct Written<'a> {
             id: &'a str,
             clause: Vec<(&'a str, Vec<&'a str>)>,
@@ -2214,21 +2215,12 @@ mod schema {
             let gluc = entry("GLUC", "LBTESTCD", &["GLUC"], "Vendor");
             let creat = entry("CREAT", "LBTESTCD", &["CREAT"], "Sponsor");
             match case {
-                "reordered values" => vec![creat, gluc],
-                "inserted value" => {
-                    vec![entry("ALB", "LBTESTCD", &["ALB"], "Sponsor"), gluc, creat]
-                }
-                "membership" => vec![entry("CHEM", "LBTESTCD", &["GLUC", "CREAT"], "Vendor")],
                 "conjunction" => vec![
                     Written {
                         id: "GLUCSER",
                         clause: vec![("LBTESTCD", vec!["GLUC"]), ("LBSPEC", vec!["SERUM"])],
                         source: "Vendor",
                     },
-                    creat,
-                ],
-                "escaped value" => vec![
-                    entry("GLUC", "LBTESTCD", &["A.&\" /\u{e9}"], "Vendor"),
                     creat,
                 ],
                 "duplicate id" => vec![gluc, entry("GLUC", "LBTESTCD", &["CREAT"], "Sponsor")],
@@ -2370,23 +2362,12 @@ mod schema {
                         };
                         let origin = a.texts(&[("type", origin_type), ("source", source)]);
                         let method = a.text("Units assigned from the supplied test metadata");
-                        let mut fields = vec![
+                        let fields = vec![
                             ("id", id),
                             ("where", clause),
                             ("origin", origin),
                             ("method", method),
                         ];
-                        if matches!(
-                            case,
-                            "stable values" | "reordered values" | "inserted value"
-                        ) {
-                            let comment = a.text("Independent value metadata comment");
-                            fields.push(("comment", comment));
-                        }
-                        if case == "labelled" && written.id == "GLUC" {
-                            let label = a.text("Glucose units");
-                            fields.push(("label", label));
-                        }
                         entries.push(a.map(fields));
                     }
                     let entries = a.node(N::Sequence(entries));
@@ -2459,13 +2440,6 @@ mod schema {
                 "2026-09-11T00:00:00",
             )
         }
-        fn render(case: &str) -> String {
-            String::from_utf8(
-                submission_xml::render(&compose(&specification(case)).unwrap()).unwrap(),
-            )
-            .unwrap()
-        }
-
         #[test]
         fn entries_inherit_complete_metadata_and_preserve_written_occurrences() {
             let document = specification("valid");
@@ -2510,14 +2484,7 @@ mod schema {
             );
         }
         #[test]
-        fn an_entry_label_describes_its_definition_and_normalized_literals_still_decide_its_rows() {
-            let xml = render("labelled");
-            let start = xml.find("<ItemDef OID=\"IT.LB.LBORRESU.GLUC\"").unwrap();
-            let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
-            assert!(item.contains(">Glucose units</TranslatedText>"));
-            let start = xml.find("<ItemDef OID=\"IT.LB.LBORRESU.CREAT\"").unwrap();
-            let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
-            assert!(item.contains(">Original units</TranslatedText>"));
+        fn normalized_literals_still_decide_an_entry_s_rows() {
             // A Derived entry is refuted by the literal of the template its
             // where clause selects, through the normalized handler form.
             let mut document = specification("normalized where column");
@@ -2746,96 +2713,6 @@ mod schema {
             // Without a codelist of their own, the test codes' other rows hold
             // any value, so no listed value is refused.
             assert!(compose_with(&specification("entry codelist only"), &catalogue(false)).is_ok());
-        }
-        #[test]
-        fn fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references() {
-            let xml = render("valid");
-            assert!(xml.contains("CreationDateTime=\"2026-09-11T00:00:00\""));
-            assert!(xml.contains("SourceSystemVersion=\"1.0\""));
-            assert_eq!(xml.matches("<def:ValueListDef ").count(), 1);
-            assert_eq!(xml.matches("<def:ValueListRef ").count(), 1);
-            assert_eq!(xml.matches("<def:WhereClauseDef ").count(), 2);
-            assert_eq!(xml.matches("<ItemDef ").count(), 6);
-            assert!(xml.contains("<def:ValueListRef ValueListOID=\"VL.LB.LBORRESU\"/>"));
-            for (index, code, source) in [(1, "GLUC", "Vendor"), (2, "CREAT", "Sponsor")] {
-                let identity = format!("LB.LBORRESU.{code}");
-                assert!(xml.contains(&format!("ItemOID=\"IT.{identity}\" OrderNumber=\"{index}\" Mandatory=\"No\" MethodOID=\"MT.{identity}\"")));
-                assert!(xml.contains(&format!(
-                    "<def:WhereClauseRef WhereClauseOID=\"WC.{identity}\"/>"
-                )));
-                assert!(xml.contains(&format!("<CheckValue>{code}</CheckValue>")));
-                assert!(xml.contains(&format!(
-                    "<def:Origin Type=\"Assigned\" Source=\"{source}\"/>"
-                )));
-                assert!(xml.contains(&format!("<MethodDef OID=\"MT.{identity}\"")));
-            }
-            assert_eq!(
-                xml.matches("Comparator=\"EQ\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBTESTCD\"")
-                    .count(),
-                2
-            );
-            assert!(
-                xml.find("<def:ValueListDef ").unwrap() < xml.find("<def:WhereClauseDef ").unwrap()
-            );
-            assert!(
-                xml.find("<def:WhereClauseDef ").unwrap() < xml.find("<ItemGroupDef ").unwrap()
-            );
-            let start = xml.find("<ItemDef OID=\"IT.LB.LBORRESU\"").unwrap();
-            let item = &xml[start..start + xml[start..].find("</ItemDef>").unwrap()];
-            assert!(item.find("<def:Origin ").unwrap() < item.find("<def:ValueListRef ").unwrap());
-        }
-        #[test]
-        fn several_values_are_a_membership_and_several_columns_one_range_check_each() {
-            let xml = render("membership");
-            assert!(xml.contains(concat!(
-                "<def:WhereClauseDef OID=\"WC.LB.LBORRESU.CHEM\">\n",
-                "        <RangeCheck Comparator=\"IN\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBTESTCD\">\n",
-                "          <CheckValue>GLUC</CheckValue>\n",
-                "          <CheckValue>CREAT</CheckValue>\n",
-                "        </RangeCheck>\n",
-                "      </def:WhereClauseDef>\n",
-            )));
-            let xml = render("conjunction");
-            assert!(xml.contains(concat!(
-                "<def:WhereClauseDef OID=\"WC.LB.LBORRESU.GLUCSER\">\n",
-                "        <RangeCheck Comparator=\"EQ\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBTESTCD\">\n",
-                "          <CheckValue>GLUC</CheckValue>\n",
-                "        </RangeCheck>\n",
-                "        <RangeCheck Comparator=\"EQ\" SoftHard=\"Soft\" def:ItemOID=\"IT.LB.LBSPEC\">\n",
-                "          <CheckValue>SERUM</CheckValue>\n",
-                "        </RangeCheck>\n",
-                "      </def:WhereClauseDef>\n",
-            )));
-        }
-
-        #[test]
-        fn value_identifiers_survive_unrelated_insertion_and_entry_reordering() {
-            let original = render("stable values");
-            let reordered = render("reordered values");
-            let inserted = render("inserted value");
-            for xml in [&original, &reordered, &inserted] {
-                for code in ["GLUC", "CREAT"] {
-                    for prefix in ["IT", "MT", "COM", "WC"] {
-                        let oid = format!("{prefix}.LB.LBORRESU.{code}");
-                        assert_eq!(xml.matches(&format!(" OID=\"{oid}\"")).count(), 1);
-                    }
-                    assert!(xml.contains(&format!(
-                        "<def:WhereClauseRef WhereClauseOID=\"WC.LB.LBORRESU.{code}\"/>"
-                    )));
-                }
-                assert_eq!(xml.matches(" OID=\"VL.LB.LBORRESU\"").count(), 1);
-            }
-            assert!(original.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\" OrderNumber=\"1\""));
-            assert!(reordered.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\" OrderNumber=\"2\""));
-            assert!(inserted.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\" OrderNumber=\"2\""));
-            assert!(inserted.contains("ItemOID=\"IT.LB.LBORRESU.ALB\" OrderNumber=\"1\""));
-        }
-
-        #[test]
-        fn where_values_keep_their_text_with_xml_escaping() {
-            let xml = render("escaped value");
-            assert!(xml.contains("ItemOID=\"IT.LB.LBORRESU.GLUC\""));
-            assert!(xml.contains("<CheckValue>A.&amp;\" /\u{e9}</CheckValue>"));
         }
     }
 }

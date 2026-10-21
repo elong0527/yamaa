@@ -210,7 +210,7 @@ An implementation must not mint an identifier from a counter, a hash or a
 random value. One base `ItemDef` is generated per dataset and column, and
 neither base nor per-value `ItemDef` elements are shared between datasets.
 
-Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::value_identifiers_survive_unrelated_insertion_and_entry_reordering`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 | Object | Identifier |
 |---|---|
@@ -263,7 +263,7 @@ one identifier space, `def:leaf`, so a document identifier must not equal a
 dataset identifier.
 
 Fails: `duplicate_define_identifier`.
-Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
+Evidence: `negative-terminology-version-collision`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionDuplicateIdentifier`, `rust/crates/yamaa-core/tests/diagnostics_aggregate.rs::sources_share_one_terminology_standard_and_another_with_its_publishing_set_is_refused`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::sources_citing_one_terminology_standard_share_its_one_definition`, `rust/crates/yamaa-core/tests/project_rows.rs::independent_complete_sixteen_record_project_report_preserves_every_field_and_order`.
 
 The shared `def:leaf` space is checked, not disambiguated. A duplicate dataset
 `id`, codelist `id` or document `id`, or a document `id` equal to a dataset
@@ -288,7 +288,7 @@ declares the ODM 1.3 namespace as the default, `def` for
 `http://www.cdisc.org/ns/def/v2.1` and `xlink` for
 `http://www.w3.org/1999/xlink`, and no other namespace.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/file_resources.rs::dm_both_goldens_without_input_execution_and_save_uses_held_bytes`.
 
 ```text
 <?xml version="1.0" encoding="UTF-8"?>
@@ -489,7 +489,7 @@ independently declarable: membership in `keys` determines it, and using a
 sponsor variable in `output.order_by` or a `unique` verification does not
 independently assign it.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `python/tests/installed/installed_public_define.py::test_ae_vs_independent_fixed_time_schema_and_structure`.
 
 | Attribute | Source |
 |---|---|
@@ -593,7 +593,7 @@ Each declared method produces one `MethodDef` carrying `OID`, `Name` from
 `Decode` holds exactly one `TranslatedText` whose `xml:lang` is the document's
 `language`, and one document carries one language.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
+Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::structural_findings_are_complete_ordered_and_only_supported_causes_are_portable`.
 
 A `MethodDef`'s `Description` child carries the method's `description`, one
 `FormalExpression` child follows when `expression` is declared, carrying
@@ -631,7 +631,7 @@ remaining byte-level decisions are fixed exactly as the list below states. The
 bytes are fixed rather than the information: the same inputs produce
 byte-identical files, and a golden document is compared byte for byte.
 
-Evidence: `sdtm-dm-metadata`, `rust/tests/host-fixtures/cases.json::newlines-in-text`, `rust/crates/yamaa-core/tests/schema_submission.rs::where_values_keep_their_text_with_xml_escaping`.
+Evidence: `sdtm-dm-metadata`, `rust/tests/host-fixtures/cases.json::newlines-in-text`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::where_values_keep_their_text_with_xml_escaping`.
 
 - the first line is `<?xml version="1.0" encoding="UTF-8"?>`;
 - a declared `stylesheet` produces a second line,
@@ -664,7 +664,7 @@ and `U+000A` must not appear in an attribute value. A `U+000D`, a `U+0009` or
 an attribute-value `U+000A` in generated text fails.
 
 Fails: `untransportable_text`.
-Evidence: `rust/tests/host-fixtures/cases.json::column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionXmlWhitespace`.
+Evidence: `rust/tests/host-fixtures/cases.json::column-label`, `rust/crates/yamaa-adapters/tests/file_resources.rs::xml_text_findings_keep_field_owners_inheritance_and_render_order_in_both_hosts`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_tab_in_generated_text_is_untransportable_at_the_field_that_holds_it`.
 
 The failure reports `untransportable_text` with the declaration that carries
 the character.
@@ -682,7 +682,7 @@ flushed and closed, and atomically moved onto the target. A failure leaves the
 previous file and no residue.
 
 Fails: `value_not_permitted`, `publication_failed`.
-Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionXmlInvalid`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
+Evidence: `rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs::later_publication_failure_preserves_prior_bytes_original_cause_and_stopped_remainder`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::a_creation_time_outside_the_schema_facet_is_a_schema_violation`, `python/tests/installed/installed_public_define.py::test_source_version_defaults_and_schema_facet_failures`.
 
 Conformance to this profile is not a substitute for schema validation: an
 implementation that produces a schema-invalid document has a defect regardless
@@ -732,7 +732,7 @@ a `def:WhereClauseRef`; one `def:WhereClauseDef` per entry with one
 the column's metadata merged with the entry's. The column's own `ItemDef`
 carries the `def:ValueListRef`.
 
-Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-core/tests/schema_submission.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-core/tests/schema_submission.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
+Evidence: `sdtm-lb-metadata`, `adam-adlb-metadata`, `sdtm-suppdm-metadata`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::fixed_time_xml_has_one_column_list_two_ordered_item_and_where_references`, `rust/crates/yamaa-adapters/tests/submission_encoders.rs::several_values_are_a_membership_and_several_columns_one_range_check_each`, `rust/crates/yamaa-adapters/tests/file_resources.rs::lb_value_metadata_uses_original_published_bytes_and_family_valid_completion`.
 
 The mapping to Define-XML is fixed:
 
