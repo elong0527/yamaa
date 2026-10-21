@@ -505,6 +505,7 @@ fn a_section_lists_only_specifications_of_its_model() {
     assert_eq!(rule.as_deref(), Some("SUB-3"));
     assert_eq!(paths, ["sdtm.specs[0].model"]);
     assert_eq!(context["field"], Value::String("model".into()));
+    assert_eq!(context["model"], Value::String("SDTM".into()));
     assert_eq!(context["section"], Value::String("sdtm".into()));
     // A guide of another model, at the section's first standard.
     study.write("dm.yaml", &dm);

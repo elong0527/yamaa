@@ -624,6 +624,35 @@ mod project {
                     "columns.VALUE.submission.mandatory",
                     r#"{"column": "VALUE", "reason": "required_not_mandatory", "model": "SDTM"}"#,
                 ),
+                // An entry can inherit either half of the conflict.
+                (
+                    SDTM,
+                    "{core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}",
+                    "{core: Perm, mandatory: false, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: [1]}, core: Req}]}",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.value_level.A.core",
+                    r#"{"column": "VALUE", "entry": "A", "reason": "required_not_mandatory", "model": "SDTM"}"#,
+                ),
+                (
+                    SDTM,
+                    "{core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}",
+                    "{core: Req, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: [1]}, mandatory: false}]}",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.value_level.A.mandatory",
+                    r#"{"column": "VALUE", "entry": "A", "reason": "required_not_mandatory", "model": "SDTM"}"#,
+                ),
+                // A key's existing admission reports the conflict once.
+                (
+                    SDTM,
+                    "{core: Req, length: 8",
+                    "{core: Req, mandatory: false, length: 8",
+                    "value_not_permitted",
+                    "SUB-10",
+                    "columns.ID.submission.mandatory",
+                    r#"{"column": "ID"}"#,
+                ),
                 // ADaM has no role and no domain (SUB-9, SUB-5).
                 (
                     ADAM,

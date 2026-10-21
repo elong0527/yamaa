@@ -350,6 +350,8 @@ fn admit_column_model(
         && required
         && effective_mandatory == Some(false)
         && (own.core.is_some() || own.mandatory.is_some())
+        // Key admission already rejects `mandatory: false` (SUB-10).
+        && !spec.keys.iter().any(|key| key.name == name)
     {
         let at = if own.mandatory.is_some() {
             format!("{path}.mandatory")

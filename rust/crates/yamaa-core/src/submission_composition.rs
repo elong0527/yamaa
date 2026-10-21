@@ -1382,6 +1382,7 @@ fn listed_model(tree: &ast::Spec, family: Submission, path: &str) -> Option<Find
             ConditionCode::SubmissionModelRequired,
             vec![
                 ("field", text("model")),
+                ("model", text(model.name())),
                 ("section", text(family_name(family))),
             ],
         ),

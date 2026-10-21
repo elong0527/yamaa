@@ -1164,7 +1164,11 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             None,
             SubmissionModelRequired,
             "missing_required_field",
-            vec![("field", text("model")), ("section", text("sdtm"))],
+            vec![
+                ("field", text("model")),
+                ("model", text("SDTM")),
+                ("section", text("sdtm")),
+            ],
         ),
         (
             Some(yamaa_core::ast::ModelKind::Adam),
