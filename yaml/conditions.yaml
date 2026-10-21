@@ -557,6 +557,10 @@ conditions:
   sqrt_of_negative:
     phases: [derivation]
     message: "{expr} takes the square root of a negative value"
+  # PROJECT-15
+  stale_artifact:
+    phases: [validation]
+    message: "the saved artifact of {dataset} is stale against its run report {report}"
   # SUB-3 and DEFINE-6 on a 1.0 project: the 1.0 name of
   # unknown_standard_family (D58)
   standard_model_mismatch:
