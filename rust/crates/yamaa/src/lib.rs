@@ -71,8 +71,7 @@ pub use diagnostic::{
     ISSUE_COLUMNS, PHASES, REPORT_COLUMNS, REPORT_KINDS, REPORT_OUTCOMES, SEVERITIES,
 };
 pub use engine::{
-    AttemptFailure, Build, DefineArtifact, DefineBuild, DefineRequest, Engine, EngineOptions,
-    Request, ResolvedSpecification, SourceBytes,
+    AttemptFailure, Build, Engine, EngineOptions, Request, ResolvedSpecification, SourceBytes,
 };
 pub use error::{
     Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, OdmError,

@@ -36,9 +36,6 @@ yamaa::DatasetPhase: pub use yamaa::observe::DatasetPhase
 yamaa::Date32Array: pub use yamaa::table::Date32Array
 yamaa::Date: pub use yamaa::scalar::Date
 yamaa::DateTime: pub use yamaa::scalar::DateTime
-yamaa::DefineArtifact: pub use yamaa::engine::DefineArtifact
-yamaa::DefineBuild: pub use yamaa::engine::DefineBuild
-yamaa::DefineRequest: pub use yamaa::engine::DefineRequest
 yamaa::Diagnostic: pub use yamaa::diagnostic::Diagnostic
 yamaa::DiagnosticContext: pub use yamaa::diagnostic::DiagnosticContext
 yamaa::EncodedScalar: pub use yamaa::scalar::EncodedScalar
@@ -277,30 +274,11 @@ yamaa::engine::Build::report: pub fn report(&self) -> &Report
 yamaa::engine::Build::run_report: pub fn run_report(&self) -> Option<&Table>
 yamaa::engine::Build::run_report_bytes: pub fn run_report_bytes(&self) -> Option<&[u8]>
 yamaa::engine::Build::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
-yamaa::engine::DefineArtifact: pub struct DefineArtifact [derive(Clone, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::engine::DefineArtifact::bytes: pub bytes: Vec<u8>
-yamaa::engine::DefineArtifact::path: pub path: String
-yamaa::engine::DefineArtifact::state: pub state: String
-yamaa::engine::DefineBuild: impl DefineBuild
-yamaa::engine::DefineBuild: pub struct DefineBuild
-yamaa::engine::DefineBuild::artifacts: pub fn artifacts(&self) -> Vec<DefineArtifact>
-yamaa::engine::DefineBuild::capture_reads: pub fn capture_reads(&self) -> usize
-yamaa::engine::DefineBuild::report: pub fn report(&self) -> &Report
-yamaa::engine::DefineBuild::save: pub fn save(&mut self) -> Result<Vec<String>, Failure>
-yamaa::engine::DefineRequest: impl<'a> DefineRequest<'a>
-yamaa::engine::DefineRequest: pub struct DefineRequest<'a> [derive(Clone, Copy, Debug, Eq, PartialEq)] [non_exhaustive]
-yamaa::engine::DefineRequest::created: pub created: Option<&'a str>
-yamaa::engine::DefineRequest::environment: pub environment: &'a str
-yamaa::engine::DefineRequest::installed: pub installed: &'a str
-yamaa::engine::DefineRequest::new: pub fn new(environment: &'a str, standard: &'a str, installed: &'a str) -> Self
-yamaa::engine::DefineRequest::standard: pub standard: &'a str
-yamaa::engine::DefineRequest::with_created: pub fn with_created(mut self, created: &'a str) -> Self
 yamaa::engine::Engine: impl Engine
 yamaa::engine::Engine: pub struct Engine [derive(Clone)]
 yamaa::engine::Engine::build: pub fn build(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Build, Error>
 yamaa::engine::Engine::check: pub fn check(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Report, Error>
 yamaa::engine::Engine::compile: pub fn compile(&self, request: &Request<'_>, token: &CancellationToken) -> Result<Plan, Error>
-yamaa::engine::Engine::define: pub fn define(&self, request: &DefineRequest<'_>, token: &CancellationToken) -> Result<DefineBuild, Error>
 yamaa::engine::Engine::new: pub fn new(options: EngineOptions) -> Self
 yamaa::engine::Engine::resolve_specification: pub fn resolve_specification(&self, request: &Request<'_>) -> Result<ResolvedSpecification, Error>
 yamaa::engine::EngineOptions: impl EngineOptions
