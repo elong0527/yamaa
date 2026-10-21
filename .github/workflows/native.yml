@@ -1018,7 +1018,7 @@ jobs:
     # architecture (tools/ci/manylinux.py), whose glibc 2.28 is RHEL 8's, with
     # the runner's Rust mounted read-only; on macOS and Windows it runs behind
     # a proxy that refuses every connection. The installed package then runs
-    # the conformance corpus the same way.
+    # its selftest and the conformance corpus the same way.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -1110,6 +1110,26 @@ jobs:
           else
             python -m pip install --no-build-isolation --no-index --no-cache-dir native-dist/yamaa-*.tar.gz
           fi
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log, as installation qualification evidence;
+      # the job fails unless the selftest reports succeeded. On Linux the
+      # container mounts no checkout: the cases are inside the package.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+              --volume "${PWD}:/work" --workdir /work --env HOME=/work/home --env TMPDIR=/work/tmp \
+              "${OFFLINE_IMAGE}" /work/venv/bin/python -I -c \
+              'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
+          else
+            python -I -c 'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
+          fi
       # On Linux the installed package runs as the runner's user, which then
       # compares and uploads the files that it saves: the engine publishes
       # each file readable by its owner alone.
@@ -1161,7 +1181,7 @@ jobs:
     # read-only root, from the rocker/r-ver image of R 4.6.1, with the runner's
     # Rust mounted read-only, and leaves HOME empty; on macOS and Windows it
     # runs behind a proxy that refuses every connection. The installed package
-    # then runs the conformance corpus the same way.
+    # then runs its selftest and the conformance corpus the same way.
     timeout-minutes: ${{ matrix.os == 'windows-2025' && 60 || 40 }}
     strategy:
       fail-fast: false
@@ -1235,6 +1255,28 @@ jobs:
                 test -z "$(ls -A /work/home)"'
           else
             R CMD INSTALL --library="${RUNNER_TEMP}/offline/library" yamaa_*.tar.gz
+          fi
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log, as installation qualification evidence;
+      # the job fails unless the selftest reports succeeded. On Linux the
+      # container mounts no checkout: the cases are inside the package.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+              --volume "${PWD}:/work" --workdir /work \
+              --env HOME=/work/home --env TMPDIR=/work/tmp --env R_LIBS=/work/library \
+              docker.io/rocker/r-ver:4.6.1 Rscript --vanilla -e \
+              'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
+          else
+            R_LIBS="${RUNNER_TEMP}/offline/library" Rscript --vanilla -e \
+              'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
           fi
       # On Linux the installed package runs as the runner's user, which then
       # compares and uploads the files that it saves: the engine publishes
@@ -1404,11 +1446,11 @@ jobs:
     # install.packages(path, repos = NULL) and R of its series, on a runner
     # that has no Rust, no Rtools and no network: the image's Rust is
     # uninstalled, setup-r installs no Rtools, any Rtools that the image
-    # carries is deleted, and the installation, the conformance corpus and
-    # the installed R suites run behind a proxy that refuses every
-    # connection. Before that, while the network is up, the suites' suggested
-    # packages are installed as CRAN binaries. The cohort comparison reads the
-    # reports.
+    # carries is deleted, and the installation, the installed package's
+    # selftest, the conformance corpus and the installed R suites run behind
+    # a proxy that refuses every connection. Before that, while the network
+    # is up, the suites' suggested packages are installed as CRAN binaries.
+    # The cohort comparison reads the reports.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -1554,6 +1596,21 @@ jobs:
             "${linked}" -L "${R_LIBS}/yamaa/libs/yamaa.so"
             if "${linked}" -L "${R_LIBS}/yamaa/libs/yamaa.so" | grep -E '/opt/homebrew/|/usr/local/'; then exit 1; fi
           fi
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log, as installation qualification evidence;
+      # the job fails unless the selftest reports succeeded. R runs with the
+      # toolchain-free PATH.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/r-binary-library
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          export PATH="$(cat toolchain-free-path)"
+          Rscript --vanilla -e 'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
       # The original benchmarks call the project programs package, plain R
       # that installs without a compiler. R runs with the toolchain-free PATH.
       - name: Report installed R public benchmark conformance

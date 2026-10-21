@@ -64,7 +64,10 @@ package. On Linux both run in a container without a network: the Python
 archive in the manylinux_2_28 image, whose glibc 2.28 is RHEL 8's, and the R
 package in the `rocker/r-ver` image of R 4.6.1. On macOS and Windows they run
 behind a proxy that refuses every connection. Each installed package then
-runs the conformance corpus without a network.
+runs its selftest, `yamaa.selftest()` or `yamaa_selftest()`, without a
+network: the job's log keeps the report as installation qualification
+evidence, and the job fails unless the selftest reports `succeeded`. The
+package then runs the conformance corpus, also without a network.
 
 The native run builds the R binary packages that a release publishes from
 the R source package that it publishes, with `R CMD INSTALL --build` and
@@ -76,10 +79,12 @@ minimum macOS that the binary's `yamaa.so` declares. Its
 `install.packages(path, repos = NULL)`, on a runner of its platform from
 which the image's Rust has been uninstalled and that has no Rtools; the log
 shows that neither the shell nor R finds a Rust tool or an Rtools directory.
-The installation, the conformance corpus and the installed R suites run
-behind the refusing proxy, and the cohort comparison reads each binary's
-reports beside those of its platform's wheel: on Windows the wheel is built
-with MSVC and the binary with Rtools' GNU toolchain.
+The installation, the installed package's `yamaa_selftest()`, the
+conformance corpus and the installed R suites run behind the refusing proxy.
+The job's log keeps the selftest's report, and the job fails unless it
+reports `succeeded`. The cohort comparison reads each binary's reports
+beside those of its platform's wheel: on Windows the wheel is built with
+MSVC and the binary with Rtools' GNU toolchain.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its

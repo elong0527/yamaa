@@ -441,7 +441,7 @@ class NativeWorkflowContract(unittest.TestCase):
         required = release.required_jobs(self.coverage)
         for job, host in self.offline_source_jobs():
             steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
-            install, conformance = required[job]
+            install, _, conformance = required[job]
             with self.subTest(job=job):
                 self.assertEqual(steps[install]["run"].count(commands[host]), 2)
                 self.assertIn("public_conformance compare", steps[conformance]["run"])
@@ -710,10 +710,11 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertIn("> toolchain-free-path", steps[removal]["run"])
                 self.assertIn("libgcc_s_seh-1.dll", steps[removal]["run"])
                 clean = 'export PATH="$(cat toolchain-free-path)"'
+                selftest = titles.index("Run the installed package's selftest")
                 conformance = titles.index(
                     "Report installed R public benchmark conformance"
                 )
-                for index in (install, conformance):
+                for index in (install, selftest, conformance):
                     self.assertIn(clean, steps[index]["run"])
                 self.assertIn("-e 'library(yamaa)'", steps[install]["run"])
                 inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
@@ -772,6 +773,48 @@ class NativeWorkflowContract(unittest.TestCase):
                     f"native-r-binary-qualification-{platform}-{version}",
                     self.jobs[job]["uploads"],
                 )
+
+    def test_each_install_without_a_network_gates_on_the_installed_selftest(self):
+        # #3062: right after the installation, and before the conformance
+        # corpus, each lane that installs a package without a network runs
+        # the installed package's selftest with the host's own call. The call
+        # prints the report, the facade's lines, to the log and fails the lane
+        # unless the status is succeeded, and a release requires the step.
+        # An offline source lane runs it twice: in the Linux container, and
+        # on macOS and Windows.
+        selftest = "Run the installed package's selftest"
+        calls = {
+            "python": "import sys, yamaa; r = yamaa.selftest(); print(r); "
+            'sys.exit(r.status != "succeeded")',
+            "r": "r <- yamaa::yamaa_selftest(); print(r); "
+            'quit(status = r$status != "succeeded")',
+        }
+        lanes = [(job, host, 2) for job, host in self.offline_source_jobs()] + [
+            (f"native-r-binary-install ({platform}, R {version})", "r", 1)
+            for platform, version in self.r_binary_lanes()
+        ]
+        required = release.required_jobs(self.coverage)
+        for job, host, runs in lanes:
+            steps = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in steps]
+            with self.subTest(job=job):
+                self.assertEqual(names.count(selftest), 1)
+                index = names.index(selftest)
+                self.assertNotIn("if", steps[index])
+                self.assertRegex(
+                    names[index - 1], r"^Install the .+ without a network$"
+                )
+                self.assertRegex(
+                    names[index + 1],
+                    r"^Report installed .+ public benchmark conformance$",
+                )
+                position = required[job].index(selftest)
+                self.assertEqual(
+                    required[job][position - 1 : position + 2],
+                    tuple(names[index - 1 : index + 2]),
+                )
+                script = " ".join(steps[index]["run"].replace("\\\n", " ").split())
+                self.assertEqual(script.count(f"'{calls[host]}'"), runs)
 
     def test_every_r_binary_install_joins_the_cohort_comparison(self):
         # Each binary's reports are compared beside the wheel lane of its
