@@ -387,7 +387,7 @@ position and is rejected where the specification is read, before any data is
 seen.
 
 Fails: `missing_required_field`, `month_out_of_range`, `value_not_permitted`, `invalid_calendar_date`, `month_required`, `month_not_permitted`, `day_required`, `day_not_permitted`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_month_rule_without_a_day_rule_fails_at_the_impute`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `negative-impute-missing-month`, `negative-impute-unreachable-month`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_imputation.rs`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_v1_lowering.rs::a_month_rule_without_a_day_rule_fails_at_the_impute`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `negative-impute-bad-month`, `negative-impute-bad-day`, `negative-impute-day-rule`, `rust/crates/yamaa-core/tests/support/diagnostic/temporal_imputation.rs`.
 
 A `month` without `day` fails as `missing_required_field` at the `impute`,
 naming `day`: a source missing its month also misses its day, so the `month`
