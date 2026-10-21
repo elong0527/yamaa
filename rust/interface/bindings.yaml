@@ -307,7 +307,7 @@ public:
       table: lint
       raises: refusal
       calls: lint
-      doc: Lint specification files, first applying the proved layout fixes when fix is true.
+      doc: Lint yamaa files, first applying the proved fixes when fix is true.
     # D149: the JSON Schema of yaml/v1/json/, as canonical JSON text; any other
     # type is refused as unexpected_file_type (SCHEMA-2).
     - name: schema
