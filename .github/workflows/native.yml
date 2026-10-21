@@ -194,10 +194,13 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check benchmark SDK lock versions
         run: python -m tools.packaging.check_benchmark_sdk_versions
+      # Staging the engine bundle, for the source archive and for the checks
+      # that compare it and the component inventories with the bundle, reads
+      # the selftest list, benchmarks/selftest.yaml, with PyYAML.
       - name: Install build tools
         run: |
           python -m tools.ci.toolchain --install
-          python -m pip install maturin==1.9.6 hatchling==1.27.0
+          python -m pip install maturin==1.9.6 hatchling==1.27.0 pyyaml==6.0.3
       - name: Generate Python caches before packaging
         run: |
           python -m compileall -q -f -o 0 -o 1 python/src/yamaa
