@@ -99,6 +99,8 @@ class Archives(unittest.TestCase):
             "LICENSE-THIRD-PARTY.txt": b"Crate: arrow 55.2.0\n",
             "COMPONENTS.tsv": b"name\narrow\t55.2.0\nrust-std\t1.99.1\n",
         }
+        # musl's notice, which only the archives for the musl targets carry.
+        self.musl = {"LICENSE-MUSL.txt": b"musl 1.2.5\nMIT\n"}
         # The Python packages' own notices, which the command line does not
         # carry.
         python = {
@@ -107,13 +109,19 @@ class Archives(unittest.TestCase):
         }
         for directory, files in (
             ("python", {**shared, **python}),
-            ("rust/crates/yamaa-cli", own),
+            ("rust/crates/yamaa-cli", {**own, **self.musl}),
         ):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
             for name, payload in files.items():
                 (self.root / directory / name).write_bytes(payload)
         self.expected = {**shared, **own}
         self.identity = Identity("1.0.0", 1)
+
+    def notices(self, target):
+        """The notices of the target's archive, by name."""
+        if target.endswith("-linux-musl"):
+            return {**self.expected, **self.musl}
+        return self.expected
 
     def write(self, target, payload=None):
         binary = self.root / "build" / archives.executable(target)
@@ -136,20 +144,18 @@ class Archives(unittest.TestCase):
                 path = self.write(target)
                 directory = f"yamaa-1.0.0-rc.1-{target}"
                 self.assertEqual(path.name, f"{directory}.zip")
+                expected = self.notices(target)
                 with zipfile.ZipFile(path) as archive:
                     entries = {entry.filename: entry for entry in archive.infolist()}
                     program = f"{directory}/{archives.executable(target)}"
                     self.assertEqual(
                         sorted(entries),
                         sorted(
-                            [
-                                program,
-                                *(f"{directory}/{name}" for name in self.expected),
-                            ]
+                            [program, *(f"{directory}/{name}" for name in expected)]
                         ),
                     )
                     self.assertEqual(archive.read(program), executable(target))
-                    for name, payload in self.expected.items():
+                    for name, payload in expected.items():
                         self.assertEqual(archive.read(f"{directory}/{name}"), payload)
                 # unzip restores these Unix modes on Linux and macOS.
                 for name, entry in entries.items():
@@ -161,7 +167,19 @@ class Archives(unittest.TestCase):
                         else archives.NOTICE_MODE,
                     )
                 self.assertEqual(archives.check(path, self.root), target)
-                self.assertEqual(len(notices.check_archive(path, self.root)), 4)
+                self.assertEqual(
+                    len(notices.check_archive(path, self.root)), len(expected)
+                )
+        # Only the archives for the musl targets carry musl's notice.
+        self.assertEqual(
+            sorted(
+                target
+                for target in native.CLI_TARGETS.values()
+                if "LICENSE-MUSL.txt"
+                in archives.layout(self.identity, target, self.root)[1]
+            ),
+            ["aarch64-unknown-linux-musl", "x86_64-unknown-linux-musl"],
+        )
 
     def test_only_an_executable_for_the_named_target_is_archived(self):
         for target, payload, error in (
@@ -216,10 +234,13 @@ class Archives(unittest.TestCase):
             info.external_attr = archives.NOTICE_MODE << 16
             yield info, b"read me\n"
 
-        def missing(entries):
+        def missing(entries, name="LICENSE-YAML.txt"):
             for entry, payload in entries:
-                if not entry.filename.endswith("/LICENSE-YAML.txt"):
+                if not entry.filename.endswith(f"/{name}"):
                     yield entry, payload
+
+        def missing_musl(entries):
+            return missing(entries, "LICENSE-MUSL.txt")
 
         def foreign(entries):
             for entry, payload in entries:
@@ -247,6 +268,7 @@ class Archives(unittest.TestCase):
             ("no Unix permissions", system, "must be a regular file"),
             ("another file", extra, "must hold exactly"),
             ("a missing notice", missing, "must hold exactly"),
+            ("no notice of musl", missing_musl, "must hold exactly"),
             (
                 "another target's executable",
                 foreign,
@@ -263,6 +285,23 @@ class Archives(unittest.TestCase):
             finally:
                 path.write_bytes(original)
         self.assertEqual(archives.check(path, self.root), target)
+
+    def test_an_archive_for_another_target_holds_no_notice_of_musl(self):
+        # The macOS executable links no musl, so its archive carries no notice
+        # of it.
+        target = "aarch64-apple-darwin"
+        path = self.write(target)
+
+        def musl(entries):
+            yield from entries
+            info = zipfile.ZipInfo(f"yamaa-1.0.0-rc.1-{target}/LICENSE-MUSL.txt")
+            info.create_system = archives.UNIX
+            info.external_attr = archives.NOTICE_MODE << 16
+            yield info, self.musl["LICENSE-MUSL.txt"]
+
+        self.rewrite(path, musl)
+        with self.assertRaisesRegex(ValueError, "must hold exactly"):
+            archives.check(path, self.root)
 
     def test_only_the_release_and_a_declared_target_name_an_archive(self):
         path = self.write("aarch64-apple-darwin")

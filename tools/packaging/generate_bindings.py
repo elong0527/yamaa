@@ -94,8 +94,9 @@ _RUST_HEADER = [
 _MANIFEST_HEADER = [
     *_PYI_HEADER,
     "# The frozen sections, one element per line: values, tables, records, public",
-    "# and cli, without the private native sections. The stability check of",
-    "# docs/design/interface-1.0/stability.md compares them with the latest release.",
+    "# and cli, without the private native sections. The stability check,",
+    "# tools/validation/check_interface_stability.py, compares them with the",
+    "# latest release tag.",
 ]
 
 _TOP_LEVEL_KEYS = {

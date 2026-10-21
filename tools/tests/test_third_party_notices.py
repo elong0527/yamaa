@@ -1,6 +1,7 @@
 """Third-party notices follow the locked closure of the shipped crates."""
 
 import dataclasses
+import os
 import re
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.packaging import generate_third_party_notices as notices
+from tools.staging import engine_bundle
 
 MIT = (
     "Copyright (c) 2020 {holder}\n\nPermission is hereby granted, free of charge, "
@@ -136,7 +138,7 @@ QUOTED
     "QUOTED",
     QUOTED.replace("<", "&#60;").replace(">", "&#62;").replace('"', "&#34;"),
 )
-# A parsed standard library notice whose crate shares a text with the graph.
+# A standard library whose linked crate shares a text with the graph.
 LIBRARY = notices.StandardLibrary(
     release="1.99.1",
     statement=(
@@ -156,23 +158,220 @@ LIBRARY = notices.StandardLibrary(
     ),
     licenses=(("MIT", MIT.format(holder="<year> <copyright holders>")),),
     crates=(
-        notices.LibraryCrate(
+        notices.Notice(
             "windows-sys",
             "0.61.2",
-            "MIT OR Apache-2.0",
+            None,
+            ("MIT",),
             (("license-mit", MIT.format(holder="Microsoft")),),
-        ),
-        notices.LibraryCrate("vex-sdk", "0.27.1", "MIT", ()),
-        notices.LibraryCrate(
-            "r-efi",
-            "5.3.0",
-            "MIT OR Apache-2.0 OR LGPL-2.1-or-later",
-            (("AUTHORS", AUTHORS),),
+            (),
         ),
     ),
 )
-# The standard library crates that the test library links.
-LINKED = (("windows-sys", "0.61.2"),)
+# The command line's musl notice: the header, then musl's COPYRIGHT file.
+MUSL_NOTICE = (
+    f"musl {notices.MUSL[1]}\n{notices.MUSL_HOME}\n\nmusl as a whole is licensed "
+    "under the following standard MIT license:\n\n" + MIT.format(holder="Rich Felker")
+)
+LINUX_OPTIONS = frozenset(
+    {
+        "unix",
+        ("target_os", "linux"),
+        ("target_env", "gnu"),
+        ("target_family", "unix"),
+        ("target_vendor", "unknown"),
+    }
+)
+WINDOWS_OPTIONS = frozenset(
+    {
+        "windows",
+        ("target_os", "windows"),
+        ("target_env", "msvc"),
+        ("target_family", "windows"),
+        ("target_vendor", "pc"),
+    }
+)
+# The platforms of the test standard library's sources.
+PLATFORMS = (
+    notices.Platform(LINUX, LINUX_OPTIONS),
+    notices.Platform(WINDOWS, WINDOWS_OPTIONS),
+)
+# What `rustc --print cfg --target` prints for each test platform.
+PRINTED_CFG = {
+    LINUX: 'debug_assertions\ntarget_env="gnu"\ntarget_family="unix"\n'
+    'target_os="linux"\ntarget_vendor="unknown"\nunix\n',
+    WINDOWS: 'debug_assertions\ntarget_env="msvc"\ntarget_family="windows"\n'
+    'target_os="windows"\ntarget_vendor="pc"\nwindows\n',
+}
+
+
+def standard_library_sources(root):
+    """Write a rust-src library directory: std's workspace, its lock and the
+    packages in vendor/ of its out-of-tree crates.
+
+    std links cfg-if and hashbrown everywhere, libc off Windows, and with its
+    backtrace feature addr2line and gimli. hashbrown asks for foldhash only
+    through a weak feature, unwinding and dlmalloc are xous's, rand is a
+    dev-dependency and cc a build dependency.
+    """
+    library = root / "library"
+    registry = '\nsource = "registry+https://github.com/rust-lang/crates.io-index"'
+
+    def package(name, version, dependencies=(), source=True):
+        listed = ", ".join(f'"{dependency}"' for dependency in dependencies)
+        return (
+            f'[[package]]\nname = "{name}"\nversion = "{version}"'
+            f"{registry if source else ''}\ndependencies = [{listed}]\n"
+        )
+
+    core = "rustc-std-workspace-core"
+    lock = "version = 4\n\n" + "\n".join(
+        [
+            package(
+                "std",
+                "0.0.0",
+                ["addr2line", "cc", "cfg-if", "core", "dlmalloc", "hashbrown"]
+                + ["libc", "rand", "unwind"],
+                source=False,
+            ),
+            package("core", "0.0.0", source=False),
+            package(core, "1.99.0", ["core"], source=False),
+            package("unwind", "0.0.0", ["libc", core, "unwinding"], source=False),
+            package("addr2line", "0.27.1", ["gimli", core]),
+            package("cc", "1.2.0"),
+            package("cfg-if", "1.0.4", [core]),
+            package("dlmalloc", "0.2.14", [core]),
+            package("foldhash", "0.2.0"),
+            package("gimli", "0.34.0", [core]),
+            package("hashbrown", "0.17.1", ["foldhash", core]),
+            package("libc", "0.2.189", [core]),
+            package("rand", "0.9.5"),
+            package("unwinding", "0.2.10", ["gimli", core]),
+        ]
+    )
+    manifests = {
+        "Cargo.toml": (
+            '[workspace]\nresolver = "1"\nmembers = ["std"]\n\n[patch.crates-io]\n'
+            f"{core} = {{ path = '{core}' }}\n"
+        ),
+        "std/Cargo.toml": """[package]
+name = "std"
+version = "0.0.0"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+core = { path = "../core" }
+cfg-if = { version = "1.0", features = ['rustc-dep-of-std'] }
+hashbrown = { version = "0.17", default-features = false, features = [
+    'rustc-dep-of-std',
+] }
+unwind = { path = "../unwind" }
+
+[target.'cfg(not(all(windows, target_env = "msvc")))'.dependencies]
+libc = { version = "0.2", default-features = false }
+addr2line = { version = "0.27", optional = true, default-features = false }
+
+[target.'cfg(target_os = "xous")'.dependencies]
+dlmalloc = "0.2"
+
+[target.x86_64-fortanix-unknown-sgx.dependencies]
+dlmalloc = "0.2"
+
+[dev-dependencies]
+rand = "0.9"
+
+[build-dependencies]
+cc = "1.2"
+
+[features]
+backtrace = ['addr2line/rustc-dep-of-std']
+panic-unwind = []
+""",
+        "core/Cargo.toml": '[package]\nname = "core"\nversion = "0.0.0"\n',
+        f"{core}/Cargo.toml": (
+            f'[package]\nname = "{core}"\nversion = "1.99.0"\n\n'
+            '[dependencies]\ncore = { path = "../core" }\n'
+        ),
+        "unwind/Cargo.toml": f"""[package]
+name = "unwind"
+version = "0.0.0"
+
+[dependencies]
+core = {{ path = "../{core}", package = "{core}" }}
+
+[target.'cfg(not(all(windows, target_env = "msvc")))'.dependencies]
+libc = {{ version = "0.2", default-features = false }}
+
+[target.'cfg(target_os = "xous")'.dependencies]
+unwinding = {{ version = "0.2", default-features = false }}
+""",
+    }
+    # A vendored crate's manifest, as `cargo publish` normalizes it, with the
+    # optional core dependency that its rustc-dep-of-std feature enables.
+    vendored = {
+        "addr2line-0.27.1": (
+            "MIT OR Apache-2.0",
+            '[dependencies.gimli]\nversion = "0.34"\ndefault-features = false\n'
+            '[features]\nrustc-dep-of-std = ["core", "gimli/rustc-dep-of-std"]\n',
+            {"LICENSE-MIT": MIT.format(holder="addr2line"), "LICENSE-APACHE": APACHE},
+        ),
+        "cc-1.2.0": ("MIT OR Apache-2.0", "", {"LICENSE-MIT": MIT.format(holder="cc")}),
+        "cfg-if-1.0.4": (
+            "MIT OR Apache-2.0",
+            '[features]\nrustc-dep-of-std = ["core"]\n',
+            {"LICENSE-MIT": MIT.format(holder="Alex Crichton")},
+        ),
+        "dlmalloc-0.2.14": ("MIT OR Apache-2.0", "", {}),
+        "foldhash-0.2.0": (
+            "BSD-3-Clause",
+            "[features]\nnightly = []\n",
+            {"LICENSE": BSD},
+        ),
+        "gimli-0.34.0": (
+            "MIT OR Apache-2.0",
+            '[features]\nrustc-dep-of-std = ["core"]\n',
+            {"LICENSE-MIT": MIT.format(holder="gimli")},
+        ),
+        "hashbrown-0.17.1": (
+            "MIT OR Apache-2.0",
+            '[dependencies.foldhash]\nversion = "0.2.0"\noptional = true\n'
+            "[features]\n"
+            'default = ["default-hasher"]\ndefault-hasher = ["dep:foldhash"]\n'
+            'nightly = ["foldhash?/nightly"]\n'
+            'rustc-dep-of-std = ["nightly", "core"]\n',
+            {"LICENSE-MIT": MIT.format(holder="Amanieu")},
+        ),
+        "libc-0.2.189": (
+            "MIT OR Apache-2.0",
+            "[features]\ndefault = []\n",
+            {"LICENSE-MIT": MIT.format(holder="libc")},
+        ),
+        "rand-0.9.5": ("MIT OR Apache-2.0", "", {}),
+        "unwinding-0.2.10": (
+            "MIT OR Apache-2.0",
+            '[dependencies.gimli]\nversion = "0.34"\n',
+            {},
+        ),
+    }
+    for relative, text in manifests.items():
+        (library / relative).parent.mkdir(parents=True, exist_ok=True)
+        (library / relative).write_text(text)
+    (library / "Cargo.lock").write_text(lock)
+    for directory, (license, tables, files) in vendored.items():
+        name, _, version = directory.rpartition("-")
+        crate = library / "vendor" / directory
+        crate.mkdir(parents=True)
+        optional_core = (
+            f'[dependencies.core]\nversion = "1.0.0"\noptional = true\n'
+            f'package = "{core}"\n'
+        )
+        (crate / "Cargo.toml").write_text(
+            f'[package]\nname = "{name}"\nversion = "{version}"\n'
+            f'license = "{license}"\n{optional_core}{tables}'
+        )
+        for relative, text in files.items():
+            (crate / relative).write_text(text)
+    return library
 
 
 class Graph:
@@ -362,7 +561,8 @@ class StandardLibraryNotice(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.documents = Path(temporary.name) / "share/doc/rust"
+        self.sysroot = Path(temporary.name)
+        self.documents = self.sysroot / "share/doc/rust"
         (self.documents / "licenses").mkdir(parents=True)
         for license, text in (
             ("Apache-2.0", APACHE),
@@ -373,13 +573,12 @@ class StandardLibraryNotice(unittest.TestCase):
 
     def read(self, html=LIBRARY_HTML):
         (self.documents / "COPYRIGHT-library.html").write_text(html, encoding="utf-8")
-        return notices.read_standard_library(self.documents, "1.99.1")
+        return notices.read_library_notice(self.documents)
 
-    def test_reads_the_statement_tree_license_texts_and_crates(self):
-        library = self.read()
-        self.assertEqual(library.release, "1.99.1")
+    def test_reads_the_statement_tree_and_license_texts(self):
+        statement, files, licenses = self.read()
         self.assertEqual(
-            library.statement,
+            statement,
             (
                 "Copyrights in the Rust Standard Library are retained by their "
                 "contributors.",
@@ -393,7 +592,7 @@ class StandardLibraryNotice(unittest.TestCase):
             (),
         )
         self.assertEqual(
-            library.files,
+            files,
             (
                 notices.LibraryFiles(
                     ".",
@@ -405,22 +604,15 @@ class StandardLibraryNotice(unittest.TestCase):
         )
         # Every license an in-tree entry names, with the toolchain's text.
         self.assertEqual(
-            [license for license, _ in library.licenses],
+            [license for license, _ in licenses],
             ["Apache-2.0", "BSD-2-Clause", "MIT"],
         )
-        # Notice texts come back verbatim from inside the template's wrapper.
-        self.assertEqual(
-            library.crates,
-            (
-                notices.LibraryCrate(
-                    "hashbrown",
-                    "0.17.1",
-                    "MIT OR Apache-2.0",
-                    (("LICENSE-MIT", QUOTED),),
-                ),
-                notices.LibraryCrate("vex-sdk", "0.27.1", "MIT", ()),
-            ),
+        # The out-of-tree section, which misses crates that std links, is not
+        # read: the crates come from the standard library's sources.
+        unread = LIBRARY_HTML.replace("<pre>\n", "<pre>").replace(
+            "crates/vex-sdk/0.27.1", "crates/vex-sdk/0.27.2"
         )
+        self.assertEqual(self.read(unread), (statement, files, licenses))
 
     def test_another_shape_stops_generation(self):
         cases = {
@@ -430,12 +622,17 @@ class StandardLibraryNotice(unittest.TestCase):
             "has 'Note: reviewed'": LIBRARY_HTML.replace(
                 "<p><b>Copyright:</b> 2016", "<p><b>Note:</b> reviewed</p><p>2016"
             ),
-            "has an unexpected text": LIBRARY_HTML.replace("<pre>\n", "<pre>"),
-            "unexpected crate '\N{PACKAGE} vex-sdk-0.27.1'": LIBRARY_HTML.replace(
-                "crates/vex-sdk/0.27.1", "crates/vex-sdk/0.27.2"
-            ),
             "names no path or license": LIBRARY_HTML.replace(
                 "<p><b>License:</b> Apache-2.0 OR MIT</p>", ""
+            ),
+            "names no statement or files": LIBRARY_HTML.replace(
+                "<p>Copyrights in the Rust Standard Library are retained by their\n"
+                "contributors.</p>",
+                "",
+            ).replace(
+                '<p>It is licensed under the <a href="http://opensource.org/licenses/'
+                'MIT">MIT</a>\nlicense, at your option.</p>',
+                "",
             ),
         }
         for message, html in cases.items():
@@ -446,20 +643,61 @@ class StandardLibraryNotice(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.read()
 
-    def test_the_notice_comes_from_the_pinned_toolchain(self):
+    def test_the_library_comes_from_the_pinned_toolchain(self):
+        # The notice and the rust-src sources below the pinned toolchain's
+        # sysroot, and the crates that std links on each of the TARGETS.
         self.read()
-        sysroot = self.documents.parent.parent.parent
-        with mock.patch.object(notices.toolchain, "channel", return_value="1.99.1"):
+        sources = standard_library_sources(self.sysroot / "lib/rustlib/src/rust")
+        expected = notices.read_standard_library(
+            self.documents, sources, "1.99.1", PLATFORMS
+        )
+        self.assertEqual(
+            [crate.name for crate in expected.crates],
+            ["addr2line", "cfg-if", "gimli", "hashbrown", "libc"],
+        )
+        printed = [
+            "rustc 1.99.1\nrelease: 1.99.1\n",
+            f"{self.sysroot}\n",
+            PRINTED_CFG[LINUX],
+            PRINTED_CFG[WINDOWS],
+        ]
+        with (
+            mock.patch.object(notices, "TARGETS", (LINUX, WINDOWS)),
+            mock.patch.object(notices.toolchain, "channel", return_value="1.99.1"),
+            mock.patch.dict(os.environ),
+        ):
+            os.environ.pop(notices.LIBRARY_SOURCES_VARIABLE, None)
             with mock.patch.object(
-                notices.subprocess,
-                "check_output",
-                side_effect=["rustc 1.99.1\nrelease: 1.99.1\n", f"{sysroot}\n"],
+                notices.subprocess, "check_output", side_effect=printed
             ) as run:
-                self.assertEqual(notices.standard_library(), self.read())
+                self.assertEqual(notices.standard_library(), expected)
             self.assertEqual(
                 [call.args[0] for call in run.call_args_list],
-                [["rustc", "-vV"], ["rustc", "--print", "sysroot"]],
+                [
+                    ["rustc", "-vV"],
+                    ["rustc", "--print", "sysroot"],
+                    ["rustc", "--print", "cfg", "--target", LINUX],
+                    ["rustc", "--print", "cfg", "--target", WINDOWS],
+                ],
             )
+            # A toolchain without rust-src takes an unpacked copy of it.
+            unpacked = self.sysroot / "rust-src/library"
+            unpacked.parent.mkdir()
+            sources.rename(unpacked)
+            with mock.patch.object(
+                notices.subprocess, "check_output", side_effect=printed
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "holds no standard library sources; add the rust-src component "
+                    "to Rust 1.99.1",
+                ):
+                    notices.standard_library()
+            os.environ[notices.LIBRARY_SOURCES_VARIABLE] = str(unpacked)
+            with mock.patch.object(
+                notices.subprocess, "check_output", side_effect=printed
+            ):
+                self.assertEqual(notices.standard_library(), expected)
             with mock.patch.object(
                 notices.subprocess,
                 "check_output",
@@ -469,6 +707,179 @@ class StandardLibraryNotice(unittest.TestCase):
                     ValueError, "rustc is 1.97.0, but the notices need Rust 1.99.1"
                 ):
                     notices.standard_library()
+
+
+class StandardLibrarySources(unittest.TestCase):
+    """The crates that std links come from a rust-src library directory."""
+
+    def sources(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        return standard_library_sources(Path(temporary.name))
+
+    def linked(self, sources, platforms=PLATFORMS):
+        return [crate.name for crate in notices.library_crates(sources, platforms)]
+
+    def test_std_links_the_dependencies_of_each_platform_and_feature(self):
+        sources = self.sources()
+        crates = notices.library_crates(sources, PLATFORMS)
+        # Neither the crate that a weak feature names, nor xous's or sgx's
+        # crates, nor a dev-dependency or a build dependency.
+        self.assertEqual(
+            [(crate.name, crate.version) for crate in crates],
+            [
+                ("addr2line", "0.27.1"),
+                ("cfg-if", "1.0.4"),
+                ("gimli", "0.34.0"),
+                ("hashbrown", "0.17.1"),
+                ("libc", "0.2.189"),
+            ],
+        )
+        # Each crate is chosen like a locked one, from its package in vendor/.
+        self.assertEqual(
+            crates[0],
+            notices.Notice(
+                "addr2line",
+                "0.27.1",
+                None,
+                ("MIT",),
+                (("LICENSE-MIT", MIT.format(holder="addr2line")),),
+                (),
+            ),
+        )
+        # Windows with MSVC links neither libc nor the backtrace crates.
+        self.assertEqual(self.linked(sources, PLATFORMS[1:]), ["cfg-if", "hashbrown"])
+        # Without backtrace, std links no crate that symbolizes backtraces.
+        with mock.patch.object(notices, "LIBRARY_FEATURES", ("panic-unwind",)):
+            self.assertEqual(self.linked(sources), ["cfg-if", "hashbrown", "libc"])
+
+    def test_a_feature_enables_an_optional_dependency_and_a_weak_one_does_not(self):
+        sources = self.sources()
+        # hashbrown's default features enable foldhash, which std leaves out.
+        manifest = sources / "std/Cargo.toml"
+        manifest.write_text(
+            manifest.read_text().replace(
+                "default-features = false, features", "features"
+            )
+        )
+        self.assertIn("foldhash", self.linked(sources))
+
+    def test_sources_that_do_not_settle_a_crate_stop_generation(self):
+        def change(relative, old, new):
+            def apply(sources):
+                path = sources / relative
+                path.write_text(path.read_text().replace(old, new, 1))
+
+            return apply
+
+        for message, edit in (
+            (
+                "addr2line 0.27.1: library/Cargo.lock locks no one gimli for it",
+                change("Cargo.lock", '"gimli", ', ""),
+            ),
+            (
+                "vendor/libc-0.2.189: does not hold libc 0.2.189, which "
+                "library/Cargo.lock locks",
+                change("vendor/libc-0.2.189/Cargo.toml", "0.2.189", "0.2.190"),
+            ),
+            (
+                "cfg-if 1.0.4: declares no feature std",
+                change("std/Cargo.toml", "'rustc-dep-of-std'] }", "'std'] }"),
+            ),
+            (
+                "malformed cfg expression: 'cfg(target_os = xous)'",
+                change("std/Cargo.toml", 'target_os = "xous"', "target_os = xous"),
+            ),
+            (
+                "hashbrown 0.17.1: review the license 'GPL-3.0-only' (GPL-3.0-only) "
+                "(the standard library's lib/rustlib/src/rust/library)",
+                change(
+                    "vendor/hashbrown-0.17.1/Cargo.toml",
+                    "MIT OR Apache-2.0",
+                    "GPL-3.0-only",
+                ),
+            ),
+        ):
+            sources = self.sources()
+            edit(sources)
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, re.escape(message)):
+                    notices.library_crates(sources, PLATFORMS)
+        sources = self.sources()
+        for path in sorted((sources / "vendor/gimli-0.34.0").iterdir()):
+            path.unlink()
+        with self.assertRaises(FileNotFoundError):
+            notices.library_crates(sources, PLATFORMS)
+
+
+class TargetConfiguration(unittest.TestCase):
+    def test_a_target_table_applies_by_its_name_or_cfg_expression(self):
+        linux, windows = PLATFORMS
+        for specification, on_linux, on_windows in (
+            (LINUX, True, False),
+            ("x86_64-fortanix-unknown-sgx", False, False),
+            ("cfg(unix)", True, False),
+            ("cfg(windows)", False, True),
+            ('cfg(not(all(windows, target_env = "msvc")))', True, False),
+            (
+                'cfg(not(all(windows, target_env = "msvc", not(target_vendor = '
+                '"uwp"))))',
+                True,
+                False,
+            ),
+            ('cfg(any(target_os = "linux", target_os = "android",))', True, False),
+            ('cfg(target_os="windows")', False, True),
+            ("cfg(any())", False, False),
+            ("cfg(all())", True, True),
+        ):
+            with self.subTest(specification=specification):
+                self.assertEqual(
+                    (
+                        notices.applies(specification, linux),
+                        notices.applies(specification, windows),
+                    ),
+                    (on_linux, on_windows),
+                )
+        for specification in (
+            "cfg(unix",
+            "cfg()",
+            "cfg(unix) extra",
+            "cfg(unix)!",
+            "cfg(not(unix, windows))",
+            "cfg(all(unix windows))",
+            "cfg(target_os = linux)",
+        ):
+            with (
+                self.subTest(specification=specification),
+                self.assertRaisesRegex(ValueError, "malformed cfg expression"),
+            ):
+                notices.applies(specification, linux)
+
+    def test_the_options_come_from_rustc_for_the_target(self):
+        with mock.patch.object(
+            notices.subprocess,
+            "check_output",
+            return_value=PRINTED_CFG[LINUX] + 'target_abi=""\n',
+        ) as run:
+            platform = notices.target_platform(LINUX)
+        run.assert_called_once_with(
+            ["rustc", "--print", "cfg", "--target", LINUX],
+            cwd=notices.WORKSPACE,
+            text=True,
+        )
+        self.assertEqual(
+            platform,
+            notices.Platform(
+                LINUX, LINUX_OPTIONS | {"debug_assertions", ("target_abi", "")}
+            ),
+        )
+        with mock.patch.object(
+            notices.subprocess, "check_output", return_value="target os\n"
+        ):
+            with self.assertRaisesRegex(
+                ValueError, "rustc printed the cfg option 'target os'"
+            ):
+                notices.target_platform(LINUX)
 
 
 class GnuLicenses(unittest.TestCase):
@@ -507,13 +918,13 @@ class LockedClosure(unittest.TestCase):
             R_INST=self.root / "R/yamaa/inst",
             CLI=self.root / "rust/crates/yamaa-cli",
             TARGETS=(LINUX, WINDOWS),
-            LIBRARY_LINKED=LINKED,
         )
         patches.start()
         self.addCleanup(patches.stop)
         (self.root / "LICENSE").write_bytes(PROJECT_LICENSE)
         for directory in (notices.PYTHON, notices.R_INST, notices.CLI):
             directory.mkdir(parents=True)
+        (notices.CLI / notices.MUSL_NOTICE).write_text(MUSL_NOTICE)
         self.project(license="MIT AND Apache-2.0 AND Unicode-3.0")
         for name, text in (("LICENSE-YAML.txt", "yaml\n"),):
             for directory in (notices.PYTHON, notices.R_INST):
@@ -747,7 +1158,7 @@ class LockedClosure(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "drop it from SHARED_TEXTS"):
             notices.notices_for(graph.graphs(), "yamaa-python")
 
-    def test_the_standard_library_section_lists_only_the_crates_it_links(self):
+    def test_the_standard_library_section_lists_the_crates_it_links(self):
         notice = notices.notices_for(self.graph.graphs(), "yamaa-python")
         rendered = notices.render(notice, LIBRARY, "python")
         crates, _, rest = rendered.partition(
@@ -768,32 +1179,95 @@ class LockedClosure(unittest.TestCase):
             "            Copyright: Unicode, Inc\n",
             standard,
         )
-        # Of the notice's crates, the section keeps those that LIBRARY_LINKED
-        # names, each with the one license relied on.
+        # The crates that std links, from the toolchain's rust-src component,
+        # each with the one license relied on.
         self.assertIn(
-            "Crate: windows-sys 0.61.2\n    License: MIT\n    Texts: [", standard
+            "From the rust-src component of Rust 1.99.1, lib/rustlib/src/rust/library, "
+            "the\ncrates that the standard library links:\n\n"
+            "Crate: windows-sys 0.61.2\n    License: MIT\n    Texts: [",
+            standard,
         )
-        self.assertNotIn("vex-sdk", standard)
         self.assertNotIn("r-efi", rendered)
         self.assertIn(
             "Shipped by: Rust 1.99.1 (share/doc/rust/licenses/MIT.txt)\n", texts
         )
         self.assertIn("from\nrust/Cargo.lock and the Rust 1.99.1 toolchain", rendered)
-        # A linked crate whose texts the notice leaves out takes the canonical
-        # text; one that the notice does not name needs the table reviewed.
-        with mock.patch.object(notices, "LIBRARY_LINKED", (("vex-sdk", "0.27.1"),)):
-            rendered = notices.render(notice, LIBRARY, "python")
-        self.assertIn("Crate: vex-sdk 0.27.1\n    License: MIT\n    Texts: [", rendered)
-        self.assertIn(
-            "canonical MIT text; the Rust project's notice reproduces none", rendered
+        # Only the command line's notices name musl.
+        self.assertNotIn("musl", rendered)
+        # A linked crate whose package ships no text for its license takes the
+        # canonical text.
+        bare = notices.Notice("vex-sdk", "0.27.1", None, ("MIT",), (), ("MIT",))
+        rendered = notices.render(
+            notice, dataclasses.replace(LIBRARY, crates=(bare,)), "python"
         )
-        with mock.patch.object(notices, "LIBRARY_LINKED", (("libc", "0.2.189"),)):
-            with self.assertRaisesRegex(
-                ValueError,
-                "libc 0.2.189 of the Rust 1.99.1 standard library: its notice "
-                "does not name it; review LIBRARY_LINKED",
-            ):
-                notices.render(notice, LIBRARY, "python")
+        self.assertIn("Crate: vex-sdk 0.27.1\n    License: MIT\n    Texts: [", rendered)
+        self.assertIn("canonical MIT text; the crate package ships none", rendered)
+
+    def test_the_command_line_notices_name_musl_for_the_musl_targets(self):
+        graphs = self.graph.graphs()
+        cli = notices.render(notices.notices_for(graphs, "yamaa-cli"), LIBRARY, "cli")
+        section = cli.partition("\nmusl C library\n--------------\n")[2]
+        section = section.partition("\nTexts\n-----\n")[0]
+        self.assertIn(
+            "The yamaa executables for x86_64-unknown-linux-musl and "
+            "aarch64-unknown-linux-musl link musl, the C library that Rust 1.99.1 "
+            "bundles for those targets, statically. Their archives carry its "
+            "notice as LICENSE-MUSL.txt",
+            " ".join(section.split()),
+        )
+        self.assertIn(
+            f"Library: musl {notices.MUSL[1]}\n    License: MIT\n"
+            "    Text: LICENSE-MUSL.txt\n",
+            section,
+        )
+        self.assertIn(
+            "The archives for the musl targets also carry LICENSE-MUSL.txt, the "
+            "notice of musl.",
+            " ".join(cli.split()),
+        )
+        for host in ("python", "r"):
+            crate = engine_bundle.BINDINGS[host]
+            rendered = notices.render(notices.notices_for(graphs, crate), LIBRARY, host)
+            self.assertNotIn("musl", rendered)
+        # Another toolchain's musl needs reviewing first.
+        newer = dataclasses.replace(LIBRARY, release="1.100.0")
+        with self.assertRaisesRegex(
+            ValueError,
+            "the musl notice was reviewed for Rust 1.99.1, not 1.100.0: set MUSL to "
+            "the musl release that Rust 1.100.0 bundles for x86_64-unknown-linux-musl "
+            "and aarch64-unknown-linux-musl, and LICENSE-MUSL.txt to its COPYRIGHT",
+        ):
+            notices.render(notices.notices_for(graphs, "yamaa-cli"), newer, "cli")
+
+    def test_the_command_line_keeps_the_notice_of_musl(self):
+        graphs = self.graph.graphs()
+        notices.write(graphs, LIBRARY)
+        self.assertEqual(notices.check(graphs, LIBRARY)[1], [])
+        path = notices.CLI / notices.MUSL_NOTICE
+        relative = "rust/crates/yamaa-cli/LICENSE-MUSL.txt"
+        header = f"musl {notices.MUSL[1]}\n{notices.MUSL_HOME}\n\n"
+        for text, error in (
+            (
+                MUSL_NOTICE.replace(notices.MUSL[1], "1.2.3", 1),
+                f"{relative}: must start with the header {header!r}",
+            ),
+            (
+                MUSL_NOTICE.replace("hereby granted, free of charge", "granted"),
+                f"{relative}: lacks musl's MIT license",
+            ),
+            (
+                MUSL_NOTICE + "Some files are under the GNU General Public License.\n",
+                f"{relative}: names a GNU license (GNU General Public License)",
+            ),
+        ):
+            path.write_text(text)
+            with self.subTest(error=error):
+                self.assertEqual(notices.check(graphs, LIBRARY)[1], [error])
+        path.unlink()
+        self.assertEqual(
+            notices.check(graphs, LIBRARY)[1],
+            [f"{relative}: missing; the archives for the musl targets carry it"],
+        )
 
     def test_check_fails_when_the_closure_gains_or_loses_a_crate(self):
         graphs = self.graph.graphs()
@@ -878,25 +1352,27 @@ class LockedClosure(unittest.TestCase):
             (
                 python,
                 "The yamaa Python wheels link",
-                "into their native extension.",
+                " into their native extension.",
                 "yamaa-python",
             ),
             (
                 r,
                 "The installed yamaa R package links",
-                "into its native extension.",
+                " into its native extension.",
                 "yamaa-r",
             ),
             (
                 cli,
                 "The yamaa command-line binaries link",
-                "into the yamaa executable.",
+                # Only the executables for the musl targets link musl.
+                ", and on the musl targets the musl C library, into the yamaa "
+                "executable.",
                 "yamaa-cli",
             ),
         ):
             flat = " ".join(text.split())
             self.assertIn(f"{packages} third-party Rust crates", flat)
-            self.assertIn(f"the Rust standard library {linked}", flat)
+            self.assertIn(f"the Rust standard library{linked}", flat)
             self.assertIn(
                 f"crates that the shipped crate {crate} links, as locked in "
                 "rust/Cargo.lock: its normal dependency closure on each of the "
@@ -948,7 +1424,7 @@ class LockedClosure(unittest.TestCase):
             "python/LICENSE-THIRD-PARTY.txt: not a package notice in license-files",
             "python/LICENSE.txt: must be a copy of LICENSE",
             "rust/crates/yamaa-cli/LICENSE-YAML.txt: the command line keeps only "
-            "its own LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv",
+            "its own LICENSE-THIRD-PARTY.txt, COMPONENTS.tsv and LICENSE-MUSL.txt",
         ):
             self.assertIn(expected, errors)
 

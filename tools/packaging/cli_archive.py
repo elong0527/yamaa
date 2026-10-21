@@ -8,7 +8,9 @@ executable built for that target, yamaa.exe on Windows, beside the package
 notices: the license files that python/pyproject.toml lists. The command
 line's LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv are its own, from
 rust/crates/yamaa-cli/; the project license and the notices of the vendored
-sources are the Python packages' copies. tools/packaging/check_package_notices.py
+sources are the Python packages' copies. The archive for a musl target also
+carries the command line's LICENSE-MUSL.txt, the notice of the musl C library
+that its executable links statically. tools/packaging/check_package_notices.py
 checks their bytes.
 
 Each member carries Unix permissions, 0755 for the executable and 0644 for the

@@ -1,4 +1,4 @@
-# Reject Version Mismatch
+# Reject a Parent Written for a Newer Language Version
 
 **Goal:** prepare subject records from definitions shared
 through a reusable file.
@@ -10,15 +10,22 @@ through a reusable file.
 No variables are requested: the entry file names no output
 variables.
 
-**Note:** the entry file reuses `layers/parent.yaml`, which declares
-language version `2.0` while the entry file declares `1.0`. Files
-written for different versions cannot be combined into one set of
-definitions, so the run is rejected before any data is read and no
-artifact is accepted.
+**Note:** the entry file reuses `layers/parent.yaml`, which states
+that it needs language version `2.0`. This engine reads only version
+`1.0`, so it cannot read the shared definitions: the run is rejected
+before any data is read and no artifact is accepted.
 
 ## How to fix
 
-Migrate the parent file and the entry file together, then give every layer the
-same `schema_version` as the active bundle. The bundle in this repository is
-version `1.0`, so here the parent's `"2.0"` is the value to correct; raising
-both files to `"2.0"` is rejected the same way.
+Find out which language version the parent really needs. A file declares the
+oldest version whose features it uses, and this parent uses nothing newer
+than `1.0`, so `"1.0"` is the value to correct it to:
+
+```yaml
+yamaa: "1.0"
+type: spec
+```
+
+The entry file and its parent may declare different versions. A parent that
+does need a newer version needs an engine that reads it; raising the entry
+file to `"2.0"` as well is rejected the same way.

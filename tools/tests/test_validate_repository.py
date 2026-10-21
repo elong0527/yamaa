@@ -154,6 +154,7 @@ class TestTextSourceBoundary(unittest.TestCase):
                 "R/yamaa/inst/LICENSE-THIRD-PARTY.txt",
                 "python/LICENSE-THIRD-PARTY.txt",
                 "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt",
+                "rust/crates/yamaa-cli/LICENSE-MUSL.txt",
             ):
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,6 +162,7 @@ class TestTextSourceBoundary(unittest.TestCase):
             for relative in (
                 "LICENSE-UNICODE.txt",
                 "LICENSE-THIRD-PARTY.txt",
+                "LICENSE-MUSL.txt",
                 "rust/crates/yamaa-core/unicode/notes.md",
                 "rust/crates/yamaa-cli/README.md",
             ):
@@ -169,6 +171,7 @@ class TestTextSourceBoundary(unittest.TestCase):
         self.assertEqual(
             errors,
             [
+                "ERROR: LICENSE-MUSL.txt:1:1: non_ascii_source byte 0xC2",
                 "ERROR: LICENSE-THIRD-PARTY.txt:1:1: non_ascii_source byte 0xC2",
                 "ERROR: LICENSE-UNICODE.txt:1:1: non_ascii_source byte 0xC2",
                 "ERROR: rust/crates/yamaa-cli/README.md:1:1: non_ascii_source byte 0xC2",

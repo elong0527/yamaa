@@ -11,7 +11,7 @@ pub(crate) use yamaa_core::{
     project_environment::Submission,
     project_terminology as ct,
     submission_composition::{self as composition, Finding, Input, Study},
-    submission_transport, submission_xml, submission_xpt,
+    submission_transport,
     table::{CellError, Column, TableAccess, TableSchema, ValueRef},
     value::{ColumnType, Value},
 };
@@ -922,10 +922,19 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         .unwrap_err();
         reached_finding(&mut reached, &findings, code, "validation", condition, rule);
     }
-    let mut spec = specification();
-    *spec.at(&["columns", "0", "label"]) = Tree::text("A\tB");
-    let study = one(project(), spec, &empty).unwrap();
-    let finding = submission_xml::render(&study).unwrap_err();
+    // The Define-XML encoder in yamaa-adapters raises DEFINE-24 and DEFINE-25
+    // through these constructors, and the adapters' encoder tests reach both
+    // from authored text (`tests/submission_encoders.rs`).
+    let finding = define_diagnostics::xml_whitespace("datasets.D0.columns.VALUE.label");
+    assert_eq!(finding.path, "datasets.D0.columns.VALUE.label");
+    assert_eq!(
+        finding.context,
+        [(
+            "detail".into(),
+            JsonValue::String("forbidden XML whitespace".into())
+        )]
+        .into()
+    );
     reached_finding(
         &mut reached,
         &[finding],
@@ -934,15 +943,16 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "untransportable_text",
         "DEFINE-24",
     );
-    let study = compose(
-        project(),
-        vec![specification()],
-        &empty,
-        "1.0",
-        "invalid civil timestamp",
-    )
-    .unwrap();
-    let finding = submission_xml::render(&study).unwrap_err();
+    let finding = define_diagnostics::xml_invalid("created", "CreationDateTime");
+    assert_eq!(finding.path, "created");
+    assert_eq!(
+        finding.context,
+        [(
+            "detail".into(),
+            JsonValue::String("schema_violation: CreationDateTime".into())
+        )]
+        .into()
+    );
     reached_finding(
         &mut reached,
         &[finding],
@@ -1214,7 +1224,7 @@ fn rows(kind: ColumnType, values: Vec<Value>) -> Rows {
         values,
     }
 }
-/// XPT-7, XPT-8, XPT-10 and JSON-3 over held published rows.
+/// XPT-7, XPT-8 and JSON-3 over held published rows, and XPT-10's findings.
 fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalogue) {
     use ConditionCode::*;
     let mut project = project();
@@ -1252,7 +1262,7 @@ fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalog
     let mut spec = specification();
     *spec.at(&["columns", "0", "type"]) = Tree::text("int");
     *spec.at(&["columns", "0", "derivation"]) = Tree::map(vec![("literal", Tree::integer("1"))]);
-    let numeric = one(project.clone(), spec, empty).unwrap();
+    let numeric = one(project, spec, empty).unwrap();
     let finding = submission_transport::admit(
         &numeric,
         &numeric.datasets()[0],
@@ -1271,16 +1281,22 @@ fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalog
         "xpt_value_out_of_range",
         "XPT-8",
     );
-    let mut measured = one(project, specification(), empty).unwrap();
-    let held = rows(
-        ColumnType::Str,
-        vec![Value::Str("A".into()), Value::Missing],
+    // The XPT encoder in yamaa-adapters refuses XPT-10 through these
+    // constructors, and the adapters' encoder tests reach both over held rows
+    // (`tests/submission_encoders.rs`).
+    let text = |value: &str| JsonValue::String(value.into());
+    let finding = define_diagnostics::xpt_last_row_blank(dataset, 1);
+    assert_eq!(finding.path, "datasets.D0.artifact");
+    assert_eq!(
+        finding.context,
+        [
+            ("artifact".into(), text("d0.csv")),
+            ("dataset".into(), text("D0")),
+            ("detail".into(), text("the last row encodes to blanks only")),
+            ("row".into(), JsonValue::from(1usize)),
+        ]
+        .into()
     );
-    submission_transport::measure(&mut measured, &[Some(&held)]).unwrap();
-    let document = submission_xpt::document(&measured, &measured.datasets()[0]);
-    assert_eq!(document.variables[0].width, 1);
-    let finding = submission_xpt::admit(&document, &measured.datasets()[0], &held).unwrap_err();
-    assert_eq!(finding.context["row"], JsonValue::from(1usize));
     reached_finding(
         reached,
         &[finding],
@@ -1289,11 +1305,21 @@ fn transport_refusals(reached: &mut BTreeSet<ConditionCode>, empty: &ct::Catalog
         "xpt_last_row_blank",
         "XPT-10",
     );
-    let wide = Rows {
-        rows: 5_000_000_000 / document.observation(),
-        ..rows(ColumnType::Str, vec![])
-    };
-    let finding = submission_xpt::admit(&document, &measured.datasets()[0], &wide).unwrap_err();
+    let finding = define_diagnostics::xpt_file_too_large(dataset, 5_000_000_880);
+    assert_eq!(finding.path, "datasets.D0.artifact");
+    assert_eq!(
+        finding.context,
+        [
+            ("artifact".into(), text("d0.csv")),
+            ("bytes".into(), JsonValue::from(5_000_000_880u64)),
+            ("dataset".into(), text("D0")),
+            (
+                "detail".into(),
+                text("transport file larger than 5000000000 bytes")
+            ),
+        ]
+        .into()
+    );
     reached_finding(
         reached,
         &[finding],
