@@ -1,7 +1,8 @@
 //! Define preparation over retained native snapshots. This service owns
-//! admission, composition and rendering, and holds the artifacts in the order a
-//! save publishes them; the save itself is the application's. Ports observe
-//! file geometry and codecs without interpreting submission declarations.
+//! admission and composition, decides when each file is rendered, and holds
+//! the artifacts in the order a save publishes them; the save itself is the
+//! application's. Ports observe file geometry and own the codecs and the
+//! byte encoders without interpreting submission declarations.
 use crate::json::Value as JsonValue;
 use crate::{
     application_issue::{Fault, Stage},
@@ -11,7 +12,7 @@ use crate::{
     project_terminology::Catalogue,
     resource::WrittenPath,
     schema::{Document, DocumentNode},
-    submission_composition::{self as composition, Finding},
+    submission_composition::{self as composition, Dataset, Finding, Study},
     submission_transport,
     table::{CellError, TableAccess, TableSchema, ValueRef},
 };
@@ -71,19 +72,32 @@ pub trait Ports {
         written: &str,
     ) -> Result<Self::Bytes, Self::Error>;
     fn decode_parquet(&mut self, bytes: &[u8]) -> Result<Self::Parquet, Self::ParquetError>;
-    /// Encode one admitted Dataset-JSON document over its held table. Core
-    /// owns admission and the typed document; the port owns only the bytes.
-    fn render_dataset_json<T: TableAccess>(
+    /// Encode the Define-XML document of a composed study, refusing text or a
+    /// value the document cannot carry (DEFINE-24, DEFINE-25). Core calls it
+    /// before any published artifact is read, and with a transport again once
+    /// the transport lengths are measured.
+    fn render_define(&mut self, study: &Study) -> Result<Vec<u8>, Finding>;
+    /// Refuse one dataset's transport file over its held table for what the
+    /// file as a whole cannot carry, such as XPT-10's size and blank last row.
+    /// Core admitted every value first (`submission_transport::admit`) and
+    /// measured the lengths, and calls this for every dataset with data before
+    /// the document is rendered again.
+    fn admit_transport<T: TableAccess>(
         &mut self,
-        document: &crate::submission_json::DatasetJsonDocument,
+        transport: Transport,
+        study: &Study,
+        dataset: &Dataset,
         table: &T,
-    ) -> Result<Vec<u8>, Finding>;
-    /// Encode one admitted SAS Transport version 5 document over its held
-    /// table. Core owns admission and the typed document; the port owns bytes.
-    fn render_xpt<T: TableAccess>(
+    ) -> Result<(), Finding>;
+    /// Encode one admitted transport file over its held table; `define` is
+    /// the file name of the document that describes it.
+    fn render_transport<T: TableAccess>(
         &mut self,
-        document: &crate::submission_xpt::XptDocument,
+        transport: Transport,
+        study: &Study,
+        dataset: &Dataset,
         table: &T,
+        define: &str,
     ) -> Result<Vec<u8>, Finding>;
     fn target(
         &self,
@@ -216,11 +230,6 @@ impl<C: TableAccess, Q: TableAccess> TableAccess for Held<C, Q> {
             Self::Parquet(table) => table.cell(row, column).map_err(opaque),
         }
     }
-}
-/// The typed document a transport file encodes.
-enum Rendered {
-    Json(Box<crate::submission_json::DatasetJsonDocument>),
-    Xpt(crate::submission_xpt::XptDocument),
 }
 /// A published artifact held for a transport, or the service failure.
 type Published<P> = Result<
@@ -514,13 +523,14 @@ impl<P: Ports> Application<P> {
         .map_err(Failure::Metadata)?;
         // Every document fault is found before a published artifact is read;
         // with a transport the document is rendered again once measured.
-        let mut xml =
-            crate::submission_xml::render(&composed).map_err(|f| Failure::Metadata(vec![f]))?;
+        let mut xml = ports
+            .render_define(&composed)
+            .map_err(|f| Failure::Metadata(vec![f]))?;
         ports
             .verify_metadata(standard, identity)
             .map_err(Failure::Port)?;
         let mut tables = Vec::new();
-        if transport.is_some() {
+        if let Some(transport) = transport {
             for (dataset, (declaring, written)) in composed.datasets().iter().zip(&outputs) {
                 if dataset.has_no_data() {
                     tables.push(None);
@@ -534,38 +544,28 @@ impl<P: Ports> Application<P> {
             let held: Vec<_> = tables.iter().map(Option::as_ref).collect();
             submission_transport::measure(&mut composed, &held)
                 .map_err(|finding| Failure::Metadata(vec![finding]))?;
-            let mut documents = Vec::new();
+            // Every file-level refusal precedes the measured document, and
+            // both precede any transport byte.
             for (dataset, table) in composed.datasets().iter().zip(&tables) {
-                let Some(table) = table else {
-                    documents.push(None);
-                    continue;
-                };
-                documents.push(Some(match transport {
-                    Some(Transport::Xpt) => {
-                        let document = crate::submission_xpt::document(&composed, dataset);
-                        crate::submission_xpt::admit(&document, dataset, table)
-                            .map_err(|finding| Failure::Metadata(vec![finding]))?;
-                        Rendered::Xpt(document)
-                    }
-                    _ => Rendered::Json(Box::new(crate::submission_json::document(
-                        &composed,
-                        dataset,
-                        &ports.define_name(&define_location),
-                    ))),
-                }));
-            }
-            xml =
-                crate::submission_xml::render(&composed).map_err(|f| Failure::Metadata(vec![f]))?;
-            for ((document, table), target) in documents.iter().zip(&tables).zip(&transports) {
-                let (Some(document), Some(table), Some((path, target))) = (document, table, target)
-                else {
-                    continue;
-                };
-                let rendered = match document {
-                    Rendered::Xpt(document) => ports.render_xpt(document, table),
-                    Rendered::Json(document) => ports.render_dataset_json(document, table),
+                if let Some(table) = table {
+                    ports
+                        .admit_transport(transport, &composed, dataset, table)
+                        .map_err(|finding| Failure::Metadata(vec![finding]))?;
                 }
+            }
+            xml = ports
+                .render_define(&composed)
                 .map_err(|f| Failure::Metadata(vec![f]))?;
+            let define_name = ports.define_name(&define_location);
+            for ((dataset, table), target) in
+                composed.datasets().iter().zip(&tables).zip(&transports)
+            {
+                let (Some(table), Some((path, target))) = (table, target) else {
+                    continue;
+                };
+                let rendered = ports
+                    .render_transport(transport, &composed, dataset, table, &define_name)
+                    .map_err(|f| Failure::Metadata(vec![f]))?;
                 let held_target = ports
                     .target(&format!("{path}.transport"), identity, target)
                     .map_err(Failure::Port)?;

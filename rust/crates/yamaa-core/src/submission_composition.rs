@@ -134,7 +134,9 @@ pub struct Standard {
     pub status: &'static str,
 }
 /// Construction remains private to complete composition. Renderers cannot accept
-/// an unadmitted declaration or fitting prefix of the selected dataset set.
+/// an unadmitted declaration or fitting prefix of the selected dataset set: the
+/// adapters' Define-XML, Dataset-JSON and XPT encoders read it only through
+/// these accessors (#3030 section 2.10).
 #[derive(Debug)]
 pub struct Study {
     pub(crate) study: ast::Study,
@@ -155,8 +157,47 @@ pub struct Study {
     pub(crate) inventory: BTreeSet<String>,
 }
 impl Study {
+    /// The project's study declaration.
+    pub fn study(&self) -> &ast::Study {
+        &self.study
+    }
+    /// The selected submission section.
+    pub fn section(&self) -> &ast::Section {
+        &self.section
+    }
+    /// The identifier of the implementation guide every dataset follows.
+    pub fn guide(&self) -> &str {
+        &self.guide
+    }
+    /// The document's `FileOID`: the section's, or one derived from the study
+    /// and the section.
+    pub fn file_oid(&self) -> &str {
+        &self.file_oid
+    }
+    pub fn metadata_id(&self) -> &str {
+        &self.metadata_id
+    }
+    pub fn metadata_name(&self) -> &str {
+        &self.metadata_name
+    }
+    pub fn metadata_description(&self) -> Option<&str> {
+        self.metadata_description.as_deref()
+    }
+    /// The source-system version the documents name: declared, or the
+    /// installed version (DEFINE-12).
+    pub fn source_version(&self) -> &str {
+        &self.source_version
+    }
     pub fn installed_version(&self) -> &str {
         &self.installed_version
+    }
+    /// The selected creation time, `YYYY-MM-DDThh:mm:ss` (DEFINE-3).
+    pub fn created(&self) -> &str {
+        &self.created
+    }
+    /// The standards the document cites, in citation order.
+    pub fn standards(&self) -> &[Standard] {
+        &self.standards
     }
     pub fn datasets(&self) -> &[Dataset] {
         &self.datasets
@@ -173,8 +214,25 @@ impl Dataset {
     pub fn id(&self) -> &str {
         &self.id
     }
+    /// The declared `domain`, which a tabulation `ItemGroupDef` names.
+    pub fn domain(&self) -> &str {
+        &self.domain
+    }
+    /// The dataset's composed submission metadata.
+    pub fn metadata(&self) -> &spec::Dataset {
+        &self.metadata
+    }
     pub fn columns(&self) -> &[Column] {
         &self.columns
+    }
+    /// The archive location's reference inside the publication package;
+    /// absent for a dataset with no data and no transport file.
+    pub fn href(&self) -> Option<&str> {
+        self.href.as_deref()
+    }
+    /// The published artifact's path as written.
+    pub fn artifact(&self) -> &str {
+        &self.artifact
     }
     /// A dataset declared to have no data is never written as a transport file.
     pub fn has_no_data(&self) -> bool {
@@ -188,6 +246,38 @@ impl Dataset {
 impl Column {
     pub fn declaration(&self) -> &spec::Column {
         &self.declaration
+    }
+    /// The resolved submission data type.
+    pub fn data_type(&self) -> spec::DataType {
+        self.data_type
+    }
+    /// The document's `Length`: declared, fixed by the family, or measured
+    /// when a transport is requested (SUB-24).
+    pub fn length(&self) -> Option<&str> {
+        self.length.as_deref()
+    }
+    /// Declared, or fixed for an ADaM numeric date (SUB-25).
+    pub fn display_format(&self) -> Option<&str> {
+        self.display_format.as_deref()
+    }
+    pub fn mandatory(&self) -> bool {
+        self.mandatory
+    }
+    /// The origin's source, when its type takes one (SUB-15).
+    pub fn source(&self) -> Option<spec::OriginSource> {
+        self.source
+    }
+    /// The origin's document references.
+    pub fn documents(&self) -> &[spec::DocumentReference] {
+        &self.documents
+    }
+    pub fn key_sequence(&self) -> Option<usize> {
+        self.key_sequence
+    }
+    /// The width a transport file gives a character column, once measured
+    /// (SUB-24).
+    pub fn transport_length(&self) -> Option<usize> {
+        self.transport_length
     }
     pub fn runtime_type(&self) -> crate::value::ColumnType {
         use crate::value::ColumnType as T;
@@ -206,6 +296,15 @@ impl Column {
 impl ValueDefinition {
     pub fn id(&self) -> &str {
         &self.id
+    }
+    /// Each where column's position in the dataset's columns and the values
+    /// it admits, in written order.
+    pub fn clause(&self) -> &[(usize, Vec<String>)] {
+        &self.clause
+    }
+    /// The entry's spec path.
+    pub fn path(&self) -> &str {
+        &self.path
     }
     pub fn column(&self) -> &Column {
         &self.column

@@ -503,9 +503,11 @@ mod service {
         use std::{cell::Cell, rc::Rc};
         use yamaa_core::define::{self, Application, Failure, Ports, PublicationState};
         use yamaa_core::{
+            ast::Transport,
             diagnostic::ConditionCode,
             project_terminology::Catalogue,
             schema::Document,
+            submission_composition::{Dataset, Finding, Study},
             table::{CellError, TableAccess, TableSchema, ValueRef},
         };
 
@@ -670,21 +672,30 @@ mod service {
             fn capture_published(&mut self, _: &str, _: &str, _: &str) -> Result<Vec<u8>, Opaque> {
                 panic!("no dataset selected")
             }
-            fn render_dataset_json<T: TableAccess>(
-                &mut self,
-                _: &yamaa_core::submission_json::DatasetJsonDocument,
-                _: &T,
-            ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
-                // The fixture declares no datasets, so composition never
-                // reaches Dataset-JSON encoding.
-                Ok(Vec::new())
+            /// The document an adapter encodes; this double holds the creation
+            /// time composition selected as the document's bytes.
+            fn render_define(&mut self, study: &Study) -> Result<Vec<u8>, Finding> {
+                self.events.push("render_define");
+                Ok(study.created().as_bytes().to_vec())
             }
-            fn render_xpt<T: TableAccess>(
+            fn admit_transport<T: TableAccess>(
                 &mut self,
-                _: &yamaa_core::submission_xpt::XptDocument,
+                _: Transport,
+                _: &Study,
+                _: &Dataset,
                 _: &T,
-            ) -> Result<Vec<u8>, yamaa_core::submission_composition::Finding> {
-                panic!("no dataset selected")
+            ) -> Result<(), Finding> {
+                panic!("no transport selected")
+            }
+            fn render_transport<T: TableAccess>(
+                &mut self,
+                _: Transport,
+                _: &Study,
+                _: &Dataset,
+                _: &T,
+                _: &str,
+            ) -> Result<Vec<u8>, Finding> {
+                panic!("no transport selected")
             }
             fn decode_parquet(&mut self, _: &[u8]) -> Result<EmptyTable, ()> {
                 panic!("no codec selected")
@@ -772,17 +783,22 @@ mod service {
             let mut spy = Spy::new();
             let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
             assert!(attempt.outcome.is_ok());
+            // The document is rendered before the captured metadata is
+            // verified, so every document fault precedes any published read.
             assert_eq!(
                 spy.events,
-                ["capture_environment", "verify_metadata", "publisher"]
+                [
+                    "capture_environment",
+                    "render_define",
+                    "verify_metadata",
+                    "publisher"
+                ]
             );
             assert_eq!(spy.clock_calls.get(), 0);
             let held = attempt.application.artifacts().next().unwrap();
             assert_eq!(held.0, "define.xml");
             assert_eq!(held.2, PublicationState::Ready);
-            assert!(std::str::from_utf8(held.1)
-                .unwrap()
-                .contains("CreationDateTime=\"2026-10-11T00:00:00\""));
+            assert_eq!(held.1, b"2026-10-11T00:00:00");
             let bytes = held.1.to_vec();
             // A save publishes the held files in order; nothing is recomposed.
             let files = attempt
@@ -823,7 +839,10 @@ mod service {
                 panic!("original verification error lost")
             };
             assert_eq!(error.identity(), identity);
-            assert_eq!(spy.events, ["capture_environment", "verify_metadata"]);
+            assert_eq!(
+                spy.events,
+                ["capture_environment", "render_define", "verify_metadata"]
+            );
             assert_eq!(attempt.application.artifacts().len(), 0);
         }
         #[test]
@@ -948,9 +967,7 @@ mod service {
                 let attempt = prepare(&mut spy, "sdtm", None);
                 assert!(attempt.outcome.is_ok());
                 let held = attempt.application.artifacts().next().unwrap();
-                assert!(std::str::from_utf8(held.1)
-                    .unwrap()
-                    .contains(&format!("CreationDateTime=\"{expected}\"")));
+                assert_eq!(held.1, expected.as_bytes());
                 assert_eq!(spy.clock_calls.get(), 1);
             }
             for (seconds, detail) in [
