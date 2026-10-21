@@ -64,14 +64,17 @@ class ToolchainTest(unittest.TestCase):
             f"Cargo (Rust's package manager) (>= {minimum}), rustc (>= {minimum})",
         )
 
-    def test_repository_checks_install_their_lint_and_format_components(self):
+    def test_repository_checks_install_their_lint_format_and_source_components(self):
+        # Clippy and rustfmt lint and format; rust-src holds the standard
+        # library's sources, from which the third-party notices list the
+        # crates that it links.
         install = ["rustup", "toolchain", "install", "1.99.1", "--profile", "minimal"]
         for declared, components in (
-            ({}, ["clippy", "rustfmt"]),
+            ({}, ["clippy", "rustfmt", "rust-src"]),
             # A declared component is installed once, before the check components.
             (
                 {"components": ["rustfmt", "llvm-tools"]},
-                ["rustfmt", "llvm-tools", "clippy"],
+                ["rustfmt", "llvm-tools", "clippy", "rust-src"],
             ),
         ):
             with self.subTest(declared=declared):

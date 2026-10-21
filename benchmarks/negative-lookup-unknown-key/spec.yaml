@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: SDTM
 domain: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -11,8 +13,8 @@ output:
   columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
 
 intermediates:
-  # No key is named, so it is inferred from the output keys LBRANGE
-  # carries -- and it carries none of STUDYID, USUBJID, LBSEQ.
+  # No key is named, and a lookup never falls back to the output keys, so
+  # the specification is rejected before any data is read.
   - id: REFRANGE
     dataset: LBRANGE
     columns: [NRHI]

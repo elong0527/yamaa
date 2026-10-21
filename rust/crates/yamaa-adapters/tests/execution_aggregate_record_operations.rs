@@ -1330,14 +1330,10 @@ S1,002,2024-06
         /// what decides it. `domain` reaches each of them once it reads or binds
         /// the inputs. The list may only shrink: a case that `check` starts to
         /// report fails until it leaves this list.
-        const NOT_REPORTED_BY_CHECK: [(&str, &str); 10] = [
+        const NOT_REPORTED_BY_CHECK: [(&str, &str); 9] = [
             (
                 "negative-lookup-mismatched",
                 "the fields stored in the current input",
-            ),
-            (
-                "negative-lookup-unknown-key",
-                "the fields stored in the lookup input",
             ),
             (
                 "negative-odm-schema-ambiguous",
