@@ -112,12 +112,64 @@ def test_the_sources_hold_no_checks_prompts_or_solutions(tmp_path):
         assert yaml.safe_load(spec.read_text())
     assert sorted(p.name for p in sources.glob("*.md")) == ["README.md", "skeleton.md"]
     assert not list(out.rglob("result.*"))
+    # A 0.5 benchmark hands over its environment files by host.
     functions = (sources / "functions" / "python.yaml").read_text()
     assert "bmi" in functions and "tests" not in functions
     assert (sources / "functions" / "yamaa_benchmarks.py").is_file()
     # The inputs are the files the evaluated agent gets.
     task = build.build_task(BENCHMARKS / "adam-adsl-bmi", tmp_path, None, "test", "r")
     assert _tree(out / "input") == _tree(task / "environment" / "input")
+
+
+def _converted(tmp_path: Path, benchmark: str) -> Path:
+    """A copy of a benchmark written in 1.0, as `python -m tools.migrate`
+    writes it; a benchmark already written in 1.0 is copied unchanged."""
+    from tools.migrate import convert, write
+
+    source = BENCHMARKS / benchmark
+    write(convert([source]), tmp_path / "converted", [source])
+    return tmp_path / "converted" / benchmark
+
+
+def test_a_1_0_project_hands_over_each_function_file_without_its_tests(tmp_path):
+    # A 1.x project lists its function files; each reaches the writer as
+    # `<name>.yaml` without its tests, beside the Python module that
+    # `implementations.python` names (#3030 D8, D120).
+    case = _converted(tmp_path, "adam-adsl-bmi")
+    assert not (case / "python" / "environment.yaml").exists()
+    functions = packet.write(case, tmp_path / "packet") / "sources" / "functions"
+    assert sorted(p.name for p in functions.iterdir()) == [
+        "bmi.yaml",
+        "yamaa_benchmarks.py",
+    ]
+    declared = yaml.safe_load((functions / "bmi.yaml").read_text())
+    assert declared["name"] == "bmi" and "tests" not in declared
+    assert declared["implementations"] == {
+        "python": "yamaa_benchmarks.bmi",
+        "r": "yamaabenchmarks::bmi",
+    }
+
+
+@pytest.mark.parametrize("benchmark", CASES)
+def test_a_converted_copy_gives_the_same_skeleton_and_graded_outputs(
+    tmp_path, benchmark
+):
+    # The build, the scaffold and the checks read output paths and columns,
+    # keys, the domain, column names and types, and benchmark.yaml, which
+    # the 1.0 conversion keeps.
+    original, converted = BENCHMARKS / benchmark, _converted(tmp_path, benchmark)
+    assert scaffold.skeleton(converted) == scaffold.skeleton(original)
+    data = packet.check_data(original)
+    assert {
+        key: value
+        for key, value in packet.check_data(converted).items()
+        if key not in ("specification", "unsaid")
+    } == {k: v for k, v in data.items() if k not in ("specification", "unsaid")}
+    try:
+        graded = [s["output"] for s in build.output_specs(original)]
+    except build.BuildError:
+        pytest.skip("not graded yet")
+    assert [s["output"] for s in build.output_specs(converted)] == graded
 
 
 def test_writing_the_sources_replaces_only_what_it_writes(tmp_path):

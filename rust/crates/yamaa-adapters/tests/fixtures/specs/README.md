@@ -39,6 +39,12 @@ ordering references, and unmatched/ambiguous selections. The Python reference
 checks these independently. Core adapter and installed Python tests compare the
 entire failed report, including source snapshots and the handler prefix recorded
 before an unmatched selection. No candidate report is used to write this file.
+Its variants edit schema-lookup as 1.0 writes it
+(`../converted/schema-lookup/spec.yaml`): their spec paths name each
+intermediate by its id, rewritten from the 0.5 positions through the rename
+table's `paths` block (P-CLR-2), and the require-match variant adds
+`require_match` to both intermediates, which 1.0 writes without the restated
+absence default the 0.5 variant replaced.
 
 The `schema-window-functions` expectation is authored from the unchanged input
 and expected CSVs, declared column types, and literal report metadata. It includes

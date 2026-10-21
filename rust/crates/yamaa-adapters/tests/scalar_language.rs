@@ -906,11 +906,13 @@ rows:
 
         #[test]
         fn failed_runs_report_the_prefix_they_reached_and_no_columns() {
-            let (study, raw) = Study::benchmark();
-            // FAIL must be projected to stay live under pruning (LAYER-11);
-            // a dead column's division failure would be discarded with it.
-            let raw = raw
-                .replace("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: {compute: {expr: '1 / 0'}}\n\nverifications:\n")
+            let (study, _) = Study::benchmark();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422). FAIL must be projected to stay live under pruning
+            // (LAYER-11); a dead column's division failure would be
+            // discarded with it.
+            let raw = crate::support::benchmarks::converted("schema-verification-log")
+                .replace("\nverifications:\n", "\n  - name: FAIL\n    type: float\n    derivation: '1 / 0'\n\nverifications:\n")
                 .replace("columns: [USUBJID, AGE]", "columns: [USUBJID, AGE, FAIL]");
             let mut result = study.build(&raw);
             assert!(result.output().is_none());

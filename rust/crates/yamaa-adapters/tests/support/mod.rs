@@ -6,6 +6,7 @@ use yamaa_core::{
 };
 
 pub mod aggregate_syntax;
+pub mod benchmarks;
 pub mod ipc_snapshot;
 pub mod numeric_syntax;
 pub mod odm_declaration;

@@ -1,0 +1,56 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: input/dm.csv
+  AE: input/ae.csv
+  MEDDRA: input/meddict.csv
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [USUBJID, DTHDY, DTHCAUS, DTHPTERM]
+
+intermediates:
+  # The fatal adverse event per subject. Only fatal records are
+  # eligible; the latest one wins. With no key declared it matches on the
+  # output key USUBJID; a subject with no fatal record selects nothing,
+  # so every read of DEATHEV is blank.
+  - id: DEATHEV
+    dataset: AE
+    key: [USUBJID]
+    filter: "AE.AEOUT = 'FATAL'"
+    order_by: [AE.AEDY]
+    keep: last
+
+  - id: MEDDRA_PT
+    dataset: MEDDRA
+    key: {LLTNAME: DTHCAUS}
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The study day of death, read off the selected fatal event.
+  - name: DTHDY
+    type: int
+    label: Study Day of Death
+    derivation: DEATHEV.AEDY
+
+  # The reported cause of death, read off the selected fatal event.
+  - name: DTHCAUS
+    type: str
+    label: Cause of Death
+    derivation: DEATHEV.AEDECOD
+
+  # The coded cause of death: MEDDRA_PT matches the dictionary on
+  # differently named key columns. A missing or unlisted cause selects
+  # nothing and gives the default missing value.
+  - name: DTHPTERM
+    type: str
+    label: Cause of Death Preferred Term
+    derivation: MEDDRA_PT.PTNAME

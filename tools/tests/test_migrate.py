@@ -2,8 +2,11 @@
 
 The six benchmarks the RFC converted by hand (docs/design/interface-1.0/
 examples/) are the acceptance: the converter writes the same YAML values and
-keeps every comment of the source, and a second run changes nothing. The
-other tests pin each transform of the rename table on a small document.
+keeps every comment of the source, and a second run changes nothing. It reads
+frozen 0.5 copies of the six under tools/tests/fixtures/migrate/, their YAML
+and the input headers the key reader needs, so the benchmarks can move to 1.0
+(#3422); #3443 deletes them with the converter. The other tests pin each
+transform of the rename table on a small document.
 """
 
 import subprocess
@@ -21,7 +24,8 @@ from tools.migrate.text import comment_texts
 from tools.paths import ROOT
 
 EXAMPLES = ROOT / "docs/design/interface-1.0/examples"
-BENCHMARKS = ROOT / "benchmarks"
+# The six benchmarks as they were written in 0.5.
+ORIGINALS = ROOT / "tools/tests/fixtures/migrate"
 CONVERTED = (
     "adam-adsl-bmi",
     "adam-adtte-pfs",
@@ -67,8 +71,8 @@ class ExampleTests(unittest.TestCase):
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory()
         cls.target = Path(cls.temporary.name) / "first"
-        cls.result = convert([BENCHMARKS / name for name in CONVERTED])
-        write(cls.result, cls.target, [BENCHMARKS])
+        cls.result = convert([ORIGINALS / name for name in CONVERTED])
+        write(cls.result, cls.target, [ORIGINALS])
 
     @classmethod
     def tearDownClass(cls):
@@ -89,8 +93,8 @@ class ExampleTests(unittest.TestCase):
 
     def test_every_comment_of_the_source_survives(self):
         for name in CONVERTED:
-            for source in sorted((BENCHMARKS / name).rglob("*.yaml")):
-                relative = source.relative_to(BENCHMARKS)
+            for source in sorted((ORIGINALS / name).rglob("*.yaml")):
+                relative = source.relative_to(ORIGINALS)
                 output = self.target / relative
                 if source.parent.name in ("python", "r") and not output.exists():
                     # A merged environment file: its comments go to the
@@ -868,6 +872,22 @@ class MarkdownTests(unittest.TestCase):
         self.assertIn("prose", {note.kind for note in result.notes})
         again, texts_again = converted({"README.md": text}, "README.md")
         self.assertEqual(texts_again["README.md"], text)
+
+    def test_a_block_that_links_environment_files_is_left_to_people(self):
+        # D8: a project block that links environment files, and an
+        # environment file shown in a block, are rewritten by hand.
+        guide = (
+            "# Guide\n\n```yaml\nschema_version: '1.0'\nenvironments:\n"
+            "  python: python/environment.yaml\nadam:\n  specs:\n  - spec.yaml\n```\n\n"
+            "```yaml\nschema_version: '1.0'\nlock: renv.lock\nfunctions: {}\n```\n"
+        )
+        result, _ = converted({"AGENTS.md": guide}, "AGENTS.md")
+        self.assertEqual(
+            sorted(
+                (note.line, note.kind) for note in result.notes if note.kind == "D8"
+            ),
+            [(4, "D8"), (13, "D8")],
+        )
 
     def test_fragment_intermediates_take_keys_from_the_benchmark(self):
         spec = (

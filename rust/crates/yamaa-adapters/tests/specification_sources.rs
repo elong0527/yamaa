@@ -82,29 +82,28 @@ output: {{path: output.csv, columns: [I, S]}}
         fn original_yaml_to_checked_numeric_failure_without_python_plan() {
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            for (name, condition, rule, path, keys) in [
-                (
-                    "negative-zero-division",
-                    "division_by_zero",
-                    "FORMULA-15",
-                    "columns.PCHG.derivation.compute",
-                    vec!["PILOT7", "P7-742", "ALT"],
-                ),
+            for (name, keys) in [
+                ("negative-zero-division", vec!["PILOT7", "P7-742", "ALT"]),
                 (
                     "negative-integer-overflow",
-                    "integer_overflow",
-                    "VALUE-5",
-                    "columns.CELLTOT.derivation.compute",
                     vec!["YAMAA-01", "YAMAA-01-102"],
                 ),
             ] {
+                // The failure each benchmark states, in the language it is
+                // written in (#3422).
+                let oracle = crate::support::benchmarks::error(name);
+                let (condition, rule, path) = (
+                    oracle["condition"].as_str().unwrap(),
+                    oracle["rule"].as_str().unwrap(),
+                    oracle["spec_paths"][0].as_str().unwrap(),
+                );
                 let case = root.join("benchmarks").join(name);
                 let spec = prepare(&schema, &std::fs::read(case.join("spec.yaml")).unwrap());
                 let source = csv_source::parse_text_table(
                     &std::fs::read(case.join("input/lb.csv")).unwrap(),
                 )
                 .unwrap();
-                let plan = lower(spec.model(), source.schema());
+                let plan = lower(&spec, source.schema());
                 drop(spec);
                 let attempt = plan.execute(
                     &source,
@@ -142,7 +141,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let same =
                 b"STUDYID,USUBJID,LBTESTCD,LBSTRESN,LBBLRESN\nS,P,ALT,12,10\nS,P,ALT,12,10\n";
             let table = csv_source::parse_text_table(same).unwrap();
-            let plan = lower(spec.model(), table.schema());
+            let plan = lower(&spec, table.schema());
             let result = plan
                 .execute(
                     &table,
@@ -200,8 +199,12 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_core::schema::SchemaSource;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            let mut bytes =
-                std::fs::read(root.join("benchmarks/schema-window-functions/spec.yaml")).unwrap();
+            // The origins and named windows of the 0.5 admission, over the
+            // benchmark as 0.5 wrote it.
+            let mut bytes = std::fs::read(
+                crate::support::benchmarks::legacy("schema-window-functions").join("spec.yaml"),
+            )
+            .unwrap();
             let captured = prepare(&schema, &bytes);
             drop(schema);
             bytes.fill(b'?');
@@ -248,16 +251,18 @@ output: {{path: output.csv, columns: [I, S]}}
                     Err(Error::InheritanceRequired)
                 ));
             }
-            // A null parent is absent, so the entry takes the standalone route.
-            let standalone =
-                std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml"))
-                    .unwrap();
+            // A null parent is absent, so the entry takes the 0.5 standalone
+            // route; the benchmark as 0.5 wrote it.
+            let standalone = std::fs::read_to_string(
+                crate::support::benchmarks::legacy("negative-zero-division").join("spec.yaml"),
+            )
+            .unwrap();
             prepare(&schema, format!("{standalone}\nparent: null\n").as_bytes());
         }
 
         #[test]
         fn unsupported_operations_handlers_and_metadata_are_refused_before_binding() {
-            use yamaa_core::specification::{PrepareError, PreparedSpecification};
+            use yamaa_core::specification::PrepareError;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let raw =
@@ -265,7 +270,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     .unwrap();
             let written = format!("{raw}\nmetadata:\n  label: reserved\n");
             let captured = prepare(&schema, written.as_bytes());
-            let error = PreparedSpecification::prepare(captured.model()).unwrap_err();
+            let error = compile(&captured).unwrap_err();
             let PrepareError::Invalid(findings) = error else {
                 panic!("{error:?}")
             };
@@ -274,7 +279,7 @@ output: {{path: output.csv, columns: [I, S]}}
             );
             let written = raw.replace("100 * (AVAL - BASE) / BASE", "LB.LBSTRESN + 1");
             let captured = prepare(&schema, written.as_bytes());
-            let prepared = PreparedSpecification::prepare(captured.model()).unwrap();
+            let prepared = compile(&captured).unwrap();
             let schema = TableSchema::new(vec![]).unwrap();
             assert!(matches!(
                 prepared.bind(&schema),
@@ -285,7 +290,7 @@ output: {{path: output.csv, columns: [I, S]}}
         #[test]
         fn binding_uses_shared_reference_and_dependency_findings() {
             use yamaa_core::reference_binding::Diagnostic;
-            use yamaa_core::specification::{BindError, BindFinding, PreparedSpecification};
+            use yamaa_core::specification::{BindError, BindFinding};
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let raw =
@@ -299,7 +304,7 @@ output: {{path: output.csv, columns: [I, S]}}
             {
                 let written = raw.replace("100 * (AVAL - BASE) / BASE", expression);
                 let captured = prepare(&schema, written.as_bytes());
-                let prepared = PreparedSpecification::prepare(captured.model()).unwrap();
+                let prepared = compile(&captured).unwrap();
                 let error = prepared.bind(table.schema()).unwrap_err();
                 let BindError::Invalid(findings) = &error else {
                     panic!("{error:?}")
@@ -319,7 +324,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let written = raw.replace("100 * (AVAL - BASE) / BASE", "PCHG + 1");
             let captured = prepare(&schema, written.as_bytes());
             assert!(matches!(
-                PreparedSpecification::prepare(captured.model())
+                compile(&captured)
                     .unwrap()
                     .bind(table.schema()),
                 Err(BindError::Invalid(findings)) if matches!(findings.as_slice(), [BindFinding::Dependencies { .. }])
@@ -332,12 +337,11 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            for (name, condition, rule, column, expr, keys) in [
+            for (name, condition, rule, expr, keys) in [
                 (
                     "negative-zero-division",
                     "division_by_zero",
                     "FORMULA-15",
-                    "PCHG",
                     "100 * (AVAL - BASE) / BASE",
                     vec!["PILOT7", "P7-742", "ALT"],
                 ),
@@ -345,7 +349,6 @@ output: {{path: output.csv, columns: [I, S]}}
                     "negative-integer-overflow",
                     "integer_overflow",
                     "VALUE-5",
-                    "CELLTOT",
                     "CELLCNT * VOLUML",
                     vec!["YAMAA-01", "YAMAA-01-102"],
                 ),
@@ -367,8 +370,10 @@ output: {{path: output.csv, columns: [I, S]}}
                     "division_by_zero" => ((0, 26), Vec::new()),
                     _ => ((0, 16), Vec::new()),
                 };
+                // The path each benchmark states, in the language it is
+                // written in (#3422).
                 let expected = json!({"phase":"derivation","condition":condition,"rule":rule,
-                    "spec_paths":[format!("columns.{column}.derivation.compute")],"context":context,
+                    "spec_paths":crate::support::benchmarks::error(name)["spec_paths"].clone(),"context":context,
                     "source_span":{"start":span.0,"end":span.1},"operand_route":route});
                 let row = keys
                     .iter()
@@ -402,7 +407,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
-            let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("negative-zero-division");
             for (expression, qualified) in [("AVAL +", false), ("LB.LBSTRESN + 1", true)] {
                 let written = raw.replace("100 * (AVAL - BASE) / BASE", expression);
                 let run = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap();
@@ -436,7 +443,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     }
                     _ => panic!("wrong phase or condition: {error:?}"),
                 };
-                assert_eq!(path, "columns.PCHG.derivation.compute.expr");
+                assert_eq!(path, "columns.PCHG.derivation");
             }
         }
 
@@ -447,7 +454,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
-            let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("negative-zero-division");
             let data = std::fs::read(case.join("input/lb.csv")).unwrap();
             for (expr, condition, rule, context) in [
                 (
@@ -481,7 +490,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(
                     spec_findings(&error, Some(run.source())).unwrap(),
                     vec![
-                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["columns.PCHG.derivation.compute.expr"],"context":context})
+                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["columns.PCHG.derivation"],"context":context})
                     ]
                 );
             }
@@ -525,19 +534,16 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            let raw =
-                std::fs::read_to_string(root.join("benchmarks/negative-zero-division/spec.yaml"))
-                    .unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422).
+            let raw = crate::support::benchmarks::converted("negative-zero-division");
             let written = raw
                 .replace("domain: ADLB", "domain: LB\nbase: BAD")
                 .replace(
                     "keys: [STUDYID, USUBJID, PARAMCD]",
                     "keys: [STUDYID, USUBJID, PARAMCD, BOGUS]",
                 )
-                .replace(
-                    "    derivation:\n      compute:\n        expr: \"100 * (AVAL - BASE) / BASE\"",
-                    "",
-                );
+                .replace("    derivation: \"100 * (AVAL - BASE) / BASE\"", "");
             let error = PreparedRun::prepare(prepare(&schema, written.as_bytes())).unwrap_err();
             assert_eq!(
                 spec_findings(&error, None).unwrap(),
@@ -651,10 +657,12 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/negative-zero-division");
-            let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("negative-zero-division");
             let data = std::fs::read(case.join("input/lb.csv")).unwrap();
-            let unknown = json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"identifier":"BOGUS"}});
-            let cycle = json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.PCHG.derivation.compute"],"context":{"cycle":["PCHG","PCHG"]}});
+            let unknown = json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["columns.PCHG.derivation"],"context":{"identifier":"BOGUS"}});
+            let cycle = json!({"phase":"validation","condition":"dependency_cycle","rule":"COLUMN-6","spec_paths":["columns.PCHG.derivation"],"context":{"cycle":["PCHG","PCHG"]}});
             let written = raw
                 .replace("derivation: LB.LBSTRESN", "derivation: LB.BOGUS")
                 .replace("100 * (AVAL - BASE) / BASE", "BOGUS + PCHG");
@@ -675,8 +683,8 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBSTRESN"}}),
-                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation.compute.expr"],"context":{"expr":expr,"identifier":"LB.LBBLRESN"}}),
+                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation"],"context":{"expr":expr,"identifier":"LB.LBSTRESN"}}),
+                    json!({"phase":"validation","condition":"qualified_identifier","rule":"FORMULA-9","spec_paths":["columns.PCHG.derivation"],"context":{"expr":expr,"identifier":"LB.LBBLRESN"}}),
                     unknown,
                     cycle
                 ]
@@ -929,9 +937,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
             let document = prepare(&schema, &std::fs::read(case.join("spec.yaml")).unwrap());
-            let compiled =
-                yamaa_core::specification::PreparedSpecification::prepare(document.model())
-                    .unwrap();
+            let compiled = compile(&document).unwrap();
             let source = typed_csv::parse(
                 &std::fs::read(case.join("input/lb.csv")).unwrap(),
                 &compiled.source().types,
@@ -1020,7 +1026,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
-            let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
             let data = std::fs::read(case.join("input/lb.csv")).unwrap();
             for (expr, condition, rule, context) in [
                 (
@@ -1075,7 +1083,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 assert_eq!(
                     spec_findings(&error, Some(run.source())).unwrap(),
                     vec![
-                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":context})
+                        json!({"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows.total.derivations.AVAL.aggregate"],"context":context})
                     ]
                 );
                 let invalid_data = String::from_utf8(data.clone())
@@ -1338,7 +1346,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
-            let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
             let prefix = raw.split("verifications:").next().unwrap();
             let bytes = std::fs::read(case.join("input/lb.csv")).unwrap();
             let id = || Identity {
@@ -1445,13 +1455,13 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(actual["verifications"], json!([]));
             assert_eq!(
                 actual["diagnostics"][0]["spec_paths"],
-                json!(["rows[1].derivations.AVAL.aggregate"])
+                json!(["rows.total.derivations.AVAL.aggregate"])
             );
             // A missing output key is reached after derivation and before declaration checks.
             let run = PreparedRun::prepare(prepare(
                 &schema,
                 written
-                    .replace("derivation: LB.STUDYID", "derivation: {literal: null}")
+                    .replace("derivation: LB.STUDYID", "derivation: null")
                     .as_bytes(),
             ))
             .unwrap();
@@ -1481,9 +1491,9 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_adapters::specification_run::PreparedRun;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
-            let raw =
-                std::fs::read_to_string(root.join("benchmarks/adam-adlb-ordered-sum/spec.yaml"))
-                    .unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
             let bytes =
                 std::fs::read(root.join("benchmarks/adam-adlb-ordered-sum/input/lb.csv")).unwrap();
             for (replacement, condition, rule, context) in [
@@ -1512,7 +1522,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 );
                 let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
                     .expect_err("preflight without source");
-                assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows[1].group_by"],"context":context}]).as_array().unwrap().clone());
+                assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":condition,"rule":rule,"spec_paths":["rows.total.group_by"],"context":context}]).as_array().unwrap().clone());
             }
             let written = raw
                 .replace("id: total", "id: total\n    dataset: ABSENT")
@@ -1520,7 +1530,7 @@ output: {{path: output.csv, columns: [I, S]}}
             let error = PreparedRun::prepare(prepare(&schema, written.as_bytes()))
                 .err()
                 .unwrap();
-            assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","rule":"ROW-1","spec_paths":["rows[1].dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
+            assert_eq!(spec_findings(&error,None).unwrap(),json!([{"phase":"validation","condition":"driver_unavailable","rule":"ROW-1","spec_paths":["rows.total.dataset"],"context":{"row":"total","dataset":"ABSENT"}}]).as_array().unwrap().clone());
             let written = raw.replace(
                 "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]",
                 "group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT, LB.ABSENT]",
@@ -1530,13 +1540,13 @@ output: {{path: output.csv, columns: [I, S]}}
             assert_eq!(
                 spec_findings(&error, Some(run.source())).unwrap(),
                 vec![
-                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["rows[1].group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
+                    json!({"phase":"validation","condition":"unknown_field","rule":"NAME-3","spec_paths":["rows.total.group_by[3]"],"context":{"identifier":"LB.ABSENT"}})
                 ]
             );
             for (written, path, rule, context) in [
                 (
-                    raw.replace("PARAM: {literal: Total of Components}", "PARAM: LB.LBTEST"),
-                    "rows[1].derivations.PARAM.source",
+                    raw.replace("PARAM: \"'Total of Components'\"", "PARAM: LB.LBTEST"),
+                    "rows.total.derivations.PARAM.source",
                     "ROW-5",
                     json!({"identifier":"LB.LBTEST","row":"total","dataset":"LB"}),
                 ),
@@ -1605,8 +1615,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
-            let raw = std::fs::read_to_string(case.join("spec.yaml"))
-                .unwrap()
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input and expected output are the benchmark's own.
+            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum")
                 .replace("LBSTRESN: float", "LBSTRESN: str");
             let input = std::fs::read_to_string(case.join("input/lb.csv")).unwrap();
             let id = || Identity {
@@ -1676,7 +1687,7 @@ output: {{path: output.csv, columns: [I, S]}}
                     expected["artifacts"] = json!([]);
                     expected["verifications"] = json!([]);
                     expected["tables"].as_array_mut().unwrap().pop();
-                    expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-23","spec_paths":["rows[1].derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
+                    expected["diagnostics"] = json!([{"phase":"validation","condition":"incompatible_input_type","rule":"FORMULA-23","spec_paths":["rows.total.derivations.AVAL.aggregate"],"context":{"expr":"SUM(LB.LBSTRESN)","reducer":"SUM","source":"LB.LBSTRESN","expected":"numeric","actual":"str"}}]);
                     expected["nodes"][0]["outcome"] = json!("failure");
                     expected["nodes"][0]["diagnostics"] = expected["diagnostics"].clone();
                     assert!(host.published.is_empty());
@@ -1735,7 +1746,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/adam-adlb-ordered-sum");
-            let raw = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since the test edits its text
+            // (#3422); its input is the benchmark's own.
+            let raw = crate::support::benchmarks::converted("adam-adlb-ordered-sum");
             let written = raw
                 .replace(
                     "label: Parameter\n",
@@ -1744,9 +1757,9 @@ output: {{path: output.csv, columns: [I, S]}}
                 .replace("      PARAM: LB.LBTEST\n", "")
                 .replace(
                     "label: Derivation Type\n",
-                    "label: Derivation Type\n    derivation: {literal: null}\n",
+                    "label: Derivation Type\n    derivation: null\n",
                 )
-                .replace("      DTYPE: {literal: null}\n", "");
+                .replace("      DTYPE: null\n", "");
             let mut host = Host {
                 bytes: std::fs::read(case.join("input/lb.csv")).unwrap().into(),
                 reads: 0,
@@ -1810,7 +1823,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 .replace("      PARAM: LB.LBTEST\n", "")
                 .replacen(
                     "    derivations:\n",
-                    "    derivations:\n      ABSENT: {literal: ignored}\n",
+                    "    derivations:\n      ABSENT: \"'ignored'\"\n",
                     1,
                 );
             let error = PreparedRun::prepare(prepare(&schema, bad.as_bytes()))
@@ -1826,7 +1839,7 @@ output: {{path: output.csv, columns: [I, S]}}
 
         #[test]
         fn original_lookup_compiles_multiple_schemas_and_executes_named_selections() {
-            use yamaa_core::specification::{BindError, PreparedSpecification};
+            use yamaa_core::specification::BindError;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let schema = schema(&root.join("yaml"));
             let case = root.join("benchmarks/schema-lookup");
@@ -1840,7 +1853,7 @@ output: {{path: output.csv, columns: [I, S]}}
                 ),
             ] {
                 let document = prepare(&schema, raw.as_bytes());
-                let prepared = PreparedSpecification::prepare(document.model()).unwrap();
+                let prepared = compile(&document).unwrap();
                 assert_eq!(prepared.sources().len(), 3);
                 assert_eq!(prepared.source().name, "DM");
                 let tables = prepared
@@ -2071,7 +2084,9 @@ output: {{path: output.csv, columns: [I, S]}}
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-lookup");
             let schema = schema(&root.join("yaml"));
-            let original = std::fs::read_to_string(case.join("spec.yaml")).unwrap();
+            // The benchmark as 1.0 writes it, since each variant edits its
+            // text (#3422); its inputs are the benchmark's own.
+            let original = crate::support::benchmarks::converted("schema-lookup");
             let cases: Vec<Json> = yamaa_adapters::json_wire::decode_array(include_str!(
                 "fixtures/specs/lookup-failures.json"
             ))
@@ -2132,17 +2147,21 @@ output: {{path: output.csv, columns: [I, S]}}
             use yamaa_core::specification::PreparedSpecification;
             let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
             let case = root.join("benchmarks/schema-lookup");
-            let raw = std::fs::read_to_string(case.join("spec.yaml"))
-                .unwrap()
-                .replace(
-                    "order_by: [AE.AEDY]",
-                    "order_by: [{variable: AE.AEDY, direction: desc, nulls: first}]",
-                );
+            // The 0.5 admission of the benchmark as 0.5 wrote it; its inputs
+            // are the benchmark's own.
+            let raw = std::fs::read_to_string(
+                crate::support::benchmarks::legacy("schema-lookup").join("spec.yaml"),
+            )
+            .unwrap()
+            .replace(
+                "order_by: [AE.AEDY]",
+                "order_by: [{variable: AE.AEDY, direction: desc, nulls: first}]",
+            );
             let normalized = prepare(&schema(&root.join("yaml")), raw.as_bytes());
             for (omit_direction, omit_nulls) in
                 [(true, true), (true, false), (false, true), (false, false)]
             {
-                let input = normalized.model().document();
+                let input = normalized.document();
                 let selection =
                     sequence(input, input.field(input.root(), "intermediates").unwrap())[0];
                 let term = sequence(input, input.field(selection, "order_by").unwrap())[0];
@@ -2291,8 +2310,10 @@ output: {{path: output.csv, columns: [I, S]}}
                 &schema(&root.join("yaml")),
                 &std::fs::read(case.join("spec.yaml")).unwrap(),
             );
+            // The 0.5 admission expands named windows; the 1.0 front end
+            // lowers them into the tree it compiles.
             assert!(
-                !prepared.windows().is_empty(),
+                prepared.legacy_model().is_none() || !prepared.windows().is_empty(),
                 "shared admission expands named windows"
             );
             let run = PreparedRun::prepare(prepared).unwrap();

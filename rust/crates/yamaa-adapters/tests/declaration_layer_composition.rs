@@ -709,8 +709,11 @@ columns:
 
         #[test]
         fn the_converted_negative_property_clear_fails_as_its_source_at_clear_0() {
-            // The 0.5 source, checked as a public call checks it.
-            let source = repository_file("benchmarks/negative-property-clear/spec.yaml");
+            // The 0.5 source, frozen as it was written before the benchmark
+            // moved to 1.0, checked as a public call checks it.
+            let source = repository_file(
+                "rust/crates/yamaa-adapters/tests/fixtures/legacy/negative-property-clear/spec.yaml",
+            );
             let issues = yamaa_adapters::file_application::check(
                 Language::Python,
                 Request {
@@ -752,7 +755,11 @@ columns:
 
         #[test]
         fn the_converted_schema_inheritance_clear_resolves_as_its_source() {
-            let source = repository_file("benchmarks/schema-inheritance-clear/spec_study.yaml");
+            // The 0.5 source, frozen as it was written before the benchmark
+            // moved to 1.0.
+            let source = repository_file(
+                "rust/crates/yamaa-adapters/tests/fixtures/legacy/schema-inheritance-clear/spec_study.yaml",
+            );
             let artifact =
                 resolved_artifact::resolve(&source, None, Some(Language::Python), None).unwrap();
             let legacy = &artifact.entries()[0].specification;
