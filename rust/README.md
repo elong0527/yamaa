@@ -260,6 +260,7 @@ impl Engine {
     pub fn resolve_specification(&self, request: &Request<'_>)
         -> Result<ResolvedSpecification, Error>;
     pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error>;
+    pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure>;
     pub fn file_type(&self, path: &str) -> Result<FileType, Failure>;
 }
 
@@ -337,11 +338,20 @@ impl DefineBuild {
   then commits them in publication order and returns their absolute paths with
   forward slashes (a caller's resolver names each by its target reference). A
   refusal is a `Failure` carrying its issues and the paths written before it.
-  It is the only mutating operation and publishes through the resolver.
+  It and `save_table` are the only mutating operations, and both publish
+  through the resolver.
+- `save_table` saves a table, such as the item table `read_odm` returns, to
+  a path its caller names, as the command line's `read-odm SOURCE OUT` does.
+  The path's case-insensitive extension selects `csv` or `parquet` from
+  OUTPUT-5's closed mapping, the encoders of a run's output write the table,
+  and the one save's publisher stages and commits the file and returns its
+  path. Its refusals are a run's: `unknown_artifact_profile` for another
+  extension, and the save's `engine_rejected` codes for a target that cannot
+  be written (#3030 D134).
 - `define` mirrors `file_define::Define::prepare` plus its save step.
-- Every operation reads through the engine's resolver: checks, builds,
-  plans, project reads, `define`, `resolve_specification`, `read_odm` and
-  `file_type`.
+- Every operation reads and writes through the engine's resolver: checks,
+  builds, plans, project reads, `define`, `resolve_specification`,
+  `read_odm`, `save_table` and `file_type`.
   Without one, the engine's local file resolver serves the same requests, so a
   resolver that records them sees every access. A resolver serves a regular
   file or reports what else a name reaches with
