@@ -509,7 +509,7 @@ class ConfigureTests(unittest.TestCase):
             [
                 "rust-std",
                 nightly,
-                "MIT OR Apache-2.0",
+                "MIT",
                 f"https://github.com/rust-lang/rust at {nightly}",
                 inventory.INSTALLED_PURPOSE + "\n",
             ],
