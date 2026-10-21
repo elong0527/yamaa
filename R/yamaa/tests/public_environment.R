@@ -33,11 +33,11 @@ readtext <- function(path) readLines(path, warn = FALSE)
 observations <- function(run) yamaa:::.run_observations(run)
 here <- function(name) file.path(normalizePath(getwd(), winslash = "/"), name)
 # One issue row as a list of plain R values, for exact comparison. Each is an
-# error with a message and, until issue locations land (#3262), no location;
-# the cases author the other columns.
+# error with a message, located in a file the case wrote (P-ISSUE-1); the
+# cases author the other columns, and issue_locations.R pins the locations.
 row_of <- function(frame, index = 1L) {
   stopifnot(identical(frame$severity[[index]], "error"), nzchar(frame$message[[index]]),
-    is.na(frame$file[[index]]), is.na(frame$line[[index]]), is.na(frame$column[[index]]))
+    nzchar(frame$file[[index]]), frame$line[[index]] >= 1, frame$column[[index]] >= 1)
   authored <- setdiff(names(frame), c("severity", "file", "line", "column", "message"))
   lapply(frame[authored], function(column) column[[index]])
 }

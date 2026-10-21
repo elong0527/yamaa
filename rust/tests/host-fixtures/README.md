@@ -31,7 +31,7 @@ the held bytes.
 | public-environment | Original case selection, schema link references, quota/version inputs, exact callback CSV and the project-relative inherited and codelist files |
 | verification-logs | `specification-original/schema-verification-log`, evaluated counts and fatal outcomes, now checked in the run report |
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
-| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave), typed plain values and the failed run's report bytes; distinct host i64 vectors |
+| public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave, and `{file}` for the file the first issue is located in, as its location names it), typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
 | diagnostic-parity | Refusal cases with their complete expected issue rows |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
@@ -40,6 +40,7 @@ the held bytes.
 | lint | One specification with layout, authoring and suppression findings: its exact `lint()` rows, the text the proved fixes write, the rows that remain, and two refusals |
 | selftest | The bundled cases in list order, the cases table's columns, the status vocabulary, the report's lines and the layout of its information line, the engine information's fields in order, and a shipped build's features and language versions |
 | schema | The four file types, each JSON Schema's dialect, title and `$ref`, the canonical order of its top-level keys, and two refusals with their error text and issue rows |
+| issue-locations | One case for each rule of P-ISSUE-1 (`docs/design/interface-1.0/api.md`, "Issue locations"): the files a case writes, its call, and its first issue's condition, first spec path, file, line and column, counted by hand in those files |
 
 `plan-reuse` is the repeated-run truth for #2821. A spec object's first
 `run()` compiles and later runs reuse the plan, so study A, then B, then A on
@@ -70,6 +71,13 @@ paths and several rows. A zero-width span is not reachable from a
 specification, because spans come only from expression nodes; the adapter
 record tests own it. Spans are integer pairs, doubles in R, and both geometry
 fields are null (`None`, `NULL`) when nothing was recorded.
+
+An issue row's `file`, here and in `plan-reuse`, `parquet-containment` and
+`issue-locations`, names the file relative to the directory the test writes
+the case in, and `line` and `column` were counted by hand in that file (the
+issue locations of P-ISSUE-1). Each host compares `file` with that file's
+absolute path, resolved as the engine resolves a local path, with forward
+slashes; a row without a location holds null in all three.
 
 `read-odm` pairs the installed Python and R `read_odm` suites. Its documents
 are the reader suite's own `odm13.xml` and `odm20.xml`, staged from
