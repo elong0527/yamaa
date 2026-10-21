@@ -78,10 +78,12 @@ stages the R bundle under `src/rust`, with its crates compressed
 (`python -m tools.staging.stage_r_package <new directory>`, which
 `make test-r` runs). Given built archives, `tools.packaging.check_cargo_lock`
 checks their bundles against the checkout and refuses a toolchain file
-anywhere in them. The toolchain file names only what a build needs; add
-Clippy, rustfmt and the standard library's sources for repository checks with
-`rustup component add clippy rustfmt rust-src` from `rust/`, as
-`python -m tools.ci.toolchain --install` does in CI.
+anywhere in them. The toolchain file names only what a build needs; for
+repository checks, `make setup` adds Clippy, rustfmt and the standard library's
+sources where rustup runs, as `rustup component add clippy rustfmt rust-src`
+from `rust/` does. In CI, `python -m tools.ci.toolchain --install` adds Clippy
+and rustfmt, and its `--notices` option adds `rust-src` only for the jobs that
+run the third-party notices generator.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
