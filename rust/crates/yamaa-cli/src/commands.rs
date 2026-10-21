@@ -6,36 +6,47 @@
 //!   lines and every issue's line, then the files its save wrote, one
 //!   absolute path per line in publication order (D38, D99); a refused save
 //!   prints the files it wrote before it stopped, such as a failed run's
-//!   report (PROJECT-12). A refusal of the call itself prints D39's error
-//!   text in place of the summary line: it carries the first issue's line, so
-//!   the lines of the other issues follow. `lint` prints each finding's line,
+//!   report (PROJECT-12). A submission made without `--created` prints the
+//!   time it read for every section, `created: <time>`, after its summary
+//!   line (D129). A refusal of the call itself prints D39's error text in
+//!   place of the summary line: it carries the first issue's line, so the
+//!   lines of the other issues follow. `lint` prints each finding's line,
 //!   then its summary line; `resolve` prints the resolved specification as
 //!   canonical JSON.
 //! - **JSON** (`--format json`). One canonical JSON document (RFC 8785) on
 //!   one line, with the keys the draft `rust/interface/bindings-1.0.yaml`
 //!   lists in `cli.commands[].json_keys`: the command and its arguments, the
 //!   `status`, the issues as objects whose `context` is an object, and the
-//!   written `paths`. `resolve` prints the resolved specification itself.
-//!   `submission` leaves out `created`: the facade does not give the
-//!   creation time a submission used yet.
+//!   written `paths`. `resolve` prints the resolved specification itself. A
+//!   submission's `created` is the time its documents carry (D129); a
+//!   refused submission has none, so its `created` is `--created` as given,
+//!   or null.
 //! - **Exit status.** 0 when the result succeeded and its save wrote
 //!   everything, when `resolve` printed, and when no lint finding remains; 1
 //!   for a `failed` or `skipped` result, a refusal or a remaining lint
 //!   finding (D68, D98). An argument the facade cannot take, a value that is
 //!   not UTF-8 text, exits 2.
 //!
-//! Each command dispatches on its PATH's `type:` header, which the facade
-//! does not read yet. A PATH given `--spec` or `--section`, or given to
-//! `submission`, can only name a project, so those calls run; a PATH without
-//! them is refused as not implemented yet (D96), and so are `read-odm`,
-//! `schema` and `selftest`.
+//! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
+//! declares in its `type:` header, which the facade reads before anything
+//! else reads the file (D122). A spec is checked, run or resolved alone; a
+//! project is checked or run whole, or through `--spec NAME` one
+//! specification it lists, or through `--section` one section, and
+//! `submission` composes it. A file the facade cannot type is a file problem
+//! it explains with issues, so the call is refused with exit status 1 (D68,
+//! D125): a path it cannot read, a file written in language version 0.5,
+//! which declares `schema_version`, or a `type` naming no file type. A PATH
+//! whose type the command does not take, at all or with the flags given,
+//! such as `--spec` with a spec, is a usage error, which exits 2.
+//! `read-odm`, `schema` and `selftest` are refused as not implemented yet
+//! (D96).
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
 use yamaa::{
-    Action, CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Failure, Host,
-    LintFinding, ProjectRun, Status, Summary,
+    Action, CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Error, Failure,
+    FileType, Host, LintFinding, ProjectRun, Run, Status, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -47,7 +58,8 @@ pub(crate) enum Execution {
     /// The command ran: what it prints on standard output and its exit
     /// status, 0 or 1.
     Ran { stdout: String, status: u8 },
-    /// An argument the facade cannot take: exit status 2.
+    /// An argument the facade cannot take, or a PATH whose type the command
+    /// does not take: exit status 2.
     Refused(Usage),
     /// A command, or a form of one, not implemented yet (D96): printed as
     /// `yamaa: <what> is not implemented yet`, with exit status 2.
@@ -107,6 +119,11 @@ fn count(value: usize) -> ContextValue {
 
 fn texts(values: &[String]) -> ContextValue {
     ContextValue::List(values.iter().map(|value| text(value)).collect())
+}
+
+/// A flag's value as text, or null when the flag was not given.
+fn optional(value: Option<&str>) -> ContextValue {
+    value.map_or(ContextValue::Null, text)
 }
 
 fn issues(diagnostics: &[Diagnostic]) -> ContextValue {
@@ -218,8 +235,16 @@ fn flag<'a>(call: &'a Call, flag: &str) -> Result<Option<&'a str>, Execution> {
         .transpose()
 }
 
-fn not_implemented(what: &str) -> Execution {
-    Execution::NotImplemented(what.to_owned())
+/// A PATH whose declared type the command does not take, at all or in the
+/// form `how` names, such as `with --spec`: a usage error, which exits 2
+/// (D68).
+fn not_taken(call: &Call, path: &str, file_type: FileType, how: Option<&str>) -> Execution {
+    let how = how.map_or_else(String::new, |how| format!(" {how}"));
+    Execution::Refused(Usage(format!(
+        "{name}: {path} declares type {}, which {name} does not take{how}",
+        file_type.as_str(),
+        name = call.name,
+    )))
 }
 
 /// The command line's engine: the local file resolver, and no host language
@@ -234,52 +259,54 @@ fn engine() -> Engine {
     ))
 }
 
-/// `yamaa check PROJECT --spec NAME`: `p.spec(name).check()`.
+/// `yamaa check PATH`: `s.check()` of a spec, `p.check()` of a project, or,
+/// with `--spec NAME`, `p.spec(name).check()`.
 fn check(call: &Call) -> Result<Printed, Execution> {
-    let Some(name) = flag(call, "--spec")? else {
-        return Err(not_implemented("check without --spec"));
-    };
     let path = path(call)?;
-    let document = document("check", [("path", text(path)), ("spec", text(name))]);
+    let name = flag(call, "--spec")?;
+    let document = document("check", [("path", text(path)), ("spec", optional(name))]);
     let engine = engine();
-    let spec = match engine.project_spec(path, name) {
-        Ok(spec) => spec,
+    let file_type = match engine.file_type(path) {
+        Ok(file_type) => file_type,
         Err(failure) => return Ok(refusal(document, failure)),
     };
-    Ok(
-        match engine.spec_check(&spec, Some(path), &CancellationToken::new()) {
-            Ok(check) => result(
-                document,
-                &check.summary(),
-                check.status(),
-                check.diagnostics(),
-                None,
-            ),
-            Err(error) => refusal(document, Failure::from_error(Action::Read(&spec), &error)),
+    let token = CancellationToken::new();
+    // The path a refusal of the check names: the specification checked, or
+    // the project.
+    let (checked, subject) = match (file_type, name) {
+        (FileType::Spec, None) => (engine.spec_check(path, None, &token), path.to_owned()),
+        (FileType::Project, None) => (engine.project_check(path, &token), path.to_owned()),
+        (FileType::Project, Some(name)) => match engine.project_spec(path, name) {
+            Ok(spec) => (engine.spec_check(&spec, Some(path), &token), spec),
+            Err(failure) => return Ok(refusal(document, failure)),
         },
-    )
+        (FileType::Spec, Some(_)) => {
+            return Err(not_taken(call, path, file_type, Some("with --spec")))
+        }
+        (other, _) => return Err(not_taken(call, path, other, None)),
+    };
+    Ok(match checked {
+        Ok(check) => result(
+            document,
+            &check.summary(),
+            check.status(),
+            check.diagnostics(),
+            None,
+        ),
+        Err(error) => refusal(
+            document,
+            Failure::from_error(Action::Read(&subject), &error),
+        ),
+    })
 }
 
-/// What `run` builds: one specification a project lists, or the scope of one
-/// section.
-enum Scope<'a> {
-    Spec(&'a str),
-    Section(&'a str),
-}
-
-/// `yamaa run PROJECT --spec NAME`, `p.spec(name).run()`, or `yamaa run
-/// PROJECT --section SECTION`, `p.run(section)`; then `save()`.
+/// `yamaa run PATH`: `s.run()` of a spec, `p.run()` of a project, or, with
+/// `--spec NAME` or `--section SECTION`, `p.spec(name).run()` or
+/// `p.run(section)`; then `save()`.
 fn run(call: &Call) -> Result<Printed, Execution> {
+    let path = path(call)?;
     let name = flag(call, "--spec")?;
     let section = flag(call, "--section")?;
-    // The arguments give one of the two at most.
-    let scope = match (name, section) {
-        (Some(name), _) => Scope::Spec(name),
-        (None, Some(section)) => Scope::Section(section),
-        (None, None) => return Err(not_implemented("run without --spec or --section")),
-    };
-    let path = path(call)?;
-    let optional = |value: Option<&str>| value.map_or(ContextValue::Null, text);
     let mut document = document(
         "run",
         [
@@ -291,29 +318,21 @@ fn run(call: &Call) -> Result<Printed, Execution> {
         ],
     );
     let engine = engine();
+    let file_type = match engine.file_type(path) {
+        Ok(file_type) => file_type,
+        Err(failure) => return Ok(refusal(document, failure)),
+    };
     let token = CancellationToken::new();
-    Ok(match scope {
-        Scope::Spec(name) => {
-            let spec = match engine.project_spec(path, name) {
-                Ok(spec) => spec,
-                Err(failure) => return Ok(refusal(document, failure)),
-            };
-            match engine.spec_run(&spec, Some(path), &token) {
-                Ok(mut run) => {
-                    let saved = run.save();
-                    result(
-                        document,
-                        &run.summary(),
-                        run.status(),
-                        run.diagnostics(),
-                        Some(saved),
-                    )
-                }
-                Err(error) => refusal(document, Failure::from_error(Action::Read(&spec), &error)),
-            }
-        }
-        // An unknown section refuses the run (D98).
-        Scope::Section(section) => match engine.project_run(path, Some(section), &token) {
+    // The arguments give `--spec` or `--section`, not both.
+    Ok(match (file_type, name, section) {
+        (FileType::Spec, None, None) => saved(document, engine.spec_run(path, None, &token), path),
+        (FileType::Project, Some(name), _) => match engine.project_spec(path, name) {
+            Ok(spec) => saved(document, engine.spec_run(&spec, Some(path), &token), &spec),
+            Err(failure) => refusal(document, failure),
+        },
+        // Every section, or the one named; an unknown section refuses the
+        // run (D98).
+        (FileType::Project, None, section) => match engine.project_run(path, section, &token) {
             Ok(mut runs) => {
                 let saved = runs.save();
                 document.insert("members".into(), members(&runs));
@@ -325,24 +344,48 @@ fn run(call: &Call) -> Result<Printed, Execution> {
                     Some(saved),
                 )
             }
-            Err(error) => refusal(
-                document,
-                Failure::from_error(Action::Select(section), &error),
-            ),
+            Err(error) => {
+                let action = section.map_or(Action::Read(path), Action::Select);
+                refusal(document, Failure::from_error(action, &error))
+            }
         },
+        (FileType::Spec, Some(_), _) => {
+            return Err(not_taken(call, path, file_type, Some("with --spec")))
+        }
+        (FileType::Spec, None, Some(_)) => {
+            return Err(not_taken(call, path, file_type, Some("with --section")))
+        }
+        (other, ..) => return Err(not_taken(call, path, other, None)),
     })
 }
 
+/// One specification's run, then its save; a refusal of the run names the
+/// specification's path, `subject`.
+fn saved(document: Document, run: Result<Run, Error>, subject: &str) -> Printed {
+    match run {
+        Ok(mut run) => {
+            let saved = run.save();
+            result(
+                document,
+                &run.summary(),
+                run.status(),
+                run.diagnostics(),
+                Some(saved),
+            )
+        }
+        Err(error) => refusal(document, Failure::from_error(Action::Read(subject), &error)),
+    }
+}
+
 /// A project run's members in run order, as `cli.json.member_keys` gives
-/// them. The facade reaches a member only by its name, so a listing that
-/// could not be read, which has none, is missing here though its member line
-/// prints.
+/// them, each named as its member line names it: by its listed name or, for
+/// a listing that could not be read, by its path as the project file writes
+/// it (D130).
 fn members(runs: &ProjectRun) -> ContextValue {
     ContextValue::List(
-        runs.names()
-            .iter()
-            .filter_map(|name| {
-                let run = runs.get(name)?;
+        runs.members()
+            .into_iter()
+            .map(|(name, run)| {
                 let output = run.output();
                 let size = |measure: fn(&yamaa::Table) -> usize| {
                     output.map_or(ContextValue::Null, |table| count(measure(table)))
@@ -354,12 +397,12 @@ fn members(runs: &ProjectRun) -> ContextValue {
                     ("columns", size(|table| table.columns().len())),
                     ("issue_count", count(run.diagnostics().len())),
                 ];
-                Some(ContextValue::Map(
+                ContextValue::Map(
                     values
                         .into_iter()
                         .map(|(key, value)| (key.to_owned(), value))
                         .collect(),
-                ))
+                )
             })
             .collect(),
     )
@@ -367,20 +410,28 @@ fn members(runs: &ProjectRun) -> ContextValue {
 
 /// `yamaa submission PROJECT [--section SECTION] [--created TIME]`:
 /// `p.submission(section, created)`, then `save()`. Without `--created`,
-/// the time used is not printed yet; see the module documentation.
+/// the submission reads the clock once for every section, and prints the
+/// time it read after its summary line (D129).
 fn submission(call: &Call) -> Result<Printed, Execution> {
     let path = path(call)?;
     let section = flag(call, "--section")?;
     let created = flag(call, "--created")?;
-    let document = document(
+    let mut document = document(
         "submission",
         [
             ("path", text(path)),
-            ("section", section.map_or(ContextValue::Null, text)),
+            ("section", optional(section)),
+            ("created", optional(created)),
             ("paths", ContextValue::List(Vec::new())),
         ],
     );
-    let composed = engine().project_submission(
+    let engine = engine();
+    match engine.file_type(path) {
+        Ok(FileType::Project) => {}
+        Ok(other) => return Err(not_taken(call, path, other, None)),
+        Err(failure) => return Ok(refusal(document, failure)),
+    }
+    let composed = engine.project_submission(
         path,
         section,
         created,
@@ -390,13 +441,23 @@ fn submission(call: &Call) -> Result<Printed, Execution> {
     Ok(match composed {
         Ok(mut submission) => {
             let saved = submission.save();
-            result(
+            let used = submission.created().to_owned();
+            document.insert("created".into(), text(&used));
+            let summary = submission.summary();
+            let mut printed = result(
                 document,
-                &submission.summary(),
+                &summary,
                 submission.status(),
                 submission.diagnostics(),
                 Some(saved),
-            )
+            );
+            // The time follows the summary line and any member line, before
+            // the issues.
+            if created.is_none() {
+                let after = 1 + summary.members.len();
+                printed.lines.insert(after, format!("created: {used}"));
+            }
+            printed
         }
         // An unknown section refuses the submission (D98).
         Err(error) => {
@@ -406,18 +467,32 @@ fn submission(call: &Call) -> Result<Printed, Execution> {
     })
 }
 
-/// `yamaa resolve PROJECT --spec NAME`: `p.spec(name).resolve()`, printed as
-/// canonical JSON in both formats.
+/// `yamaa resolve PATH`: `s.resolve()` of a spec, or, with `--spec NAME`,
+/// `p.spec(name).resolve()` of a project, printed as canonical JSON in both
+/// formats. A project has no resolved form of its own, so it needs
+/// `--spec`.
 fn resolve(call: &Call) -> Result<Printed, Execution> {
-    let Some(name) = flag(call, "--spec")? else {
-        return Err(not_implemented("resolve without --spec"));
-    };
     let path = path(call)?;
-    let document = document("resolve", [("path", text(path)), ("spec", text(name))]);
+    let name = flag(call, "--spec")?;
+    let document = document("resolve", [("path", text(path)), ("spec", optional(name))]);
     let engine = engine();
-    let resolved = engine
-        .project_spec(path, name)
-        .and_then(|spec| engine.spec_resolve(&spec, Some(path)));
+    let file_type = match engine.file_type(path) {
+        Ok(file_type) => file_type,
+        Err(failure) => return Ok(refusal(document, failure)),
+    };
+    let resolved = match (file_type, name) {
+        (FileType::Spec, None) => engine.spec_resolve(path, None),
+        (FileType::Project, Some(name)) => engine
+            .project_spec(path, name)
+            .and_then(|spec| engine.spec_resolve(&spec, Some(path))),
+        (FileType::Spec, Some(_)) => {
+            return Err(not_taken(call, path, file_type, Some("with --spec")))
+        }
+        (FileType::Project, None) => {
+            return Err(not_taken(call, path, file_type, Some("without --spec")))
+        }
+        (other, _) => return Err(not_taken(call, path, other, None)),
+    };
     Ok(match resolved {
         Ok(value) => Printed {
             lines: vec![value.to_json()],

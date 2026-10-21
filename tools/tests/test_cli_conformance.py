@@ -1,13 +1,17 @@
-"""The command line's conformance runner (#3060), over stand-in binaries."""
+"""The command line's conformance runner (#3060) and the caller that runs it
+over the corpus written as 1.0, over stand-in binaries."""
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from tools.commands import cli_conformance, conversion
 from tools.conformance import public_conformance as judge
 from tools.paths import ROOT
 
@@ -21,12 +25,12 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
 """
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
-# Behaves as the binary does today: refuses `run SPEC` as not implemented,
-# and for `run PROJECT --spec NAME` prints one result document, here naming
-# what it was asked and where, and exits 1 as a run with findings does. Its
-# save wrote, as absolute paths with forward slashes, one file below the case
-# and one beside it; the paths that climb out of the case or have a backslash
-# are not ones the binary prints.
+# Refuses `run SPEC` as not implemented, as the binary refuses a command it
+# has not built yet (D96), and for `run PROJECT --spec NAME` prints one result
+# document, here naming what it was asked and where, and exits 1 as a run
+# with findings does. Its save wrote, as absolute paths with forward slashes,
+# one file below the case and one beside it; the paths that climb out of the
+# case or have a backslash are not ones the binary prints.
 BINARY = """import json, os, sys
 arguments = sys.argv[1:]
 if arguments == ["--version"]:
@@ -250,6 +254,99 @@ class CommandLineRunner(unittest.TestCase):
         result = self.runner(self.binary("yamaa", BINARY), output)
         self.assertEqual(result.returncode, 2)
         self.assertIn("output must be a fresh directory", result.stderr)
+
+
+# The benchmarks written as 1.0, which the binary reads (#3030 D122).
+SPEC_1_0 = 'yamaa: "1.0"\ntype: spec\n' + SPEC.split("\n", 1)[1]
+PROJECT_1_0 = 'yamaa: "1.0"\ntype: project\nsdtm:\n  specs: [spec.yaml]\n'
+# Runs every call and prints one result document naming what it was asked
+# and the file it read, as a binary that reads 1.x files does.
+CONVERTED = """import json, sys
+arguments = sys.argv[1:]
+if arguments == ["--version"]:
+    sys.stdout.write("yamaa 0.0.0\\n")
+    sys.exit(0)
+with open(arguments[3], encoding="utf-8") as read:
+    header = read.readline()
+document = {"arguments": arguments, "header": header, "issues": [], "paths": [], "status": "succeeded"}
+sys.stdout.write(json.dumps(document) + "\\n")
+sys.exit(0)
+"""
+
+
+@unittest.skipIf(os.name == "nt", "a stand-in binary is a script run by its #! line")
+class ConvertedCorpus(unittest.TestCase):
+    """`tools.commands.cli_conformance` runs the runner over converted copies."""
+
+    def test_the_runner_runs_the_converted_copies_without_the_excepted_ones(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name).resolve()
+        # What the converter writes, here for three benchmarks.
+        source = root / "source"
+        for name in ("plain", "project", "excepted"):
+            (source / name).mkdir(parents=True)
+            (source / name / "spec.yaml").write_text(SPEC_1_0)
+            (source / name / "benchmark.yaml").write_text(METADATA)
+        (source / "project/project.yaml").write_text(PROJECT_1_0)
+
+        def convert(target):
+            fixtures = target / "benchmarks"
+            shutil.copytree(source, fixtures)
+            return fixtures
+
+        binary = root / "yamaa"
+        binary.write_text(f"#!{sys.executable}\n{CONVERTED}")
+        binary.chmod(0o755)
+        output = root / "output"
+        with (
+            mock.patch.object(conversion, "convert", convert),
+            mock.patch.object(conversion, "EXCEPTED", {"excepted": "a decided item"}),
+        ):
+            status = cli_conformance.main(
+                [
+                    "--binary",
+                    str(binary),
+                    "--output",
+                    str(output),
+                    "--source-revision",
+                    "test",
+                ]
+            )
+        self.assertEqual(status, 0)
+        # The plan is the converted corpus's, with the gate's exception.
+        plan = json.loads((output / "plan/plan.json").read_text())
+        self.assertEqual(
+            [example["name"] for example in plan["examples"]],
+            ["excepted", "plain", "project"],
+        )
+        records = output / "observed/records"
+        excepted = json.loads((records / "excepted.json").read_text())
+        self.assertEqual(
+            excepted["excluded"],
+            "excepted by the 1.0 conversion gate: a decided item",
+        )
+        # Each call ran on its converted case, staged from the copies.
+        for name, arguments in (
+            ("plain", ["run", "spec.yaml"]),
+            ("project", ["run", "project.yaml", "--spec", "TEST"]),
+        ):
+            [call] = json.loads((records / f"{name}.json").read_text())["calls"]
+            self.assertEqual(call["exit_status"], 0, name)
+            self.assertEqual(
+                call["document"]["arguments"], ["--format", "json", *arguments]
+            )
+            self.assertEqual(call["document"]["header"], 'yamaa: "1.0"\n')
+        self.assertTrue((output / "benchmarks/plain/spec.yaml").is_file())
+        run = json.loads((output / "observed/run.json").read_text())
+        self.assertEqual(run["source_revision"], "test")
+
+    def test_the_output_must_be_fresh(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        with self.assertRaises(SystemExit) as raised:
+            cli_conformance.main(["--binary", "yamaa", "--output", temp.name])
+        self.assertEqual(raised.exception.code, 2)
 
 
 if __name__ == "__main__":
