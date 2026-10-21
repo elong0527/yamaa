@@ -52,11 +52,12 @@ class CompactYaml(unittest.TestCase):
             for verification in variants:
                 with self.subTest(prior_mapping=prior, verification=verification):
                     self.write(verification, prior_mapping=prior)
-                    self.assertEqual(yamaa.spec(self.spec).check().issues.height, 0)
+                    self.assertEqual(yamaa.spec(self.spec).check().issues.num_rows, 0)
                     built = yamaa.spec(self.spec).run()
-                    self.assertEqual(built.issues.height, 0)
+                    self.assertEqual(built.issues.num_rows, 0)
                     self.assertEqual(
-                        built.output.to_dict(as_series=False), {"ID": ["a", "b", "c"]}
+                        built.output.to_polars().to_dict(as_series=False),
+                        {"ID": ["a", "b", "c"]},
                     )
                     built.save()
                     self.assertEqual(
@@ -67,11 +68,12 @@ class CompactYaml(unittest.TestCase):
         for bounds in ("min: 0, max: 2", "min: 4, max: 10"):
             with self.subTest(bounds=bounds):
                 self.write("verifications: [row_count: {" + bounds + "}]")
-                self.assertEqual(yamaa.spec(self.spec).check().issues.height, 0)
+                self.assertEqual(yamaa.spec(self.spec).check().issues.num_rows, 0)
                 built = yamaa.spec(self.spec).run()
                 self.assertIsNone(built.output)
                 self.assertEqual(
-                    built.issues["condition"].to_list(), ["row_count_failed"]
+                    built.issues.to_polars()["condition"].to_list(),
+                    ["row_count_failed"],
                 )
 
     def test_malformed_compact_closers_remain_invalid_yaml(self):
@@ -87,7 +89,8 @@ class CompactYaml(unittest.TestCase):
             ):
                 with self.subTest(verification=verification, operation=operation):
                     self.assertEqual(
-                        result.issues["condition"].to_list(), ["invalid_yaml"]
+                        result.issues.to_polars()["condition"].to_list(),
+                        ["invalid_yaml"],
                     )
 
     def test_raw_nul_is_invalid_yaml_at_the_nul(self):
@@ -105,10 +108,11 @@ class CompactYaml(unittest.TestCase):
             ):
                 with self.subTest(line=line, operation=operation):
                     self.assertEqual(
-                        result.issues["condition"].to_list(), ["invalid_yaml"]
+                        result.issues.to_polars()["condition"].to_list(),
+                        ["invalid_yaml"],
                     )
                     self.assertEqual(
-                        json.loads(result.issues["context"][0]),
+                        json.loads(result.issues.to_polars()["context"][0]),
                         {
                             "line": line,
                             "column": column,

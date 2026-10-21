@@ -2,17 +2,16 @@
 
 `yamaa/__init__.py` is generated from rust/interface/bindings.yaml by
 tools/packaging/generate_bindings.py: its classes and functions delegate each
-operation to `yamaa._native`. What it does not write lives here: the Polars
-table conversion, path conversion, the pickling of lazy objects and the
-package version.
+operation to `yamaa._native`, and every table is the native `yamaa.Table`.
+What it does not write lives here: path conversion, the pickling of lazy
+objects and the package version. Nothing here imports a package outside the
+standard library.
 """
 
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _distribution_version
 from os import PathLike
 from os import fspath as _fspath
-
-import polars as _pl
 
 from yamaa import _native
 
@@ -21,9 +20,6 @@ __all__ = [
     "_fspath",
     "_fspaths",
     "_Lazy",
-    "_optional_table",
-    "_pl",
-    "_table",
 ]
 
 
@@ -32,16 +28,6 @@ def _fspaths(paths) -> list[str]:
     if isinstance(paths, (str, PathLike)):
         return [_fspath(paths)]
     return [_fspath(path) for path in paths]
-
-
-def _table(table) -> _pl.DataFrame:
-    """A native table as a Polars DataFrame."""
-    return _pl.DataFrame(table)
-
-
-def _optional_table(table) -> _pl.DataFrame | None:
-    """A native table, or None, as a Polars DataFrame or None."""
-    return None if table is None else _pl.DataFrame(table)
 
 
 class _Lazy:

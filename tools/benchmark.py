@@ -252,9 +252,9 @@ def compare_define(case, staged, define):
         result = yamaa.project(staged / define["environment"]).submission(
             define["standard"], created=define["created"]
         )
-        issues = result.issues.to_dicts()
+        issues = result.issues.to_pylist()
     except yamaa.Error as error:
-        result, issues = None, error.issues.to_dicts()
+        result, issues = None, error.issues.to_pylist()
     for issue in issues:
         issue["context"] = json.loads(issue["context"])
     negative = case / "expected" / "error.yaml"

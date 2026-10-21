@@ -139,16 +139,16 @@ class PublicEnvironment(unittest.TestCase):
 
     def assert_refused_project(self, project, expected):
         """Project problems: issues of check() and of a run that built nothing."""
-        self.assertEqual(project.check().issues.to_dicts(), expected)
+        self.assertEqual(project.check().issues.to_pylist(), expected)
         runs = project.run()
         self.assertEqual(runs.names, [])
-        self.assertEqual(runs.issues.to_dicts(), expected)
+        self.assertEqual(runs.issues.to_pylist(), expected)
         with self.assertRaises(yamaa.Error) as caught:
             runs.save()
-        self.assertEqual(caught.exception.issues.to_dicts(), expected)
+        self.assertEqual(caught.exception.issues.to_pylist(), expected)
         with self.assertRaises(yamaa.Error) as caught:
             project.spec("TEST")
-        self.assertEqual(caught.exception.issues.to_dicts(), expected)
+        self.assertEqual(caught.exception.issues.to_pylist(), expected)
 
     def test_missing_metadata_names_each_declared_input_before_entry_and_activation(
         self,
@@ -241,7 +241,7 @@ class PublicEnvironment(unittest.TestCase):
             spec = project.spec("TEST")
             for result in (spec.check(), spec.run()):
                 self.assertEqual(
-                    result.issues.to_dicts(),
+                    result.issues.to_pylist(),
                     [
                         issue(
                             "project_environment_missing",
@@ -253,7 +253,7 @@ class PublicEnvironment(unittest.TestCase):
                 )
             # A project result names the specification each issue belongs to.
             self.assertEqual(
-                project.check().issues.to_dicts(),
+                project.check().issues.to_pylist(),
                 [
                     issue(
                         "project_environment_missing",
@@ -265,7 +265,7 @@ class PublicEnvironment(unittest.TestCase):
             )
             # The same file alone has no project, so the function is unknown.
             self.assertEqual(
-                yamaa.spec("spec.yaml").check().issues.to_dicts(),
+                yamaa.spec("spec.yaml").check().issues.to_pylist(),
                 [
                     issue(
                         "unknown_project_function",
@@ -310,15 +310,15 @@ class PublicEnvironment(unittest.TestCase):
                     )
                     Path("project.yaml").write_text(prefix + field)
                     checked = project.check()
-                    self.assertTrue(checked.issues.is_empty(), checked.issues)
+                    self.assertEqual(checked.issues.num_rows, 0, checked.issues)
                 for declared in tuple(TRUTH["invalid_source_system_versions"]):
                     Path("project.yaml").write_text(
                         prefix + f"  source_system_version: {declared}\n"
                     )
                     checked = project.check()
-                    self.assertEqual(checked.issues.height, 1, checked.issues)
+                    self.assertEqual(checked.issues.num_rows, 1, checked.issues)
                     self.assertEqual(
-                        checked.issues["spec_paths"][0].to_list(),
+                        checked.issues.to_polars()["spec_paths"][0].to_list(),
                         [f"{family}.source_system_version"],
                     )
             self.assertEqual(
@@ -346,13 +346,15 @@ class PublicEnvironment(unittest.TestCase):
         with no_activation():
             checked = spec.check()
             failed = spec.run()
-        self.assertTrue(checked.issues.is_empty(), checked.issues)
+        self.assertEqual(checked.issues.num_rows, 0, checked.issues)
         # The producer never runs: the consumer reads its own linked path, and
         # that stored artifact does not exist yet.
         self.assertEqual(
-            failed.issues["condition"].to_list(), ["resource_path_missing"]
+            failed.issues.to_polars()["condition"].to_list(), ["resource_path_missing"]
         )
-        self.assertEqual(failed.issues["spec_paths"].to_list(), [["input.P.path"]])
+        self.assertEqual(
+            failed.issues.to_polars()["spec_paths"].to_list(), [["input.P.path"]]
+        )
         report = self.report(failed)
         self.assertEqual(report["outcome"], "failure")
         self.assertEqual(report["source_reads"], [])
@@ -399,7 +401,7 @@ class PublicEnvironment(unittest.TestCase):
             for _ in range(2):
                 # Linked producers supply output contracts only: their own
                 # findings are never compiled, and only the entry is checked.
-                rows = spec.check().issues.to_dicts()
+                rows = spec.check().issues.to_pylist()
                 self.assertEqual(
                     rows,
                     [
@@ -417,12 +419,12 @@ class PublicEnvironment(unittest.TestCase):
             Path("spec.yaml").write_text(
                 document(TRUTH["wrong_leaf_reference"], "P", "consumer.csv")
             )
-            rows = spec.check().issues.to_dicts()
+            rows = spec.check().issues.to_pylist()
             self.assertEqual(rows, [])
             Path("spec.yaml").write_text(
                 document(TRUTH["incompatible_leaf_reference"], "P", "consumer.csv")
             )
-            rows = spec.check().issues.to_dicts()
+            rows = spec.check().issues.to_pylist()
             self.assertEqual(
                 [(r["condition"], r["rule"], r["spec_paths"]) for r in rows],
                 [("redundant_field_type", "INPUT-6", ["input.P.types.ID"])],
@@ -455,9 +457,9 @@ class PublicEnvironment(unittest.TestCase):
         with no_activation():
             checked = project.check()
             result = project.spec("CHILD").run()
-        self.assertTrue(checked.issues.is_empty(), checked.issues)
-        self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["ID"].to_list(), [7])
+        self.assertEqual(checked.issues.num_rows, 0, checked.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
+        self.assertEqual(result.output.to_polars()["ID"].to_list(), [7])
         self.assertFalse(Path("outputs/held.csv").exists())
         before = self.report(result)
         self.assertNotIn("yamaa-project.yaml", json.dumps(before))
@@ -490,8 +492,8 @@ class PublicEnvironment(unittest.TestCase):
         )
         spec = yamaa.spec("entry/spec.yaml")
         result = spec.run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["ID"].to_list(), [7])
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
+        self.assertEqual(result.output.to_polars()["ID"].to_list(), [7])
         self.assertFalse(Path(output).exists())
         self.assertEqual(result.save()[-1], Path(output).resolve().as_posix())
         self.assertEqual(Path(output).read_bytes(), b"ID\n7\n")
@@ -510,9 +512,11 @@ class PublicEnvironment(unittest.TestCase):
             )
             failed = spec.run()
             self.assertIsNone(failed.output)
-            self.assertEqual(failed.issues["condition"].to_list(), [condition])
             self.assertEqual(
-                failed.issues["spec_paths"].to_list(), [["input.SRC.path"]]
+                failed.issues.to_polars()["condition"].to_list(), [condition]
+            )
+            self.assertEqual(
+                failed.issues.to_polars()["spec_paths"].to_list(), [["input.SRC.path"]]
             )
             with self.assertRaises(yamaa.Error):
                 failed.save()
@@ -548,13 +552,13 @@ class PublicEnvironment(unittest.TestCase):
                     + json.dumps(written)
                     + "]\nsdtm: {specs: [../entry/spec.yaml]}\n"
                 )
-                self.assertTrue(project.check().issues.is_empty())
+                self.assertEqual(project.check().issues.num_rows, 0)
                 spec = project.spec("TEST")
                 checked = spec.check()
                 result = spec.run()
-                self.assertTrue(checked.issues.is_empty(), checked.issues)
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["ID"].to_list(), ["01"])
+                self.assertEqual(checked.issues.num_rows, 0, checked.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                self.assertEqual(result.output.to_polars()["ID"].to_list(), ["01"])
                 self.assertTrue(self.report(result)["verifications"])
                 self.assertFalse(Path("outputs/ids.csv").exists())
                 self.assertEqual(
@@ -570,7 +574,7 @@ class PublicEnvironment(unittest.TestCase):
         Path("ids.yaml").write_text(terminology)
         Path("entry/ids.yaml").write_text(terminology)
         with no_activation():
-            checked = project.check().issues.to_dicts()
+            checked = project.check().issues.to_pylist()
             runs = project.run()
         self.assertEqual(
             [(row["condition"], row["spec_paths"]) for row in checked],
@@ -578,7 +582,7 @@ class PublicEnvironment(unittest.TestCase):
         )
         self.assertEqual(json.loads(checked[0]["context"])["path"], "ids.yaml")
         self.assertEqual(runs.names, [])
-        self.assertEqual(runs.issues.to_dicts(), checked)
+        self.assertEqual(runs.issues.to_pylist(), checked)
         self.assertFalse(Path("outputs/ids.csv").exists())
 
     def test_catastrophic_pattern_fails_the_same_check_with_and_without_a_project(
@@ -599,7 +603,7 @@ class PublicEnvironment(unittest.TestCase):
         for spec in (yamaa.spec("spec.yaml"), self.project().spec("TEST")):
             failed = spec.run()
             self.assertIsNone(failed.output)
-            rows = failed.issues.to_dicts()
+            rows = failed.issues.to_pylist()
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["condition"], truth["condition"])
             self.assertEqual(rows[0]["spec_paths"], truth["paths"])
@@ -633,15 +637,15 @@ class PublicEnvironment(unittest.TestCase):
         expected = TRUTH["rounded_callback_csv"].encode("utf-8")
         spec = self.precision_study()
         with no_activation():
-            self.assertTrue(spec.check().issues.is_empty())
+            self.assertEqual(spec.check().issues.num_rows, 0)
             result = spec.run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(
-            result.output["VALUE"].to_list(),
+            result.output.to_polars()["VALUE"].to_list(),
             [0.125, -0.125, 2.675, -0.004, 1.234, 2.345, None, 25.0],
         )
         self.assertEqual(
-            result.output["DOUBLE"].to_list(),
+            result.output.to_polars()["DOUBLE"].to_list(),
             [0.25, -0.25, 5.35, -0.008, 2.468, 4.69, None, 50.0],
         )
         before = self.report(result)
@@ -656,8 +660,8 @@ class PublicEnvironment(unittest.TestCase):
         )
         (self.directory / "rounded.csv").unlink()
         ordinary = self.precision_study(None).run()
-        self.assertTrue(ordinary.issues.is_empty(), ordinary.issues)
-        self.assertEqual(ordinary.output.to_dicts(), result.output.to_dicts())
+        self.assertEqual(ordinary.issues.num_rows, 0, ordinary.issues)
+        self.assertEqual(ordinary.output.to_pylist(), result.output.to_pylist())
         # Metadata and every calculation/check observation retain the same truth.
         self.assertEqual(self.report(ordinary), before)
 
@@ -665,7 +669,7 @@ class PublicEnvironment(unittest.TestCase):
         spec = self.precision_study(TRUTH["csv_precision_maximum"])
         (self.directory / "input.csv").write_text("ID,VALUE,INT\n1,0.125,7\n")
         result = spec.run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         expected = TRUTH["maximum_precision_csv"].encode("utf-8")
         self.assertEqual(
             result.save()[-1], (self.directory / "rounded.csv").resolve().as_posix()
@@ -677,17 +681,19 @@ class PublicEnvironment(unittest.TestCase):
             checked = spec.check()
             failed = spec.run()
             self.assertIsNone(failed.output)
-            self.assertEqual(checked.issues.to_dicts(), failed.issues.to_dicts())
-            self.assertEqual(failed.issues["phase"].to_list(), ["validation"])
+            self.assertEqual(checked.issues.to_pylist(), failed.issues.to_pylist())
             self.assertEqual(
-                failed.issues["condition"].to_list(), ["invalid_field_type"]
-            )
-            self.assertEqual(failed.issues["rule"].to_list(), ["CSV-6"])
-            self.assertEqual(
-                failed.issues["spec_paths"].to_list(), [["output.decimals"]]
+                failed.issues.to_polars()["phase"].to_list(), ["validation"]
             )
             self.assertEqual(
-                json.loads(failed.issues["context"][0]),
+                failed.issues.to_polars()["condition"].to_list(), ["invalid_field_type"]
+            )
+            self.assertEqual(failed.issues.to_polars()["rule"].to_list(), ["CSV-6"])
+            self.assertEqual(
+                failed.issues.to_polars()["spec_paths"].to_list(), [["output.decimals"]]
+            )
+            self.assertEqual(
+                json.loads(failed.issues.to_polars()["context"][0]),
                 {"expected": TRUTH["csv_precision_expected"], "actual": int(precision)},
             )
             with self.assertRaises(yamaa.Error):
@@ -718,9 +724,13 @@ class PublicEnvironment(unittest.TestCase):
         ):
             result = self.precision_study(precision, output).run()
             self.assertIsNone(result.output)
-            self.assertEqual(result.issues["condition"].to_list(), [condition])
-            self.assertEqual(result.issues["rule"].to_list(), [rule])
-            self.assertEqual(json.loads(result.issues["context"][0]), context)
+            self.assertEqual(
+                result.issues.to_polars()["condition"].to_list(), [condition]
+            )
+            self.assertEqual(result.issues.to_polars()["rule"].to_list(), [rule])
+            self.assertEqual(
+                json.loads(result.issues.to_polars()["context"][0]), context
+            )
             self.assertEqual(self.report(result)["diagnostics"][0]["context"], context)
             with self.assertRaises(yamaa.Error):
                 result.save()
@@ -728,15 +738,17 @@ class PublicEnvironment(unittest.TestCase):
         for invalid in tuple(TRUTH["invalid_significant_digits"]):
             result = self.precision_study(invalid).check()
             self.assertEqual(
-                result.issues["spec_paths"].to_list(), [["output.decimals"]]
+                result.issues.to_polars()["spec_paths"].to_list(), [["output.decimals"]]
             )
-            self.assertFalse(result.issues.is_empty())
+            self.assertGreater(result.issues.num_rows, 0)
         self.precision_study("-1")
         path = self.directory / "spec.yaml"
         path.write_text(path.read_text().replace("VALUE + VALUE", "1 / 0"))
         failed = yamaa.spec(path).run()
         self.assertIsNone(failed.output)
-        self.assertEqual(failed.issues["condition"].to_list(), ["division_by_zero"])
+        self.assertEqual(
+            failed.issues.to_polars()["condition"].to_list(), ["division_by_zero"]
+        )
         with self.assertRaises(yamaa.Error):
             failed.save()
         self.assertFalse((self.directory / "rounded.csv").exists())
@@ -747,16 +759,20 @@ class PublicEnvironment(unittest.TestCase):
                 case = self.study(name)
                 expected = next((case / "expected").glob("*.csv"))
                 project = self.project(case)
-                self.assertTrue(project.check().issues.is_empty())
+                self.assertEqual(project.check().issues.num_rows, 0)
                 runs = project.run()
-                self.assertTrue(runs.issues.is_empty(), runs.issues)
+                self.assertEqual(runs.issues.num_rows, 0, runs.issues)
                 (domain,) = runs.names
                 self.assertIsNotNone(runs[domain].output)
                 self.assertFalse((case / expected.name).exists())
                 for _ in range(2):
                     result = project.spec(domain).run()
-                    self.assertTrue(result.issues.is_empty(), result.issues)
-                    self.assertTrue(result.output.equals(runs[domain].output))
+                    self.assertEqual(result.issues.num_rows, 0, result.issues)
+                    self.assertTrue(
+                        result.output.to_polars().equals(
+                            runs[domain].output.to_polars()
+                        )
+                    )
                     before = self.report(result)
                     self.assertEqual(before["outcome"], "success")
                     self.assertEqual(
@@ -808,9 +824,9 @@ class PublicEnvironment(unittest.TestCase):
             "_installed_providers",
             side_effect=AssertionError("unexpected lock audit"),
         ):
-            self.assertTrue(project.check().issues.is_empty())
+            self.assertEqual(project.check().issues.num_rows, 0)
             result = project.spec("ADSL").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(self.report(result)["activation"]["lock"], "not_requested")
         self.assertTrue(self.report(result)["activation"]["tests"])
         expected = next((case / "expected").glob("*.csv"))
@@ -835,12 +851,12 @@ class PublicEnvironment(unittest.TestCase):
         with no_activation():
             spec = project.spec("TEST")
             for result in (spec.check(), spec.run()):
-                rows = result.issues.to_dicts()
+                rows = result.issues.to_pylist()
                 self.assertEqual(len(rows), 1)
                 rows[0]["context"] = json.loads(rows[0]["context"])
                 self.assertEqual(rows[0], expected)
             # A project check names the specification each issue belongs to.
-            (row,) = project.check().issues.to_dicts()
+            (row,) = project.check().issues.to_pylist()
             row["context"] = json.loads(row["context"])
             self.assertEqual(
                 row,
@@ -862,17 +878,17 @@ class PublicEnvironment(unittest.TestCase):
         case = self.value_study()
         os.chdir(self.previous)
         project = self.project(case)
-        self.assertTrue(project.check().issues.is_empty())
+        self.assertEqual(project.check().issues.num_rows, 0)
         checked = project.spec("TEST").check()
-        self.assertTrue(checked.issues.is_empty(), checked.issues)
+        self.assertEqual(checked.issues.num_rows, 0, checked.issues)
 
     def test_valid_static_check_has_no_host_effects_even_with_missing_data(self):
         case = self.value_study()
         shutil.rmtree(case / "input")
         project = self.project(case)
         with no_activation():
-            self.assertTrue(project.check().issues.is_empty())
-            self.assertTrue(project.spec("TEST").check().issues.is_empty())
+            self.assertEqual(project.check().issues.num_rows, 0)
+            self.assertEqual(project.spec("TEST").check().issues.num_rows, 0)
 
     def test_project_check_validates_original_studies_without_study_inputs(self):
         # The caller's path may be any UTF-8 text; the project file is ASCII.
@@ -886,9 +902,9 @@ class PublicEnvironment(unittest.TestCase):
                 domain = yaml.safe_load((case / "spec.yaml").read_text())["domain"]
                 project = self.project(case)
                 with no_activation():
-                    self.assertTrue(project.check().issues.is_empty())
+                    self.assertEqual(project.check().issues.num_rows, 0)
                     checked = project.spec(domain).check()
-                self.assertTrue(checked.issues.is_empty(), checked.issues)
+                self.assertEqual(checked.issues.num_rows, 0, checked.issues)
                 self.assertEqual(list(case.glob("*.csv")), [])
 
     def test_lock_mismatch_precedes_binding_tests_and_missing_study_data(self):
@@ -910,7 +926,8 @@ class PublicEnvironment(unittest.TestCase):
         self.assertEqual(report["source_reads"], [])
         self.assertEqual(report["activation"]["bindings"], [])
         self.assertEqual(
-            result.issues["condition"].to_list(), ["runtime_artifact_mismatch"]
+            result.issues.to_polars()["condition"].to_list(),
+            ["runtime_artifact_mismatch"],
         )
 
     def test_every_failed_case_is_retained_before_data_and_run_repeats_tests(self):
@@ -940,7 +957,7 @@ class PublicEnvironment(unittest.TestCase):
                         ["result_mismatch", "result_mismatch", "passed"],
                     )
                     self.assertEqual(
-                        result.issues["condition"].to_list(),
+                        result.issues.to_polars()["condition"].to_list(),
                         ["function_conformance_failed"] * 2,
                     )
 
@@ -969,9 +986,9 @@ class PublicEnvironment(unittest.TestCase):
         spec_path.write_text(yaml.safe_dump(spec, sort_keys=False))
         project = yamaa.project(project_file.resolve())
         checked = project.spec("TEST").check()
-        self.assertTrue(checked.issues.is_empty(), checked.issues)
+        self.assertEqual(checked.issues.num_rows, 0, checked.issues)
         result = project.spec("TEST").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertTrue(self.report(result)["verifications"])
         spec["columns"][0]["submission"]["codelist"] = "ABSENT"
         spec["columns"][1]["derivation"]["function"]["args"] = {}
@@ -980,7 +997,7 @@ class PublicEnvironment(unittest.TestCase):
         with patch.object(
             host, "_installed_providers", side_effect=AssertionError("activation")
         ):
-            rows = project.spec("TEST").check().issues.to_dicts()
+            rows = project.spec("TEST").check().issues.to_pylist()
         self.assertEqual({row["rule"] for row in rows}, {"FUNC-5", "CT-1"})
 
     def test_approved_math_is_identical_in_root_row_and_nested_case_compute(self):
@@ -1037,8 +1054,8 @@ class PublicEnvironment(unittest.TestCase):
                         case / "python/environment.yaml",
                     )
                 result = self.project(case).spec("TEST").run()
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["RESULT"].to_list(), [9.0])
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                self.assertEqual(result.output.to_polars()["RESULT"].to_list(), [9.0])
                 self.assertEqual(
                     result.save()[-1], (case / "test.csv").resolve().as_posix()
                 )
@@ -1085,8 +1102,8 @@ class PublicEnvironment(unittest.TestCase):
         ]
         path.write_text(yaml.safe_dump(spec, sort_keys=False))
         result = self.project(case).spec("TEST").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output["RESULT"].to_list(), [4.0])
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
+        self.assertEqual(result.output.to_polars()["RESULT"].to_list(), [4.0])
         self.assertEqual(result.save()[-1], (case / "test.csv").resolve().as_posix())
         self.assertEqual((case / "test.csv").read_bytes(), b"ID,RESULT\n01,4\n")
 
@@ -1108,7 +1125,7 @@ class PublicEnvironment(unittest.TestCase):
         self.assertIsNone(result.output)
         self.assertIsNone(result.report)
         self.assertIsNone(result._native.observations())
-        self.assertFalse(result.issues.is_empty())
+        self.assertGreater(result.issues.num_rows, 0)
         with self.assertRaises(yamaa.Error):
             result.save()
         # The run owns the original host failure exactly as long as it lives.
@@ -1143,7 +1160,7 @@ class PublicEnvironment(unittest.TestCase):
         shutil.copyfile(case / "r/renv.lock", case / "python/uv.lock")
         with no_activation():
             self.assertEqual(
-                project.check().issues.to_dicts(),
+                project.check().issues.to_pylist(),
                 [lock_kind("python/environment.yaml")],
             )
         shutil.copyfile(
@@ -1157,7 +1174,7 @@ class PublicEnvironment(unittest.TestCase):
             "adam: {specs: [spec.yaml]}\n"
         )
         with no_activation():
-            rows = project.check().issues.to_dicts()
+            rows = project.check().issues.to_pylist()
         self.assertEqual(rows[0], lock_kind("r/environment.yaml"))
         self.assertEqual(
             [(row["condition"], json.loads(row["context"])["reason"]) for row in rows],
@@ -1177,7 +1194,7 @@ class PublicEnvironment(unittest.TestCase):
             )
         )
         with no_activation():
-            (row,) = project.check().issues.to_dicts()
+            (row,) = project.check().issues.to_pylist()
         self.assertEqual(
             (row["condition"], row["rule"], row["spec_paths"]),
             ("unknown_field", "SCHEMA-13", ["language"]),
@@ -1196,7 +1213,7 @@ class PublicEnvironment(unittest.TestCase):
         env.write_text(yaml.safe_dump(source, sort_keys=False))
         project = self.project(case)
         result = project.spec("TEST").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(
             [b["function"] for b in self.report(result)["activation"]["bindings"]],
             ["project_value"],
@@ -1210,7 +1227,7 @@ class PublicEnvironment(unittest.TestCase):
         )
         with no_activation():
             result = project.spec("TEST").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(self.report(result)["activation"]["tests"], [])
 
     def test_aggregate_callback_keeps_original_current_types_and_selected_record(self):
@@ -1242,9 +1259,10 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
         (case / "input.csv").write_text("ID,N\n1,10\n1,30\n2,40\n")
         project = self.project(case)
         result = project.spec("TEST").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(
-            result.output.rows(), [(1, 10.0, 20.0), (1, 30.0, 60.0), (2, 40.0, 40.0)]
+            result.output.to_polars().rows(),
+            [(1, 10.0, 20.0), (1, 30.0, 60.0), (2, 40.0, 40.0)],
         )
         observed = self.report(result)
         self.assertEqual(
@@ -1262,7 +1280,7 @@ output: {path: output.csv, columns: [ID, N, VALUE]}
             spec.replace(", order_by: [SRC.ID], keep: first", "")
         )
         with no_activation():
-            issues = project.spec("TEST").check().issues.to_dicts()
+            issues = project.spec("TEST").check().issues.to_pylist()
         self.assertTrue(
             any(
                 row["condition"] == "invalid_derive_step" and row["rule"] == "LOOKUP-22"
@@ -1305,8 +1323,8 @@ output: {{path: output.csv, columns: [ID, VALUE]}}
 """
             (case / "spec.yaml").write_text(spec)
             result = project.spec("TEST").run()
-            self.assertTrue(result.issues.is_empty(), result.issues)
-            self.assertEqual(result.output.rows(), rows)
+            self.assertEqual(result.issues.num_rows, 0, result.issues)
+            self.assertEqual(result.output.to_polars().rows(), rows)
             activation = self.report(result)["activation"]
             self.assertEqual(
                 [row["function"] for row in activation["bindings"]], ["project_value"]
@@ -1345,9 +1363,10 @@ columns:
 output: {path: output.csv, columns: [ID, N, VALUE]}
 """)
         result = self.project(case).spec("TEST").run()
-        self.assertTrue(result.issues.is_empty(), result.issues)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(
-            result.output.rows(), [(1, 10.0, 10.0), (1, 30.0, 10.0), (2, 40.0, 40.0)]
+            result.output.to_polars().rows(),
+            [(1, 10.0, 10.0), (1, 30.0, 10.0), (2, 40.0, 40.0)],
         )
         activation = self.report(result)["activation"]
         self.assertEqual(

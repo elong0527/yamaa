@@ -138,7 +138,7 @@ def problems(result):
                 if key in facts
             },
         )
-        for issue in result.issues.to_dicts()
+        for issue in result.issues.to_pylist()
     ]
 
 
@@ -156,7 +156,7 @@ def test_a_run_verifies_its_uv_lock_in_the_engine(study):
     lock(study, (INSTALLED, None))
     result = run(study)
     assert problems(result) == []
-    assert result.output["TEXT"].to_list() == ["a"]
+    assert result.output.to_polars()["TEXT"].to_list() == ["a"]
     lock(study, ("999999.0", None))
     result = run(study)
     assert result.output is None

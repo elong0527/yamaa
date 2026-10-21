@@ -71,17 +71,21 @@ class PublicPortableMath(unittest.TestCase):
             with self.subTest(case=name):
                 result = self.build(self.specification(expression, operands))
                 if expected in {"ln_of_nonpositive", "invalid_power"}:
-                    self.assertEqual(result.issues["condition"].to_list(), [expected])
-                    self.assertEqual(result.issues["phase"].to_list(), ["derivation"])
                     self.assertEqual(
-                        result.issues["rule"].to_list(),
+                        result.issues.to_polars()["condition"].to_list(), [expected]
+                    )
+                    self.assertEqual(
+                        result.issues.to_polars()["phase"].to_list(), ["derivation"]
+                    )
+                    self.assertEqual(
+                        result.issues.to_polars()["rule"].to_list(),
                         ["FORMULA-15"],
                     )
                     self.assertEqual(
-                        result.issues["spec_paths"].to_list(),
+                        result.issues.to_polars()["spec_paths"].to_list(),
                         [["columns.VALUE.derivation.compute"]],
                     )
-                    context = json.loads(result.issues["context"][0])
+                    context = json.loads(result.issues.to_polars()["context"][0])
                     self.assertEqual(context["expr"], expression)
                     self.assertEqual(context["keys"], [{"ID": 1}])
                     if function == "POWER":
@@ -90,9 +94,9 @@ class PublicPortableMath(unittest.TestCase):
                             struct.pack(">d", context["exponent"]).hex(), right
                         )
                     continue
-                self.assertTrue(result.issues.is_empty(), result.issues)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
                 expected = None if expected == "missing" else expected
-                value = result.output["VALUE"][0]
+                value = result.output.to_polars()["VALUE"][0]
                 self.assertEqual(
                     None if value is None else struct.pack(">d", value).hex(), expected
                 )
@@ -110,8 +114,8 @@ class PublicPortableMath(unittest.TestCase):
                 result = self.build(
                     self.specification("POWER(A, B)", operands, "int", True)
                 )
-                self.assertTrue(result.issues.is_empty(), result.issues)
-                self.assertEqual(result.output["VALUE"][0], expected)
+                self.assertEqual(result.issues.num_rows, 0, result.issues)
+                self.assertEqual(result.output.to_polars()["VALUE"][0], expected)
                 observation = json.loads(result._native.observations())
                 self.assertEqual(
                     observation["handler_counts"],
@@ -151,14 +155,19 @@ class PublicPortableMath(unittest.TestCase):
         )
         specification["output"]["columns"] = ["ID", "VALUE", "ABOVE", "ROUNDED"]
         result = self.build(specification)
-        self.assertTrue(result.issues.is_empty(), result.issues)
-        self.assertEqual(result.output.columns, ["ID", "VALUE", "ABOVE", "ROUNDED"])
-        self.assertEqual(result.output.height, 1)
-        self.assertEqual(result.output["ID"][0], 1)
-        self.assertEqual(struct.pack(">d", result.output["VALUE"][0]).hex(), value_bits)
-        self.assertEqual(result.output["ABOVE"][0], above)
+        self.assertEqual(result.issues.num_rows, 0, result.issues)
         self.assertEqual(
-            struct.pack(">d", result.output["ROUNDED"][0]).hex(), rounded_bits
+            result.output.column_names, ["ID", "VALUE", "ABOVE", "ROUNDED"]
+        )
+        self.assertEqual(result.output.num_rows, 1)
+        self.assertEqual(result.output.to_polars()["ID"][0], 1)
+        self.assertEqual(
+            struct.pack(">d", result.output.to_polars()["VALUE"][0]).hex(), value_bits
+        )
+        self.assertEqual(result.output.to_polars()["ABOVE"][0], above)
+        self.assertEqual(
+            struct.pack(">d", result.output.to_polars()["ROUNDED"][0]).hex(),
+            rounded_bits,
         )
         self.assertEqual(
             result.save(), [(self.root / "result.csv").resolve().as_posix()]
@@ -174,7 +183,7 @@ class PublicPortableMath(unittest.TestCase):
         ]
         verified = self.build(specification)
         self.assertEqual(
-            verified.issues.to_dicts(),
+            verified.issues.to_pylist(),
             [
                 {
                     "severity": "error",

@@ -27,7 +27,7 @@ import yamaa
 conditions = []
 for path in sys.argv[1:]:
     run = yamaa.spec(path).run()
-    conditions.append(run.issues["condition"].to_list())
+    conditions.append(run.issues.to_polars()["condition"].to_list())
     if run.output is not None:
         run.save()
 print(json.dumps(conditions))
@@ -58,12 +58,12 @@ class ParquetContainment(unittest.TestCase):
         ]
         for _ in range(2):
             result = yamaa.spec(self.specs["contained_panic_parquet"]).run()
-            self.assertEqual(result.issues.to_dicts(), expected)
+            self.assertEqual(result.issues.to_pylist(), expected)
             self.assertIsNone(result.output)
             with self.assertRaises(yamaa.Error):
                 result.save()
             result = yamaa.spec(self.specs["readable_parquet"]).run()
-            self.assertTrue(result.issues.is_empty())
+            self.assertEqual(result.issues.num_rows, 0)
             result.save()
             self.assertEqual(
                 self.saved.read_bytes(), TRUTH["readable_csv"].encode("utf-8")
