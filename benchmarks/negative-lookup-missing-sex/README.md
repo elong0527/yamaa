@@ -23,7 +23,7 @@ accepted.
 Recover the missing sex when possible. If an incomplete lookup key is
 intended to leave the upper limit missing, drop `require_match: true`; a
 result with a blank sex then gets a missing `LBSTNRHI`, counted under
-`no_match`:
+`absent`:
 
 ```yaml
 intermediates:
@@ -34,4 +34,4 @@ intermediates:
 
 An incomplete key and a complete key the table does not contain share one
 absence policy (LOOKUP-24): both yield nothing, and `require_match` or
-`no_match` decides whether that fails or answers with a value.
+`absent` decides whether that fails or answers with a value.

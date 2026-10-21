@@ -30,6 +30,7 @@ items, and every non-missing value must equal one of them:
     codelist: SEX
     origins:
       - type: Collected
+        source: Investigator
 ```
 
 To accept fewer codes than the published list, bind a sponsor codelist

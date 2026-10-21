@@ -26,4 +26,4 @@ case:
 ```
 
 When every subject genuinely takes the same value, write that value alone,
-`{literal: "N"}`, without `case`.
+`derivation: "'N'"`, without `case`.

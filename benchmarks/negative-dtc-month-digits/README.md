@@ -29,5 +29,5 @@ input:
 ```
 
 If a malformed part should leave the start empty rather than stop the
-run, declare that outcome explicitly with `invalid: {literal: null}` on
-the `dtc` operation, and review the records it empties.
+run, declare that outcome explicitly with `invalid: null` on the `dtc`
+operation, and review the records it empties.

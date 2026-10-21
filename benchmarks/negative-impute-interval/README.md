@@ -35,5 +35,5 @@ before completing it:
 
 and complete `ASTDTC` instead of `AE.AESTDTC`. If an onset recorded as a
 period should have no analysis date, declare that outcome with
-`invalid: {literal: null}` on `impute`; it then answers every start that
-names no single date.
+`invalid: null` on `impute`; it then answers every start that names no
+single date.

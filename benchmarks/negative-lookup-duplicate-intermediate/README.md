@@ -33,9 +33,9 @@ intermediates:
     keep: last
 ```
 
-The `no_match` line leaves `EOSDT` blank for a subject with no
-eligible record, one whose only disposition records are screen
-failures, instead of failing the lookup.
+A subject with no eligible record, one whose only disposition records
+are screen failures, then gets a blank `EOSDT`: a lookup that finds no
+record answers with a missing value instead of failing.
 
 Keep the uniqueness assertion only for eligible sets that truly
 carry each key once.

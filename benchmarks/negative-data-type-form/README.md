@@ -27,6 +27,7 @@ submission:
   data_type: partialDate
   origins:
     - type: Collected
+      source: Investigator
 ```
 
 When every birth date was in fact collected in full, correct the record
