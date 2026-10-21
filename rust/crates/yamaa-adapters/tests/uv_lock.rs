@@ -440,6 +440,31 @@ fn editable_distribution_names_normalize_and_versions_compare_by_value() {
 }
 
 #[test]
+fn a_distribution_reported_twice_is_one_needed_distribution() {
+    // A site directory that two path entries reach, as `lib` and `lib64` are
+    // on RHEL-family systems, lists a distribution twice; it is one package,
+    // observed and reported once.
+    let mut host = Host::new(
+        &[("yamaa", "0.2.0"), ("a", "1")],
+        &[("shared", &["a", "a", "A"])],
+    );
+    assert_eq!(
+        verify_uv(
+            &lock(&[("yamaa", "0.2.0", None), ("a", "2", None)]),
+            &["shared.run"],
+            &mut host
+        ),
+        Ok(vec![finding(
+            "a",
+            Reason::VersionMismatch,
+            &["2"],
+            Some("1")
+        )])
+    );
+    assert_eq!(host.trace, ["providers", "version a", "version yamaa"]);
+}
+
+#[test]
 fn distribution_with_stdlib_root_name_is_version_checked_before_exemption() {
     let mut host = Host::new(
         &[("yamaa", "0.2.0"), ("shadow-statistics", "2")],

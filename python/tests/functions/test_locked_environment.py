@@ -517,6 +517,26 @@ def test_editable_without_top_level_names_maps_actual_recorded_module_without_im
     assert "project_bmi" not in sys.modules
 
 
+def test_a_distribution_on_two_path_entries_provides_its_modules_once(
+    tmp_path, monkeypatch
+):
+    # A site directory that two path entries reach, as `lib` and `lib64` are
+    # on RHEL-family systems, lists each of its distributions twice.
+    site = tmp_path / "lib"
+    info = site / "yamaa_twice-1.0.dist-info"
+    info.mkdir(parents=True)
+    (info / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: yamaa-twice\nVersion: 1.0\n"
+    )
+    (info / "top_level.txt").write_text("yamaa_twice\n")
+    monkeypatch.setattr(sys, "path", [str(site), str(site / ".")])
+    assert metadata.packages_distributions()["yamaa_twice"] == [
+        "yamaa-twice",
+        "yamaa-twice",
+    ]
+    assert m._installed_providers(("yamaa_twice",)) == {"yamaa_twice": ["yamaa-twice"]}
+
+
 def test_namespace_editable_providers_are_added_even_when_other_distribution_is_mapped(
     tmp_path, monkeypatch
 ):
