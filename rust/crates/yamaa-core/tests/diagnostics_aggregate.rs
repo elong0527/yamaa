@@ -1146,18 +1146,28 @@ mod diagnostics {
                     source(NCI, cited, "SECOND"),
                 ])
                 .unwrap();
-                let xml = String::from_utf8(submission_xml::render(&study).unwrap()).unwrap();
+                // The model the Define-XML encoder writes (the adapters'
+                // `tests/submission_encoders.rs` checks the document): one
+                // terminology standard that both bound codelists cite.
+                let terminology: Vec<_> = study
+                    .standards()
+                    .iter()
+                    .filter(|standard| standard.id == "CT_SDTM")
+                    .collect();
+                assert_eq!(terminology.len(), 1, "{:?}", study.standards());
+                assert_eq!(terminology[0].version, cited);
                 assert_eq!(
-                    xml.matches("<def:Standard OID=\"STD.CT_SDTM\"").count(),
-                    1,
-                    "{xml}"
+                    study
+                        .codelists()
+                        .iter()
+                        .map(|list| (list.declaration.id.name.as_str(), list.standard.as_deref()))
+                        .collect::<Vec<_>>(),
+                    [("FIRST", Some("CT_SDTM")), ("SECOND", Some("CT_SDTM"))]
                 );
-                assert_eq!(
-                    xml.matches("def:StandardOID=\"STD.CT_SDTM\"").count(),
-                    2,
-                    "{xml}"
-                );
-                assert!(!xml.contains(later), "{xml}");
+                assert!(study
+                    .standards()
+                    .iter()
+                    .all(|standard| standard.version != later));
                 // A later release, or another of the standard names Define-XML
                 // publishes, under the publishing set already cited.
                 for (name, version) in [(NCI, later), ("BIMO", cited)] {
