@@ -9,6 +9,7 @@ SDTM and ADaM datasets and define.xml files.
 |---|---|---|
 | Build one dataset | `yamaa_spec(path)$run()$save()` | `yamaa.spec(path).run().save()` |
 | Build one project dataset | `project$spec("DM")$run()$save()` | `project.spec("DM").run().save()` |
+| A project's specifications | `project$names` | `project.names` |
 | Build every SDTM dataset | `project$run("sdtm")$save()` | `project.run("sdtm").save()` |
 | Build every ADaM dataset | `project$run("adam")$save()` | `project.run("adam").save()` |
 | One dataset of a project run | `runs[["ADSL"]]$output` | `runs["ADSL"].output` |
@@ -322,6 +323,7 @@ checked or run without its project, fails before any data is read with
 
     ```r
     project <- yamaa_project("project.yaml")
+    project$names             # every specification, in run order
     adae <- project$spec("ADAE")
     adae$run()$save()
     project$check()$issues    # every specification, no data read
@@ -331,6 +333,7 @@ checked or run without its project, fails before any data is read with
 
     ```python
     project = yamaa.project("project.yaml")
+    project.names             # every specification, in run order
     adae = project.spec("ADAE")
     adae.run().save()
     project.check().issues    # every specification, no data read
@@ -338,7 +341,9 @@ checked or run without its project, fails before any data is read with
 
 Only specifications listed in the project have names, and each name is unique
 across the project. An unknown name raises an error that lists the names the
-project has.
+project has. `names` lists them in the order a run of every section builds
+them, each specification after the ones it reads from, and reads no study
+data; it raises when the project file cannot be read or lists a name twice.
 
 The project's `check()` checks every listed specification as `spec(name)`
 would. It also reports two listings that share a name, specifications that
@@ -391,7 +396,9 @@ benchmark shows. With `datasets: json` or `datasets: xpt` in a section, it also
 writes each saved dataset as one Dataset-JSON or SAS Transport version 5 file
 next to define.xml.
 Its `save()` writes each section's transport files, then its define.xml, and
-returns the paths it wrote.
+returns the paths it wrote. Its `created` is the creation time that the
+documents carry: the `created` you gave, or else the time the submission read
+once and gave every section.
 
 === "R"
 

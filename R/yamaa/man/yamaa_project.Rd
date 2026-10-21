@@ -44,8 +44,12 @@ yamaa_project(path)
   \item{...}{Unused.}
 }
 \value{
-An object with four methods:
+An object with a read-only field and four methods:
 \describe{
+  \item{\code{$names}}{The \code{domain} names of the listed specifications,
+    in the order that a run of every section builds them, each after the ones
+    it reads from, read without study data. A project file that cannot be read,
+    or that lists a name twice, raises.}
   \item{\code{$spec(name)}}{The listed specification whose \code{domain} is
     \code{name}, with the project's codelists and functions.}
   \item{\code{$check()}}{Static findings for every listed specification, with
@@ -63,6 +67,8 @@ An object with four methods:
   \item{\code{$submission(section = NULL, created = NULL)}}{define.xml, and
     a Dataset-JSON or SAS Transport version 5 file per dataset where a section
     sets \code{datasets: json} or \code{datasets: xpt}, with \code{$status},
+    \code{$created}, the ISO 8601 creation time the documents carry (the
+    \code{created} given, or else the time read once for every section),
     \code{$issues} and \code{$save()}, which writes each section's transport
     files and then its define.xml.}
 }

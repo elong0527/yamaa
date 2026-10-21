@@ -507,6 +507,17 @@ fn project_spec(project: Raw, name: Raw, version: Raw) -> List {
     })
 }
 
+/// The listed specifications' names in run order, read without data (D45).
+#[extendr]
+fn project_names(project: Raw, version: Raw) -> List {
+    reply(|| {
+        let names = engine(&version, None)?
+            .project_names(&text(&project)?)
+            .map_err(Refusal::Failure)?;
+        Ok(Strings::from_values(names).into_robj())
+    })
+}
+
 #[extendr]
 fn project_check(project: Raw, version: Raw) -> List {
     reply(|| {
@@ -699,6 +710,18 @@ fn submission_status(handle: Robj) -> List {
             .try_borrow()
             .map_err(|_| "submission handle in use")?;
         Ok(r!(submission.status().as_str()))
+    })
+}
+
+/// The creation time the documents carry (D69, D129).
+#[extendr]
+fn submission_created(handle: Robj) -> List {
+    reply(|| {
+        let submission = submission_of(&handle)?;
+        let submission = submission
+            .try_borrow()
+            .map_err(|_| "submission handle in use")?;
+        Ok(r!(submission.created()))
     })
 }
 

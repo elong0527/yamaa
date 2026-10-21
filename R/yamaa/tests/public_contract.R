@@ -419,7 +419,10 @@ qualify_project_run_members <- function() {
   writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readLines(entry), fixed = TRUE), entry)
   project <- yamaa_project(file.path(case, "project.yaml"))
   runs <- project$run()
-  stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L)
+  stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L,
+    # The project names what a run of every section builds, read without data
+    # (D45).
+    identical(project$names, runs$names))
   member <- runs[["TEST"]]
   single <- project$spec("TEST")$run()
   stopifnot(identical(members(member), expected_members("member_run")),
@@ -440,9 +443,14 @@ qualify_project_run_members <- function() {
   error <- refusal(project$run("sdtm")$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_project_run_save", listing)),
     nothing_to_save(error, "PROJECT-12"))
-  error <- refusal(project$submission()$save())
+  submission <- project$submission()
+  error <- refusal(submission$save())
   stopifnot(identical(conditionMessage(error), error_text("empty_submission_save", listing)),
-    nothing_to_save(error, "PROJECT-13"))
+    nothing_to_save(error, "PROJECT-13"),
+    # Without a creation time the submission reads the clock once and reports
+    # the time it gave every section (D129).
+    grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$", submission$created),
+    identical(project$names, "TEST"))
   stopifnot(identical(project$run("adam")$names, "TEST"), identical(project$run("sdtm")$names, character()),
     !file.exists(file.path(case, "test.csv")), returns_paths(runs$save()),
     identical(readBin(file.path(case, "test.csv"), "raw", 100L), charToRaw("ID,RESULT\n01,1.5\n")))
@@ -536,6 +544,9 @@ qualify_project_refusals <- function() {
     identical(unread$condition, "project_environment_missing"),
     identical(unread$spec_paths, list("environment")),
     identical(check_issues(project$check()$issues), unread))
+  error <- refusal(project$names)
+  stopifnot(identical(conditionMessage(error), error_text("unread_project_names", absent)),
+    identical(error$issues, unread))
   runs <- project$run()
   stopifnot(identical(runs$names, character()), identical(check_issues(runs$issues), unread),
     identical(names(runs$report), fixture_strings(host_truth[["report_columns"]])),
@@ -548,7 +559,9 @@ qualify_project_refusals <- function() {
   stopifnot(identical(conditionMessage(error), error_text("no_member_built")), unknown_member(error, "[]"))
   submission <- project$submission("sdtm", created = "2026-09-11T00:00:00")
   stopifnot(identical(members(submission), expected_members("submission")),
-    identical(check_issues(submission$issues), unread))
+    identical(check_issues(submission$issues), unread),
+    # The creation time given is kept, though nothing composed (D129).
+    identical(submission$created, "2026-09-11T00:00:00"))
   locked(submission, c(fixture_strings(host_truth[["read_only_views"]][["submission"]]), "save"))
   for (attempt in 1:2) {
     error <- refusal(submission$save())

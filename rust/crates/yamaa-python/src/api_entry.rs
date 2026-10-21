@@ -406,6 +406,11 @@ impl Submission {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         Ok(guard.status().as_str())
     }
+    /// The creation time the documents carry (D69, D129).
+    fn created(&self) -> PyResult<String> {
+        let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
+        Ok(guard.created().to_owned())
+    }
     fn issues(&self) -> PyResult<ArrowTable> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         Ok(ArrowTable::from(&guard.issues()))
@@ -429,6 +434,14 @@ impl Submission {
 pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<String> {
     engine(py)
         .project_spec(project, name)
+        .map_err(|failure| raise(py, failure))
+}
+
+/// The listed specifications' names in run order, read without data (D45).
+#[pyfunction]
+pub fn _project_names(py: Python<'_>, project: &str) -> PyResult<Vec<String>> {
+    engine(py)
+        .project_names(project)
         .map_err(|failure| raise(py, failure))
 }
 

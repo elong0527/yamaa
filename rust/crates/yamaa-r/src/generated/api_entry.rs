@@ -21,6 +21,7 @@ extendr_module! {
     fn run_interrupt;
     fn project_spec;
     fn project_summary;
+    fn project_names;
     fn project_check;
     fn project_run;
     fn project_run_status;
@@ -37,6 +38,7 @@ extendr_module! {
     fn project_run_interrupt;
     fn project_submission;
     fn submission_status;
+    fn submission_created;
     fn submission_issues;
     fn submission_save;
     fn submission_summary;

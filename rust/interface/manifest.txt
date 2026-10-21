@@ -185,6 +185,7 @@ public.classes.ProjectRun.save: method; returns paths_written; raises refusal
 public.classes.ProjectRun.summary: printing; python __repr__; r print, format
 public.classes.Submission: python yamaa.Submission; r yamaa_submission
 public.classes.Submission.status: property; returns status
+public.classes.Submission.created: property; returns text
 public.classes.Submission.issues: property; returns table; table issues
 public.classes.Submission.save: method; returns paths_written; raises refusal
 public.classes.Submission.summary: printing; python __repr__; r print, format
@@ -196,6 +197,7 @@ public.classes.Spec.summary: printing; python __repr__; r print, format
 public.classes.Project: python yamaa.Project; r yamaa_project
 public.classes.Project.spec: method; returns Spec; raises refusal
 public.classes.Project.spec.args[0]: name: text
+public.classes.Project.names: property; returns names; raises refusal
 public.classes.Project.check: method; returns Check; raises refusal
 public.classes.Project.run: method; returns ProjectRun; raises refusal
 public.classes.Project.run.args[0]: section: optional_text = None

@@ -190,6 +190,11 @@ class Submission:
         return self._native.status()
 
     @property
+    def created(self) -> str:
+        """The ISO 8601 creation time the documents carry, as given or as read once for every section."""
+        return self._native.created()
+
+    @property
     def issues(self) -> _pl.DataFrame:
         return _table(self._native.issues())
 
@@ -235,6 +240,11 @@ class Project(_Lazy):
     def spec(self, name: str) -> Spec:
         """The listed specification whose `domain` is `name`."""
         return Spec(_call(_native._project_spec, self._path, name), self._path)
+
+    @property
+    def names(self) -> list[str]:
+        """The listed specifications by `domain` name, in run order, read without study data."""
+        return _call(_native._project_names, self._path)
 
     def check(self) -> Check:
         return Check(_call(_native._project_check, self._path))

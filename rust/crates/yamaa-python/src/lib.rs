@@ -25,6 +25,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(api_entry::_spec_resolve, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_spec, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_summary, module)?)?;
+    module.add_function(wrap_pyfunction!(api_entry::_project_names, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_check, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_run, module)?)?;
     module.add_function(wrap_pyfunction!(api_entry::_project_submission, module)?)?;

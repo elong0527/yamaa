@@ -137,6 +137,7 @@ yamaa::api::Check::summary: pub fn summary(&self) -> Summary
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine: impl Engine
 yamaa::api::Engine::project_check: pub fn project_check(&self, project: &str, token: &CancellationToken) -> Result<Check, Error>
+yamaa::api::Engine::project_names: pub fn project_names(&self, project: &str) -> Result<Vec<String>, Failure>
 yamaa::api::Engine::project_run: pub fn project_run(&self, project: &str, section: Option<&str>, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_run_reusing: pub fn project_run_reusing(&self, project: &str, section: Option<&str>, plans: &Plans, token: &CancellationToken) -> Result<ProjectRun, Error>
 yamaa::api::Engine::project_spec: pub fn project_spec(&self, project: &str, name: &str) -> Result<String, Failure>

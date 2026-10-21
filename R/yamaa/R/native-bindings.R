@@ -81,6 +81,10 @@
   .Call(wrap__project_summary, project)
 }
 
+.native_project_names <- function(project, version) {
+  .Call(wrap__project_names, project, version)
+}
+
 .native_project_check <- function(project, version) {
   .Call(wrap__project_check, project, version)
 }
@@ -143,6 +147,10 @@
 
 .native_submission_status <- function(handle) {
   .Call(wrap__submission_status, handle)
+}
+
+.native_submission_created <- function(handle) {
+  .Call(wrap__submission_created, handle)
 }
 
 .native_submission_issues <- function(handle) {

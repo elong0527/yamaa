@@ -109,6 +109,7 @@ format.yamaa_project_run <- function(x, ...) {
   object <- new.env(parent = emptyenv())
   object$.handle <- native
   .read_only(object, "status", function() .reply(.native_submission_status(native)))
+  .read_only(object, "created", function() .reply(.native_submission_created(native)))
   .read_only(object, "issues", function() .reply(.native_submission_issues(native)))
   object$save <- function() invisible(.reply(.native_submission_save(native)))
   .object(object, "yamaa_submission")
@@ -157,6 +158,7 @@ format.yamaa_spec <- function(x, ...) {
   object$spec <- function(name) {
     .spec(.text(.reply(.native_project_spec(path, .text(name, "name"), .version())), "path"), path)
   }
+  .read_only(object, "names", function() .reply(.native_project_names(path, .version())))
   object$check <- function() .check(.reply(.native_project_check(path, .version())))
   object$run <- function(section = NULL) {
     plans <<- .reply(.native_plans(plans))

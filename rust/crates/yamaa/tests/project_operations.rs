@@ -188,6 +188,67 @@ fn save_refusal(subject: &str, failure: &yamaa::Failure) -> String {
     )
 }
 
+/// D45: a project's names in run order, producer first, as a run of every
+/// section orders them, read without data. A listing that cannot be read has
+/// no name, as in a run; a project that cannot be read, or that lists a name
+/// twice, refuses as `cannot read <project>` (D39).
+#[test]
+fn project_names_list_the_run_order_and_refuse_as_a_read() {
+    let study = study();
+    let engine = engine();
+    // ADSL, listed first, reads DM, so DM runs before it.
+    study.write(
+        "project.yaml",
+        "schema_version: '1.0'\nsdtm:\n  specs: [adam/adsl.yaml, sdtm/dm.yaml, sdtm/ae.yaml]\n",
+    );
+    let names = engine.project_names(&study.project()).unwrap();
+    assert_eq!(names, ["DM", "ADSL", "AE"]);
+    let runs = engine
+        .project_run(&study.project(), None, &CancellationToken::new())
+        .unwrap();
+    assert_eq!(runs.names(), names);
+
+    study.write(
+        "project.yaml",
+        PROJECT.replace("sdtm/ae.yaml", "sdtm/absent.yaml"),
+    );
+    assert_eq!(
+        engine.project_names(&study.project()).unwrap(),
+        ["DM", "ADSL"]
+    );
+
+    study.write("adam/dm.yaml", DM.replace("../out/dm", "../out/dm-copy"));
+    study.write(
+        "project.yaml",
+        PROJECT.replace("[adam/adsl.yaml]", "[adam/adsl.yaml, adam/dm.yaml]"),
+    );
+    let duplicate = engine.project_names(&study.project()).unwrap_err();
+    assert!(
+        duplicate.message.starts_with(&format!("cannot read {}: ", study.project()))
+            && duplicate
+                .message
+                .ends_with("the project lists two specifications named DM [duplicate_specification_name, PROJECT-5]"),
+        "{}",
+        duplicate.message
+    );
+    assert_eq!(
+        conditions(&duplicate.issues),
+        ["duplicate_specification_name"]
+    );
+    assert!(duplicate.paths.is_empty());
+
+    let absent = study.path("absent.yaml");
+    let missing = engine.project_names(&absent).unwrap_err();
+    assert!(
+        missing
+            .message
+            .starts_with(&format!("cannot read {absent}: ")),
+        "{}",
+        missing.message
+    );
+    assert_eq!(rows(&missing.issues).len(), 1);
+}
+
 #[test]
 fn names_select_listed_specifications_and_refuse_unknown_or_shared_names() {
     let study = study();

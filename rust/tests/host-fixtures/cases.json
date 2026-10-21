@@ -4666,6 +4666,7 @@
         ],
         "project": [
           "check",
+          "names",
           "run",
           "spec",
           "submission"
@@ -4695,6 +4696,7 @@
           "status"
         ],
         "submission": [
+          "created",
           "issues",
           "save",
           "status"
@@ -4762,6 +4764,7 @@
         ],
         "submission": [
           "status",
+          "created",
           "issues"
         ]
       },
@@ -4770,6 +4773,7 @@
         "missing_run_save": "cannot save {path}: the engine refused the operation in its prepare stage: resource_missing [engine_rejected]",
         "resolve": "cannot resolve {path}: the engine refused the operation in its prepare stage: resource_missing [engine_rejected]",
         "unread_project": "cannot select TEST: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
+        "unread_project_names": "cannot read {path}: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
         "unknown_section_run": "cannot select bogus: the project declares no section bogus [unknown_section, PROJECT-14]",
         "unknown_section_submission": "cannot select bogus: the project declares no section bogus [unknown_section, PROJECT-14]",
         "refused_project_run_save": "cannot save {path}: environment needs an environment file for this host that is not declared or cannot be read [project_environment_missing, FUNC-1]",
