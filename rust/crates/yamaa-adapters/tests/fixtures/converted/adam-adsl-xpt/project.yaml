@@ -1,0 +1,19 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: CATH
+  name: CATH
+  description: Example study submitting subject-level analysis data in SAS transport
+  protocol_name: CATH-01
+adam:
+  standards:
+  - name: ADaMIG
+    version: '1.3'
+    status: Final
+  specs:
+  - spec.yaml
+  define: define.xml
+  transport: xpt
+  context: Submission
+  source_system_version: '1.0'
