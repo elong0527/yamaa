@@ -48,7 +48,7 @@ other configuration.
 | `yaml` | Saphyr parser and adapter scalar decoding; admits specification, schema, environment and project-lock YAML bytes, and the files `lint` checks. |
 | `parquet` | Parquet source and artifact encoding, schema metadata, and Brotli, Gzip, LZ4, Snappy and Zstd codecs. Zstd builds native C through `zstd-sys` and `cc`. |
 | `readstat` | Bundled read-only C backend and direct `cc` build dependency for `.sas7bdat` and `.xpt` input. |
-| `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table. |
+| `odm` | The `quick-xml` tokenizer and the pure-Rust Gzip codec; reads CDISC ODM 1.3 and 2.0 XML clinical items from plain XML or plain/Gzip TAR files into the fixed clinical-item table, for `read_odm` and for a specification's `.xml` inputs. |
 | No format features | CSV and Arrow table/IPC representation remain available, including supplied Arrow batches. No YAML parser, Parquet codec, ODM XML reader, ReadStat or native compression build is selected. |
 
 Arrow arrays, buffers, schemas, IPC and FlatBuffers are representation and host
@@ -64,9 +64,9 @@ returns `parquet_source::Error::ReaderUnavailable`, Parquet output returns
 `sas_source::Error::Unavailable`, and ODM XML input returns
 `odm_xml::Error::Unavailable`. These capability failures do not become
 malformed-source language findings. Capture and ingest boundary replies expose
-`yaml_reader_unavailable`, `parquet_reader_unavailable` and
-`sas_reader_unavailable`; unavailable Parquet compression retains its separate
-`parquet_codec_unavailable` code.
+`yaml_reader_unavailable`, `parquet_reader_unavailable`,
+`sas_reader_unavailable` and `odm_reader_unavailable`; unavailable Parquet
+compression retains its separate `parquet_codec_unavailable` code.
 
 The Release compatibility workflow's Rust job adds two minimal facade builds:
 no optional formats and YAML + Parquet. Each compiles the adapter's unit tests,
@@ -531,8 +531,8 @@ With no format feature, CSV and Arrow routes remain, exactly as described in
 the feature table above. A capability a build omits fails the same way it does
 today: the stable codes (`yaml_reader_unavailable`,
 `parquet_reader_unavailable`, `sas_reader_unavailable`,
-`parquet_codec_unavailable`) surface as diagnostics or as
-`Error::Unavailable`. The facade adds no native dependencies of its own.
+`odm_reader_unavailable`, `parquet_codec_unavailable`) surface as
+diagnostics or as `Error::Unavailable`. The facade adds no native dependencies of its own.
 
 ### Stability policy
 
