@@ -22,6 +22,51 @@ def write(destination: Path, name: str, table: pa.Table, **options):
     pq.write_table(table, destination / (name + ".parquet"), **options)
 
 
+class WellKnownBinary(pa.ExtensionType):
+    """The GeoArrow WKB type, which PyArrow writes as a Parquet GEOMETRY, or
+    as a GEOGRAPHY when its metadata names spherical edges."""
+
+    def __init__(self, metadata: bytes = b"{}"):
+        self.metadata = metadata
+        super().__init__(pa.binary(), "geoarrow.wkb")
+
+    def __arrow_ext_serialize__(self):
+        return self.metadata
+
+    @classmethod
+    def __arrow_ext_deserialize__(cls, storage_type, serialized):
+        return cls(serialized)
+
+
+# The well-known binary of the point (1 2).
+POINT = bytes.fromhex("0101000000000000000000f03f0000000000000040")
+
+
+def write_variant(destination: Path):
+    """A VARIANT group, which PyArrow cannot write: its struct, written by
+    PyArrow, with the group's schema element annotated in the footer."""
+    metadata = pa.field("metadata", pa.binary(), nullable=False)
+    value = pa.field("value", pa.binary(), nullable=False)
+    group = pa.array(
+        [{"metadata": b"\x01\x00\x00", "value": b"\x0c\x01"}],
+        type=pa.struct([metadata, value]),
+    )
+    buffer = io.BytesIO()
+    pq.write_table(pa.table({"FIELD": group}), buffer, compression="ZSTD")
+    content = buffer.getvalue()
+    # The group's name and two children, then its stop byte. Before the stop
+    # goes field 10, the logical type: the VARIANT variant (16, in the long
+    # form) of the union, holding specification_version 1.
+    marker = b"\x18\x05FIELD\x15\x04\x00"
+    annotation = b"\x5c\x0c\x20\x13\x01\x00\x00"
+    assert content.count(marker) == 1
+    content = content.replace(marker, marker[:-1] + annotation + b"\x00")
+    footer = int.from_bytes(content[-8:-4], "little") + len(annotation)
+    (destination / "unsupported-variant.parquet").write_bytes(
+        content[:-8] + footer.to_bytes(4, "little") + b"PAR1"
+    )
+
+
 def build(destination: Path):
     destination.mkdir(parents=True, exist_ok=False)
     table = pa.table(
@@ -123,6 +168,16 @@ def build(destination: Path):
         ("fixed-list", pa.list_(pa.int64(), 2), [[1, 2]]),
         ("struct", pa.struct([("item", pa.int64())]), [{"item": 1}]),
         ("decimal", pa.decimal128(10, 2), [Decimal("1.23")]),
+        # Types that the Arrow release the engine pins has no counterpart
+        # for, named only in the embedded Arrow schema (#3155).
+        ("decimal32", pa.decimal32(9, 2), [Decimal("1.23")]),
+        ("decimal64", pa.decimal64(18, 2), [Decimal("1.23")]),
+        ("list-view", pa.list_view(pa.int64()), [[1]]),
+        ("large-list-view", pa.large_list_view(pa.int64()), [[1]]),
+        # Logical types that the Parquet release the engine pins does not
+        # know (#3155).
+        ("geometry", WellKnownBinary(), [POINT]),
+        ("geography", WellKnownBinary(b'{"edges":"spherical"}'), [POINT]),
     ):
         write(
             destination,
@@ -130,6 +185,7 @@ def build(destination: Path):
             pa.table({"FIELD": pa.array(values, type=kind)}),
             compression="ZSTD",
         )
+    write_variant(destination)
     write(
         destination,
         "date64",

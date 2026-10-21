@@ -510,6 +510,17 @@ class ParquetOriginalOutput(unittest.TestCase):
             ],
             "output": {"path": "output.csv", "columns": ["ID"]},
         }
+        # The same specification on the 1.0 surface, as the converter writes
+        # it: each refusal keeps its condition, rule, path and context.
+        surfaces = {
+            "0.5": source,
+            "1.0": (
+                b'yamaa: "1.0"\ntype: spec\ndomain: TEST\nbase: SRC\n'
+                b"input: {SRC: input.parquet}\nkeys: [ID]\n"
+                b'columns:\n  - {name: ID, type: int, derivation: "1"}\n'
+                b"output: {path: output.csv, columns: [ID]}\n"
+            ),
+        }
         for name, condition, rule, context in (
             ("utf8", "source_parquet_invalid", "PARQUET-5", {}),
             (
@@ -562,30 +573,45 @@ class ParquetOriginalOutput(unittest.TestCase):
                     ("fixed-list", "fixed_size_list<element: int64>[2]"),
                     ("struct", "struct<item: int64>"),
                     ("decimal", "decimal128(10, 2)"),
+                    # Types that the pinned Arrow and Parquet releases do not
+                    # know (#3155).
+                    ("decimal32", "decimal32(9, 2)"),
+                    ("decimal64", "decimal64(18, 2)"),
+                    ("list-view", "list_view<element: int64>"),
+                    ("large-list-view", "large_list_view<element: int64>"),
+                    ("geometry", "binary"),
+                    ("geography", "binary"),
+                    (
+                        "variant",
+                        "struct<metadata: binary not null, value: binary not null>",
+                    ),
                 )
             ),
         ):
-            with self.subTest(case=name):
-                result = self.build(
-                    source, {"input.parquet": ROOT / "pq" / (name + ".parquet")}
-                )
-                diagnostics = [
-                    {
-                        "phase": "ingest",
-                        "condition": condition,
-                        "rule": rule,
-                        "spec_paths": ["input.SRC.path"],
-                        "context": dict(dataset="SRC", path="input.parquet", **context),
-                    }
-                ]
-                self.assertEqual(
-                    self.observe(result),
-                    self.failed_report(diagnostics, ["input.parquet"]),
-                )
-                self.assertIsNone(result.output)
-                with self.assertRaises(yamaa.Error):
-                    result.save()
-                self.assertFalse((self.root / "output.csv").exists())
+            for surface, entry in surfaces.items():
+                with self.subTest(case=name, surface=surface):
+                    result = self.build(
+                        entry, {"input.parquet": ROOT / "pq" / (name + ".parquet")}
+                    )
+                    diagnostics = [
+                        {
+                            "phase": "ingest",
+                            "condition": condition,
+                            "rule": rule,
+                            "spec_paths": ["input.SRC.path"],
+                            "context": dict(
+                                dataset="SRC", path="input.parquet", **context
+                            ),
+                        }
+                    ]
+                    self.assertEqual(
+                        self.observe(result),
+                        self.failed_report(diagnostics, ["input.parquet"]),
+                    )
+                    self.assertIsNone(result.output)
+                    with self.assertRaises(yamaa.Error):
+                        result.save()
+                    self.assertFalse((self.root / "output.csv").exists())
 
     def test_original_build_saves_parquet_with_independent_logical_readback(self):
         name = "adam-adlb-ordered-sum"

@@ -169,8 +169,12 @@ pub fn parse_odm(content: &[u8]) -> Result<ArrowTable, Error> {
 /// alike, INT32 and INT64 as one integer type and a column whatever its
 /// nullability, so two equal tables can be stored differently. Annotations
 /// are kept as stored: a legacy converted type alone differs from the logical
-/// type that the runner's reader derives from it. Each type is spelled as the
-/// Parquet crate names it, which is stable within one build.
+/// type that the runner's reader derives from it. The exception is a variant,
+/// geometry or geography annotation, which the pinned Parquet release does
+/// not know: admission removes it before the footer is decoded, so it is
+/// reported absent, and [`parse`] refuses its column (PARQUET-7). Each type
+/// is spelled as the Parquet crate names it, which is stable within one
+/// build.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ColumnSignature {
     pub path: String,
@@ -268,6 +272,21 @@ mod tests {
         assert_eq!(signature(&wide).unwrap(), signature(&wide).unwrap());
         assert!(signature(b"PAR1").is_err());
         assert!(signature(&wide[..wide.len() - 1]).is_err());
+    }
+
+    /// The pinned Parquet release does not know the geometry annotation, so
+    /// the signature reports it absent, and the reader refuses the column.
+    #[test]
+    fn a_later_annotation_is_absent_from_the_signature_and_refused() {
+        let geometry = include_bytes!("../../tests/fixtures/pq/unsupported-geometry.parquet");
+        let [column] = signature(geometry).unwrap().try_into().unwrap();
+        assert_eq!(column.path, "FIELD");
+        assert_eq!(column.physical_type, "BYTE_ARRAY");
+        assert_eq!(column.logical_type, None);
+        assert!(matches!(
+            parse(geometry),
+            Err(Error::Unsupported { field, stored_type }) if field == "FIELD" && stored_type == "binary"
+        ));
     }
 
     #[test]

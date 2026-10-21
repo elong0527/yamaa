@@ -2,7 +2,7 @@
 //! Format: https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 //! Parquet still validates its own schema.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Range};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Error {
@@ -117,6 +117,25 @@ impl<'a> Cursor<'a> {
     pub(super) fn remaining(&self) -> usize {
         self.0.bytes.len() - self.0.position
     }
+
+    /// Where the next byte lies, counted from the start of the walked struct.
+    pub(super) fn position(&self) -> usize {
+        self.0.position
+    }
+
+    /// The bytes at `range` of the walked struct.
+    pub(super) fn held(&self, range: Range<usize>) -> &'a [u8] {
+        &self.0.bytes[range]
+    }
+
+    /// Read the value of a binary field or element, and return where its
+    /// bytes lie.
+    pub(super) fn binary(&mut self) -> Result<Range<usize>, Error> {
+        let length = self.0.length()?;
+        let start = self.0.position;
+        self.0.take(length)?;
+        Ok(start..self.0.position)
+    }
 }
 
 pub(super) struct Elements<'a> {
@@ -160,7 +179,7 @@ struct Reader<'a> {
 /// set or map in a footer or a UUID anywhere, so a set becomes the
 /// identically encoded list and a map or UUID becomes a binary of the same
 /// length (`native_binary`).
-fn native_opaque(kind: u8) -> u8 {
+pub(super) fn native_opaque(kind: u8) -> u8 {
     match kind {
         10 => 9,
         11 | 13 => 8,
@@ -414,9 +433,13 @@ pub(super) fn parse(bytes: &[u8]) -> Result<(Value<'_>, usize), Error> {
 /// collections and no known set, map or UUID fields. Present validated
 /// one-byte boolean elements as bytes, a set as the identically encoded list,
 /// and a map or UUID as one opaque binary of the same length whose bytes are
-/// UTF-8, only to the native decoder; every field header and id stays. The result has the input's length, so a page header is
-/// presented in place in the held file. Keep the original metadata for
-/// admission and the original data pages for reads. This independently
+/// UTF-8, only to the native decoder; every field header and id stays. The
+/// result has the input's length, so a page header is presented in place in
+/// the held file. A skipped binary whose bytes are not UTF-8, which only the
+/// struct's shape tells from a known one, is presented afterwards by
+/// `wire::Presentation`, as is what parquet 55 does not know of the footer.
+/// Keep the original metadata for admission and the original data pages for
+/// reads. This independently
 /// authored correction copies the struct only when needed, changes no values
 /// the native decoder reads from a well-typed struct, and never turns invalid
 /// booleans into bytes.

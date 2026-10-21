@@ -1,4 +1,5 @@
 //! Represent physical codec metadata; closed source type admission is core-owned.
+use crate::storage_api::LaterType;
 use arrow_schema::{DataType, Schema, TimeUnit as ArrowUnit};
 pub(super) use core_profile::{temporal, Error};
 use parquet::{
@@ -76,15 +77,39 @@ fn representation(arrow: &DataType) -> core_profile::Representation {
         _ => R::Other,
     }
 }
-pub(super) fn column_type(stored: &ColumnDescriptor, arrow: &DataType) -> Option<ColumnType> {
+/// The logical type of the leaf column `stored`, whose variant, geometry or
+/// geography annotation the native decoder was not shown when `annotated`
+/// (`wire::Checked`): that annotation is outside the mapping (PARQUET-7).
+fn annotated_logical(stored: &ColumnDescriptor, annotated: bool) -> core_profile::Logical {
+    if annotated {
+        core_profile::Logical::Other
+    } else {
+        logical(stored)
+    }
+}
+pub(super) fn column_type(
+    stored: &ColumnDescriptor,
+    arrow: &DataType,
+    annotated: bool,
+) -> Option<ColumnType> {
     core_profile::column_type(
         physical(stored),
-        logical(stored),
+        annotated_logical(stored, annotated),
         converted(stored),
         representation(arrow),
     )
 }
-pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<TableSchema, Error> {
+/// The table schema of the fields `arrow` of the leaf columns `stored`, or
+/// the first field's finding. `annotated` lists the leaf columns whose
+/// variant, geometry or geography annotation the native decoder was not
+/// shown, and `later` the later types the embedded schema names
+/// (`storage_api::LaterTypes`), which a refused field's stored type spells.
+pub(super) fn columns(
+    arrow: &Schema,
+    stored: &SchemaDescriptor,
+    annotated: &[usize],
+    later: &[(Vec<usize>, LaterType)],
+) -> Result<TableSchema, Error> {
     let mut leaf = 0;
     let fields = arrow.fields().iter().enumerate().map(|(index, field)| {
         let first = leaf;
@@ -92,6 +117,13 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
             leaf += 1;
         }
         let descriptor = (leaf - first == 1).then(|| stored.column(first));
+        let later: Vec<_> = later
+            .iter()
+            .filter_map(|(path, later)| match path.split_first() {
+                Some((&root, below)) if root == index => Some((below, *later)),
+                _ => None,
+            })
+            .collect();
         core_profile::Field {
             name: field.name().clone(),
             leaves: leaf - first,
@@ -106,12 +138,14 @@ pub(super) fn columns(arrow: &Schema, stored: &SchemaDescriptor) -> Result<Table
                 .map_or(core_profile::Physical::Other, |column| physical(column)),
             logical: descriptor
                 .as_ref()
-                .map_or(core_profile::Logical::Other, |column| logical(column)),
+                .map_or(core_profile::Logical::Other, |column| {
+                    annotated_logical(column, annotated.contains(&first))
+                }),
             converted: descriptor
                 .as_ref()
                 .map_or(core_profile::Converted::Other, |column| converted(column)),
             representation: representation(field.data_type()),
-            stored_type: super::type_name::field_type(field),
+            stored_type: super::type_name::stored_type(field, &later),
         }
     });
     core_profile::columns(fields, stored.root_schema().get_fields().len())
@@ -204,7 +238,10 @@ mod tests {
             ),
         ] {
             let stored = descriptor(physical, logical, converted);
-            assert_eq!(column_type(&stored.column(0), &arrow), Some(expected));
+            assert_eq!(
+                column_type(&stored.column(0), &arrow, false),
+                Some(expected)
+            );
         }
         for (physical, logical, converted, arrow) in [
             (
@@ -263,7 +300,7 @@ mod tests {
             ),
         ] {
             let stored = descriptor(physical, logical, converted);
-            assert_eq!(column_type(&stored.column(0), &arrow), None);
+            assert_eq!(column_type(&stored.column(0), &arrow, false), None);
         }
     }
     #[test]
@@ -285,7 +322,7 @@ mod tests {
                     DataType::Dictionary(Box::new(DataType::Int32), Box::new(arrow.clone()));
                 for arrow in [&arrow, &dictionary] {
                     assert_eq!(
-                        column_type(&column, arrow),
+                        column_type(&column, arrow, false),
                         Some(ColumnType::Int),
                         "{converted} {logical:?} {arrow}"
                     );
@@ -314,7 +351,7 @@ mod tests {
         let legacy = descriptor(Physical::BYTE_ARRAY, None, ConvertedType::UTF8);
         for stored in [&text, &legacy] {
             assert_eq!(
-                column_type(&stored.column(0), &DataType::Utf8View),
+                column_type(&stored.column(0), &DataType::Utf8View, false),
                 Some(ColumnType::Str)
             );
             for index in [
@@ -330,7 +367,7 @@ mod tests {
                 for value in [DataType::Utf8, DataType::LargeUtf8, DataType::Utf8View] {
                     let arrow = dictionary(index.clone(), value);
                     assert_eq!(
-                        column_type(&stored.column(0), &arrow),
+                        column_type(&stored.column(0), &arrow, false),
                         Some(ColumnType::Str),
                         "{arrow}"
                     );
@@ -377,7 +414,10 @@ mod tests {
         ] {
             let stored = descriptor(physical, logical, converted);
             let arrow = dictionary(DataType::Int32, value);
-            assert_eq!(column_type(&stored.column(0), &arrow), Some(expected));
+            assert_eq!(
+                column_type(&stored.column(0), &arrow, false),
+                Some(expected)
+            );
         }
         // A layout never supplies a type the stored pair lacks, and a refused
         // value type stays refused inside a dictionary.
@@ -399,26 +439,36 @@ mod tests {
                 ),
             ),
         ] {
-            assert_eq!(column_type(&stored.column(0), &arrow), None, "{arrow}");
+            assert_eq!(
+                column_type(&stored.column(0), &arrow, false),
+                None,
+                "{arrow}"
+            );
         }
     }
     #[test]
     fn field_names_and_physical_alignment_have_stable_precedence() {
         use arrow_schema::Field;
         let stored = descriptor(Physical::INT64, None, ConvertedType::NONE);
-        assert_eq!(columns(&Schema::empty(), &stored), Err(Error::Invalid));
+        assert_eq!(
+            columns(&Schema::empty(), &stored, &[], &[]),
+            Err(Error::Invalid)
+        );
         let arrow = Schema::new(vec![Field::new("", DataType::Int64, true)]);
-        assert_eq!(columns(&arrow, &stored), Err(Error::EmptyName { field: 1 }));
+        assert_eq!(
+            columns(&arrow, &stored, &[], &[]),
+            Err(Error::EmptyName { field: 1 })
+        );
         let arrow = Schema::new(vec![Field::new("X", DataType::Int64, true)]);
         assert_eq!(
-            columns(&arrow, &stored).unwrap().columns()[0].kind,
+            columns(&arrow, &stored, &[], &[]).unwrap().columns()[0].kind,
             ColumnType::Int
         );
         let arrow = Schema::new(vec![
             Field::new("", DataType::Int64, true),
             Field::new("Y", DataType::Int64, true),
         ]);
-        assert_eq!(columns(&arrow, &stored), Err(Error::Invalid));
+        assert_eq!(columns(&arrow, &stored, &[], &[]), Err(Error::Invalid));
         let same = stored.root_schema().get_fields()[0].clone();
         let duplicate = SchemaDescriptor::new(Arc::new(
             Type::group_type_builder("schema")
@@ -431,7 +481,7 @@ mod tests {
             Field::new("X", DataType::Boolean, true),
         ]);
         assert_eq!(
-            columns(&arrow, &duplicate),
+            columns(&arrow, &duplicate, &[], &[]),
             Err(Error::DuplicateName { field: "X".into() })
         );
     }
