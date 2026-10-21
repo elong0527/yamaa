@@ -131,17 +131,17 @@ qualify_changed_function_contract <- function() {
   }
   first <- spec$run()
   stopifnot(compiled(first), identical(saved(first), expected), !compiled(spec$run()))
-  # The function's default number of significant digits changes in the environment
+  # The function's default number of significant digits changes in its function
   # file: the run compiles the new contract and uses it.
-  environment <- file.path(case, "r", "environment.yaml")
-  original <- read_text(environment)
-  write_text(environment, sub("default: 3", "default: 2",
+  contract <- file.path(case, "functions", "rounded_value.yaml")
+  original <- read_text(contract)
+  write_text(contract, sub("default: 3", "default: 2",
     sub("args: {x: 2.375}, result: 2.38", "args: {x: 2.375}, result: 2.4",
       original, fixed = TRUE), fixed = TRUE))
   changed <- spec$run()
   stopifnot(compiled(changed), identical(saved(changed), "ID,RESULT\n01,2.4\n02,-1.1\n03,\n"),
     !compiled(spec$run()))
-  write_text(environment, original)
+  write_text(contract, original)
   restored <- spec$run()
   stopifnot(compiled(restored), identical(saved(restored), expected))
   # The project file changes: every plan it holds compiles again.

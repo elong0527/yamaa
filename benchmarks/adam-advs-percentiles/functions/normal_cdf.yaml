@@ -1,0 +1,44 @@
+yamaa: "1.0"
+type: function
+name: normal_cdf
+description: Calculate the standard normal cumulative probability.
+params:
+- name: q
+  type: float
+returns: float
+comparison_decimals: 20
+implementations:
+  python: yamaa_benchmarks.normal_cdf
+  r: yamaabenchmarks::normal_cdf
+
+tests:
+- id: centre
+  covers:
+  - normal
+  - numeric-comparison
+  args:
+    q: 0.0
+  result: 0.5
+
+- id: lower-tail-boundary
+  covers:
+  - boundary
+  - numeric-comparison
+  args:
+    q: -8.0
+  result: 6.22096057427178e-16
+
+- id: displayed-lower-tail
+  covers:
+  - boundary
+  - numeric-comparison
+  args:
+    q: -3.0
+  result: 0.0013498980316300957
+
+- id: missing-short-circuits
+  covers:
+  - short-circuit-missing:q
+  args:
+    q: null
+  result: null

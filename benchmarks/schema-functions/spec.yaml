@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: TEST
 keys: [ID]
 input:
@@ -90,7 +92,7 @@ columns:
       function:
         name: project_ratio
         args:
-          numerator: {literal: null}
+          numerator: null
           denominator: SOURCE.DEN
           decimals: 2
           adjust: 0.0

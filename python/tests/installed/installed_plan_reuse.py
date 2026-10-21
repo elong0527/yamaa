@@ -123,20 +123,21 @@ class PlanReuse(unittest.TestCase):
         self.assertTrue(compiled(first))
         self.assertEqual(saved(first), expected)
         self.assertFalse(compiled(spec.run()))
-        # The function's default number of decimals changes in the
-        # environment file: the run compiles the new contract and uses it.
-        environment = case / "python/environment.yaml"
+        # The function's default number of decimals changes in its function
+        # file: the run compiles the new contract and uses it.
+        function = case / "functions/project_ratio.yaml"
         before, after = (
             TRUTH["function_default"]["before"],
             TRUTH["function_default"]["after"],
         )
-        original = environment.read_text(encoding="utf-8")
-        environment.write_text(original.replace(before, after), encoding="utf-8")
+        original = function.read_text(encoding="utf-8")
+        self.assertEqual(original.count(before), 1)
+        function.write_text(original.replace(before, after), encoding="utf-8")
         changed = spec.run()
         self.assertTrue(compiled(changed))
         self.assertEqual(saved(changed), TRUTH["function_output_csv"].encode("utf-8"))
         self.assertFalse(compiled(spec.run()))
-        environment.write_text(original, encoding="utf-8")
+        function.write_text(original, encoding="utf-8")
         restored = spec.run()
         self.assertTrue(compiled(restored))
         self.assertEqual(saved(restored), expected)
