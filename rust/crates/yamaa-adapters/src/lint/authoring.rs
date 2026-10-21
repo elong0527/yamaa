@@ -867,6 +867,150 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
     let mut found = missing_labels(document, &value);
     found.extend(repeated_row_derivations(document, &value));
     found.extend(redundant_intermediates(document, &value));
+    if document.versioned {
+        found.extend(unused_input_keys(document, &value));
+    }
     sort(&mut found);
+    found
+}
+
+/// True when every row the specification builds comes from the input
+/// `dataset`: each row template's driver, or without templates the root
+/// `base`, is that input, a missing one being the sole declared input.
+fn every_row_from(value: &Data, dataset: &str) -> bool {
+    let inputs: Vec<&str> = value
+        .get("input")
+        .and_then(Data::map)
+        .map(|inputs| inputs.iter().filter_map(|(name, _)| name.text()).collect())
+        .unwrap_or_default();
+    let sole = |driver: Option<&str>| match driver {
+        Some(driver) => driver == dataset,
+        None => inputs == [dataset],
+    };
+    let rows = entries(value, "rows");
+    if rows.is_empty() {
+        return sole(value.get("base").and_then(Data::text));
+    }
+    rows.iter()
+        .all(|row| sole(row.get("dataset").and_then(Data::text)))
+}
+
+/// Every `aggregate` operation in `value`: its payload, the shorthand text or
+/// the class form.
+fn aggregates<'a>(value: &'a Data, out: &mut Vec<&'a Data>) {
+    match value {
+        Data::Map(entries) => {
+            for (key, item) in entries {
+                if key.text() == Some("aggregate") {
+                    out.push(item);
+                }
+                aggregates(item, out);
+            }
+        }
+        Data::List(items) => items.iter().for_each(|item| aggregates(item, out)),
+        _ => {}
+    }
+}
+
+/// Whether `value` reads `dataset` through a qualified name outside an
+/// aggregate that declares its own `key`, which matches the input by it.
+fn reads_joined(value: &Data, dataset: &str) -> bool {
+    match value {
+        Data::Text(text) => reads_qualified_name(text, dataset),
+        Data::List(items) => items.iter().any(|item| reads_joined(item, dataset)),
+        Data::Map(entries) => entries.iter().any(|(key, item)| {
+            let own_key = key.text() == Some("aggregate")
+                && item.get("key").is_some_and(|key| !key.is_null());
+            !own_key && (reads_joined(key, dataset) || reads_joined(item, dataset))
+        }),
+        _ => false,
+    }
+}
+
+/// `unused_input_key`: an input's declared `key` that no read uses (D111,
+/// P-JOIN-1). A read uses it when it is an implicit join, a qualified read of
+/// the input that is not a read of the current row's driver, or a qualified
+/// aggregate over the input that declares no `key` of its own (D63); a `copy`
+/// entry reads the input through the implicit join too (SPEC-9). A named
+/// intermediate over the input reads its records by its own `key`, and when
+/// every row comes from the input, a qualified read of it reads the driver.
+/// Validation admits such a key, so a shared parent layer can declare it for
+/// its children; a file that declares `parent` is not read, since its
+/// columns may come from a layer it inherits.
+fn unused_input_keys(document: &Document, value: &Data) -> Vec<Departure> {
+    let mut found = Vec::new();
+    if value.get("parent").is_some_and(|parent| !parent.is_null()) {
+        return found;
+    }
+    let Some(inputs) = value.get("input").and_then(Data::map) else {
+        return found;
+    };
+    let mut payloads = Vec::new();
+    aggregates(value, &mut payloads);
+    for (name, declaration) in inputs {
+        let (Some(dataset), Some(_)) = (name.text(), declaration.get("key")) else {
+            continue;
+        };
+        let reads = |value: &Data| {
+            strings(value)
+                .into_iter()
+                .any(|text| reads_qualified_name(text, dataset))
+        };
+        let keyless_aggregate = payloads.iter().any(|payload| match payload {
+            Data::Map(_) => {
+                payload.get("key").is_none_or(Data::is_null)
+                    && payload.get("expr").is_some_and(reads)
+            }
+            other => reads(other),
+        });
+        let copied = entries(value, "columns").iter().any(|entry| {
+            entry
+                .get("copy")
+                .and_then(|copy| copy.get("dataset"))
+                .and_then(Data::text)
+                == Some(dataset)
+        });
+        // Reads outside the input declarations and the intermediates over
+        // this input, which read its records as their donors.
+        let joined = !every_row_from(value, dataset)
+            && value.map().is_some_and(|fields| {
+                fields.iter().any(|(field, item)| match field.text() {
+                    Some("input") => false,
+                    Some("intermediates") => item.list().is_some_and(|entries| {
+                        entries.iter().any(|entry| {
+                            entry.get("dataset").and_then(Data::text) != Some(dataset)
+                                && reads_joined(entry, dataset)
+                        })
+                    }),
+                    _ => reads_joined(item, dataset),
+                })
+            });
+        if keyless_aggregate || copied || joined {
+            continue;
+        }
+        let Some(key) = document
+            .member(document.root, "input")
+            .and_then(|inputs| {
+                document
+                    .pairs(inputs)?
+                    .iter()
+                    .find(|&&(key, _)| document.scalar(key) == Some(dataset))
+            })
+            .and_then(|&(_, declaration)| document.key(Some(declaration), "key"))
+        else {
+            continue;
+        };
+        let start = document.node(key).start;
+        found.push(Departure::new(
+            "unused_input_key",
+            start.line,
+            start.column,
+            document.path(key),
+            format!(
+                "no implicit join or keyless aggregate reads input `{dataset}` by its \
+                 declared `key`; remove the `key`"
+            ),
+        ));
+    }
     found
 }

@@ -1,5 +1,7 @@
-//! The canonical spellings a 1.x file's schema fixes: `redundant_long_form`,
-//! `restated_default` and `scalar_as_text` (P-LONG-1, P-HND-3, P-KIND-1).
+//! The findings that read a 1.x file through its schema: the canonical
+//! spellings `redundant_long_form`, `restated_default` and `scalar_as_text`
+//! (P-LONG-1, P-HND-3, P-KIND-1), and `equality_filter` (P-ORD-3), which
+//! reads the lookup filters the schema locates.
 //!
 //! Each reads the file as its schema does. The engine's own validation walk
 //! ([`SchemaStructure::written_sites`]) reports, for each written value, the
@@ -8,12 +10,12 @@
 //! lint matches those values to the nodes it locates by walking the decoded
 //! values and its own nodes together, since both come from one scan.
 //!
-//! Each finding names a rewrite to the canonical spelling, which keeps the
-//! value's meaning but not its written value: a restated default is removed,
-//! grammar text for a missing value, number or Boolean becomes that YAML
-//! scalar, and a long form becomes its shorthand. [`same_meaning`] proves
-//! such a rewrite: the rewritten file must read as exactly the original's
-//! values with that one change.
+//! Each canonical finding names a rewrite to the canonical spelling, which
+//! keeps the value's meaning but not its written value: a restated default
+//! is removed, grammar text for a missing value, number or Boolean becomes
+//! that YAML scalar, and a long form becomes its shorthand. [`same_meaning`]
+//! proves such a rewrite: the rewritten file must read as exactly the
+//! original's values with that one change.
 
 use yamaa_core::language::{FileType, LanguageVersion, LANGUAGE_VERSION};
 use yamaa_core::schema::{
@@ -309,6 +311,149 @@ impl<'a> Read<'a> {
     }
 }
 
+impl Read<'_> {
+    /// The text a lookup's sibling field `name` holds, beside the filter
+    /// whose lint node is `filter`.
+    fn sibling(&self, filter: usize, name: &str) -> Option<&str> {
+        let (_, mapping) = self.keys[filter]?;
+        let node = self.document.member(Some(mapping), name)?;
+        self.document.text_scalar(node)
+    }
+
+    /// The dataset whose records a lookup's filter narrows: a named
+    /// intermediate's `dataset`, a source binding's variable's qualifier, or
+    /// the one dataset a qualified aggregate's expression reads.
+    fn donor(&self, owner: &str, filter: usize) -> Option<String> {
+        match owner {
+            "intermediate_class" => self.sibling(filter, "dataset").map(str::to_owned),
+            "source_binding_class" => self
+                .sibling(filter, "variable")?
+                .split_once('.')
+                .map(|(dataset, _)| dataset.to_owned()),
+            "aggregate_class" => {
+                let parsed = yamaa_core::expression::parse(self.sibling(filter, "expr")?).ok()?;
+                let mut datasets = parsed
+                    .identifiers()
+                    .filter_map(|name| name.split_once('.').map(|(dataset, _)| dataset))
+                    .chain(parsed.star_datasets())
+                    .collect::<Vec<_>>();
+                datasets.sort_unstable();
+                datasets.dedup();
+                match datasets.as_slice() {
+                    [dataset] => Some((*dataset).to_owned()),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// `equality_filter`: a lookup filter conjunct that compares a donor
+    /// field with a current-row value by equality, which is a key pair
+    /// (P-ORD-3, LOOKUP-5). The filters of a named intermediate, a source
+    /// binding and a qualified aggregate are read; a conjunct that compares a
+    /// donor field with a constant stays in `filter`.
+    fn equality_filters(&self) -> Vec<Departure> {
+        use yamaa_core::expression::{Comparison, NodeKind, Parsed};
+        let mut found = Vec::new();
+        for site in &self.sites {
+            let SiteRole::Field { owner, field, .. } = &site.role else {
+                continue;
+            };
+            let N::Text(text) = &self.values.nodes()[site.node] else {
+                continue;
+            };
+            let filter = self.nodes[site.node];
+            if field != "filter" {
+                continue;
+            }
+            let Some(donor) = self.donor(owner, filter) else {
+                continue;
+            };
+            let Ok(parsed) = yamaa_core::expression::parse(text) else {
+                continue;
+            };
+            fn conjuncts(parsed: &Parsed, node: usize, out: &mut Vec<usize>) {
+                let node = parsed.ungroup(node);
+                match parsed.nodes()[node].kind {
+                    NodeKind::And(left, right) => {
+                        conjuncts(parsed, left, out);
+                        conjuncts(parsed, right, out);
+                    }
+                    _ => out.push(node),
+                }
+            }
+            // The names one operand reads, each with its qualifier.
+            fn names<'p>(parsed: &'p Parsed, node: usize, out: &mut Vec<&'p str>) {
+                match &parsed.nodes()[node].kind {
+                    NodeKind::Identifier | NodeKind::Star => out.push(parsed.text(node)),
+                    NodeKind::Group(inner) | NodeKind::Not(inner) => names(parsed, *inner, out),
+                    NodeKind::Unary { operand, .. } => names(parsed, *operand, out),
+                    NodeKind::Binary { left, right, .. }
+                    | NodeKind::And(left, right)
+                    | NodeKind::Or(left, right)
+                    | NodeKind::Compare { left, right, .. } => {
+                        names(parsed, *left, out);
+                        names(parsed, *right, out);
+                    }
+                    NodeKind::Call { arguments, .. } => {
+                        arguments.iter().for_each(|&item| names(parsed, item, out))
+                    }
+                    NodeKind::Reduction { operand, .. } => names(parsed, *operand, out),
+                    _ => {}
+                }
+            }
+            let qualifier =
+                |name: &str| name.split_once('.').map(|(dataset, _)| dataset.to_owned());
+            let donor_field = |node: usize| {
+                let node = parsed.ungroup(node);
+                parsed.nodes()[node].kind == NodeKind::Identifier
+                    && qualifier(parsed.text(node)).as_deref() == Some(donor.as_str())
+            };
+            // A current-row value reads at least one name, each qualified by
+            // a dataset other than the donor.
+            let current_row = |node: usize| {
+                let mut read = Vec::new();
+                names(&parsed, node, &mut read);
+                !read.is_empty()
+                    && read.iter().all(|name| {
+                        qualifier(name).is_some_and(|dataset| dataset != donor && dataset != "SELF")
+                    })
+            };
+            let mut found_here = Vec::new();
+            conjuncts(&parsed, parsed.root(), &mut found_here);
+            for conjunct in found_here {
+                let NodeKind::Compare {
+                    operator: Comparison::Equal,
+                    left,
+                    right,
+                } = parsed.nodes()[conjunct].kind
+                else {
+                    continue;
+                };
+                if !(donor_field(left) && current_row(right)
+                    || donor_field(right) && current_row(left))
+                {
+                    continue;
+                }
+                let start = self.document.node(filter).start;
+                found.push(Departure::new(
+                    "equality_filter",
+                    start.line,
+                    start.column,
+                    self.document.path(filter),
+                    format!(
+                        "`{}` compares a donor field with a current-row value; declare the \
+                         pair in `key`",
+                        parsed.text(conjunct)
+                    ),
+                ));
+            }
+        }
+        found
+    }
+}
+
 /// The YAML scalar that grammar `text` holding only a literal stands for, and
 /// what it is: the missing value, a number or a Boolean. The scalar must read
 /// back as the same value, so a number the YAML core schema reads otherwise
@@ -359,6 +504,7 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
     let mut found = read.long_forms();
     found.extend(read.restated_defaults());
     found.extend(read.scalar_texts());
+    found.extend(read.equality_filters());
     found
 }
 

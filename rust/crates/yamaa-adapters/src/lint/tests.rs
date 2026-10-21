@@ -1377,8 +1377,8 @@ type: spec
 domain: DM
 keys: [STUDYID, USUBJID]
 input:
-  DM: {path: input/dm.csv, key: [STUDYID, USUBJID]}
-  SV: {path: input/sv.csv, key: [STUDYID, USUBJID]}
+  DM: input/dm.csv
+  SV: input/sv.csv
 
 output:
   path: dm.csv
@@ -1517,13 +1517,13 @@ type: spec
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  AE: {path: input/ae.csv, key: [STUDYID, USUBJID, AESEQ]}
+  AE: input/ae.csv
   ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
 base: AE
 
 output:
   path: adae.csv
-  columns: [STUDYID, USUBJID, AESEQ, AGE]
+  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]
 
 intermediates:
   - id: ADSL1
@@ -1550,6 +1550,11 @@ columns:
     type: int
     label: Age
     derivation: ADSL1.AGE
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: ADSL.SEX
 "#;
 
 #[test]
@@ -1655,8 +1660,8 @@ fn a_1_0_file_names_members_in_the_spec_path_notation() {
     );
     assert!(paths(&long).contains(&("line_width", "metadata['study note']".to_owned())));
     let order = REDUNDANT_1_0.replace(
-        "  columns: [STUDYID, USUBJID, AESEQ, AGE]\n",
-        "  order_by:\n    - {variable: AESEQ, direction: desc}\n  columns: [STUDYID, USUBJID, AESEQ, AGE]\n",
+        "  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\n",
+        "  order_by:\n    - {variable: AESEQ, direction: desc}\n  columns: [STUDYID, USUBJID, AESEQ, AGE, SEX]\n",
     );
     assert!(paths(&order).contains(&("field_order", "output.columns".to_owned())));
     // A 0.5 file keeps positional paths.
@@ -1672,13 +1677,14 @@ type: spec
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: {path: input/dm.csv, key: [STUDYID, USUBJID]}
+  DM: input/dm.csv
   EX: input/ex.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
 base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, AGE]
+  columns: [STUDYID, USUBJID, AGE, TRTSDT]
 
 intermediates:
   - id: FIRSTDOSE
@@ -1702,6 +1708,11 @@ columns:
     type: int
     label: Age
     derivation: DM.AGE
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: ADSL.TRTSDT
 "#;
 
 /// A finding as (finding, spec path, message).
@@ -1733,36 +1744,36 @@ fn spellings(cases: &[(&str, &str, &[Expected])]) {
 fn restated_defaults_are_removed() {
     spellings(&[
         (
-            "  DM: {path: input/dm.csv, key: [STUDYID, USUBJID]}\n",
-            "  DM: {path: input/dm.csv, relative_to: declaring, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, relative_to: declaring, key: [STUDYID, USUBJID]}\n",
             &[(
                 "restated_default",
-                "input.DM.relative_to",
+                "input.ADSL.relative_to",
                 "`relative_to: declaring` restates the default; remove it",
             )],
         ),
         (
-            "  DM: {path: input/dm.csv, key: [STUDYID, USUBJID]}\n",
-            "  DM: {path: input/dm.csv, empty_string: missing, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, empty_string: missing, key: [STUDYID, USUBJID]}\n",
             &[(
                 "restated_default",
-                "input.DM.empty_string",
+                "input.ADSL.empty_string",
                 "`empty_string: missing` restates the default; remove it",
             )],
         ),
         // The first entry of a flow mapping goes with the separator after it.
         (
-            "  DM: {path: input/dm.csv, key: [STUDYID, USUBJID]}\n",
-            "  DM: {empty_string: missing, path: input/dm.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
+            "  ADSL: {empty_string: missing, path: input/adsl.csv, key: [STUDYID, USUBJID]}\n",
             &[
                 (
                     "restated_default",
-                    "input.DM.empty_string",
+                    "input.ADSL.empty_string",
                     "`empty_string: missing` restates the default; remove it",
                 ),
                 (
                     "field_order",
-                    "input.DM.path",
+                    "input.ADSL.path",
                     "write `path` before `empty_string`",
                 ),
             ],
@@ -2073,6 +2084,201 @@ fn a_long_form_is_written_as_its_shorthand() {
         [("redundant_long_form", "verifications[0].unique".to_owned())]
     );
     assert_eq!(fixed(&text), text);
+}
+
+/// A 1.0 specification built from `LB` whose two other inputs declare keys
+/// that a read uses: `ADSL` through an implicit join, `RANGES` through a
+/// keyless qualified aggregate.
+const KEYED: &str = r#"yamaa: "1.0"
+type: spec
+domain: ADLB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB: input/lb.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
+  RANGES: {path: input/ranges.csv, key: [STUDYID, USUBJID]}
+base: LB
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, AGE, RANGES]
+
+intermediates:
+  - id: RANGE
+    dataset: RANGES
+    key: [LBTESTCD]
+    filter: "RANGES.SEX = 'F'"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation: LB.LBSEQ
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: ADSL.AGE
+
+  - name: RANGES
+    type: int
+    label: Ranges per Subject
+    derivation: {aggregate: "COUNT(RANGES.*)"}
+"#;
+
+#[test]
+fn an_input_key_no_read_uses_is_reported() {
+    assert!(findings(KEYED).is_empty());
+    let message = |dataset: &str| {
+        format!(
+            "no implicit join or keyless aggregate reads input `{dataset}` by its declared \
+             `key`; remove the `key`"
+        )
+    };
+    // The base input's reads read the driver, so its key is unused.
+    let base = KEYED.replace(
+        "  LB: input/lb.csv\n",
+        "  LB: {path: input/lb.csv, key: [STUDYID, USUBJID, LBSEQ]}\n",
+    );
+    let found = findings(&base);
+    assert_eq!(
+        found
+            .iter()
+            .map(|item| (item.finding, item.spec_path.as_str(), item.message.clone()))
+            .collect::<Vec<_>>(),
+        [("unused_input_key", "input.LB.key", message("LB"))]
+    );
+    assert_eq!((found[0].line, found[0].column), (6, 28));
+    // No fix is offered: removing a key is the author's call.
+    assert_eq!(fixed(&base), base);
+    // An aggregate that declares its own key, and a named intermediate over
+    // the input, read it by their own keys.
+    let own_key = KEYED.replace(
+        "{aggregate: \"COUNT(RANGES.*)\"}",
+        "{aggregate: {key: [USUBJID], expr: \"COUNT(RANGES.*)\"}}",
+    );
+    assert_eq!(
+        paths(&own_key),
+        [("unused_input_key", "input.RANGES.key".to_owned())]
+    );
+    // A read through the implicit join uses the key, and so does a copy.
+    let unread = KEYED.replace("derivation: ADSL.AGE", "derivation: LB.AGE");
+    assert_eq!(
+        paths(&unread),
+        [("unused_input_key", "input.ADSL.key".to_owned())]
+    );
+    let copied = unread.replace(
+        "  - name: AGE\n    type: int\n    label: Age\n    derivation: LB.AGE\n",
+        "  - copy: {dataset: ADSL, columns: [AGE]}\n",
+    );
+    assert!(!names(&copied).contains(&"unused_input_key"), "{copied}");
+    // A template built from another input reads the base input through the
+    // join (NAME-4).
+    let templates = base.replace("base: LB\n", "").replace(
+        "    derivation: {aggregate: \"COUNT(RANGES.*)\"}\n",
+        "    derivation: {aggregate: \"COUNT(RANGES.*)\"}\n\nrows:\n  - id: lab\n    \
+             dataset: LB\n\n  - id: subject\n    dataset: ADSL\n    derivations:\n      \
+             LBSEQ: 0\n",
+    );
+    assert!(
+        !names(&templates).contains(&"unused_input_key"),
+        "{templates}"
+    );
+    // A layer's columns may come from the layer it inherits.
+    let layer = base.replace("domain: ADLB\n", "parent: base.yaml\ndomain: ADLB\n");
+    assert!(!names(&layer).contains(&"unused_input_key"));
+    // A 0.5 file declares no input keys.
+    let legacy = base.replace("yamaa: \"1.0\"\ntype: spec\n", "schema_version: \"1.0\"\n");
+    assert!(!names(&legacy).contains(&"unused_input_key"));
+    // A shared parent layer suppresses it with a reason.
+    let shared = base.replace(
+        "  LB: {path",
+        "  # yamaa-lint: allow unused_input_key -- child layers join LB\n  LB: {path",
+    );
+    assert!(names(&shared).is_empty());
+}
+
+#[test]
+fn an_equality_with_a_current_row_value_in_a_lookup_filter_is_a_key_pair() {
+    let filtered = |filter: &str| KEYED.replace("RANGES.SEX = 'F'", filter);
+    let message = |conjunct: &str| {
+        format!(
+            "`{conjunct}` compares a donor field with a current-row value; declare the pair \
+             in `key`"
+        )
+    };
+    let found = findings(&filtered(
+        "RANGES.SEX = 'F' AND RANGES.LBTESTCD = LB.LBTESTCD",
+    ));
+    assert_eq!(
+        found
+            .iter()
+            .map(|item| (item.finding, item.spec_path.as_str(), item.message.clone()))
+            .collect::<Vec<_>>(),
+        [(
+            "equality_filter",
+            "intermediates.RANGE.filter",
+            message("RANGES.LBTESTCD = LB.LBTESTCD")
+        )]
+    );
+    assert_eq!((found[0].line, found[0].column), (19, 13));
+    assert_eq!(
+        fixed(&filtered("LB.LBTESTCD = RANGES.LBTESTCD")),
+        filtered("LB.LBTESTCD = RANGES.LBTESTCD")
+    );
+    // Either side, inside grouping, and an expression of the current row.
+    for filter in [
+        "(LB.LBTESTCD = RANGES.LBTESTCD)",
+        "RANGES.SEX = 'F' AND (RANGES.AGE = LB.AGE + 1)",
+    ] {
+        assert_eq!(names(&filtered(filter)), ["equality_filter"], "{filter}");
+    }
+    // A constant, another comparison, a disjunction, a negation and a
+    // comparison of two donor fields stay in `filter`.
+    for filter in [
+        "RANGES.SEX = 'F'",
+        "RANGES.LOW < LB.AGE",
+        "RANGES.SEX = LB.SEX OR RANGES.SEX = 'U'",
+        "NOT (RANGES.SEX = LB.SEX)",
+        "RANGES.LOW = RANGES.HIGH",
+    ] {
+        assert!(names(&filtered(filter)).is_empty(), "{filter}");
+    }
+    // A source binding's filter narrows its variable's input, and a
+    // qualified aggregate's the one input its expression reads.
+    let source = KEYED.replace(
+        "    derivation: ADSL.AGE\n",
+        "    derivation:\n      source: {variable: ADSL.AGE, filter: \"ADSL.SITEID = LB.SITEID\"}\n",
+    );
+    assert_eq!(
+        paths(&source),
+        [(
+            "equality_filter",
+            "columns.AGE.derivation.source.filter".to_owned()
+        )]
+    );
+    let aggregate = KEYED.replace(
+        "    derivation: {aggregate: \"COUNT(RANGES.*)\"}\n",
+        "    derivation:\n      aggregate:\n        filter: \"RANGES.VISIT = LB.VISIT\"\n        \
+         expr: \"COUNT(RANGES.*)\"\n",
+    );
+    assert_eq!(
+        paths(&aggregate),
+        [(
+            "equality_filter",
+            "columns.RANGES.derivation.aggregate.filter".to_owned()
+        )]
+    );
 }
 
 const MISSING_LABEL: &str = r#"schema_version: "1.0"

@@ -43,6 +43,8 @@ values.lint_finding.missing_label
 values.lint_finding.redundant_long_form
 values.lint_finding.restated_default
 values.lint_finding.scalar_as_text
+values.lint_finding.unused_input_key
+values.lint_finding.equality_filter
 values.file_type.spec
 values.file_type.project
 values.file_type.codelists

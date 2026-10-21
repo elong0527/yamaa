@@ -283,6 +283,45 @@ columns:
     derivation: DM.USUBJID
 ```
 
+An input's declared `key` that no read uses is reported as `unused_input_key`
+at that `key` (LOOKUP-5). A read uses it when it is an implicit join: a
+qualified read of the input that is not a read of the current row's driver,
+a qualified `aggregate` over the input that declares no `key` of its own, or
+a `copy` entry from the input. A named intermediate over the input reads its
+records by its own `key`, and when every row is built from the input, each
+qualified read of it reads the driver. Validation admits such a key, so a
+shared parent layer may declare it for the layers that inherit it and suppress
+the finding there; a file that declares `parent` is not read, since its columns
+may come from the layer it inherits.
+
+```yaml
+input:
+  DM: {path: input/dm.csv, key: [STUDYID, USUBJID]}
+base: DM
+```
+
+Every row comes from `DM` here, so `DM.AGE` reads the driver and the key is
+unused.
+
+A lookup filter conjunct that compares a donor field with a current-row value
+by equality is reported as `equality_filter` at the filter: such a comparison
+is a key pair, which `key` states (P-ORD-3). The filters of a named
+intermediate, a structured `source` and a qualified `aggregate` are read, each
+over the input whose records it narrows. A conjunct that compares a donor field
+with a constant stays in `filter`, as do other comparisons, disjunctions and
+negations.
+
+```yaml
+intermediates:
+  - id: RANGE
+    dataset: RANGES
+    key: [LBTESTCD]
+    filter: "RANGES.SEX = LB.SEX AND RANGES.LOW IS NOT NULL"
+```
+
+`RANGES.SEX = LB.SEX` is reported; write `key: {LBTESTCD: LBTESTCD,
+SEX: LB.SEX}` and keep `RANGES.LOW IS NOT NULL` in the filter.
+
 ## Fixes
 
 A layout fix changes how the lines of a file are laid out, never the written
@@ -315,9 +354,9 @@ rewritten leaves the file as written.
 Otherwise the file stays as written and the finding stays reported. A fixed
 file is replaced atomically, keeping its permissions; these named files are
 the only files the check writes. A `repeated_row_derivation`,
-`redundant_intermediate` or `missing_label` finding rewrites the
-specification's value while keeping its derivation behavior, and its author
-corrects it; no fix is offered.
+`redundant_intermediate`, `missing_label`, `unused_input_key` or
+`equality_filter` finding rewrites the specification's value while keeping its
+derivation behavior, and its author corrects it; no fix is offered.
 
 ## Suppression
 

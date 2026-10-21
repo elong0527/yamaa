@@ -99,6 +99,8 @@ values:
       - redundant_long_form
       - restated_default
       - scalar_as_text
+      - unused_input_key
+      - equality_filter
   # The file types a yamaa file declares in `type` (SCHEMA-2), as schema()
   # takes them (D149).
   file_type:

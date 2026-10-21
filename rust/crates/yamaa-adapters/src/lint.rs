@@ -41,7 +41,7 @@ use yamaa_core::application_issue::{Fault, Stage};
 use yamaa_core::diagnostic::Diagnostic;
 
 /// Every finding the lint reports, in the order the style guide names them.
-pub const FINDINGS: [&str; 12] = [
+pub const FINDINGS: [&str; 14] = [
     "field_order",
     "root_spacing",
     "entry_spacing",
@@ -54,6 +54,8 @@ pub const FINDINGS: [&str; 12] = [
     "redundant_long_form",
     "restated_default",
     "scalar_as_text",
+    "unused_input_key",
+    "equality_filter",
 ];
 
 /// One departure, at the one-based line and column where it starts.
