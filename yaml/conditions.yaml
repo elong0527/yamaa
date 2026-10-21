@@ -480,6 +480,52 @@ conditions:
   source_header_absent:
     phases: [ingest]
     message: "{path} has no header record"
+  # ODM-1: the refusals of an ODM source; `path` is the source as given.
+  source_odm_archive_invalid:
+    phases: [ingest]
+    message: "the archive {path} cannot be read: {reason}"
+  source_odm_archive_member:
+    phases: [ingest]
+    message: "no member of {path} can be read: {reason}"
+  source_odm_attribute_ambiguous:
+    phases: [ingest]
+    message: "{path} has more than one namespaced attribute named {attribute}"
+  source_odm_attribute_invalid:
+    phases: [ingest]
+    message: "{element} in {path} has the unsupported {attribute} value '{value}'"
+  source_odm_attribute_missing:
+    phases: [ingest]
+    message: "{element} in {path} requires a non-empty {attribute}"
+  source_odm_compression_unsupported:
+    phases: [ingest]
+    message: "{path} uses {format} compression, but only plain and gzip TAR archives are read"
+  source_odm_document_unsupported:
+    phases: [ingest]
+    message: "{path} is not a supported ODM 1.3 or 2.0 document: {reason}"
+  source_odm_layout_unsupported:
+    phases: [ingest]
+    message: "{path} holds clinical data the item table cannot represent: {reason}"
+  source_odm_limit_exceeded:
+    phases: [ingest]
+    message: "{path} exceeds a read limit: {reason}"
+  source_odm_metadata_conflict:
+    phases: [ingest]
+    message: "{path} gives the {definition} {oid} of {study}/{metadata_version} different names"
+  source_odm_no_clinical_data:
+    phases: [ingest]
+    message: "{path} holds no ClinicalData"
+  source_odm_transactional:
+    phases: [ingest]
+    message: "{path} is not a snapshot: {element} declares {attribute} {value}"
+  source_odm_value_unsupported:
+    phases: [ingest]
+    message: "the ItemData {item} in {path} holds a value the item table cannot represent: {reason}"
+  source_odm_xml_malformed:
+    phases: [ingest]
+    message: "{path} is not well-formed XML at byte {position}: {reason}"
+  source_odm_xml_unsupported:
+    phases: [ingest]
+    message: "{path} uses XML the reader does not support: {reason}"
   source_parquet_invalid:
     phases: [ingest]
     message: "{path} is not a valid Parquet file"

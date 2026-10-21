@@ -6,8 +6,16 @@
 //! [`ODM_COLUMNS`]: `SourceOrdinal` is an integer counting the items from one,
 //! `ValuePresent` and `IsNull` hold the text `true` or `false`, and every
 //! other column is nullable text, so the table is an ordinary engine input.
-//! Refusals arrive as [`Error::Odm`] with a stable code; a build without the
-//! `odm` feature returns [`Error::Unavailable`].
+//! Only a snapshot reads (ODM-1): a transactional document and one without
+//! `ClinicalData` are refused, and audit records, signatures, annotations,
+//! reference data and administrative data are skipped.
+//!
+//! A refusal is [`Error::Rejected`] with one issue, so a host's error carries
+//! it (#3030 D73, D158): a `source_odm_*` condition for the source, naming
+//! it as given in `context.path`; FILE-7's and FILE-8's conditions for a
+//! path that reaches no regular file; `value_not_permitted` at an option
+//! below its minimum; and `engine_rejected` for a file the host cannot read.
+//! A build without the `odm` feature returns [`Error::Unavailable`].
 //!
 //! The source is captured once through a resolver, as every other read is:
 //! [`read_odm`] reads a local caller path through the local file resolver,
@@ -17,8 +25,9 @@
 
 use std::path::Path;
 
+use crate::diagnostic::Report;
 use crate::engine::Engine;
-use crate::error::{Error, OdmError, TableError};
+use crate::error::{Error, TableError};
 use crate::table::Table;
 
 /// The clinical-item columns in table order.
@@ -97,8 +106,9 @@ impl OdmOptions {
     }
 }
 
-/// Read every clinical item of one ODM 1.3 or 2.0 file into a table. The
-/// file is captured once through the local file resolver.
+/// Read every clinical item of one ODM 1.3 or 2.0 snapshot into a table. The
+/// file is captured once through the local file resolver. A refusal is
+/// [`Error::Rejected`] with one issue, naming the path as given.
 ///
 /// # Example
 ///
@@ -130,7 +140,11 @@ impl OdmOptions {
 /// }
 /// ```
 pub fn read_odm(path: &Path, options: &OdmOptions) -> Result<Table, Error> {
-    table(yamaa_adapters::odm_xml::read(path, &options.to_core()))
+    let source = path.display().to_string();
+    table(
+        yamaa_adapters::odm_xml::read(path, &options.to_core()),
+        &source,
+    )
 }
 
 impl Engine {
@@ -140,12 +154,13 @@ impl Engine {
     ///
     /// A resolver's source is held whole before it is read as XML or TAR,
     /// so the per-file source bound of 10 GiB applies first: a larger source
-    /// fails with the code `limit` and the message `ODM source exceeds
-    /// 10737418240 bytes`, and a plain XML source over `max_expanded_bytes`
-    /// is refused only once it is held. [`read_odm`] reads a local file in
-    /// place instead: it streams an archive, never holding it whole, and
-    /// refuses a plain XML file over `max_expanded_bytes` before reading it,
-    /// then holds that file whole, at most `max_expanded_bytes`.
+    /// fails as `source_odm_limit_exceeded` with the reason `ODM source
+    /// exceeds 10737418240 bytes`, and a plain XML source over
+    /// `max_expanded_bytes` is refused only once it is held. [`read_odm`]
+    /// reads a local file in place instead: it streams an archive, never
+    /// holding it whole, and refuses a plain XML file over
+    /// `max_expanded_bytes` before reading it, then holds that file whole,
+    /// at most `max_expanded_bytes`. A refusal names `source` as given.
     ///
     /// # Example
     ///
@@ -179,25 +194,31 @@ impl Engine {
     /// ```
     pub fn read_odm(&self, source: &str, options: &OdmOptions) -> Result<Table, Error> {
         match crate::internal::resolver_bridge(self.shared()) {
-            Some(resolver) => table(yamaa_adapters::odm_xml::read_with_resolver(
-                resolver,
+            Some(resolver) => table(
+                yamaa_adapters::odm_xml::read_with_resolver(resolver, source, &options.to_core()),
                 source,
-                &options.to_core(),
-            )),
+            ),
             None => read_odm(Path::new(source), options),
         }
     }
 }
 
+/// The table, or the refusal of `source`, named as given: one issue in a
+/// rejected report, or a capability or representation failure, which
+/// carries none.
 fn table(
     result: Result<yamaa_adapters::public_table::PublicTable, yamaa_adapters::odm_xml::Error>,
+    source: &str,
 ) -> Result<Table, Error> {
     use yamaa_adapters::odm_xml;
     match result {
         Ok(table) => Ok(Table::from_adapter(&table)),
         Err(odm_xml::Error::Unavailable) => Err(Error::Unavailable { feature: "odm" }),
-        Err(odm_xml::Error::Read(error)) => Err(Error::Odm(OdmError::from_core(&error))),
         Err(odm_xml::Error::Table(error)) => Err(Error::Table(TableError::from_ipc(error))),
+        Err(error) => {
+            let issues = error.issue(source).into_iter().collect::<Vec<_>>();
+            Err(Error::Rejected(Report::from_issues(&issues)))
+        }
     }
 }
 

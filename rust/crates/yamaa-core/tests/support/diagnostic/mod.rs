@@ -12,6 +12,7 @@ pub mod intermediate_scopes;
 pub mod language;
 pub mod mapping_cut;
 pub mod odm;
+pub mod odm_read;
 pub mod parquet;
 pub mod predicate_evaluation;
 pub mod preflight;
