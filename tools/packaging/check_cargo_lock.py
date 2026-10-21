@@ -414,11 +414,12 @@ def check_bundle_archive(path: Path, workspace=WORKSPACE):
     """Check a source archive's engine bundle against the checkout.
 
     The archive must hold no Rust toolchain file anywhere, the vendored crates
-    included. It must carry exactly the bundle's Rust sources, manifest and
-    Cargo configuration, a lock that verifies against the canonical lock, and
-    each crates.io crate of that lock, with every file that its
-    `.cargo-checksum.json` lists and no other: in vendor/ in a Python source
-    archive, and in src/rust/vendor.tar.xz in an R source package. An R source
+    included. It must carry exactly the bundle's Rust sources, the selftest
+    cases that the facade embeds, its manifest and Cargo configuration, a
+    lock that verifies against the canonical lock, and each crates.io crate
+    of that lock, with every file that its `.cargo-checksum.json` lists and
+    no other: in vendor/ in a Python source archive, and in
+    src/rust/vendor.tar.xz in an R source package. An R source
     package's Makevars must strip nothing, through the Cargo profile or at R's
     link step (check_r_symbols). Returns the host and the lock's packages.
     """
