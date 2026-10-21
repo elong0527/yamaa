@@ -11,9 +11,9 @@ benchmark specifications and metadata runs on both trees:
 - vocabulary coverage accepts the same declared negatives.
 
 A benchmark already in 1.0 converts to itself, so this holds while the corpus
-moves one prefix at a time (P2-5 to P2-8). The benchmark runner and the
-installed conformance runs are compared on the same conversion by
-`make check-conversion`.
+moves one prefix at a time (P2-5 to P2-8). The benchmark runner stages a study
+with the project staging that test_benchmark_metadata covers in both surfaces,
+and `make check-conversion` runs every converted benchmark on a fresh install.
 """
 
 import json
