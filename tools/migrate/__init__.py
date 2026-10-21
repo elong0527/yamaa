@@ -22,6 +22,10 @@ What it writes, entry by entry of `tools/migrate/renames.yaml`:
 - the spec paths of negative contracts, through the table's `paths` block;
 - the YAML blocks of Markdown files.
 
+`python -m tools.migrate --embedded SOURCE...` converts the YAML that Rust,
+Python and R test sources and JSON and TSV fixtures embed, through the same
+transforms (`tools.migrate.embedded`).
+
 The converter is temporary: P2-13 deletes it and keeps `renames.yaml`.
 """
 
