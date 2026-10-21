@@ -143,9 +143,10 @@ files serves the `sdtm` and `adam` sections alike.
 
 A codelists file's `standard` and a section's `standards` name different
 things. The section's `standards` lists the implementation guides its
-datasets follow, here ADaMIG 1.3, and takes only guides of the section's
-model. Each codelists file's `standard` names the terminology release its
-lists are drawn from; terminology is never listed in a section's `standards`.
+datasets follow, here ADaMIG 1.3: one or more guides of the section's model,
+each named once. Each codelists file's `standard` names the terminology
+release its lists are drawn from; terminology is never listed in a section's
+`standards`.
 
 `standard.name` takes the closed list a guide's name takes, the eleven
 standard names Define-XML 2.1 publishes, in their exact case: `ADaMIG`,
@@ -158,15 +159,17 @@ codelists are read: before any data, whether or not a document is generated.
 and `version` names the release, such as `2023-12-15`.
 
 A Define-XML document lists both kinds of standard: every guide of the
-section's `standards`, in order, then the terminology standard of each source
-whose lists its datasets bind. Each dataset names its guide, the one its
-`submission.standard` selects or else the first. Each list of a published
-source names its terminology standard, and a sponsor list with items is marked
-`def:IsNonStandard="Yes"`. Sources that declare the same `name`,
-`publishing_set` and `version` share one standard, and a document cites one
-release per publishing set: when two sources whose lists one document binds
-declare one `publishing_set` with a different `name` or `version`, the later
-source's `publishing_set` fails with `duplicate_define_identifier`.
+section's `standards` in declaration order, whether or not a dataset binds
+it, then the terminology standard of each source whose lists its datasets
+bind. Each dataset is bound to the guide its `submission.standard` names, or
+to the first when it names none; a name the section does not list fails with
+`unknown_standard`. Each list of a published source names its terminology
+standard, and a sponsor list with items is marked `def:IsNonStandard="Yes"`.
+Sources that declare the same `name`, `publishing_set` and `version` share
+one standard, and a document cites one release per publishing set: when two
+sources whose lists one document binds declare one `publishing_set` with a
+different `name` or `version`, the later source's `publishing_set` fails with
+`duplicate_define_identifier`.
 
 ## Bind and check a column
 
