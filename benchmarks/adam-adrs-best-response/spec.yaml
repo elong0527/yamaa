@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -18,8 +20,8 @@ intermediates:
   # date; two such records for one subject fail the run.
   - id: RESPONSE
     dataset: ADRSSEL
+    key: [STUDYID, USUBJID]
     filter: "ADRSSEL.BORSEQ = 1"
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -35,19 +37,19 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: BOR}
+    derivation: "'BOR'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Best Overall Response by Investigator}
+    derivation: "'Best Overall Response by Investigator'"
 
   - name: RANDDT
     type: date
     label: Randomization Date
     derivation: ADSL.RANDDT
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: AVALC
     type: str
@@ -70,7 +72,6 @@ columns:
           NON-CR/NON-PD: 4
           PD: 5
           NE: 6
-        missing: {literal: null}
     verifications:
       - range:
           min: 1

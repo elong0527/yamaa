@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
@@ -23,7 +25,6 @@ intermediates:
     between: {value: ASTDTM, lower: EXSTDTC, upper: WINLAST}
     order_by: [EX.EXSTDTC]
     keep: last
-    no_match: {literal: null}
     derivations:
       DOSENUM:
         row_number:

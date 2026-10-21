@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
@@ -19,9 +21,9 @@ intermediates:
   # no onset date sorts last.
   - id: AE_REC
     dataset: ADAE
+    key: [STUDYID, USUBJID]
     order_by: [{variable: ADAE.ASTDT, nulls: last}, ADAE.AESEQ]
     keep: first
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -37,12 +39,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: TTAE}
+    derivation: "'TTAE'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Time to First Adverse Event}
+    derivation: "'Time to First Adverse Event'"
 
   - name: STARTDT
     type: date
@@ -84,7 +86,7 @@ columns:
         start: STARTDT
         end: ADT
         unit: day
-        bounds: inclusive
+        closed: both
 
   - name: CNSR
     type: int
@@ -92,8 +94,8 @@ columns:
     derivation:
       case:
         - when: "AEDT IS NOT NULL"
-          then: {literal: 0}
-        - otherwise: {literal: 1}
+          then: 0
+        - otherwise: 1
 
   - name: EVNTDESC
     type: str
@@ -101,8 +103,8 @@ columns:
     derivation:
       case:
         - when: "AEDT IS NOT NULL"
-          then: {literal: AE}
-        - otherwise: {literal: END OF STUDY}
+          then: "'AE'"
+        - otherwise: "'END OF STUDY'"
 
   - name: SRCDOM
     type: str
@@ -110,8 +112,8 @@ columns:
     derivation:
       case:
         - when: "AEDT IS NOT NULL"
-          then: {literal: ADAE}
-        - otherwise: {literal: ADSL}
+          then: "'ADAE'"
+        - otherwise: "'ADSL'"
 
   - name: SRCVAR
     type: str
@@ -119,8 +121,8 @@ columns:
     derivation:
       case:
         - when: "AEDT IS NOT NULL"
-          then: {literal: ASTDT}
-        - otherwise: {literal: EOSDT}
+          then: "'ASTDT'"
+        - otherwise: "'EOSDT'"
 
   - name: SRCSEQ
     type: int

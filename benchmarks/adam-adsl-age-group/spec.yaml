@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
@@ -35,12 +37,12 @@ columns:
     derivation:
       case:
         - when: "AGE < 18"
-          then: {literal: "<18"}
+          then: "'<18'"
         - when: "AGE >= 18 AND AGE <= 64"
-          then: {literal: "18-64"}
+          then: "'18-64'"
         - when: "AGE > 64"
-          then: {literal: ">64"}
-        - otherwise: {literal: "Missing"}
+          then: "'>64'"
+        - otherwise: "'Missing'"
 
   - name: AGEGR1N
     type: int
@@ -48,12 +50,12 @@ columns:
     derivation:
       case:
         - when: "AGEGR1 = '<18'"
-          then: {literal: 1}
+          then: 1
         - when: "AGEGR1 = '18-64'"
-          then: {literal: 2}
+          then: 2
         - when: "AGEGR1 = '>64'"
-          then: {literal: 3}
-        - otherwise: {literal: null}
+          then: 3
+        - otherwise: null
 
 verifications:
   - row_count:

@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADRS
 keys: [STUDYID, USUBJID, RSSEQ]
 input:
   RS: input/rs.csv
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, key: [STUDYID, USUBJID]}
 
 base: RS
 
@@ -33,12 +35,12 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: OVR}
+    derivation: "'OVR'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Overall Response by Investigator}
+    derivation: "'Overall Response by Investigator'"
 
   - name: RSDTC
     type: str
@@ -58,7 +60,7 @@ columns:
         month: 1
         day: 1
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: AVALC
     type: str
@@ -96,7 +98,7 @@ columns:
     label: Analysis Relative Day
     derivation:
       study_day:
-        date: ADT
+        source: ADT
         reference: TRTSDT
 
   # One record per subject and date carries ANL01FL: the date's worst

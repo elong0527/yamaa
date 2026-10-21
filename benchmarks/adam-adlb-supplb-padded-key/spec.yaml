@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLB
 keys: [STUDYID, USUBJID, LBSEQ]
 input:
@@ -16,7 +18,6 @@ intermediates:
       STUDYID: LB.STUDYID
       USUBJID: LB.USUBJID
       IDVARVAL: {str_pad: {source: LBSEQ, width: 8}}
-    no_match: {literal: null}
 
 columns:
   - {name: STUDYID, type: str, label: Study Identifier, derivation: LB.STUDYID}

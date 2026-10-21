@@ -1,4 +1,6 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADLBC
 keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
 input:
@@ -47,9 +49,7 @@ columns:
   - name: CHG
     type: float
     label: Change from Previous Value
-    derivation:
-      compute:
-        expr: "AVAL - PREV_AVAL"
+    derivation: "AVAL - PREV_AVAL"
 
 rows:
   # One row per albumin or bilirubin record with a numeric result. The
@@ -67,4 +67,4 @@ rows:
         mapping:
           source: LB.LBTESTCD
           dict: {ALB: "_ALB", BILI: "_BILI"}
-          unmapped: {literal: null}
+          unmapped: null

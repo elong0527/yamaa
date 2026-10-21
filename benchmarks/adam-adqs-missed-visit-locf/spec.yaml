@@ -1,8 +1,10 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADQS
 keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
 input:
-  ADSL: input/adsl.csv
+  ADSL: {path: input/adsl.csv, key: [STUDYID, USUBJID]}
   QS:
     path: input/qs.csv
     types: {AVISITN: int, AVAL: float}
@@ -29,7 +31,6 @@ intermediates:
     dataset: QS
     key: [STUDYID, USUBJID, PARAMCD, AVISITN]
     filter: "QS.AVAL IS NOT NULL"
-    no_match: {literal: null}
 
 columns:
   - name: STUDYID
@@ -92,7 +93,7 @@ rows:
       AVISIT: QS.AVISIT
       AVISITN: QS.AVISITN
       AVALCOL: QS.AVAL
-      DTYPE: {literal: null}
+      DTYPE: null
       EFFFL: ADSL.EFFFL
 
   # One template per scheduled visit. Each builds at most one record per
@@ -103,11 +104,11 @@ rows:
     derivations:
       STUDYID: ADSL.STUDYID
       USUBJID: ADSL.USUBJID
-      PARAMCD: {literal: ACTOT}
-      AVISIT: {literal: Week 8}
-      AVISITN: {literal: 8}
-      AVALCOL: {literal: null}
-      DTYPE: {literal: LOCF}
+      PARAMCD: "'ACTOT'"
+      AVISIT: "'Week 8'"
+      AVISITN: 8
+      AVALCOL: null
+      DTYPE: "'LOCF'"
       EFFFL: ADSL.EFFFL
 
   - id: week_16
@@ -116,11 +117,11 @@ rows:
     derivations:
       STUDYID: ADSL.STUDYID
       USUBJID: ADSL.USUBJID
-      PARAMCD: {literal: ACTOT}
-      AVISIT: {literal: Week 16}
-      AVISITN: {literal: 16}
-      AVALCOL: {literal: null}
-      DTYPE: {literal: LOCF}
+      PARAMCD: "'ACTOT'"
+      AVISIT: "'Week 16'"
+      AVISITN: 16
+      AVALCOL: null
+      DTYPE: "'LOCF'"
       EFFFL: ADSL.EFFFL
 
   - id: week_24
@@ -129,11 +130,11 @@ rows:
     derivations:
       STUDYID: ADSL.STUDYID
       USUBJID: ADSL.USUBJID
-      PARAMCD: {literal: ACTOT}
-      AVISIT: {literal: Week 24}
-      AVISITN: {literal: 24}
-      AVALCOL: {literal: null}
-      DTYPE: {literal: LOCF}
+      PARAMCD: "'ACTOT'"
+      AVISIT: "'Week 24'"
+      AVISITN: 24
+      AVALCOL: null
+      DTYPE: "'LOCF'"
       EFFFL: ADSL.EFFFL
 
 verifications:

@@ -1,9 +1,11 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: input/ae.csv
-  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}}
+  ADSL: {path: input/adsl.csv, types: {TRTSDT: date}, key: [STUDYID, USUBJID]}
 base: AE
 
 output:
@@ -55,10 +57,9 @@ columns:
         type: date
         source: AESTDTC
         day: 15
-        minimum_source_precision: month
         not_before: TRTSDT
         # handlers are explicit: an omitted one is fatal
-        invalid: {literal: null}
+        invalid: null
 
   - name: ASTDTC
     type: str
@@ -75,8 +76,7 @@ columns:
         type: date
         source: AESTDTC
         day: last
-        minimum_source_precision: month
-        invalid: {literal: null}
+        invalid: null
 
   # D: the collected start carried a year and month, so the day was
   # supplied, whether or not first exposure then moved it.

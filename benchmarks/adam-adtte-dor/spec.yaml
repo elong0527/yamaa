@@ -1,10 +1,12 @@
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: {path: input/adsl.csv, types: {RESPDT: date, NACTDT: date}}
-  ADRS_RAW: input/adrs_raw.csv
-  DS: input/ds.csv
+  ADRS_RAW: {path: input/adrs_raw.csv, key: [STUDYID, USUBJID]}
+  DS: {path: input/ds.csv, key: [STUDYID, USUBJID]}
 base: ADSL
 # One record per responder: a subject with no response date has none.
 filter: "ADSL.RESPDT IS NOT NULL"
@@ -28,19 +30,19 @@ columns:
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {literal: DOR}
+    derivation: "'DOR'"
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: {literal: Duration of Response}
+    derivation: "'Duration of Response'"
 
   - name: STARTDT
     type: date
     label: Time to Event Origin Date for Subject
     derivation: ADSL.RESPDT
     verifications:
-      - not_missing: {}
+      - not_missing
 
   # The therapy start as a date: ADSL is read as text, and the comparisons
   # below need a date.
@@ -139,8 +141,8 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then: {literal: 0}
-        - otherwise: {literal: 1}
+          then: 0
+        - otherwise: 1
 
   - name: EVNTDESC
     type: str
@@ -148,10 +150,10 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NULL"
-          then: {literal: CENSORED}
+          then: "'CENSORED'"
         - when: "EVENTDT = PDDT"
-          then: {literal: DISEASE PROGRESSION}
-        - otherwise: {literal: DEATH}
+          then: "'DISEASE PROGRESSION'"
+        - otherwise: "'DEATH'"
 
   # Censored at the last valid assessment, or at the therapy start when
   # that comes first.
@@ -169,7 +171,7 @@ columns:
       first_available:
         sources: [EVENTDT, CENSORDT]
     verifications:
-      - not_missing: {}
+      - not_missing
 
   - name: AVAL
     type: int
@@ -180,7 +182,7 @@ columns:
         start: STARTDT
         end: ADT
         unit: day
-        bounds: inclusive
+        closed: both
 
   - name: CNSDTDSC
     type: str
@@ -188,10 +190,10 @@ columns:
     derivation:
       case:
         - when: "EVENTDT IS NOT NULL"
-          then: {literal: null}
+          then: null
         - when: "CENSORDT = LASTVLDT"
-          then: {literal: LAST TUMOUR ASSESSMENT}
-        - otherwise: {literal: START OF NEW ANTI-CANCER THERAPY}
+          then: "'LAST TUMOUR ASSESSMENT'"
+        - otherwise: "'START OF NEW ANTI-CANCER THERAPY'"
 
   - name: SRCDOM
     type: str
@@ -199,12 +201,12 @@ columns:
     derivation:
       case:
         - when: "EVNTDESC = 'DEATH'"
-          then: {literal: DS}
+          then: "'DS'"
         - when: "EVNTDESC = 'DISEASE PROGRESSION'"
-          then: {literal: ADRS}
+          then: "'ADRS'"
         - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
-          then: {literal: ADRS}
-        - otherwise: {literal: ADSL}
+          then: "'ADRS'"
+        - otherwise: "'ADSL'"
 
   - name: SRCVAR
     type: str
@@ -212,10 +214,10 @@ columns:
     derivation:
       case:
         - when: "SRCDOM = 'DS'"
-          then: {literal: DSSTDTC}
+          then: "'DSSTDTC'"
         - when: "SRCDOM = 'ADRS'"
-          then: {literal: ADT}
-        - otherwise: {literal: NACTDT}
+          then: "'ADT'"
+        - otherwise: "'NACTDT'"
 
   # Censoring at the therapy start traces to ADSL, which has no sequence
   # number, so SRCSEQ stays empty there.
