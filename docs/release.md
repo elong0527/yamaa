@@ -778,16 +778,21 @@ offers, and reproduces the license, copyright and NOTICE texts that the crate
 ships for it (#3364). The Python packages' copy covers the Python binding's
 crates, the R package's copy the R binding's, all of which the R source package
 bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
-the crates of `yamaa-cli`. It also gives the standard library's licensing from
-the notice that the Rust project ships with the pinned toolchain,
-`share/doc/rust/COPYRIGHT-library.html`, because the native code links that
-library: the licensing statement, the in-tree licenses and copyright holders,
-and of the notice's out-of-tree crates those that the standard library links
-on the supported targets. No package notice names a GNU license; the only GPL
-wording that remains is the clause of the LLVM exception to Apache-2.0, a
-permissive license, which names GPLv2. The command line keeps only that file
-and its component inventory beside its crate; its archives carry the Python
-packages' copies of the other notices. `LICENSE-READSTAT.txt`,
+the crates of `yamaa-cli`. It also gives the standard library's licensing,
+because the native code links that library: from the notice that the Rust
+project ships with the pinned toolchain, `share/doc/rust/COPYRIGHT-library.html`,
+the licensing statement and the in-tree licenses and copyright holders; and
+from the toolchain's `rust-src` component, which that notice does not fully
+cover, the third-party crates that the standard library links on the supported
+targets, such as `addr2line` and `object`, each with its one license and the
+texts that its package ships (#3369). No package notice names a GNU license;
+the only GPL wording that remains is the clause of the LLVM exception to
+Apache-2.0, a permissive license, which names GPLv2. The command line keeps
+only that file, its component inventory and `LICENSE-MUSL.txt` beside its
+crate; its archives carry the Python packages' copies of the other notices.
+The archives for the musl targets, whose executables link the musl C library
+statically, also carry `LICENSE-MUSL.txt`: musl's `COPYRIGHT` file, relied on
+under MIT. `LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
@@ -798,12 +803,14 @@ relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
 notices from `rust/Cargo.lock` and the standard library section from the
-toolchain that `rust/rust-toolchain.toml` pins, and it derives that
+toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
+component, which the repository checks add to it, and it derives that
 expression from the Python binding's linked crates. The repository check
 fails when a host gains or loses a linked crate without a matching notice
 entry in its host's copy, when `rustc` in `rust/` is not the pinned toolchain,
-when the committed section differs from that toolchain's notice, and when a
-notice would name a GNU license. Staging the R source package fails while its
+when the committed section differs from that toolchain's notice and sources,
+when the musl notice was reviewed for another toolchain, and when a notice
+would name a GNU license. Staging the R source package fails while its
 notices name a crate that it does not bundle. Native qualification and the
 release selector require every wheel, source package, R binary package and
 command-line archive to carry its own host's notices unchanged, and refuse a

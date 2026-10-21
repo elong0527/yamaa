@@ -61,7 +61,8 @@ class PackageNotices(unittest.TestCase):
         # The command line keeps only its own notices and inventory beside
         # its crate, an inventory that names the standard library that its
         # binaries link; its archives carry the Python packages' copies of the
-        # others.
+        # others. It also keeps musl's notice, which only the archives for the
+        # musl targets carry.
         self.cli_notices = dict(
             project,
             **{
@@ -69,14 +70,21 @@ class PackageNotices(unittest.TestCase):
                 "COMPONENTS.tsv": b"name\narrow\t55.2.0\nrust-std\t1.99.1\n",
             },
         )
+        self.musl_notices = dict(
+            self.cli_notices, **{"LICENSE-MUSL.txt": b"musl 1.2.5\nMIT\n"}
+        )
         for directory, notices in (
             ("python", self.notices),
             ("R/yamaa/inst", self.r_notices),
             (
                 "rust/crates/yamaa-cli",
                 {
-                    name: self.cli_notices[name]
-                    for name in ("LICENSE-THIRD-PARTY.txt", "COMPONENTS.tsv")
+                    name: self.musl_notices[name]
+                    for name in (
+                        "LICENSE-THIRD-PARTY.txt",
+                        "COMPONENTS.tsv",
+                        "LICENSE-MUSL.txt",
+                    )
                 },
             ),
         ):
@@ -154,6 +162,11 @@ class PackageNotices(unittest.TestCase):
         for path in (wheel, sdist, r_source, *r_binaries, *archives):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
+        # The archives for the musl targets also carry musl's notice.
+        for target in ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"):
+            path = self.cli(self.musl_notices, target=target)
+            with self.subTest(archive=path.name):
+                self.assertEqual(len(packages.check_archive(path, self.root)), 4)
 
     def test_command_line_archives_carry_their_own_and_the_shared_notices(self):
         # The command line's own notices and inventory, not a host's; the
@@ -161,7 +174,7 @@ class PackageNotices(unittest.TestCase):
         member = "yamaa-0.4.0-x86_64-unknown-linux-musl/{}"
         for notice in ("LICENSE-THIRD-PARTY.txt", "COMPONENTS.tsv"):
             for other in (self.notices, self.r_notices):
-                archive = self.cli(dict(self.cli_notices, **{notice: other[notice]}))
+                archive = self.cli(dict(self.musl_notices, **{notice: other[notice]}))
                 with (
                     self.subTest(notice=notice),
                     self.assertRaisesRegex(
@@ -169,17 +182,27 @@ class PackageNotices(unittest.TestCase):
                     ),
                 ):
                     packages.check_archive(archive, self.root)
-        archive = self.cli(dict(self.cli_notices, **{"LICENSE.txt": b"edited\n"}))
+        archive = self.cli(dict(self.musl_notices, **{"LICENSE.txt": b"edited\n"}))
         with self.assertRaisesRegex(
             ValueError, f"differs or is missing: {member.format('LICENSE.txt')}"
         ):
             packages.check_archive(archive, self.root)
         (self.root / "python/LICENSE.txt").write_bytes(b"edited\n")
-        self.assertEqual(len(packages.check_archive(archive, self.root)), 3)
+        self.assertEqual(len(packages.check_archive(archive, self.root)), 4)
+        # An archive for a musl target carries the command line's copy of
+        # musl's notice, unchanged.
+        musl = member.format("LICENSE-MUSL.txt")
+        edited = dict(self.musl_notices, **{"LICENSE.txt": b"edited\n"})
+        for notices in (
+            {name: data for name, data in edited.items() if name != "LICENSE-MUSL.txt"},
+            dict(edited, **{"LICENSE-MUSL.txt": b"musl 1.2.3\nMIT\n"}),
+        ):
+            with self.assertRaisesRegex(ValueError, f"differs or is missing: {musl}"):
+                packages.check_archive(self.cli(notices), self.root)
         # Notices outside the archive's directory are not its notices.
         path = self.root / "yamaa-0.4.0-x86_64-unknown-linux-musl.zip"
         with zipfile.ZipFile(path, "w") as flat:
-            for name, payload in self.cli_notices.items():
+            for name, payload in self.musl_notices.items():
                 flat.writestr(name, payload)
         with self.assertRaisesRegex(ValueError, "differs or is missing"):
             packages.check_archive(path, self.root)
@@ -423,7 +446,9 @@ class PackageNotices(unittest.TestCase):
         # Command-line archives also reject a forbidden license even when
         # their notice agrees with the checkout's own copy.
         forbidden = b"Crate: r-efi\nLGPL\n"
-        cli = self.cli(dict(self.cli_notices, **{"LICENSE-THIRD-PARTY.txt": forbidden}))
+        cli = self.cli(
+            dict(self.musl_notices, **{"LICENSE-THIRD-PARTY.txt": forbidden})
+        )
         (self.root / "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt").write_bytes(
             forbidden
         )
@@ -455,7 +480,9 @@ class PackageNotices(unittest.TestCase):
             {f"yamaa/{name}": data for name, data in self.r_binary_notices.items()},
         )
         # The command line's archives carry the engine's Cargo version.
-        cli = self.cli(self.cli_notices, version="1.0.0-rc.1")
+        cli = self.cli(
+            self.cli_notices, version="1.0.0-rc.1", target="aarch64-apple-darwin"
+        )
         for path in (wheel, sdist, r_source, r_binary, cli):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
