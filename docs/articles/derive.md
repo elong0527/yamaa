@@ -14,6 +14,7 @@ rows. Column derivation never changes the row count.
 | `keys:` | What identifies a row? | The ordered columns whose combined values must be present and unique. |
 | `rows:` | Which rows exist? | When present, row templates construct rows from retained input records or groups. |
 | `columns:` | What does each row carry? | Each derivation produces exactly one value per constructed row, in declaration order. |
+| `input:` with `key` | How does another dataset reach a row? | A read of that input joins on its declared `key`, each column matched against the row's column of the same name. |
 
 When `rows` is absent, the distinct key combinations in the default input
 construct the output rows. When `rows` is present, its templates construct the
@@ -24,20 +25,11 @@ rows and `keys` validate their identity.
 `keys:` is always required. It names output columns that together identify
 one row:
 
-```yaml
-domain: ADSL
-keys: [STUDYID, USUBJID]   # one row per subject
-```
-
-```yaml
-domain: ADLB
-keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]   # one row per analysis record
-```
-
-```yaml
-domain: ADAE
-keys: [STUDYID, USUBJID, AESEQ]   # one row per event
-```
+| `domain` | `keys` | One row per |
+|---|---|---|
+| ADSL | `[STUDYID, USUBJID]` | subject |
+| ADLB | `[STUDYID, USUBJID, PARAMCD, ADT, ASEQ]` | analysis record |
+| ADAE | `[STUDYID, USUBJID, AESEQ]` | event |
 
 Every completed row must have non-missing key values, and no two rows may
 have the same key combination.
@@ -50,23 +42,29 @@ one-to-one: several input records may contribute values to the same output
 row.
 
 ```yaml
-schema_version: "1.0"
+yamaa: "1.0"
+type: spec
+model: ADaM
 domain: ADSL
+keys: [STUDYID, USUBJID]
 input:
   DM: source/dm.csv
+
 output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, AGE]
-keys: [STUDYID, USUBJID]
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation: DM.STUDYID
+
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation: DM.USUBJID
+
   - name: AGE
     type: int
     label: Age
@@ -92,25 +90,57 @@ Sections concatenate in specification order.
 
 ![Two row-template sections concatenated vertically, with shared and section-specific columns derived onto the resulting rows.](../diagrams/derive-full.svg)
 
-This partial fragment builds separate HEIGHT and WEIGHT sections from one
-input dataset:
+This specification builds separate HEIGHT and WEIGHT sections from one input
+dataset:
 
 ```yaml
-input: {VS: source/vs.csv}
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  VS: source/vs.csv
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: VS.VSSTRESN
 
 rows:
   - id: height
-    filter: "VS.PARAMCD = 'HEIGHT'"
+    filter: "VS.VSTESTCD = 'HEIGHT'"
     derivations:
-      PARAMCD: {literal: HEIGHT}
-      AVAL: VS.AVAL
+      PARAMCD: "'HEIGHT'"
 
   - id: weight
-    filter: "VS.PARAMCD = 'WEIGHT'"
+    filter: "VS.VSTESTCD = 'WEIGHT'"
     derivations:
-      PARAMCD: {literal: WEIGHT}
-      AVAL: VS.AVAL
+      PARAMCD: "'WEIGHT'"
 ```
+
+Each template keeps the records of one test and derives what differs between
+the sections, here `PARAMCD` as quoted text. `STUDYID`, `USUBJID` and `AVAL`
+are the same in both sections, so they are derived once, at column level.
 
 The constructed rows must still satisfy `keys`: every key value must be
 present and every key combination unique. Section order is construction
@@ -123,13 +153,94 @@ Columns resolve in declaration order, so a later column may read an earlier
 one. A column-level derivation is the column's default: every `rows` entry
 inherits it, and a `rows` entry may name the column in its own `derivations`
 to override the default for that entry's rows only. A column with no
-column-level derivation must be derived in every `rows` entry; use
-`{literal: null}` when its value is deliberately missing in one section.
+column-level derivation must be derived in every `rows` entry; write `null`,
+the missing value, when its value is deliberately missing in one section.
 
-One restriction: a column-level derivation that reads across rows -- a
-lookup, an aggregate, a window, or a named intermediate -- is not row-local,
-so pairing it with a `rows` entry's own derivation for the same column fails
-validation instead of deriving the column twice.
+One restriction: a column-level derivation that is not row-local -- one that
+holds an aggregate or a window operation, or reads a `SELF` intermediate or a
+column that is not row-local -- is not a default, so a `rows` entry that
+derives the same column fails validation instead of deriving the column
+twice. A read through a join, or through a named intermediate over an input,
+is row-local and may be such a default.
+
+## Reading another dataset: declared join keys
+
+A derivation reads another input by qualifying a column with the input's
+name, such as `EX.EXDOSE`. Unless that input built the row, the read is a
+join, and yamaa never infers the join from the columns two datasets happen to
+share: the input declares the columns it joins on in `key`, and each is
+matched against the current row's column of the same name.
+
+```yaml
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: source/dm.csv
+  EX:
+    path: source/ex.csv
+    types: {EXSTDTC: date, EXDOSE: float}
+    key: [STUDYID, USUBJID]
+base: DM
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, TRTSDT, CUMDOSE]
+
+intermediates:
+  # Each subject's first exposure record.
+  - id: FIRSTEX
+    dataset: EX
+    key: [STUDYID, USUBJID]
+    order_by: [EX.EXSTDTC]
+    keep: first
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: FIRSTEX.EXSTDTC
+
+  - name: CUMDOSE
+    type: float
+    label: Cumulative Dose
+    derivation:
+      aggregate: "SUM(EX.EXDOSE)"
+```
+
+`DM` is the base that built the rows, so `DM.STUDYID` reads the records each
+row was built from, without a join. A subject can have several `EX` records,
+and each kind of read treats them in its own way:
+
+- **A scalar read**, such as `EX.EXDOSE` as a whole derivation, joins on the
+  input's `key` and gives one value per row. For a subject with two exposure
+  records it fails with `multiple_matches`: the join finds more than one
+  record and has no rule to choose one.
+- **An aggregate** reduces every record it matches. `CUMDOSE` declares no key
+  of its own, so it matches on the input's `key`.
+- **A named intermediate** chooses one record per row and always declares its
+  own `key`, here the same columns, with `order_by` and `keep` choosing the
+  first exposure. The one exception is an intermediate that drives a row
+  template, which declares no key.
+
+A qualified read of an input that declares no `key` fails validation with
+`no_applicable_keys` at the read. An empty or repeated `key`, or a named
+intermediate without one, fails before any input is read, and each declared
+key column is checked against the input wherever a read uses it. The output
+`keys` and an input's `key` answer different questions: `keys` identify the
+rows yamaa builds, and `key` states how another dataset reaches them.
 
 ## More examples
 
