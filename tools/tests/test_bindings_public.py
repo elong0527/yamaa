@@ -29,6 +29,7 @@ class RenderingTests(unittest.TestCase):
             "lint",
             "project",
             "read_odm",
+            "schema",
             "selftest",
             "spec",
         ]
@@ -76,6 +77,7 @@ class RenderingTests(unittest.TestCase):
                 "export(yamaa_project)",
                 "export(yamaa_read_odm)",
                 "export(yamaa_lint)",
+                "export(yamaa_schema)",
                 "export(yamaa_selftest)",
                 'S3method("[[", yamaa_project_run)',
                 "S3method(print, yamaa_selftest)",
@@ -152,6 +154,34 @@ class RenderingTests(unittest.TestCase):
             self.public.render_r([]),
         )
 
+    def test_a_file_type_argument_gives_the_text_its_native_call_returns(self):
+        python = self.public.render_python([])
+        self.assertIn(
+            "def schema(file_type: str) -> str:\n"
+            '    """The JSON Schema of a file type, spec, project, codelists or '
+            'function, as canonical JSON text."""\n'
+            "    return _call(_native._schema, file_type)\n",
+            python,
+        )
+        self.assertIn(
+            'yamaa_schema <- function(file_type) .reply(.native_schema(.text(file_type, "file_type")))',
+            self.public.render_r([]),
+        )
+
+    def test_a_long_export_list_is_split_one_name_per_line(self):
+        text = self.public.render_python([])
+        self.assertIn('__all__ = [\n    "Error",\n    "__version__",\n', text)
+        self.assertIn('    "spec",\n]\n', text)
+        candidate = copy.deepcopy(self.definition)
+        for name in ("lint", "schema"):
+            candidate["public"]["functions"].remove(function(candidate, name))
+        short = public.Public(candidate).render_python([])
+        self.assertIn(
+            '__all__ = ["Error", "__version__", "project", "read_odm", "selftest", '
+            '"spec"]\n',
+            short,
+        )
+
     def test_a_long_helper_import_is_split_one_name_per_line(self):
         text = self.public.render_python([])
         self.assertIn("from yamaa._support import (\n    __version__,\n", text)
@@ -208,6 +238,14 @@ class ValidationTests(unittest.TestCase):
                 lambda d: d["public"]["types"].update(widget={"python": "x", "r": "y"}),
             ),
             ("undeclared type token", lambda d: d["public"]["types"].pop("count")),
+            (
+                "public.types.file_type names an undeclared vocabulary",
+                lambda d: d["values"].pop("file_type"),
+            ),
+            (
+                "public.types.file_type.r must name values.file_type",
+                lambda d: d["public"]["types"]["file_type"].update(r="character(1)"),
+            ),
             ("unknown kind", lambda d: member(d, "Run", "save").update(kind="action")),
             (
                 "unknown operation",

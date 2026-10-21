@@ -81,8 +81,8 @@ records a host returns as a dict or named list: today `info`, the engine
 information of a selftest (D41). Each vocabulary and table names, as
 `rust: yamaa::NAME`, the facade constant that owns it: the statuses, the
 issues, run report, lint and selftest columns, the ODM item columns, the
-phases, the report's kinds and outcomes, the severities and the lint
-findings. The generator reads the constant from the facade sources,
+phases, the report's kinds and outcomes, the severities, the lint findings
+and the file types. The generator reads the constant from the facade sources,
 following an alias such as
 `pub const ODM_COLUMNS: [&str; 30] = yamaa_core::odm_items::COLUMNS;` into
 the core or adapters crate, and refuses a declaration that differs from it in
@@ -96,7 +96,9 @@ come from (or `yaml/conditions.yaml`, the condition registry) and a `meaning`.
 ### Public surface
 
 `public` declares each host's user-facing surface. Its `types` give the host
-projection of each type token, its `functions` the module functions, its
+projection of each type token (a token named for a vocabulary, `status` or
+`file_type`, is text from that vocabulary, and both projections name it as
+`values.<token>`), its `functions` the module functions, its
 `classes` the result and lazy classes in definition order (a class is defined
 before any class that returns it), its `errors` the refusal and its `python`
 block the module docstring and version name. From it the generator writes the
