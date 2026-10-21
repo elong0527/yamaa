@@ -11,6 +11,7 @@ from unittest import mock
 from tools.packaging import check_crate_purposes as purposes
 
 GRAPHS = {
+    "cli": {"yamaa-core", "parser", "cc"},
     "python": {"yamaa-core", "parser", "pyo3", "cc"},
     "r": {"yamaa-core", "parser", "extendr-api", "cc"},
 }
@@ -37,7 +38,7 @@ class ProblemsTest(unittest.TestCase):
         self.assertEqual(
             purposes.problems(missing, GRAPHS),
             [
-                f"{LABEL}: no purpose for cc, which the python and r bundles ship",
+                f"{LABEL}: no purpose for cc, which the cli, python and r bundles ship",
                 f"{LABEL}: no purpose for pyo3, which the python bundle ships",
             ],
         )
@@ -52,7 +53,7 @@ class ProblemsTest(unittest.TestCase):
         # A purpose stays while either host ships its crate, and goes stale
         # when the last one stops.
         self.assertEqual(
-            purposes.problems(PURPOSES, {"python": GRAPHS["python"], "r": set()}),
+            purposes.problems(PURPOSES, {**GRAPHS, "r": set()}),
             [f"{LABEL}: extendr-api has a purpose, but no host's bundle ships it"],
         )
 
@@ -118,10 +119,11 @@ class ShippedTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("cargo"), "cargo is unavailable")
     def test_each_host_ships_its_trimmed_lock_with_members_and_build_crates(self):
         graphs = purposes.shipped()
-        self.assertEqual(sorted(graphs), ["python", "r"])
+        self.assertEqual(sorted(graphs), ["cli", "python", "r"])
         for host, binding, other in (
             ("python", "yamaa-python", "yamaa-r"),
             ("r", "yamaa-r", "yamaa-python"),
+            ("cli", "yamaa-cli", "yamaa-python"),
         ):
             with self.subTest(host=host):
                 names = graphs[host]
@@ -143,6 +145,8 @@ class ShippedTest(unittest.TestCase):
                 self.assertNotIn(other, names)
         self.assertIn("pyo3", graphs["python"] - graphs["r"])
         self.assertIn("extendr-api", graphs["r"] - graphs["python"])
+        # The command line depends on the facade alone.
+        self.assertFalse({"pyo3", "extendr-api", "yamaa-r"} & graphs["cli"])
 
 
 if __name__ == "__main__":

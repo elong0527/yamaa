@@ -142,6 +142,33 @@ any adapter that no case covers, and gives the engine version, the language
 versions, the host and its version, and the platform: keep it as the
 installation and operational qualification evidence of that installation.
 
+Command line:
+
+From 1.0.0, each GitHub release also carries the `yamaa` command line as a
+standalone binary that needs no Python, R or Rust:
+`yamaa-<version>-<target>.zip`, where the target is
+`x86_64-unknown-linux-musl` or `aarch64-unknown-linux-musl` for Linux,
+`x86_64-pc-windows-msvc` for Windows x64 and `aarch64-apple-darwin` for macOS
+arm64 (macOS 11 or later). There is no installer: unzip the archive and run
+`yamaa` (`yamaa.exe` on Windows) in the directory that it holds, beside the
+license notices and the component inventory, or put that directory on your
+`PATH`. The Linux binaries are static, so they run on any Linux of their
+architecture. `yamaa --version` names the engine, and `yamaa selftest` runs
+the self-test above.
+
+The binaries are not signed. On macOS, a binary that a browser downloaded
+carries the quarantine attribute, and Gatekeeper refuses to run it, saying
+that Apple could not verify it. Clear the attribute once, in the archive's
+directory:
+
+```sh
+xattr -d com.apple.quarantine yamaa
+```
+
+On Windows, SmartScreen may stop a downloaded `yamaa.exe` with "Windows
+protected your PC": choose **More info**, then **Run anyway**, or remove the
+download mark first with `Unblock-File` in PowerShell.
+
 ## Where to go next
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
@@ -153,7 +180,8 @@ installation and operational qualification evidence of that installation.
 ## License
 
 This project is licensed under the terms of the MIT license. The Python and R
-packages also include third-party code under its own licenses; each package
-carries those notices in `LICENSE-THIRD-PARTY.txt` and the other files listed
-in the [release guidance](docs/release.md#source-package-contents), with an
-inventory of its components in `COMPONENTS.tsv`.
+packages and the command-line binaries also include third-party code under its
+own licenses; each package carries those notices in `LICENSE-THIRD-PARTY.txt`
+and the other files listed in the
+[release guidance](docs/release.md#source-package-contents), with an inventory
+of its components in `COMPONENTS.tsv`.

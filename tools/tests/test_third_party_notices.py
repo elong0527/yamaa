@@ -239,12 +239,13 @@ class Graph:
 
 
 def shipped_graph(root):
-    """Two shipped roots with linked, build-only, macro-only, dev-only and
-    other-platform crates; each root also links a crate that the other does
-    not."""
+    """Two shipped bindings with linked, build-only, macro-only, dev-only and
+    other-platform crates, each also linking a crate that the other does not,
+    and the command line, which links the engine's crates alone."""
     graph = Graph(root)
     python = graph.crate("yamaa-python", "0.4.0", "MIT", member=True)
     r = graph.crate("yamaa-r", "0.4.0", "MIT", member=True)
+    cli = graph.crate("yamaa-cli", "0.4.0", "MIT", member=True)
     core = graph.crate("yamaa-core", "0.4.0", "MIT AND Unicode-3.0", member=True)
     extendr = graph.crate(
         "extendr-api",
@@ -309,6 +310,7 @@ def shipped_graph(root):
     graph.depend(python, builder, kind="build")
     graph.depend(r, core)
     graph.depend(r, extendr)
+    graph.depend(cli, core)
     graph.depend(r, tester, kind="dev")
     graph.depend(core, arrow)
     graph.depend(core, derive)
@@ -503,13 +505,14 @@ class LockedClosure(unittest.TestCase):
             WORKSPACE=self.root / "rust",
             PYTHON=self.root / "python",
             R_INST=self.root / "R/yamaa/inst",
+            CLI=self.root / "rust/crates/yamaa-cli",
             TARGETS=(LINUX, WINDOWS),
             LIBRARY_LINKED=LINKED,
         )
         patches.start()
         self.addCleanup(patches.stop)
         (self.root / "LICENSE").write_bytes(PROJECT_LICENSE)
-        for directory in (notices.PYTHON, notices.R_INST):
+        for directory in (notices.PYTHON, notices.R_INST, notices.CLI):
             directory.mkdir(parents=True)
         self.project(license="MIT AND Apache-2.0 AND Unicode-3.0")
         for name, text in (("LICENSE-YAML.txt", "yaml\n"),):
@@ -538,6 +541,7 @@ class LockedClosure(unittest.TestCase):
         for crate, own in (
             ("yamaa-python", ["pyo3", "windows-sys"]),
             ("yamaa-r", ["extendr-api"]),
+            ("yamaa-cli", []),
         ):
             with self.subTest(crate=crate):
                 self.assertEqual(
@@ -555,8 +559,8 @@ class LockedClosure(unittest.TestCase):
             - self.names(linux),
             {"windows-sys"},
         )
-        with self.assertRaisesRegex(ValueError, "the shipped crate yamaa-cli once"):
-            notices.dependency_closure(graphs[LINUX], "yamaa-cli")
+        with self.assertRaisesRegex(ValueError, "the shipped crate yamaa-wasm once"):
+            notices.dependency_closure(graphs[LINUX], "yamaa-wasm")
 
     def test_texts_follow_the_relied_license_and_fall_back_to_spdx(self):
         graphs = self.graph.graphs()
@@ -796,6 +800,13 @@ class LockedClosure(unittest.TestCase):
         notices.write(graphs, LIBRARY)
         self.assertEqual(notices.check(graphs, LIBRARY)[1], [])
         self.assertEqual((notices.PYTHON / "LICENSE.txt").read_bytes(), PROJECT_LICENSE)
+        # The command-line archives carry the Python packages' license copy.
+        self.assertFalse((notices.CLI / "LICENSE.txt").exists())
+        hosts = (
+            ("python", "yamaa-python"),
+            ("R/yamaa/inst", "yamaa-r"),
+            ("rust/crates/yamaa-cli", "yamaa-cli"),
+        )
         # A toolchain whose notice changed needs the notices regenerated.
         changed = dataclasses.replace(
             LIBRARY, statement=("Copyrights are retained by their contributors.",)
@@ -806,19 +817,13 @@ class LockedClosure(unittest.TestCase):
                 f"{relative}/LICENSE-THIRD-PARTY.txt: differs from the notices "
                 f"generated for {crate} from rust/Cargo.lock and the Rust 1.99.1 "
                 "toolchain"
-                for relative, crate in (
-                    ("python", "yamaa-python"),
-                    ("R/yamaa/inst", "yamaa-r"),
-                )
+                for relative, crate in hosts
             ],
         )
         gained = self.graph.crate("snap", "1.1.2", "BSD-3-Clause", {"COPYING": BSD})
         self.graph.depend("yamaa-core@0.4.0", gained)
         errors = notices.check(self.graph.graphs(), LIBRARY)[1]
-        for relative, crate in (
-            ("python", "yamaa-python"),
-            ("R/yamaa/inst", "yamaa-r"),
-        ):
+        for relative, crate in hosts:
             self.assertIn(
                 f"{relative}/LICENSE-THIRD-PARTY.txt: no entry for snap 1.1.2, which "
                 f"{crate} links",
@@ -853,6 +858,7 @@ class LockedClosure(unittest.TestCase):
         selected = notices.write(graphs, LIBRARY)
         python = (notices.PYTHON / "LICENSE-THIRD-PARTY.txt").read_text()
         r = (notices.R_INST / "LICENSE-THIRD-PARTY.txt").read_text()
+        cli = (notices.CLI / "LICENSE-THIRD-PARTY.txt").read_text()
         shared = {
             ("arrow", "57.3.0"),
             ("flatbuffers", "25.12.19"),
@@ -863,23 +869,41 @@ class LockedClosure(unittest.TestCase):
         self.assertEqual(
             notices.committed_entries(r), shared | {("extendr-api", "0.9.0")}
         )
+        self.assertEqual(notices.committed_entries(cli), shared)
         self.assertEqual(
             {host: len(found) for host, found in selected.items()},
-            {"python": 5, "r": 4},
+            {"python": 5, "r": 4, "cli": 3},
         )
-        for text, packages, crate in (
-            (python, "The yamaa Python wheels link", "yamaa-python"),
-            (r, "The installed yamaa R package links", "yamaa-r"),
+        for text, packages, linked, crate in (
+            (
+                python,
+                "The yamaa Python wheels link",
+                "into their native extension.",
+                "yamaa-python",
+            ),
+            (
+                r,
+                "The installed yamaa R package links",
+                "into its native extension.",
+                "yamaa-r",
+            ),
+            (
+                cli,
+                "The yamaa command-line binaries link",
+                "into the yamaa executable.",
+                "yamaa-cli",
+            ),
         ):
             flat = " ".join(text.split())
             self.assertIn(f"{packages} third-party Rust crates", flat)
+            self.assertIn(f"the Rust standard library {linked}", flat)
             self.assertIn(
                 f"crates that the shipped crate {crate} links, as locked in "
                 "rust/Cargo.lock: its normal dependency closure on each of the "
                 f"targets {LINUX}, {WINDOWS}, without procedural macros.",
                 flat,
             )
-            # Both hosts link the standard library and list its linked crates.
+            # Every host links the standard library and lists its linked crates.
             self.assertIn("Crate: windows-sys 0.61.2\n    License: MIT\n", text)
         # Only the copy whose crates ship a text reproduces it.
         self.assertNotIn("Copyright (c) 2020 PyO3", r)
@@ -909,6 +933,8 @@ class LockedClosure(unittest.TestCase):
         (notices.R_INST / "LICENSE-YAML.txt").write_text("changed\n")
         (notices.R_INST / "LICENSE-WINDOWS.txt").write_text("stale\n")
         (notices.PYTHON / "LICENSE.txt").write_text("edited\n")
+        # The command line keeps no copy of a notice that the hosts share.
+        (notices.CLI / "LICENSE-YAML.txt").write_text("yaml\n")
         self.project(
             license="MIT AND Apache-2.0 AND Unicode-3.0",
             files=("LICENSE.txt", "LICENSE-YAML.txt"),
@@ -921,6 +947,8 @@ class LockedClosure(unittest.TestCase):
             "R/yamaa/inst/LICENSE-WINDOWS.txt: not a package notice in license-files",
             "python/LICENSE-THIRD-PARTY.txt: not a package notice in license-files",
             "python/LICENSE.txt: must be a copy of LICENSE",
+            "rust/crates/yamaa-cli/LICENSE-YAML.txt: the command line keeps only "
+            "its own LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv",
         ):
             self.assertIn(expected, errors)
 
