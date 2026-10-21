@@ -9,10 +9,7 @@ use arrow_array::{
     TimestampMicrosecondArray,
 };
 use arrow_schema::DataType;
-use parquet::{
-    arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions},
-    file::metadata::ParquetMetaData,
-};
+use parquet::file::metadata::ParquetMetaData;
 use std::{borrow::Cow, sync::Arc};
 use yamaa_core::{table::TableSchema, value::ColumnType};
 
@@ -88,7 +85,7 @@ pub(super) fn read_odm(bytes: &[u8]) -> Result<Decoded, Error> {
 /// is decoded and no profile is applied.
 pub(super) fn signature(bytes: &[u8]) -> Result<Vec<super::ColumnSignature>, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = row_groups::decode(frame.metadata)?;
+    let metadata = row_groups::decode(frame.metadata, &frame.footer)?;
     Ok(metadata
         .file_metadata()
         .schema_descr()
@@ -163,6 +160,10 @@ fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Byt
             file.get_or_insert_with(|| bytes.to_vec())[header.clone()].copy_from_slice(&native);
         }
     }
+    // A skipped binary that is not UTF-8 (`wire::Presentation`).
+    for opaque in &frame.opaque {
+        file.get_or_insert_with(|| bytes.to_vec())[opaque.clone()].fill(0);
+    }
     let Some(file) = file else {
         return Ok(bytes::Bytes::copy_from_slice(bytes));
     };
@@ -182,20 +183,30 @@ fn native_pages(bytes: &[u8], frame: &framing::Framing<'_>) -> Result<bytes::Byt
     Ok(bytes::Bytes::from(file))
 }
 
+/// The Arrow schema of the admitted file `metadata`, as the native conversion
+/// gives it with the file's embedded schema `hint`.
+fn native_schema(
+    metadata: &ParquetMetaData,
+    hint: Option<&metadata::Hint>,
+) -> Result<arrow_schema::Schema, Error> {
+    let held = hint.and_then(metadata::Hint::held);
+    contain_decode(|| crate::storage_api::arrow_schema(metadata, held))
+        .ok_or(Error::Malformed)?
+        .map_err(|_| Error::Malformed)
+}
+
 fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     let frame = framing::admit(bytes)?;
-    let metadata = Arc::new(row_groups::decode(frame.metadata)?);
+    let metadata = Arc::new(row_groups::decode(frame.metadata, &frame.footer)?);
     let hint = metadata::admit(metadata.file_metadata().key_value_metadata())?;
+    let held_hint = hint.as_ref().map(|hint| &hint.schema);
     let columns = metadata.file_metadata().schema_descr().columns();
+    let annotated = |column: usize| frame.annotated.contains(&column);
     // ODM field admission uses metadata alone. Ordinary profile findings keep
     // their existing precedence after all physical chunks have been decoded.
     let odm_metadata = if odm {
-        let arrow = contain_decode(|| {
-            ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
-        })
-        .ok_or(Error::Malformed)?
-        .map_err(|_| Error::Malformed)?;
-        let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
+        let arrow = native_schema(&metadata, hint.as_ref())?;
+        let arrow_schema = schema::normalize(&arrow, held_hint);
         let fields = arrow_schema
             .fields()
             .iter()
@@ -203,10 +214,13 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 name: field.name(),
                 kind: columns
                     .iter()
-                    .find(|column| {
+                    .enumerate()
+                    .find(|(_, column)| {
                         column.max_rep_level() == 0 && column.path().string() == *field.name()
                     })
-                    .and_then(|column| profile::column_type(column, field.data_type())),
+                    .and_then(|(index, column)| {
+                        profile::column_type(column, field.data_type(), annotated(index))
+                    }),
             })
             .collect::<Vec<_>>();
         let binding = yamaa_core::odm_source::bind_fields(&fields).map_err(Error::OdmFields)?;
@@ -242,13 +256,9 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     }
     let row_count =
         usize::try_from(metadata.file_metadata().num_rows()).map_err(|_| Error::Malformed)?;
-    let arrow = contain_decode(|| {
-        ArrowReaderMetadata::try_new(metadata.clone(), ArrowReaderOptions::new())
-    })
-    .ok_or(Error::Malformed)?
-    .map_err(|_| Error::Malformed)?;
+    let arrow = native_schema(&metadata, hint.as_ref())?;
     yamaa_core::limits::Limits::table(row_count, columns.len())?;
-    let arrow_schema = schema::normalize(arrow.schema(), hint.as_ref());
+    let arrow_schema = schema::normalize(&arrow, held_hint);
     // Determine retention only. Profile errors remain deferred until every
     // physical chunk has been decoded, including fields outside the profile.
     let keep: Vec<_> = columns
@@ -262,7 +272,8 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
                 && arrow_schema.fields().get(index).is_some_and(|field| {
                     column.max_rep_level() == 0
                         && column.path().string() == *field.name()
-                        && profile::column_type(column, field.data_type()).is_some()
+                        && profile::column_type(column, field.data_type(), annotated(index))
+                            .is_some()
                 })
         })
         .collect();
@@ -281,8 +292,14 @@ fn read_interpreted(bytes: &[u8], odm: bool) -> Result<Decoded, Error> {
     if let Some((_, stored)) = odm_metadata {
         return odm_decoded(raw, stored, row_count);
     }
-    let schema = profile::columns(&arrow_schema, metadata.file_metadata().schema_descr())
-        .map_err(Error::Profile)?;
+    let later = hint.as_ref().map_or(&[][..], |hint| &hint.later);
+    let schema = profile::columns(
+        &arrow_schema,
+        metadata.file_metadata().schema_descr(),
+        &frame.annotated,
+        later,
+    )
+    .map_err(Error::Profile)?;
     for (field, column) in schema.columns().iter().zip(&raw) {
         match (field.kind, column) {
             (ColumnType::Date, physical::Column::Int32(values)) => {
@@ -705,8 +722,11 @@ mod tests {
         let presented = [0x1a, 0x01, 0, 0xee];
         let frame = |headers| framing::Framing {
             metadata: &[],
+            footer: Default::default(),
+            annotated: Vec::new(),
             pages: Vec::new(),
             headers,
+            opaque: Vec::new(),
         };
         let mut file = presented.to_vec();
         file.extend(presented);

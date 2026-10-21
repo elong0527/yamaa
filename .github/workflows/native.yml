@@ -1018,7 +1018,7 @@ jobs:
     # architecture (tools/ci/manylinux.py), whose glibc 2.28 is RHEL 8's, with
     # the runner's Rust mounted read-only; on macOS and Windows it runs behind
     # a proxy that refuses every connection. The installed package then runs
-    # the conformance corpus the same way.
+    # its selftest and the conformance corpus the same way.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -1110,6 +1110,26 @@ jobs:
           else
             python -m pip install --no-build-isolation --no-index --no-cache-dir native-dist/yamaa-*.tar.gz
           fi
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log, as installation qualification evidence;
+      # the job fails unless the selftest reports succeeded. On Linux the
+      # container mounts no checkout: the cases are inside the package.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+              --volume "${PWD}:/work" --workdir /work --env HOME=/work/home --env TMPDIR=/work/tmp \
+              "${OFFLINE_IMAGE}" /work/venv/bin/python -I -c \
+              'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
+          else
+            python -I -c 'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
+          fi
       # On Linux the installed package runs as the runner's user, which then
       # compares and uploads the files that it saves: the engine publishes
       # each file readable by its owner alone.
@@ -1161,7 +1181,7 @@ jobs:
     # read-only root, from the rocker/r-ver image of R 4.6.1, with the runner's
     # Rust mounted read-only, and leaves HOME empty; on macOS and Windows it
     # runs behind a proxy that refuses every connection. The installed package
-    # then runs the conformance corpus the same way.
+    # then runs its selftest and the conformance corpus the same way.
     timeout-minutes: ${{ matrix.os == 'windows-2025' && 60 || 40 }}
     strategy:
       fail-fast: false
@@ -1236,6 +1256,28 @@ jobs:
           else
             R CMD INSTALL --library="${RUNNER_TEMP}/offline/library" yamaa_*.tar.gz
           fi
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log, as installation qualification evidence;
+      # the job fails unless the selftest reports succeeded. On Linux the
+      # container mounts no checkout: the cases are inside the package.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+              --volume "${PWD}:/work" --workdir /work \
+              --env HOME=/work/home --env TMPDIR=/work/tmp --env R_LIBS=/work/library \
+              docker.io/rocker/r-ver:4.6.1 Rscript --vanilla -e \
+              'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
+          else
+            R_LIBS="${RUNNER_TEMP}/offline/library" Rscript --vanilla -e \
+              'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
+          fi
       # On Linux the installed package runs as the runner's user, which then
       # compares and uploads the files that it saves: the engine publishes
       # each file readable by its owner alone.
@@ -1277,6 +1319,356 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: public-conformance-r-offline-${{ matrix.os }}
+          path: ${{ runner.temp }}/offline/public-conformance
+          if-no-files-found: error
+
+  offline-toolchain-python:
+    name: native-offline-toolchain (${{ matrix.os }}, python)
+    needs: dist
+    runs-on: ${{ matrix.os }}
+    # The offline toolchain route (#3030 D54), which the restricted-environment
+    # guide documents for a Linux machine whose packaged Rust is older than the
+    # workspace's rust-version. While the network is up, the job downloads the
+    # standalone installer archive of that minimum Rust for the runner's target
+    # from static.rust-lang.org and verifies its signature. Then, in containers
+    # without a network and with a read-only root, from the pinned
+    # manylinux_2_28 image of the runner's architecture, the archive's own
+    # install.sh installs Rust with no rustup, and pip builds and installs the
+    # Python source archive that a release publishes with that toolchain alone,
+    # as native-offline-source does with the pinned one. The installed package
+    # then runs the conformance corpus the same way. The runner's Rust is never
+    # activated.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: '0.13.0'
+          enable-cache: true
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: python -m pip install --no-deps -e .
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-python-ubuntu-24.04-${{ env.NATIVE_BUILD_PYTHON }}
+          path: ${{ runner.temp }}/offline/native-dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-project-${{ matrix.os }}-${{ env.NATIVE_BUILD_PYTHON }}
+          path: ${{ runner.temp }}/offline/project-dist
+      # The Rust project signs each standalone installer with the Rust signing
+      # key committed in tools/ci/keys/rust-key.gpg.ascii. gpg checks the .asc
+      # signature before unpacking, with a fresh keyring holding only that
+      # key; neither the download host nor a keyserver supplies a key.
+      - name: Download and verify the standalone Rust installer
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          version=$(python -c 'from tools.ci.toolchain import minimum; print(minimum())')
+          target="$(uname -m)-unknown-linux-gnu"
+          installer="rust-${version}-${target}.tar.xz"
+          for file in "dist/${installer}" "dist/${installer}.asc"; do
+            curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+              --retry 3 --remote-name "https://static.rust-lang.org/${file}"
+          done
+          export GNUPGHOME="${PWD}/gnupg"
+          mkdir -m 700 "${GNUPGHOME}"
+          gpg --batch --import "${GITHUB_WORKSPACE}/tools/ci/keys/rust-key.gpg.ascii"
+          gpg --batch --no-auto-key-retrieve --verify "${installer}.asc" "${installer}"
+          tar -xJf "${installer}"
+          {
+            echo "STANDALONE_RUST_VERSION=${version}"
+            echo "STANDALONE_RUST_TARGET=${target}"
+          } >> "${GITHUB_ENV}"
+      - name: Record source revision and table requirements
+        run: |
+          echo "QUALIFICATION_SOURCE_REVISION=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
+          uv export --project python --locked --extra test --no-dev --no-emit-project --no-hashes --output-file "${RUNNER_TEMP}/offline/table-requirements.txt"
+      # While the network is up. The runner's Python gets the readers of the
+      # conformance plan and comparison, and a virtual environment in the image
+      # gets the same requirements, maturin and the project programs that the
+      # benchmarks call.
+      - name: Prepare the Python that installs the archive
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          maturin=$(python -c 'from tools.ci.manylinux import maturin; print(maturin())')
+          image=$(python -c 'import platform; from tools.ci.manylinux import IMAGES; print(IMAGES[platform.machine()])')
+          interpreter=$(python -c 'from tools.ci.manylinux import PYTHON; print(PYTHON)')
+          python -m pip install --no-deps -r table-requirements.txt
+          mkdir cargo-home home tmp rust
+          echo "OFFLINE_IMAGE=${image}" >> "${GITHUB_ENV}"
+          docker run --rm --volume "${PWD}:/work" --workdir /work \
+            --env PYTHON="${interpreter}" --env MATURIN="${maturin}" "${image}" sh -c '
+              set -e
+              "${PYTHON}" -m venv venv
+              venv/bin/python -m pip install --no-cache-dir --no-deps -r table-requirements.txt \
+                "${MATURIN}" project-dist/*.whl'
+      # Each offline container first checks that no network interface but the
+      # loopback is up. install.sh installs rustc, Cargo and the standard
+      # library of the runner's target, the components of rustup's minimal
+      # profile, into /opt/rust, which the build then mounts read-only.
+      - name: Install Rust from its standalone installer without a network
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            --volume "${PWD}:/work" --volume "${PWD}/rust:/opt/rust" --workdir /work \
+            --env HOME=/work/home --env TMPDIR=/work/tmp \
+            --env STANDALONE_RUST_VERSION --env STANDALONE_RUST_TARGET \
+            "${OFFLINE_IMAGE}" sh -c '
+              set -e
+              for state in /sys/class/net/*/operstate; do
+                test "${state}" = /sys/class/net/lo/operstate || test "$(cat "${state}")" = down
+              done
+              "rust-${STANDALONE_RUST_VERSION}-${STANDALONE_RUST_TARGET}/install.sh" --prefix=/opt/rust \
+                --components="rustc,cargo,rust-std-${STANDALONE_RUST_TARGET}" --disable-ldconfig
+              /opt/rust/bin/rustc --version | grep -F "rustc ${STANDALONE_RUST_VERSION} "
+              /opt/rust/bin/cargo --version | grep -F "cargo ${STANDALONE_RUST_VERSION} "'
+      # As in native-offline-source, a download that the build attempts fails
+      # at once, and Cargo's home starts empty. No rustup is on the PATH, and
+      # the only cargo and rustc are the installed ones.
+      - name: Install the Python source archive without a network
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            --volume "${PWD}:/work" --volume "${PWD}/rust:/opt/rust:ro" --workdir /work \
+            --env HOME=/work/home --env TMPDIR=/work/tmp --env CARGO_HOME=/work/cargo-home \
+            "${OFFLINE_IMAGE}" sh -c '
+              set -e
+              for state in /sys/class/net/*/operstate; do
+                test "${state}" = /sys/class/net/lo/operstate || test "$(cat "${state}")" = down
+              done
+              PATH="/work/venv/bin:/opt/rust/bin:${PATH}"
+              test -z "$(command -v rustup)"
+              test "$(command -v cargo)" = /opt/rust/bin/cargo
+              test "$(command -v rustc)" = /opt/rust/bin/rustc
+              exec python -m pip install --no-build-isolation --no-index --no-cache-dir native-dist/yamaa-*.tar.gz'
+      # Only the installed package is mounted; its own cases must pass
+      # before it runs the external conformance corpus.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+            --volume "${PWD}:/work" --workdir /work --env HOME=/work/home --env TMPDIR=/work/tmp \
+            "${OFFLINE_IMAGE}" /work/venv/bin/python -I -c \
+            'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
+      # The installed package runs as the runner's user, which then compares
+      # and uploads the files that it saves: the engine publishes each file
+      # readable by its owner alone.
+      - name: Report installed Python public benchmark conformance
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          evidence="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          python -I -m tools.conformance.public_conformance plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          mkdir public-conformance
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+            --volume "${PWD}:/work" --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
+            --env HOME=/work/home --env TMPDIR=/work/tmp \
+            "${OFFLINE_IMAGE}" /work/venv/bin/python -I /checkout/python/tests/installed/public_conformance.py \
+            --plan public-conformance-plan --fixtures /checkout/benchmarks \
+            --python-lock /checkout/python/uv.lock --output public-conformance/observed \
+            --source-revision "${QUALIFICATION_SOURCE_REVISION}" --package-form source --evidence "${evidence}"
+          python -I -m tools.conformance.public_conformance compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve Python public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-python-offline-toolchain-${{ matrix.os }}
+          path: ${{ runner.temp }}/offline/public-conformance
+          if-no-files-found: error
+
+  offline-toolchain-r:
+    name: native-offline-toolchain (${{ matrix.os }}, r)
+    needs: r-dist
+    runs-on: ${{ matrix.os }}
+    # The offline toolchain route (#3030 D54) for the R source package that a
+    # release publishes: the minimum Rust, downloaded and verified while the
+    # network is up and installed with no rustup and no network, as in
+    # native-offline-toolchain (python). Then R CMD INSTALL builds the package
+    # with that toolchain alone, in a container without a network and with a
+    # read-only root, from the rocker/r-ver image of R 4.6.1, as
+    # native-offline-source does with the pinned one, and leaves HOME empty.
+    # The installed package then runs the conformance corpus the same way.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3 pyarrow==25.0.1
+      - name: Download the published R source archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-r-ubuntu-24.04
+          path: ${{ runner.temp }}/offline
+      # The Rust project signs each standalone installer with the Rust signing
+      # key committed in tools/ci/keys/rust-key.gpg.ascii. gpg checks the .asc
+      # signature before unpacking, with a fresh keyring holding only that
+      # key; neither the download host nor a keyserver supplies a key.
+      - name: Download and verify the standalone Rust installer
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          version=$(python -c 'from tools.ci.toolchain import minimum; print(minimum())')
+          target="$(uname -m)-unknown-linux-gnu"
+          installer="rust-${version}-${target}.tar.xz"
+          for file in "dist/${installer}" "dist/${installer}.asc"; do
+            curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+              --retry 3 --remote-name "https://static.rust-lang.org/${file}"
+          done
+          export GNUPGHOME="${PWD}/gnupg"
+          mkdir -m 700 "${GNUPGHOME}"
+          gpg --batch --import "${GITHUB_WORKSPACE}/tools/ci/keys/rust-key.gpg.ascii"
+          gpg --batch --no-auto-key-retrieve --verify "${installer}.asc" "${installer}"
+          tar -xJf "${installer}"
+          {
+            echo "STANDALONE_RUST_VERSION=${version}"
+            echo "STANDALONE_RUST_TARGET=${target}"
+          } >> "${GITHUB_ENV}"
+      # The original benchmarks call the project programs package, which the
+      # conformance step installs from this copy.
+      - name: Prepare the installation
+        working-directory: ${{ runner.temp }}/offline
+        run: |
+          mkdir library home tmp rust
+          cp -R "${GITHUB_WORKSPACE}/rust/tests/project-programs/r" project-programs
+          docker pull docker.io/rocker/r-ver:4.6.1
+      # Each offline container first checks that no network interface but the
+      # loopback is up. install.sh installs rustc, Cargo and the standard
+      # library of the runner's target, the components of rustup's minimal
+      # profile, into /opt/rust, which the build then mounts read-only.
+      - name: Install Rust from its standalone installer without a network
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            --volume "${PWD}:/work" --volume "${PWD}/rust:/opt/rust" --workdir /work \
+            --env HOME=/work/home --env TMPDIR=/work/tmp \
+            --env STANDALONE_RUST_VERSION --env STANDALONE_RUST_TARGET \
+            docker.io/rocker/r-ver:4.6.1 sh -c '
+              set -e
+              for state in /sys/class/net/*/operstate; do
+                test "${state}" = /sys/class/net/lo/operstate || test "$(cat "${state}")" = down
+              done
+              "rust-${STANDALONE_RUST_VERSION}-${STANDALONE_RUST_TARGET}/install.sh" --prefix=/opt/rust \
+                --components="rustc,cargo,rust-std-${STANDALONE_RUST_TARGET}" --disable-ldconfig
+              /opt/rust/bin/rustc --version | grep -F "rustc ${STANDALONE_RUST_VERSION} "
+              /opt/rust/bin/cargo --version | grep -F "cargo ${STANDALONE_RUST_VERSION} "'
+      # tools/configure.R finds cargo and rustc on the PATH, where no rustup is
+      # and the only cargo and rustc are the installed ones, and reports their
+      # versions in the installation log.
+      - name: Install the R source package without a network
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+            --volume "${PWD}:/work" --volume "${PWD}/rust:/opt/rust:ro" \
+            --env PATH=/opt/rust/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            --env HOME=/work/home --env TMPDIR=/work/tmp \
+            docker.io/rocker/r-ver:4.6.1 sh -c '
+              set -e
+              for state in /sys/class/net/*/operstate; do
+                test "${state}" = /sys/class/net/lo/operstate || test "$(cat "${state}")" = down
+              done
+              test -z "$(command -v rustup)"
+              test "$(command -v cargo)" = /opt/rust/bin/cargo
+              test "$(command -v rustc)" = /opt/rust/bin/rustc
+              R CMD INSTALL --library=/work/library /work/yamaa_*.tar.gz
+              test -z "$(ls -A /work/home)"'
+      # Only the installed package is mounted; its own cases must pass
+      # before it runs the external conformance corpus.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+            --volume "${PWD}:/work" --workdir /work --env HOME=/work/home --env TMPDIR=/work/tmp \
+            --env R_LIBS=/work/library \
+            docker.io/rocker/r-ver:4.6.1 Rscript --vanilla -e \
+            'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
+      # The installed package runs as the runner's user, which then compares
+      # and uploads the files that it saves: the engine publishes each file
+      # readable by its owner alone.
+      - name: Report installed R public benchmark conformance
+        working-directory: ${{ runner.temp }}/offline
+        env:
+          PUBLIC_CONFORMANCE_PACKAGE_FORM: source
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          revision=$(git -C "${GITHUB_WORKSPACE}" rev-parse HEAD)
+          python -I -m tools.conformance.public_conformance plan \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --output public-conformance-plan
+          mkdir public-conformance
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,exec --user "$(id -u):$(id -g)" \
+            --volume "${PWD}:/work" --volume "${GITHUB_WORKSPACE}:/checkout:ro" --workdir /work \
+            --env HOME=/work/home --env TMPDIR=/work/tmp --env R_LIBS=/work/library \
+            --env PUBLIC_CONFORMANCE_PACKAGE_FORM --env GITHUB_SERVER_URL --env GITHUB_REPOSITORY \
+            --env GITHUB_RUN_ID --env REVISION="${revision}" \
+            docker.io/rocker/r-ver:4.6.1 sh -c '
+              set -e
+              R CMD INSTALL --library=/work/library project-programs
+              Rscript --vanilla /checkout/rust/tests/public_conformance.R \
+                public-conformance-plan /checkout/benchmarks public-conformance/observed "${REVISION}"'
+          python -I -m tools.conformance.public_conformance compare \
+            --fixtures "${GITHUB_WORKSPACE}/benchmarks" --observed public-conformance/observed \
+            --output public-conformance/inventory.json
+      - name: Preserve R public benchmark inventory and saved artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-r-offline-toolchain-${{ matrix.os }}
           path: ${{ runner.temp }}/offline/public-conformance
           if-no-files-found: error
 
@@ -1404,11 +1796,11 @@ jobs:
     # install.packages(path, repos = NULL) and R of its series, on a runner
     # that has no Rust, no Rtools and no network: the image's Rust is
     # uninstalled, setup-r installs no Rtools, any Rtools that the image
-    # carries is deleted, and the installation, the conformance corpus and
-    # the installed R suites run behind a proxy that refuses every
-    # connection. Before that, while the network is up, the suites' suggested
-    # packages are installed as CRAN binaries. The cohort comparison reads the
-    # reports.
+    # carries is deleted, and the installation, the installed package's
+    # selftest, the conformance corpus and the installed R suites run behind
+    # a proxy that refuses every connection. Before that, while the network
+    # is up, the suites' suggested packages are installed as CRAN binaries.
+    # The cohort comparison reads the reports.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -1554,6 +1946,21 @@ jobs:
             "${linked}" -L "${R_LIBS}/yamaa/libs/yamaa.so"
             if "${linked}" -L "${R_LIBS}/yamaa/libs/yamaa.so" | grep -E '/opt/homebrew/|/usr/local/'; then exit 1; fi
           fi
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log, as installation qualification evidence;
+      # the job fails unless the selftest reports succeeded. R runs with the
+      # toolchain-free PATH.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}
+        env:
+          R_LIBS: ${{ runner.temp }}/r-binary-library
+          http_proxy: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: ''
+        run: |
+          export PATH="$(cat toolchain-free-path)"
+          Rscript --vanilla -e 'r <- yamaa::yamaa_selftest(); print(r); quit(status = r$status != "succeeded")'
       # The original benchmarks call the project programs package, plain R
       # that installs without a compiler. R runs with the toolchain-free PATH.
       - name: Report installed R public benchmark conformance

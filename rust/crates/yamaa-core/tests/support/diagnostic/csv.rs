@@ -89,11 +89,26 @@ pub(crate) fn reached() -> BTreeSet<ConditionCode> {
         assert_eq!(finding.context["path"], C::String("source.csv".into()));
         assert_eq!(finding.context["record"], C::from(record));
         assert_eq!(finding.context["field"], field);
-        assert_eq!(finding.context.len(), 4);
+        // A mark also records whether its input declares one (CSV-10).
+        if condition == "source_byte_order_mark" {
+            assert_eq!(finding.context["declared"], C::Bool(false));
+            assert_eq!(finding.context.len(), 5);
+        } else {
+            assert_eq!(finding.context.len(), 4);
+        }
         assert_eq!(finding.source_span, None);
         assert_eq!(finding.operand_route, None);
         reached.insert(rendered(&finding));
     }
+    // A declared mark that is absent keeps the condition and records the
+    // declaration.
+    let error = yamaa_core::csv_source::parse_declared(b"ID\n", true).unwrap_err();
+    let finding = error.finding("SRC", "source.csv").unwrap().diagnostic();
+    assert_eq!(finding.condition(), "source_byte_order_mark");
+    assert_eq!(finding.rule(), Some("CSV-16"));
+    assert_eq!(finding.spec_paths, ["input.SRC.path"]);
+    assert_eq!(finding.context["declared"], C::Bool(true));
+    reached.insert(rendered(&finding));
     let header = (0..=yamaa_core::limits::Limits::COLUMNS)
         .map(|index| format!("C{index}"))
         .collect::<Vec<_>>()

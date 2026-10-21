@@ -37,7 +37,9 @@
 //!
 //! Every specification whose trees still differ is listed in [`EXPECTED`]
 //! with the reason, and the test fails when the list is wrong in either
-//! direction. Each 1.0 tree is also checked to be total and located. The
+//! direction. Each 1.0 tree is also checked to be total and located. A
+//! benchmark already written in 1.0 has no 0.5 tree to compare: the
+//! converter copies it unchanged, and only its 1.0 tree is checked. The
 //! converter runs through `uv` in the locked tooling environment that
 //! `make setup` installs; without uv or PyYAML the test says so.
 
@@ -274,6 +276,17 @@ fn legacy(path: &Path) -> Result<(Spec, PreparedDocument), String> {
     let document = shipped_schema::prepare(source, identity, &mut Files)
         .map_err(|error| refusal(&format!("{error:?}")))?;
     Ok((lower(document.model(), None).into_spec(), document))
+}
+
+/// Whether a benchmark's specification is already written in 1.0, so that
+/// no 0.5 tree exists to compare with its conversion, which is the same file.
+fn written_in_1_0(path: &Path) -> bool {
+    let (source, _) = source(path);
+    let closures = Closures::shipped().unwrap();
+    matches!(
+        document::decode(source, FileType::Spec, Some(LANGUAGE_VERSION), &closures),
+        Ok(Decoded::Versioned(_))
+    )
 }
 
 /// The 1.0 front end's tree for a converted specification, or why it is
@@ -1086,6 +1099,13 @@ fn every_converted_benchmark_lowers_to_its_original_tree() {
         for entry in entries(case) {
             let label = format!("{name}/{entry}");
             let converted = scratch.0.join("benchmarks").join(&name).join(&entry);
+            if written_in_1_0(&case.join(&entry)) {
+                match versioned(&converted) {
+                    Ok(new) => check_tree(&label, &new, &mut failures),
+                    Err(new) => refused.push(format!("{label}: only 1.0, {new}")),
+                }
+                continue;
+            }
             match (legacy(&case.join(&entry)), versioned(&converted)) {
                 (Ok((mut old, document)), Ok(mut new)) => {
                     compared += 1;

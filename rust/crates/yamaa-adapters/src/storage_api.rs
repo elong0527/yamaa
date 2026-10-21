@@ -9,6 +9,15 @@
 //! malformed schema, so `ipc_schema` refuses the missing field list and
 //! contains any remaining conversion panic.
 //!
+//! Arrow 55 has no 32- or 64-bit decimal, and its IPC conversion reads no
+//! list view, all of which later Arrow writers name in a Parquet file's
+//! embedded schema. So `ipc_schema` holds each as its nearest Arrow 55 type
+//! (a 128-bit decimal, a list or a large list) and returns where it did
+//! (`LaterType`), and `arrow_schema` gives the native schema conversion the
+//! held schema in place of the file's. An embedded schema chooses a layout,
+//! never a field type (PARQUET-7), and the stored type of a refused field
+//! still names the type the file names (`parquet_source::type_name`).
+//!
 //! The row-group reader construction also lives here: on 55 the constructor
 //! takes the group's `Option<&[OffsetIndexMetaData]>` sliced from
 //! `ParquetMetaData::offset_index` (later releases take a
@@ -58,17 +67,163 @@ use std::sync::Arc;
 #[cfg(feature = "parquet")]
 use yamaa_core::parquet_source::{Logical, Unit};
 
+/// An Arrow type that an embedded schema names and Arrow 55 has no
+/// counterpart for, held as its nearest Arrow 55 type.
+#[cfg(feature = "parquet")]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum LaterType {
+    /// A 32- or 64-bit decimal, held as a 128-bit one of the same precision
+    /// and scale.
+    Decimal { bits: i32, precision: u8, scale: i8 },
+    /// A list view, held as a list.
+    ListView,
+    /// A large list view, held as a large list.
+    LargeListView,
+}
+
+/// Each later type an embedded schema names, by the path of the field that
+/// holds it: the index of the schema's field, then of each child below it,
+/// in the order the IPC schema lists them.
+#[cfg(feature = "parquet")]
+pub(crate) type LaterTypes = Vec<(Vec<usize>, LaterType)>;
+
+/// Convert a verified IPC schema to Arrow 55's types, holding each later
+/// type as its nearest one, and say where it held one.
 #[cfg(feature = "parquet")]
 pub(crate) fn ipc_schema(
     schema: arrow_ipc::Schema<'_>,
-) -> Result<arrow_schema::Schema, arrow_schema::ArrowError> {
+) -> Result<(arrow_schema::Schema, LaterTypes), arrow_schema::ArrowError> {
     let malformed = || {
         arrow_schema::ArrowError::ParseError("IPC schema is not a valid Arrow schema".to_string())
     };
-    if schema.fields().is_none() {
+    let Some(fields) = schema.fields() else {
         return Err(malformed());
+    };
+    // 55 refuses a big-endian decimal, as later releases do.
+    let little = schema.endianness() == arrow_ipc::Endianness::Little;
+    if little && fields.iter().any(names_later) {
+        let mut later = Vec::new();
+        let held = fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| hold(field, &mut vec![index], &mut later))
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(malformed)?;
+        return Ok((arrow_schema::Schema::new(held), later));
     }
-    contain_decode(|| arrow_ipc::convert::fb_to_schema(schema)).ok_or_else(malformed)
+    contain_decode(|| arrow_ipc::convert::fb_to_schema(schema))
+        .ok_or_else(malformed)
+        .map(|schema| (schema, Vec::new()))
+}
+
+/// Whether `field`'s type, or a type below it, is a later one.
+#[cfg(feature = "parquet")]
+fn names_later(field: arrow_ipc::Field<'_>) -> bool {
+    use arrow_ipc::Type;
+    let later = match field.type_type() {
+        Type::Decimal => field
+            .type_as_decimal()
+            .is_some_and(|decimal| matches!(decimal.bitWidth(), 32 | 64)),
+        Type::ListView | Type::LargeListView => true,
+        _ => false,
+    };
+    later
+        || field
+            .children()
+            .is_some_and(|children| children.iter().any(names_later))
+}
+
+/// Convert `field`, at `path`, holding each later type below it as its
+/// nearest Arrow 55 type and noting it in `later`. Only a decimal, and the
+/// lists, structs and maps above one or above a list view, are held: `None`
+/// refuses any other type with a later type below it, as Arrow 55 does, and
+/// a malformed field.
+#[cfg(feature = "parquet")]
+fn hold(
+    field: arrow_ipc::Field<'_>,
+    path: &mut Vec<usize>,
+    later: &mut LaterTypes,
+) -> Option<arrow_schema::Field> {
+    use arrow_ipc::Type;
+    use arrow_schema::DataType;
+    if !names_later(field) {
+        return contain_decode(|| arrow_schema::Field::from(field));
+    }
+    if field.dictionary().is_some() {
+        return None;
+    }
+    let mut children = Vec::new();
+    for (index, child) in field.children().into_iter().flatten().enumerate() {
+        path.push(index);
+        children.push(hold(child, path, later));
+        path.pop();
+    }
+    let children = children.into_iter().collect::<Option<Vec<_>>>()?;
+    let only = || match children.as_slice() {
+        [child] => Some(Arc::new(child.clone())),
+        _ => None,
+    };
+    let data_type = match field.type_type() {
+        Type::Decimal => {
+            let decimal = field.type_as_decimal()?;
+            let precision = u8::try_from(decimal.precision()).ok()?;
+            let scale = i8::try_from(decimal.scale()).ok()?;
+            let bits = decimal.bitWidth();
+            later.push((
+                path.clone(),
+                LaterType::Decimal {
+                    bits,
+                    precision,
+                    scale,
+                },
+            ));
+            DataType::Decimal128(precision, scale)
+        }
+        Type::ListView => {
+            later.push((path.clone(), LaterType::ListView));
+            DataType::List(only()?)
+        }
+        Type::LargeListView => {
+            later.push((path.clone(), LaterType::LargeListView));
+            DataType::LargeList(only()?)
+        }
+        Type::List => DataType::List(only()?),
+        Type::LargeList => DataType::LargeList(only()?),
+        Type::FixedSizeList => {
+            DataType::FixedSizeList(only()?, field.type_as_fixed_size_list()?.listSize())
+        }
+        Type::Struct_ => DataType::Struct(children.into()),
+        Type::Map => DataType::Map(only()?, field.type_as_map()?.keysSorted()),
+        _ => return None,
+    };
+    Some(arrow_schema::Field::new(
+        field.name()?,
+        data_type,
+        field.nullable(),
+    ))
+}
+
+/// The Arrow schema the native conversion gives the file `metadata`, with
+/// its embedded schema's hints, or with `held` in their place: the embedded
+/// schema as `ipc_schema` held it, when it names a later type.
+#[cfg(feature = "parquet")]
+pub(crate) fn arrow_schema(
+    metadata: &ParquetMetaData,
+    held: Option<&arrow_schema::Schema>,
+) -> Result<arrow_schema::Schema, ParquetError> {
+    use parquet::{
+        arrow::{encode_arrow_schema, parquet_to_arrow_schema, ARROW_SCHEMA_META_KEY},
+        file::metadata::KeyValue,
+    };
+    let schema = metadata.file_metadata().schema_descr();
+    match held {
+        Some(held) => {
+            let hint = encode_arrow_schema(held);
+            let held = vec![KeyValue::new(ARROW_SCHEMA_META_KEY.to_string(), hint)];
+            parquet_to_arrow_schema(schema, Some(&held))
+        }
+        None => parquet_to_arrow_schema(schema, metadata.file_metadata().key_value_metadata()),
+    }
 }
 
 pub(crate) use stream::StreamReader;

@@ -43,6 +43,15 @@ CRAN_NO_SUGGESTS_R_VERSIONS = ("devel",)
 # refuses every connection.
 OFFLINE_SOURCE_PLATFORMS = PYTHON_PLATFORMS
 OFFLINE_SOURCE_HOSTS = ("python", "r")
+# The offline toolchain route (#3030 D54), which the restricted-environment
+# guide documents for a Linux machine whose packaged Rust is older than the
+# workspace's rust-version: that minimum Rust, installed from its standalone
+# installer archive of static.rust-lang.org with no rustup and no network,
+# builds and installs the source archives of these hosts that a release
+# publishes, in a container without a network, and each then runs the
+# conformance corpus.
+OFFLINE_TOOLCHAIN_PLATFORMS = ("ubuntu-24.04", "ubuntu-24.04-arm")
+OFFLINE_TOOLCHAIN_HOSTS = ("python", "r")
 # R-release and R-oldrel, the two R series that CRAN builds binary packages
 # for, each at its latest patch release. The other native R lanes use
 # R-release.
@@ -106,6 +115,10 @@ def coverage():
         "offline_source": {
             "os": list(OFFLINE_SOURCE_PLATFORMS),
             "host": list(OFFLINE_SOURCE_HOSTS),
+        },
+        "offline_toolchain": {
+            "os": list(OFFLINE_TOOLCHAIN_PLATFORMS),
+            "host": list(OFFLINE_TOOLCHAIN_HOSTS),
         },
         "r_binary": {"os": list(R_BINARY_PLATFORMS), "r": list(R_BINARY_VERSIONS)},
         "cli": {

@@ -136,8 +136,8 @@ fn a_project_file_on_a_network_share_is_a_caller_path() {
         identity(&specification),
     );
     assert!(checked.is_empty(), "{checked:?}");
-    let read =
-        yamaa_adapters::project_scope::Project::read(&project, Language::Python, None).unwrap();
+    let read = yamaa_adapters::project_scope::Project::read(&project, Some(Language::Python), None)
+        .unwrap();
     assert_eq!(read.listed().len(), 1);
     assert!(read.listed()[0].failure().is_empty());
 }
