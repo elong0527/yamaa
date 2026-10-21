@@ -34,6 +34,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The interface stability check reads each release tag's manifests, but
+      # no history: one commit per yamaa-v* tag costs less than fetch-depth: 0,
+      # which fetches every branch's history. Without the tags, the check fails
+      # wherever it needs a baseline.
+      - name: Fetch the release tags
+        run: git fetch --no-tags --depth=1 origin '+refs/tags/yamaa-v*:refs/tags/yamaa-v*'
       - uses: ./.github/actions/setup
       - id: lint
         run: make check-lint

@@ -36,6 +36,7 @@ CHECKS = (
     "tools.rules.check",
     "tools.validation.check_documentation",
     "tools.validation.check_diagnostics",
+    "tools.validation.check_interface_stability",
 )
 
 
