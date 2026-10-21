@@ -67,40 +67,12 @@ use yamaa_core::table::TableAccess;
 use yamaa_core::value::ColumnType;
 
 /// Each specification whose trees differ, with the reason.
-const EXPECTED: &[(&str, &str)] = &[
-    (
-        "negative-derivation-call-form/spec.yaml",
-        "D18: the bare string `to_date(DM.BRTHDTC)` is expression text in 1.0, a call \
-         outside the closed function vocabulary whose formula holds \
-         `prohibited_function` (FORMULA-27) for binding to report; 0.5 refuses the \
-         same string at validation as a variable that does not match its pattern, \
-         so only 0.5 refuses it here",
-    ),
-    (
-        "negative-impute-missing-month/spec.yaml",
-        "D61: `minimum_source_precision: year` asks for a month the rules do not \
-         supply; the field and this negative retire",
-    ),
-    (
-        "negative-impute-unreachable-month/spec.yaml",
-        "D61: `minimum_source_precision: month` beside a `month` rule; the field and \
-         this negative retire",
-    ),
-    (
-        "negative-lookup-unknown-key/spec.yaml",
-        "D23, D60: the intermediate REFRANGE reads LBRANGE, which stores none of the \
-         output keys, so 0.5 infers no key and the converter declares none; 1.0 \
-         refuses the intermediate before any input is read as missing_required_field \
-         (LOOKUP-3), where 0.5 refuses it at binding as no_applicable_keys; D60 \
-         re-authors this negative's error.yaml",
-    ),
-    (
-        "sdtm-tr-tumor-measurements/spec.yaml",
-        "D18: `compute: {expr: TRORRES_N}` holds only a name, which 1.0 text reads as \
-         a reference (FORMULA-9, EXPR-4); TRORRES_N is a float column, so the value \
-         is the same",
-    ),
-];
+const EXPECTED: &[(&str, &str)] = &[(
+    "sdtm-tr-tumor-measurements/spec.yaml",
+    "D18: `compute: {expr: TRORRES_N}` holds only a name, which 1.0 text reads as \
+     a reference (FORMULA-9, EXPR-4); TRORRES_N is a float column, so the value \
+     is the same",
+)];
 
 fn repository() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
