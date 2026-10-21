@@ -78,8 +78,9 @@ stages the R bundle under `src/rust`, with its crates compressed
 `make test-r` runs). Given built archives, `tools.packaging.check_cargo_lock`
 checks their bundles against the checkout and refuses a toolchain file
 anywhere in them. The toolchain file names only what a build needs; add
-Clippy and rustfmt for repository checks with `rustup component add clippy rustfmt`
-from `rust/`, as `python -m tools.ci.toolchain --install` does in CI.
+Clippy, rustfmt and the standard library's sources for repository checks with
+`rustup component add clippy rustfmt rust-src` from `rust/`, as
+`python -m tools.ci.toolchain --install` does in CI.
 The [source packaging guidance](docs/release.md#source-package-contents) links
 the vendored licenses and patch provenance.
 
@@ -87,27 +88,38 @@ Every package ships the third-party notices of its host's crate,
 `python/LICENSE-THIRD-PARTY.txt` for the Python packages,
 `R/yamaa/inst/LICENSE-THIRD-PARTY.txt` for the R package and
 `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt` for the command-line archives,
-generated from `rust/Cargo.lock` and from the standard library notice of the
-toolchain that `rust/rust-toolchain.toml` pins. They list only the crates that
-the host links on the supported targets, each with the one license that yamaa
-relies on, and no notice names a GNU license (#3364). After changing the lock
-or the pinned toolchain, regenerate them and commit the results. The generator
-runs `rustc` in `rust/`, where rustup selects the pinned toolchain:
+generated from `rust/Cargo.lock` and from the standard library notice and the
+`rust-src` component of the toolchain that `rust/rust-toolchain.toml` pins.
+They list only the crates that the host links on the supported targets, each
+with the one license that yamaa relies on, and no notice names a GNU license
+(#3364). The standard library's own crates come from `rust-src`: those that
+`library/std/Cargo.toml` declares for the supported targets, at the versions
+that `library/Cargo.lock` locks, with the license files of their packages in
+`library/vendor` (#3369). The archives for the musl targets also carry
+`rust/crates/yamaa-cli/LICENSE-MUSL.txt`, the notice of the musl C library that
+their executables link. After changing the lock or the pinned toolchain,
+regenerate the notices and commit the results. The generator runs `rustc` in
+`rust/`, where rustup selects the pinned toolchain:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
 ```
 
+Where rustup cannot add `rust-src`, set `YAMAA_RUST_SRC_LIBRARY` to the
+`lib/rustlib/src/rust/library` directory of the pinned release's unpacked
+`rust-src` archive from static.rust-lang.org.
+
 `make check-repository` fails while a linked crate has no matching notice entry
 or the Python License-Expression misses a license that a linked crate is relied
-on under. The generator reads only the crate packages Cargo has unpacked. It
-stops instead of guessing when a crate needs a license outside its reviewed
-list, ships an unclassified license file, or would bring in a text that names a
-GNU license; review the crate and extend the tables in
-`tools/packaging/generate_third_party_notices.py`. A toolchain update also
-needs `LIBRARY_LINKED` there reviewed: the standard library crates that the
-supported targets link, from `library/std/Cargo.toml` and `library/Cargo.lock`
-of that toolchain's `rust-src` component.
+on under. The generator reads only the crate packages Cargo has unpacked and
+the toolchain's own files. It stops instead of guessing when a crate needs a
+license outside its reviewed list, ships an unclassified license file, or would
+bring in a text that names a GNU license; review the crate and extend the
+tables in `tools/packaging/generate_third_party_notices.py`. A toolchain update
+also needs `MUSL` there reviewed, and the check stops until it is: the musl
+release that the toolchain bundles for its `*-linux-musl` targets, as
+`src/ci/docker/scripts/musl.sh` of the Rust repository names it at the
+release's tag, with `LICENSE-MUSL.txt` holding that release's `COPYRIGHT` file.
 
 Every crate of each host's trimmed lock has a purpose in
 `tools/packaging/crate_purposes.toml`: the source archives ship them all,
@@ -121,6 +133,14 @@ the file's header describes, and remove the lines of crates that no host ships
 any more. From `rust/`,
 `cargo tree --locked --offline --workspace --target all -i <crate>` shows what
 pulls a crate in.
+
+The same file's `[unconditional.<engine crate>]` tables say why an engine crate
+(`yamaa-core`, `yamaa-adapters` or `yamaa`) depends, without a feature, on a
+crate that #3030 section 2.9 scopes to the features and adapters that need it:
+an Arrow crate, `flatbuffers`, `serde_json` or `toml`. The same check reads the
+engine crates' manifests and fails while such a dependency has no reason, or a
+reason names a dependency that is optional or gone, so the change that moves a
+crate behind a feature also removes its reason.
 
 Every package also ships `COMPONENTS.tsv` beside the notices: an inventory,
 without digests, of the components that its host's packages are built from.
@@ -235,8 +255,8 @@ A change to the executor, such as rewrite 1 (#2785), must leave every result
 unchanged. Each such PR passes ordinary CI and the `equivalence` and
 `conversion` jobs below on its exact head. Those jobs are the proof: run
 `make check-equivalence` or `make check-conversion` locally only to debug a
-CI failure of that gate (D148 on #3030). CI's `equivalence` job runs the gate
-on a pull request unless its diff is confined to root `README.md`,
+CI failure of that gate (D148 on #3030). CI runs the gate on a pull request
+unless its diff is confined to root `README.md`,
 `CONTRIBUTING.md`, `AGENTS.md` and Markdown files under `docs/`. Such a
 documentation-only pull request passes with a notice without running the
 gate. All other paths, including new
@@ -251,6 +271,11 @@ object a second time and requires it to reuse what the first run compiled,
 with the same issues, tables and saved bytes. On the same installs it then
 runs the installed Python suites and `R CMD check`, which carry the
 cross-host diagnostic parity truth and the host-fixture families.
+`HOSTS=python` runs the Python half alone: its build, its conformance and the
+installed suites; `HOSTS=r` runs the R half: its build, its conformance and
+`R CMD check`. CI runs the two halves in parallel, as the jobs
+`equivalence (python)` and `equivalence (r)`, and its `equivalence` job passes
+only when both pass; that one check is the gate's result.
 While the 0.5 and 1.0 surfaces coexist (#3030 P1-9 to P2-13), `make
 check-conversion` proves the 1.0 front end against the same truth. The
 converter (`tools/migrate`) writes every benchmark as 1.0 into a temporary
@@ -262,7 +287,7 @@ originals, and composes each Define benchmark's documents at its fixed time.
 `HOSTS=python,r` adds the R host. A benchmark whose expected files a decided
 item changes is excepted in `tools/migrate/excepted.py`, with its reason, and
 the gate lists each one. CI's `conversion` job runs the gate on Python on
-every pull request that the `equivalence` job runs on, by the same rule
+every pull request that the equivalence gate runs on, by the same rule
 (#3030 D124), and a documentation-only pull request passes it with a notice;
 a weekly schedule and a dispatch run it on both hosts.
 The repository tools that read benchmarks read each file by its own header,
@@ -294,9 +319,10 @@ Pin external actions to complete commit IDs with exact release comments.
 PRs and the main schedule run four development jobs: repository checks
 (including lint), the Rust workspace, and the Python and R hosts on Linux.
 These four checks are required to merge into main.
-The additional `equivalence` and `conversion` jobs run their gates on the pull
-requests described above and on dispatch, and `conversion` also weekly; a
-documentation-only pull request passes both with a skip notice.
+The additional `equivalence` and `conversion` checks run their gates on the
+pull requests described above and on dispatch, `equivalence` as one job per
+host, and `conversion` also weekly; a documentation-only pull request passes
+both with a skip notice.
 
 The `Release compatibility` workflow checks the minimum Rust toolchain, the R
 source package built with it, minimal format builds, Python 3.15 and minimum
@@ -465,9 +491,11 @@ Native qualification is separate: `.github/workflows/native.yml` builds and
 installs the supported Python wheel/source and R source and binary
 combinations on dispatch, on a `qualification/issue-*` push and weekly on
 main. It checks public benchmark conformance, installed host suites,
-packaging, optimized Rust behavior and portable math, installs both source
-archives that a release publishes with the network disabled on every platform
-(its `native-offline-source` jobs) and again on Linux with the minimum Rust,
+packaging, optimized Rust behavior and portable math, installs each wheel
+that a release publishes from local files with the network disabled (its
+`native-offline-wheel` jobs), installs both source archives that a release
+publishes with the network disabled on every platform (its
+`native-offline-source` jobs) and again on Linux with the minimum Rust,
 installed from its standalone installer with no rustup or network (its
 `native-offline-toolchain` jobs), builds the R binary packages that a
 release publishes and installs each with no Rust, Rtools or network (its

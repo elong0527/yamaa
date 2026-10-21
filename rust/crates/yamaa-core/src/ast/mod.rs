@@ -177,6 +177,17 @@ pub enum ModelKind {
     Adam,
 }
 
+impl ModelKind {
+    /// The model as `model` writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Sdtm => "SDTM",
+            Self::Send => "SEND",
+            Self::Adam => "ADaM",
+        }
+    }
+}
+
 /// One resolved specification: composed, pruned and admitted.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Spec {

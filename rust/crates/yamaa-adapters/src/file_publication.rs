@@ -220,10 +220,14 @@ impl Publisher {
         publisher.check_target()?;
         Ok(publisher)
     }
-    fn check_target(&self) -> Result<(), Error> {
+    /// Admit an absent target or a regular file, returning a present
+    /// target's permission bits.
+    fn check_target(&self) -> Result<Option<Mode>, Error> {
         match fs::statat(&self.parent, self.name.as_str(), AtFlags::SYMLINK_NOFOLLOW) {
-            Ok(status) if kind(&status) == FileType::RegularFile => Ok(()),
-            Err(rustix::io::Errno::NOENT) => Ok(()),
+            Ok(status) if kind(&status) == FileType::RegularFile => Ok(Some(
+                Mode::from_raw_mode(status.st_mode) & (Mode::RWXU | Mode::RWXG | Mode::RWXO),
+            )),
+            Err(rustix::io::Errno::NOENT) => Ok(None),
             Ok(_) => Err(Error::InvalidTarget),
             Err(error) => Err(error.into()),
         }
@@ -234,9 +238,11 @@ impl Publisher {
         let staged = self.stage(&mut locks, declared, content)?;
         self.commit(staged)
     }
-    /// Write `content` completely into a private temporary file beside the
-    /// target, flushed and synced, without making it visible. The target's
-    /// directory stays locked in `locks` until the save ends (OUTPUT-8).
+    /// Write `content` completely into a temporary file in a private
+    /// directory beside the target, flushed and synced, without making it
+    /// visible. The target's directory stays locked in `locks` until the save
+    /// ends (OUTPUT-8). The file then has the mode it is published with: a
+    /// present target's permission bits, or else 0666 less the umask (D92).
     pub fn stage(
         &self,
         locks: &mut Locks,
@@ -248,12 +254,16 @@ impl Publisher {
         }
         yamaa_core::limits::Limits::output_bytes(content.len()).map_err(Error::Limit)?;
         locks.hold(&self.parent)?;
-        self.check_target()?;
+        let replaced = self.check_target()?;
         let (mut temporary, descriptor) = self.temporary()?;
         let written = (|| {
             let mut file = File::from(descriptor);
             file.write_all(content)?;
             file.flush()?;
+            // Before the sync, so the sync covers the mode too.
+            if let Some(mode) = replaced {
+                fs::fchmod(&file, mode)?;
+            }
             file.sync_all()?;
             let held = fs::fstat(&file)?;
             drop(file);
@@ -424,11 +434,14 @@ impl Publisher {
                     ));
                 }
             };
+            // The private directory, not the file's mode, keeps the candidate
+            // from other users: the umask narrows 0666 as it does for any
+            // file `open(2)` creates.
             let file = match fs::openat(
                 &temporary.directory,
                 "candidate.part",
                 OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::RUSR | Mode::WUSR,
+                Mode::RUSR | Mode::WUSR | Mode::RGRP | Mode::WGRP | Mode::ROTH | Mode::WOTH,
             ) {
                 Ok(file) => file,
                 Err(error) => return Err(temporary.failure(error.into())),
@@ -461,11 +474,12 @@ fn parent_case_sensitive(parent: &OwnedFd) -> Result<bool, Error> {
         _ => Err(Error::InvalidTarget),
     }
 }
-/// One staged file: its complete bytes in a private temporary file beside the
-/// target, not yet visible there. It holds no descriptor, so a save may stage
-/// any number of files: the publisher that staged it reopens its private
-/// directory to commit or abort it, and confirms the directory is the one it
-/// staged into. A staged file neither committed nor aborted stays behind.
+/// One staged file: its complete bytes in a temporary file in a private
+/// directory beside the target, not yet visible there. It holds no
+/// descriptor, so a save may stage any number of files: the publisher that
+/// staged it reopens its private directory to commit or abort it, and
+/// confirms the directory is the one it staged into. A staged file neither
+/// committed nor aborted stays behind.
 pub struct Staged {
     name: String,
     directory: (i128, i128, FileType),
@@ -811,5 +825,128 @@ mod tests {
         let actual = std::fs::read(target).unwrap();
         std::fs::remove_dir_all(path).unwrap();
         assert_eq!(actual, b"checked");
+    }
+
+    /// The umasks the mode tests run under, each with the mode a new file
+    /// takes under it.
+    const UMASKS: [(u32, u32); 2] = [(0o022, 0o644), (0o077, 0o600)];
+    const UMASK_CHILD: &str = "YAMAA_PUBLICATION_TEST_UMASK";
+    /// The umask belongs to the whole process, so a mode test runs again in
+    /// one child process per umask, which runs that test alone and sets the
+    /// umask first. In such a child this sets the umask and returns it with
+    /// the mode a new file takes; elsewhere it runs the children and returns
+    /// `None`.
+    fn under_each_umask(test: &str) -> Option<(u32, u32)> {
+        if let Ok(umask) = std::env::var(UMASK_CHILD) {
+            let umask = u32::from_str_radix(&umask, 8).unwrap();
+            let _ = rustix::process::umask(Mode::from_raw_mode(umask as _));
+            let (_, new_file) = UMASKS
+                .into_iter()
+                .find(|&(each, _)| each == umask)
+                .expect("a listed umask");
+            return Some((umask, new_file));
+        }
+        for (umask, _) in UMASKS {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", test.split_once("::").unwrap().1])
+                .arg("--test-threads=1")
+                .env(UMASK_CHILD, format!("{umask:03o}"))
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "umask {umask:03o}: {output:?}");
+            // The child ran the test rather than matching nothing.
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(stdout.contains("1 passed"), "umask {umask:03o}: {stdout}");
+        }
+        None
+    }
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::symlink_metadata(path).unwrap().mode() & 0o7777
+    }
+    fn sandbox(label: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("yamaa-publication-{label}-{}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        crate::canonical_path::canonicalize(path).unwrap()
+    }
+    #[test]
+    fn a_new_file_takes_0666_less_the_umask() {
+        let Some((umask, new_file)) = under_each_umask(concat!(
+            module_path!(),
+            "::a_new_file_takes_0666_less_the_umask"
+        )) else {
+            return;
+        };
+        let path = sandbox("new-file-mode");
+        let target = path.join("result.csv");
+        let mut publisher = Publisher::new("result.csv", target.to_str().unwrap()).unwrap();
+        publisher.publish("result.csv", b"new").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        assert_eq!(mode(&target), new_file, "umask {umask:03o}");
+        std::fs::remove_dir_all(path).unwrap();
+    }
+    #[test]
+    fn a_replaced_file_keeps_its_permission_bits() {
+        use std::os::unix::fs::PermissionsExt;
+        let Some((umask, _)) = under_each_umask(concat!(
+            module_path!(),
+            "::a_replaced_file_keeps_its_permission_bits"
+        )) else {
+            return;
+        };
+        let path = sandbox("replaced-file-mode");
+        // Neither umask gives a new file either mode. The permission bits are
+        // kept; set-user-ID is not.
+        for (name, before, after) in [("shared.csv", 0o640, 0o640), ("setuid.csv", 0o4750, 0o750)] {
+            let target = path.join(name);
+            std::fs::write(&target, b"old").unwrap();
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(before)).unwrap();
+            assert_eq!(mode(&target), before, "{name}");
+            let mut publisher = Publisher::new(name, target.to_str().unwrap()).unwrap();
+            publisher.publish(name, b"new").unwrap();
+            assert_eq!(std::fs::read(&target).unwrap(), b"new");
+            assert_eq!(mode(&target), after, "{name} under umask {umask:03o}");
+        }
+        std::fs::remove_dir_all(path).unwrap();
+    }
+    /// The candidate has its published mode before the rename makes it
+    /// visible, and the directory that holds it stays 0700.
+    #[test]
+    fn the_staging_directory_stays_private_under_any_umask() {
+        use std::os::unix::fs::PermissionsExt;
+        let Some((umask, new_file)) = under_each_umask(concat!(
+            module_path!(),
+            "::the_staging_directory_stays_private_under_any_umask"
+        )) else {
+            return;
+        };
+        let path = sandbox("staging-mode");
+        let replaced = path.join("replaced.csv");
+        std::fs::write(&replaced, b"old").unwrap();
+        std::fs::set_permissions(&replaced, std::fs::Permissions::from_mode(0o640)).unwrap();
+        for (name, published) in [("new.csv", new_file), ("replaced.csv", 0o640)] {
+            let target = path.join(name);
+            let mut publisher = Publisher::new(name, target.to_str().unwrap()).unwrap();
+            let mut staged = None;
+            publisher
+                .publish_with_checkpoint(name, b"new", |staging| {
+                    let staging = path.join(staging);
+                    // A set-group-ID parent passes that bit to the directory.
+                    let directory = mode(&staging) & 0o777;
+                    staged = Some((directory, mode(&staging.join("candidate.part"))));
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(
+                staged,
+                Some((0o700, published)),
+                "{name} under umask {umask:03o}"
+            );
+            assert_eq!(mode(&target), published, "{name} under umask {umask:03o}");
+        }
+        // Each staging directory went with its commit.
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 2);
+        std::fs::remove_dir_all(path).unwrap();
     }
 }

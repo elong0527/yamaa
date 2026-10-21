@@ -97,6 +97,23 @@ network: the job's log keeps the report as installation qualification
 evidence, and the job fails unless the selftest reports `succeeded`. The
 package then runs the conformance corpus, also without a network.
 
+The native run also installs each wheel that a release publishes as a
+restricted machine installs
+[files carried in](articles/restricted-environments.md#from-files-carried-in):
+its `native-offline-wheel` jobs, on every platform with CPython 3.12 and
+3.15. The wheels are abi3, so the oldest and the newest supported CPython
+bound the supported interpreters that each wheel serves. While the network
+is up, pip downloads the wheel's runtime dependencies, at the versions that
+`python/uv.lock` pins and as wheels alone, into one directory with the
+wheel. Then, with the network disabled, pip installs the wheel from that
+directory alone, with `--no-index --find-links`, into a new virtual
+environment, which builds nothing. The installed package must import with
+the wheel's version, and it then runs its selftest: the job's log keeps the
+report, and the job fails unless it reports `succeeded`. On Linux the
+installation and the selftest run in containers without a network, from the
+manylinux_2_28 image with its CPython of the lane's version, and on macOS
+and Windows behind the same refusing proxy.
+
 The native run also proves the offline toolchain route (#3030 D54) on Linux
 x86_64 and aarch64: its `native-offline-toolchain` jobs. While the network is
 up, each downloads the standalone installer archive of the minimum Rust for
@@ -187,12 +204,14 @@ refuses connections and runs two Cargo jobs.
 - In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
-  CRAN's Linux check servers use their distribution's. Development PRs do not run the release lanes, so before a
-release also dispatch R-CMD-check, Dependency graphs and Release compatibility
-on the candidate. Release compatibility checks the minimum toolchain, the R
-source package built with it, minimal format builds, Python 3.15 and minimum
-Python saved artifact readers; dispatch CI for its minimum R saved artifact
-reader checks.
+  CRAN's Linux check servers use their distribution's.
+
+Development PRs do not run the release lanes, so before a release also
+dispatch R-CMD-check, Dependency graphs and Release compatibility on the
+candidate. Release compatibility checks the minimum toolchain, the R source
+package built with it, minimal format builds, Python 3.15 and minimum Python
+saved artifact readers; dispatch CI for its minimum R saved artifact reader
+checks.
 
 A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
@@ -208,8 +227,7 @@ link of `python/README.md` that names a release tag to name its tag:
 
 An R version cannot mark a candidate, so the R package keeps the final version
 through the candidates (#3030 D53), and R does not offer the final release as
-an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
-tag.
+an update to a candidate.
 
 The commit that changes the identity also re-pins the tag links of
 `python/README.md`, the wheels' PyPI description: the check fails until they
@@ -434,9 +452,9 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs, the offline toolchain route, the R binary installs and the
-unpacked command-line archives among them, the R binary and command-line
-builds, shared Rust/math, complete cohort comparisons, strict R package
+wheel and source installs, the offline toolchain route, the R binary
+installs and the unpacked command-line archives among them, the R binary and
+command-line builds, shared Rust/math, complete cohort comparisons, strict R package
 checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
@@ -806,16 +824,21 @@ offers, and reproduces the license, copyright and NOTICE texts that the crate
 ships for it (#3364). The Python packages' copy covers the Python binding's
 crates, the R package's copy the R binding's, all of which the R source package
 bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
-the crates of `yamaa-cli`. It also gives the standard library's licensing from
-the notice that the Rust project ships with the pinned toolchain,
-`share/doc/rust/COPYRIGHT-library.html`, because the native code links that
-library: the licensing statement, the in-tree licenses and copyright holders,
-and of the notice's out-of-tree crates those that the standard library links
-on the supported targets. No package notice names a GNU license; the only GPL
-wording that remains is the clause of the LLVM exception to Apache-2.0, a
-permissive license, which names GPLv2. The command line keeps only that file
-and its component inventory beside its crate; its archives carry the Python
-packages' copies of the other notices. `LICENSE-READSTAT.txt`,
+the crates of `yamaa-cli`. It also gives the standard library's licensing,
+because the native code links that library: from the notice that the Rust
+project ships with the pinned toolchain, `share/doc/rust/COPYRIGHT-library.html`,
+the licensing statement and the in-tree licenses and copyright holders; and
+from the toolchain's `rust-src` component, which that notice does not fully
+cover, the third-party crates that the standard library links on the supported
+targets, such as `addr2line` and `object`, each with its one license and the
+texts that its package ships (#3369). No package notice names a GNU license;
+the only GPL wording that remains is the clause of the LLVM exception to
+Apache-2.0, a permissive license, which names GPLv2. The command line keeps
+only that file, its component inventory and `LICENSE-MUSL.txt` beside its
+crate; its archives carry the Python packages' copies of the other notices.
+The archives for the musl targets, whose executables link the musl C library
+statically, also carry `LICENSE-MUSL.txt`: musl's `COPYRIGHT` file, relied on
+under MIT. `LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
@@ -826,20 +849,25 @@ relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
 notices from `rust/Cargo.lock` and the standard library section from the
-toolchain that `rust/rust-toolchain.toml` pins, and it derives that
+toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
+component, which the repository checks add to it, and it derives that
 expression from the Python binding's linked crates. The repository check
 fails when a host gains or loses a linked crate without a matching notice
 entry in its host's copy, when `rustc` in `rust/` is not the pinned toolchain,
-when the committed section differs from that toolchain's notice, and when a
-notice would name a GNU license. Staging the R source package fails while its
+when the committed section differs from that toolchain's notice and sources,
+when the musl notice was reviewed for another toolchain, and when a notice
+would name a GNU license. Staging the R source package fails while its
 notices name a crate that it does not bundle. Native qualification and the
 release selector require every wheel, source package, R binary package and
 command-line archive to carry its own host's notices unchanged, and refuse a
 package with any text that names a GNU license, the files inside the R source
-package's `vendor.tar.xz` included. The only exception is the unchanged
+package's `vendor.tar.xz` included. The exceptions are the unchanged
 upstream files of the vendored crates that
 `tools/packaging/check_package_notices.py` lists with its reasons: zstd's
-dual-licensed C sources, `r-efi`, and README or changelog prose.
+dual-licensed C sources, `r-efi`, and README or changelog prose; and an R
+binary package's namespace loader, `yamaa/R/yamaa`, which R writes itself
+from its own `share/R/nspackloader.R`, whose header names the GPL that R is
+under.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the

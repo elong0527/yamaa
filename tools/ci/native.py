@@ -52,6 +52,18 @@ OFFLINE_SOURCE_HOSTS = ("python", "r")
 # conformance corpus.
 OFFLINE_TOOLCHAIN_PLATFORMS = ("ubuntu-24.04", "ubuntu-24.04-arm")
 OFFLINE_TOOLCHAIN_HOSTS = ("python", "r")
+# Each wheel that a release publishes, installed as the restricted-environment
+# guide installs files carried in, with the oldest and the newest supported
+# CPython: the wheels are abi3, so these two bound the supported interpreters
+# that each wheel serves. While the network is up, pip downloads the wheel's
+# locked runtime dependencies, as wheels, into one directory with it. Then,
+# with the network disabled, pip installs the wheel from that directory alone
+# into a new virtual environment, building nothing, and the installed package
+# runs its selftest: on Linux in a container without a network, from the
+# pinned manylinux_2_28 image of the runner's architecture, with that image's
+# CPython; on macOS and Windows behind a proxy that refuses every connection.
+OFFLINE_WHEEL_PLATFORMS = PYTHON_PLATFORMS
+OFFLINE_WHEEL_PYTHONS = (PYTHONS[0], PYTHONS[-1])
 # R-release and R-oldrel, the two R series that CRAN builds binary packages
 # for, each at its latest patch release. The other native R lanes use
 # R-release.
@@ -122,6 +134,10 @@ def coverage():
         "offline_toolchain": {
             "os": list(OFFLINE_TOOLCHAIN_PLATFORMS),
             "host": list(OFFLINE_TOOLCHAIN_HOSTS),
+        },
+        "offline_wheel": {
+            "os": list(OFFLINE_WHEEL_PLATFORMS),
+            "python": list(OFFLINE_WHEEL_PYTHONS),
         },
         "r_binary": {"os": list(R_BINARY_PLATFORMS), "r": list(R_BINARY_VERSIONS)},
         "cli": {

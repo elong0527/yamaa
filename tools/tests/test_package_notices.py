@@ -61,7 +61,8 @@ class PackageNotices(unittest.TestCase):
         # The command line keeps only its own notices and inventory beside
         # its crate, an inventory that names the standard library that its
         # binaries link; its archives carry the Python packages' copies of the
-        # others.
+        # others. It also keeps musl's notice, which only the archives for the
+        # musl targets carry.
         self.cli_notices = dict(
             project,
             **{
@@ -69,14 +70,21 @@ class PackageNotices(unittest.TestCase):
                 "COMPONENTS.tsv": b"name\narrow\t55.2.0\nrust-std\t1.99.1\n",
             },
         )
+        self.musl_notices = dict(
+            self.cli_notices, **{"LICENSE-MUSL.txt": b"musl 1.2.5\nMIT\n"}
+        )
         for directory, notices in (
             ("python", self.notices),
             ("R/yamaa/inst", self.r_notices),
             (
                 "rust/crates/yamaa-cli",
                 {
-                    name: self.cli_notices[name]
-                    for name in ("LICENSE-THIRD-PARTY.txt", "COMPONENTS.tsv")
+                    name: self.musl_notices[name]
+                    for name in (
+                        "LICENSE-THIRD-PARTY.txt",
+                        "COMPONENTS.tsv",
+                        "LICENSE-MUSL.txt",
+                    )
                 },
             ),
         ):
@@ -154,6 +162,11 @@ class PackageNotices(unittest.TestCase):
         for path in (wheel, sdist, r_source, *r_binaries, *archives):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
+        # The archives for the musl targets also carry musl's notice.
+        for target in ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"):
+            path = self.cli(self.musl_notices, target=target)
+            with self.subTest(archive=path.name):
+                self.assertEqual(len(packages.check_archive(path, self.root)), 4)
 
     def test_command_line_archives_carry_their_own_and_the_shared_notices(self):
         # The command line's own notices and inventory, not a host's; the
@@ -161,7 +174,7 @@ class PackageNotices(unittest.TestCase):
         member = "yamaa-0.4.0-x86_64-unknown-linux-musl/{}"
         for notice in ("LICENSE-THIRD-PARTY.txt", "COMPONENTS.tsv"):
             for other in (self.notices, self.r_notices):
-                archive = self.cli(dict(self.cli_notices, **{notice: other[notice]}))
+                archive = self.cli(dict(self.musl_notices, **{notice: other[notice]}))
                 with (
                     self.subTest(notice=notice),
                     self.assertRaisesRegex(
@@ -169,17 +182,27 @@ class PackageNotices(unittest.TestCase):
                     ),
                 ):
                     packages.check_archive(archive, self.root)
-        archive = self.cli(dict(self.cli_notices, **{"LICENSE.txt": b"edited\n"}))
+        archive = self.cli(dict(self.musl_notices, **{"LICENSE.txt": b"edited\n"}))
         with self.assertRaisesRegex(
             ValueError, f"differs or is missing: {member.format('LICENSE.txt')}"
         ):
             packages.check_archive(archive, self.root)
         (self.root / "python/LICENSE.txt").write_bytes(b"edited\n")
-        self.assertEqual(len(packages.check_archive(archive, self.root)), 3)
+        self.assertEqual(len(packages.check_archive(archive, self.root)), 4)
+        # An archive for a musl target carries the command line's copy of
+        # musl's notice, unchanged.
+        musl = member.format("LICENSE-MUSL.txt")
+        edited = dict(self.musl_notices, **{"LICENSE.txt": b"edited\n"})
+        for notices in (
+            {name: data for name, data in edited.items() if name != "LICENSE-MUSL.txt"},
+            dict(edited, **{"LICENSE-MUSL.txt": b"musl 1.2.3\nMIT\n"}),
+        ):
+            with self.assertRaisesRegex(ValueError, f"differs or is missing: {musl}"):
+                packages.check_archive(self.cli(notices), self.root)
         # Notices outside the archive's directory are not its notices.
         path = self.root / "yamaa-0.4.0-x86_64-unknown-linux-musl.zip"
         with zipfile.ZipFile(path, "w") as flat:
-            for name, payload in self.cli_notices.items():
+            for name, payload in self.musl_notices.items():
                 flat.writestr(name, payload)
         with self.assertRaisesRegex(ValueError, "differs or is missing"):
             packages.check_archive(path, self.root)
@@ -423,7 +446,9 @@ class PackageNotices(unittest.TestCase):
         # Command-line archives also reject a forbidden license even when
         # their notice agrees with the checkout's own copy.
         forbidden = b"Crate: r-efi\nLGPL\n"
-        cli = self.cli(dict(self.cli_notices, **{"LICENSE-THIRD-PARTY.txt": forbidden}))
+        cli = self.cli(
+            dict(self.musl_notices, **{"LICENSE-THIRD-PARTY.txt": forbidden})
+        )
         (self.root / "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt").write_bytes(
             forbidden
         )
@@ -432,6 +457,104 @@ class PackageNotices(unittest.TestCase):
             r"LICENSE-THIRD-PARTY.txt names a GNU license \(LGPL\)",
         ):
             packages.check_archive(cli, self.root)
+
+    def test_an_r_binary_package_may_carry_the_namespace_loader_that_r_writes(self):
+        # #3393, D136: R CMD INSTALL writes R/yamaa from R's own
+        # share/R/nspackloader.R, whose header names R's GPL. R 4.5 and 4.6
+        # write these bytes on macOS and on Windows.
+        loader = (
+            b"#  File share/R/nspackloader.R\n"
+            b"#  Part of the R package, https://www.R-project.org\n"
+            b"#\n"
+            b"#  Copyright (C) 1995-2012 The R Core Team\n"
+            b"#\n"
+            b"#  This program is free software; you can redistribute it and/or modify\n"
+            b"#  it under the terms of the GNU General Public License as published by\n"
+            b"#  the Free Software Foundation; either version 2 of the License, or\n"
+            b"#  (at your option) any later version.\n"
+            b"#\n"
+            b"#  This program is distributed in the hope that it will be useful,\n"
+            b"#  but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+            b"#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
+            b"#  GNU General Public License for more details.\n"
+            b"#\n"
+            b"#  A copy of the GNU General Public License is available at\n"
+            b"#  https://www.r-project.org/Licenses/\n"
+            b"\n"
+            b"local({\n"
+            b"    info <- loadingNamespaceInfo()\n"
+            b"    pkg <- info$pkgname\n"
+            b"    ns <- .getNamespace(as.name(pkg))\n"
+            b"    if (is.null(ns))\n"
+            b'        stop("cannot find namespace environment for ", pkg, domain = NA);\n'
+            b'    dbbase <- file.path(info$libname, pkg, "R", pkg)\n'
+            b'    lazyLoad(dbbase, ns, filter = function(n) n != ".__NAMESPACE__.")\n'
+            b"})\n"
+        )
+        members = {
+            f"yamaa/{name}": data for name, data in self.r_binary_notices.items()
+        }
+        for name in ("yamaa_0.4.0-4.6.zip", "yamaa_0.4.0-4.5.tgz"):
+            binary = self.r_binary(name, dict(members, **{"yamaa/R/yamaa": loader}))
+            with self.subTest(archive=name):
+                self.assertEqual(len(packages.check_archive(binary, self.root)), 3)
+        # The same text at another path, or in the R source package, is read
+        # as any other text is.
+        for name, member in (
+            ("yamaa_0.4.0-4.6.zip", "yamaa/R/yamaa.R"),
+            ("yamaa_0.4.0-4.5.tgz", "yamaa/doc/yamaa"),
+        ):
+            binary = self.r_binary(name, dict(members, **{member: loader}))
+            with (
+                self.subTest(member=member),
+                self.assertRaisesRegex(ValueError, f"{member} names a GNU license"),
+            ):
+                packages.check_archive(binary, self.root)
+        r_source = self.tar(
+            "yamaa_0.4.0.tar.gz",
+            {
+                **{f"yamaa/inst/{name}": data for name, data in self.r_notices.items()},
+                "yamaa/R/yamaa": loader,
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "yamaa/R/yamaa names a GNU license"):
+            packages.check_archive(r_source, self.root)
+        # Any other text at the loader's path must name none: R's header
+        # without the loader's body, the body with more, or another file.
+        header = loader.split(b"\n\n")[0] + b"\n"
+        for case, payload in (
+            ("a license text", b"GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n"),
+            ("the header alone", header),
+            ("another body", header + b'\nsource("yamaa.R")\n'),
+            ("more code", loader + b'source("yamaa.R")\n'),
+            ("a comment after the body", loader + b"# See the LGPL.\n"),
+            ("another file", loader.replace(b"nspackloader.R", b"packloader.R")),
+        ):
+            binary = self.r_binary(
+                "yamaa_0.4.0-4.6.zip", dict(members, **{"yamaa/R/yamaa": payload})
+            )
+            with (
+                self.subTest(case=case),
+                self.assertRaisesRegex(ValueError, "yamaa/R/yamaa names a GNU license"),
+            ):
+                packages.check_archive(binary, self.root)
+        # Text of yamaa's own that names a GNU license still fails beside it.
+        binary = self.r_binary(
+            "yamaa_0.4.0-4.5.tgz",
+            dict(
+                members,
+                **{
+                    "yamaa/R/yamaa": loader,
+                    "yamaa/DESCRIPTION": b"Package: yamaa\nLicense: GPL-3\n",
+                },
+            ),
+        )
+        with self.assertRaises(ValueError) as raised:
+            packages.check_archive(binary, self.root)
+        self.assertEqual(
+            str(raised.exception),
+            "yamaa_0.4.0-4.5.tgz: yamaa/DESCRIPTION names a GNU license (GPL)",
+        )
 
     def test_a_candidate_names_python_packages_and_the_r_archive_differently(self):
         # #3030 D53: the R package keeps the final version through candidates.
@@ -455,7 +578,9 @@ class PackageNotices(unittest.TestCase):
             {f"yamaa/{name}": data for name, data in self.r_binary_notices.items()},
         )
         # The command line's archives carry the engine's Cargo version.
-        cli = self.cli(self.cli_notices, version="1.0.0-rc.1")
+        cli = self.cli(
+            self.cli_notices, version="1.0.0-rc.1", target="aarch64-apple-darwin"
+        )
         for path in (wheel, sdist, r_source, r_binary, cli):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)

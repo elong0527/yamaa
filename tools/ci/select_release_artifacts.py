@@ -324,6 +324,15 @@ def required_jobs(coverage):
                 "Run the installed package's selftest",
                 conformance,
             )
+    # Each wheel that a release publishes, installed from local files alone
+    # with the network disabled, with the oldest and the newest supported
+    # CPython, where the installed package passes its selftest.
+    for platform in coverage["offline_wheel"]["os"]:
+        for version in coverage["offline_wheel"]["python"]:
+            jobs[f"native-offline-wheel ({platform}, {version})"] = (
+                "Install the wheel without a network",
+                "Run the installed package's selftest",
+            )
     # Each R binary package that a release publishes, built from the R source
     # archive that it publishes, then installed on a runner with no Rust, no
     # Rtools and no network, where it passes its selftest and runs the

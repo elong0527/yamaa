@@ -144,7 +144,7 @@ columns:
     submission:
       core: Req
       length: 8
-      origins: [{{type: Assigned, source: Sponsor}}]
+      origins: [{{type: Assigned}}]
       codelist: PARAMCD
   - name: AVALU
     type: str
@@ -153,7 +153,7 @@ columns:
     submission:
       core: Perm
       length: 8
-      origins: [{{type: Assigned, source: Sponsor}}]
+      origins: [{{type: Assigned}}]
       value_level:
         - {{id: GLUC, where: {{PARAMCD: [GLUC]}}, codelist: GLUCU}}
   - name: SRCDOM
@@ -163,7 +163,7 @@ columns:
     submission:
       core: Perm
       length: 4
-      origins: [{{type: Assigned, source: Sponsor}}]
+      origins: [{{type: Assigned}}]
       value_level:
         - {{id: GLUC, where: {{PARAMCD: [GLUC]}}, inventory_vocabulary: {inventory}}}
 {column}"
@@ -296,7 +296,7 @@ fn a_0_5_specification_keeps_its_0_5_meaning() {
                 "schema_version: '1.0'\n",
             )
             .replace(
-                "origins: [{type: Assigned, source: Sponsor}]",
+                "origins: [{type: Assigned}]",
                 "origin: {type: Assigned, source: Sponsor}",
             )
     };

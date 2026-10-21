@@ -23,8 +23,9 @@ def main(argv=None):
     )
     arguments = parser.parse_args(argv)
     uv = arguments.uv
-    # The toolchain file names only what a build needs, so `make quick`'s lint
-    # needs Clippy and rustfmt added to the pinned toolchain where rustup runs.
+    # The toolchain file names only what a build needs, so `make quick` needs
+    # Clippy and rustfmt for its lint, and rust-src for its notice check,
+    # added to the pinned toolchain where rustup runs.
     if shutil.which("rustup"):
         subprocess.run(install_command(declaration()), cwd=ROOT, check=True)
     environment = os.environ | {"RUSTUP_TOOLCHAIN": channel()}

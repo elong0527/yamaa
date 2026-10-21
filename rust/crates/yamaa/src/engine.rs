@@ -138,35 +138,6 @@ impl<'a> Request<'a> {
     }
 }
 
-/// One define request: environment, standard, installed version and optional
-/// creation timestamp.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DefineRequest<'a> {
-    pub environment: &'a str,
-    pub standard: &'a str,
-    pub created: Option<&'a str>,
-    pub installed: &'a str,
-}
-
-impl<'a> DefineRequest<'a> {
-    /// Request metadata composition for an environment and standard.
-    pub fn new(environment: &'a str, standard: &'a str, installed: &'a str) -> Self {
-        Self {
-            environment,
-            standard,
-            created: None,
-            installed,
-        }
-    }
-
-    /// Set the creation timestamp.
-    pub fn with_created(mut self, created: &'a str) -> Self {
-        self.created = Some(created);
-        self
-    }
-}
-
 /// An embedder configures one engine and calls operations on it. The engine
 /// is cheap to clone over shared state; concurrent calls are independent
 /// attempts.
@@ -464,52 +435,6 @@ impl Engine {
 
     pub(crate) fn shared(&self) -> &EngineShared {
         &self.shared
-    }
-
-    /// Compose submission metadata without running a specification. The
-    /// project file and everything it declares are read through the engine's
-    /// resolver, and the composed files publish through it on save.
-    ///
-    /// # Example
-    ///
-    /// A missing environment reports typed diagnostics in every lane instead
-    /// of composing.
-    ///
-    /// ```
-    /// use yamaa::{CancellationToken, DefineRequest, Engine, EngineOptions, HostLanguage};
-    ///
-    /// let engine = Engine::new(EngineOptions::new(
-    ///     HostLanguage::Python,
-    ///     "doctest".into(),
-    ///     "0".into(),
-    /// ));
-    /// let token = CancellationToken::new();
-    /// let missing = std::env::temp_dir().join("yamaa-doctest-define-missing.yaml");
-    /// let _ = std::fs::remove_file(&missing);
-    /// let define = engine
-    ///     .define(&DefineRequest::new(missing.to_str().unwrap(), "sdtm", "1.0"), &token)
-    ///     .unwrap();
-    /// assert!(!define.report().is_empty());
-    /// assert!(define.artifacts().is_empty());
-    /// ```
-    pub fn define(
-        &self,
-        request: &DefineRequest<'_>,
-        token: &CancellationToken,
-    ) -> Result<DefineBuild, Error> {
-        if token.is_cancelled() {
-            return Err(Error::Cancelled);
-        }
-        let inner = yamaa_adapters::file_define::Define::prepare(
-            request.environment,
-            request.standard,
-            request.created,
-            request.installed,
-            self.shared.language,
-            crate::internal::resolver_bridge(&self.shared),
-        );
-        let subject = format!("{}, section {}", request.environment, request.standard);
-        Ok(DefineBuild::from_define(inner, subject))
     }
 
     /// Resolve one specification entry into its owned inspection artifact,
@@ -833,134 +758,6 @@ impl Build {
     }
 }
 
-/// One retained define artifact: path, bytes and publication state.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DefineArtifact {
-    pub path: String,
-    pub bytes: Vec<u8>,
-    pub state: String,
-}
-
-/// An owned define composition with its rendered artifacts. Only the save of
-/// the submission that holds it writes, through the resolver.
-pub struct DefineBuild {
-    inner: yamaa_adapters::file_define::Define,
-    /// What a refusal of its own save names: its project and section.
-    subject: String,
-    /// The issues of the composition as it was made: a later save's refusal
-    /// joins `issues` and the report, never these.
-    composed: Vec<yamaa_core::diagnostic::Diagnostic>,
-    issues: Vec<yamaa_core::diagnostic::Diagnostic>,
-    report: Report,
-}
-
-impl DefineBuild {
-    pub(crate) fn from_define(inner: yamaa_adapters::file_define::Define, subject: String) -> Self {
-        let issues = inner.issues().to_vec();
-        let report = Report::from_issues(&issues);
-        Self {
-            inner,
-            subject,
-            composed: issues.clone(),
-            issues,
-            report,
-        }
-    }
-
-    /// Borrow the define report with every diagnostic.
-    pub fn report(&self) -> &Report {
-        &self.report
-    }
-
-    /// The composition's issues, as its report holds them.
-    pub(crate) fn issues(&self) -> Vec<yamaa_core::diagnostic::Diagnostic> {
-        self.issues.clone()
-    }
-
-    /// The composition's issues as it was made, before any save.
-    pub(crate) fn composed(&self) -> &[yamaa_core::diagnostic::Diagnostic] {
-        &self.composed
-    }
-
-    /// Borrow the rendered artifacts with their publication states.
-    pub fn artifacts(&self) -> Vec<DefineArtifact> {
-        self.inner
-            .artifacts()
-            .map(|(path, bytes, state)| DefineArtifact {
-                path: path.to_owned(),
-                bytes: bytes.to_vec(),
-                // Explicit tokens, not the adapter `Debug` text: a renamed
-                // or restructured adapter variant must break this build
-                // rather than silently change a public value.
-                state: match state {
-                    yamaa_adapters::file_define::PublicationState::Ready => "Ready",
-                    yamaa_adapters::file_define::PublicationState::Published => "Published",
-                    yamaa_adapters::file_define::PublicationState::Failed => "Failed",
-                    yamaa_adapters::file_define::PublicationState::Stopped => "Stopped",
-                }
-                .to_owned(),
-            })
-            .collect()
-    }
-
-    /// Count resource reads captured while composing.
-    pub fn capture_reads(&self) -> usize {
-        self.inner.capture_reads()
-    }
-
-    /// The transport files of a section that composed: every artifact but
-    /// its define.xml, which comes last (JSON-14).
-    pub(crate) fn transports(&self) -> usize {
-        self.inner.artifacts().len().saturating_sub(1)
-    }
-
-    /// The files a save of this composition writes, in publication order:
-    /// each transport file, then define.xml (JSON-14). `None` when the
-    /// composition, or an earlier save of it, failed.
-    pub(crate) fn plan(&self) -> Option<Vec<yamaa_adapters::publication::File<'_>>> {
-        self.inner.plan()
-    }
-
-    /// Record what a save did with this composition's files; a stop fails the
-    /// composition, and its issues then say why.
-    pub(crate) fn record(
-        &mut self,
-        committed: usize,
-        stopped: Option<(usize, yamaa_adapters::publication::Cause)>,
-    ) {
-        self.inner.record(committed, stopped);
-        self.refresh();
-    }
-
-    /// Record a save stopped at this composition for `issues`, before any of
-    /// its files was written.
-    pub(crate) fn refuse(&mut self, issues: Vec<yamaa_core::diagnostic::Diagnostic>) {
-        self.inner.refuse_save(issues);
-        self.refresh();
-    }
-
-    fn refresh(&mut self) {
-        self.issues = self.inner.issues().to_vec();
-        self.report = Report::from_issues(&self.issues);
-    }
-
-    /// Save this composition as a submission of one section saves it,
-    /// through the one save every result shares: its transport files, then
-    /// define.xml (JSON-14), returning the paths written (D38). A failed
-    /// composition writes nothing and fails with its issues. See
-    /// [`crate::Submission::save`].
-    pub fn save(&mut self) -> Result<Vec<String>, Failure> {
-        let subject = self.subject.clone();
-        crate::outcome::save(
-            &[],
-            vec![crate::outcome::Part::Composed { define: self }],
-            crate::outcome::Operation::Submission,
-            &subject,
-        )
-    }
-}
-
 /// An owned resolved-specification artifact: inspection facts without source
 /// access, path resolution, callbacks or recompilation.
 #[derive(Clone, Debug)]
@@ -1025,8 +822,6 @@ mod tests {
         let request = Request::new("spec");
         assert_eq!(request.environment, None);
         assert_eq!(request.with_environment("env").environment, Some("env"));
-        let define = DefineRequest::new("env", "std", "1.0").with_created("now");
-        assert_eq!(define.created, Some("now"));
         let options = EngineOptions::new(HostLanguage::R, "r".into(), "4.3".into())
             .with_resolver(Arc::new(MemoryResolver::new()))
             .with_observer(Arc::new(NoopProgress));
@@ -1050,10 +845,6 @@ mod tests {
         let request = Request::new("spec");
         assert!(matches!(
             engine.build(&request, &token),
-            Err(Error::Cancelled)
-        ));
-        assert!(matches!(
-            engine.define(&DefineRequest::new("env", "std", "1.0"), &token),
             Err(Error::Cancelled)
         ));
         assert!(matches!(
@@ -1122,17 +913,6 @@ mod tests {
                 code: "resolved_syntax"
             }
         ));
-    }
-
-    #[test]
-    fn define_without_sources_reports_diagnostics() {
-        let engine = Engine::new(options());
-        let token = CancellationToken::new();
-        let missing = missing_spec();
-        let request = DefineRequest::new(missing.to_str().unwrap(), "standard", "1.0");
-        let define = engine.define(&request, &token).unwrap();
-        assert!(!define.report().is_empty());
-        assert!(define.artifacts().is_empty());
     }
 }
 

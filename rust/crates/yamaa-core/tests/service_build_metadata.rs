@@ -504,6 +504,7 @@ mod service {
         use yamaa_core::define::{self, Application, Failure, Ports, PublicationState};
         use yamaa_core::{
             diagnostic::ConditionCode,
+            project_environment::Submission,
             project_terminology::Catalogue,
             schema::Document,
             table::{CellError, TableAccess, TableSchema, ValueRef},
@@ -713,39 +714,31 @@ mod service {
                 Ok(left == right)
             }
         }
-        fn prepare(spy: &mut Spy, standard: &str, created: Option<&str>) -> define::Attempt<Spy> {
+        fn prepare(
+            spy: &mut Spy,
+            section: Submission,
+            created: Option<&str>,
+        ) -> define::Attempt<Spy> {
             Application::prepare(
                 spy,
                 define::Request {
                     environment: "project.yaml",
-                    standard,
+                    section,
                     created,
                     installed: "0.3.0",
                 },
             )
         }
         #[test]
-        fn standard_and_explicit_creation_admit_before_any_capture_or_clock() {
-            for (standard, created, code) in [
-                ("other", None, ConditionCode::DefineStandardName),
-                (
-                    "sdtm",
-                    Some("2026-10-11T00:00:00.5"),
-                    ConditionCode::DefineCreatedInvalid,
-                ),
-                (
-                    "sdtm",
-                    Some("2026-02-30T00:00:00"),
-                    ConditionCode::DefineCreatedInvalid,
-                ),
-            ] {
+        fn explicit_creation_admits_before_any_capture_or_clock() {
+            for created in ["2026-10-11T00:00:00.5", "2026-02-30T00:00:00"] {
                 let mut spy = Spy::new();
-                let attempt = prepare(&mut spy, standard, created);
+                let attempt = prepare(&mut spy, Submission::Sdtm, Some(created));
                 let Err(Failure::Metadata(findings)) = attempt.outcome else {
                     panic!("missing admission cause")
                 };
                 assert_eq!(findings.len(), 1);
-                assert_eq!(findings[0].code, code);
+                assert_eq!(findings[0].code, ConditionCode::DefineCreatedInvalid);
                 assert!(spy.events.is_empty());
                 assert_eq!(spy.clock_calls.get(), 0);
                 assert!(attempt.application.failed());
@@ -758,7 +751,7 @@ mod service {
             let error = Opaque(Box::new(42));
             let identity = error.identity();
             spy.environment_error = Some(error);
-            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
             let Err(Failure::Port(error)) = attempt.outcome else {
                 panic!("original port error lost")
             };
@@ -770,7 +763,7 @@ mod service {
         #[test]
         fn complete_metadata_and_rendering_precede_publication_and_record_marks_held_bytes() {
             let mut spy = Spy::new();
-            let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let mut attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
             assert!(attempt.outcome.is_ok());
             assert_eq!(
                 spy.events,
@@ -818,7 +811,7 @@ mod service {
             let error = Opaque(Box::new(17));
             let identity = error.identity();
             spy.verification_error = Some(error);
-            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
             let Err(Failure::Port(error)) = attempt.outcome else {
                 panic!("original verification error lost")
             };
@@ -832,7 +825,7 @@ mod service {
             let error = Opaque(Box::new(23));
             let identity = error.identity();
             spy.publisher_error = Some((1, error));
-            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
             let Some(Failure::TargetAdmission { index, error }) = attempt.outcome.err() else {
                 panic!("original target cause lost")
             };
@@ -848,7 +841,7 @@ mod service {
         fn a_recorded_save_failure_keeps_admitted_bytes_and_fails_the_composition() {
             for admission in [true, false] {
                 let mut spy = Spy::new();
-                let mut attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+                let mut attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
                 assert!(attempt.outcome.is_ok());
                 let held = attempt.application.artifacts().next().unwrap().1.to_vec();
                 let error = Opaque(Box::new(81));
@@ -870,7 +863,7 @@ mod service {
         fn missing_study_is_the_real_typed_owner_before_any_metadata_verification() {
             let mut spy = Spy::new();
             spy.environment = Some(project(false));
-            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
             let Err(Failure::Metadata(findings)) = attempt.outcome else {
                 panic!("missing actual cause")
             };
@@ -896,7 +889,7 @@ mod service {
                 )])),
                 catalogue: Catalogue::admit(vec![]).unwrap(),
             });
-            let attempt = prepare(&mut spy, "sdtm", Some("2026-10-11T00:00:00"));
+            let attempt = prepare(&mut spy, Submission::Sdtm, Some("2026-10-11T00:00:00"));
             let Err(Failure::Metadata(findings)) = attempt.outcome else {
                 panic!("missing define declarations")
             };
@@ -920,22 +913,35 @@ mod service {
                 .all(|finding| finding.definition().rule == Some("DEFINE-28")));
             assert_eq!(spy.events, ["capture_environment"]);
         }
+        /// A project file that no longer declares the selected section when
+        /// composition reads it refuses the section as any undeclared section
+        /// is refused (PROJECT-14), before the section's declarations are
+        /// checked or any specification is captured.
         #[test]
-        fn a_project_without_the_selected_section_names_that_section() {
+        fn a_project_that_no_longer_declares_the_selected_section_refuses_it() {
+            use yamaa_core::json::Value;
             let mut spy = Spy::new();
-            let attempt = prepare(&mut spy, "adam", Some("2026-10-11T00:00:00"));
-            let Err(Failure::Metadata(findings)) = attempt.outcome else {
+            let attempt = prepare(&mut spy, Submission::Adam, Some("2026-10-11T00:00:00"));
+            let Err(Failure::Diagnostic(issues)) = attempt.outcome else {
                 panic!("missing selected section")
             };
+            let [issue] = issues.as_slice() else {
+                panic!("one refusal: {issues:?}")
+            };
+            let definition = issue.definition();
             assert_eq!(
-                findings,
-                [yamaa_core::submission_composition::Finding::cause(
-                    ConditionCode::DefineRequiredDeclaration,
-                    "adam",
-                    "adam"
-                )]
+                (definition.phase, definition.condition, definition.rule),
+                ("validation", "unknown_section", Some("PROJECT-14"))
+            );
+            assert!(issue.spec_paths.is_empty());
+            assert_eq!(issue.context["section"], Value::String("adam".into()));
+            assert_eq!(
+                issue.context["sections"],
+                Value::Array(vec![Value::String("sdtm".into())])
             );
             assert_eq!(spy.events, ["capture_environment"]);
+            assert!(attempt.application.failed());
+            assert_eq!(attempt.application.files().len(), 0);
         }
         #[test]
         fn clock_is_observed_once_and_calendar_admission_is_owned_by_the_engine() {
@@ -945,7 +951,7 @@ mod service {
             ] {
                 let mut spy = Spy::new();
                 spy.seconds = Some(seconds);
-                let attempt = prepare(&mut spy, "sdtm", None);
+                let attempt = prepare(&mut spy, Submission::Sdtm, None);
                 assert!(attempt.outcome.is_ok());
                 let held = attempt.application.artifacts().next().unwrap();
                 assert!(std::str::from_utf8(held.1)
@@ -959,7 +965,7 @@ mod service {
             ] {
                 let mut spy = Spy::new();
                 spy.seconds = seconds;
-                let attempt = prepare(&mut spy, "sdtm", None);
+                let attempt = prepare(&mut spy, Submission::Sdtm, None);
                 let Err(Failure::Metadata(findings)) = attempt.outcome else {
                     panic!("missing clock refusal")
                 };

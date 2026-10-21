@@ -164,8 +164,7 @@ pub(crate) fn compose_study(
     let section = &declared.sections[0];
     let required = composition::Required::admit(
         declared.study.as_ref(),
-        Some(section),
-        section.family,
+        section,
         yamaa_core::ast::Surface::V0_5,
     )?;
     composition::compose(required, catalogue, &inputs, &others, installed, created)
@@ -1015,18 +1014,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         JsonValue::Array(vec![JsonValue::String("UNKNOWN_DATASET".into())])
     );
     transport_refusals(&mut reached, &empty);
-    for valid in ["sdtm", "adam", "send"] {
-        assert!(define_diagnostics::standard_name(valid).is_ok());
-    }
-    let finding = define_diagnostics::standard_name("invalid").unwrap_err();
-    reached_finding(
-        &mut reached,
-        &[finding],
-        DefineStandardName,
-        "validation",
-        "value_not_permitted",
-        "DEFINE-6",
-    );
     // A section that lists only its specifications admits for runs. Define
     // composition reports the study and the section's guide and target it
     // still needs, together, before composing any dataset.
@@ -1050,15 +1037,6 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         "validation",
         "missing_required_field",
         "DEFINE-28",
-    );
-    // A project without the selected family's section names that section.
-    assert_eq!(
-        composition::Required::admit(None, None, Submission::Adam, yamaa_core::ast::Surface::V0_5)
-            .unwrap_err(),
-        [
-            Finding::cause(DefineRequiredDeclaration, "study", "study"),
-            Finding::cause(DefineRequiredDeclaration, "adam", "adam"),
-        ]
     );
     assert!(define_diagnostics::created_text("2026-09-30T00:00:00").is_ok());
     let finding = define_diagnostics::created_text("2026-09-30T00:00:00.1").unwrap_err();
@@ -1119,6 +1097,87 @@ pub fn reached() -> BTreeSet<ConditionCode> {
             condition,
             rule,
         );
+    }
+    // SUB-3 (D25, D58): a section lists only 1.x specifications of its model,
+    // each at its listed `model`, and composes no further dataset metadata
+    // for one that fails.
+    let listed = |model: Option<yamaa_core::ast::ModelKind>| {
+        let document = specification().document();
+        let mut tree = crate::support::submission_tree(&document);
+        tree.header.surface = yamaa_core::ast::Surface::V1 { minor: 0 };
+        tree.model = model.map(|kind| yamaa_core::ast::Model {
+            kind,
+            meta: tree.meta,
+        });
+        let project = project().document();
+        let declared = yamaa_core::front_end::v0_5::sections::sections(&project).unwrap();
+        let section = &declared.sections[0];
+        let required = composition::Required::admit(
+            declared.study.as_ref(),
+            Some(section),
+            section.family,
+            yamaa_core::ast::Surface::V0_5,
+        )
+        .unwrap();
+        let input = Input {
+            document: &document,
+            tree: &tree,
+            source: "d0.yaml",
+            artifact: "d0.csv",
+            href: Some("d0.csv"),
+        };
+        composition::compose(
+            required,
+            &empty,
+            &[input],
+            &[],
+            "1.0",
+            "2026-09-30T00:00:00",
+        )
+    };
+    assert!(listed(Some(yamaa_core::ast::ModelKind::Sdtm)).is_ok());
+    let text = |value: &str| JsonValue::String(value.into());
+    for (model, code, condition, context) in [
+        (
+            None,
+            SubmissionModelRequired,
+            "missing_required_field",
+            vec![
+                ("field", text("model")),
+                ("model", text("SDTM")),
+                ("section", text("sdtm")),
+            ],
+        ),
+        (
+            Some(yamaa_core::ast::ModelKind::Adam),
+            SubmissionModelMismatch,
+            "standard_model_mismatch",
+            vec![
+                ("model", text("SDTM")),
+                ("section", text("sdtm")),
+                ("value", text("ADaM")),
+            ],
+        ),
+    ] {
+        let findings = listed(model).unwrap_err();
+        let [finding] = findings.as_slice() else {
+            panic!("one finding: {findings:?}")
+        };
+        let definition = finding.definition();
+        assert_eq!(finding.code, code);
+        assert_eq!(
+            (definition.phase, definition.condition, definition.rule),
+            ("validation", condition, Some("SUB-3"))
+        );
+        assert_eq!(finding.path, "sdtm.specs[0].model");
+        assert_eq!(
+            finding.context,
+            context
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect()
+        );
+        reached.insert(rendered(finding));
     }
     reached
 }

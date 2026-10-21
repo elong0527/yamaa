@@ -31,11 +31,14 @@
 #
 # tools/packaging/check_crate_purposes.py, which `make check-repository`
 # runs, fails while a crate of any host's trimmed lock has no purpose, a
-# purpose names a crate that no host ships, or a purpose is empty.
+# purpose names a crate that no host ships, or a purpose is empty. It also
+# holds the [unconditional] tables at the end of this file to the engine
+# crates' manifests.
 #
 # Every package ships these purposes in its component inventory,
 # COMPONENTS.tsv; after changing one, regenerate the inventories with
-# `python -m tools.packaging.generate_component_inventory --write`.
+# `python -m tools.packaging.generate_component_inventory --write`. The
+# inventories do not carry the reasons of the [unconditional] tables.
 
 [crates]
 adler2 = "transitive dependency of miniz_oxide: Adler-32 checksums of zlib streams"
@@ -192,3 +195,74 @@ zmij = "transitive dependency of serde_json: floating-point formatting"
 zstd = "Zstandard codec for Parquet pages (the parquet feature); an older release comes with parquet's zstd support"
 zstd-safe = "transitive dependency of zstd: safe bindings to the zstd C library"
 zstd-sys = "transitive dependency of zstd-safe: builds and links the zstd C library that it bundles"
+
+# Why an engine crate depends unconditionally on a crate that #3030 section
+# 2.9 scopes: Arrow leaves the core and the always-on adapters, staying for
+# the Python hand-off, Parquet and the Rust facade; serde_json and toml go to
+# the adapters that use them; and flatbuffers goes with arrow-ipc (#3106).
+# Every host builds the engine crates (ENGINE in
+# tools/staging/engine_bundle.py), so their unconditional dependencies are in
+# every host's graph whatever features it selects.
+#
+# Each [unconditional.<engine crate>] table has one reason for each scoped
+# crate that the engine crate's manifest declares as a normal dependency
+# without `optional = true`, citing the code that needs it whatever the
+# features: files under rust/crates/<engine crate>/src. The crates that those
+# crates pull in, such as arrow-data, follow from them and need no reason of
+# their own. The check fails while such a dependency has no reason, and while
+# a reason names a crate that its engine crate does not depend on
+# unconditionally, so the change that moves a crate behind a feature, or into
+# the adapters that use it, removes its reason.
+
+[unconditional.yamaa-adapters]
+arrow-array = """\
+  every table on the always-on path is Arrow arrays: the snapshots behind the \
+  core's table port (arrow_table.rs), CSV text tables (csv_source.rs), the \
+  text columns of the empty-string convention (specification_run.rs), the \
+  generated ordinal field (source_ordinal.rs), batch function arguments \
+  (arrow_batch.rs), the batches rebuilt from checked tables (ipc_table.rs) and \
+  the public tables that the hosts take through the Arrow C stream of \
+  arrow-array's ffi feature (public_table.rs, arrow_bridge.rs), which the ODM \
+  reader returns even without the odm feature (odm_xml/)"""
+arrow-buffer = """\
+  the validity bitmaps of those tables: the temporal columns of admitted \
+  snapshots (arrow_table.rs) and the text columns whose values the \
+  empty-string convention marks missing (specification_run.rs)"""
+arrow-ipc = """\
+  each build holds the Arrow IPC streams of its output table and its run \
+  report, which arrow-ipc's StreamWriter writes (public_table.rs, for \
+  specification_report.rs and run_report.rs; ipc_table.rs), and the facade's \
+  Table::ipc and Build::run_report_bytes return such streams; only tests read \
+  one back, and the parquet feature also reads the Arrow schema that a \
+  Parquet file embeds with it (parquet_source/metadata.rs, storage_api.rs)"""
+arrow-schema = """\
+  the schemas, fields and data types of those tables (arrow_table.rs, \
+  public_table.rs, source_ordinal.rs), and ArrowError, which building their \
+  arrays returns (arrow_batch.rs, ipc_table.rs, specification_run.rs)"""
+flatbuffers = """\
+  unconditional only as declared: no always-on code uses it. Its one use, \
+  bounding the verification of the Arrow schema that a Parquet file embeds \
+  (parquet_source/metadata.rs), compiles only with the parquet feature, so the \
+  edge can move behind that feature; arrow-ipc depends on it, so the crate \
+  stays in every host's graph while arrow-ipc is unconditional"""
+serde_json = """\
+  JSON on the always-on path: the wire form of the core's JSON values \
+  (json_wire.rs), through which R renv.lock files are read (project_lock.rs), \
+  report rows and views (report_storage.rs), application measurements \
+  (application_measurements.rs), resolved artifact facts \
+  (resolved_artifact/model.rs) and Dataset-JSON output (submission_json.rs)"""
+toml = """\
+  projects need no feature, and capturing a project's lock file classifies it \
+  (file_metadata.rs), reading a uv.lock as TOML (project_lock.rs)"""
+
+[unconditional.yamaa]
+arrow-array = """\
+  the facade's public table is Arrow: yamaa::table re-exports RecordBatch, the \
+  array types and FFI_ArrowArrayStream, Table::batches returns record batches \
+  and Table::stream exports the Arrow C stream (table.rs); the Python binding \
+  hands that stream to Python as a PyCapsule, and the R binding copies the \
+  batches' columns into R vectors"""
+arrow-schema = """\
+  the facade's public table schema: yamaa::table re-exports SchemaRef, \
+  DataType, Field, Fields and TimeUnit, and Table::schema returns the table's \
+  Arrow schema (table.rs)"""

@@ -232,14 +232,20 @@ fn write(file: &File, content: &[u8]) -> Result<(), Error> {
         .path
         .to_str()
         .ok_or_else(|| refused(crate::file_publication::Error::InvalidTarget))?;
+    // On Unix the publisher keeps the replaced file's permission bits (D92).
+    // On Windows it stages a private file, so the replacement takes back the
+    // read-only attribute the author's file had. The bytes are already in
+    // place there, so an attribute that cannot be restored does not undo the
+    // fix.
+    #[cfg(windows)]
     let permissions = std::fs::metadata(&file.path).map(|metadata| metadata.permissions());
     let mut publisher = crate::file_publication::Publisher::new(target, target).map_err(refused)?;
     publisher.publish(target, content).map_err(refused)?;
-    // The publisher stages a private file; the replacement keeps the mode the
-    // author's file had. The bytes are already in place, so a mode that cannot
-    // be restored does not undo the fix.
-    if let Ok(permissions) = permissions {
-        let _ = std::fs::set_permissions(&file.path, permissions);
+    #[cfg(windows)]
+    {
+        if let Ok(permissions) = permissions {
+            let _ = std::fs::set_permissions(&file.path, permissions);
+        }
     }
     Ok(())
 }

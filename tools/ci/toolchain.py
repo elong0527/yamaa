@@ -8,9 +8,12 @@ from pathlib import Path
 
 from tools.paths import WORKSPACE
 
-# Repository checks lint and format with these. The toolchain file names only
-# what a build needs, so rustup adds them only where these checks run.
-CHECK_COMPONENTS = ("clippy", "rustfmt")
+# Repository checks lint and format with the first two, and read the third,
+# the standard library's sources, for the crates that the third-party notices
+# list (tools/packaging/generate_third_party_notices.py). The toolchain file
+# names only what a build needs, so rustup adds them only where these checks
+# run; no package build or installation needs them.
+CHECK_COMPONENTS = ("clippy", "rustfmt", "rust-src")
 
 
 def declaration(workspace=WORKSPACE):
