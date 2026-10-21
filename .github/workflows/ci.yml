@@ -40,7 +40,10 @@ jobs:
       # wherever it needs a baseline.
       - name: Fetch the release tags
         run: git fetch --no-tags --depth=1 origin '+refs/tags/yamaa-v*:refs/tags/yamaa-v*'
+      # The repository check runs the third-party notices generator.
       - uses: ./.github/actions/setup
+        with:
+          notices: 'true'
       - id: lint
         run: make check-lint
       # Report repository findings even when lint fails.

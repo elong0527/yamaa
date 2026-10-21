@@ -225,9 +225,7 @@ mod execution {
 
         #[test]
         fn original_binding_fixture_keeps_output_names_literal_fields_and_complete_source_count() {
-            use yamaa_adapters::{
-                shipped_schema, specification_run::PreparedRun, specification_source::Source,
-            };
+            use yamaa_adapters::{shipped_schema, specification_run::PreparedRun};
             use yamaa_core::{
                 reference_binding::{Binding, Catalog, Dataset, Field},
                 specification::BindError,
@@ -236,13 +234,11 @@ mod execution {
             };
             let original = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../../benchmarks/schema-odm-form-items/spec.yaml");
-            let document = shipped_schema::capture()
-                .unwrap()
-                .prepare_standalone(Source {
-                    identity: "spec.yaml".into(),
-                    bytes: fs::read(original).unwrap(),
-                })
-                .unwrap();
+            // The benchmark in the language it is written in (#3422).
+            let document = crate::support::specification_run::prepare(
+                &shipped_schema::capture().unwrap(),
+                &fs::read(original).unwrap(),
+            );
             let run = PreparedRun::prepare(document).unwrap();
             let compiled = run.compiled();
             let source = TableSchema::new(

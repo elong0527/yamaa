@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="BP01.adam.Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.BP01">
+    <GlobalVariables>
+      <StudyName>BP01</StudyName>
+      <StudyDescription>Example study averaging each subject's blood pressure</StudyDescription>
+      <ProtocolName>BP-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.BP01.adam" Name="BP01 adam metadata" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.ADaMIG" Name="ADaMIG" Type="IG" Version="1.3" Status="Final"/>
+      </def:Standards>
+      <def:ValueListDef OID="VL.ADVS.AVAL">
+        <ItemRef ItemOID="IT.ADVS.AVAL.OBSERVED" OrderNumber="1" Mandatory="Yes">
+          <def:WhereClauseRef WhereClauseOID="WC.ADVS.AVAL.OBSERVED"/>
+        </ItemRef>
+        <ItemRef ItemOID="IT.ADVS.AVAL.AVERAGE" OrderNumber="2" Mandatory="Yes" MethodOID="MT.ADVS.AVAL.AVERAGE">
+          <def:WhereClauseRef WhereClauseOID="WC.ADVS.AVAL.AVERAGE"/>
+        </ItemRef>
+      </def:ValueListDef>
+      <def:WhereClauseDef OID="WC.ADVS.AVAL.OBSERVED">
+        <RangeCheck Comparator="NE" SoftHard="Soft" def:ItemOID="IT.ADVS.DTYPE">
+          <CheckValue>AVERAGE</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <def:WhereClauseDef OID="WC.ADVS.AVAL.AVERAGE">
+        <RangeCheck Comparator="EQ" SoftHard="Soft" def:ItemOID="IT.ADVS.DTYPE">
+          <CheckValue>AVERAGE</CheckValue>
+        </RangeCheck>
+      </def:WhereClauseDef>
+      <ItemGroupDef OID="IG.ADVS" Name="ADVS" Purpose="Analysis" SASDatasetName="ADVS" Repeating="Yes" IsReferenceData="No" def:Structure="One record per subject per parameter per analysis visit" def:ArchiveLocationID="LF.ADVS" def:StandardOID="STD.ADaMIG">
+        <Description>
+          <TranslatedText xml:lang="en">Vital Signs Analysis Dataset</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.ADVS.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADVS.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.ADVS.PARAMCD" OrderNumber="3" Mandatory="Yes" KeySequence="3"/>
+        <ItemRef ItemOID="IT.ADVS.AVISIT" OrderNumber="4" Mandatory="Yes" KeySequence="4"/>
+        <ItemRef ItemOID="IT.ADVS.DTYPE" OrderNumber="5" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADVS.AVAL" OrderNumber="6" Mandatory="Yes"/>
+        <def:Class Name="BASIC DATA STRUCTURE"/>
+        <def:leaf ID="LF.ADVS" xlink:href="advs.csv">
+          <def:title>advs.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.ADVS.STUDYID" Name="STUDYID" DataType="text" Length="4" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">VS.STUDYID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.USUBJID" Name="USUBJID" DataType="text" Length="8" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">VS.USUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.PARAMCD" Name="PARAMCD" DataType="text" Length="5" SASFieldName="PARAMCD">
+        <Description>
+          <TranslatedText xml:lang="en">Parameter Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.AVISIT" Name="AVISIT" DataType="text" Length="7" SASFieldName="AVISIT">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Visit</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.DTYPE" Name="DTYPE" DataType="text" Length="7" SASFieldName="DTYPE">
+        <Description>
+          <TranslatedText xml:lang="en">Derivation Type</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.AVAL" Name="AVAL" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Other" Source="Sponsor">
+          <Description>
+            <TranslatedText xml:lang="en">Observed or averaged, as each value-level definition states</TranslatedText>
+          </Description>
+        </def:Origin>
+        <def:ValueListRef ValueListOID="VL.ADVS.AVAL"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.AVAL.OBSERVED" Name="AVAL" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">VS.VSSTRESN</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.AVAL.AVERAGE" Name="AVAL" DataType="float" Length="8" SignificantDigits="1" SASFieldName="AVAL">
+        <Description>
+          <TranslatedText xml:lang="en">Analysis Value</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <MethodDef OID="MT.ADVS.AVAL.AVERAGE" Name="ADVS.AVAL.AVERAGE" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Mean of the subject's observed values over all visits</TranslatedText>
+        </Description>
+      </MethodDef>
+    </MetaDataVersion>
+  </Study>
+</ODM>

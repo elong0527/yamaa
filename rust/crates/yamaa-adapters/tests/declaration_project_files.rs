@@ -259,9 +259,12 @@ mod declaration {
             // The converter's output for two benchmarks, which
             // `tools/tests/test_migrate.py` checks it reproduces: one with a
             // function both hosts implement and an R lock only, and one with
-            // inline codelists, a study and a section.
+            // inline codelists, a study and a section. Their 0.5 sources are
+            // frozen as they were written before the benchmarks moved to 1.0.
             let files = compare(
-                &repository("benchmarks/adam-adsl-bmi/project.yaml"),
+                &repository(
+                    "rust/crates/yamaa-adapters/tests/fixtures/legacy/adam-adsl-bmi/project.yaml",
+                ),
                 &repository("docs/design/interface-1.0/examples/adam-adsl-bmi/project.yaml"),
             );
             assert_eq!(files.len(), 1);
@@ -288,7 +291,7 @@ mod declaration {
                 );
             }
             assert!(compare(
-                &repository("benchmarks/sdtm-dm-metadata/project.yaml"),
+                &repository("rust/crates/yamaa-adapters/tests/fixtures/legacy/sdtm-dm-metadata/project.yaml"),
                 &repository("docs/design/interface-1.0/examples/sdtm-dm-metadata/project.yaml"),
             )
             .is_empty());

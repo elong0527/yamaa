@@ -143,6 +143,18 @@ missing-lookup CSV bytes, reached `no_match` counts and refusal conditions for
 `{literal: null}` handlers, nulls that leave a field absent, empty children and
 inherited clears in both hosts.
 
+## Conditions no case reaches
+
+`unreached-conditions.yaml` lists each condition that `yaml/conditions.yaml`
+registers and no parity case reaches (#2846): no negative benchmark's
+`expected/error.yaml` names it, and no case of the JSON files here does. Each
+entry is unreachable by design, with the reason no case can reach it, or not
+covered yet, under the family issue that adds its case.
+`tools/validation/check_diagnostics.py` keeps the list exact: it fails on a
+registered condition with neither a case nor an entry, and on an entry for a
+condition that a case reaches or that is not registered. The hosts never read
+the list, so the supplemental catalog stages it nowhere.
+
 ## Public conformance mapping
 
 The public-conformance plan reads benchmark metadata for membership and
