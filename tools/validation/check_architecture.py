@@ -6,7 +6,8 @@ Two rules hold for the Rust workspace under `rust/`:
   adapters depend on core, the facade composes the adapters and core, and
   each host (the Python and R bindings and the command line) depends on the
   facade only. Every dependency table counts: normal, build and development
-  dependencies, on every target, under any rename. A vendored crate outside
+  dependencies, on every target, under any rename, including a rename that a
+  member inherits from `[workspace.dependencies]`. A vendored crate outside
   the workspace, such as the adapters' YAML parser, is outside the rule, and
   a workspace member that `LAYER` gives no layer fails until it has one.
 - **No file or format code in core.** A scan of `yamaa-core`'s sources,
@@ -104,10 +105,14 @@ HINT = (
 
 
 def members(root):
-    """Each workspace member's manifest path and manifest, by package name."""
+    """Each workspace member's manifest path and manifest, by package name, and
+    the dependencies a member may inherit (`[workspace.dependencies]`)."""
     workspace = tomllib.loads((root / WORKSPACE / "Cargo.toml").read_text("utf-8"))[
         "workspace"
     ]
+    inherited = workspace.get("dependencies", {})
+    if not isinstance(inherited, dict):
+        raise ValueError("[workspace.dependencies] must be a table")
     excluded = {
         (root / WORKSPACE / path).resolve() for path in workspace.get("exclude", [])
     }
@@ -122,12 +127,14 @@ def members(root):
             path = directory / "Cargo.toml"
             manifest = tomllib.loads(path.read_text("utf-8"))
             found[manifest["package"]["name"]] = (path, manifest)
-    return found
+    return found, inherited
 
 
-def dependencies(manifest):
+def dependencies(manifest, inherited):
     """Yield (table, package) for every dependency of a manifest: each table,
-    on every target, with a renamed dependency's real package."""
+    on every target, with a renamed dependency's real package. A dependency
+    that declares `workspace = true` takes its package from the entry of the
+    same name in `inherited`, the workspace's `[workspace.dependencies]`."""
     tables = [(name, manifest.get(name, {})) for name in DEPENDENCY_TABLES]
     for target, entries in manifest.get("target", {}).items():
         tables += [
@@ -136,6 +143,12 @@ def dependencies(manifest):
         ]
     for table, entries in tables:
         for key, value in entries.items():
+            if isinstance(value, dict) and value.get("workspace") is True:
+                if key not in inherited:
+                    raise LookupError(
+                        f"[{table}] {key} inherits no [workspace.dependencies] entry"
+                    )
+                value = inherited[key]
             package = value.get("package", key) if isinstance(value, dict) else key
             yield table, package
 
@@ -143,7 +156,7 @@ def dependencies(manifest):
 def edge_errors(root):
     """The workspace edges section 2.10 does not allow."""
     try:
-        crates = members(root)
+        crates, inherited = members(root)
     except (
         OSError,
         UnicodeError,
@@ -169,8 +182,8 @@ def edge_errors(root):
             )
             continue
         try:
-            edges = list(dependencies(manifest))
-        except (AttributeError, TypeError) as error:
+            edges = list(dependencies(manifest, inherited))
+        except (AttributeError, LookupError, TypeError) as error:
             errors.append(f"{label}: cannot read the dependency tables: {error}")
             continue
         for table, package in edges:

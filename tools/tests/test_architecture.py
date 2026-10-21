@@ -125,6 +125,55 @@ class ArchitectureTests(unittest.TestCase):
                 )
                 self.write(path, original)
 
+    def test_a_dependency_inherited_from_the_workspace_keeps_the_edges(self):
+        self.append(
+            "rust/Cargo.toml",
+            "\n[workspace.dependencies]\n"
+            'engine = { package = "yamaa-core", path = "crates/yamaa-core" }\n'
+            'yamaa-adapters = { path = "crates/yamaa-adapters" }\n'
+            'facade = { package = "yamaa", path = "crates/yamaa" }\n'
+            'thiserror = "2"\n',
+        )
+        path = "rust/crates/yamaa-python/Cargo.toml"
+        original = (self.root / path).read_text(encoding="utf-8")
+        refusal = (
+            "{table} yamaa-python depends on {package}, but a host depends on the "
+            "facade alone (#3030 section 2.10)"
+        )
+        cases = {
+            "engine = { workspace = true }\n": refusal.format(
+                table="[dependencies]", package="yamaa-core"
+            ),
+            "\n[build-dependencies]\nengine = { workspace = true }\n": refusal.format(
+                table="[build-dependencies]", package="yamaa-core"
+            ),
+            "\n[dev-dependencies]\nyamaa-adapters = { workspace = true }\n": (
+                refusal.format(table="[dev-dependencies]", package="yamaa-adapters")
+            ),
+            '\n[target."cfg(windows)".dependencies]\n'
+            "engine = { workspace = true, optional = true }\n": refusal.format(
+                table="[target.cfg(windows).dependencies]", package="yamaa-core"
+            ),
+        }
+        for table, message in cases.items():
+            with self.subTest(table=table):
+                self.append(path, table)
+                self.assertEqual(self.errors(), [f"{path}: {message}"])
+                self.write(path, original)
+        # The facade under an inherited rename, and a crate outside the
+        # workspace, are allowed.
+        self.append(path, "facade = { workspace = true }\nthiserror.workspace = true\n")
+        self.assertEqual(self.errors(), [])
+        self.write(path, original)
+        self.append(path, "ghost = { workspace = true }\n")
+        self.assertEqual(
+            self.errors(),
+            [
+                f"{path}: cannot read the dependency tables: [dependencies] ghost "
+                "inherits no [workspace.dependencies] entry"
+            ],
+        )
+
     def test_crates_outside_the_workspace_are_outside_the_rule(self):
         self.append(
             f"{CORE}/Cargo.toml",
