@@ -132,7 +132,8 @@ Linux and none of the suggested packages, and in a CRAN-like Fedora
 container). Release assets come from that workflow. CRAN and r-universe
 publication are later distribution work.
 
-After installing either package, run `yamaa.selftest()` in Python or
+Packages from 1.0.0 on carry a self-test, which the 0.4.0 packages above do
+not. After installing one, run `yamaa.selftest()` in Python or
 `yamaa_selftest()` in R. It runs the cases that the package carries,
 benchmarks with independently authored expected files, through the installed
 engine and compares each result with its expected files, writing no file and

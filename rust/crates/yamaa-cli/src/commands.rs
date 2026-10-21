@@ -12,7 +12,10 @@
 //!   place of the summary line: it carries the first issue's line, so the
 //!   lines of the other issues follow. `lint` prints each finding's line,
 //!   then its summary line; `resolve` prints the resolved specification as
-//!   canonical JSON.
+//!   canonical JSON. `selftest` prints the facade's report as the hosts print
+//!   it (D119): its summary line, `first failure:` when a case failed, `not
+//!   covered:` when an adapter is not covered, then the engine, language,
+//!   host and platform.
 //! - **JSON** (`--format json`). One canonical JSON document (RFC 8785) on
 //!   one line, with the keys the draft `rust/interface/bindings-1.0.yaml`
 //!   lists in `cli.commands[].json_keys`: the command and its arguments, the
@@ -20,12 +23,16 @@
 //!   written `paths`. `resolve` prints the resolved specification itself. A
 //!   submission's `created` is the time its documents carry (D129); a
 //!   refused submission has none, so its `created` is `--created` as given,
-//!   or null.
+//!   or null. `selftest` gives its `cases` and the engine `info` as
+//!   `--version` prints it; the adapters no case covers are named on its
+//!   printed line alone (D119).
 //! - **Exit status.** 0 when the result succeeded and its save wrote
-//!   everything, when `resolve` printed, and when no lint finding remains; 1
-//!   for a `failed` or `skipped` result, a refusal or a remaining lint
-//!   finding (D68, D98). An argument the facade cannot take, a value that is
-//!   not UTF-8 text, exits 2.
+//!   everything, when `resolve` printed, when no lint finding remains, and
+//!   when no selftest case failed; 1 for a `failed` or `skipped` result, a
+//!   refusal, a remaining lint finding or a failed selftest case (D68, D98).
+//!   A selftest case that this build does not cover fails nothing (D119). An
+//!   argument the facade cannot take, a value that is not UTF-8 text, exits
+//!   2.
 //!
 //! `check`, `run`, `submission` and `resolve` dispatch on the type their PATH
 //! declares in its `type:` header, which the facade reads before anything
@@ -38,15 +45,16 @@
 //! which declares `schema_version`, or a `type` naming no file type. A PATH
 //! whose type the command does not take, at all or with the flags given,
 //! such as `--spec` with a spec, is a usage error, which exits 2.
-//! `read-odm`, `schema` and `selftest` are refused as not implemented yet
-//! (D96).
+//! `selftest` takes no PATH: it runs the cases the facade carries on an
+//! engine like the command line's, which claims no host language (D108,
+//! D123). `read-odm` and `schema` are refused as not implemented yet (D96).
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
 use yamaa::{
     Action, CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, Error, Failure,
-    FileType, Host, LintFinding, ProjectRun, Run, Status, Summary,
+    FileType, Host, Info, LintFinding, ProjectRun, Run, Status, Summary,
 };
 
 use crate::arguments::{Call, Format, Usage};
@@ -74,8 +82,9 @@ pub(crate) fn execute(call: &Call, format: Format) -> Execution {
         "submission" => submission(call),
         "resolve" => resolve(call),
         "lint" => lint(call),
+        "selftest" => Ok(selftest()),
         // `read-odm` needs a writer for OUT and `schema` the schema text,
-        // which the facade does not offer yet; `selftest` waits for #3062.
+        // which the facade does not offer yet.
         other => Err(Execution::NotImplemented(other.to_owned())),
     };
     match printed {
@@ -128,6 +137,33 @@ fn optional(value: Option<&str>) -> ContextValue {
 
 fn issues(diagnostics: &[Diagnostic]) -> ContextValue {
     ContextValue::List(diagnostics.iter().map(Diagnostic::to_value).collect())
+}
+
+/// One JSON object of `(key, value)` members.
+fn object<const N: usize>(members: [(&str, ContextValue); N]) -> ContextValue {
+    ContextValue::Map(
+        members
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect(),
+    )
+}
+
+/// The engine information as one object with `cli.json.info_keys`, as
+/// `--version` prints it and `selftest` reports it. The command line runs on
+/// no interpreter, so its `host_version` is null.
+pub(crate) fn info(info: &Info) -> ContextValue {
+    object([
+        ("version", text(info.version)),
+        ("language_versions", texts(&info.language_versions)),
+        (
+            "features",
+            ContextValue::List(info.features.iter().map(|feature| text(feature)).collect()),
+        ),
+        ("host", text(info.host.as_str())),
+        ("host_version", optional(info.host_version.as_deref())),
+        ("platform", text(&info.platform)),
+    ])
 }
 
 /// The document of `command`, with the arguments it names as `(key, value)`.
@@ -390,19 +426,13 @@ fn members(runs: &ProjectRun) -> ContextValue {
                 let size = |measure: fn(&yamaa::Table) -> usize| {
                     output.map_or(ContextValue::Null, |table| count(measure(table)))
                 };
-                let values = [
+                object([
                     ("name", text(name)),
                     ("status", text(run.status().as_str())),
                     ("rows", size(yamaa::Table::rows)),
                     ("columns", size(|table| table.columns().len())),
                     ("issue_count", count(run.diagnostics().len())),
-                ];
-                ContextValue::Map(
-                    values
-                        .into_iter()
-                        .map(|(key, value)| (key.to_owned(), value))
-                        .collect(),
-                )
+                ])
             })
             .collect(),
     )
@@ -542,6 +572,36 @@ fn lint(call: &Call) -> Result<Printed, Execution> {
         }
         Err(failure) => refusal(document, failure),
     })
+}
+
+/// `yamaa selftest`: `selftest()`, for the command line, which runs on no
+/// interpreter (D28, D108, D123). It prints the facade's report line for
+/// line, the same words as the hosts (D37, D119); its JSON holds the status,
+/// each case with `cli.json.case_keys` in list order, and the engine
+/// information. It exits 0 when no case failed: a case this build does not
+/// cover is `skipped`, which fails nothing (D119).
+fn selftest() -> Printed {
+    let selftest = yamaa::selftest(Host::Cli, None);
+    let cases = selftest
+        .cases()
+        .iter()
+        .map(|case| {
+            object([
+                ("case", text(case.case)),
+                ("status", text(case.status.as_str())),
+                ("message", optional(case.message.as_deref())),
+            ])
+        })
+        .collect();
+    let mut document = document("selftest", []);
+    document.insert("status".into(), text(selftest.status().as_str()));
+    document.insert("cases".into(), ContextValue::List(cases));
+    document.insert("info".into(), info(selftest.info()));
+    Printed {
+        lines: selftest.summary().lines().map(str::to_owned).collect(),
+        document: ContextValue::Map(document),
+        status: exit(selftest.status()),
+    }
 }
 
 #[cfg(test)]

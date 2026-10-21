@@ -1,6 +1,6 @@
 //! The `yamaa` binary as a user runs it: what it prints, on which stream, and
-//! its exit status (#3030 section 2.8, D12, D41, D68, D96 to D99, D103, D122,
-//! D125).
+//! its exit status (#3030 section 2.8, D12, D41, D68, D96 to D99, D103, D119,
+//! D122, D125).
 //!
 //! What the command line composes is written out here: the summary and
 //! member lines, the order of the lines, the written paths, the JSON keys and
@@ -313,6 +313,7 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
             "schema: unexpected argument project",
         ),
         (&["selftest", "now"], "selftest: unexpected argument now"),
+        (&["selftest", "--fix"], "selftest: unknown option --fix"),
     ];
     for (arguments, message) in cases {
         assert_eq!(
@@ -324,8 +325,7 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
 }
 
 /// What the command line cannot run yet checks its arguments, then refuses
-/// with exit status 2 and writes nothing (D96): `read-odm`, `schema` and
-/// `selftest`.
+/// with exit status 2 and writes nothing (D96): `read-odm` and `schema`.
 #[test]
 fn the_commands_not_implemented_yet_check_their_arguments_then_refuse() {
     let study = Study::new();
@@ -349,8 +349,6 @@ fn the_commands_not_implemented_yet_check_their_arguments_then_refuse() {
         ),
         (&["schema", "spec"], "schema"),
         (&["--format", "json", "schema", "project"], "schema"),
-        (&["selftest"], "selftest"),
-        (&["selftest", "--format", "json"], "selftest"),
     ];
     for (arguments, what) in cases {
         assert_eq!(
@@ -366,6 +364,57 @@ fn the_commands_not_implemented_yet_check_their_arguments_then_refuse() {
     // Nothing ran, so nothing was written, OUT included.
     assert!(study.files("out").is_empty());
     assert!(!study.exists("items.parquet") && !study.exists("items.csv"));
+}
+
+/// `yamaa selftest` runs the cases the binary carries and prints the facade's
+/// report, the hosts' words with the host `cli` (D119). A shipped build
+/// compiles every feature, so every case passes, and the one adapter no case
+/// covers yet is named. With `--format json` it prints the status, each case
+/// in list order and the engine information as `--version` prints it, with no
+/// key for the uncovered adapter. No case failed, so it exits 0; it writes no
+/// file (D108).
+#[test]
+fn selftest_prints_the_report_and_exits_0_when_no_case_failed() {
+    let study = Study::empty();
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let report = format!(
+        "yamaa selftest: succeeded, 4 of 4 cases passed\nnot covered: odm\n\
+         engine {}, language 1.0, cli, {platform}\n",
+        yamaa::VERSION
+    );
+    for arguments in [&["selftest"][..], &["--format", "text", "selftest"]] {
+        assert_eq!(
+            outcome(&yamaa_in(&study.0, arguments)),
+            printed(0, report.clone()),
+            "{arguments:?}"
+        );
+    }
+    let cases = [
+        "adam-adae-analysis-time",
+        "adam-adsl-xpt",
+        "negative-transport-empty-string",
+        "schema-source-xpt",
+    ]
+    .map(|case| format!("{{\"case\":\"{case}\",\"message\":null,\"status\":\"succeeded\"}}"))
+    .join(",");
+    let document = format!(
+        "{{\"cases\":[{cases}],\"command\":\"selftest\",\
+         \"info\":{{\"features\":[\"odm\",\"parquet\",\"readstat\",\"yaml\"],\"host\":\"cli\",\
+         \"host_version\":null,\"language_versions\":[\"1.0\"],\"platform\":\"{platform}\",\
+         \"version\":\"{}\"}},\"status\":\"succeeded\"}}\n",
+        yamaa::VERSION
+    );
+    for arguments in [
+        &["selftest", "--format", "json"][..],
+        &["--format", "json", "selftest"],
+    ] {
+        assert_eq!(
+            outcome(&yamaa_in(&study.0, arguments)),
+            printed(0, document.clone()),
+            "{arguments:?}"
+        );
+    }
+    assert!(study.files(".").is_empty());
 }
 
 /// A PATH that declares `type: spec` is checked, run and resolved alone, as
