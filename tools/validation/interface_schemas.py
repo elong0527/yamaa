@@ -101,6 +101,41 @@ def _canonical(value):
     return json.dumps(value, sort_keys=True)
 
 
+def _schema_without_prose(node):
+    """Drop annotations at schema nodes, preserving names and literal data."""
+    if not isinstance(node, dict):
+        return node
+    result = {}
+    for keyword, value in node.items():
+        if keyword in PROSE:
+            continue
+        if keyword in {"$defs", "properties", "patternProperties", "dependentSchemas"}:
+            if isinstance(value, dict):
+                value = {
+                    name: _schema_without_prose(schema)
+                    for name, schema in value.items()
+                }
+        elif keyword in {"allOf", "anyOf", "oneOf", "prefixItems"}:
+            if isinstance(value, list):
+                value = [_schema_without_prose(schema) for schema in value]
+        elif keyword in {
+            "items",
+            "additionalProperties",
+            "unevaluatedProperties",
+            "unevaluatedItems",
+            "propertyNames",
+            "contains",
+            "contentSchema",
+            "not",
+            "if",
+            "then",
+            "else",
+        }:
+            value = _schema_without_prose(value)
+        result[keyword] = value
+    return result
+
+
 def _shown(value):
     return "none" if value is None else f"`{value}`"
 
@@ -200,6 +235,7 @@ def _covers(new, old):
 
 
 def _facts(node, where, parent, required):
+    node = _schema_without_prose(node)
     values = node.get("enum")
     bounds = {bound: node.get(bound) for bound in LOWER_BOUNDS + UPPER_BOUNDS}
     if not (values is None or isinstance(values, list)) or not all(
