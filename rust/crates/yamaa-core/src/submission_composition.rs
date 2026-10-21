@@ -92,12 +92,35 @@ pub struct Column {
     /// Declared, or fixed for an ADaM numeric date (SUB-25).
     pub(crate) display_format: Option<String>,
     pub(crate) mandatory: bool,
-    pub(crate) source: Option<spec::OriginSource>,
-    pub(crate) documents: Vec<spec::DocumentReference>,
+    /// One per declared origin, in declaration order (DEFINE-19).
+    pub(crate) origins: Vec<OriginDefinition>,
     pub(crate) key_sequence: Option<usize>,
     pub(crate) values: Vec<ValueDefinition>,
     /// The width a transport file gives a character column (SUB-24).
     pub(crate) transport_length: Option<usize>,
+}
+/// One composed origin of a column or value-level entry: its declaration, the
+/// source the model admits or derives (SUB-15) and its document references,
+/// with the annotated case report form reference `context: Other` derives
+/// (SUB-17).
+#[derive(Clone, Debug)]
+pub struct OriginDefinition {
+    pub(crate) declaration: spec::OriginMetadata,
+    pub(crate) source: Option<spec::OriginSource>,
+    pub(crate) documents: Vec<spec::DocumentReference>,
+}
+impl OriginDefinition {
+    pub fn declaration(&self) -> &spec::OriginMetadata {
+        &self.declaration
+    }
+    /// The origin's source, when its type takes one (SUB-15).
+    pub fn source(&self) -> Option<spec::OriginSource> {
+        self.source
+    }
+    /// The origin's document references.
+    pub fn documents(&self) -> &[spec::DocumentReference] {
+        &self.documents
+    }
 }
 /// One value-level entry's definition: the rows its where clause selects take
 /// the column's metadata merged with the entry's (SUB-12, DEFINE-27).
@@ -114,6 +137,8 @@ pub struct ValueDefinition {
 pub struct Dataset {
     pub(crate) id: String,
     pub(crate) domain: String,
+    /// The name of the section guide that binds the dataset (DEFINE-6).
+    pub(crate) standard: String,
     pub(crate) metadata: spec::Dataset,
     pub(crate) columns: Vec<Column>,
     pub(crate) href: Option<String>,
@@ -141,8 +166,6 @@ pub struct Standard {
 pub struct Study {
     pub(crate) study: ast::Study,
     pub(crate) section: ast::Section,
-    /// The implementation guide every represented dataset follows.
-    pub(crate) guide: String,
     pub(crate) file_oid: String,
     pub(crate) metadata_id: String,
     pub(crate) metadata_name: String,
@@ -164,10 +187,6 @@ impl Study {
     /// The selected submission section.
     pub fn section(&self) -> &ast::Section {
         &self.section
-    }
-    /// The identifier of the implementation guide every dataset follows.
-    pub fn guide(&self) -> &str {
-        &self.guide
     }
     /// The document's `FileOID`: the section's, or one derived from the study
     /// and the section.
@@ -195,7 +214,9 @@ impl Study {
     pub fn created(&self) -> &str {
         &self.created
     }
-    /// The standards the document cites, in citation order.
+    /// The standards the document cites: every implementation guide of the
+    /// section in declaration order, then the terminology standards its bound
+    /// codelists cite (DEFINE-6).
     pub fn standards(&self) -> &[Standard] {
         &self.standards
     }
@@ -217,6 +238,12 @@ impl Dataset {
     /// The declared `domain`, which a tabulation `ItemGroupDef` names.
     pub fn domain(&self) -> &str {
         &self.domain
+    }
+    /// The name of the implementation guide that binds the dataset: the
+    /// section guide its `submission.standard` selects, or the section's
+    /// first (DEFINE-6, DEFINE-8).
+    pub fn standard(&self) -> &str {
+        &self.standard
     }
     /// The dataset's composed submission metadata.
     pub fn metadata(&self) -> &spec::Dataset {
@@ -263,13 +290,10 @@ impl Column {
     pub fn mandatory(&self) -> bool {
         self.mandatory
     }
-    /// The origin's source, when its type takes one (SUB-15).
-    pub fn source(&self) -> Option<spec::OriginSource> {
-        self.source
-    }
-    /// The origin's document references.
-    pub fn documents(&self) -> &[spec::DocumentReference] {
-        &self.documents
+    /// The composed origins, one per declared origin in declaration order
+    /// (DEFINE-19).
+    pub fn origins(&self) -> &[OriginDefinition] {
+        &self.origins
     }
     pub fn key_sequence(&self) -> Option<usize> {
         self.key_sequence
@@ -659,15 +683,9 @@ impl ColumnAdmission<'_> {
             tree,
             section,
             known,
-            acrfs,
             keys,
-            reads,
             ..
         } = *self;
-        let refutation = match level {
-            Level::Column => ConditionCode::SubmissionOriginRefuted,
-            Level::Value => ConditionCode::SubmissionValueOriginRefuted,
-        };
         let name = &column.name.value;
         let Some(metadata) = &column.submission else {
             findings.push(Finding::cause(
@@ -677,14 +695,14 @@ impl ColumnAdmission<'_> {
             ));
             return None;
         };
-        let Some(origin) = &metadata.origin_metadata else {
+        if metadata.origins.is_empty() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionOriginMissing,
                 column_path,
                 name,
             ));
             return None;
-        };
+        }
         if column.label.is_none() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionMetadataMissing,
@@ -735,114 +753,43 @@ impl ColumnAdmission<'_> {
                 name,
             ));
         }
-        let source = origin.source.as_ref().map(|s| s.value);
-        if !origin
-            .kind
-            .value
-            .admits_source(section_model(section.family), source)
+        // Each origin is admitted on its own, at its own position: 1.0's
+        // `origins[<i>]`, or 0.5's one `origin` (P-ORIGIN-1).
+        let v1 = matches!(tree.header.surface, ast::Surface::V1 { .. });
+        let origins = metadata
+            .origins
+            .iter()
+            .enumerate()
+            .map(|(index, declared)| {
+                let at = if v1 {
+                    format!("{column_path}.origins[{index}]")
+                } else {
+                    format!("{column_path}.origin")
+                };
+                self.admit_origin(
+                    declared,
+                    &at,
+                    column_path,
+                    name,
+                    derivations,
+                    level,
+                    findings,
+                )
+            })
+            .collect();
+        // SUB-18: a `Derived` origin anywhere needs the method that derives it.
+        if metadata
+            .origins
+            .iter()
+            .any(|declared| declared.kind.value == spec::OriginType::Derived)
+            && metadata.method.is_none()
         {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginSource,
-                &format!("{column_path}.origin"),
-                name,
-            ));
-        }
-        let description = origin.description.as_ref().map(|d| d.value.as_str());
-        let predecessor = description
-            .filter(|_| origin.kind.value == spec::OriginType::Predecessor)
-            .and_then(origin::predecessor);
-        if matches!(
-            origin.kind.value,
-            spec::OriginType::Other
-                | spec::OriginType::Predecessor
-                | spec::OriginType::NotAvailable
-        ) && description.is_none()
-        {
-            findings.push(Finding::cause(
-                ConditionCode::SubmissionOriginDescription,
-                &format!("{column_path}.origin"),
-                name,
-            ));
-        } else if origin.kind.value == spec::OriginType::Predecessor && predecessor.is_none() {
-            // SUB-16: a Predecessor description names `<dataset>.<column>`.
-            let mut finding = Finding::cause(
-                ConditionCode::SubmissionOriginDescription,
-                &format!("{column_path}.origin.description"),
-                name,
-            );
-            finding.context.insert(
-                "reason".into(),
-                crate::json::Value::String("predecessor_form".into()),
-            );
-            findings.push(finding);
-        }
-        if origin.kind.value == spec::OriginType::Derived && metadata.method.is_none() {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionMethodMissing,
                 column_path,
                 name,
             ));
         }
-        if refuting(tree, derivations, origin.kind.value, reads).is_some() {
-            findings.push(Finding::cause(refutation, column_path, name));
-        } else if let Some(failure) = predecessor
-            .as_ref()
-            .and_then(|predecessor| copy_failure(tree, derivations, predecessor, reads))
-        {
-            // SUB-20: a Predecessor is a bare `source` of the column it names.
-            let mut finding = Finding::cause(refutation, column_path, name);
-            finding.context.insert(
-                "reason".into(),
-                crate::json::Value::String(failure.reason().into()),
-            );
-            findings.push(finding);
-        }
-        let mut refs = origin.documents.value.clone();
-        if origin.kind.value == spec::OriginType::Collected
-            && matches!(
-                source,
-                Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
-            )
-        {
-            // SUB-17: under `Submission` the reference says where in the form
-            // the value was collected; only `Other` derives a page-less one.
-            let submission = section.context == ast::DefineContext::Submission;
-            if acrfs.len() != 1 {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionAnnotatedCrfMissing,
-                    &format!("{column_path}.origin"),
-                    name,
-                ));
-            } else if origin.documents.origin.key.is_none() {
-                if submission {
-                    findings.push(Finding::cause(
-                        ConditionCode::SubmissionOriginDocument,
-                        &format!("{column_path}.origin"),
-                        name,
-                    ));
-                } else {
-                    refs.push(spec::DocumentReference::Plain(spec::Field {
-                        value: acrfs[0].id.name.clone(),
-                        origin: origin.documents.origin,
-                    }));
-                }
-            } else if refs.is_empty()
-                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.name)
-                || (submission && !refs.iter().any(paged))
-            {
-                findings.push(Finding::cause(
-                    ConditionCode::SubmissionOriginDocument,
-                    &format!("{column_path}.origin.documents"),
-                    name,
-                ));
-            }
-        }
-        references(
-            findings,
-            &refs,
-            known,
-            &format!("{column_path}.origin.documents"),
-        );
         if let Some(spec::Method::Class(class)) = &metadata.method {
             references(
                 findings,
@@ -951,18 +898,170 @@ impl ColumnAdmission<'_> {
             length,
             display_format,
             mandatory,
-            source: if section.family == Submission::Adam
-                && origin.kind.value != spec::OriginType::Predecessor
+            origins,
+            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
+            values: Vec::new(),
+            transport_length: None,
+        })
+    }
+    /// Admit one declared origin of the column or entry at `column_path`, at
+    /// `at`, its own position: its type and source pair (SUB-15), its
+    /// description (SUB-16), its annotated case report form reference
+    /// (SUB-17) and the derivations its type claims (SUB-19, SUB-20), each
+    /// refutation naming the refuted type.
+    #[allow(clippy::too_many_arguments)]
+    fn admit_origin(
+        &self,
+        declared: &spec::OriginMetadata,
+        at: &str,
+        column_path: &str,
+        name: &str,
+        derivations: &[ast::ExprId],
+        level: Level,
+        findings: &mut Vec<Finding>,
+    ) -> OriginDefinition {
+        let Self {
+            tree,
+            section,
+            known,
+            acrfs,
+            reads,
+            ..
+        } = *self;
+        let kind = declared.kind.value;
+        let model = section_model(section.family);
+        let source = declared.source.as_ref().map(|s| s.value);
+        // D65: a 1.0 specification takes no `Not Available` origin under
+        // SDTM; a 0.5 one keeps the pairs of 0.5.0 (D75).
+        let admitted = match tree.header.surface {
+            ast::Surface::V0_5 => kind.admits_source_v0_5(model, source),
+            ast::Surface::V1 { .. } => kind.admits_source(model, source),
+        };
+        if !admitted {
+            findings.push(Finding::cause(
+                ConditionCode::SubmissionOriginSource,
+                at,
+                name,
+            ));
+        }
+        let description = declared.description.as_ref().map(|d| d.value.as_str());
+        let predecessor = description
+            .filter(|_| kind == spec::OriginType::Predecessor)
+            .and_then(origin::predecessor);
+        if matches!(
+            kind,
+            spec::OriginType::Other
+                | spec::OriginType::Predecessor
+                | spec::OriginType::NotAvailable
+        ) && description.is_none()
+        {
+            findings.push(Finding::cause(
+                ConditionCode::SubmissionOriginDescription,
+                at,
+                name,
+            ));
+        } else if kind == spec::OriginType::Predecessor && predecessor.is_none() {
+            // SUB-16: a Predecessor description names `<dataset>.<column>`.
+            let mut finding = Finding::cause(
+                ConditionCode::SubmissionOriginDescription,
+                &format!("{at}.description"),
+                name,
+            );
+            finding.context.insert(
+                "reason".into(),
+                crate::json::Value::String("predecessor_form".into()),
+            );
+            findings.push(finding);
+        }
+        // SUB-19 and SUB-20: the derivations refute the declared type, or are
+        // not the copy a Predecessor claims. A Predecessor that is not the
+        // named copy is refuted by a bare `source`, which SUB-19 alone admits.
+        let refuted = refuting(tree, derivations, kind, reads)
+            .map(|derivation| (derivation, None))
+            .or_else(|| {
+                predecessor
+                    .as_ref()
+                    .and_then(|predecessor| copy_failure(tree, derivations, predecessor, reads))
+                    .map(|failure| {
+                        (
+                            origin::classify_expr(tree, derivations[0], reads),
+                            Some(failure),
+                        )
+                    })
+            });
+        if let Some((derivation, failure)) = refuted {
+            let code = match level {
+                Level::Column => ConditionCode::SubmissionOriginRefuted,
+                Level::Value => ConditionCode::SubmissionValueOriginRefuted,
+            };
+            let mut finding = Finding::cause(code, column_path, name);
+            let text = |value: &str| crate::json::Value::String(value.into());
+            finding
+                .context
+                .insert("origin_type".into(), text(kind.name()));
+            if level == Level::Value {
+                finding
+                    .context
+                    .insert("derivation_kind".into(), text(derivation.name()));
+            }
+            if let Some(failure) = failure {
+                finding
+                    .context
+                    .insert("reason".into(), text(failure.reason()));
+            }
+            findings.push(finding);
+        }
+        let mut refs = declared.documents.value.clone();
+        if kind == spec::OriginType::Collected
+            && matches!(
+                source,
+                Some(spec::OriginSource::Investigator | spec::OriginSource::Subject)
+            )
+        {
+            // SUB-17: under `Submission` the reference says where in the form
+            // the value was collected; only `Other` derives a page-less one.
+            let submission = section.context == ast::DefineContext::Submission;
+            if acrfs.len() != 1 {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionAnnotatedCrfMissing,
+                    at,
+                    name,
+                ));
+            } else if declared.documents.origin.key.is_none() {
+                if submission {
+                    findings.push(Finding::cause(
+                        ConditionCode::SubmissionOriginDocument,
+                        at,
+                        name,
+                    ));
+                } else {
+                    refs.push(spec::DocumentReference::Plain(spec::Field {
+                        value: acrfs[0].id.name.clone(),
+                        origin: declared.documents.origin,
+                    }));
+                }
+            } else if refs.is_empty()
+                || refs.iter().any(|r| reference_id(r) != acrfs[0].id.name)
+                || (submission && !refs.iter().any(paged))
             {
+                findings.push(Finding::cause(
+                    ConditionCode::SubmissionOriginDocument,
+                    &format!("{at}.documents"),
+                    name,
+                ));
+            }
+        }
+        references(findings, &refs, known, &format!("{at}.documents"));
+        OriginDefinition {
+            declaration: declared.clone(),
+            // SUB-15: an ADaM source is derived, never declared.
+            source: if section.family == Submission::Adam && kind != spec::OriginType::Predecessor {
                 Some(spec::OriginSource::Sponsor)
             } else {
                 source
             },
             documents: refs,
-            key_sequence: keys.iter().position(|key| key == name).map(|k| k + 1),
-            values: Vec::new(),
-            transport_length: None,
-        })
+        }
     }
     /// Admit length and significant-digit declarations; return the effective length.
     fn admit_length(
@@ -1332,13 +1431,10 @@ fn compose_values(
                     name,
                 ));
             }
-            // An entry without its own origin answers with the column's,
+            // An entry without origins of its own answers with the column's,
             // which the column's own refutation already covers (SUB-13).
-            let derivations = match (
-                &entry.metadata.origin_metadata,
-                tree_column(admission.tree, name),
-            ) {
-                (Some(_), Some(column)) => values::levels(column)
+            let derivations = match tree_column(admission.tree, name) {
+                Some(column) if !entry.metadata.origins.is_empty() => values::levels(column)
                     .iter()
                     .find(|level| level.id.name == *id)
                     .map_or_else(Vec::new, |level| {
@@ -1359,32 +1455,6 @@ fn compose_values(
                     finding
                         .context
                         .insert(key.into(), crate::json::Value::String(value.into()));
-                }
-                if finding.code == ConditionCode::SubmissionValueOriginRefuted {
-                    let origin = effective
-                        .submission
-                        .as_ref()
-                        .and_then(|m| m.origin_metadata.as_ref())
-                        .expect("refuted admitted origin");
-                    // A Predecessor that is not the named copy is refuted by a
-                    // bare `source`, which SUB-19 alone admits.
-                    let kind = refuting(
-                        admission.tree,
-                        &derivations,
-                        origin.kind.value,
-                        admission.reads,
-                    )
-                    .unwrap_or_else(|| {
-                        origin::classify_expr(admission.tree, derivations[0], admission.reads)
-                    });
-                    for (key, value) in [
-                        ("derivation_kind", kind.name()),
-                        ("origin_type", origin.kind.value.name()),
-                    ] {
-                        finding
-                            .context
-                            .insert(key.into(), crate::json::Value::String(value.into()));
-                    }
                 }
             }
             if let (Some(value), Some(clause)) = (value, clause) {
@@ -1469,6 +1539,100 @@ fn predecessor_labels(
     }
 }
 
+/// Whether `guide` is an implementation guide of the model a `family`
+/// section lists (SUB-3's table): the guide names are closed (DEFINE-6), so
+/// each model's guides are the names that start with its own guide's.
+fn guide_of(family: Submission, guide: &str) -> bool {
+    match family {
+        Submission::Sdtm => guide.starts_with("SDTMIG"),
+        Submission::Adam => guide.starts_with("ADaMIG"),
+        Submission::Send => guide.starts_with("SENDIG"),
+    }
+}
+
+/// DEFINE-6's findings for a 1.0 section's `standards`: a guide outside the
+/// section's model fails as `standard_model_mismatch`, and a name an earlier
+/// entry takes as `duplicate_identifier`, each at the entry's `name`.
+fn section_standards(
+    family: Submission,
+    guides: &[ast::ImplementationGuide],
+    findings: &mut Vec<Finding>,
+) {
+    let section = family_name(family);
+    let text = |value: &str| crate::json::Value::String(value.into());
+    for (index, guide) in guides.iter().enumerate() {
+        let name = guide.name.text.as_str();
+        let (code, context) = if guides[..index]
+            .iter()
+            .any(|earlier| earlier.name.text == name)
+        {
+            (
+                ConditionCode::SectionStandardDuplicate,
+                vec![("identifier", text(name))],
+            )
+        } else if !guide_of(family, name) {
+            (
+                ConditionCode::SectionStandardModel,
+                vec![
+                    ("value", text(name)),
+                    ("model", text(section_model(family).name())),
+                    ("section", text(section)),
+                ],
+            )
+        } else {
+            continue;
+        };
+        findings.push(Finding {
+            code,
+            path: format!("{section}.standards[{index}].name"),
+            context: context
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect(),
+        });
+    }
+}
+
+/// The section guide a dataset's `submission.standard` selects, or the
+/// section's first when it selects none (DEFINE-8). A name the section does
+/// not list fails as `unknown_standard` at `path`, naming the section and its
+/// standards, and the dataset composes on under the first.
+fn bound_standard(
+    family: Submission,
+    guides: &[ast::ImplementationGuide],
+    selected: Option<&spec::Field<String>>,
+    path: &str,
+    findings: &mut Vec<Finding>,
+) -> String {
+    let first = || guides[0].name.text.clone();
+    let Some(selected) = selected else {
+        return first();
+    };
+    if let Some(guide) = guides
+        .iter()
+        .find(|guide| guide.name.text == selected.value)
+    {
+        return guide.name.text.clone();
+    }
+    let text = |value: &str| crate::json::Value::String(value.into());
+    findings.push(Finding {
+        code: ConditionCode::SubmissionUnknownStandard,
+        path: path.into(),
+        context: [
+            ("value".to_string(), text(&selected.value)),
+            ("section".to_string(), text(family_name(family))),
+            (
+                "standards".to_string(),
+                crate::json::Value::Array(
+                    guides.iter().map(|guide| text(&guide.name.text)).collect(),
+                ),
+            ),
+        ]
+        .into(),
+    });
+    first()
+}
+
 /// SUB-3's finding for a 1.x specification a section lists at `path`, unless
 /// it declares the section's model: `missing_required_field` without
 /// `model`, and `standard_model_mismatch` for another model, naming the
@@ -1506,10 +1670,12 @@ fn listed_model(tree: &ast::Spec, family: Submission, path: &str) -> Option<Find
 }
 
 /// Compose every captured dataset in order, collecting codelist bindings.
-/// `study` holds every specification any submission section lists.
+/// `study` holds every specification any submission section lists, and
+/// `guides` the section's implementation guides, never empty.
 #[allow(clippy::too_many_arguments)]
 fn compose_datasets(
     section: &ast::Section,
+    guides: &[ast::ImplementationGuide],
     catalogue: &ct::Catalogue,
     inputs: &[Input<'_>],
     study: &[&Document],
@@ -1540,7 +1706,10 @@ fn compose_datasets(
         reserved_metadata(
             doc,
             doc.root(),
-            spec::DATASET_METADATA_FIELDS,
+            spec::dataset_metadata_fields(matches!(
+                input.tree.header.surface,
+                ast::Surface::V1 { .. }
+            )),
             &path,
             findings,
         );
@@ -1618,6 +1787,13 @@ fn compose_datasets(
             ));
             continue;
         };
+        let standard = bound_standard(
+            section.family,
+            guides,
+            dataset.standard.as_ref(),
+            &format!("{path}.submission.standard"),
+            findings,
+        );
         if transport_limits(section) {
             if !dataset_name(&id) {
                 findings.push(name_finding(&path, &id, DATASET_NAME));
@@ -1742,19 +1918,18 @@ fn compose_datasets(
                 continue;
             };
             redundant_mandatory_checks(&admission, column, &path, findings);
-            let own = column
+            // Every origin the column and its entries declare.
+            let origins: Vec<_> = column
                 .submission
-                .as_ref()
-                .and_then(|metadata| metadata.origin_metadata.as_ref());
-            let origins: Vec<_> = own
-                .into_iter()
-                .chain(
-                    column
-                        .submission
-                        .iter()
-                        .flat_map(|metadata| &metadata.value_level)
-                        .filter_map(|entry| entry.metadata.origin_metadata.as_ref()),
-                )
+                .iter()
+                .flat_map(|metadata| {
+                    metadata.origins.iter().chain(
+                        metadata
+                            .value_level
+                            .iter()
+                            .flat_map(|entry| &entry.metadata.origins),
+                    )
+                })
                 .collect();
             predecessor_labels(study, column, &origins, &path, findings);
             // The column's origin answers for every construction whose rows an
@@ -1806,6 +1981,7 @@ fn compose_datasets(
         datasets.push(Dataset {
             id: id.clone(),
             domain: dataset.domain.as_ref().map_or(id, |d| d.value.clone()),
+            standard,
             metadata: dataset.clone(),
             columns: selected,
             artifact: input.artifact.into(),
@@ -1835,10 +2011,12 @@ fn source_version<'a>(section: &'a ast::Section, installed: &'a str) -> Option<&
 pub struct Required<'a> {
     pub study: &'a ast::Study,
     pub section: &'a ast::Section,
-    pub standard: &'a ast::ImplementationGuide,
+    /// The section's implementation guides, never empty: 1.0's `standards`
+    /// in declaration order, or 0.5's one `standard` (DEFINE-6).
+    pub standards: &'a [ast::ImplementationGuide],
     pub define: &'a ast::Text,
-    /// The surface the project is written in, which spells the guide's path:
-    /// `standard` in 0.5, `standards[0]` in 1.0.
+    /// The surface the project is written in, which spells the guides' path:
+    /// `standard` in 0.5, `standards[<i>]` in 1.0.
     pub surface: ast::Surface,
 }
 impl<'a> Required<'a> {
@@ -1857,13 +2035,13 @@ impl<'a> Required<'a> {
         let missing = |path: String, field: &str| {
             Finding::cause(ConditionCode::DefineRequiredDeclaration, &path, field)
         };
-        let standard = section.standards.first();
+        let standards = (!section.standards.is_empty()).then_some(section.standards.as_slice());
         let define = section.define.as_ref();
-        if let (Some(study), Some(standard), Some(define)) = (study, standard, define) {
+        if let (Some(study), Some(standards), Some(define)) = (study, standards, define) {
             return Ok(Self {
                 study,
                 section,
-                standard,
+                standards,
                 define,
                 surface,
             });
@@ -1872,7 +2050,7 @@ impl<'a> Required<'a> {
         if study.is_none() {
             findings.push(missing("study".into(), "study"));
         }
-        if standard.is_none() {
+        if standards.is_none() {
             let field = match surface {
                 ast::Surface::V0_5 => "standard",
                 ast::Surface::V1 { .. } => "standards",
@@ -1901,7 +2079,7 @@ pub fn compose(
     let Required {
         study,
         section,
-        standard: guide_declaration,
+        standards: guides,
         define,
         surface,
     } = required;
@@ -1927,39 +2105,22 @@ pub fn compose(
             "incomplete captured dataset set",
         ));
     }
-    let guide = guide_declaration.name.text.as_str();
-    let compatible = match section.family {
-        Submission::Sdtm => guide.starts_with("SDTMIG"),
-        Submission::Adam => guide.starts_with("ADaMIG"),
-        Submission::Send => guide.starts_with("SENDIG"),
-    };
-    if !compatible {
-        // The guide composition binds: 0.5's one `standard`, outside the
-        // section's family, or the first of a 1.0 section's `standards`
-        // (D16), outside the section's model (SUB-3, D58).
-        match surface {
-            ast::Surface::V0_5 => findings.push(cause(
-                ConditionCode::SubmissionStandardFamily,
-                "standard.name",
-                guide,
-            )),
-            ast::Surface::V1 { .. } => {
-                let text = |value: &str| crate::json::Value::String(value.into());
-                findings.push(Finding {
-                    code: ConditionCode::SubmissionModelMismatch,
-                    path: format!("{prefix}.standards[0].name"),
-                    context: [
-                        ("value".to_string(), text(guide)),
-                        (
-                            "model".to_string(),
-                            text(section_model(section.family).name()),
-                        ),
-                        ("section".to_string(), text(family)),
-                    ]
-                    .into(),
-                });
+    // Every guide a 1.0 section lists belongs to its model under a name of
+    // its own (DEFINE-6, D16). A 0.5 project writes one `standard`, refused
+    // outside the section's family (SUB-3).
+    match surface {
+        ast::Surface::V0_5 => {
+            for guide in guides {
+                if !guide_of(section.family, &guide.name.text) {
+                    findings.push(cause(
+                        ConditionCode::SubmissionStandardFamily,
+                        "standard.name",
+                        &guide.name.text,
+                    ));
+                }
             }
         }
+        ast::Surface::V1 { .. } => section_standards(section.family, guides, &mut findings),
     }
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
         findings.push(cause(
@@ -2011,6 +2172,7 @@ pub fn compose(
     let mut bound = BTreeSet::new();
     let datasets = compose_datasets(
         section,
+        guides,
         catalogue,
         inputs,
         &specifications,
@@ -2019,14 +2181,20 @@ pub fn compose(
         &mut findings,
         &mut bound,
     );
-    let mut standards = std::vec![Standard {
-        id: guide.into(),
-        name: guide.into(),
-        kind: "IG",
-        publishing_set: None,
-        version: guide_declaration.version.text.clone(),
-        status: guide_declaration.status.name(),
-    }];
+    // The document lists every guide of the section in declaration order,
+    // whether or not a dataset binds it, then the terminology standards
+    // (DEFINE-6).
+    let mut standards: Vec<_> = guides
+        .iter()
+        .map(|guide| Standard {
+            id: guide.name.text.clone(),
+            name: guide.name.text.clone(),
+            kind: "IG",
+            publishing_set: None,
+            version: guide.version.text.clone(),
+            status: guide.status.name(),
+        })
+        .collect();
     let mut codelists = Vec::new();
     for (index, source) in catalogue.sources().iter().enumerate() {
         if !source.codelists.iter().any(|c| bound.contains(&c.id.name)) {
@@ -2100,7 +2268,6 @@ pub fn compose(
     Ok(Study {
         study: study.clone(),
         section: section.clone(),
-        guide: guide.into(),
         file_oid: section.file_oid.as_ref().map_or_else(
             || format!("{}.{}.Define-XML_2.1", study.id.name, family),
             |f| f.text.clone(),

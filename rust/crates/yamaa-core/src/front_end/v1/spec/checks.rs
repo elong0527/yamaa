@@ -7,18 +7,13 @@
 //! pull request lands (#3030 D76).
 
 use crate::ast::{
-    Comparator, Direction, ExprId, ExprKind, Profile, ScalarOp, Spec, SubmissionMetadata, Window,
-    WindowFunction,
+    Comparator, Direction, ExprId, ExprKind, Origin, Profile, ScalarOp, Spec, SubmissionMetadata,
+    Window, WindowFunction,
 };
 use crate::diagnostic::ConditionCode;
 use crate::schema::{SchemaContext as C, SchemaDiagnostic};
 use crate::specification::UnsupportedFeature;
 
-/// More than one origin on a column or a value-level entry (P-ORIGIN-1),
-/// refused until P1-13 builds them.
-pub const MULTIPLE_ORIGINS: &str = "multiple_origins";
-/// A dataset's `submission.standard` (P-STD-1), refused until P1-13.
-pub const SUBMISSION_STANDARD: &str = "submission_standard";
 /// A value-level `where` comparator, NE or NOTIN (P-VLM-1), refused until
 /// P1-14.
 pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
@@ -31,20 +26,13 @@ fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
 }
 
 /// What a lowered 1.0 specification writes that the engine does not build
-/// yet, in written order: more than one origin; a value-level comparator;
-/// and a dataset's `standard`.
+/// yet: a value-level comparator.
 pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     let mut found = Vec::new();
-    let origins = |metadata: &SubmissionMetadata, at: String, found: &mut Vec<_>| {
-        if metadata.origins.len() > 1 {
-            found.push(unsupported(MULTIPLE_ORIGINS, format!("{at}.origins")));
-        }
-    };
     for column in &spec.columns {
         let Some(submission) = &column.submission else {
             continue;
         };
-        origins(&submission.metadata, spec.cite(submission.meta), &mut found);
         for entry in &submission.value_level {
             for clause in &entry.conditions {
                 if clause.comparator == Comparator::NotIn {
@@ -54,13 +42,51 @@ pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
                     ));
                 }
             }
-            origins(&entry.metadata, spec.cite(entry.meta), &mut found);
         }
     }
-    if let Some(standard) = spec.submission.as_ref().and_then(|s| s.standard.as_ref()) {
-        found.push(unsupported(SUBMISSION_STANDARD, spec.cite(standard.meta)));
-    }
     found
+}
+
+/// SUB-14 (D69): each origin of `metadata` that conflicts with an earlier one,
+/// at its own position: one with the same type and source as an earlier
+/// origin, and any origin beside a `Predecessor` or `Not Available` one,
+/// which stands alone.
+fn conflicting_origins(
+    spec: &Spec,
+    metadata: &SubmissionMetadata,
+    column: &str,
+    entry: Option<&str>,
+    findings: &mut Vec<SchemaDiagnostic>,
+) {
+    fn exclusive(origin: &Origin) -> bool {
+        matches!(origin.kind.text.as_str(), "Predecessor" | "Not Available")
+    }
+    fn source(origin: &Origin) -> Option<&str> {
+        origin.source.as_ref().map(|source| source.text.as_str())
+    }
+    for (index, origin) in metadata.origins.iter().enumerate() {
+        let earlier = &metadata.origins[..index];
+        let reason = if earlier
+            .iter()
+            .any(|other| other.kind.text == origin.kind.text && source(other) == source(origin))
+        {
+            "same_type_and_source"
+        } else if !earlier.is_empty() && (exclusive(origin) || earlier.iter().any(exclusive)) {
+            "exclusive_type"
+        } else {
+            continue;
+        };
+        let mut context = vec![("column", C::Text(column.into()))];
+        context.extend(entry.map(|entry| ("entry", C::Text(entry.into()))));
+        context.push(("origin_type", C::Text(origin.kind.text.clone())));
+        context.extend(source(origin).map(|source| ("origin_source", C::Text(source.into()))));
+        context.push(("reason", C::Text(reason.into())));
+        findings.push(SchemaDiagnostic {
+            path: spec.cite(origin.meta),
+            code: ConditionCode::SubmissionConflictingOrigins,
+            context,
+        });
+    }
 }
 
 /// The findings of a lowered 1.0 specification, in written order.
@@ -84,6 +110,22 @@ pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
                 ("class", C::Text("root_class".into())),
             ],
         });
+    }
+    for column in &spec.columns {
+        let Some(submission) = &column.submission else {
+            continue;
+        };
+        let name = column.name.name.as_str();
+        conflicting_origins(spec, &submission.metadata, name, None, &mut findings);
+        for entry in &submission.value_level {
+            conflicting_origins(
+                spec,
+                &entry.metadata,
+                name,
+                Some(&entry.id.name),
+                &mut findings,
+            );
+        }
     }
     // Only the csv profile reads a byte-order mark (CSV-10). An input of
     // another profile declares none, whatever the value written; an input
