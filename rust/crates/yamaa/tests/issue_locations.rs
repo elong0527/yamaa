@@ -392,6 +392,99 @@ fn a_child_source_shorthand_is_located_in_the_child_over_a_structured_parent() {
     }
 }
 
+/// A root mapping replaces its parent whole; a clear removes the named
+/// inherited field. Neither operation can be fixed at the parent's old key.
+#[test]
+fn replaced_and_cleared_fields_do_not_locate_in_overridden_parent_values() {
+    for header in SURFACES {
+        let study = Study::new();
+        let (text, _) = spec(
+            header,
+            &[
+                "domain: IT",
+                "keys: [ID]",
+                "input: {RAW: raw.csv}",
+                "output:",
+                "  path: out.csv",
+                "  columns: [ID]",
+                "  report: report.csv",
+                "columns:",
+                "  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}",
+                "verifications:",
+                "  - row_count: {min: 1, severity: warning}",
+            ],
+        );
+        write(&study, "parent.yaml", &text);
+        study.write("raw.csv", &["ID", "S1"]);
+        let check = |name: &str| {
+            engine()
+                .spec_check(&study.path(name), None, &CancellationToken::new())
+                .unwrap()
+                .diagnostics()
+        };
+        assert!(check("parent.yaml").is_empty());
+        let (text, offset) = spec(
+            header,
+            &[
+                "parent: parent.yaml",
+                "output:",
+                "  path: child.csv",
+                "  columns: [ID]",
+            ],
+        );
+        write(&study, "child.yaml", &text);
+        let issues = check("child.yaml");
+        assert_eq!(issues[0].code, "missing_report", "{issues:?}");
+        assert_eq!(issues[0].spec_path, ["output.report"]);
+        assert_eq!(
+            location(&issues),
+            Some((study.file("child.yaml"), offset + 2, 1))
+        );
+        if header.len() == 2 {
+            for (cleared, code, path) in [
+                ("output.report", "missing_report", "output.report"),
+                (
+                    "columns.ID.derivation",
+                    "missing_derivation",
+                    "columns.ID.derivation",
+                ),
+            ] {
+                let (text, offset) = spec(
+                    header,
+                    &["parent: parent.yaml", &format!("clear: [{cleared}]")],
+                );
+                write(&study, "cleared.yaml", &text);
+                let issues = check("cleared.yaml");
+                assert_eq!(issues[0].code, code, "{issues:?}");
+                assert_eq!(issues[0].spec_path, [path]);
+                // The clear entry follows `clear: [` (eight characters).
+                assert_eq!(
+                    location(&issues),
+                    Some((study.file("cleared.yaml"), offset + 2, 9))
+                );
+            }
+            let (text, _) = spec(header, &["parent: parent.yaml", "clear: [output.report]"]);
+            write(&study, "cleared.yaml", &text);
+            let (text, offset) = spec(
+                header,
+                &[
+                    "parent: cleared.yaml",
+                    "output:",
+                    "  path: grandchild.csv",
+                    "  columns: [ID]",
+                ],
+            );
+            write(&study, "grandchild.yaml", &text);
+            let issues = check("grandchild.yaml");
+            assert_eq!(issues[0].code, "missing_report", "{issues:?}");
+            assert_eq!(
+                location(&issues),
+                Some((study.file("grandchild.yaml"), offset + 2, 1))
+            );
+        }
+    }
+}
+
 /// Rule 4: a path that starts in the project file locates there, or in the
 /// listed file it continues into. Two listings name one dataset; the first
 /// path, `sdtm.specs[0]`, is the first listing, at its first character. A

@@ -17,7 +17,10 @@
 //! shorthand can override a parent's structured value. Schema defaults have
 //! no written position and stop the walk. Among a specification's layers the
 //! deepest contribution wins and, on a tie, the latest layer, whose value took
-//! effect (LAYER-3). An indexed row or intermediate (`rows[1]`) is the item
+//! effect (LAYER-3). Surviving composition provenance excludes earlier layers
+//! hidden by whole-value replacement; a removed field locates at the clear
+//! entry that removed it, unless the layer writes its container again.
+//! An indexed row or intermediate (`rows[1]`) is the item
 //! of the resolved specification at that position, found in each layer by
 //! its `id`. Among roots the deepest node wins too; on a tie, the root the
 //! issue's `source` names, and then the root held first. A project path that
@@ -62,6 +65,7 @@ struct Written {
 #[derive(Clone, Debug)]
 struct Layer {
     file: usize,
+    order: usize,
     document: Document,
     locations: Vec<SourcePosition>,
     contribution: Option<NormalizedDocument>,
@@ -116,6 +120,26 @@ impl Layer {
         }
         depth
     }
+
+    /// A 1.x clear entry that removed this path or a container above it.
+    fn clearing(&self, path: &[Step]) -> Option<(usize, Written)> {
+        let list = self.document.field(self.document.root(), "clear")?;
+        let N::Sequence(items) = &self.document.nodes()[list] else {
+            return None;
+        };
+        items
+            .iter()
+            .filter_map(|&item| {
+                let N::Text(text) = &self.document.nodes()[item] else {
+                    return None;
+                };
+                let cleared = steps(text);
+                (!cleared.is_empty() && path.starts_with(&cleared))
+                    .then(|| self.at(item).map(|at| (cleared.len(), at)))
+                    .flatten()
+            })
+            .max_by_key(|&(depth, _)| depth)
+    }
 }
 
 /// One document a path can start in.
@@ -130,6 +154,10 @@ struct Root {
     /// A specification's resolved document, whose rows and intermediates an
     /// indexed step selects.
     resolved: Option<Document>,
+    /// Composition's surviving paths and their contributing layer. The
+    /// nearest surviving ancestor bounds which layers can still contribute
+    /// beneath a whole-value replacement, including a list or root field.
+    provenance: Vec<(Vec<Step>, usize)>,
     /// The fields the document's class declares, when its schema is known.
     fields: Vec<String>,
     /// Text nodes of a file's document that name a file it lists, with that
@@ -301,6 +329,7 @@ impl Locator {
     fn layer(&mut self, identity: &str, decoded: &DecodedYaml) -> Layer {
         Layer {
             file: self.file(identity),
+            order: 0,
             document: decoded.document.clone(),
             locations: decoded.locations.clone(),
             contribution: None,
@@ -318,6 +347,7 @@ impl Locator {
             identity: identity.to_owned(),
             layers,
             resolved,
+            provenance: Vec::new(),
             fields,
             links: Vec::new(),
         });
@@ -399,9 +429,10 @@ impl Locator {
                 .map(|parent| parent.raw())
         };
         let mut layers = Vec::new();
-        for (identity, normalized) in contributed.into_iter().rev() {
+        for (order, (identity, normalized)) in contributed.into_iter().enumerate().rev() {
             if let Some(raw) = decoded(identity) {
                 let mut layer = self.layer(identity, raw);
+                layer.order = order;
                 layer.contribution = normalized;
                 layers.push(layer);
             }
@@ -419,7 +450,19 @@ impl Locator {
             .map(|field| field.name.clone())
             .collect();
         self.specified = true;
-        self.root(entry, layers, Some(resolved.clone()), fields)
+        let root = self.root(entry, layers, Some(resolved.clone()), fields);
+        let provenance = if let Some(versioned) = document.versioned() {
+            versioned.provenance()
+        } else if let Some(inherited) = document.inheritance() {
+            inherited.provenance()
+        } else {
+            &[]
+        };
+        self.roots[root].provenance = provenance
+            .iter()
+            .map(|origin| (steps(&origin.path), origin.layer))
+            .collect();
+        root
     }
 
     /// A project file and the files it reads: the environment file and each
@@ -539,9 +582,24 @@ impl Locator {
     /// contribution, and on a tie the latest layer's written position.
     fn walk(&self, root: usize, steps: &[Step], visited: &mut Vec<usize>) -> Walk {
         let written = self.written_steps(root, steps);
+        let minimum = self.roots[root]
+            .provenance
+            .iter()
+            .filter(|(path, _)| written.starts_with(path))
+            .max_by_key(|(path, order)| (path.len(), *order))
+            .map_or(0, |(_, order)| *order);
         let mut best: Option<Walk> = None;
         for layer in &self.roots[root].layers {
+            if layer.order < minimum {
+                continue;
+            }
             let mut walk = self.walk_layer(root, layer, &written, visited);
+            if let Some((depth, at)) = layer.clearing(&written) {
+                if walk.depth < depth {
+                    walk.at = Some(at);
+                }
+                walk.depth = written.len();
+            }
             // Compare effective contributions, but keep the position of the
             // deepest node written in this layer. A shorthand reaches its
             // expanded path without having written those extra keys.

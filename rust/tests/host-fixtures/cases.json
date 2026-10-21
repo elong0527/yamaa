@@ -5805,6 +5805,70 @@
           }
         },
         {
+          "name": "a_0_5_root_replacement_hides_parent_fields",
+          "files": {
+            "parent.yaml": "schema_version: '1.0'\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "schema_version: '1.0'\nparent: parent.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_report",
+            "spec_path": "output.report",
+            "file": "child.yaml",
+            "line": 3,
+            "column": 1
+          }
+        },
+        {
+          "name": "a_1_0_root_replacement_hides_parent_fields",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\noutput:\n  path: child.csv\n  columns: [ID]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_report",
+            "spec_path": "output.report",
+            "file": "child.yaml",
+            "line": 4,
+            "column": 1
+          }
+        },
+        {
+          "name": "a_1_0_cleared_report_locates_at_the_clear_entry",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [output.report]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_report",
+            "spec_path": "output.report",
+            "file": "child.yaml",
+            "line": 4,
+            "column": 9
+          }
+        },
+        {
+          "name": "a_1_0_cleared_derivation_locates_at_the_clear_entry",
+          "files": {
+            "parent.yaml": "yamaa: \"1.0\"\ntype: spec\ndomain: IT\nkeys: [ID]\ninput: {RAW: raw.csv}\noutput:\n  path: out.csv\n  columns: [ID]\n  report: report.csv\ncolumns:\n  - {name: ID, type: str, label: Identifier, derivation: RAW.ID}\nverifications:\n  - row_count: {min: 1, severity: warning}\n",
+            "child.yaml": "yamaa: \"1.0\"\ntype: spec\nparent: parent.yaml\nclear: [columns.ID.derivation]\n",
+            "raw.csv": "ID\nS1\n"
+          },
+          "call": {"operation": "check", "path": "child.yaml"},
+          "issue": {
+            "condition": "missing_derivation",
+            "spec_path": "columns.ID.derivation",
+            "file": "child.yaml",
+            "line": 4,
+            "column": 9
+          }
+        },
+        {
           "name": "a_project_path_in_the_project_file",
           "files": {
             "dm.yaml": "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: raw.csv}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\noutput: {path: dm.csv, columns: [USUBJID]}\n",
