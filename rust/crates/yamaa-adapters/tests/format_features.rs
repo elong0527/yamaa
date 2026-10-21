@@ -4,6 +4,7 @@ use yamaa_adapters::{
 };
 use yamaa_core::{
     specification::{SourceDeclaration, SourceProfile},
+    specification_run::SourceDecoder as _,
     table::{TableAccess, ValueRef},
 };
 
@@ -21,7 +22,7 @@ fn source(profile: SourceProfile) -> SourceDeclaration {
 }
 
 /// An omitted reader is an engine fault naming its stage and closed code.
-#[cfg(not(all(feature = "yaml", feature = "parquet")))]
+#[cfg(not(all(feature = "yaml", feature = "parquet", feature = "odm")))]
 fn assert_fault(
     rejection: yamaa_adapters::specification_diagnostics::Rejection,
     stage: &str,
@@ -140,25 +141,56 @@ fn parquet_source_and_artifact_share_one_capability() {
 
 #[test]
 fn odm_reader_is_an_independent_capability() {
+    const DOCUMENT: &str = r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"><ClinicalData StudyOID="S" MetaDataVersionOID="M"/></ODM>"#;
     let path = std::env::temp_dir().join(format!("yamaa-format-odm-{}.xml", std::process::id()));
-    std::fs::write(
-        &path,
-        r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"><ClinicalData StudyOID="S" MetaDataVersionOID="M"/></ODM>"#,
-    )
-    .unwrap();
+    std::fs::write(&path, DOCUMENT).unwrap();
     let result = yamaa_adapters::odm_xml::read(&path, &yamaa_core::odm_items::Options::default());
     std::fs::remove_file(&path).unwrap();
+    // A specification's `.xml` input reads its held bytes through the same
+    // reader, in the shared source decode (INPUT-1, ODM-1).
+    let mut declaration = source(SourceProfile::OdmXml);
+    declaration.path = "held.xml".into();
+    declaration.encoding = None;
+    let decoded =
+        yamaa_adapters::project_source_decoder::Decoder::<std::convert::Infallible>::default()
+            .decode(
+                &declaration,
+                DOCUMENT.as_bytes(),
+                yamaa_core::specification::SourceInterpretation::Ordinary,
+                None,
+            )
+            .map(yamaa_adapters::project_source_decoder::Snapshot::into_table);
     #[cfg(feature = "odm")]
     {
         let table = result.unwrap();
         assert_eq!(table.rows(), 0);
         assert_eq!(table.columns().len(), yamaa_core::odm_items::COLUMNS.len());
+        let decoded = decoded.unwrap();
+        assert_eq!(decoded.row_count(), 0);
+        assert_eq!(
+            decoded.schema().columns().len(),
+            yamaa_core::odm_items::COLUMNS.len()
+        );
     }
     #[cfg(not(feature = "odm"))]
-    assert!(matches!(
-        result,
-        Err(yamaa_adapters::odm_xml::Error::Unavailable)
-    ));
+    {
+        assert!(matches!(
+            result,
+            Err(yamaa_adapters::odm_xml::Error::Unavailable)
+        ));
+        let error = decoded.unwrap_err();
+        assert!(matches!(
+            error,
+            yamaa_adapters::specification_run::Error::OdmSource(
+                yamaa_adapters::odm_xml::Error::Unavailable
+            )
+        ));
+        assert_fault(
+            yamaa_adapters::specification_diagnostics::failure(&error, Some(&declaration)),
+            "ingest",
+            "odm_reader_unavailable",
+        );
+    }
 }
 
 #[test]

@@ -121,15 +121,6 @@ fn keyword(name: &str) -> Segment {
     Segment::Key(name.into())
 }
 
-/// Whether a 1.0 input's path names an ODM XML file, which selects the ODM
-/// profile (P-ODMIN-1); the extension is matched as `SourceProfile` matches.
-fn odm_path(path: &str) -> bool {
-    path.rsplit('/')
-        .next()
-        .and_then(|name| name.rsplit_once('.'))
-        .is_some_and(|(stem, extension)| !stem.is_empty() && extension.eq_ignore_ascii_case("xml"))
-}
-
 /// `{literal: null}`, the one spelling of the missing value a handler, flag,
 /// mapping entry or function argument substitutes (COLUMN-10).
 fn missing_literal(d: &Document, id: usize) -> bool {
@@ -432,14 +423,20 @@ impl<'d> Lower<'d> {
             let Some(name) = self.text(key) else { continue };
             let meta = self.meta(list, Segment::Key(name.into()), Some(source));
             let path = self.required_text(meta, source, "path");
-            let profile = crate::specification::SourceProfile::from_path(&path.text)
-                .map(|profile| match profile {
-                    crate::specification::SourceProfile::Csv => Profile::Csv,
-                    crate::specification::SourceProfile::Parquet => Profile::Parquet,
-                    crate::specification::SourceProfile::Xport => Profile::Xport,
-                    crate::specification::SourceProfile::Sas7bdat => Profile::Sas7bdat,
-                })
-                .or_else(|| (self.v1() && odm_path(&path.text)).then_some(Profile::OdmXml));
+            // `.xml` selects the ODM profile on a 1.0 tree only (INPUT-1,
+            // P-ODMIN-1); a 0.5 file keeps its unknown profile.
+            let profile =
+                crate::specification::SourceProfile::from_path(&path.text).and_then(|profile| {
+                    match profile {
+                        crate::specification::SourceProfile::Csv => Some(Profile::Csv),
+                        crate::specification::SourceProfile::Parquet => Some(Profile::Parquet),
+                        crate::specification::SourceProfile::Xport => Some(Profile::Xport),
+                        crate::specification::SourceProfile::Sas7bdat => Some(Profile::Sas7bdat),
+                        crate::specification::SourceProfile::OdmXml => {
+                            self.v1().then_some(Profile::OdmXml)
+                        }
+                    }
+                });
             let mut types = Vec::new();
             if let Some(declared) = self.field(source, "types") {
                 let types_meta = self.field_meta(meta, "types", declared);

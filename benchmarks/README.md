@@ -10,6 +10,9 @@ Production artifacts should use `parquet` unless they must be reviewable as CSV.
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange
 document itself. Its fields map to the official
 [CDISC ODM 2.0 clinical-data schema](https://github.com/cdisc-org/DataExchange-ODM/tree/main).
+An `odm.xml` input is an ODM 1.3 or 2.0 document itself, which a 1.0
+specification reads directly into the same fields, as
+[`sdtm-dm-odm-snapshot`](sdtm-dm-odm-snapshot/) shows.
 
 Start with [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 [`sdtm-lb-findings`](sdtm-lb-findings/) for row construction, and
