@@ -14,12 +14,40 @@ use yamaa::{
 
 /// Borrow the exact captured lock snapshot for this activation. No construction
 /// imports a helper or project module; empty selection has no host effects.
-pub struct Port;
+/// The port of one native call keeps, in that call's interrupt, the original
+/// exception of an interrupt its project functions raise (#3030 D46).
+pub struct Port {
+    interrupt: crate::api_entry::Interrupt,
+}
 
 impl Port {
+    pub(crate) fn new(interrupt: crate::api_entry::Interrupt) -> Self {
+        Self { interrupt }
+    }
+
     fn helper(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         // A top-level private host module avoids legacy artifact/cache imports.
         py.import("yamaa._locked_functions")
+    }
+
+    /// Keep the original exception of `error` when it is an interrupt, which
+    /// cancels the call.
+    fn keep(&self, error: &FunctionError) {
+        if matches!(error, FunctionError::Interrupted { .. }) {
+            Python::attach(|py| {
+                if let Some(exception) = crate::function_callback::payload(py, error) {
+                    self.interrupt.keep(exception);
+                }
+            });
+        }
+    }
+
+    /// `result`, after keeping the interrupt it fails with, if any.
+    fn kept<T>(&self, result: Result<T, FunctionError>) -> Result<T, FunctionError> {
+        if let Err(error) = &result {
+            self.keep(error);
+        }
+        result
     }
 }
 
@@ -140,12 +168,12 @@ impl ProjectFunctions for Port {
         lock: &LockContext<'_>,
         functions: &[FunctionIdentity],
     ) -> Result<(), FunctionError> {
-        Python::attach(|py| {
+        self.kept(Python::attach(|py| {
             if lock.language != HostLanguage::Python || lock.kind != LockKind::Uv {
                 return Err(FunctionError::Protocol);
             }
             yamaa::verify_uv_lock(lock.bytes, functions, &Installed { py })
-        })
+        }))
     }
 
     fn bind(
@@ -153,7 +181,7 @@ impl ProjectFunctions for Port {
         identity: &FunctionIdentity,
         signature: &Signature,
     ) -> Result<FunctionHandle, FunctionError> {
-        Python::attach(|py| {
+        self.kept(Python::attach(|py| {
             let names = PyList::new(py, signature.parameters.iter().map(|p| &p.name))
                 .map_err(|error| crate::function_callback::host_error(py, error))?;
             Self::helper(py)
@@ -164,7 +192,7 @@ impl ProjectFunctions for Port {
                 .map(Bound::unbind)
                 .map(FunctionHandle::new)
                 .map_err(|error| crate::function_callback::host_error(py, error))
-        })
+        }))
     }
 
     fn invoke(
@@ -172,7 +200,7 @@ impl ProjectFunctions for Port {
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> Result<Scalar, CallError> {
-        Python::attach(|py| {
+        let result = Python::attach(|py| {
             let Some(handle) = handle.with::<Py<PyAny>, _>(|held| held.clone_ref(py)) else {
                 return Err(CallError::Raised(FunctionError::Protocol));
             };
@@ -189,7 +217,11 @@ impl ProjectFunctions for Port {
                 CallError::Raised(crate::function_callback::host_error(py, error))
             })?;
             crate::function_callback::host_result(&returned).map_err(CallError::InvalidResult)
-        })
+        });
+        if let Err(error) = &result {
+            self.keep(error.error());
+        }
+        result
     }
 }
 
@@ -254,7 +286,7 @@ impl ProjectFunctions for RegistryPort {
         handle: &FunctionHandle,
         arguments: &[Argument<'_>],
     ) -> Result<Scalar, CallError> {
-        Port.invoke(handle, arguments)
+        Port::new(crate::api_entry::Interrupt::new()).invoke(handle, arguments)
     }
     /// Vectorized Python contract: the callable receives one list per
     /// named parameter (declaration order is the core's, names are the

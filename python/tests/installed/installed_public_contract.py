@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import _thread
 import datetime
 import gc
 import importlib.util
 import inspect
+import itertools
 import json
 import math
 import os
 import shutil
+import signal
 import tempfile
 import unittest
 import weakref
@@ -558,6 +561,88 @@ class PublicContract(unittest.TestCase):
                             {"conformance": 1, "derivation": 3}.get(stage, 0),
                         )
                         self.assertFalse((case / "test.csv").exists())
+
+    def test_a_signal_in_a_callback_interrupts_the_run_and_publishes_nothing(self):
+        # Ctrl+C arrives as SIGINT, whose default handler raises
+        # KeyboardInterrupt inside the project function (D46).
+        project, case = self.function_study()
+        resolve = host.resolve_callable
+        calls = []
+
+        def binding(*arguments):
+            invoke = resolve(*arguments)
+
+            def callback(**arguments):
+                calls.append(arguments)
+                if len(calls) > 2:
+                    signal.raise_signal(signal.SIGINT)
+                return invoke(**arguments)
+
+            return callback
+
+        for call in (lambda: project.spec("TEST").run(), lambda: project.run()):
+            calls.clear()
+            with (
+                self.subTest(call=call),
+                patch.object(host, "resolve_callable", side_effect=binding),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                call()
+            # The two function tests that call it, then the first row's call.
+            self.assertEqual(len(calls), 3)
+            self.assertFalse((case / "test.csv").exists())
+
+    def test_an_interrupt_pending_between_steps_cancels_the_call(self):
+        # The engine asks the interpreter at each of its checkpoints. The
+        # function's one test calls `_thread.interrupt_main`, which only marks
+        # SIGINT pending, and returns to the engine with the interrupt still
+        # pending, so the run's next checkpoint raises it: the default
+        # handler's KeyboardInterrupt ends the call before any row calls the
+        # function, and nothing is published. Every call is a builtin, so no
+        # Python code runs that could raise it earlier.
+        _, case = self.function_study()
+        environment = case / "python" / "environment.yaml"
+        environment.write_text(
+            "schema_version: '1.0'\n"
+            "lock: uv.lock\n"
+            "functions:\n"
+            "  project_value:\n"
+            "    function: yamaa_benchmarks.project_value\n"
+            "    description: Mark an interrupt pending.\n"
+            "    params: []\n"
+            "    returns: str\n"
+            "    may_return_missing: true\n"
+            "    tests:\n"
+            "    - {id: once, covers: [normal, boundary, nullable-output], args: {}, result: null}\n",
+            encoding="utf-8",
+        )
+        spec = case / "spec.yaml"
+        spec.write_text(
+            spec.read_text(encoding="utf-8")
+            .replace("args: {x: SOURCE.VALUE}", "args: {}")
+            .replace(
+                "type: float\n    label: Project", "type: str\n    label: Project"
+            ),
+            encoding="utf-8",
+        )
+        project = yamaa.project(case / "project.yaml")
+        rows = []
+
+        def binding(*_):
+            # The first call marks the interrupt pending; each later one, a
+            # row's, answers the next count.
+            count = itertools.count()
+            rows.append(count)
+            pending = map(_thread.interrupt_main, [signal.SIGINT])
+            return itertools.chain(pending, map(str, count)).__next__
+
+        with patch.object(host, "resolve_callable", side_effect=binding):
+            for call in (lambda: project.spec("TEST").run(), lambda: project.run()):
+                with self.subTest(call=call):
+                    with self.assertRaises(KeyboardInterrupt):
+                        call()
+                    self.assertEqual(next(rows[-1]), 0)
+                    self.assertFalse((case / "test.csv").exists())
 
     def test_callback_can_reenter_public_check_and_run(self):
         project, case = self.function_study()

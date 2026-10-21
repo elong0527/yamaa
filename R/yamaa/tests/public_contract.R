@@ -368,6 +368,29 @@ qualify_callbacks <- function() {
       stopifnot(identical(seen, interrupted), identical(invoked, expected), !file.exists(file.path(case, "test.csv")))
     }
   }
+  # An interrupt R receives during a run, here the SIGINT that Ctrl+C sends,
+  # raised from a project function, ends the call with R's interrupt condition
+  # and publishes nothing (D46), whether R takes it inside the function, the
+  # engine at its next checkpoint, or the call as it returns. A process on
+  # Windows cannot send itself SIGINT.
+  if (.Platform$OS.type == "unix") {
+    signaling <- function(call, parameters) {
+      resolved <- capabilities$resolve(call, parameters)
+      if (resolved[[1L]] != 0L) return(resolved)
+      invoke <- resolved[[2L]]
+      list(0L, function(arguments) tryCatch({
+        invoked <<- invoked + 1L
+        if (invoked > 2L) tools::pskill(Sys.getpid(), tools::SIGINT)
+        invoke(arguments)
+      }, interrupt = function(condition) list(3L, condition)))
+    }
+    for (call in entries) {
+      invoked <- 0L
+      seen <- with_capabilities(capabilities$verify, signaling,
+        tryCatch(call(), interrupt = function(condition) "interrupted"))
+      stopifnot(identical(seen, "interrupted"), invoked >= 3L, !file.exists(file.path(case, "test.csv")))
+    }
+  }
   long_condition <- structure(list(message = paste0(strrep("\u00e9\n", 30000L), "complete failure"), call = NULL),
     class = c("public_contract_error", "error", "condition"))
   invoked <- 0L

@@ -10,6 +10,8 @@
 # `.RData` file or another R process.
 
 .reply <- function(reply) {
+  interrupted <- reply$interrupt
+  if (!is.null(interrupted)) .signal_again(interrupted)
   error <- reply$error
   if (!is.null(error)) {
     stop(structure(
@@ -44,11 +46,18 @@
   list(capabilities$verify, capabilities$resolve, .project_condition_details)
 }
 
-# A run keeps the interrupt a project function raised; once the native call
-# has returned, signal that original condition again.
-.rethrow_interrupt <- function(reply) {
-  interrupted <- .reply(reply)
-  if (!is.null(interrupted)) stop(interrupted)
+# D46: a native call stops at the first interrupt it is asked about, or that a
+# project function raised, publishes nothing and returns that condition, which
+# is signaled again here, the original object. Handlers established for the
+# interrupt take it; without one, R returns to the top level, as an interrupt
+# does. An error R signaled instead when asked, such as an elapsed time limit,
+# is raised again.
+.signal_again <- function(condition) {
+  if (inherits(condition, "interrupt")) {
+    signalCondition(condition)
+    invokeRestart("abort")
+  }
+  stop(condition)
 }
 
 # Locked bindings refuse assignment, so a binding only reads.
