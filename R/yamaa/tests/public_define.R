@@ -79,14 +79,17 @@ stopifnot(identical(saved(result, root, c("dm.json", "define.xml")), held))
 unlink(root, recursive = TRUE)
 
 # Without a section every declared define section is composed; a section the
-# project does not declare is a submission issue.
+# project does not declare refuses the call, naming those it declares
+# (PROJECT-14).
 root <- fixture("sdtm-dm-metadata", TRUE)
 result <- submission(root, section = NULL); check_issues(result)
 held <- saved(result, root, c("dm.json", "define.xml"))
 for (name in names(held)) stopifnot(identical(held[[name]], rawfile(file.path(fixtures, "sdtm-dm-metadata/expected", name))))
-absent <- submission(root, section = "adam")
-stopifnot(identical(absent$issues$condition, "missing_required_field"), identical(absent$issues$rule, "DEFINE-28"),
-  identical(absent$issues$spec_paths, list("adam")), refused(absent))
+absent <- tryCatch({ submission(root, section = "adam"); NULL }, yamaa_error = identity)
+stopifnot(inherits(absent, "yamaa_error"), identical(absent$issues$condition, "unknown_section"),
+  identical(absent$issues$rule, "PROJECT-14"), identical(absent$issues$spec_paths, list(character())),
+  identical(absent$issues$context, '{"section":"adam","sections":["sdtm"]}'),
+  identical(absent$paths, character()))
 unlink(root, recursive = TRUE)
 
 # The original LB spec and expected CSV remain immutable. The separate metadata

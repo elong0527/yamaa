@@ -1,5 +1,5 @@
-//! Project operation findings: names, unlinked producers, blocked consumers,
-//! run-scope cycles and saves with nothing to write, each with its
+//! Project operation findings: names, sections, unlinked producers, blocked
+//! consumers, run-scope cycles and saves with nothing to write, each with its
 //! independently authored mapping.
 use super::rendered;
 use std::collections::BTreeSet;
@@ -86,6 +86,18 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         &[
             ("name", Value::String("ADXX".into())),
             ("available", texts(&["ADSL", "AE", "DM"])),
+        ],
+    ));
+    // A section outside the three, or one the project does not declare,
+    // names every declared section, sorted.
+    reached.insert(check(
+        &project_scope::unknown_section("send", &["sdtm", "adam"]),
+        "unknown_section",
+        "PROJECT-14",
+        &[],
+        &[
+            ("section", Value::String("send".into())),
+            ("sections", texts(&["adam", "sdtm"])),
         ],
     ));
     reached.insert(check(

@@ -107,6 +107,18 @@ def unknown_member(available):
     )
 
 
+def unknown_section(section, sections):
+    """The one issue of a call that selects `section`, which the project does
+    not declare; `sections` is the canonical JSON of the sections it does."""
+    return issue_row(
+        f"the project declares no section {section}",
+        phase="validation",
+        condition="unknown_section",
+        rule="PROJECT-14",
+        context='{"section":"' + section + '","sections":' + sections + "}",
+    )
+
+
 def nothing_to_save(rule):
     """The one issue of a save with nothing to write, under `rule`."""
     return issue_row(
@@ -635,6 +647,12 @@ class PublicContract(unittest.TestCase):
         self.assertNotIn("ADSL", runs)
         self.assertEqual(list(runs), ["TEST"])
         self.assertEqual(project.run("adam").names, ["TEST"])
+        # A section the project does not declare refuses the run (PROJECT-14).
+        error = self.refusal(lambda: project.run("sdtm"))
+        self.assertEqual(error.issues.to_dicts(), [unknown_section("sdtm", '["adam"]')])
+        # A declared section that lists no specification builds nothing.
+        with (case / "project.yaml").open("a", encoding="utf-8") as listing:
+            listing.write("sdtm:\n  specs: []\n")
         self.assertEqual(project.run("sdtm").names, [])
         # A run or a submission that built nothing has nothing to save.
         for result, key, rule in (
@@ -775,6 +793,16 @@ class PublicContract(unittest.TestCase):
                 setattr(runs, name, None)
         with self.assertRaises(AttributeError):
             submission.issues = None
+        # The project file is read first: one that cannot be read reports its
+        # own findings, and no section is checked.
+        self.assertEqual(self.issues(project.run("bogus")).to_dicts(), unread)
+        self.assertEqual(self.issues(project.submission("bogus")).to_dicts(), unread)
+        # A name that is no section of the project raises (PROJECT-14).
+        listing = self.root / "project.yaml"
+        listing.write_text(
+            "schema_version: '1.0'\nadam:\n  specs: []\n", encoding="utf-8"
+        )
+        project = yamaa.project(listing)
         for call, expected in (
             (lambda: project.run("bogus"), error_text("unknown_section_run")),
             (
@@ -784,22 +812,12 @@ class PublicContract(unittest.TestCase):
         ):
             error = self.refusal(call)
             self.assertEqual(str(error), expected)
-            (row,) = error.issues.to_dicts()
             self.assertEqual(
-                (row["phase"], row["condition"]), ("engine", "engine_rejected")
-            )
-            self.assertEqual(
-                json.loads(row["context"]),
-                {
-                    "code": "unknown_section",
-                    "section": "bogus",
-                    "sections": ["sdtm", "adam", "send"],
-                    "stage": "project",
-                },
+                error.issues.to_dicts(), [unknown_section("bogus", '["adam"]')]
             )
         self.assertEqual(
             sorted(path.name for path in self.root.iterdir()),
-            ["input.csv", "spec.yaml"],
+            ["input.csv", "project.yaml", "spec.yaml"],
         )
 
     def test_issue_rows_keep_exact_wide_integers_and_recorded_geometry(self):
