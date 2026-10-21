@@ -441,15 +441,17 @@ python -m tools.ci.review_gate --repository elong0527/yamaa --pr <number> --head
 Use that command when GitHub CLI API access is available. If environment policy
 blocks it, approved authenticated GitHub connector reads must prove every same
 predicate from fresh API evidence: the exact head and base, this PR's authentic
-completed status and walkthrough/footer chronology, unchanged base history,
-and all resolved threads. Re-read the PR head and status immediately before
-merging. Large PRs require the complete bounded proof below through those
-reads as well. An unavailable CLI does not waive review requirements.
+completed status, its walkthrough and final reviewed footer, no review in
+progress, unchanged base history, and all resolved threads. Re-read the PR
+head and status immediately before merging. Large PRs require the complete
+bounded proof below through those reads as well. An unavailable CLI does not
+waive review requirements.
 
 This requires CodeRabbit's authentic `Review completed` status on that commit
 and resolved review threads. The PR must have its own authentic summary and
-walkthrough, with a final reviewed footer naming that exact head; completion
-must follow the walkthrough's last update. The reviewed range must end at that
+walkthrough, with a final reviewed footer naming that exact head and no review
+in progress. A later edit of a finished summary, such as an offer to fix
+failing CI, does not start a new review. The reviewed range must end at that
 head. If the summary omits the range, an authentic formal review on this PR,
 submitted for this commit before completion, can supply it. A conflicting or
 ambiguous summary range cannot use that fallback. Incremental review ranges
@@ -483,9 +485,9 @@ cannot use it. Every batch still needs its own authentic `Review completed`
 status and resolved threads; target threads must also be resolved. The gate
 also binds each completion to this PR's exact base/head review range and final
 reviewed summary footer. The range can come from the summary or the authentic
-formal review for that commit. Completion must follow both the summary's last
-update and the formal review's submission when that receipt is used. Missing
-evidence, another PR sharing the head, or any recorded
+formal review for that commit. Completion must follow the formal review's
+submission when that receipt is used. Missing evidence, another PR sharing the
+head, or any recorded
 base retarget/force-push history requires a fresh review PR and head. This
 prevents a completion for an earlier base from covering a different diff.
 The gate checks complete Git trees and paginated PR files through the authenticated API,
