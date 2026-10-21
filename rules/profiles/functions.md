@@ -25,15 +25,17 @@ name. The host running the build calls the callable that file's
 implementation for that host fails before any input is read. A specification
 cannot select, replace or override the project or its function files.
 
-Fails: `function_implementation_missing`, `project_environment_missing`.
-Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::function_implementation_missing`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
+Fails: `function_implementation_missing`, `project_binding_missing`, `project_environment_missing`.
+Evidence: `rust/crates/yamaa-core/tests/support/diagnostic/project_functions.rs::function_implementation_missing`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa-core/tests/preparation_project_preparation.rs::a_1_0_host_reads_only_its_own_lock_and_every_listed_function_file`, `rust/crates/yamaa-adapters/tests/file_project.rs::unavailable_environment_precedes_bad_entry_and_valid_environment_is_retained_before_missing_entry`, `python/tests/installed/installed_public_environment.py::test_missing_environment_file_precedes_bad_or_absent_entry_without_activation`, `python/tests/installed/installed_public_environment.py::test_each_host_reads_only_its_own_environment_entry`.
 
 No function file is discovered, and none is created by omission. A function
 file that names no implementation for the host is admitted, since another host
 may run the build; a call of it fails with `function_implementation_missing`
 at the call's `name`, reported at each call with the function and the host
 language, while the specification is checked, before activation. A call when
-no project is supplied names no declared function under [FUNC-4](#func-4).
+no project file is supplied fails with `project_binding_missing` at the call's
+`name`, with the function, before any input is read
+([CT-13](terminology.md#ct-13)).
 
 In a project file that declares `schema_version`, the project's `environments`
 entry for the host language links the one environment file the host reads
@@ -41,7 +43,9 @@ entry for the host language links the one environment file the host reads
 relative to it under the admitted resource policy of
 [File resolution](../reference/files.md). A supplied project file that cannot
 be read fails with `project_environment_missing`, and so does each call, with
-the host language, when the project links no environment for it.
+the host language, when the project links no environment for it. A
+specification that declares `schema_version`, checked or run without a project
+file, names no declared function in a call under [FUNC-4](#func-4).
 
 <a id="func-2"></a>
 

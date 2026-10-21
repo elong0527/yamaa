@@ -344,34 +344,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
         refusals(&study, "spec.yaml", None),
         [refusal("model_check", "model")]
     );
-    // A codelist or a project function a specification run without its
-    // project binds (P1-11).
-    study.write(
-        "spec.yaml",
-        &spec(&format!("{submission}      codelist: CL_SUBJECT\n")),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal(
-            "project_binding",
-            "columns.USUBJID.submission.codelist"
-        )]
-    );
-    study.write(
-        "spec.yaml",
-        &format!(
-            "{}\n  - {{name: BMI, type: float, label: BMI, derivation: {{function: {{name: bmi, args: {{weight: RAW.WEIGHT}}}}}}}}\n",
-            spec("")
-        )
-        .replace("columns: [USUBJID]", "columns: [USUBJID, BMI]"),
-    );
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal(
-            "project_binding",
-            "columns.BMI.derivation.function"
-        )]
-    );
 }
 
 /// A 1.0 project whose `sdtm` section composes one dataset, published as

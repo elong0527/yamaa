@@ -438,6 +438,7 @@ mod diagnostics {
             reached.extend(inheritance::reached());
             reached.extend(language::reached());
             reached.extend(front_end::reached());
+            reached.extend(front_end::project_binding_reached());
             reached.extend(grammar::predicate_reached());
             reached.extend(predicate_evaluation::reached());
             reached.extend(binding::reached());
