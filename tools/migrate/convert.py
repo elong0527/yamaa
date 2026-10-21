@@ -595,7 +595,7 @@ class Converter:
         """Edits inserting `key: value_text` into a mapping, or None."""
         text = self.text
         if mapping.flow_style:
-            return self._flow_insert(mapping, key, value_text, after)
+            return self._flow_insert(mapping, key, value_text, after, before)
         if not mapping.value:
             return None
         column = text.column(start(mapping.value[0][0]))
@@ -621,7 +621,7 @@ class Converter:
             body = text.newline + line_text
         return [Edit(at, at, body)]
 
-    def _flow_insert(self, mapping, key, value_text, after=None):
+    def _flow_insert(self, mapping, key, value_text, after=None, before=None):
         text = self.text
         pairs = mapping.value
         if not pairs:
@@ -630,6 +630,12 @@ class Converter:
                     start(mapping), end(mapping, text.text), f"{{{key}: {value_text}}}"
                 )
             ]
+        if before is not None:
+            index = next(i for i, (k, _) in enumerate(pairs) if k is before)
+            if index == 0:
+                at = start(before)
+                return [Edit(at, at, f"{key}: {value_text}, ")]
+            after = pairs[index - 1][0]
         anchor_key, anchor_value = pairs[-1]
         if after is not None:
             anchor_key, anchor_value = next((k, v) for k, v in pairs if k is after)
@@ -1109,7 +1115,12 @@ def declare_input_key(converter, visit, entry):
                 )
             ]
         elif isinstance(value, yaml.MappingNode) and member(value, "key") is None:
-            edits = converter.insert_pair(value, "key", listed)
+            # The key takes its place in the 1.0 order, before
+            # `require_match`, the one input field written after it.
+            later = member_pair(value, "require_match")
+            edits = (
+                later and converter.insert_pair(value, "key", listed, before=later[0])
+            ) or converter.insert_pair(value, "key", listed)
         else:
             continue
         if edits and converter.edits.add(*edits):

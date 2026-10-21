@@ -1,7 +1,5 @@
 yamaa: "1.0"
-
 type: spec
-
 model: ADaM
 domain: ADSL
 keys: [STUDYID, USUBJID]
