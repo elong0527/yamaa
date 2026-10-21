@@ -69,6 +69,12 @@ To build offline, install `maturin` 1.9.6 and pass `--no-build-isolation`. The
 0.4.0 and 0.5.0 source archives download the locked crates from crates.io, so
 building them offline also needs the Cargo cache filled first.
 
+On a machine without internet access, install from an internal package index
+or from files carried in, as
+[Installing in a restricted environment](https://elong0527.github.io/yamaa/articles/restricted-environments/)
+describes. It also shows how a Linux machine whose packaged Rust is older than
+1.82 installs Rust from its standalone installer to build the source archive.
+
 To set up the development version from GitHub, install uv, the pinned Rust
 toolchain and a C compiler, then run:
 
