@@ -1,0 +1,135 @@
+name: PyPI install
+
+# Release verification, not a development check: after each PyPI upload the
+# owner dispatches it with the release's Python version, X.Y.Z or X.Y.ZrcN,
+# once tools/ci/check_pypi_release.py has passed (docs/release.md, "PyPI
+# upload"). Each job installs the release from the index as a user does and
+# runs the installed package's selftest. Nothing is checked out, so no
+# repository file can reach the fresh virtual environment that it installs
+# into.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The release's Python version, X.Y.Z or X.Y.ZrcN
+        required: true
+        type: string
+      index:
+        description: The index to install from; testpypi rehearses an upload there
+        required: true
+        type: choice
+        options:
+          - pypi
+          - testpypi
+        default: pypi
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.index }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  VERSION: ${{ inputs.version }}
+  INDEX: ${{ inputs.index }}
+
+jobs:
+  wheel:
+    name: pypi-install (${{ matrix.os }}, ${{ matrix.python }}, wheel)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every platform that a release has a wheel for, with the oldest and
+        # the newest supported CPython, as PYTHON_PLATFORMS and PYTHONS in
+        # tools/ci/native.py name them; tools/tests/test_pypi_install_workflow.py
+        # fails when the two differ.
+        os: [ubuntu-24.04, macos-15, windows-2025, ubuntu-24.04-arm]
+        python: ['3.12', '3.15']
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Create a fresh virtual environment
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -I -m venv pypi-install
+          if [ "${RUNNER_OS}" = Windows ]; then
+            interpreter=pypi-install/Scripts/python.exe
+          else
+            interpreter=pypi-install/bin/python
+          fi
+          echo "VENV_PYTHON=${interpreter}" >> "${GITHUB_ENV}"
+          "${interpreter}" -I -m pip --version
+      # A wheel, never a source archive, of yamaa and of each dependency. A
+      # candidate is a pre-release, which its release body installs with --pre.
+      - name: Install the wheel from the index
+        working-directory: ${{ runner.temp }}
+        run: |
+          options=(--no-cache-dir --only-binary=:all:)
+          if [[ "${VERSION}" == *rc* ]]; then
+            options+=(--pre)
+          fi
+          # Anyone can upload a project to TestPyPI, so a rehearsal takes
+          # yamaa alone from it, and its dependencies from PyPI.
+          if [ "${INDEX}" = testpypi ]; then
+            "${VENV_PYTHON}" -I -m pip install "${options[@]}" --no-deps \
+              --index-url https://test.pypi.org/simple/ "yamaa==${VERSION}"
+          fi
+          "${VENV_PYTHON}" -I -m pip install "${options[@]}" "yamaa==${VERSION}"
+      - name: Check the installed version
+        working-directory: ${{ runner.temp }}
+        run: |
+          "${VENV_PYTHON}" -I -m pip list
+          "${VENV_PYTHON}" -I -c 'import sys; from importlib.metadata import version; v = version("yamaa"); sys.exit(None if v == sys.argv[1] else f"pip installed yamaa {v}, not {sys.argv[1]}")' "${VERSION}"
+      # The installed package runs the selftest cases that it carries and
+      # prints the report to the log; the job fails unless the selftest
+      # reports succeeded.
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}
+        run: |
+          "${VENV_PYTHON}" -I -c 'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
+
+  # pip builds the source archive from the index with the runner's Rust and C
+  # compiler, and fetches its build requirement, maturin, from PyPI. A
+  # rehearsal skips this job: pip would fetch maturin from TestPyPI too.
+  source:
+    name: pypi-install (ubuntu-24.04, 3.12, source)
+    if: inputs.index == 'pypi'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Create a fresh virtual environment
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -I -m venv pypi-install
+          echo "VENV_PYTHON=pypi-install/bin/python" >> "${GITHUB_ENV}"
+          pypi-install/bin/python -I -m pip --version
+      - name: Build and install the source archive from the index
+        working-directory: ${{ runner.temp }}
+        run: |
+          rustc --version
+          cargo --version
+          options=(--no-cache-dir --no-binary yamaa)
+          if [[ "${VERSION}" == *rc* ]]; then
+            options+=(--pre)
+          fi
+          "${VENV_PYTHON}" -I -m pip install "${options[@]}" "yamaa==${VERSION}"
+      - name: Check the installed version
+        working-directory: ${{ runner.temp }}
+        run: |
+          "${VENV_PYTHON}" -I -m pip list
+          "${VENV_PYTHON}" -I -c 'import sys; from importlib.metadata import version; v = version("yamaa"); sys.exit(None if v == sys.argv[1] else f"pip installed yamaa {v}, not {sys.argv[1]}")' "${VERSION}"
+      - name: Run the installed package's selftest
+        working-directory: ${{ runner.temp }}
+        run: |
+          "${VENV_PYTHON}" -I -c 'import sys, yamaa; r = yamaa.selftest(); print(r); sys.exit(r.status != "succeeded")'
