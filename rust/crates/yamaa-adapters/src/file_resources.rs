@@ -512,6 +512,23 @@ impl Resources {
         file.capture_named(&self.store.base, name, maximum)
             .map_err(|failure| Error::from_capture(failure, Kind::Input, maximum))
     }
+    /// The publication target of a file the caller names: through the local
+    /// file resolver, its own file `name` in the selected entry directory
+    /// (see [`FileResolver::publication_target_named`]); through a caller's
+    /// resolver, the object that resolver's target reply names for `name`
+    /// from the entry, as it names a specification's output.
+    pub(crate) fn caller_target(
+        &self,
+        name: &str,
+    ) -> Result<crate::publication::AnchoredTarget, Error> {
+        match &self.file {
+            Some(file) => file
+                .publication_target_named(&self.store.base, name)
+                .map(crate::publication::AnchoredTarget::File)
+                .map_err(Error::from_failure),
+            None => self.publication_target_from(&self.store.base, name),
+        }
+    }
     /// Keep the same path authority and captures for data declared by this
     /// entry: the identity its resolver gave it.
     pub fn select_entry_base(&mut self, identity: &str) -> Result<(), Error> {

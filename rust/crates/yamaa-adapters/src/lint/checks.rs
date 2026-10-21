@@ -6,6 +6,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use yamaa_core::language::FileType;
+
 use super::document::{Document, Value};
 use super::{authoring, fields, FINDINGS};
 
@@ -13,6 +15,38 @@ pub(super) const LINE_WIDTH: usize = 79;
 
 /// `entry_spacing` separates the entries of these root lists.
 const SPACED_LISTS: [&str; 3] = ["intermediates", "columns", "rows"];
+
+/// The schema field orders of one language version, one per class that
+/// `field_order` orders; `fields.rs` holds them, generated from the schemas.
+pub(super) struct Orders {
+    pub(super) root: &'static [&'static str],
+    pub(super) dataset: &'static [&'static str],
+    pub(super) output: &'static [&'static str],
+    pub(super) intermediate: &'static [&'static str],
+    pub(super) column: &'static [&'static str],
+    pub(super) row: &'static [&'static str],
+}
+
+/// The orders `document` is written in. A root that declares the 1.x header,
+/// `yamaa` and no `schema_version` as the engine reads it (SCHEMA-2), follows
+/// the 1.0 schema, and any other root the 0.5 schema. The 1.0 orders are a
+/// specification's: a 1.x file that declares another type (`project`,
+/// `codelists` or `function`) has none, so neither `field_order` nor
+/// `root_spacing` reads it.
+pub(super) fn orders(document: &Document) -> Option<&'static Orders> {
+    let declares = |name| document.key(document.root, name).is_some();
+    if !declares("yamaa") || declares("schema_version") {
+        return Some(&fields::LEGACY);
+    }
+    let declared = document
+        .member(document.root, "type")
+        .and_then(|value| document.scalar(value))
+        .and_then(FileType::parse);
+    match declared {
+        None | Some(FileType::Spec) => Some(&fields::VERSIONED),
+        Some(_) => None,
+    }
+}
 
 /// One finding before it is bound to a file: zero-based position.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,7 +90,10 @@ pub(super) fn ordered_mappings(
     let Some(root) = document.root.filter(|&root| document.pairs(root).is_some()) else {
         return mappings;
     };
-    mappings.push(("$".to_owned(), fields::ROOT_CLASS, root));
+    let Some(orders) = orders(document) else {
+        return mappings;
+    };
+    mappings.push(("$".to_owned(), orders.root, root));
     if let Some(datasets) = document
         .member(Some(root), "input")
         .and_then(|id| document.pairs(id))
@@ -64,15 +101,15 @@ pub(super) fn ordered_mappings(
         for &(key, value) in datasets {
             if document.pairs(value).is_some() {
                 let name = document.scalar(key).unwrap_or("");
-                mappings.push((format!("input.{name}"), fields::DATASET_CLASS, value));
+                mappings.push((format!("input.{name}"), orders.dataset, value));
             }
         }
     }
     for (field, order) in [
-        ("output", fields::OUTPUT_CLASS),
-        ("intermediates", fields::INTERMEDIATE_CLASS),
-        ("columns", fields::COLUMN_CLASS),
-        ("rows", fields::ROW_CLASS),
+        ("output", orders.output),
+        ("intermediates", orders.intermediate),
+        ("columns", orders.column),
+        ("rows", orders.row),
     ] {
         let Some(value) = document.member(Some(root), field) else {
             continue;
@@ -189,7 +226,10 @@ fn root_spacing(document: &Document) -> Vec<Departure> {
     let Value::Mapping { flow: false, pairs } = &document.node(root).value else {
         return found;
     };
-    let header = header_fields(fields::ROOT_CLASS);
+    let Some(orders) = orders(document) else {
+        return found;
+    };
+    let header = header_fields(orders.root);
     for window in pairs.windows(2) {
         let (previous, key) = (window[0].1, window[1].0);
         let name = document.scalar(key).unwrap_or("");
