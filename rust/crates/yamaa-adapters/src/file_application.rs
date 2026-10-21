@@ -627,10 +627,25 @@ pub fn check_with_resolver(
     _identity: Identity<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Failure {
-    collect(match select(host, request, resolver) {
-        Ok(prepared) => crate::specification_check::issues(prepared.run()),
-        Err(error) => crate::project_application::selection_failure(&error),
-    })
+    check_located(host, request, resolver).0
+}
+/// [`check_with_resolver`], with what locates its issues (P-ISSUE-1): the
+/// specification as far as it was read and the project files read.
+pub fn check_located(
+    host: Option<Language>,
+    request: Request<'_>,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> (Failure, crate::issue_location::Locator) {
+    match select(host, request, resolver) {
+        Ok(prepared) => (
+            collect(crate::specification_check::issues(prepared.run())),
+            crate::issue_location::prepared(&prepared),
+        ),
+        Err(error) => (
+            collect(crate::project_application::selection_failure(&error)),
+            crate::issue_location::selection(&error),
+        ),
+    }
 }
 /// The type the file `written` names declares, read before any call reads
 /// it: what the command line dispatches on (#3030 D122). The file is
@@ -644,7 +659,20 @@ pub fn file_type(
     written: &str,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<yamaa_core::language::FileType, Failure> {
-    let unreadable = |error| vec![caller_read_failure(written, &error)];
+    file_type_located(written, resolver).map_err(|(issues, _)| issues)
+}
+/// [`file_type`], whose refusal keeps what locates its issues: the file as
+/// read (P-ISSUE-1).
+pub fn file_type_located(
+    written: &str,
+    resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
+) -> Result<yamaa_core::language::FileType, (Failure, crate::issue_location::Locator)> {
+    let unreadable = |error| {
+        (
+            vec![caller_read_failure(written, &error)],
+            crate::issue_location::Locator::none(),
+        )
+    };
     let (mut resources, name) = match resolver {
         Some(resolver) => (
             crate::file_resources::Resources::with_resolver(resolver, written),
@@ -659,7 +687,12 @@ pub fn file_type(
         bytes: bytes.to_vec(),
     };
     crate::document::file_type(source, yamaa_core::language::LANGUAGE_VERSION).map_err(|error| {
-        collect(crate::specification_diagnostics::capture_failure(&error).into_issues())
+        let mut locator = crate::issue_location::Locator::none();
+        locator.sources(&resources.retain_sources());
+        (
+            collect(crate::specification_diagnostics::capture_failure(&error).into_issues()),
+            locator,
+        )
     })
 }
 /// Prepare and run one request with no project functions: a request with a

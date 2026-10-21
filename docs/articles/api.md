@@ -137,14 +137,18 @@ running project code. It does not open the input datasets, so some problems, suc
 as a column name that no input has, appear only when you call `run()`.
 
 Each problem is one row of `issues`: its `severity`, `phase` and
-`condition`, the `rule` it breaks, the `spec_paths` it concerns, its `file`,
-`line` and `column` once the engine locates them, a `message` to read, and its
-facts in `context` as JSON text. A call that cannot complete, such as a
-`save()` of a failed run, raises `yamaa.Error` in Python or signals a
-`yamaa_error` condition in R. Its message names the call and the first issue,
-such as `cannot save ADAE: column ASTDY reads TRTSDT, which is declared after
-it [forward_reference, COLUMN-5] (and 2 more issues)`, and its `issues` hold
-every row.
+`condition`, the `rule` it breaks, the `spec_paths` it concerns, a `message`
+to read, and its facts in `context` as JSON text. Its `file`, `line` and
+`column` say where to edit: the YAML file that wrote the first spec path,
+which is the parent layer when the specification inherits that value, and
+the line and column of that entry. A problem with no place in a YAML file,
+such as a project section that does not exist, leaves them missing. A call
+that cannot complete, such as a `save()` of a failed run, raises
+`yamaa.Error` in Python or signals a `yamaa_error` condition in R. Its
+message names the call and the first issue with its location, such as
+`cannot save ADAE: adam/adae.yaml:57:9: column ASTDY reads TRTSDT, which is
+declared after it [forward_reference, COLUMN-5] (and 2 more issues)`, and its
+`issues` hold every row.
 
 === "R"
 

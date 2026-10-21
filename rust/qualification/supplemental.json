@@ -1043,7 +1043,9 @@
         "python/tests/installed/installed_selftest.py",
         "R/yamaa/tests/selftest.R",
         "python/tests/installed/installed_schema.py",
-        "R/yamaa/tests/schema.R"
+        "R/yamaa/tests/schema.R",
+        "python/tests/installed/installed_issue_locations.py",
+        "R/yamaa/tests/issue_locations.R"
       ]
     },
     {

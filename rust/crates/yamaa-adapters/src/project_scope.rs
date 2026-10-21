@@ -5,6 +5,7 @@
 //! specification metadata.
 use crate::{
     file_resources::{same_location, Error as ResourceError, Resources},
+    issue_location::Locator,
     public_table::PublicTable,
 };
 use std::sync::Arc;
@@ -99,6 +100,9 @@ pub struct Project {
     sections: Vec<(Submission, bool)>,
     /// Every listing, in section run order and then listing order.
     listed: Vec<Listed>,
+    /// The project file, the files it reads and each listed specification
+    /// that was read: what locates the project findings (P-ISSUE-1).
+    locator: Arc<Locator>,
 }
 
 /// Name `entry` as the listed specification an issue belongs to, and as the
@@ -154,18 +158,36 @@ impl Project {
         host: Option<Language>,
         resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
     ) -> Result<Self, Vec<Diagnostic>> {
+        Self::read_located(project, host, resolver).map_err(|(issues, _)| issues)
+    }
+
+    /// [`Project::read`], whose refusal keeps the locator of its findings:
+    /// the files it read before it stopped (P-ISSUE-1).
+    pub fn read_located(
+        project: &str,
+        host: Option<Language>,
+        resolver: Option<Arc<dyn crate::host_resources::Resolver>>,
+    ) -> Result<Self, (Vec<Diagnostic>, Locator)> {
         let crate::file_workflow::CapturedProject {
             mut resources,
             environment,
             schema,
-        } = crate::file_workflow::capture_project(project, host, resolver)
-            .map_err(|error| crate::project_application::workflow_rejection(&error))?;
+        } = crate::file_workflow::capture_project(project, host, resolver).map_err(|error| {
+            (
+                crate::project_application::workflow_rejection(&error),
+                crate::issue_location::workflow(&error),
+            )
+        })?;
         let identity = environment.root().source().identity.clone();
+        let located = || crate::issue_location::project((&environment).into(), [], &Vec::new());
         let declarations = environment
             .project()
             .and_then(|project| project.submission.as_ref().ok())
             .ok_or_else(|| {
-                crate::file_application::rejected(Stage::Project, Fault::ProjectSections)
+                (
+                    crate::file_application::rejected(Stage::Project, Fault::ProjectSections),
+                    located(),
+                )
             })?;
         let mut sections = Vec::new();
         let mut written = Vec::new();
@@ -182,17 +204,36 @@ impl Project {
                 written.push((section, index, spec.text.clone()));
             }
         }
-        let listed = written
+        let (listed, documents): (Vec<_>, Vec<_>) = written
             .into_iter()
             .map(|(section, index, written)| {
                 read_listing(&mut resources, &schema, &identity, section, index, &written)
             })
-            .collect();
+            .unzip();
+        let listings = listed
+            .iter()
+            .zip(&documents)
+            .filter_map(|(listed, document)| Some((listed.listing(), document.as_ref()?)))
+            .collect::<Vec<_>>();
+        let locator = crate::issue_location::project(
+            (&environment).into(),
+            listings
+                .iter()
+                .map(|(listing, document)| (listing.as_str(), *document)),
+            &resources.retain_sources(),
+        );
         Ok(Self {
             identity,
             sections,
             listed,
+            locator: Arc::new(locator),
         })
+    }
+
+    /// What locates the project findings: the project file, the files it
+    /// reads and each listed specification that was read (P-ISSUE-1).
+    pub fn locator(&self) -> &Arc<Locator> {
+        &self.locator
     }
 
     /// The project file's canonical identity.
@@ -439,7 +480,10 @@ fn read_listing(
     section: Submission,
     index: usize,
     written: &str,
-) -> Listed {
+) -> (
+    Listed,
+    Option<crate::specification_source::PreparedDocument>,
+) {
     let mut listed = Listed {
         section,
         index,
@@ -456,7 +500,7 @@ fn read_listing(
         Ok(location) => listed.location = location,
         Err(error) => {
             listed.failure = listing_failure(&listed.listing(), written, &error);
-            return listed;
+            return (listed, None);
         }
     }
     // A specification that cannot be prepared has no name or links here; its
@@ -467,7 +511,7 @@ fn read_listing(
         written,
         Some(Arc::clone(schema)),
     ) else {
-        return listed;
+        return (listed, None);
     };
     let locate = |resources: &Resources, origin: yamaa_core::resource::WrittenPath<'_>| {
         resources
@@ -516,7 +560,7 @@ fn read_listing(
     listed.report = document
         .written_output_field_origin("report")
         .and_then(|origin| locate(resources, origin));
-    listed
+    (listed, Some(document))
 }
 
 /// One specification of a run scope, in run order.

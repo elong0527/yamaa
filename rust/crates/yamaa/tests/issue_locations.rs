@@ -1,0 +1,543 @@
+//! Issue locations (P-ISSUE-1, D28): each case of
+//! `docs/design/interface-1.0/api.md`, "Issue locations", through the public
+//! engine, on a specification that declares `schema_version` and on one that
+//! declares the 1.x header. Every expected line and column was counted by hand
+//! in the files below; each test names the text that precedes the column.
+//!
+//! 1. An issue without a spec path has no location, except `invalid_yaml` and
+//!    `non_ascii_source`, which give the file read and the reader's position.
+//! 2. A path is walked to the deepest node a layer wrote; a path into an
+//!    expanded long form stops at the written node.
+//! 3. Among the layers that wrote it, the one whose value took effect.
+//! 4. A path that starts in the project file locates there, or in the listed
+//!    file it continues into.
+//! 5. `file` is absolute with forward slashes; `line` and `column` are
+//!    one-based, at a mapping member's key or a list item's first character.
+//! 6. A position never points into a data file.
+#![cfg(feature = "yaml")]
+
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use yamaa::{CancellationToken, ContextValue, Diagnostic, Engine, EngineOptions, HostLanguage};
+
+fn engine() -> Engine {
+    Engine::new(EngineOptions::new(
+        HostLanguage::Python,
+        "issue-locations".into(),
+        "0".into(),
+    ))
+}
+
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+/// A study directory outside the current directory, so a location names its
+/// file by its absolute path.
+struct Study(PathBuf);
+impl Study {
+    fn new() -> Self {
+        let root = std::env::temp_dir().join(format!(
+            "yamaa-issue-locations-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        Self(yamaa_adapters::canonical_path::canonicalize(root).unwrap())
+    }
+    /// Write `lines`, each ended by LF.
+    fn write(&self, name: &str, lines: &[&str]) {
+        let path = self.0.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let text: String = lines.iter().map(|line| format!("{line}\n")).collect();
+        std::fs::write(path, text).unwrap();
+    }
+    fn path(&self, name: &str) -> String {
+        self.0.join(name).to_str().unwrap().to_owned()
+    }
+    /// A file as a location names it: absolute, with forward slashes.
+    fn file(&self, name: &str) -> String {
+        self.path(name).replace('\\', "/")
+    }
+}
+impl Drop for Study {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The first issue's location as (file, line, column).
+fn location(issues: &[Diagnostic]) -> Option<(String, usize, usize)> {
+    let location = issues.first().expect("an issue").location.clone()?;
+    let position = location.position.expect("a located node");
+    Some((location.file, position.line, position.column))
+}
+
+/// The two headers: today's and the 1.x one.
+const SURFACES: [&[&str]; 2] = [
+    &["schema_version: '1.0'"],
+    &["yamaa: \"1.0\"", "type: spec"],
+];
+
+/// `lines` after `header`, and the number of header lines.
+fn spec(header: &[&str], lines: &[&str]) -> (Vec<String>, usize) {
+    let mut text = header
+        .iter()
+        .map(|line| (*line).to_owned())
+        .collect::<Vec<_>>();
+    text.extend(lines.iter().map(|line| (*line).to_owned()));
+    (text, header.len())
+}
+
+fn write(study: &Study, name: &str, lines: &[String]) {
+    study.write(name, &lines.iter().map(String::as_str).collect::<Vec<_>>());
+}
+
+/// Rule 5: ASTDY reads TRTSDT, declared after it (COLUMN-5). Today's path
+/// ends at the operation, `columns.ASTDY.derivation.compute`; the 1.0 path at
+/// the expression field, `columns.ASTDY.derivation`.
+#[test]
+fn a_path_locates_at_the_key_of_its_deepest_written_member() {
+    let lines = |v1: bool| {
+        let derivation = if v1 {
+            "    derivation: TRTSDT + 1"
+        } else {
+            "    derivation: {compute: {expr: TRTSDT + 1}}"
+        };
+        vec![
+            "domain: ADAE",
+            "keys: [USUBJID]",
+            "input: {AE: {path: ae.csv, types: {TRTSDT: int}}}",
+            "columns:",
+            "  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}",
+            "  - name: ASTDY",
+            "    type: int",
+            "    label: Study Day",
+            derivation,
+            "  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}",
+            "output: {path: adae.csv, columns: [USUBJID, ASTDY, TRTSDT]}",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>()
+    };
+    for (surface, header) in SURFACES.into_iter().enumerate() {
+        let study = Study::new();
+        let v1 = surface == 1;
+        let body = lines(v1);
+        let (text, offset) = spec(header, &body.iter().map(String::as_str).collect::<Vec<_>>());
+        write(&study, "adae.yaml", &text);
+        study.write("ae.csv", &["USUBJID,TRTSDT", "S1,3"]);
+        let check = engine()
+            .spec_check(&study.path("adae.yaml"), None, &CancellationToken::new())
+            .unwrap();
+        let issues = check.diagnostics();
+        // Line 9 of the body: the 1.0 `derivation` key at column 5, after
+        // four spaces; today's `compute` key at column 18, after
+        // `    derivation: {` (17 characters).
+        let column = if v1 { 5 } else { 18 };
+        assert_eq!(
+            location(&issues),
+            Some((study.file("adae.yaml"), offset + 9, column)),
+            "{:?}",
+            issues
+        );
+        // The issue line starts with the location, and the table and the
+        // JSON object carry it.
+        assert!(issues[0].text().starts_with(&format!(
+            "{}:{}:{column}: column ASTDY reads TRTSDT",
+            study.file("adae.yaml"),
+            offset + 9
+        )));
+        let ContextValue::Map(object) = issues[0].to_value() else {
+            panic!("an issue is an object");
+        };
+        assert_eq!(object["file"], ContextValue::Text(study.file("adae.yaml")));
+        assert_eq!(object["line"], ContextValue::Int((offset + 9) as i64));
+        assert_eq!(object["column"], ContextValue::Int(column as i64));
+        assert_eq!(check.issues().rows(), 1);
+    }
+}
+
+/// Rule 2: a path into an expanded long form stops at the written node. AGE
+/// reads `RAW.AGEYRS`, which the input does not hold, through the shorthand
+/// that expands to `source`; the issue cites `columns.AGE.derivation.source`
+/// and is located at the `derivation` key that wrote the shorthand. A list
+/// item a path names by identity is located at its first character.
+#[test]
+fn a_path_into_an_expanded_long_form_stops_at_the_written_node() {
+    let body = [
+        "domain: DM",
+        "keys: [USUBJID]",
+        "input: {RAW: raw.csv}",
+        "columns:",
+        "  - name: USUBJID",
+        "    type: str",
+        "    label: Subject",
+        "    derivation: RAW.USUBJID",
+        "  - name: AGE",
+        "    type: int",
+        "    label: Age",
+        "    derivation: RAW.AGEYRS",
+        "output: {path: dm.csv, columns: [USUBJID, AGE]}",
+    ];
+    for header in SURFACES {
+        let study = Study::new();
+        let (text, offset) = spec(header, &body);
+        write(&study, "dm.yaml", &text);
+        study.write("raw.csv", &["USUBJID,AGE", "S1,30"]);
+        let run = engine()
+            .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
+            .unwrap();
+        let issues = run.diagnostics();
+        assert_eq!(
+            issues[0].spec_path,
+            ["columns.AGE.derivation.source"],
+            "{issues:?}"
+        );
+        // Line 12 of the body, after four spaces.
+        assert_eq!(
+            location(&issues),
+            Some((study.file("dm.yaml"), offset + 12, 5))
+        );
+    }
+}
+
+/// Rule 3: a value a child layer writes is located in the child, one it
+/// inherits in the parent. RATIO divides by zero at run time, in the
+/// derivation the parent writes, unless the child writes its own. Today's
+/// surface writes the operation, `compute`, under `derivation`; the 1.0
+/// surface writes the expression as the field's text.
+#[test]
+fn a_layered_issue_is_located_in_the_layer_whose_value_took_effect() {
+    for (surface, header) in SURFACES.into_iter().enumerate() {
+        let v1 = surface == 1;
+        let (written, rewritten, path, column) = if v1 {
+            (
+                "    derivation: AGE / ZERO",
+                "    derivation: AGE / (ZERO * 2)",
+                "columns.RATIO.derivation",
+                5,
+            )
+        } else {
+            (
+                "    derivation: {compute: {expr: AGE / ZERO}}",
+                "    derivation: {compute: {expr: AGE / (ZERO * 2)}}",
+                "columns.RATIO.derivation.compute",
+                // After `    derivation: {` (17 characters).
+                18,
+            )
+        };
+        let parent = [
+            "domain: ADSL",
+            "keys: [USUBJID]",
+            "input: {DM: {path: dm.csv, types: {AGE: int, ZERO: int}}}",
+            "columns:",
+            "  - {name: USUBJID, type: str, label: Subject, derivation: DM.USUBJID}",
+            "  - name: RATIO",
+            "    type: float",
+            "    label: Ratio",
+            written,
+            "  - {name: AGE, type: int, label: Age, derivation: DM.AGE}",
+            "  - {name: ZERO, type: int, label: Zero, derivation: DM.ZERO}",
+            "output: {path: adsl.csv, columns: [USUBJID, RATIO, AGE, ZERO]}",
+        ];
+        let relabelled = [
+            "parent: parent.yaml",
+            "columns:",
+            "  - name: RATIO",
+            "    label: Age Ratio",
+        ];
+        let rederived = [
+            "parent: parent.yaml",
+            "columns:",
+            "  - name: RATIO",
+            rewritten,
+        ];
+        let study = Study::new();
+        let (text, offset) = spec(header, &parent);
+        write(&study, "parent.yaml", &text);
+        let (text, child_offset) = spec(header, &relabelled);
+        write(&study, "relabelled.yaml", &text);
+        let (text, _) = spec(header, &rederived);
+        write(&study, "rederived.yaml", &text);
+        study.write("dm.csv", &["USUBJID,AGE,ZERO", "S1,30,0"]);
+        let first = |name: &str| {
+            let run = engine()
+                .spec_run(&study.path(name), None, &CancellationToken::new())
+                .unwrap();
+            let issues = run.diagnostics();
+            assert_eq!(issues[0].spec_path, [path], "{issues:?}");
+            location(&issues)
+        };
+        // Line 9 of the parent's body.
+        assert_eq!(
+            first("relabelled.yaml"),
+            Some((study.file("parent.yaml"), offset + 9, column))
+        );
+        // Line 4 of the child's own body.
+        assert_eq!(
+            first("rederived.yaml"),
+            Some((study.file("rederived.yaml"), child_offset + 4, column))
+        );
+    }
+}
+
+/// Rule 4: a path that starts in the project file locates there, or in the
+/// listed file it continues into. Two listings name one dataset; the first
+/// path, `sdtm.specs[0]`, is the first listing, at its first character. A
+/// 1.0 submission of an SDTM section lists a specification of model ADaM, at
+/// `sdtm.specs[0].model`, which continues into that specification.
+#[test]
+fn a_project_path_locates_in_the_project_or_the_file_it_lists() {
+    let study = Study::new();
+    let dm = [
+        "schema_version: '1.0'",
+        "domain: DM",
+        "keys: [USUBJID]",
+        "input: {RAW: raw.csv}",
+        "columns:",
+        "  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}",
+        "output: {path: dm.csv, columns: [USUBJID]}",
+    ];
+    study.write("dm.yaml", &dm);
+    study.write("again.yaml", &dm);
+    study.write(
+        "project.yaml",
+        &[
+            "schema_version: '1.0'",
+            "sdtm:",
+            "  specs:",
+            "    - dm.yaml",
+            "    - again.yaml",
+        ],
+    );
+    let check = engine()
+        .project_check(&study.path("project.yaml"), &CancellationToken::new())
+        .unwrap();
+    let issues = check.diagnostics();
+    assert_eq!(issues[0].spec_path[0], "sdtm.specs[0]", "{issues:?}");
+    // Line 4, after `    - `.
+    assert_eq!(location(&issues), Some((study.file("project.yaml"), 4, 7)));
+
+    let study = Study::new();
+    study.write(
+        "project.yaml",
+        &[
+            "yamaa: \"1.0\"",
+            "type: project",
+            "study:",
+            "  id: CATH",
+            "  name: CATH",
+            "  description: A study",
+            "  protocol_name: CATH-01",
+            "sdtm:",
+            "  standards:",
+            "    - {name: SDTMIG, version: \"3.4\", status: Final}",
+            "  specs:",
+            "    - spec.yaml",
+            "  define: define.xml",
+        ],
+    );
+    study.write(
+        "spec.yaml",
+        &[
+            "yamaa: \"1.0\"",
+            "type: spec",
+            "model: ADaM",
+            "domain: ADSL",
+            "keys: [USUBJID]",
+            "input: {RAW: raw.csv}",
+            "columns:",
+            "  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}",
+            "output: {path: adsl.csv, columns: [USUBJID]}",
+        ],
+    );
+    let submission = engine()
+        .project_submission(
+            &study.path("project.yaml"),
+            Some("sdtm"),
+            Some("2026-09-11T00:00:00"),
+            "0.4.0",
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    let issues = submission.diagnostics();
+    assert_eq!(issues[0].spec_path, ["sdtm.specs[0].model"], "{issues:?}");
+    // The specification's `model` key, line 3.
+    assert_eq!(location(&issues), Some((study.file("spec.yaml"), 3, 1)));
+}
+
+/// Rule 6: a position never points into a data file. AGE is `NA` in the
+/// second record of the input: the issue is located at the declaration of
+/// AGE's type in the specification, and the record stays in the context.
+#[test]
+fn a_location_never_points_into_a_data_file() {
+    let body = [
+        "domain: DM",
+        "keys: [USUBJID]",
+        "input: {RAW: {path: raw.csv, types: {AGE: int}}}",
+        "columns:",
+        "  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}",
+        "  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}",
+        "output: {path: dm.csv, columns: [USUBJID, AGE]}",
+    ];
+    for header in SURFACES {
+        let study = Study::new();
+        let (text, offset) = spec(header, &body);
+        write(&study, "dm.yaml", &text);
+        study.write("raw.csv", &["USUBJID,AGE", "S1,30", "S2,NA"]);
+        let run = engine()
+            .spec_run(&study.path("dm.yaml"), None, &CancellationToken::new())
+            .unwrap();
+        let issues = run.diagnostics();
+        assert_eq!(issues[0].spec_path, ["input.RAW.types.AGE"], "{issues:?}");
+        // Line 3 of the body, after `input: {RAW: {path: raw.csv, types: {`
+        // (37 characters).
+        assert_eq!(
+            location(&issues),
+            Some((study.file("dm.yaml"), offset + 3, 38))
+        );
+        assert_eq!(
+            issues[0].context.get("value"),
+            Some(&ContextValue::Text("NA".into()))
+        );
+    }
+}
+
+/// Rule 1: an issue without a spec path has no location. `invalid_yaml` and
+/// `non_ascii_source` have none either, yet are located in the file the
+/// reader refused, at the position it reported, which their context names;
+/// in a parent layer, that parent.
+#[test]
+fn only_a_refused_file_locates_an_issue_without_a_written_node() {
+    let study = Study::new();
+    study.write(
+        "project.yaml",
+        &["schema_version: '1.0'", "sdtm:", "  specs: []"],
+    );
+    let failure = engine()
+        .project_spec(&study.path("project.yaml"), "ADXX")
+        .unwrap_err();
+    assert!(failure.diagnostics[0].spec_path.is_empty());
+    assert_eq!(failure.diagnostics[0].location, None);
+
+    // The flow sequence is never closed: the reader stops at line 3, column 1.
+    study.write("invalid.yaml", &["schema_version: '1.0'", "domain: [ADSL"]);
+    let check = engine()
+        .spec_check(&study.path("invalid.yaml"), None, &CancellationToken::new())
+        .unwrap();
+    let issues = check.diagnostics();
+    assert_eq!(location(&issues), Some((study.file("invalid.yaml"), 3, 1)));
+    assert_eq!(issues[0].context.get("line"), Some(&ContextValue::Int(3)));
+    assert_eq!(issues[0].context.get("column"), Some(&ContextValue::Int(1)));
+
+    // The comment's sixth character, after `# caf`, is not ASCII.
+    std::fs::write(
+        study.0.join("accented.yaml"),
+        "schema_version: '1.0'\ndomain: ADSL\n# caf\u{e9}\n",
+    )
+    .unwrap();
+    let check = engine()
+        .spec_check(
+            &study.path("accented.yaml"),
+            None,
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    assert_eq!(
+        location(&check.diagnostics()),
+        Some((study.file("accented.yaml"), 3, 6))
+    );
+
+    // A specification whose project file the reader refuses, read with it
+    // and read alone: the project file is the file refused.
+    study.write(
+        "project.yaml",
+        &["schema_version: '1.0'", "sdtm: {specs: [accented.yaml"],
+    );
+    let check = engine()
+        .spec_check(
+            &study.path("accented.yaml"),
+            Some(&study.path("project.yaml")),
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    assert_eq!(
+        location(&check.diagnostics()),
+        Some((study.file("project.yaml"), 3, 1))
+    );
+    let check = engine()
+        .project_check(&study.path("project.yaml"), &CancellationToken::new())
+        .unwrap();
+    assert_eq!(
+        location(&check.diagnostics()),
+        Some((study.file("project.yaml"), 3, 1))
+    );
+}
+
+/// Every negative benchmark whose failure belongs to its submission locates
+/// its first issue, as the memory route checks for every other negative. A
+/// submission composed here reads no saved artifact, so a case whose authored
+/// failure is in its transport files stops earlier, at the artifact it
+/// misses: such a path names a written artifact, not a node any file writes,
+/// and has no location.
+#[test]
+fn every_submission_negative_locates_its_first_issue() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks");
+    let mut cases = std::fs::read_dir(&root)
+        .unwrap()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name().into_string().ok()?;
+            let benchmark = std::fs::read_to_string(entry.path().join("benchmark.yaml")).ok()?;
+            (name.starts_with("negative-") && benchmark.contains("\ndefine:")).then_some((
+                name,
+                entry.path(),
+                benchmark,
+            ))
+        })
+        .collect::<Vec<_>>();
+    cases.sort();
+    assert!(cases.len() >= 9, "{} submission negatives", cases.len());
+    let field = |benchmark: &str, key: &str| {
+        let line = benchmark
+            .lines()
+            .skip_while(|line| *line != "define:")
+            .find_map(|line| line.trim_start().strip_prefix(&format!("{key}: ")))
+            .unwrap_or_else(|| panic!("define names {key}"))
+            .trim_matches('\'');
+        line.to_owned()
+    };
+    let mut unlocated = Vec::new();
+    for (name, case, benchmark) in cases {
+        let project = case.join(field(&benchmark, "environment"));
+        let submission = engine()
+            .project_submission(
+                project.to_str().unwrap(),
+                Some(&field(&benchmark, "standard")),
+                Some(&field(&benchmark, "created")),
+                "0.4.0",
+                &CancellationToken::new(),
+            )
+            .unwrap();
+        let issues = submission.diagnostics();
+        let first = issues
+            .first()
+            .unwrap_or_else(|| panic!("{name} has an issue"));
+        let located = first.location.as_ref().and_then(|at| at.position).is_some();
+        if first.spec_path[0].starts_with("datasets.") {
+            assert!(!located, "{name}: {first:?}");
+            unlocated.push(name);
+        } else {
+            assert!(located, "{name}: {first:?}");
+        }
+    }
+    assert_eq!(
+        unlocated,
+        [
+            "negative-transport-empty-string",
+            "negative-transport-non-ascii",
+            "negative-transport-trailing-blank"
+        ]
+    );
+}
