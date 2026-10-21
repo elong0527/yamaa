@@ -9,7 +9,7 @@ release tag's (`tools/validation/check_interface_stability.py`):
   `tools/validation/check_diagnostics.py`. A removed triple breaks: an
   existing failure would report another condition or rule. Cause names are
   not compared. A rule is the ID the cause cites, whichever rule files define
-  it, so that 0.5.0's requirement IDs, such as REQ-0694, compare too. The
+  it, so that 0.5.0's requirement IDs compare too. The
   registry must be in both trees, so when it moves the check fails naming its
   path, and the pull request that moves it adds the new path to REGISTRIES.
 - `rules`: the ID of each rule card in `rules/**/*.md`, read with

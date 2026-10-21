@@ -172,14 +172,14 @@ class Identities(Temporary):
         )
 
     def test_a_rule_is_the_id_the_cause_cites(self):
-        # 0.5.0 cites requirement IDs, which no rule file of 1.0 defines.
-        self.repo.edit(REGISTRY, 'Some("CT-1")', 'Some("REQ-0694")')
+        # A historical identifier need not name a card in the current tree.
+        self.repo.edit(REGISTRY, 'Some("CT-1")', 'Some("LEGACY-0694")')
         self.repo.tag("yamaa-v0.5.0")
-        self.repo.edit(REGISTRY, 'Some("REQ-0694")', 'Some("CT-1")')
+        self.repo.edit(REGISTRY, 'Some("LEGACY-0694")', 'Some("CT-1")')
         self.assertEqual(
             self.repo.changes(SOURCES.compare, "yamaa-v0.5.0"),
             [
-                (REGISTRY, "(validation, alpha_failed, REQ-0694)", "removed", True),
+                (REGISTRY, "(validation, alpha_failed, LEGACY-0694)", "removed", True),
                 (REGISTRY, "(validation, alpha_failed, CT-1)", "added", False),
             ],
         )
