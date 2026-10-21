@@ -46,32 +46,32 @@ enum Format {
 /// not a written path, so it may hold a `:` or, on Unix, a `\`. Options are
 /// checked once the file is found, before any of it is read.
 pub(super) fn read(path: &Path, options: &Options) -> Result<PublicTable, Error> {
-    let display = path.display().to_string();
-    let written = path.to_str().ok_or_else(|| not_found(&display))?;
-    let (resources, name) = crate::file_configuration::resources(written).map_err(
-        |crate::file_configuration::Error::Path(error)| refusal(&error, &display, Limit::XmlBytes),
-    )?;
+    let written = path
+        .to_str()
+        .ok_or(Error::Resource(crate::file_resources::Error::InvalidPath))?;
+    let (resources, name) = crate::file_configuration::resources(written)
+        .map_err(|crate::file_configuration::Error::Path(error)| refusal(error, Limit::XmlBytes))?;
     let file = resources
         .open_named(&name)
-        .map_err(|error| refusal(&error, &display, Limit::XmlBytes))?;
+        .map_err(|error| refusal(error, Limit::XmlBytes))?;
     options.validate()?;
-    let io_error = |error: io::Error| -> Error { Fault::from_io(&error, &display).into() };
+    let io_error = |error: io::Error| -> Error { Fault::from_io(&error).into() };
     let length = file.metadata().map_err(io_error)?.len();
     let open = || -> io::Result<Source<'_>> {
         let mut handle = &file;
         handle.rewind()?;
         Ok(Source::File(BufReader::new(&file)))
     };
-    match detect(open, &name, &display)? {
+    match detect(open, &name)? {
         Format::Xml => {
             admit_xml(length, options)?;
             let maximum = usize::try_from(options.max_expanded_bytes).unwrap_or(usize::MAX);
             let bytes = resources
                 .capture_named(&name, maximum)
-                .map_err(|error| refusal(&error, &display, Limit::XmlBytes))?;
-            xml(&bytes, options, &display)
+                .map_err(|error| refusal(error, Limit::XmlBytes))?;
+            xml(&bytes, options)
         }
-        Format::Tar(compression) => tar(open, compression, length, options, &display),
+        Format::Tar(compression) => tar(open, compression, length, options),
     }
 }
 
@@ -87,48 +87,29 @@ pub(super) fn read_with_resolver(
     options.validate()?;
     let (bytes, _) = Resources::with_resolver(resolver, source)
         .capture(source)
-        .map_err(|error| refusal(&error, source, Limit::SourceBytes))?;
+        .map_err(|error| refusal(error, Limit::SourceBytes))?;
     let name = source.rsplit(['/', '\\']).next().unwrap_or(source);
     let length = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let open = || -> io::Result<Source<'_>> { Ok(Source::Bytes(&bytes)) };
-    match detect(open, name, source)? {
+    match detect(open, name)? {
         Format::Xml => {
             admit_xml(length, options)?;
-            xml(&bytes, options, source)
+            xml(&bytes, options)
         }
-        Format::Tar(compression) => tar(open, compression, length, options, source),
+        Format::Tar(compression) => tar(open, compression, length, options),
     }
 }
 
-fn not_found(display: &str) -> Error {
-    odm_items::Error::NotFound {
-        path: display.into(),
-    }
-    .into()
-}
-
-/// A resource the resolver does not serve as a regular file is not found, and
-/// one over the capture's bound is over `limit`, the read's limit that bound
-/// enforces; any other failure is the read's own I/O failure.
-fn refusal(error: &crate::file_resources::Error, display: &str, limit: fn(u64) -> Limit) -> Error {
-    use crate::file_resources::Error as E;
+/// A capture over its bound is over `limit`, the read's limit that bound
+/// enforces. Any other failure is the resolver's: a name that reaches no
+/// regular file, or one the resolver cannot serve, which the caller's path
+/// reports as any caller's path does (FILE-7, FILE-8).
+fn refusal(error: crate::file_resources::Error, limit: fn(u64) -> Limit) -> Error {
     match error {
-        E::Missing
-        | E::NotRegularFile
-        | E::Symlink
-        | E::InvalidPath
-        | E::WrittenForm(_)
-        | E::OutsideRoots
-        | E::InvalidRoot
-        | E::InvalidBase => not_found(display),
-        E::Limit(bound) => {
+        crate::file_resources::Error::Limit(bound) => {
             odm_items::Error::Limit(limit(u64::try_from(bound.limit).unwrap_or(u64::MAX))).into()
         }
-        error => odm_items::Error::Io {
-            path: display.into(),
-            reason: error.message().into(),
-        }
-        .into(),
+        error => Error::Resource(error),
     }
 }
 
@@ -145,12 +126,11 @@ fn admit_xml(length: u64, options: &Options) -> Result<(), Error> {
 }
 
 /// Read the clinical items of the captured plain XML `bytes`.
-fn xml(bytes: &[u8], options: &Options, display: &str) -> Result<PublicTable, Error> {
+fn xml(bytes: &[u8], options: &Options) -> Result<PublicTable, Error> {
     items::read(Xml::new(
         bytes,
         Some(options.max_expanded_bytes),
         options.max_xml_depth,
-        display.to_owned(),
     ))
 }
 
@@ -162,34 +142,25 @@ fn tar<'f>(
     compression: Compression,
     length: u64,
     options: &Options,
-    display: &str,
 ) -> Result<PublicTable, Error> {
-    let io_error = |error: io::Error| -> Error { Fault::from_io(&error, display).into() };
+    let io_error = |error: io::Error| -> Error { Fault::from_io(&error).into() };
+    let changed = || odm_items::Error::Archive {
+        reason: "TAR member changed between reads",
+    };
     let limit = options.max_expanded_bytes;
     let mut first = open_tar(open().map_err(io_error)?, compression, length, limit);
-    let (index, selected) = select(&mut first, options, display)?;
+    let (index, selected) = select(&mut first, options)?;
     let mut tar = open_tar(open().map_err(io_error)?, compression, length, limit);
     for position in 0..=index {
-        let member =
-            tar.next_member()
-                .map_err(io_error)?
-                .ok_or_else(|| odm_items::Error::Archive {
-                    path: display.to_owned(),
-                    reason: "TAR member changed between reads",
-                })?;
+        let member = tar.next_member().map_err(io_error)?.ok_or_else(changed)?;
         if position == index && (member.name != selected.name || member.size != selected.size) {
-            return Err(odm_items::Error::Archive {
-                path: display.to_owned(),
-                reason: "TAR member changed between reads",
-            }
-            .into());
+            return Err(changed().into());
         }
     }
     items::read(Xml::new(
         tar.into_member(selected.size),
         None,
         options.max_xml_depth,
-        display.to_owned(),
     ))
 }
 
@@ -204,19 +175,9 @@ fn open_tar(source: Source<'_>, compression: Compression, length: u64, limit: u6
 /// Decide between plain XML and a plain or gzip TAR archive, refusing other
 /// compressed archives and archive names that hold no archive. `open` gives
 /// the source from its start; only its head is read.
-fn detect<'f>(
-    open: impl Fn() -> io::Result<Source<'f>>,
-    name: &str,
-    display: &str,
-) -> Result<Format, Error> {
-    let io_error = |error: io::Error| -> Error { Fault::from_io(&error, display).into() };
-    let archive = |reason| -> Error {
-        odm_items::Error::Archive {
-            path: display.into(),
-            reason,
-        }
-        .into()
-    };
+fn detect<'f>(open: impl Fn() -> io::Result<Source<'f>>, name: &str) -> Result<Format, Error> {
+    let io_error = |error: io::Error| -> Error { Fault::from_io(&error).into() };
+    let archive = |reason| -> Error { odm_items::Error::Archive { reason }.into() };
     let mut head = [0_u8; BLOCK];
     let read = archive::read_up_to(&mut open().map_err(io_error)?, &mut head).map_err(io_error)?;
     let head = &head[..read];
@@ -254,24 +215,20 @@ fn detect<'f>(
     ];
     for (magic, format) in compressed {
         if head.starts_with(magic) {
-            return Err(odm_items::Error::Compression {
-                path: display.into(),
-                format,
-            }
-            .into());
+            return Err(odm_items::Error::Compression { format }.into());
         }
     }
     not_archive()
 }
 
 /// The first pass: count every member and select the one XML member.
-fn select(tar: &mut Tar<'_>, options: &Options, display: &str) -> Result<(usize, Member), Error> {
+fn select(tar: &mut Tar<'_>, options: &Options) -> Result<(usize, Member), Error> {
     let mut count = 0_usize;
     let mut candidates = 0_usize;
     let mut selected = None;
     while let Some(member) = tar
         .next_member()
-        .map_err(|error| -> Error { Fault::from_io(&error, display).into() })?
+        .map_err(|error| -> Error { Fault::from_io(&error).into() })?
     {
         count += 1;
         if count > options.max_archive_members {

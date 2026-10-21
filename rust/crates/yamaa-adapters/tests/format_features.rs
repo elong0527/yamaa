@@ -141,7 +141,11 @@ fn parquet_source_and_artifact_share_one_capability() {
 #[test]
 fn odm_reader_is_an_independent_capability() {
     let path = std::env::temp_dir().join(format!("yamaa-format-odm-{}.xml", std::process::id()));
-    std::fs::write(&path, r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"/>"#).unwrap();
+    std::fs::write(
+        &path,
+        r#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3"><ClinicalData StudyOID="S" MetaDataVersionOID="M"/></ODM>"#,
+    )
+    .unwrap();
     let result = yamaa_adapters::odm_xml::read(&path, &yamaa_core::odm_items::Options::default());
     std::fs::remove_file(&path).unwrap();
     #[cfg(feature = "odm")]

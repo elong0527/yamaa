@@ -366,7 +366,10 @@ returns the paths it wrote.
 
 Specifications read tables, not ODM XML. `read_odm()` reads an ODM 1.3 or 2.0
 XML file into one row per clinical item in file order. Save the table where your
-specifications' `input` reads it.
+specifications' `input` reads it. Only a snapshot reads: a transactional file,
+and one without clinical data such as a define.xml, are refused with their
+issue, and audit records, signatures and annotations are skipped
+([ODM-1](../../rules/reference/odm.md#odm-1)).
 
 === "R"
 

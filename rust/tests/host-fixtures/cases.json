@@ -5356,7 +5356,18 @@
           "options": {
             "max_xml_depth": "7"
           },
-          "code": "invalid_option"
+          "issue": {
+            "phase": "validation",
+            "condition": "value_not_permitted",
+            "rule": "ODM-1",
+            "spec_paths": [
+              "max_xml_depth"
+            ],
+            "message": "max_xml_depth has a value that is not permitted",
+            "context": {
+              "minimum": 8
+            }
+          }
         },
         {
           "name": "member-of-plain-xml",
@@ -5364,19 +5375,48 @@
           "options": {
             "archive_member": "odm13.xml"
           },
-          "code": "archive_member"
+          "issue": {
+            "phase": "ingest",
+            "condition": "source_odm_archive_member",
+            "rule": "ODM-1",
+            "spec_paths": [],
+            "message": "no member of {source} can be read: archive_member requires a TAR input",
+            "context": {
+              "path": "{source}",
+              "reason": "archive_member requires a TAR input"
+            }
+          }
         },
         {
           "name": "absent-source",
           "document": null,
           "options": {},
-          "code": "not_found"
+          "issue": {
+            "phase": "validation",
+            "condition": "resource_path_missing",
+            "rule": "FILE-7",
+            "spec_paths": [],
+            "message": "{source} does not exist",
+            "context": {
+              "path": "{source}"
+            }
+          }
         },
         {
           "name": "archive-without-member",
           "document": "documents.tar",
           "options": {},
-          "code": "archive_member"
+          "issue": {
+            "phase": "ingest",
+            "condition": "source_odm_archive_member",
+            "rule": "ODM-1",
+            "spec_paths": [],
+            "message": "no member of {source} can be read: TAR input must contain exactly one XML member or receive archive_member",
+            "context": {
+              "path": "{source}",
+              "reason": "TAR input must contain exactly one XML member or receive archive_member"
+            }
+          }
         },
         {
           "name": "archive-over-member-limit",
@@ -5385,7 +5425,17 @@
             "archive_member": "odm20.xml",
             "max_archive_members": "1"
           },
-          "code": "limit"
+          "issue": {
+            "phase": "ingest",
+            "condition": "source_odm_limit_exceeded",
+            "rule": "ODM-1",
+            "spec_paths": [],
+            "message": "{source} exceeds a read limit: TAR input contains more than 1 members",
+            "context": {
+              "path": "{source}",
+              "reason": "TAR input contains more than 1 members"
+            }
+          }
         }
       ]
     },

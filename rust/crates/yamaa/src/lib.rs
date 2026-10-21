@@ -74,8 +74,8 @@ pub use engine::{
     Request, ResolvedSpecification, SourceBytes,
 };
 pub use error::{
-    Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, OdmError,
-    ResolverFailure, TableError,
+    Error, FunctionError, HostPayload, LockFinding, LockReason, LockSyntaxError, ResolverFailure,
+    TableError,
 };
 pub use file_type::FileType;
 pub use functions::{

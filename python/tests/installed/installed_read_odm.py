@@ -5,6 +5,7 @@ installed host returns for the same two documents, which R reads too.
 """
 
 import io
+import json
 import os
 import tarfile
 import tempfile
@@ -77,7 +78,7 @@ class ReadOdm(unittest.TestCase):
         )
         self.assertEqual(frame.to_dicts(), expected_rows(selected["rows"]))
 
-    def test_refusals_raise_yamaa_error_naming_the_reader_code(self):
+    def test_refusals_raise_yamaa_error_carrying_their_issue(self):
         for refusal in TRUTH["refusals"]:
             with self.subTest(refusal=refusal["name"]):
                 options = {
@@ -89,18 +90,39 @@ class ReadOdm(unittest.TestCase):
                     yamaa.read_odm(source, **options)
                 error = caught.exception
                 self.assertIs(type(error), yamaa.Error)
-                # D39: the call names the source as given; a reader failure
-                # carries no issue, so its own text follows.
-                self.assertTrue(
-                    str(error).startswith(
-                        f"cannot read {os.fspath(source)}: "
-                        f"ODM read failure ({refusal['code']}): "
-                    ),
+                # `{source}` stands for the source as given (#3030 D73, D158).
+                given = os.fspath(source)
+                expected = refusal["issue"]
+                message = expected["message"].replace("{source}", given)
+                # D39: the call names the source as given, then the issue.
+                self.assertEqual(
                     str(error),
+                    f"cannot read {given}: {message} "
+                    f"[{expected['condition']}, {expected['rule']}]",
                 )
-                # A reader failure is not a specification finding.
                 self.assertEqual(error.issues.columns, ISSUE_COLUMNS)
-                self.assertTrue(error.issues.is_empty())
+                [row] = error.issues.to_dicts()
+                self.assertEqual(
+                    {
+                        name: row[name]
+                        for name in ("severity", "phase", "condition", "rule")
+                    },
+                    {
+                        "severity": "error",
+                        "phase": expected["phase"],
+                        "condition": expected["condition"],
+                        "rule": expected["rule"],
+                    },
+                )
+                self.assertEqual(row["spec_paths"], expected["spec_paths"])
+                self.assertEqual(row["message"], message)
+                context = {
+                    name: value.replace("{source}", given)
+                    if isinstance(value, str)
+                    else value
+                    for name, value in expected["context"].items()
+                }
+                self.assertEqual(json.loads(row["context"]), context)
 
 
 if __name__ == "__main__":

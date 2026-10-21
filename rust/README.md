@@ -361,10 +361,10 @@ impl DefineBuild {
   and a missing name as `resource_path_missing`. `MemoryResolver::insert_kind`
   models these.
 - `read_odm` through a resolver captures the source once and holds it whole,
-  under the 10 GiB per-file source bound (code `limit`, `ODM source exceeds
-  10737418240 bytes`), before `max_expanded_bytes` applies: the resolver
-  protocol has no streaming read. Without a resolver, a local archive is
-  streamed and never held whole, and a local plain XML file over
+  under the 10 GiB per-file source bound (`source_odm_limit_exceeded`, `ODM
+  source exceeds 10737418240 bytes`), before `max_expanded_bytes` applies:
+  the resolver protocol has no streaming read. Without a resolver, a local
+  archive is streamed and never held whole, and a local plain XML file over
   `max_expanded_bytes` is refused before it is read; one within that bound
   is held whole.
 - `file_type` captures a file once and interprets only its `yamaa` and

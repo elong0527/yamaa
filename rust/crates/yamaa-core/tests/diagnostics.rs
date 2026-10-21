@@ -716,6 +716,7 @@ mod diagnostics {
             reached.extend(csv::typing_reached());
             reached.extend(parquet::reached());
             reached.extend(sas::reached());
+            reached.extend(odm_read::reached());
             reached.extend(result_types::reached());
             let check = yamaa_core::dataset::Check::Codelist {
                 id: "SEX".into(),
