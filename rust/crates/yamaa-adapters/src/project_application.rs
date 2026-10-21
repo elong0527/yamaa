@@ -345,21 +345,26 @@ fn inheritance_issues<'a>(
     owner: &'a crate::file_workflow::Error,
     cause: &crate::specification_source::InheritanceError<crate::file_resources::Error>,
 ) -> Result<Vec<Diagnostic>, IssueError<'a>> {
-    use crate::specification_source::{Error as S, InheritanceError as I};
+    use crate::specification_source::{Error as S, InheritanceError as I, SourceFailure};
     use crate::yaml_decode::DecodeFailure;
     use yamaa_core::{
         dictionary_preparation::Cause, inheritance::Error as G,
         inheritance_preparation::Error as E, resolution::Error as D,
         schema::NormalizationError as N,
     };
-    let supported = match cause {
-        I::Entry(S::Findings(_)) => true,
-        I::Entry(S::Decode { error, .. }) => matches!(
+    // Text the YAML reader refuses, in the entry or in a parent layer, is a
+    // finding of the file it refused (SCHEMA-3, SPEC-8, VALUE-11).
+    let refused = |error: &DecodeFailure| {
+        matches!(
             error,
             DecodeFailure::NonAscii(_)
                 | DecodeFailure::InvalidYaml { .. }
                 | DecodeFailure::InvalidText(_)
-        ),
+        )
+    };
+    let supported = match cause {
+        I::Entry(S::Findings(_)) => true,
+        I::Entry(S::Decode { error, .. }) => refused(error),
         I::Dictionary { error, .. } => matches!(
             &error.cause,
             Cause::Capture {
@@ -378,6 +383,9 @@ fn inheritance_issues<'a>(
                 | G::Version { .. }
                 | G::Header { .. },
             ) => true,
+            E::Traversal(G::Host(SourceFailure::Admission(S::Decode { error, .. }))) => {
+                refused(error)
+            }
             E::Traversal(G::Layer {
                 error: N::Invalid(_),
                 ..
@@ -401,12 +409,10 @@ fn inheritance_issues<'a>(
                 V::Producer(P::Preparation(producer)) => {
                     return inheritance_issues(owner, producer)
                 }
-                V::Entry(S::Decode { error, .. }) => matches!(
-                    error,
-                    DecodeFailure::NonAscii(_)
-                        | DecodeFailure::InvalidYaml { .. }
-                        | DecodeFailure::InvalidText(_)
-                ),
+                V::Entry(S::Decode { error, .. })
+                | V::Traversal(G::Host(SourceFailure::Admission(S::Decode { error, .. }))) => {
+                    refused(error)
+                }
                 V::Entry(S::Dependencies(error)) => matches!(error, D::Invalid(_)),
                 V::Traversal(
                     G::Unavailable { .. }

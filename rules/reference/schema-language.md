@@ -110,7 +110,7 @@ follows [Values](../values.md) even when written with ASCII escape
 notation.
 
 Fails: `invalid_yaml`.
-Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::complete_original_codec_reports_survive_schema_closure_admission`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::forbidden_metadata_reports_its_prefix_and_precedes_later_errors`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::merge_key_style_and_non_scalar_keys_are_checked`.
+Evidence: `rust/crates/yamaa-adapters/tests/declaration_schema_capture.rs::complete_original_codec_reports_survive_schema_closure_admission`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::forbidden_metadata_reports_its_prefix_and_precedes_later_errors`, `rust/crates/yamaa-adapters/src/yaml_decode/tests.rs::merge_key_style_and_non_scalar_keys_are_checked`, `rust/crates/yamaa/tests/issue_locations.rs::a_parent_the_reader_refuses_locates_its_issue_in_that_parent`.
 
 <a id="schema-4"></a>
 
