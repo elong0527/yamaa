@@ -40,6 +40,9 @@ values.lint_finding.invalid_suppression
 values.lint_finding.repeated_row_derivation
 values.lint_finding.redundant_intermediate
 values.lint_finding.missing_label
+values.lint_finding.redundant_long_form
+values.lint_finding.restated_default
+values.lint_finding.scalar_as_text
 values.file_type.spec
 values.file_type.project
 values.file_type.codelists

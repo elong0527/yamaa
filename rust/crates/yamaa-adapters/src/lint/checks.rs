@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use yamaa_core::language::FileType;
 
 use super::document::{Document, Value};
-use super::{authoring, fields, FINDINGS};
+use super::{authoring, canonical, fields, FINDINGS};
 
 pub(super) const LINE_WIDTH: usize = 79;
 
@@ -105,6 +105,27 @@ pub(super) struct Departure {
     pub column: usize,
     pub spec_path: String,
     pub message: String,
+    /// The canonical rewrite a schema finding names, by the nodes of the
+    /// document it was found in.
+    pub fix: Option<Rewrite>,
+}
+
+/// A rewrite to a value's canonical spelling, which keeps its meaning but not
+/// its written value (P-HND-3, P-KIND-1, P-LONG-1).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Rewrite {
+    /// Remove the mapping entry of `key`, which restates its default.
+    Remove { key: usize },
+    /// Write the scalar `node` as `text`, the YAML scalar its grammar text
+    /// stands for.
+    Scalar { node: usize, text: String },
+    /// Write the long form `node` as its shorthand: the node `shorthand`, or
+    /// the bare keyword when there is none.
+    Shorthand {
+        node: usize,
+        shorthand: Option<usize>,
+        keyword: String,
+    },
 }
 
 impl Departure {
@@ -121,6 +142,14 @@ impl Departure {
             column,
             spec_path: spec_path.into(),
             message: message.into(),
+            fix: None,
+        }
+    }
+
+    pub(super) fn with_fix(self, fix: Rewrite) -> Self {
+        Self {
+            fix: Some(fix),
+            ..self
         }
     }
 }
@@ -225,6 +254,8 @@ pub(super) fn check(document: &Document) -> Vec<Departure> {
         // change it.
         found.extend(authoring::check(document));
     }
+    // A 1.x file's canonical spellings, read through its schema.
+    found.extend(canonical::check(document));
     sort(&mut found);
     found
 }

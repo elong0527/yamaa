@@ -320,3 +320,48 @@ fn a_file_that_cannot_be_read_or_parsed_refuses_with_its_issue() {
         .unwrap();
     assert_eq!(conditions.value(0), "resource_path_missing");
 }
+
+/// A 1.0 file's canonical spellings through the facade: each finding in the
+/// table, then `fix` writes the canonical spelling and names the file
+/// (P-HND-3, P-KIND-1, P-LONG-1).
+#[test]
+fn a_1_0_file_is_fixed_to_its_canonical_spellings() {
+    const SPELLED: &str = "yamaa: \"1.0\"\ntype: spec\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID, AGE]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n\n  - name: AGE\n    type: int\n    label: Age\n    derivation: 0\n";
+    let written = SPELLED
+        .replace(
+            "  DM: input/dm.csv\n",
+            "  DM: {path: input/dm.csv, relative_to: declaring}\n",
+        )
+        .replace("derivation: 0\n", "derivation: \"0\"\n");
+    let directory = Directory::new("canonical");
+    let file = directory.write("dm.yaml", &written);
+    let linted = lint(std::slice::from_ref(&file), false).unwrap();
+    assert_eq!(
+        rows(&linted.table())
+            .into_iter()
+            .map(|(_, line, column, finding, spec_path, _)| (line, column, finding, spec_path))
+            .collect::<Vec<_>>(),
+        [
+            (
+                6,
+                28,
+                "restated_default".to_owned(),
+                "input.DM.relative_to".to_owned()
+            ),
+            (
+                21,
+                17,
+                "scalar_as_text".to_owned(),
+                "columns.AGE.derivation".to_owned()
+            ),
+        ]
+    );
+    let fixed = lint(std::slice::from_ref(&file), true).unwrap();
+    assert!(fixed.findings().is_empty());
+    assert_eq!(fixed.rewritten(), [directory.absolute("dm.yaml")]);
+    assert_eq!(
+        fixed.summary(),
+        "0 lint findings in 0 of 1 file; fixed 1 file"
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), SPELLED);
+}

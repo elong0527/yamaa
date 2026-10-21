@@ -139,19 +139,48 @@ rules, which read each line break inside it as one space.
 
 ## Canonical spellings
 
-A literal expression is written as the single-line flow mapping
-`{literal: X}`, wherever it appears: a `case` branch `then` or `otherwise`
-result, a `derivation` value, a row-template value or any other position. The
-block form, with the parent key on its own line and `literal: X` nested beneath
-it, parses identically. The check reports no spelling of a literal, since the
-1.0 language retires `{literal: X}`.
+A 1.0 file is read through its file type's schema, as validation reads it, and
+three findings name a value written in a spelling other than its canonical
+one. Each keeps the value's meaning, and `fix` writes the canonical spelling.
 
-A value has one spelling in the language itself, so the check names
-none of the shorthand spellings. A plain source is the bare string wherever
-the source shorthand applies, a field that takes several values is a list even
-for one, and a long form that holds only the field its shorthand fills, such
-as `{source: X}` in a `derivation` or `aggregate: {expr: E}`, fails validation
-as `redundant_long_form` rather than standing as a lint finding.
+A field that writes the default its schema declares, such as an input's
+`relative_to: declaring`, a section's `context: Submission` or a codelist's
+`data_type: text`, is reported as `restated_default` at its key. So is a
+handler whose omission answers with the missing value written as `null`: a
+lookup's `absent`, and `missing` on `first_available`, `mapping`, `cut`,
+`str_extract`, `str_replace` and `str_case`, and a flag's `false_value` and
+`missing` (COLUMN-10). A handler whose omission fails, such as `unmapped`,
+declares an answer when it is `null`, and a flag's `missing` beside a declared
+`false_value` is required (EXPR-8); neither is reported. A file that declares
+`parent` is not read for restated defaults: a value a layer writes may replace
+one it inherits.
+
+An expression field whose whole value is grammar text for the missing value, a
+number or a Boolean, such as `"NULL"`, `"0"` or `"(2)"`, is reported as
+`scalar_as_text`: the YAML scalar is canonical (P-KIND-1). This covers each
+field whose type admits a YAML scalar beside grammar text: a `derivation`, a
+`case` result, a handled wrapper's `value`, a key match value and a function
+argument. Quoted text, a name, a predicate and a value field keep their text.
+
+A long form that holds only what its shorthand fills, such as
+`{variable: X}` for the order term `X`, `aggregate: {expr: E}` or
+`- not_missing: {}`, fails validation as `redundant_long_form` (SCHEMA-15). The
+check reports the same spelling as the finding `redundant_long_form`, at the
+long form, so `fix` can write the shorthand.
+
+```yaml
+input:
+  DM: {path: input/dm.csv, relative_to: declaring}
+  EX:
+    path: input/ex.csv
+```
+
+Here `relative_to: declaring` is a `restated_default` and the `EX` mapping a
+`redundant_long_form`. `fix` writes `DM: input/dm.csv` and `EX: input/ex.csv`:
+the removed default leaves a long form, which the next pass writes as its
+shorthand. Likewise `derivation: "0"` is a `scalar_as_text`, and `fix` writes
+`derivation: 0`. A file that declares `schema_version` keeps the 0.5 spellings,
+which none of the three reads.
 
 ## Authoring lints
 
@@ -256,8 +285,8 @@ columns:
 
 ## Fixes
 
-`fix` changes how the lines of a file are laid out, never the written text of
-a value. It may:
+A layout fix changes how the lines of a file are laid out, never the written
+text of a value. It may:
 
 - move a field, with the comments written directly above it, into field order;
 - insert or remove blank lines;
@@ -265,12 +294,23 @@ a value. It may:
 - write a one-line flow mapping other than `{literal: X}` as a block mapping,
   keeping each member's written text.
 
-A fix is kept only when all of these hold for the fixed file:
+A layout fix is kept only when all of these hold for the fixed file:
 
 - it parses under the YAML 1.2 core schema to the same value, with the same
   types, as the file before it;
 - it carries the same comment lines;
 - it does not change when it is fixed again.
+
+A canonical rewrite, for `restated_default`, `scalar_as_text` or
+`redundant_long_form`, changes the written value and keeps its meaning: it
+removes the restated entry, writes the YAML scalar the text stands for, or
+writes the shorthand in place of the long form. It is kept only when the fixed
+file reads as exactly the values before it with that one rewrite applied, with
+the same comment lines, and does not change when it is fixed again. A rewrite
+that would lose a comment, or that has no single line to write the shorthand
+on, is not made. A fixed 1.0 file must also give no validation finding that the
+file as written did not, so a removed default whose long form cannot be
+rewritten leaves the file as written.
 
 Otherwise the file stays as written and the finding stays reported. A fixed
 file is replaced atomically, keeping its permissions; these named files are

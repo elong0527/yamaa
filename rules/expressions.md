@@ -186,10 +186,11 @@ reference, text that holds only a literal is that literal
 ([EXPR-4](#expr-4)), and other text returns one value per current row. So
 `derivation: DM.AGE` copies `DM.AGE`, `derivation: "'DM'"` is the text `DM`,
 `derivation: 5` and `derivation: "5"` are the number 5, and
-`derivation: "AGE * 2"` computes. An operation is written as its mapping,
-such as `{to_date: {source: DM.BRTHDTC}}`; written as text,
-`to_date(DM.BRTHDTC)` calls a function the field does not admit and fails as
-`prohibited_function` under FORMULA-27. A name that no input or column
+`derivation: "AGE * 2"` computes. Of two such spellings the YAML scalar is
+canonical, and the lint reports the text as `scalar_as_text`. An operation is
+written as its mapping, such as `{to_date: {source: DM.BRTHDTC}}`; written as
+text, `to_date(DM.BRTHDTC)` calls a function the field does not admit and fails
+as `prohibited_function` under FORMULA-27. A name that no input or column
 declares fails when it binds, as `unknown_field` under
 [NAME-3](names.md#name-3), so a forgotten quote around `DM` never becomes the
 text `DM`.

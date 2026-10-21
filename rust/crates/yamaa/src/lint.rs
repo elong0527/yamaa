@@ -17,10 +17,12 @@
 //! suppression that names no finding, names one the lint does not report or
 //! gives no reason is itself reported as `invalid_suppression`.
 //!
-//! With `fix`, each file is first rewritten by the proved layout fixes: it is
+//! With `fix`, each file is first rewritten by the proved fixes: it is
 //! replaced, atomically, only when the fixed text reads as the same values
-//! with the same comments and a second pass changes nothing, and the table
-//! lists what remains. These named files are the only writes outside a
+//! with the same comments, or for a canonical rewrite of a 1.x file
+//! (`restated_default`, `scalar_as_text`, `redundant_long_form`) as those
+//! values with exactly that rewrite, and a second pass changes nothing; the
+//! table lists what remains. These named files are the only writes outside a
 //! specification's declared outputs. A file that cannot be read or admitted
 //! as YAML, or a directory that cannot be listed, refuses the whole call with
 //! the issue that says why, before any file is written.
@@ -34,7 +36,7 @@ use crate::text::{self, Action};
 pub const LINT_COLUMNS: [&str; 6] = ["file", "line", "column", "finding", "spec_path", "message"];
 
 /// Every value of the lint table's `finding` column.
-pub const LINT_FINDINGS: [&str; 9] = yamaa_adapters::lint::FINDINGS;
+pub const LINT_FINDINGS: [&str; 12] = yamaa_adapters::lint::FINDINGS;
 
 /// What [`lint`] found: the findings that remain, in table order, with the
 /// number of files it read and the files a fix rewrote. The hosts return its

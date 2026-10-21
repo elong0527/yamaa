@@ -1,16 +1,20 @@
-//! Layout fixes that move and insert whole lines, kept only when proved.
+//! Fixes, each kept only when proved.
 //!
-//! A fix rearranges the lines of a file and never rewrites what a value says.
-//! Each candidate edit is applied to the text, the text is admitted again by
-//! the shared document admission, and the edit is kept only when the values,
-//! compared with their types, and the comment lines are unchanged. A refused
-//! edit leaves its finding reported.
+//! A layout fix rearranges the lines of a file and never rewrites what a value
+//! says. Each candidate edit is applied to the text, the text is admitted again
+//! by the shared document admission, and the edit is kept only when the values,
+//! compared with their types, and the comment lines are unchanged. A canonical
+//! rewrite (P-HND-3, P-KIND-1, P-LONG-1) is kept only when the text reads as
+//! the values with exactly that rewrite applied, with the same comment lines.
+//! A refused edit leaves its finding reported, and a fixed 1.x file must give
+//! no validation finding that the file as written did not.
 
 use std::collections::{HashMap, HashSet};
 
+use super::canonical;
 use super::checks::{
     blank_after_openers, check, header_fields, order_violation, ordered_mappings, rank, suppressed,
-    Departure, LINE_WIDTH,
+    Departure, Rewrite, LINE_WIDTH,
 };
 use super::document::{head, rstrip, split_lines, strip, tail, Document, Style, Value};
 
@@ -27,6 +31,7 @@ enum Key {
     LineWidth(String, String),
     Spacing,
     BlankLines,
+    Rewrite(&'static str, String),
 }
 
 enum Edit {
@@ -38,6 +43,7 @@ enum Edit {
     LineWidth(usize),
     Spacing(Vec<usize>),
     BlankLines,
+    Rewrite(Rewrite),
 }
 
 fn comments(text: &str) -> HashMap<String, usize> {
@@ -63,12 +69,23 @@ fn join(lines: &[String], newline: &str) -> String {
     text
 }
 
-/// Apply every proved layout fix to `text`; a fix that a second pass would
-/// change again is refused, leaving `text` as written.
+/// Apply every proved fix to `text`. A result that a second pass would change
+/// again, or a 1.x file whose result gives a validation finding the file as
+/// written did not, is refused, leaving `text` as written.
 pub(super) fn fix_text(text: &str) -> String {
     let result = fix_once(text);
-    if result != text && fix_once(&result) != result {
+    if result == text {
+        return result;
+    }
+    if fix_once(&result) != result {
         return text.to_owned();
+    }
+    // A removed default can leave a long form that only its rewrite in a
+    // later pass makes valid again; a chain left halfway is no fix.
+    if let Some(before) = canonical::refusals(text) {
+        if !canonical::refusals(&result).is_some_and(|after| after.is_subset(&before)) {
+            return text.to_owned();
+        }
     }
     result
 }
@@ -87,9 +104,16 @@ fn fix_once(text: &str) -> String {
                 continue;
             }
             let candidate = apply(&document, &edit);
-            if let Some(candidate) =
-                candidate.filter(|candidate| *candidate != text && proved(&text, candidate))
-            {
+            if let Some(candidate) = candidate.filter(|candidate| {
+                *candidate != text
+                    && match &edit {
+                        Edit::Rewrite(rewrite) => {
+                            canonical::same_meaning(&document, rewrite, candidate)
+                                && comments(&text) == comments(candidate)
+                        }
+                        _ => proved(&text, candidate),
+                    }
+            }) {
                 text = candidate;
                 applied = true;
                 break;
@@ -150,6 +174,14 @@ fn edits(document: &Document, found: &[Departure]) -> Vec<(Key, Edit)> {
     if found.iter().any(|item| item.name == "blank_lines") {
         edits.push((Key::BlankLines, Edit::BlankLines));
     }
+    for item in found {
+        if let Some(rewrite) = &item.fix {
+            edits.push((
+                Key::Rewrite(item.name, item.spec_path.clone()),
+                Edit::Rewrite(rewrite.clone()),
+            ));
+        }
+    }
     edits
 }
 
@@ -163,6 +195,141 @@ fn apply(document: &Document, edit: &Edit) -> Option<String> {
         Edit::LineWidth(line) => wrap(document, *line),
         Edit::Spacing(starts) => Some(insert_blanks(document, starts)),
         Edit::BlankLines => Some(remove_blanks(document)),
+        Edit::Rewrite(rewrite) => rewrite_text(document, rewrite),
+    }
+}
+
+/// `document`'s text with `[start, end)` replaced by `text`.
+fn splice(document: &Document, start: usize, end: usize, text: &str) -> String {
+    format!("{}{text}{}", &document.text[..start], &document.text[end..])
+}
+
+/// The key that names `node` as a mapping value.
+fn holder(document: &Document, node: usize) -> Option<usize> {
+    document.nodes.iter().find_map(|item| {
+        let Value::Mapping { pairs, .. } = &item.value else {
+            return None;
+        };
+        pairs
+            .iter()
+            .find(|&&(_, value)| value == node)
+            .map(|&(key, _)| key)
+    })
+}
+
+/// Write one canonical rewrite into the text, or `None` where the text gives
+/// it no place this edit can write: the proof then decides nothing, and the
+/// finding stays reported.
+fn rewrite_text(document: &Document, rewrite: &Rewrite) -> Option<String> {
+    match rewrite {
+        Rewrite::Remove { key } => remove_entry(document, *key),
+        Rewrite::Scalar { node, text } => {
+            let node = document.node(*node);
+            Some(splice(document, node.start.index, node.end.index, text))
+        }
+        Rewrite::Shorthand {
+            node,
+            shorthand,
+            keyword,
+        } => write_shorthand(document, *node, *shorthand, keyword),
+    }
+}
+
+/// Remove the mapping entry `key` names. In a flow mapping its text goes with
+/// the separator before it, or after it when it is first. In a block mapping
+/// its lines go, when the key starts its line, no comment stands directly
+/// above it, and another entry remains.
+fn remove_entry(document: &Document, key: usize) -> Option<String> {
+    let mapping = document.nodes.iter().position(|item| {
+        matches!(&item.value, Value::Mapping { pairs, .. } if pairs.iter().any(|&(k, _)| k == key))
+    })?;
+    let Value::Mapping { flow, pairs } = &document.node(mapping).value else {
+        return None;
+    };
+    let index = pairs.iter().position(|&(k, _)| k == key)?;
+    let value = pairs[index].1;
+    if *flow {
+        let (start, end) = if pairs.len() == 1 {
+            (
+                document.node(key).start.index,
+                document.node(value).end.index,
+            )
+        } else if index > 0 {
+            (
+                document.node(pairs[index - 1].1).end.index,
+                document.node(value).end.index,
+            )
+        } else {
+            (
+                document.node(key).start.index,
+                document.node(pairs[1].0).start.index,
+            )
+        };
+        return Some(splice(document, start, end, ""));
+    }
+    let start = document.node(key).start;
+    if pairs.len() < 2
+        || !strip(head(&document.lines[start.line], start.column)).is_empty()
+        || (start.line > 0 && document.is_comment(start.line - 1))
+    {
+        return None;
+    }
+    let mut lines = document.lines.clone();
+    lines.drain(start.line..=document.last_line(value));
+    Some(join(&lines, document.newline))
+}
+
+/// Write the long form `node` as its shorthand: the one-line text of the
+/// value `shorthand`, or `keyword`. A flow long form is replaced where it
+/// stands, a one-line block entry after its list dash, and a one-line block
+/// mapping below its key is written after that key.
+fn write_shorthand(
+    document: &Document,
+    node: usize,
+    shorthand: Option<usize>,
+    keyword: &str,
+) -> Option<String> {
+    let written = match shorthand {
+        Some(value) => document.source(value),
+        None => keyword,
+    };
+    if written.contains(['\n', '\r']) {
+        return None;
+    }
+    let long = document.node(node);
+    match &long.value {
+        Value::Mapping { flow: true, .. } => {
+            Some(splice(document, long.start.index, long.end.index, written))
+        }
+        Value::Mapping { flow: false, pairs } if pairs.len() == 1 => {
+            let line = long.start.line;
+            let value = pairs[0].1;
+            if document.last_line(node) != line || document.node(value).start.line != line {
+                return None;
+            }
+            let before = strip(head(&document.lines[line], long.start.column));
+            if before.ends_with('-') {
+                return Some(splice(
+                    document,
+                    long.start.index,
+                    document.node(value).end.index,
+                    written,
+                ));
+            }
+            let key = holder(document, node)?;
+            let opener = document.node(key).start.line;
+            if !before.is_empty()
+                || opener + 1 != line
+                || !rstrip(&document.lines[opener]).ends_with(':')
+            {
+                return None;
+            }
+            let mut lines = document.lines.clone();
+            lines[opener] = format!("{} {written}", rstrip(&lines[opener]));
+            lines.remove(line);
+            Some(join(&lines, document.newline))
+        }
+        _ => None,
     }
 }
 

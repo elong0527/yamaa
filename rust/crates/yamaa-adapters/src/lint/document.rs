@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use crate::yaml_decode::{decode_yaml, DecodeFailure};
+use crate::yaml_decode::{decode_yaml, DecodeFailure, DecodedYaml};
 use crate::yaml_source::{scan_strict, LocatedEvent, SourceEvent, SourceText};
 use yamaa_saphyr_parser::ScalarStyle;
 
@@ -87,6 +87,9 @@ pub(super) struct Document {
     pub versioned: bool,
     /// Each node's spec path; a mapping key has its value's.
     paths: Vec<String>,
+    /// The values document admission decoded, which the schema findings
+    /// read; none for the directory scan's structure alone.
+    pub decoded: Option<DecodedYaml>,
 }
 
 // --- Text as Python's str methods read it ---------------------------------------
@@ -380,8 +383,10 @@ impl Document {
     /// Admit `source` through the shared document admission, then keep its
     /// nodes, lines, comment lines and suppressions.
     pub(super) fn parse(source: &[u8]) -> Result<Self, DecodeFailure> {
-        decode_yaml(source)?;
-        Self::structure(source)
+        let decoded = decode_yaml(source)?;
+        let mut document = Self::structure(source)?;
+        document.decoded = Some(decoded);
+        Ok(document)
     }
 
     /// The nodes and lines without document admission, as the directory scan
@@ -401,6 +406,7 @@ impl Document {
             suppressions: Vec::new(),
             newline: dominant_ending(text),
             versioned: false,
+            decoded: None,
         };
         document.versioned = document.key(document.root, "yamaa").is_some()
             && document.key(document.root, "schema_version").is_none();
