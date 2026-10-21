@@ -122,6 +122,14 @@ any more. From `rust/`,
 `cargo tree --locked --offline --workspace --target all -i <crate>` shows what
 pulls a crate in.
 
+The same file's `[unconditional.<engine crate>]` tables say why an engine crate
+(`yamaa-core`, `yamaa-adapters` or `yamaa`) depends, without a feature, on a
+crate that #3030 section 2.9 scopes to the features and adapters that need it:
+an Arrow crate, `flatbuffers`, `serde_json` or `toml`. The same check reads the
+engine crates' manifests and fails while such a dependency has no reason, or a
+reason names a dependency that is optional or gone, so the change that moves a
+crate behind a feature also removes its reason.
+
 Every package also ships `COMPONENTS.tsv` beside the notices: an inventory,
 without digests, of the components that its host's packages are built from.
 `tools.packaging.generate_component_inventory` writes `python/COMPONENTS.tsv`,
