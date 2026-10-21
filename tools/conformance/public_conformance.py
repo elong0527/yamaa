@@ -1188,10 +1188,6 @@ def compare_cli_example(example, record, fixtures, observed):
     ):
         result["findings"].append("observed calls do not match the runner plan")
         return result
-    refused = [call["arguments"] for call in calls if call["not_implemented"]]
-    if refused:
-        result["findings"].append({"not_implemented": refused})
-        return result
     issues = [issue for call in calls for issue in call["document"]["issues"]]
     if any(issue["phase"] == "engine" for issue in issues):
         result["findings"].append({"engine_issues": issues})

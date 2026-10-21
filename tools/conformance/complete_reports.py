@@ -323,8 +323,6 @@ def cli_saved(directory, destination, name, record):
     outcome, saved = "success", []
     for call in record["calls"]:
         document = call["document"]
-        if document is None:
-            raise ValueError(f"the command line did not run {name}")
         if (call["exit_status"], document["status"]) != (0, "succeeded"):
             outcome = "failure"
         for path in document["paths"]:

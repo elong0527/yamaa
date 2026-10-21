@@ -515,7 +515,6 @@ class CommandLineCohort(unittest.TestCase):
             "arguments": ["run", "spec.yaml"],
             "exit_status": exit_status,
             "stderr": "",
-            "not_implemented": False,
             "document": {"status": status, "issues": [], "paths": paths},
         }
         cohort.write(

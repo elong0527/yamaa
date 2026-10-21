@@ -27,20 +27,15 @@ columns:
   - {name: ID, type: int, derivation: SRC.ID}
 """
 METADATA = "lifecycle: draft\nstandard: TEST\ndomain: TEST\n"
-# Refuses `run SPEC` as not implemented, as the binary refuses a command it
-# has not built yet (D96), and for `run PROJECT --spec NAME` prints one result
-# document, here naming what it was asked and where, and exits 1 as a run
-# with findings does. Its save wrote, as absolute paths with forward slashes,
-# one file below the case and one beside it; the paths that climb out of the
-# case or have a backslash are not ones the binary prints.
+# Prints one result document, here naming what it was asked and where, and
+# exits 1 as a run with findings does. Its save wrote, as absolute paths with
+# forward slashes, one file below the case and one beside it; the paths that
+# climb out of the case or have a backslash are not ones the binary prints.
 BINARY = """import json, os, sys
 arguments = sys.argv[1:]
 if arguments == ["--version"]:
     sys.stdout.write("yamaa 0.0.0\\n")
     sys.exit(0)
-if "--spec" not in arguments:
-    sys.stderr.write("yamaa: run without --spec or --section is not implemented yet\\n")
-    sys.exit(2)
 case = os.getcwd().replace(os.sep, "/")
 paths = [
     case + "/out/test-report.csv",
@@ -66,8 +61,8 @@ if sys.argv[1:] == ["--version"]:
 sys.stdout.write("null\\n")
 sys.exit(0)
 """
-# Refuses every command as a usage error, which is not a refusal of a command
-# not implemented yet.
+# Refuses every command as a usage error, with exit status 2: the command
+# could not run as asked.
 USAGE = """import sys
 if sys.argv[1:] == ["--version"]:
     sys.stdout.write("yamaa 0.0.0\\n")
@@ -156,8 +151,7 @@ class CommandLineRunner(unittest.TestCase):
             {
                 "runtime": "cli",
                 "excluded": 1,
-                "not_implemented": 1,
-                "observed": 1,
+                "observed": 2,
                 "error": 0,
             },
         )
@@ -185,7 +179,7 @@ class CommandLineRunner(unittest.TestCase):
         )
         self.assertEqual(Path(document["cwd"]).resolve(), case)
         self.assertEqual(document["status"], "failed")
-        self.assertEqual((call["exit_status"], call["not_implemented"]), (1, False))
+        self.assertEqual(call["exit_status"], 1)
         self.assertNotIn("stdout", call)
         # The record keeps a written path relative to the case's root (#3312);
         # one beside the case, one that climbs out of it, and one with a
@@ -204,18 +198,17 @@ class CommandLineRunner(unittest.TestCase):
         self.assertTrue((case / "spec.yaml").is_file())
         self.assertFalse((case / "expected").exists())
         self.assertFalse((case / "benchmark.yaml").exists())
-        # A call the binary does not run yet is recorded as such.
+        # A call without a project runs its specification in its own case.
         [call] = self.record(output, "plain")["calls"]
         self.assertEqual(call["arguments"], ["run", "spec.yaml"])
+        document = call["document"]
         self.assertEqual(
-            (call["exit_status"], call["not_implemented"], call["document"]),
-            (2, True, None),
+            document["arguments"], ["--format", "json", "run", "spec.yaml"]
         )
+        self.assertEqual(Path(document["cwd"]).resolve(), output / "work/plain")
         self.assertFalse((output / "work/plain/expected").exists())
 
-    def test_a_usage_error_is_neither_a_command_not_implemented_nor_an_observation(
-        self,
-    ):
+    def test_a_run_that_exits_2_is_recorded_as_an_error(self):
         output = self.root / "observed"
         result = self.runner(self.binary("usage", USAGE), output)
         self.assertEqual(result.returncode, 0, result.stderr)

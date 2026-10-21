@@ -1363,7 +1363,6 @@ class CommandLineJudgement(unittest.TestCase):
             "arguments": ["run", "spec.yaml"],
             "exit_status": 0,
             "stderr": "",
-            "not_implemented": False,
             "document": {"status": "succeeded", "issues": [], "paths": ["result.csv"]},
         }
         self.record = {
@@ -1497,8 +1496,6 @@ class CommandLineJudgement(unittest.TestCase):
         self.call["arguments"] = ["run", "other.yaml"]
         self.fails("observed calls do not match the runner plan", "error")
         self.call["arguments"] = ["run", "spec.yaml"]
-        self.call.update(not_implemented=True, exit_status=2, document=None)
-        self.fails({"not_implemented": [["run", "spec.yaml"]]}, "error")
         self.record.update(error="ValueError: yamaa printed no single JSON line")
         self.fails("ValueError: yamaa printed no single JSON line", "error")
         self.record.update(error=None, excluded="a reason the plan does not give")
