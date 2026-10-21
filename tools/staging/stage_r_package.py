@@ -98,14 +98,6 @@ UNREAD_BY_R_SUITES = (
     "specification-original/flags/nested_case_mixed_declarations/**",
     "specification-original/case-predicate-history/**",
     "!specification-original/case-predicate-history/*/expected.csv",
-    "specification-original/pq/*",
-    "!specification-original/pq/duplicate.parquet",
-    "!specification-original/pq/empty-name.parquet",
-    "!specification-original/pq/mixed-*.parquet",
-    "!specification-original/pq/ordered-sum.parquet",
-    "!specification-original/pq/text.parquet",
-    "!specification-original/pq/unsupported-*.parquet",
-    "!specification-original/pq/utf8*.parquet",
 )
 
 

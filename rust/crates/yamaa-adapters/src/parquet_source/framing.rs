@@ -778,7 +778,7 @@ mod tests {
             }
             bytes.push(value as u8);
         }
-        let fixture = include_bytes!("../../tests/fixtures/pq/none-1-0.parquet");
+        let fixture = super::super::test_files::file("none-1-0");
         let footer = fixture.len() - 8;
         let old_length =
             u32::from_le_bytes(fixture[footer..footer + 4].try_into().unwrap()) as usize;
