@@ -323,12 +323,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
             "columns.USUBJID.submission.value_level.OTHER.where.USUBJID.comparator"
         )]
     );
-    // An ODM XML input (P1-15).
-    study.write("spec.yaml", &spec("").replace("raw.csv", "raw.xml"));
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal("odm_xml_input", "input.RAW.path")]
-    );
 }
 
 /// A 1.0 project whose `sdtm` section composes one dataset, published as

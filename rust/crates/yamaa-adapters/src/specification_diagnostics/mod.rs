@@ -87,6 +87,7 @@ pub fn findings(
         | Error::Ordinal(_)
         | Error::OdmFields(_)
         | Error::OdmValues(_)
+        | Error::OdmSource(_)
         | Error::ProducerMetadata(_) => crate::source_diagnostics::findings(error, source),
         Error::Prepare(PrepareError::Invalid(errors)) => Ok(Some(
             errors.iter().map(|error| error.diagnostic()).collect(),
@@ -170,6 +171,12 @@ pub fn failure(error: &Error, source: Option<&SourceDeclaration>) -> Rejection {
         Error::ResourceLimit(_) => (Stage::Ingest, Fault::SourceLimit),
         Error::Sources(_) => (Stage::Ingest, Fault::SourceCollectionBoundary),
         Error::OdmFields(_) | Error::OdmValues(_) => (Stage::Ingest, Fault::OdmProjectionBoundary),
+        Error::OdmSource(crate::odm_xml::Error::Unavailable) => {
+            (Stage::Ingest, Fault::OdmReaderUnavailable)
+        }
+        // A refusal of the document is an issue above; an input's held bytes
+        // and default options leave only a table the engine cannot hold.
+        Error::OdmSource(_) => (Stage::Ingest, Fault::Internal),
         Error::ProducerContract(_) => (Stage::Ingest, Fault::ProducerContract),
         Error::ProducerMetadata(_) => (Stage::Ingest, Fault::ProducerMetadata),
     };
