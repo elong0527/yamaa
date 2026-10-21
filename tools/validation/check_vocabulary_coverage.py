@@ -32,15 +32,18 @@ MERGED = {"compute": "formula", "literal": "literal"}
 # is addressed by [N].
 IDENTITY = {"columns": "name", "intermediates": "id", "rows": "id"}
 SEGMENT = re.compile(r"\.?([^.\[\]]+)|\[(\d+)\]")
+# What `resolve` returns for a path that names no node; YAML null is a node.
+UNRESOLVED = object()
 
 
 def resolve(document, path):
-    """The node a diagnostic spec path names in a parsed document, or None."""
+    """The node a diagnostic spec path names in a parsed document, or
+    UNRESOLVED."""
     node, owner = document, None
     for name, index in SEGMENT.findall(path):
         if index:
             if not isinstance(node, list) or int(index) >= len(node):
-                return None
+                return UNRESOLVED
             node, owner = node[int(index)], None
         elif isinstance(node, dict) and name in node:
             node, owner = node[name], name
@@ -54,10 +57,10 @@ def resolve(document, path):
                 None,
             )
             if node is None:
-                return None
+                return UNRESOLVED
             owner = None
         else:
-            return None
+            return UNRESOLVED
     return node
 
 
@@ -72,7 +75,7 @@ def names_merged(operation, spec, paths):
     return any(
         surface.expression(node)[0] == MERGED[operation]
         for node in (resolve(document, path) for path in paths)
-        if isinstance(node, (str, int, float, bool))
+        if node is None or isinstance(node, (str, int, float, bool))
     )
 
 

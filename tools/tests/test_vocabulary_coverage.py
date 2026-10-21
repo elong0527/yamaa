@@ -58,8 +58,9 @@ class TestVocabularyCoverage(unittest.TestCase):
         self.assertEqual(resolve(document, "columns[1].derivation"), "DM.SEX")
         self.assertEqual(resolve(document, "columns.AGE.derivation.case[0].then"), 1)
         self.assertEqual(resolve(document, "intermediates.LAST.absent"), 0)
+        self.assertIsNone(resolve({"then": None}, "then"))
         for missing in ("columns.AGE.label", "columns.BMI", "columns[2]", "base.x"):
-            self.assertIsNone(resolve(document, missing), missing)
+            self.assertIs(resolve(document, missing), OWNER_VOCABULARY.UNRESOLVED)
 
     def test_a_1_x_negative_names_an_operation_its_grammar_text_holds(self):
         """1.0 writes `compute` and `literal` as grammar text (D18), so a 1.0
@@ -76,6 +77,7 @@ class TestVocabularyCoverage(unittest.TestCase):
                     ('"AVAL > ANRHI"', ["compute"]),
                     ("\"'H'\"", ["literal"]),
                     ("1", ["literal"]),
+                    ("null", ["literal"]),
                     ("AVAL", []),
                 ):
                     spec.write_text(
