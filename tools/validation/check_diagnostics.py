@@ -9,7 +9,8 @@ sources. These are static ownership checks, not a claim that every registered
 condition has executable release coverage.
 Condition and rule literals outside the canonical registry, the generated
 shipped schema, the generated message table and private unit tests are
-refused. A rule is a card ID, read from the shared rules model.
+refused; within the lint module, a literal its closed list of findings names
+is a finding. A rule is a card ID, read from the shared rules model.
 A condition written as a literal must also name a registered condition: the
 value of a `condition` field, key or binding, in Rust or in JSON text, outside
 the items that compile only for tests. Matching registered names alone would
@@ -42,6 +43,13 @@ MESSAGE_TABLE = Path("rust/crates/yamaa-core/src/diagnostic/message_templates.rs
 PRIVATE_TEST_MODULE = Path(
     "rust/crates/yamaa-adapters/src/file_define/publication_failure_tests.rs"
 )
+# The lint names its findings with a closed list in its own module. One finding
+# shares a registered condition's spelling (`redundant_long_form`, which the
+# lint reports where SCHEMA-15's refusal stands, P-LONG-1), so within the lint
+# module a literal that the list names is a finding, never a diagnostic.
+LINT_SOURCE = Path("rust/crates/yamaa-adapters/src/lint.rs")
+LINT_MODULE = Path("rust/crates/yamaa-adapters/src/lint")
+LINT_FINDINGS = re.compile(r"pub const FINDINGS: \[&str; \d+\] = \[(.*?)\];", re.S)
 NULL_POLICY = Path("rules/columns.md")
 NULL_START = "<!-- normative-null-conditions:start -->"
 NULL_END = "<!-- normative-null-conditions:end -->"
@@ -1172,6 +1180,21 @@ def diagnostic_literals(
     return found
 
 
+def lint_findings(root: Path) -> set[str]:
+    """The finding names the lint's closed list declares; none without it."""
+    try:
+        source = (root / LINT_SOURCE).read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    match = LINT_FINDINGS.search(source)
+    return set(re.findall(r'"([a-z][a-z0-9_]*)"', match[1])) if match else set()
+
+
+def lint_source(relative: Path) -> bool:
+    """Whether a source belongs to the lint module, which names findings."""
+    return relative == LINT_SOURCE or relative.is_relative_to(LINT_MODULE)
+
+
 def private_unit_test_source(root: Path, relative: Path) -> bool:
     """Keep relocated independent assertions outside the production literal ratchet."""
     if relative != PRIVATE_TEST_MODULE:
@@ -1380,6 +1403,7 @@ def violations(root: Path) -> list[str]:
             if path not in json_tests
         }
     )
+    findings = lint_findings(root)
     for path, source in sources.items():
         relative = path.relative_to(root).as_posix()
         crate = path.relative_to(root / "rust/crates").parts[0]
@@ -1392,6 +1416,8 @@ def violations(root: Path) -> list[str]:
             for identifier in literals:
                 if rule.fullmatch(identifier) and identifier not in defined:
                     errors.append(f"{relative}:{number}: undefined rule {identifier}")
+            if lint_source(Path(relative)):
+                literals = [name for name in literals if name not in findings]
             if (
                 Path(relative) in (REGISTRY, SHIPPED_SCHEMA, MESSAGE_TABLE)
                 or test_only

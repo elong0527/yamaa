@@ -108,7 +108,7 @@ checks a complete specification. The engine embeds them byte for byte, and
 `schema(file_type)` gives each as canonical JSON text, one line with its
 members in key order. After changing a file in `v1/`, regenerate them, then
 the copy of `v1/` and its JSON Schemas that the engine embeds and the field
-orders the lint reads from the specification classes, which `make quick`
+orders the lint reads from each file type's classes, which `make quick`
 also compares:
 
 ```sh

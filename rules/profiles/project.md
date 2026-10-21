@@ -96,7 +96,9 @@ submission metadata is ready. A section's `transport` requests the transport
 files of [Dataset-JSON](dataset-json.md#json-1) or
 [SAS Transport](xpt.md#xpt-1), which only a project submission writes
 ([PROJECT-13](#project-13)). A section's `standards` is a list, its first
-entry the guide a specification binds by default. A project file that declares
+entry the guide a specification binds by default; a specification selects
+another by name in `submission.standard`
+([DEFINE-8](define-xml.md#define-8)). A project file that declares
 `schema_version` writes one `standard` and `datasets: json` or `datasets: xpt`
 instead.
 

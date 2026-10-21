@@ -1,78 +1,195 @@
 """Generate the lint's field orders from the authoritative schema fields.
 
-`field_order` orders the root of a specification, each input dataset, the
-output, each named intermediate, each column and each row template by the
-fields their schema classes declare. A specification that declares the 1.x
-header (`yamaa`) is written in the order of the 1.0 schema in `yaml/v1/`, and
-any other in the order of the 0.5 schema in `yaml/`. This writes both sets of
-orders, each read from its schema's specification closure with every
-`fields_from` reference expanded, as constants of the Rust lint
-(`rust/crates/yamaa-adapters/src/lint/fields.rs`); the default mode compares
-the committed file with the schemas and `--write` regenerates it.
+`field_order` orders each mapping a schema class describes by the fields the
+class declares. A file that declares the 1.x header (`yamaa`) is written in
+the order of its file type's 1.0 schema in `yaml/v1/`, and any other
+specification in the order of the 0.5 schema in `yaml/`.
+
+A specification orders its root, each input dataset, the output, each named
+intermediate, each column and each row template. A project, codelists or
+function file orders its root and every mapping beneath it that a class of its
+schema describes: a field typed by a class, a list of a class or a mapping of
+a class, or by a union whose one class member describes a mapping written
+there.
+
+This writes one tree per file type and language version, each read from its
+schema's closure with every `fields_from` reference expanded, as statics of
+the Rust lint (`rust/crates/yamaa-adapters/src/lint/fields.rs`); the default
+mode compares the committed file with the schemas and `--write` regenerates
+it.
 """
 
 import argparse
 
 from tools.paths import ROOT
-from tools.validation.schema_bundle import Bundle
+from tools.validation.schema_bundle import BUILTINS, Bundle
 
 TARGET = ROOT / "rust/crates/yamaa-adapters/src/lint/fields.rs"
-# Each set of orders: its constant, the specification entry module of its
-# schema, and the files the lint reads by it.
-SCHEMAS = (
+# The classes a specification orders below its root: each root field and how
+# it holds its class.
+SPECIFICATION = (
+    ("input", "Values", "dataset_class"),
+    ("output", "Value", "output_class"),
+    ("intermediates", "Items", "intermediate_class"),
+    ("columns", "Items", "column_class"),
+    ("rows", "Items", "row_class"),
+)
+# Each tree: its static, the entry module of its schema, its root class, the
+# prefix of its classes' statics, whether it is a specification, and the
+# files the lint reads by it.
+TREES = (
     (
-        "LEGACY",
+        "LEGACY_SPEC",
         "yaml/schema.yaml",
-        "A file that declares `schema_version`, or no `yamaa`: the 0.5 schema.",
+        "root_class",
+        "LEGACY_",
+        True,
+        "A file that declares `schema_version`, or no `yamaa`: the 0.5 specification.",
     ),
     (
-        "VERSIONED",
+        "SPEC",
         "yaml/v1/schema_spec.yaml",
+        "root_class",
+        "",
+        True,
         "A specification that declares the 1.x header: the 1.0 schema.",
     ),
-)
-# Each ordered class: its member of the lint's `Orders` and its schema class.
-CLASSES = (
-    ("root", "root_class"),
-    ("dataset", "dataset_class"),
-    ("output", "output_class"),
-    ("intermediate", "intermediate_class"),
-    ("column", "column_class"),
-    ("row", "row_class"),
+    (
+        "PROJECT",
+        "yaml/v1/schema_project.yaml",
+        "project_class",
+        "",
+        False,
+        "A 1.x file that declares `type: project`.",
+    ),
+    (
+        "CODELISTS",
+        "yaml/v1/schema_codelists.yaml",
+        "codelist_file_class",
+        "",
+        False,
+        "A 1.x file that declares `type: codelists`.",
+    ),
+    (
+        "FUNCTION",
+        "yaml/v1/schema_function.yaml",
+        "function_definition_class",
+        "",
+        False,
+        "A 1.x file that declares `type: function`.",
+    ),
 )
 
 
-def orders(entry):
-    """Each ordered class's field names in the closure of the schema module
-    `entry`, `fields_from` references expanded."""
+def held_class(bundle, item, active=()):
+    """The class a mapping written for one parsed type follows: a class, or
+    the one class member of a named union; `None` when the type describes no
+    mapping of a class."""
+    if item.name in bundle.classes:
+        return item.name
+    alias = bundle.aliases.get(item.name)
+    if alias is None or "registry" in alias or item.name in active:
+        return None
+    found = {
+        held_class(bundle, member, (*active, item.name))
+        for member in bundle.members(alias)
+        if member.name not in BUILTINS and member.name not in {"list", "dict"}
+    } - {None}
+    if len(found) > 1:
+        raise ValueError(f"{item.name}: a union of classes has no one field order")
+    return found.pop() if found else None
+
+
+def holds(bundle, descriptor):
+    """How a field holds the class its value follows: `Value`, `Items` or
+    `Values`, with the class; `None` when it holds none."""
+    found = []
+    for member in bundle.members(descriptor):
+        if member.name == "list":
+            name, how = held_class(bundle, member.arguments[0]), "Items"
+        elif member.name == "dict":
+            name, how = held_class(bundle, member.arguments[1]), "Values"
+        else:
+            name, how = held_class(bundle, member), "Value"
+        if name is not None:
+            found.append((how, name))
+    if len(found) > 1:
+        raise ValueError(f"a field holding {found} has no one field order")
+    return found[0] if found else None
+
+
+def tree(entry, root, specification):
+    """Each ordered class of the tree rooted at `root`, from the closure of
+    the schema module `entry`: its fields in schema order and the
+    (field, holds, class) of each field that holds an ordered class."""
     path = ROOT / entry
     bundle = Bundle(path.parent, path.name)
-    return {
-        name: tuple(field.name for field in bundle.fields(name)) for _, name in CLASSES
-    }
+    classes = {}
+
+    def visit(name):
+        if name in classes:
+            return
+        fields = bundle.fields(name)
+        classes[name] = ([field.name for field in fields], [])
+        if specification:
+            members = SPECIFICATION if name == root else ()
+        else:
+            members = []
+            for field in fields:
+                held = holds(bundle, field.descriptor)
+                if held is not None:
+                    members.append((field.name, *held))
+        for field, how, held in members:
+            classes[name][1].append((field, how, held))
+            visit(held)
+
+    visit(root)
+    return classes
+
+
+def static(prefix, name):
+    return f"{prefix}{name.upper()}"
 
 
 def render():
     lines = [
         "// Generated by tools/packaging/generate_style_orders.py --write. Do not edit.",
         "// Authoritative sources: the class field lists of yaml/schema.yaml and of",
-        "// yaml/v1/schema_spec.yaml, each with the modules it includes.",
-        "//! The schema field orders `field_order` checks: one set per language",
-        "//! version, one order per class.",
-        "use super::checks::Orders;",
+        "// each 1.0 file type's entry module in yaml/v1/, with the modules each",
+        "// includes.",
+        "//! The schema field orders `field_order` checks: one tree per file type",
+        "//! and language version, each class with the classes its fields hold.",
+        "use super::checks::{Class, Holds};",
     ]
-    for constant, entry, files in SCHEMAS:
-        fields = orders(entry)
+    written = {}
+    for constant, entry, root, prefix, specification, files in TREES:
+        classes = tree(entry, root, specification)
         lines += [
             "",
             f"/// {files}",
-            "#[rustfmt::skip]",
-            f"pub(super) const {constant}: Orders = Orders {{",
+            f"pub(super) static {constant}: &Class = &{static(prefix, root)};",
         ]
-        for member, name in CLASSES:
-            values = ", ".join(f'"{field}"' for field in fields[name])
-            lines.append(f"    {member}: &[{values}],")
-        lines.append("};")
+        for name, (fields, members) in classes.items():
+            label = static(prefix, name)
+            body = (fields, tuple(members))
+            if label in written:
+                if written[label] != body:
+                    raise ValueError(f"{name}: two closures order it differently")
+                continue
+            written[label] = body
+            values = ", ".join(f'"{field}"' for field in fields)
+            held = "".join(
+                f'\n        ("{field}", Holds::{how}, &{static(prefix, member)}),'
+                for field, how, member in members
+            )
+            lines += [
+                "",
+                "#[rustfmt::skip]",
+                f"static {label}: Class = Class {{",
+                f"    fields: &[{values}],",
+                f"    members: &[{held}{chr(10) + '    ' if held else ''}],",
+                "};",
+            ]
     return "\n".join([*lines, ""])
 
 

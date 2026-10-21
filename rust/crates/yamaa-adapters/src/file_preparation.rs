@@ -83,6 +83,9 @@ impl std::fmt::Debug for Rejected {
     }
 }
 impl Rejected {
+    pub(crate) fn retained_metadata_sources(&self) -> crate::file_resources::RetainedSources {
+        self.resources.retain_metadata_sources()
+    }
     pub fn run(&self) -> &RejectedRun {
         &self.run
     }

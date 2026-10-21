@@ -1,0 +1,9 @@
+phase: validation
+condition: standard_model_mismatch
+spec_paths:
+  - sdtm.standards[1].name
+rule: DEFINE-6
+context:
+  value: ADaMIG-MD
+  model: SDTM
+  section: sdtm
