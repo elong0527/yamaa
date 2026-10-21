@@ -4,6 +4,10 @@
 
 use std::path::PathBuf;
 
+#[cfg(unix)]
+#[path = "support/scratch.rs"]
+mod scratch;
+
 use yamaa::{lint, Array, DataType, Int64Array, StringArray, Table, LINT_COLUMNS, LINT_FINDINGS};
 
 const CANONICAL: &str = "schema_version: \"1.0\"\ndomain: DM\nkeys: [USUBJID]\ninput:\n  DM: input/dm.csv\n\noutput:\n  path: dm.csv\n  columns: [USUBJID]\n\ncolumns:\n  - name: USUBJID\n    type: str\n    label: Unique Subject Identifier\n    derivation: DM.USUBJID\n";
@@ -364,4 +368,83 @@ fn a_1_0_file_is_fixed_to_its_canonical_spellings() {
         "0 lint findings in 0 of 1 file; fixed 1 file"
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), SPELLED);
+}
+
+/// P-PRINT-1 rule 3 and P-LINT-2: a caller parent alias changes display only.
+#[cfg(unix)]
+#[test]
+fn parent_alias_findings_print_relative_while_fix_keeps_the_written_path() {
+    const WRITTEN: &str = "schema_version: \"1.0\"\ndomain: DM\noutput:\n  path: dm.csv\n";
+    const FIXED: &str = "schema_version: \"1.0\"\ndomain: DM\n\noutput:\n  path: dm.csv\n";
+    let cwd =
+        yamaa_adapters::canonical_path::canonicalize(std::env::current_dir().unwrap()).unwrap();
+    let study = scratch::Scratch::under(&cwd, "lint-alias-study");
+    let aliases = scratch::Scratch::new("lint-alias-caller");
+    std::fs::create_dir(study.path().join("nested")).unwrap();
+    let alias = aliases.path().join("study");
+    let nested_alias = aliases.path().join("nested");
+    std::os::unix::fs::symlink(study.path(), &alias).unwrap();
+    std::os::unix::fs::symlink(study.path().join("nested"), &nested_alias).unwrap();
+    let root = study.path().file_name().unwrap().to_str().unwrap();
+    for (given, source, relative, label) in [
+        (
+            alias.join("spec.yaml"),
+            study.path().join("spec.yaml"),
+            format!("{root}/spec.yaml"),
+            "parent alias",
+        ),
+        (
+            nested_alias.join("spec.yaml"),
+            study.path().join("nested/spec.yaml"),
+            format!("{root}/nested/spec.yaml"),
+            "alias targets nested directory",
+        ),
+    ] {
+        std::fs::write(&source, WRITTEN).unwrap();
+        let written = given.to_str().unwrap().to_owned();
+        for fix in [false, true] {
+            let linted = lint(std::slice::from_ref(&written), fix).unwrap();
+            let actual = (
+                rows(&linted.table()),
+                linted
+                    .findings()
+                    .iter()
+                    .map(yamaa::LintFinding::text)
+                    .collect::<Vec<_>>(),
+                linted.files(),
+                linted.summary(),
+                linted.rewritten().to_vec(),
+                std::fs::read_to_string(&source).unwrap(),
+            );
+            let expected = if fix {
+                (
+                    vec![],
+                    vec![],
+                    1,
+                    "0 lint findings in 0 of 1 file; fixed 1 file".to_owned(),
+                    vec![written.clone()],
+                    FIXED.to_owned(),
+                )
+            } else {
+                (
+                    vec![(
+                        written.clone(),
+                        3,
+                        1,
+                        "root_spacing".to_owned(),
+                        "output".to_owned(),
+                        "leave one blank line before `output`".to_owned(),
+                    )],
+                    vec![format!(
+                        "{relative}:3:1: root_spacing leave one blank line before `output`"
+                    )],
+                    1,
+                    "1 lint finding in 1 of 1 file".to_owned(),
+                    vec![],
+                    WRITTEN.to_owned(),
+                )
+            };
+            assert_eq!(actual, expected, "{label}, fix={fix}");
+        }
+    }
 }
