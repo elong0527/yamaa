@@ -31,7 +31,6 @@ before completing it:
     str_extract:
       source: AE.AESTDTC
       pattern: "^[^/]+"
-      missing: {literal: null}
 ```
 
 and complete `ASTDTC` instead of `AE.AESTDTC`. If an onset recorded as a
