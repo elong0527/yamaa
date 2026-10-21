@@ -130,6 +130,8 @@ steps and the review gate.
 - **Prove engine changes on the exact head.** CI's `equivalence` and
   `conversion` jobs, green on the exact head, are the proof for every
   session, and no session needs to run them locally (D148 on #3030).
+  The `equivalence` job means its two legs, `equivalence (python)` and
+  `equivalence (r)`, both green.
 - **Bring the branch up to date before merging**, wait for green CI on
   that exact head, then run the review gate. When no review bot can
   review, another agent, never the author, reviews the exact diff and
