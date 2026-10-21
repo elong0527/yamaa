@@ -127,9 +127,9 @@ impl OriginDefinition {
 #[derive(Clone, Debug)]
 pub struct ValueDefinition {
     pub(crate) id: String,
-    /// Each where column's position in the dataset's columns and the values
-    /// it admits, in written order.
-    pub(crate) clause: Vec<(usize, Vec<String>)>,
+    /// Each where column's position in the dataset's columns, the values it
+    /// lists and whether it excludes them (`NE`, `NOTIN`), in written order.
+    pub(crate) clause: Vec<crate::dataset::WhereTerm>,
     pub(crate) path: String,
     pub(crate) column: Column,
 }
@@ -321,9 +321,9 @@ impl ValueDefinition {
     pub fn id(&self) -> &str {
         &self.id
     }
-    /// Each where column's position in the dataset's columns and the values
-    /// it admits, in written order.
-    pub fn clause(&self) -> &[(usize, Vec<String>)] {
+    /// Each where column's position in the dataset's columns, the values it
+    /// lists and whether it excludes them (`NE`, `NOTIN`), in written order.
+    pub fn clause(&self) -> &[crate::dataset::WhereTerm] {
         &self.clause
     }
     /// The entry's spec path.
@@ -334,13 +334,15 @@ impl ValueDefinition {
         &self.column
     }
     /// Whether the entry's where clause selects a row: `holds` answers whether
-    /// the row's value of one where column is one of the listed values.
+    /// the row's value of one where column is one of the listed values, and
+    /// an `NE` or `NOTIN` term selects the rows where it is not, a missing
+    /// value included (SUB-12).
     pub(crate) fn selects<E>(
         &self,
         mut holds: impl FnMut(usize, &[String]) -> Result<bool, E>,
     ) -> Result<bool, E> {
-        for (column, values) in &self.clause {
-            if !holds(*column, values)? {
+        for term in &self.clause {
+            if holds(term.column, &term.values)? == term.excludes {
                 return Ok(false);
             }
         }
@@ -1360,6 +1362,12 @@ fn compose_values(
                         let refused = refused.iter().map(|value| text(value)).collect();
                         ("values", crate::json::Value::Array(refused))
                     }));
+                    // The comparator whose value count is refused.
+                    context.extend(
+                        fault
+                            .comparator()
+                            .map(|comparator| ("comparator", text(comparator))),
+                    );
                     (
                         ConditionCode::SubmissionValueWhereInvalid,
                         column.map_or_else(
@@ -1405,14 +1413,14 @@ fn compose_values(
                     positions
                         .iter()
                         .position(|column| column == &term.column.value)
-                        .map(|index| {
-                            (
-                                index,
-                                term.values
-                                    .iter()
-                                    .map(|value| value.value.clone())
-                                    .collect(),
-                            )
+                        .map(|index| crate::dataset::WhereTerm {
+                            column: index,
+                            values: term
+                                .values
+                                .iter()
+                                .map(|value| value.value.clone())
+                                .collect(),
+                            excludes: term.comparator.excludes(),
                         })
                 })
                 .collect::<Option<Vec<_>>>();

@@ -192,8 +192,8 @@ fn traversal<'a, T>(
 
 /// The refusal of a specification that declares the 1.x header (#3030 D76),
 /// whose entry file is `entry`: a finding in the entry or the resolved
-/// specification, a layer's traversal, a clear finding in the layer that
-/// writes it, or a 1.0 feature the engine does not build yet.
+/// specification, a layer's traversal, or a clear finding in the layer that
+/// writes it.
 fn versioned_failure_ref<'a, T>(
     schema: &SchemaStructure,
     entry: &str,
@@ -231,17 +231,6 @@ fn versioned_failure_ref<'a, T>(
             crate::document::ProducerFailure::Preparation(error) => return failure_ref(error),
             crate::document::ProducerFailure::Host(error) => return Err(error),
         },
-        V::Unsupported(features) => Rejection::Unsupported(
-            features
-                .iter()
-                .map(|feature| {
-                    yamaa_core::application_issue::unsupported(
-                        &feature.operation,
-                        Some(&feature.path),
-                    )
-                })
-                .collect(),
-        ),
     })
 }
 

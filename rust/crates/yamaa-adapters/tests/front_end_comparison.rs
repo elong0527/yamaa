@@ -1232,7 +1232,7 @@ fn a_converted_value_level_comparator_stays_on_the_tree() {
         [
             (
                 "GLUC",
-                Comparator::NotIn,
+                Comparator::Ne,
                 vec!["GLUC"],
                 "columns.AVAL.submission.value_level.GLUC.where.PARAMCD.values[0]".to_string()
             ),
