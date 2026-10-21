@@ -60,14 +60,15 @@ HOSTS = {
 # each crate under the license that the notices and inventory name.
 VENDORED_GNU = {
     "zstd-sys": (
-        "the bundled zstd C sources say that zstd is offered under BSD-3-Clause "
-        "or GPL-2.0-only, and zstd/COPYING holds the GPL-2.0 text; yamaa relies "
-        "on BSD-3-Clause"
+        "the headers of the bundled zstd sources say that zstd is offered under "
+        "BSD-3-Clause or GPL-2.0-only; yamaa relies on BSD-3-Clause, and "
+        "tools/staging/vendor_crates.py leaves out the GPL-2.0 text"
     ),
     "zstd": "its Readme says that the zstd C library is dual BSD/GPLv2 licensed",
     "r-efi": (
-        "offered under MIT, Apache-2.0 or LGPL-2.1-or-later; yamaa relies on MIT, "
-        "and no supported target compiles it"
+        "no supported target compiles it, so the packages keep only its "
+        "manifest, which Cargo reads to resolve the lock and which offers "
+        "LGPL-2.1-or-later beside MIT and Apache-2.0; yamaa relies on MIT"
     ),
     "pyo3": "its changelog says that the MIT OR Apache-2.0 license is GPLv2-compatible",
     "num-bigint": "its README names the license of rug, another crate",

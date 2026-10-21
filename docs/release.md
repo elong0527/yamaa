@@ -898,12 +898,25 @@ is R's, not the package's (#3030 D140). The package's
 names no stripping, and `check_cargo_lock` refuses an R source package whose
 Makevars or Cargo profile would strip.
 
-CRAN's policy admits no binary executable code in a source package, and
-neither package carries any: the vendoring script leaves out the prebuilt
-WebAssembly objects that `wit-bindgen` ships, a crate that only wasm32 targets
-build, and stops on any other prebuilt binary until it is reviewed. Cargo's
+The vendoring script keeps whole only the crates that a build for one of the
+supported targets (`check_minimum_rust.TARGETS`) compiles, as Cargo resolves
+them for each target: the crates that the target links, with their procedural
+macros and their build scripts' dependencies (#3368). Each other crate, such
+as `r-efi`, `windows-core` and the WebAssembly and WASI crates, keeps only its
+manifest, which Cargo reads to resolve the lock. Where the manifest leaves its
+library to Cargo's discovery of `src/lib.rs`, an empty `src/lib.rs` takes the
+place of the crate's, so neither package carries any of those crates' code.
+The script then checks that Cargo resolves the lock offline from what remains.
+It also leaves out the license texts that a crate ships for an alternative to
+the license that yamaa relies on, which `ALTERNATIVE_LICENSES` lists: zstd's
+`COPYING`, the text of the license that zstd offers beside BSD-3-Clause (#3030
+D136). CRAN's policy admits no binary executable code in a source package, and
+neither package carries any: the prebuilt WebAssembly objects of `wit-bindgen`,
+a crate that only wasm32 targets build, leave with the rest of that crate, and
+a binary in a crate that a supported target compiles stops vendoring. Cargo's
 `.cargo-checksum.json` files stay as Cargo wrote them, apart from the entries
-of the files left out, binaries and toolchain files; the package checksum
+of the files left out, and do not list an empty `src/lib.rs` that the script
+writes; the package checksum
 stays too. Like the checksums in `Cargo.lock`, they belong to the packaging
 tool, and the script computes no digest of its own. `inst/AUTHORS`, written
 at staging from `cargo metadata`, gives every crate that the R package
@@ -930,7 +943,8 @@ beside the executable. `LICENSE.txt` is the project's MIT license.
 links: its normal dependency closure on each supported target, without
 procedural macros. Crates that only build scripts or procedural macros use,
 and crates of other platforms, are not linked and are not listed; the source
-packages carry their license files with their vendored sources. Each entry
+packages carry the license files of those that a supported target compiles
+with their vendored sources, and only the manifests of the others. Each entry
 names the one license that yamaa relies on, never the choice that the crate
 offers, and reproduces the license, copyright and NOTICE texts that the crate
 ships for it (#3364). The Python packages' copy covers the Python binding's
@@ -976,10 +990,10 @@ package with any text that names a GNU license, the files inside the R source
 package's `vendor.tar.xz` included. The exceptions are the unchanged
 upstream files of the vendored crates that
 `tools/packaging/check_package_notices.py` lists with its reasons: zstd's
-dual-licensed C sources, `r-efi`, and README or changelog prose; and an R
-binary package's namespace loader, `yamaa/R/yamaa`, which R writes itself
-from its own `share/R/nspackloader.R`, whose header names the GPL that R is
-under.
+dual-licensed sources, the manifest of `r-efi`, and README or changelog
+prose; and an R binary package's namespace loader, `yamaa/R/yamaa`, which R
+writes itself from its own `share/R/nspackloader.R`, whose header names the
+GPL that R is under.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the

@@ -7,10 +7,11 @@
 # that they reach on any platform with any feature, all vendored. The crates
 # that only build scripts and procedural macros use are shipped and compiled
 # with the rest. The crates that Cargo locks for a platform or a feature that
-# no yamaa build selects are shipped without being compiled. Each of them has
-# a purpose too. The command line has no source archive; its trimmed lock,
-# with yamaa-cli in place of a binding crate, is the graph that its binaries
-# build from, and its inventory lists it too.
+# no yamaa build selects are shipped as their manifests alone, never compiled
+# (tools/staging/vendor_crates.py). Each of them has a purpose too. The
+# command line has no source archive; its trimmed lock, with yamaa-cli in
+# place of a binding crate, is the graph that its binaries build from, and
+# its inventory lists it too.
 #
 # A purpose is a short phrase written from the crate's place in yamaa's
 # graph. From rust/, `cargo tree --locked --offline --workspace --target all
