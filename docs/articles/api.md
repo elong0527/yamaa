@@ -292,9 +292,11 @@ specification's dataset without linking it through `schema`.
 ## Project execution
 
 `run()` builds every specification in the section you name, `"sdtm"`, `"adam"`
-or `"send"`, in dependency order. Without a name, it builds every section. As
-with `spec()`, a later `run()` reuses what earlier runs of the same project
-object compiled, and compiles again any specification whose files changed.
+or `"send"`, in dependency order. Without a name, it builds every section.
+Naming a section the project does not declare, in `run()` or `submission()`,
+raises an error that lists the sections it declares. As with `spec()`, a later
+`run()` reuses what earlier runs of the same project object compiled, and
+compiles again any specification whose files changed.
 Its `save()` writes each specification's run report and dataset in run order,
 or only the run reports when any specification failed, and returns the paths it
 wrote. It checks every target before it writes anything.

@@ -13,12 +13,12 @@ from tools.paths import WORKSPACE
 CHECK_COMPONENTS = ("clippy", "rustfmt")
 
 
-def declaration():
-    return tomllib.loads((WORKSPACE / "rust-toolchain.toml").read_text())["toolchain"]
+def declaration(workspace=WORKSPACE):
+    return tomllib.loads((workspace / "rust-toolchain.toml").read_text())["toolchain"]
 
 
-def channel():
-    return declaration()["channel"]
+def channel(workspace=WORKSPACE):
+    return declaration(workspace)["channel"]
 
 
 def minimum():

@@ -20,6 +20,7 @@ import unittest
 from pathlib import Path
 
 from tools.ci import toolchain
+from tools.packaging import generate_component_inventory as inventory
 from tools.packaging.check_cargo_lock import check_r_link
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import vendor_crates
@@ -28,6 +29,9 @@ PACKAGE = ROOT / "R/yamaa"
 RSCRIPT = shutil.which("Rscript")
 MAKE = shutil.which("make")
 SYSTEM_PATH = "/usr/bin:/bin"
+SH = shutil.which("sh", path=SYSTEM_PATH)
+# The component inventory that the source package carries and R installs.
+INVENTORY = "inst/COMPONENTS.tsv"
 
 
 def rust_toolchain():
@@ -101,7 +105,12 @@ class ConfigureTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.package = self.root / "yamaa"
-        for relative in ("tools/configure.R", "src/Makevars.in", "src/Makevars.win.in"):
+        for relative in (
+            "tools/configure.R",
+            "src/Makevars.in",
+            "src/Makevars.win.in",
+            INVENTORY,
+        ):
             (self.package / relative).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(PACKAGE / relative, self.package / relative)
         self.manifest(toolchain.minimum())
@@ -143,6 +152,16 @@ class ConfigureTests(unittest.TestCase):
 
     def makevars(self, name="Makevars"):
         return (self.package / "src" / name).read_text(encoding="utf-8")
+
+    def inventory_text(self):
+        """The package's inventory, as R would install it."""
+        return (self.package / INVENTORY).read_bytes().decode("utf-8")
+
+    def files(self):
+        """The bytes of every file below the temporary root, by path."""
+        return {
+            path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()
+        }
 
     def assert_refused(self, result, *phrases):
         self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -446,6 +465,147 @@ class ConfigureTests(unittest.TestCase):
                     f"\nCARGO_ENV = MACOSX_DEPLOYMENT_TARGET={target}\n",
                     self.makevars(),
                 )
+
+    def test_the_inventory_names_the_standard_library_that_rustc_reports(self):
+        # R installs inst/COMPONENTS.tsv with the package, so configure names
+        # there the standard library that rustc links into it (#3030 D117):
+        # one rust-std row with the release that rustc reports, after the
+        # source package's rows, which is what check_package_notices requires
+        # of an R binary package built with the pinned toolchain.
+        committed = (PACKAGE / INVENTORY).read_text(encoding="utf-8")
+        self.assertNotIn("\nrust-std\t", committed)
+        major, minor, _ = map(int, toolchain.minimum().split("."))
+        tool(self.bin, "cargo", f"cargo {toolchain.channel()} (5f94df478 2026-08-27)")
+        for line, release in (
+            (
+                f"rustc {toolchain.channel()} (58cf8f9c3 2026-10-13)",
+                toolchain.channel(),
+            ),
+            (
+                f"rustc {toolchain.minimum()} (4d91de4e4 2024-10-15) (built from a "
+                "source tarball)",
+                toolchain.minimum(),
+            ),
+        ):
+            with self.subTest(release=release):
+                shutil.copyfile(PACKAGE / INVENTORY, self.package / INVENTORY)
+                tool(self.bin, "rustc", line)
+                result = self.configure("main(windows = FALSE, darwin = FALSE)")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    self.inventory_text(),
+                    inventory.installed_inventory(committed, release),
+                )
+        # A pre-release keeps its suffix: its standard library is not the
+        # release's.
+        nightly = f"{major}.{minor + 1}.0-nightly"
+        tool(self.bin, "rustc", f"rustc {nightly} (00000000 2026-01-01)")
+        result = self.configure("main(windows = FALSE, darwin = FALSE)")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        *rows, row = self.inventory_text().splitlines(keepends=True)
+        self.assertEqual("".join(rows), committed)
+        self.assertEqual(
+            row.split("\t"),
+            [
+                "rust-std",
+                nightly,
+                "MIT OR Apache-2.0",
+                f"https://github.com/rust-lang/rust at {nightly}",
+                inventory.INSTALLED_PURPOSE + "\n",
+            ],
+        )
+
+    def test_a_rerun_leaves_one_standard_library_row(self):
+        # R CMD INSTALL configures a package directory each time that it
+        # installs from it, with the same rustc or another. The inventory
+        # keeps one row, for the rustc of the last run.
+        committed = (PACKAGE / INVENTORY).read_text(encoding="utf-8")
+        tool(self.bin, "cargo", f"cargo {toolchain.channel()} (5f94df478 2026-08-27)")
+        for release in (toolchain.channel(), toolchain.channel(), toolchain.minimum()):
+            tool(self.bin, "rustc", f"rustc {release} (58cf8f9c3 2026-10-13)")
+            result = self.configure("main(windows = FALSE, darwin = FALSE)")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                self.inventory_text(),
+                inventory.installed_inventory(committed, release),
+            )
+            self.assertEqual(self.inventory_text().count("\nrust-std\t"), 1)
+
+    def test_configure_writes_only_its_makevars_and_the_inventory(self):
+        # CRAN's policy admits no writing outside the build tree and the
+        # temporary directory (#3119, #3030 D86). In the package, configure
+        # writes the Makevars and the inventory that R installs, and nothing
+        # else.
+        sysroot = self.root / "sysroot"
+        library = sysroot / "lib/rustlib/x86_64-pc-windows-gnu/lib"
+        library.mkdir(parents=True)
+        (library / "libstd-0123456789abcdef.rlib").write_bytes(b"")
+        line = f"{toolchain.channel()} (58cf8f9c3 2026-10-13)"
+        for suffix in ("", ".exe"):
+            tool(self.bin, "rustc" + suffix, f"rustc {line}", sysroot=sysroot)
+            tool(self.bin, "cargo" + suffix, f"cargo {line}")
+        for platform, name in (
+            ("windows = FALSE, darwin = FALSE", "Makevars"),
+            ("windows = FALSE, darwin = TRUE", "Makevars"),
+            ("windows = TRUE, darwin = FALSE", "Makevars.win"),
+        ):
+            with self.subTest(platform=platform):
+                (self.package / "src" / name).unlink(missing_ok=True)
+                shutil.copyfile(PACKAGE / INVENTORY, self.package / INVENTORY)
+                before = self.files()
+                result = self.configure(f"main({platform})")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                after = self.files()
+                self.assertEqual(
+                    {
+                        path
+                        for path in before.keys() | after.keys()
+                        if before.get(path) != after.get(path)
+                    },
+                    {self.package / "src" / name, self.package / INVENTORY},
+                )
+
+    def test_a_package_without_its_inventory_is_refused(self):
+        tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
+        tool(self.bin, "cargo", "cargo 1.99.1 (5f94df478 2026-08-27)")
+        (self.package / INVENTORY).unlink()
+        self.assert_refused(
+            self.configure(),
+            "inst/COMPONENTS.tsv is missing; the package must carry its component "
+            "inventory.",
+        )
+
+    @unittest.skipIf(SH is None, "no POSIX shell")
+    def test_cleanup_restores_the_inventory_that_the_source_package_carries(self):
+        # R CMD build runs cleanup, so a package directory that has been
+        # configured still builds a source archive with the committed
+        # inventory, which check_package_notices requires. "Writing R
+        # Extensions" asks for a cleanup that removes what configure creates.
+        committed = (PACKAGE / INVENTORY).read_bytes()
+        tool(self.bin, "rustc", "rustc 1.99.1 (58cf8f9c3 2026-10-13)")
+        tool(self.bin, "cargo", "cargo 1.99.1 (5f94df478 2026-08-27)")
+        for name in ("cleanup", "cleanup.win"):
+            shutil.copy2(PACKAGE / name, self.package / name)
+            with self.subTest(script=name):
+                result = self.configure("main(windows = FALSE, darwin = FALSE)")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotEqual((self.package / INVENTORY).read_bytes(), committed)
+                # Again on the cleaned directory, where it changes nothing.
+                for _ in range(2):
+                    cleaned = subprocess.run(
+                        [SH, name],
+                        cwd=self.package,
+                        env={"PATH": SYSTEM_PATH, "LANG": "C"},
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(cleaned.returncode, 0, cleaned.stderr)
+                    self.assertEqual((self.package / INVENTORY).read_bytes(), committed)
+                    self.assertEqual(
+                        [path.name for path in (self.package / "inst").iterdir()],
+                        ["COMPONENTS.tsv"],
+                    )
+                    self.assertFalse((self.package / "src/Makevars").exists())
 
     def test_the_build_stays_in_the_package_whatever_cargo_target_dir_says(self):
         # CRAN's policy admits no writing outside the build tree and the

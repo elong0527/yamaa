@@ -107,17 +107,17 @@ that row derivation, naming the column.
 
 ### SPEC-6. A row-local column-level derivation is a default that each row template may override
 
-A column-level derivation is row-local unless it uses a lookup, an aggregate
-or a window, reads a `SELF` intermediate, or reads a column whose
-column-level derivation is not row-local. A row-local column-level derivation
-is its column's default when a `rows` entry names the column or a row-phase
-context reads it; an entry's own derivation overrides the default for that
-entry's rows only, and other entries inherit it. Any other column-level
-derivation keeps its column-phase meaning, and a `rows` entry naming its
-column fails.
+A column-level derivation is row-local unless it is an aggregate, holds a
+window operation, or reads a `SELF` intermediate or a column whose
+column-level derivation is not row-local; a read through the implicit join or
+an input-backed named intermediate is row-local. A structured `source` reads
+its `between` value. A row-local column-level derivation is its column's
+default for every `rows` entry that names the column or whose row-phase
+context reads it, and an entry's own derivation overrides it. Any other keeps
+its column-phase meaning; a `rows` entry naming its column fails.
 
 Fails: `duplicate_derivation`.
-Evidence: `schema-rows-override`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`.
+Evidence: `schema-rows-override`, `schema-lookup-source-range-default`, `rust/crates/yamaa-core/tests/project_specification.rs`, `rust/crates/yamaa-adapters/tests/fixtures/row_intermediate_reference.json`, `rust/crates/yamaa-adapters/tests/execution_row_phase_reads.rs`, `rust/crates/yamaa-core/src/specification/phases.rs::a_template_cannot_replace_a_default_that_is_not_row_local`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_s_range_value_brings_its_default_into_the_row_phase`, `rust/crates/yamaa-core/src/specification/phases.rs::a_structured_source_whose_range_value_reads_a_window_is_not_row_local`.
 
 The rule applies to output and internal columns alike. A row-phase context is
 one of these:
@@ -129,10 +129,20 @@ one of these:
   derivation reads ([LOOKUP-2](lookup.md#lookup-2)), and of each further
   intermediate that such a `between` value reads.
 
-A read of a named intermediate backed by an input dataset, including a read
-through another row-local column, may be such a default. A column-level read
-of a `SELF` intermediate keeps its column-phase meaning under
-[LOOKUP-7](lookup.md#lookup-7). A default's own reads of
+A window operation makes its derivation not row-local as the whole expression
+or as a `case` result, and an aggregate only as the whole expression. A
+structured `source`'s `between` value is a read of the derivation that holds
+the source, whether the source is that whole derivation or a `case` result in
+it. A row-local default that the value names therefore completes in the row
+phase of each `rows` entry whose row-phase context holds the source, and a
+column-level derivation whose `between` value reads a column that is not
+row-local is not row-local either.
+
+An entry's own derivation replaces the default for that entry's rows only,
+and the other entries inherit it. A read of a named intermediate backed by an
+input dataset, including a read through another row-local column, may be such
+a default. A column-level read of a `SELF` intermediate keeps its column-phase
+meaning under [LOOKUP-7](lookup.md#lookup-7). A default's own reads of
 column-level columns make those derivations defaults too. A qualified field
 or a literal that only spells a column's name does not read that column. An
 inherited default is evaluated in the inheriting `rows` entry's scope, exactly

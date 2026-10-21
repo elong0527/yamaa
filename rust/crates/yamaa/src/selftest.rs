@@ -22,7 +22,9 @@
 //!   compares it, since its bytes depend on the writer that authored it:
 //!   each column's stored schema (its physical type, logical and converted
 //!   type annotations, and definition and repetition levels), then the
-//!   values, floats by their bits.
+//!   values, floats by their bits. The engine's reader reads NaN and the
+//!   infinities as missing (VALUE-4), so here a stored NaN equals a missing
+//!   value, as for the memory-route runner but not the public one.
 //! - A negative case passes when its first issue matches its
 //!   `expected/error.yaml` as the conformance runners match it: the phase,
 //!   condition and spec paths exactly, the rule when the file names one, and
@@ -894,6 +896,33 @@ mod tests {
         );
     }
 
+    /// The SAS transport case compares what the SAS reader decoded: a stored
+    /// number that decodes otherwise, AGE 24 stored as 25, fails its case.
+    #[test]
+    fn a_changed_transport_number_fails_its_case() {
+        let case = edited("schema-source-xpt", |files, _| {
+            let (_, bytes) = files
+                .iter_mut()
+                .find(|(name, _)| *name == "input/adsl_raw.xpt")
+                .unwrap();
+            // The first observation follows 22 records: eight header records,
+            // the seven NAMESTRs in 13 and the observation header. AGE, at
+            // byte 40, holds the IBM double 24: exponent 0x42, fraction 0x18.
+            let age = 22 * 80 + 40;
+            assert_eq!(bytes[age..age + 8], [0x42, 0x18, 0, 0, 0, 0, 0, 0]);
+            bytes[age + 1] = 0x19;
+        });
+        if !compiled(&case) {
+            return;
+        }
+        let outcome = run(&case, &engine_info());
+        assert_eq!(outcome.status, Status::Failed);
+        assert_eq!(
+            outcome.message.as_deref(),
+            Some("the output bytes of adsl.csv differ from the expected bytes")
+        );
+    }
+
     /// A Parquet file is compared by how it stores each column and by what it
     /// holds, never by its bytes, which the listed case's saved file does not
     /// share with the authored one: a file whose columns are stored otherwise
@@ -1129,20 +1158,20 @@ mod tests {
         let result = SelfTest::new(
             &[case, edited("adam-adsl-xpt", |_, _| {})],
             vec![outcome.clone(), passed.clone()],
-            &["odm", "readstat"],
+            &["odm"],
             info.clone(),
         );
         assert_eq!(result.status(), Status::Succeeded);
         // csv is covered by the case that ran; the skipped case's other
         // adapter is not.
-        assert_eq!(result.not_covered(), ["odm", "readstat", "unbuilt-adapter"]);
+        assert_eq!(result.not_covered(), ["odm", "unbuilt-adapter"]);
         assert_eq!(result.cases(), [outcome, passed]);
         let languages = info.language_versions.join(", ");
         assert_eq!(
             result.summary().to_string(),
             format!(
                 "yamaa selftest: succeeded, 1 of 2 cases passed\n\
-                 not covered: odm, readstat, unbuilt-adapter\n\
+                 not covered: odm, unbuilt-adapter\n\
                  engine {}, language {languages}, python 3.12.4, {}",
                 crate::VERSION,
                 info.platform

@@ -10,9 +10,28 @@
 # and when either is missing or too old it stops and asks the user to install
 # them. It never installs Rust, and RUSTUP_AUTO_INSTALL=0 stops rustup from
 # installing a toolchain that a rust-toolchain.toml file names.
+#
+# It also names the Rust standard library that rustc links into the package in
+# the component inventory that R installs (record_standard_library).
 
 # The Rust target that Rtools' GCC and UCRT link on Windows.
 WINDOWS_TARGET <- "x86_64-pc-windows-gnu"
+
+# The component inventory that R installs at the package root.
+INVENTORY <- file.path("inst", "COMPONENTS.tsv")
+# The inventory row of the Rust standard library: rustup's name for it, the
+# license and source that the Python wheels' row gives it, and its purpose.
+# installed_inventory() in the yamaa repository's
+# tools/packaging/generate_component_inventory.py writes the same row, and
+# the release checks compare the R binary packages' inventories with it.
+STANDARD_LIBRARY <- "rust-std"
+STANDARD_LIBRARY_LICENSE <- "MIT OR Apache-2.0"
+RUST_REPOSITORY <- "https://github.com/rust-lang/rust"
+STANDARD_LIBRARY_PURPOSE <- paste(
+  "the Rust standard library (core, alloc and std) of the toolchain that",
+  "compiled this package, statically linked into its native code; configure",
+  "adds this row at installation with the version that rustc reports"
+)
 
 # The rust-version that src/rust/Cargo.toml declares, as major.minor.patch.
 minimum_rust <- function(manifest = file.path("src", "rust", "Cargo.toml")) {
@@ -133,6 +152,35 @@ has_target <- function(rustc, target) {
                     pattern = "^libstd-.*[.]rlib$")) > 0L
 }
 
+# The release that a `rustc --version` line reports: its second word, with any
+# pre-release suffix such as -nightly.
+release_of <- function(line) {
+  sub("^rustc ([^[:space:]]+).*$", "\\1", line)
+}
+
+# Append the row of the Rust standard library that rustc links to the
+# component inventory that R installs: rust-std with the release that rustc
+# reports. The source package's inventory cannot name it, because a build
+# from the source package links the standard library of whatever toolchain
+# builds it, so each installation names its own. Rows that an earlier run in
+# this directory appended are dropped first, so the inventory gets exactly
+# one; cleanup drops it again. The file stays LF-terminated text.
+record_standard_library <- function(release, inventory = INVENTORY) {
+  if (!file.exists(inventory)) {
+    stop_with(sprintf("%s is missing; the package must carry its component inventory.",
+                      inventory))
+  }
+  lines <- readLines(inventory, warn = FALSE)
+  lines <- lines[!startsWith(lines, paste0(STANDARD_LIBRARY, "\t"))]
+  row <- paste(STANDARD_LIBRARY, release, STANDARD_LIBRARY_LICENSE,
+               paste(RUST_REPOSITORY, "at", release), STANDARD_LIBRARY_PURPOSE,
+               sep = "\t")
+  connection <- file(inventory, "wb")
+  on.exit(close(connection))
+  writeLines(c(lines, row), connection, useBytes = TRUE)
+  invisible(inventory)
+}
+
 # A path as make reads it in a recipe: forward slashes and "$" doubled.
 make_path <- function(path) {
   gsub("$", "$$", gsub("\\", "/", path, fixed = TRUE), fixed = TRUE)
@@ -219,6 +267,7 @@ main <- function(windows = .Platform$OS.type == "windows",
       sprintf("Add it, for a rustup installation with: rustup target add %s", WINDOWS_TARGET)
     )
   }
+  record_standard_library(release_of(rustc$version))
   # cc-rs otherwise selects the current SDK's minimum macOS version for the C
   # code that crates compile, which can be newer than R's link target: match
   # Rust's arm64 floor unless the caller sets one.

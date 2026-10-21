@@ -6,7 +6,8 @@ use std::collections::BTreeSet;
 use yamaa_core::diagnostic::{ConditionCode, Diagnostic, InheritanceFinding as F};
 use yamaa_core::json::Value as JsonValue;
 use yamaa_core::language::{
-    read_header, FileType, LanguageVersion, PathBase, Reference, ReferenceFault, LANGUAGE_VERSION,
+    read_declared_header, read_header, FileType, LanguageVersion, PathBase, Reference,
+    ReferenceFault, LANGUAGE_VERSION,
 };
 use yamaa_core::schema::{
     DocumentNode as N, SchemaContext as C, SchemaDiagnostic, SchemaModule, SchemaStructure,
@@ -113,6 +114,55 @@ pub fn reached() -> BTreeSet<ConditionCode> {
         [
             ("type", C::InputValue(kind)),
             ("expected", C::Text("spec".into())),
+        ]
+    );
+
+    // The file whose type a call reads before anything reads it, as the
+    // command line dispatches on it (#3030 D122): a 0.5 file declares no
+    // type, at its `schema_version`, and a type naming none of the four is
+    // unexpected where any is expected (SCHEMA-2).
+    let legacy = T::map(vec![("schema_version", T::text("1.0"))]).document();
+    let finding = read_declared_header(&legacy, LANGUAGE_VERSION)
+        .unwrap_err()
+        .finding();
+    schema_finding(
+        &mut reached,
+        &finding,
+        "schema_version",
+        "unsupported_language_version",
+        "SCHEMA-2",
+    );
+    assert_eq!(
+        finding.context,
+        [
+            ("version", C::Text("0.5".into())),
+            ("language_versions", C::TextList(vec!["1.0".into()])),
+        ]
+    );
+    let unknown = header("1.0", "environment").document();
+    let finding = read_declared_header(&unknown, LANGUAGE_VERSION)
+        .unwrap_err()
+        .finding();
+    schema_finding(
+        &mut reached,
+        &finding,
+        "type",
+        "unexpected_file_type",
+        "SCHEMA-2",
+    );
+    let kind = unknown.field(unknown.root(), "type").unwrap();
+    assert_eq!(
+        finding.context,
+        [
+            ("type", C::InputValue(kind)),
+            (
+                "expected",
+                C::TextList(
+                    ["spec", "project", "codelists", "function"]
+                        .map(String::from)
+                        .into()
+                )
+            ),
         ]
     );
 

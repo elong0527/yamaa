@@ -574,6 +574,10 @@ conditions:
   unknown_reference:
     phases: [validation]
     message: "{column} reads {dependency}, which no input or earlier column declares"
+  # PROJECT-14
+  unknown_section:
+    phases: [validation]
+    message: "the project declares no section {section}"
   # PROJECT-6
   unknown_specification_name:
     phases: [validation]
