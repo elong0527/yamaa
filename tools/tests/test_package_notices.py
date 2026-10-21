@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 from tools.packaging import check_package_notices as packages
+from tools.packaging import generate_component_inventory as inventory
 
 
 class PackageNotices(unittest.TestCase):
@@ -18,6 +19,11 @@ class PackageNotices(unittest.TestCase):
         (self.root / "python").mkdir()
         (self.root / "tools/packaging").mkdir(parents=True)
         (self.root / "tools/packaging/release.toml").write_text('version = "0.4.0"\n')
+        # The toolchain that builds the release binaries.
+        (self.root / "rust").mkdir()
+        (self.root / "rust/rust-toolchain.toml").write_text(
+            '[toolchain]\nchannel = "1.99.1"\n'
+        )
         (self.root / "python/pyproject.toml").write_text(
             '[project]\nversion = "0.4.0"\n'
             'license-files = ["LICENSE.txt", "LICENSE-THIRD-PARTY.txt", '
@@ -45,6 +51,13 @@ class PackageNotices(unittest.TestCase):
                 "COMPONENTS.tsv": b"name\nextendr-api\t0.9.0\n",
             },
         )
+        # The R package's configure step appends the standard library that
+        # rustc links to the inventory that R installs, so an R binary package
+        # built with the pinned toolchain names that toolchain's.
+        self.r_binary_notices = dict(
+            self.r_notices,
+            **{"COMPONENTS.tsv": self.installed_inventory("1.99.1")},
+        )
         for directory, notices in (
             ("python", self.notices),
             ("R/yamaa/inst", self.r_notices),
@@ -52,6 +65,11 @@ class PackageNotices(unittest.TestCase):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
             for name, payload in notices.items():
                 (self.root / directory / name).write_bytes(payload)
+
+    def installed_inventory(self, release):
+        """The R inventory that an installation with rustc `release` carries."""
+        committed = self.r_notices["COMPONENTS.tsv"].decode("utf-8")
+        return inventory.installed_inventory(committed, release).encode("utf-8")
 
     def tar(self, name, members):
         path = self.root / name
@@ -94,7 +112,10 @@ class PackageNotices(unittest.TestCase):
         r_binaries = [
             self.r_binary(
                 name,
-                {f"yamaa/{notice}": data for notice, data in self.r_notices.items()},
+                {
+                    f"yamaa/{notice}": data
+                    for notice, data in self.r_binary_notices.items()
+                },
             )
             for name in ("yamaa_0.4.0-4.6.zip", "yamaa_0.4.0-4.5.tgz")
         ]
@@ -155,6 +176,73 @@ class PackageNotices(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must hold one rust-std row"):
             packages.check_archive(sdist, self.root)
 
+    def test_only_an_r_binary_package_adds_the_standard_library_row(self):
+        # configure appends exactly one row, for the rustc that builds the
+        # package, to the inventory that R installs; the release binaries are
+        # built with the pinned toolchain. The source package carries the
+        # committed inventory, which names no standard library.
+        committed = self.r_notices["COMPONENTS.tsv"]
+        row = self.installed_inventory("1.99.1")[len(committed) :]
+        self.assertEqual(row.count(b"\n"), 1)
+        self.assertTrue(row.startswith(b"rust-std\t1.99.1\tMIT OR Apache-2.0\t"))
+        for case, payload in (
+            ("no row", committed),
+            ("two rows", committed + row + row),
+            ("another release", self.installed_inventory("1.98.0")),
+            ("the row first", committed.replace(b"\n", b"\n" + row, 1)),
+        ):
+            binary = self.r_binary(
+                "yamaa_0.4.0-4.6.zip",
+                {
+                    f"yamaa/{name}": data
+                    for name, data in dict(
+                        self.r_notices, **{"COMPONENTS.tsv": payload}
+                    ).items()
+                },
+            )
+            with (
+                self.subTest(case=case),
+                self.assertRaisesRegex(
+                    ValueError, "differs or is missing: yamaa/COMPONENTS.tsv"
+                ),
+            ):
+                packages.check_archive(binary, self.root)
+        r_source = self.tar(
+            "yamaa_0.4.0.tar.gz",
+            {
+                f"yamaa/inst/{name}": data
+                for name, data in self.r_binary_notices.items()
+            },
+        )
+        with self.assertRaisesRegex(
+            ValueError, "differs or is missing: yamaa/inst/COMPONENTS.tsv"
+        ):
+            packages.check_archive(r_source, self.root)
+        # A committed R inventory that already names a standard library, or a
+        # pinned toolchain that is no release, gives no binary's inventory.
+        binary = self.r_binary(
+            "yamaa_0.4.0-4.5.tgz",
+            {f"yamaa/{name}": data for name, data in self.r_binary_notices.items()},
+        )
+        for path, payload, error in (
+            (
+                "R/yamaa/inst/COMPONENTS.tsv",
+                self.r_binary_notices["COMPONENTS.tsv"],
+                "the R source package's inventory must hold no rust-std row",
+            ),
+            (
+                "rust/rust-toolchain.toml",
+                b'[toolchain]\nchannel = "stable"\n',
+                "pins 'stable', not a Rust release",
+            ),
+        ):
+            original = (self.root / path).read_bytes()
+            (self.root / path).write_bytes(payload)
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, error):
+                packages.check_archive(binary, self.root)
+            (self.root / path).write_bytes(original)
+        self.assertEqual(len(packages.check_archive(binary, self.root)), 3)
+
     def test_misplaced_changed_or_foreign_packages_fail(self):
         misplaced = self.tar(
             "yamaa_0.4.0.tar.gz",
@@ -212,7 +300,7 @@ class PackageNotices(unittest.TestCase):
         )
         r_binary = self.r_binary(
             "yamaa_1.0.0-4.6.tgz",
-            {f"yamaa/{name}": data for name, data in self.r_notices.items()},
+            {f"yamaa/{name}": data for name, data in self.r_binary_notices.items()},
         )
         for path in (wheel, sdist, r_source, r_binary):
             with self.subTest(archive=path.name):
