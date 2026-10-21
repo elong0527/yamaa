@@ -93,25 +93,43 @@ closed registry (see [Schema introduction](https://elong0527.github.io/yamaa/art
 
 Python engine:
 
-Download the wheel for your platform from the selected
-[GitHub release](https://github.com/elong0527/yamaa/releases), then install it:
+Install yamaa from [PyPI](https://pypi.org/project/yamaa/). A release
+candidate is a pre-release there, so name it and add `--pre`:
 
 ```sh
-python -m pip install ./yamaa-0.4.0-<wheel-tags>.whl
+python -m pip install yamaa                     # the newest release
+python -m pip install --pre yamaa==<candidate>  # a candidate, such as 1.0.0rc1
 ```
 
-The release also provides a standalone Python source archive. See the
+The wheels and a standalone Python source archive are also assets of each
+[GitHub release](https://github.com/elong0527/yamaa/releases). See the
 [Python package README](https://github.com/elong0527/yamaa/blob/main/python/README.md)
 for source prerequisites, development setup and supported platforms.
 
 R engine:
 
-R is distributed as a standalone source tarball attached to its
-[GitHub release](https://github.com/elong0527/yamaa/releases). After downloading
-`yamaa_0.4.0.tar.gz` from the selected qualified release:
+Each [GitHub release](https://github.com/elong0527/yamaa/releases) carries the
+R source package and, from the 1.0.0 release candidates on, binary packages
+for Windows x64 and macOS arm64 built for R-release and R-oldrel, today R 4.6
+and R 4.5. A binary package installs without Rust, Rtools or a network, and
+works only with the R series that ends its file name. Download the package for
+your platform and R from the selected release, and install it:
 
 ```r
-install.packages("yamaa_0.4.0.tar.gz", repos = NULL, type = "source")
+# Windows x64
+install.packages("yamaa_<version>-4.6.zip", repos = NULL)  # R 4.6
+install.packages("yamaa_<version>-4.5.zip", repos = NULL)  # R 4.5
+# macOS arm64
+install.packages("yamaa_<version>-4.6.tgz", repos = NULL)  # R 4.6
+install.packages("yamaa_<version>-4.5.tgz", repos = NULL)  # R 4.5
+# Linux, or any other R series: the source package
+install.packages("yamaa_<version>.tar.gz", repos = NULL, type = "source")
+```
+
+Once CRAN accepts 1.0.0, `install.packages("yamaa")` installs it from there
+too. Then load the package and run the example above:
+
+```r
 library(yamaa)
 spec <- yamaa_spec("spec.yaml")
 spec$check()$issues    # check the specification without reading data
@@ -121,7 +139,7 @@ run$save()             # write adsl.csv
 ```
 
 Source installation requires R 4.4.0 or later, Rust 1.82 or later with Cargo, and platform build tools; it needs no network.
-To build a checkout candidate, follow
+To build the package from a checkout, follow
 [the R package guide](https://github.com/elong0527/yamaa/blob/main/R/yamaa/README.md).
 The **Release checks** badge shows the latest release package checks on `main`,
 which run weekly and before each release: Python and R installation, benchmark
@@ -129,11 +147,15 @@ conformance, and numerical consistency across Linux, macOS, and Windows, and
 CRAN's incoming checks of the R source package (`R CMD check --as-cran` with
 R-devel, R-release and R 4.4 and the minimum Rust, once more with R-devel on
 Linux and none of the suggested packages, and in a CRAN-like Fedora
-container). Release assets come from that workflow. CRAN and r-universe
-publication are later distribution work.
+container). Release assets come from that workflow.
 
-Packages from 1.0.0 on carry a self-test, which the 0.4.0 packages above do
-not. After installing one, run `yamaa.selftest()` in Python or
+On a machine without internet access, install from an internal mirror or from
+files carried in, as
+[Installing in a restricted environment](https://elong0527.github.io/yamaa/articles/restricted-environments/)
+describes.
+
+Packages from 1.0.0 on carry a self-test, which earlier packages do not.
+After installing one, run `yamaa.selftest()` in Python or
 `yamaa_selftest()` in R. It runs the cases that the package carries,
 benchmarks with independently authored expected files, through the installed
 engine and compares each result with its expected files, writing no file and

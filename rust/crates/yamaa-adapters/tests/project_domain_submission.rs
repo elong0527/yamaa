@@ -400,7 +400,7 @@ mod project {
                 .unwrap();
                 let define = Define::prepare(
                     project.to_str().unwrap(),
-                    "sdtm",
+                    yamaa_core::project_environment::Submission::Sdtm,
                     Some("2026-09-11T00:00:00"),
                     "0.0.0",
                     Some(yamaa_core::project_function::Language::Python),
@@ -726,6 +726,237 @@ mod project {
                 let issues = study.check(&spec);
                 assert!(issues.is_empty(), "{spec}\n{issues:?}");
             }
+        }
+
+        /// SUB-23 (D25): the rules that read the model a 1.0 specification
+        /// declares are checked on the specification alone, each where it is
+        /// declared (SUB-5, SUB-6, SUB-9, SUB-10, SUB-15, SUB-25). `core` and
+        /// ADaM's `mandatory` are required only with dataset metadata, and a
+        /// 0.5 specification declares no model, so these rules wait for a
+        /// document there.
+        #[test]
+        fn rules_that_read_the_model_are_checked_on_the_specification_alone() {
+            const ADAM: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADSL\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, CODE, VALUE, DAY]}\nsubmission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: SRC.ID\n    submission: {core: Req, mandatory: true, length: 8, origins: [{type: Assigned}]}\n  - name: CODE\n    type: str\n    label: Code\n    derivation: SRC.CODE\n    submission: {core: Perm, mandatory: false, length: 4, origins: [{type: Assigned}]}\n  - name: VALUE\n    type: str\n    label: Value\n    derivation: SRC.VALUE\n    submission: {core: Perm, mandatory: false, length: 3, origins: [{type: Assigned}], value_level: [{id: A, where: {CODE: [A]}, core: Req}]}\n  - name: DAY\n    type: date\n    label: Day\n    derivation: SRC.DAY\n    submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n";
+            const SDTM: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [ID]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, VALUE, DAY]}\nsubmission: {label: Demographics, class: SPECIAL PURPOSE, structure: One record per subject, repeating: false}\ncolumns:\n  - name: ID\n    type: int\n    label: Identifier\n    derivation: SRC.ID\n    submission: {core: Req, length: 8, origins: [{type: Assigned, source: Sponsor}]}\n  - name: VALUE\n    type: str\n    label: Value\n    derivation: SRC.VALUE\n    submission: {core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}\n  - name: DAY\n    type: date\n    label: Day\n    derivation: SRC.DAY\n    submission: {core: Perm, origins: [{type: Assigned, source: Sponsor}]}\n";
+            let study = Study::new();
+            for spec in [ADAM, SDTM] {
+                let issues = study.check(spec);
+                assert!(issues.is_empty(), "{spec}\n{issues:?}");
+            }
+            let value = |json: &str| yamaa_adapters::json_wire::decode(json).unwrap();
+            // A value-level selector names a text column (SUB-12).
+            let sdtm_text_key = SDTM.replacen("type: int", "type: str", 1);
+            for (base, from, to, condition, rule, path, context) in [
+                // A designation the model does not publish (SUB-10).
+                (
+                    ADAM,
+                    "{core: Perm, mandatory: false, length: 3",
+                    "{core: Exp, mandatory: false, length: 3",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.core",
+                    r#"{"column": "VALUE", "reason": "core_not_admitted", "core": "Exp", "model": "ADaM"}"#,
+                ),
+                (
+                    ADAM,
+                    "value_level: [{id: A, where: {CODE: [A]}, core: Req}]",
+                    "value_level: [{id: A, where: {CODE: [A]}, core: Exp}]",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.value_level.A.core",
+                    r#"{"column": "VALUE", "entry": "A", "reason": "core_not_admitted", "core": "Exp", "model": "ADaM"}"#,
+                ),
+                (
+                    SDTM,
+                    "{core: Perm, length: 3",
+                    "{core: Cond, length: 3",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.core",
+                    r#"{"column": "VALUE", "reason": "core_not_admitted", "core": "Cond", "model": "SDTM"}"#,
+                ),
+                // ADaM declares `mandatory`; SDTM never relaxes `Req`.
+                (
+                    ADAM,
+                    "{core: Perm, mandatory: false, length: 3",
+                    "{core: Perm, length: 3",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission",
+                    r#"{"column": "VALUE", "reason": "mandatory_missing", "model": "ADaM"}"#,
+                ),
+                (
+                    SDTM,
+                    "{core: Perm, length: 3",
+                    "{core: Req, mandatory: false, length: 3",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.mandatory",
+                    r#"{"column": "VALUE", "reason": "required_not_mandatory", "model": "SDTM"}"#,
+                ),
+                // An entry can inherit either half of the conflict.
+                (
+                    sdtm_text_key.as_str(),
+                    "{core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}",
+                    "{core: Perm, mandatory: false, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: ['1']}, core: Req}]}",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.value_level.A.core",
+                    r#"{"column": "VALUE", "entry": "A", "reason": "required_not_mandatory", "model": "SDTM"}"#,
+                ),
+                (
+                    sdtm_text_key.as_str(),
+                    "{core: Perm, length: 3, origins: [{type: Collected, source: Investigator}]}",
+                    "{core: Req, length: 3, origins: [{type: Collected, source: Investigator}], value_level: [{id: A, where: {ID: ['1']}, mandatory: false}]}",
+                    "core_mandatory_conflict",
+                    "SUB-10",
+                    "columns.VALUE.submission.value_level.A.mandatory",
+                    r#"{"column": "VALUE", "entry": "A", "reason": "required_not_mandatory", "model": "SDTM"}"#,
+                ),
+                // A key's existing admission reports the conflict once.
+                (
+                    SDTM,
+                    "{core: Req, length: 8",
+                    "{core: Req, mandatory: false, length: 8",
+                    "value_not_permitted",
+                    "SUB-10",
+                    "columns.ID.submission.mandatory",
+                    r#"{"column": "ID"}"#,
+                ),
+                // ADaM has no role and no domain (SUB-9, SUB-5).
+                (
+                    ADAM,
+                    "{core: Perm, mandatory: false, length: 3",
+                    "{core: Perm, mandatory: false, role: Topic, length: 3",
+                    "value_not_permitted",
+                    "SUB-5",
+                    "columns.VALUE.submission.role",
+                    r#"{"column": "VALUE", "value": "Topic", "model": "ADaM"}"#,
+                ),
+                (
+                    ADAM,
+                    "repeating: false}",
+                    "repeating: false, domain: ADSL}",
+                    "value_not_permitted",
+                    "SUB-5",
+                    "submission.domain",
+                    r#"{"value": "ADSL", "model": "ADaM"}"#,
+                ),
+                // The class belongs to the model (SUB-10).
+                (
+                    ADAM,
+                    "class: SUBJECT LEVEL ANALYSIS DATASET",
+                    "class: SPECIAL PURPOSE",
+                    "value_not_permitted",
+                    "SUB-10",
+                    "submission.class",
+                    r#"{"value": "SPECIAL PURPOSE", "model": "ADaM"}"#,
+                ),
+                (
+                    SDTM,
+                    "class: SPECIAL PURPOSE",
+                    "class: BASIC DATA STRUCTURE",
+                    "value_not_permitted",
+                    "SUB-10",
+                    "submission.class",
+                    r#"{"value": "BASIC DATA STRUCTURE", "model": "SDTM"}"#,
+                ),
+                // Origin pairs (SUB-15).
+                (
+                    ADAM,
+                    "length: 3, origins: [{type: Assigned}]",
+                    "length: 3, origins: [{type: Collected, source: Subject}]",
+                    "origin_source_not_admitted",
+                    "SUB-15",
+                    "columns.VALUE.submission.origins[0]",
+                    r#"{"column": "VALUE", "origin_type": "Collected", "origin_source": "Subject", "model": "ADaM"}"#,
+                ),
+                (
+                    SDTM,
+                    "origins: [{type: Collected, source: Investigator}]",
+                    "origins: [{type: Collected}]",
+                    "origin_source_not_admitted",
+                    "SUB-15",
+                    "columns.VALUE.submission.origins[0]",
+                    r#"{"column": "VALUE", "origin_type": "Collected", "model": "SDTM"}"#,
+                ),
+                // A date is submitted as the one type its model gives it
+                // (SUB-6), with ADaM's fixed display format (SUB-25).
+                (
+                    ADAM,
+                    "submission: {core: Perm, mandatory: false, origins",
+                    "submission: {core: Perm, mandatory: false, data_type: date, origins",
+                    "submission_data_type_not_admitted",
+                    "SUB-6",
+                    "columns.DAY.submission",
+                    r#"{"column": "DAY", "declared_type": "date", "data_type": "date", "model": "ADaM"}"#,
+                ),
+                // An entry that inherits the type leaves it to its column.
+                (
+                    ADAM,
+                    "submission: {core: Perm, mandatory: false, origins: [{type: Assigned}]}\n",
+                    "submission: {core: Perm, mandatory: false, data_type: date, origins: [{type: Assigned}], value_level: [{id: B, where: {CODE: [B]}, mandatory: true}]}\n",
+                    "submission_data_type_not_admitted",
+                    "SUB-6",
+                    "columns.DAY.submission",
+                    r#"{"column": "DAY", "declared_type": "date", "data_type": "date", "model": "ADaM"}"#,
+                ),
+                (
+                    SDTM,
+                    "submission: {core: Perm, origins: [{type: Assigned",
+                    "submission: {core: Perm, data_type: integer, origins: [{type: Assigned",
+                    "submission_data_type_not_admitted",
+                    "SUB-6",
+                    "columns.DAY.submission",
+                    r#"{"column": "DAY", "declared_type": "date", "data_type": "integer", "model": "SDTM"}"#,
+                ),
+                (
+                    ADAM,
+                    "submission: {core: Perm, mandatory: false, origins",
+                    "submission: {core: Perm, mandatory: false, display_format: YYMMDD10., origins",
+                    "value_not_permitted",
+                    "SUB-25",
+                    "columns.DAY.submission.display_format",
+                    r#"{"column": "DAY", "value": "YYMMDD10.", "permitted": "DATE9."}"#,
+                ),
+            ] {
+                assert_eq!(base.matches(from).count(), 1, "{from}");
+                let spec = base.replace(from, to);
+                let issues = study.check(&spec);
+                assert_eq!(issues.len(), 1, "{to}: {issues:?}");
+                assert_eq!(
+                    (issues[0].phase(), issues[0].condition(), issues[0].rule()),
+                    ("validation", condition, Some(rule)),
+                    "{to}"
+                );
+                assert_eq!(issues[0].spec_paths, [path], "{to}");
+                assert_eq!(
+                    yamaa_core::json::Value::Object(issues[0].context.clone()),
+                    value(context),
+                    "{to}"
+                );
+            }
+            // Without dataset metadata, `core` and ADaM's `mandatory` are not
+            // yet required, while a declared value is still judged.
+            let partial = ADAM.replace(
+                "submission: {label: Subject Level, class: SUBJECT LEVEL ANALYSIS DATASET, structure: One record per subject, repeating: false}\n",
+                "",
+            );
+            assert!(study
+                .check(&partial.replace("{core: Perm, mandatory: false, length: 3", "{length: 3"))
+                .is_empty());
+            let issues = study.check(&partial.replace(
+                "{core: Perm, mandatory: false, length: 3",
+                "{core: Exp, length: 3",
+            ));
+            assert_eq!(issues.len(), 1, "{issues:?}");
+            assert_eq!(issues[0].spec_paths, ["columns.VALUE.submission.core"]);
+            // A 0.5 specification declares no model: its section decides
+            // these rules when a document composes it.
+            assert!(study
+                .check(&VALID.replace("submission: {", "submission: {core: Cond, "))
+                .is_empty());
+            assert!(!study.0.join("output.csv").exists());
         }
 
         const ROW_CT: &str = "schema_version: '1.0'\ndomain: LB\nkeys: [ID, LBTESTCD]\ninput: {SRC: input.csv}\noutput: {path: output.csv, columns: [ID, RESULT, LBTESTCD]}\ncolumns:\n  - {name: ID, type: int, derivation: SRC.ID}\n  - {name: RESULT, type: str, derivation: SRC.VALUE, submission: {origin: {type: Assigned}, codelist: DEFAULT, value_level: [{id: GLUC, where: {LBTESTCD: [GLUC]}, codelist: GLUCOSE}]}}\n  - {name: LBTESTCD, type: str}\nrows:\n  - id: glucose\n    derivations: {LBTESTCD: {literal: GLUC}}\n  - id: creatinine\n    derivations: {LBTESTCD: {literal: CREAT}}\n";

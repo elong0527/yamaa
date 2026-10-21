@@ -324,6 +324,15 @@ def required_jobs(coverage):
                 "Run the installed package's selftest",
                 conformance,
             )
+    # Each wheel that a release publishes, installed from local files alone
+    # with the network disabled, with the oldest and the newest supported
+    # CPython, where the installed package passes its selftest.
+    for platform in coverage["offline_wheel"]["os"]:
+        for version in coverage["offline_wheel"]["python"]:
+            jobs[f"native-offline-wheel ({platform}, {version})"] = (
+                "Install the wheel without a network",
+                "Run the installed package's selftest",
+            )
     # Each R binary package that a release publishes, built from the R source
     # archive that it publishes, then installed on a runner with no Rust, no
     # Rtools and no network, where it passes its selftest and runs the
@@ -343,7 +352,7 @@ def required_jobs(coverage):
             )
     # Each command-line archive that a release publishes, built on a runner
     # of its target's platform, then unpacked on a fresh one, where the binary
-    # prints its version and passes its selftest.
+    # prints its version, passes its selftest and runs the conformance corpus.
     for lane in coverage["cli"]["include"]:
         label = f"({lane['os']}, {lane['target']})"
         jobs[f"native-cli {label}"] = (
@@ -354,6 +363,7 @@ def required_jobs(coverage):
         jobs[f"native-cli-install {label}"] = (
             "Unpack the command-line archive",
             "Run the command-line selftest",
+            "Report command-line public benchmark conformance",
         )
     return jobs
 

@@ -1041,7 +1041,9 @@
         "python/tests/installed/installed_lint.py",
         "R/yamaa/tests/lint.R",
         "python/tests/installed/installed_selftest.py",
-        "R/yamaa/tests/selftest.R"
+        "R/yamaa/tests/selftest.R",
+        "python/tests/installed/installed_schema.py",
+        "R/yamaa/tests/schema.R"
       ]
     },
     {

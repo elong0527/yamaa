@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import yaml
-from tools.ci import native, release_assets
+from tools.ci import manylinux, native, release_assets
 from tools.ci import select_release_artifacts as release
 from tools.commands import rust_tests
 from tools.paths import ROOT
@@ -391,6 +391,14 @@ class NativeWorkflowContract(unittest.TestCase):
             for host in self.coverage["offline_toolchain"]["host"]
         ]
 
+    def offline_wheel_jobs(self):
+        """List each offline wheel lane's job name with its host, always python."""
+        return [
+            (f"native-offline-wheel ({platform}, {version})", "python")
+            for platform in self.coverage["offline_wheel"]["os"]
+            for version in self.coverage["offline_wheel"]["python"]
+        ]
+
     def test_both_source_archives_install_offline_on_every_platform(self):
         # Each platform that a wheel is built for also builds and installs
         # both published source archives with the network disabled (#3030
@@ -405,10 +413,11 @@ class NativeWorkflowContract(unittest.TestCase):
 
     def test_offline_lanes_refuse_the_network_while_they_install_and_run(self):
         # The steps that install the standalone Rust (the toolchain lanes),
-        # build the archive and run the installed package go behind a proxy
-        # that refuses every connection (macOS and Windows) and run every
-        # container without a network and with a read-only root (Linux). The
-        # steps before them reach package mirrors and static.rust-lang.org.
+        # build the archive or install the wheel, and run the installed
+        # package go behind a proxy that refuses every connection (macOS and
+        # Windows) and run every container without a network and with a
+        # read-only root (Linux). The steps before them reach package mirrors
+        # and static.rust-lang.org.
         proxy = {
             "http_proxy": "http://127.0.0.1:9",
             "HTTPS_PROXY": "http://127.0.0.1:9",
@@ -417,7 +426,11 @@ class NativeWorkflowContract(unittest.TestCase):
         }
         names = {name.lower() for name in proxy}
         required = release.required_jobs(self.coverage)
-        for job, _ in self.offline_source_jobs() + self.offline_toolchain_jobs():
+        for job, _ in (
+            self.offline_source_jobs()
+            + self.offline_toolchain_jobs()
+            + self.offline_wheel_jobs()
+        ):
             with self.subTest(job=job):
                 inherited = {name.lower() for name in self.jobs[job]["context"]["env"]}
                 self.assertFalse(names & inherited)
@@ -583,6 +596,109 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertNotIn("python -m tools.ci.toolchain", scripts)
                 self.assertNotIn("--print sysroot", scripts)
                 self.assertNotIn("rustup", scripts.replace("command -v rustup", ""))
+
+    def test_every_wheel_installs_offline_with_the_oldest_and_newest_cpython(self):
+        # Each wheel that a release publishes is abi3 from the oldest
+        # supported CPython, which its tag names, so that CPython and the
+        # newest bound the supported interpreters that it serves (#3061).
+        pythons = sorted(
+            native.PYTHONS, key=lambda text: tuple(map(int, text.split(".")))
+        )
+        self.assertEqual(
+            sorted(self.coverage["offline_wheel"]["os"]),
+            sorted(lane["os"] for lane in self.coverage["build"]["include"]),
+        )
+        self.assertEqual(
+            self.coverage["offline_wheel"]["python"], [pythons[0], pythons[-1]]
+        )
+        tag = "cp" + pythons[0].replace(".", "") + "-abi3-"
+        for asset in release_assets.declared(self.coverage):
+            if asset.kind == "wheel":
+                with self.subTest(asset=asset.title):
+                    self.assertIn(tag, asset.file)
+
+    def test_offline_wheel_lanes_install_files_carried_in_as_the_guide_says(self):
+        # While the network is up, each lane collects its platform's published
+        # wheel and the runtime dependencies that python/uv.lock pins, as
+        # wheels alone, into one directory: on Linux with the CPython of the
+        # lane's version in the pinned manylinux_2_28 image. Then, without a
+        # network, pip installs from that directory alone with the command of
+        # the restricted-environment guide, into a new virtual environment,
+        # and the installed package must import with the wheel's version:
+        # once in the Linux container, and once on macOS and Windows.
+        command = "--no-index --find-links yamaa-files yamaa"
+        guide = (ROOT / "docs/articles/restricted-environments.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"python -m pip install {command}\n", guide)
+        download = (
+            "-m pip download --no-cache-dir --only-binary :all: --no-deps "
+            "--dest yamaa-files -r runtime-requirements.txt"
+        )
+        oldest = self.coverage["offline_wheel"]["python"][0]
+        producers = release_assets.artifacts(release_assets.declared(self.coverage))
+        required = release.required_jobs(self.coverage)
+        for job, _ in self.offline_wheel_jobs():
+            context = self.jobs[job]["context"]
+            platform, version = context["matrix"]["os"], context["matrix"]["python"]
+            steps = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in steps]
+            collect = steps[names.index("Collect the wheel and its dependencies")]
+            install = steps[names.index(required[job][0])]
+            [setup] = [
+                step
+                for step in steps
+                if step.get("uses", "").split("@")[0] == "actions/setup-python"
+            ]
+            # Each command on one line, with single spaces.
+            collection, installation = (
+                " ".join(step["run"].replace("\\\n", " ").split())
+                for step in (collect, install)
+            )
+            [interpreter] = re.findall(r'interpreter="([^"]+)"', collection)
+            with self.subTest(job=job):
+                wheel = f"native-python-{platform}-{native.BUILD_PYTHON}"
+                self.assertEqual(self.jobs[job]["downloads"], [wheel])
+                self.assertIn(wheel, producers)
+                self.assertEqual(
+                    expand(setup["with"]["python-version"], context), version
+                )
+                self.assertEqual(
+                    expand(collect["env"]["PYTHON_VERSION"], context), version
+                )
+                # The image's CPython, named as tools/ci/manylinux.py names
+                # the oldest.
+                self.assertEqual(
+                    interpreter.replace(
+                        "${PYTHON_VERSION/./}", oldest.replace(".", "", 1)
+                    ),
+                    manylinux.PYTHON,
+                )
+                self.assertIn("from tools.ci.manylinux import IMAGES", collection)
+                self.assertLess(steps.index(collect), steps.index(install))
+                self.assertIn(
+                    "--locked --no-dev --no-emit-project --no-hashes "
+                    "--output-file runtime-requirements.txt",
+                    collection,
+                )
+                self.assertNotIn("--extra", collection)
+                self.assertIn("cp native-dist/yamaa-*.whl yamaa-files/", collection)
+                self.assertEqual(collection.count(download), 2)
+                self.assertEqual(installation.count("-I -m venv venv"), 2)
+                self.assertEqual(
+                    installation.count(f"-m pip install --no-cache-dir {command}"), 2
+                )
+                self.assertEqual(
+                    installation.count("-m pip list --disable-pip-version-check"), 2
+                )
+                self.assertEqual(
+                    installation.count(
+                        "sys.exit(None if v == sys.argv[1] else "
+                        'f"pip installed yamaa {v}, not {sys.argv[1]}")\' '
+                        '"${version}"'
+                    ),
+                    2,
+                )
 
     def test_cran_checks_run_on_the_published_r_source_archive(self):
         # CRAN's incoming checks judge the bytes that a release publishes.
@@ -918,8 +1034,9 @@ class NativeWorkflowContract(unittest.TestCase):
         # the installed package's selftest with the host's own call. The call
         # prints the report, the facade's lines, to the log and fails the lane
         # unless the status is succeeded, and a release requires the step.
-        # An offline source lane runs it twice: in the Linux container, and
-        # on macOS and Windows.
+        # An offline source or wheel lane runs it twice: in the Linux
+        # container, and on macOS and Windows. A wheel lane runs no corpus,
+        # which native-qualify runs on every wheel, so its selftest ends it.
         selftest = "Run the installed package's selftest"
         calls = {
             "python": "import sys, yamaa; r = yamaa.selftest(); print(r); "
@@ -934,7 +1051,9 @@ class NativeWorkflowContract(unittest.TestCase):
                 (f"native-r-binary-install ({platform}, R {version})", "r", 1)
                 for platform, version in self.r_binary_lanes()
             ]
+            + [(job, host, 2) for job, host in self.offline_wheel_jobs()]
         )
+        wheels = {job for job, _ in self.offline_wheel_jobs()}
         required = release.required_jobs(self.coverage)
         for job, host, runs in lanes:
             steps = self.jobs[job]["definitions"]
@@ -946,10 +1065,13 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertRegex(
                     names[index - 1], r"^Install the .+ without a network$"
                 )
-                self.assertRegex(
-                    names[index + 1],
-                    r"^Report installed .+ public benchmark conformance$",
-                )
+                if job in wheels:
+                    self.assertEqual(index, len(names) - 1)
+                else:
+                    self.assertRegex(
+                        names[index + 1],
+                        r"^Report installed .+ public benchmark conformance$",
+                    )
                 position = required[job].index(selftest)
                 self.assertEqual(
                     required[job][position - 1 : position + 2],
@@ -1193,17 +1315,20 @@ class NativeWorkflowContract(unittest.TestCase):
                 )
 
     def test_each_cli_archive_runs_its_selftest_unpacked_on_a_fresh_runner(self):
-        # Nothing from the build: no checkout, no Rust and no Python.
+        # Nothing from the build, and nothing set up before the selftest: no
+        # checkout, no Rust and no Python.
         required = release.required_jobs(self.coverage)
         for platform, target in self.cli_lanes():
             job = f"native-cli-install ({platform}, {target})"
             definitions = self.jobs[job]["definitions"]
             steps = {step.get("name"): step for step in definitions}
+            names = [step.get("name") for step in definitions]
+            fresh = definitions[: names.index("Run the command-line selftest") + 1]
             with self.subTest(job=job):
                 self.assertEqual(self.jobs[job]["job"]["needs"], "cli")
                 self.assertEqual(self.jobs[job]["downloads"], [f"native-cli-{target}"])
                 self.assertEqual(
-                    [step.get("uses", "").split("@")[0] for step in definitions],
+                    [step.get("uses", "").split("@")[0] for step in fresh],
                     ["actions/download-artifact", "", ""],
                 )
                 self.assertEqual(
@@ -1211,6 +1336,7 @@ class NativeWorkflowContract(unittest.TestCase):
                     (
                         "Unpack the command-line archive",
                         "Run the command-line selftest",
+                        "Report command-line public benchmark conformance",
                     ),
                 )
                 unpack = steps["Unpack the command-line archive"]["run"]
@@ -1220,9 +1346,123 @@ class NativeWorkflowContract(unittest.TestCase):
                 self.assertIn('"${binary}" --version | tee cli-version.txt', run)
                 self.assertIn('if [ "${first}" != "yamaa ${version}" ]; then', run)
                 self.assertTrue(run.rstrip().endswith('"${binary}" selftest'))
-                for step in definitions:
+                for step in fresh:
                     self.assertNotIn("tools.ci.toolchain", step.get("run", ""))
                     self.assertNotIn("python", step.get("run", ""))
+
+    def test_each_cli_archive_runs_the_corpus_written_as_1_0_after_its_selftest(self):
+        # #3060: the repository's tools convert the corpus (D122), run it
+        # through the unpacked binary and judge the records; no Rust.
+        for platform, target in self.cli_lanes():
+            job = f"native-cli-install ({platform}, {target})"
+            definitions = self.jobs[job]["definitions"]
+            names = [step.get("name") for step in definitions]
+            later = definitions[names.index("Run the command-line selftest") + 1 :]
+            steps = {step.get("name"): step for step in definitions}
+            conformance = steps["Report command-line public benchmark conformance"]
+            upload = steps[
+                "Preserve command-line public benchmark inventory and saved artifacts"
+            ]
+            script = " ".join(conformance["run"].replace("\\\n", " ").split())
+            with self.subTest(job=job):
+                self.assertEqual(
+                    [step.get("uses", "").split("@")[0] for step in later],
+                    [
+                        "",
+                        "actions/checkout",
+                        "actions/setup-python",
+                        "",
+                        "",
+                        "actions/upload-artifact",
+                    ],
+                )
+                self.assertEqual(
+                    later[0]["run"].split(),
+                    "git config --global core.autocrlf false "
+                    "git config --global core.symlinks true".split(),
+                )
+                self.assertIn(
+                    "python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3 "
+                    "pyarrow==25.0.1",
+                    steps["Install repository tools"]["run"],
+                )
+                # The binary that passed the selftest, with Windows' suffix.
+                self.assertIn(
+                    'binary="unpacked/$(basename "${archives[0]}" .zip)/yamaa"', script
+                )
+                self.assertIn('binary="${binary}.exe"', script)
+                self.assertIn(
+                    'python -I -m tools.commands.cli_conformance --binary "${binary}" '
+                    "--output public-conformance-cli --evidence "
+                    '"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/'
+                    '${GITHUB_RUN_ID}"',
+                    script,
+                )
+                self.assertEqual(conformance["working-directory"], "${{ runner.temp }}")
+                self.assertEqual(
+                    self.jobs[job]["uploads"], [f"public-conformance-cli-{target}"]
+                )
+                self.assertEqual(
+                    upload["with"]["path"].splitlines(),
+                    [
+                        "${{ runner.temp }}/public-conformance-cli/inventory.json",
+                        "${{ runner.temp }}/public-conformance-cli/observed",
+                    ],
+                )
+                self.assertIn(
+                    "steps.cli_conformance.outcome == 'failure'", upload["if"]
+                )
+                for step in definitions:
+                    for tool in ("tools.ci.toolchain", "cargo ", "rustup"):
+                        self.assertNotIn(tool, step.get("run", ""))
+
+    def test_every_cli_archive_joins_the_cohort_comparison_of_its_wheel(self):
+        # Each archive's saved outputs are compared with the complete reports
+        # of its platform's wheel lane with the build Python and the R
+        # reports beside them, in that lane's one comparison.
+        joined = {
+            Path(command[command.index("--cli-evidence") + 1]): command
+            for command in self.cohort_commands()
+            if "--cli-evidence" in command
+        }
+        self.assertEqual(
+            sorted(joined),
+            sorted(
+                Path("cohort-input") / f"public-conformance-cli-{target}"
+                for _, target in self.cli_lanes()
+            ),
+        )
+        for platform, target in self.cli_lanes():
+            command = joined[Path("cohort-input") / f"public-conformance-cli-{target}"]
+            r_platform = native.R_EVIDENCE.get(platform, platform)
+            with self.subTest(platform=platform, target=target):
+                self.assertEqual(
+                    Path(command[command.index("--python-evidence") + 1]),
+                    Path("cohort-input")
+                    / f"native-qualification-{platform}-{native.BUILD_PYTHON}-wheel"
+                    / "wheel",
+                )
+                self.assertEqual(
+                    Path(command[command.index("--r-evidence") + 1]),
+                    Path("cohort-input")
+                    / f"native-r-qualification-{r_platform}"
+                    / "r-source",
+                )
+        cohort = self.jobs["public-cohort-complete-runs"]["job"]
+        self.assertIn("cli-install", cohort["needs"])
+        self.assertIn(
+            "public-conformance-cli-*",
+            [step.get("with", {}).get("pattern") for step in cohort["steps"]],
+        )
+
+    def test_a_cli_target_without_a_wheel_lane_to_join_is_refused(self):
+        coverage = native.coverage()
+        coverage["cli"]["include"].append({"os": "freebsd-14", "target": "x86_64"})
+        with (
+            patch.object(native.subprocess, "run"),
+            self.assertRaisesRegex(ValueError, "command-line targets: freebsd-14$"),
+        ):
+            native.compare_cohorts(coverage, ROOT, "a" * 40)
 
 
 if __name__ == "__main__":

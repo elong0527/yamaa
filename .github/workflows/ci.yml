@@ -34,6 +34,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The interface stability check reads each release tag's manifests, but
+      # no history: one commit per yamaa-v* tag costs less than fetch-depth: 0,
+      # which fetches every branch's history. Without the tags, the check fails
+      # wherever it needs a baseline.
+      - name: Fetch the release tags
+        run: git fetch --no-tags --depth=1 origin '+refs/tags/yamaa-v*:refs/tags/yamaa-v*'
       - uses: ./.github/actions/setup
       - id: lint
         run: make check-lint
@@ -58,16 +64,22 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: make test-python
-  equivalence:
-    # The engine gate: fresh builds of both hosts must reproduce every
-    # benchmark's expected bytes and every negative benchmark's first issue.
-    # Run by default, including new build/configuration inputs. Only changes
-    # confined to the documentation paths below pass without running, so
-    # branch protection can require this job on every pull request.
-    # Scheduled runs leave it out: the gate rebuilds both hosts.
+  equivalence-host:
+    # The engine gate, one job per host so that the two halves run in
+    # parallel: a fresh build of each host must reproduce every benchmark's
+    # expected bytes and every negative benchmark's first issue. Run by
+    # default, including new build/configuration inputs. Only changes
+    # confined to the documentation paths below pass without running.
+    # Scheduled runs leave it out: the gate rebuilds both hosts. The
+    # equivalence job below reports the two jobs as one check.
+    name: equivalence (${{ matrix.host }})
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [python, r]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -103,26 +115,53 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "::notice::The diff changes only documentation, so the equivalence gate did not run."
           fi
-      # The gate builds both hosts from the checkout and ends with
-      # R CMD check --as-cran, so it needs what the r job needs.
+      # Each half builds its host from the checkout. The Python half needs no
+      # R; the R half ends with R CMD check --as-cran, so it needs what the r
+      # job needs.
       - uses: ./.github/actions/setup
         if: steps.paths.outputs.run == 'true'
         with:
-          r: check
+          r: ${{ matrix.host == 'r' && 'check' || 'none' }}
           package: tools
       - name: Install the programs that CRAN's checks use
-        if: steps.paths.outputs.run == 'true'
+        if: steps.paths.outputs.run == 'true' && matrix.host == 'r'
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends devscripts aspell aspell-en
       - if: steps.paths.outputs.run == 'true'
-        run: make check-equivalence
+        env:
+          HOSTS: ${{ matrix.host }}
+        run: make check-equivalence HOSTS="$HOSTS"
+  equivalence:
+    # The engine gate's one check, under the name that branch protection and
+    # the merge tooling read. It passes only when both host jobs passed,
+    # including a documentation-only pull request's pass without building,
+    # so branch protection can require it on every pull request. It runs on
+    # the host jobs' events even when one of them fails or is cancelled, and
+    # scheduled runs leave it out with them.
+    needs: equivalence-host
+    if: >-
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every host job to pass
+        env:
+          RESULT: ${{ needs.equivalence-host.result }}
+        run: |
+          if [ "$RESULT" != success ] && [ "$RESULT" != skipped ]; then
+            echo "::error::An equivalence host job ended with the result $RESULT."
+            exit 1
+          fi
+          echo "The equivalence host jobs ended with the result $RESULT."
   conversion:
     # The 1.0 conversion gate (#3030 P1-9, D76): every benchmark, converted to
     # 1.0 by tools/migrate, must give its expected result on a fresh install.
     # A pull request runs it on Python unless its diff changes only
-    # documentation, by the equivalence job's rule (D124), and otherwise passes
-    # with a notice; the weekly schedule and a dispatch run it on both hosts.
+    # documentation, by the equivalence gate's rule (D124), and otherwise
+    # passes with a notice; the weekly schedule and a dispatch run it on both
+    # hosts.
     if: >-
       github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' ||
       github.event.schedule == '23 4 * * 1'
@@ -134,8 +173,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      # The equivalence job's step, repeated so that both gates read the same
-      # diff (D124); tools/tests/test_equivalence_workflow.py runs both. A
+      # The equivalence host jobs' step, repeated so that both gates read the
+      # same diff (D124); tools/tests/test_equivalence_workflow.py runs both. A
       # local action or script would be read from the pull-request head, and a
       # head that predates it would fail both gates.
       - name: Decide whether the diff reaches the gate's paths

@@ -1,0 +1,68 @@
+yamaa: "1.0"
+
+type: spec
+
+model: ADaM
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+    submission:
+      core: Req
+      mandatory: true
+      length: 4
+      origins:
+        - type: Predecessor
+          description: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+    submission:
+      core: Req
+      mandatory: true
+      length: 14
+      origins:
+        - type: Predecessor
+          description: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+    submission:
+      core: Req
+      mandatory: true
+      length: 3
+      origins:
+        - type: Predecessor
+          description: DM.AGE
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+    submission:
+      core: Req
+      mandatory: true
+      length: 1
+      origins:
+        - type: Predecessor
+          description: DM.SEX
+
+submission:
+  label: Subject-Level Analysis Dataset
+  class: SUBJECT LEVEL ANALYSIS DATASET
+  structure: One record per subject
+  repeating: false

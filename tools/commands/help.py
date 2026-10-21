@@ -23,7 +23,9 @@ HELP = """yamaa repository commands (run from the repository root)
                     and spelling.
   check-equivalence Executor equivalence gate: both hosts built from the checkout for
                     public benchmark conformance, installed Python suites, R CMD check.
-                    Needs what test-python and test-r need. CI runs it on qualifying PRs.
+                    HOSTS=python or HOSTS=r runs one host's half. Needs what
+                    test-python and test-r need; the Python half needs no R. CI runs
+                    each half as its own job on qualifying PRs.
   check-conversion  1.0 conversion gate: every benchmark converted to 1.0 and run on a
                     Python host built from the checkout, Define benchmarks included;
                     HOSTS=python,r adds R. Needs what test-python needs, and test-r

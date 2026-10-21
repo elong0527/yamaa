@@ -6,47 +6,60 @@ open gates live in GitHub issues and pull requests, not here.
 
 ## Supported platforms
 
-- CPython 3.12, 3.13, 3.14 and 3.15 wheels and source builds on Linux
-  x86_64 and aarch64, macOS arm64 and Windows x64. The Linux wheels are
-  `manylinux_2_28` and need glibc 2.28 or later, for example RHEL 8, Ubuntu
-  20.04 or Debian 10; older systems build from the Python source archive.
-  Each Linux wheel is built in the manylinux_2_28 container of its
-  architecture, and native qualification also installs it on AlmaLinux 8,
-  which has glibc 2.28, and runs the conformance corpus there with that
-  system's Python 3.12.
-- R source builds with R 4.4.0 or later on Linux x86_64, macOS arm64 and
-  Windows x64, each passing `R CMD check --as-cran` with only the notes that
+Each row is a platform, and each column a package form that a release
+publishes. A cell names the CPython or R series with which native
+qualification installs and tests that form on that platform, with the oldest
+glibc that a Linux wheel needs, or the Rust target that the command-line
+binary is built for. A floor, as in R 4.4 or later, is qualified with the floor
+and R-release, and a cell that says "no" means that a release has no such
+package for that platform. `tools.validation.check_supported_platforms`, which
+`make check-repository` runs, fails when the table and the native matrix that
+`tools/ci/native.py` declares disagree.
+
+| Platform | Python wheel | Python source archive | R source package | R binary package | Command-line binary |
+| --- | --- | --- | --- | --- | --- |
+| Linux x86_64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.4 or later | no | `x86_64-unknown-linux-musl` |
+| Linux aarch64 | CPython 3.12 to 3.15 on glibc 2.28 or later | CPython 3.12 to 3.15 | R 4.6 | no | `aarch64-unknown-linux-musl` |
+| macOS arm64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.4 or later | R 4.5 and 4.6 | `aarch64-apple-darwin` |
+| Windows x64 | CPython 3.12 to 3.15 | CPython 3.12 to 3.15 | R 4.4 or later | R 4.5 and 4.6 | `x86_64-pc-windows-msvc` |
+
+- The Linux wheels are `manylinux_2_28`, so they need glibc 2.28 or later,
+  for example RHEL 8, Ubuntu 20.04 or Debian 10; older systems build from the
+  Python source archive. Each Linux wheel is built in the manylinux_2_28
+  container of its architecture, and native qualification also installs it
+  on AlmaLinux 8, which has glibc 2.28, and runs the conformance corpus there
+  with that system's Python 3.12.
+- The R source package needs R 4.4.0 or later, a floor that follows an audit
+  of the R C API that the binding calls. On Linux x86_64, macOS arm64 and
+  Windows x64 it passes `R CMD check --as-cran` with only the notes that
   `R/yamaa/cran-comments.md` explains: with R 4.6.1, and in CRAN's incoming
-  checks with R-devel, R-release and R 4.4 and the minimum Rust. The floor
-  follows an audit of the R C API that the binding calls.
-- R source builds with R 4.6.1 on Linux aarch64. There, with the network
-  disabled, native qualification builds and installs the R source package
-  that a release publishes and runs the conformance corpus with it: its
+  checks with R-devel, R-release and R 4.4 and the minimum Rust.
+- On Linux aarch64, native qualification uses R-release alone. With the
+  network disabled, it builds and installs the R source package that a
+  release publishes and runs the conformance corpus with it: its
   `native-offline-source` job, with the pinned Rust, and its
   `native-offline-toolchain` job, with the minimum Rust installed from its
   standalone installer. No `R CMD check --as-cran` runs on aarch64, and no
   lane there uses R 4.4.
-- R binary packages for R-release and R-oldrel, today R 4.6 and R 4.5, on
-  Windows x64 and macOS arm64, as CRAN builds them (#3030 D48). Each is built
-  for one R series and works only with R of that series, and the macOS
-  binaries need macOS 11 or later, the first macOS for Apple silicon;
-  `install.packages()` installs each with no Rust, Rtools or network. With any
-  other R series, R 4.4 among them, and on Linux, which gets no binary
-  packages (D54), users install from source: the R source package of the
-  GitHub release, which builds with its vendored crates and a Rust
-  toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without Rust
-  1.82 or later, the offline toolchain route, which carries Rust in from its
-  standalone installers without rustup or a network
+- The R binary packages are for R-release and R-oldrel, as CRAN builds them
+  (#3030 D48). Each is built for one R series and works only with R of that
+  series, and the macOS binaries need macOS 11 or later, the first macOS for
+  Apple silicon; `install.packages()` installs each with no Rust, Rtools or
+  network. With any other R series, R 4.4 among them, and on Linux, which
+  gets no binary packages (D54), users install from source: the R source
+  package of the GitHub release, which builds with its vendored crates and a
+  Rust toolchain; CRAN, once it has 1.0.0; or, on a Linux machine without
+  Rust 1.82 or later, the offline toolchain route, which carries Rust in from
+  its standalone installers without rustup or a network
   ([Installing in a restricted environment](articles/restricted-environments.md#the-offline-rust-toolchain-route)).
-- The `yamaa` command line as standalone binaries, which need no Python, R
-  or Rust (#3030 D12, D49): for Linux x86_64 and aarch64, built for the
-  `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` targets and
-  linked statically with the musl C library, so they run on any Linux of
-  their architecture; for Windows x64, built for `x86_64-pc-windows-msvc`
-  with the C runtime linked statically; and for macOS arm64, built for
-  `aarch64-apple-darwin`, on macOS 11 or later. Each is a GitHub release
-  asset, `yamaa-<version>-<target>.zip`, with no installer, and ships
-  unsigned, as [command-line binaries](#command-line-binaries) describes.
+- The `yamaa` command line ships as standalone binaries, which need no
+  Python, R or Rust (#3030 D12, D49). The Linux binaries link the musl C
+  library statically, so they run on any Linux of their architecture; the
+  Windows binary links the C runtime statically; and the macOS binary needs
+  macOS 11 or later. Each is a GitHub release asset,
+  `yamaa-<version>-<target>.zip` for its target above, with no installer,
+  and ships unsigned, as [command-line binaries](#command-line-binaries)
+  describes.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49;
   CRAN may still build the R package there), free-threaded Python, and the
   Python and R packages on musl systems such as Alpine Linux, are not
@@ -83,6 +96,23 @@ runs its selftest, `yamaa.selftest()` or `yamaa_selftest()`, without a
 network: the job's log keeps the report as installation qualification
 evidence, and the job fails unless the selftest reports `succeeded`. The
 package then runs the conformance corpus, also without a network.
+
+The native run also installs each wheel that a release publishes as a
+restricted machine installs
+[files carried in](articles/restricted-environments.md#from-files-carried-in):
+its `native-offline-wheel` jobs, on every platform with CPython 3.12 and
+3.15. The wheels are abi3, so the oldest and the newest supported CPython
+bound the supported interpreters that each wheel serves. While the network
+is up, pip downloads the wheel's runtime dependencies, at the versions that
+`python/uv.lock` pins and as wheels alone, into one directory with the
+wheel. Then, with the network disabled, pip installs the wheel from that
+directory alone, with `--no-index --find-links`, into a new virtual
+environment, which builds nothing. The installed package must import with
+the wheel's version, and it then runs its selftest: the job's log keeps the
+report, and the job fails unless it reports `succeeded`. On Linux the
+installation and the selftest run in containers without a network, from the
+manylinux_2_28 image with its CPython of the lane's version, and on macOS
+and Windows behind the same refusing proxy.
 
 The native run also proves the offline toolchain route (#3030 D54) on Linux
 x86_64 and aarch64: its `native-offline-toolchain` jobs. While the network is
@@ -135,10 +165,20 @@ declares, and every library that the binary loads must be the system's.
 Each job archives its binary with the command line's notices and checks the
 archive with `tools/packaging/cli_archive.py` and
 `tools.packaging.check_package_notices`. Its `native-cli-install` jobs then
-unpack each archive on a fresh runner of its platform, with no checkout,
-Rust or Python, and run `yamaa --version`, whose first line must name the
+unpack each archive on a fresh runner of its platform and, before setting up
+anything else, run `yamaa --version`, whose first line must name the
 archive's version, and `yamaa selftest`, which must succeed; the log keeps
-both reports.
+both reports. Each job then checks out the repository and sets up Python,
+but no Rust, and runs the conformance corpus through the unpacked binary
+with `tools.commands.cli_conformance`. The binary reads only 1.x files, so
+the converter writes every benchmark as 1.0 (#3030 D122), leaving out those
+that the 1.0 conversion gate excepts and those whose project supplies
+project functions, which the binary cannot call. The comparator judges each
+run against the expected files, and the job fails on any difference. The
+cohort comparison reads each archive's saved outputs beside its platform's
+wheel with the build Python and the R reports beside that wheel: for each
+case of the complete-report cohort, the command line's outcome and saved
+files must equal both installed hosts' reports, CSV byte for byte.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
@@ -159,12 +199,14 @@ refuses connections and runs two Cargo jobs.
 - In R-hub v2's `gcc16` container, CRAN's r-devel-linux-x86_64-fedora-gcc
   configuration (R-devel built with GCC 16 on Fedora 44, with CRAN's check
   settings), the build uses the Cargo and rustc that Fedora packages, as
-  CRAN's Linux check servers use their distribution's. Development PRs do not run the release lanes, so before a
-release also dispatch R-CMD-check, Dependency graphs and Release compatibility
-on the candidate. Release compatibility checks the minimum toolchain, the R
-source package built with it, minimal format builds, Python 3.15 and minimum
-Python saved artifact readers; dispatch CI for its minimum R saved artifact
-reader checks.
+  CRAN's Linux check servers use their distribution's.
+
+Development PRs do not run the release lanes, so before a release also
+dispatch R-CMD-check, Dependency graphs and Release compatibility on the
+candidate. Release compatibility checks the minimum toolchain, the R source
+package built with it, minimal format builds, Python 3.15 and minimum Python
+saved artifact readers; dispatch CI for its minimum R saved artifact reader
+checks.
 
 A release has one identity, written once in `tools/packaging/release.toml`:
 the final version X.Y.Z and, for a release candidate, its number N. Each
@@ -180,8 +222,7 @@ link of `python/README.md` that names a release tag to name its tag:
 
 An R version cannot mark a candidate, so the R package keeps the final version
 through the candidates (#3030 D53), and R does not offer the final release as
-an update to a candidate. The previous Python release is the `yamaa-py-0.3.0`
-tag.
+an update to a candidate.
 
 The commit that changes the identity also re-pins the tag links of
 `python/README.md`, the wheels' PyPI description: the check fails until they
@@ -277,15 +318,17 @@ nothing else is exempt. When a rule itself is wrong, changing its statement
 changes the language: the change waits for 2.0, or arrives in 1.x as a new
 optional field.
 
-**Enforcement.** The interface check (#3442, #3444 and #3445) runs in
+**Enforcement.** The interface check,
+`tools.validation.check_interface_stability`, runs in
 `make check-repository`, and so in CI's repository job. It compares the
 frozen surfaces with the newest final release of the same major, the tag
-`yamaa-vM.m.p` with no candidate suffix, and refuses a break in:
+`yamaa-vM.m.p` with no candidate suffix, and refuses a break in the
+conditions and their phases in `yaml/conditions.yaml`, the lines of
+`rust/interface/manifest.txt` and those of
+`rust/crates/yamaa/public-api.txt` (#3442).
 
-- the conditions and their phases in `yaml/conditions.yaml`, the lines of
-  `rust/interface/manifest.txt` and those of
-  `rust/crates/yamaa/public-api.txt` (#3442, the release baseline and the
-  line manifests);
+The remaining comparisons are tracked separately:
+
 - the four file types' JSON Schemas and the grammars in `yaml/grammar/`
   (#3444);
 - each existing failure's phase, condition and rule, the rule card IDs, and
@@ -521,9 +564,9 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs, the offline toolchain route, the R binary installs and the
-unpacked command-line archives among them, the R binary and command-line
-builds, shared Rust/math, complete cohort comparisons, strict R package
+wheel and source installs, the offline toolchain route, the R binary
+installs and the unpacked command-line archives among them, the R binary and
+command-line builds, shared Rust/math, complete cohort comparisons, strict R package
 checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
@@ -893,16 +936,21 @@ offers, and reproduces the license, copyright and NOTICE texts that the crate
 ships for it (#3364). The Python packages' copy covers the Python binding's
 crates, the R package's copy the R binding's, all of which the R source package
 bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
-the crates of `yamaa-cli`. It also gives the standard library's licensing from
-the notice that the Rust project ships with the pinned toolchain,
-`share/doc/rust/COPYRIGHT-library.html`, because the native code links that
-library: the licensing statement, the in-tree licenses and copyright holders,
-and of the notice's out-of-tree crates those that the standard library links
-on the supported targets. No package notice names a GNU license; the only GPL
-wording that remains is the clause of the LLVM exception to Apache-2.0, a
-permissive license, which names GPLv2. The command line keeps only that file
-and its component inventory beside its crate; its archives carry the Python
-packages' copies of the other notices. `LICENSE-READSTAT.txt`,
+the crates of `yamaa-cli`. It also gives the standard library's licensing,
+because the native code links that library: from the notice that the Rust
+project ships with the pinned toolchain, `share/doc/rust/COPYRIGHT-library.html`,
+the licensing statement and the in-tree licenses and copyright holders; and
+from the toolchain's `rust-src` component, which that notice does not fully
+cover, the third-party crates that the standard library links on the supported
+targets, such as `addr2line` and `object`, each with its one license and the
+texts that its package ships (#3369). No package notice names a GNU license;
+the only GPL wording that remains is the clause of the LLVM exception to
+Apache-2.0, a permissive license, which names GPLv2. The command line keeps
+only that file, its component inventory and `LICENSE-MUSL.txt` beside its
+crate; its archives carry the Python packages' copies of the other notices.
+The archives for the musl targets, whose executables link the musl C library
+statically, also carry `LICENSE-MUSL.txt`: musl's `COPYRIGHT` file, relied on
+under MIT. `LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
@@ -913,20 +961,25 @@ relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 
 `tools.packaging.generate_third_party_notices` generates each host's crate
 notices from `rust/Cargo.lock` and the standard library section from the
-toolchain that `rust/rust-toolchain.toml` pins, and it derives that
+toolchain that `rust/rust-toolchain.toml` pins, its notice and its `rust-src`
+component, which the repository checks add to it, and it derives that
 expression from the Python binding's linked crates. The repository check
 fails when a host gains or loses a linked crate without a matching notice
 entry in its host's copy, when `rustc` in `rust/` is not the pinned toolchain,
-when the committed section differs from that toolchain's notice, and when a
-notice would name a GNU license. Staging the R source package fails while its
+when the committed section differs from that toolchain's notice and sources,
+when the musl notice was reviewed for another toolchain, and when a notice
+would name a GNU license. Staging the R source package fails while its
 notices name a crate that it does not bundle. Native qualification and the
 release selector require every wheel, source package, R binary package and
 command-line archive to carry its own host's notices unchanged, and refuse a
 package with any text that names a GNU license, the files inside the R source
-package's `vendor.tar.xz` included. The only exception is the unchanged
+package's `vendor.tar.xz` included. The exceptions are the unchanged
 upstream files of the vendored crates that
 `tools/packaging/check_package_notices.py` lists with its reasons: zstd's
-dual-licensed C sources, `r-efi`, and README or changelog prose.
+dual-licensed C sources, `r-efi`, and README or changelog prose; and an R
+binary package's namespace loader, `yamaa/R/yamaa`, which R writes itself
+from its own `share/R/nspackloader.R`, whose header names the GPL that R is
+under.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the

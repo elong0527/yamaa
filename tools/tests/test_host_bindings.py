@@ -112,24 +112,24 @@ class HostBindings(unittest.TestCase):
             Loader=UniqueKeyLoader,
         )
         installs = {
-            "r": "check",
-            "equivalence": "check",
+            "r": ["check"],
+            # The equivalence gate checks R in its R host job only, and the
+            # job that reports both host jobs sets nothing up.
+            "equivalence-host": ["${{ matrix.host == 'r' && 'check' || 'none' }}"],
+            "equivalence": [],
             # The conversion gate checks R only when it runs both hosts.
-            "conversion": (
+            "conversion": [
                 "${{ steps.paths.outputs.hosts == 'python' && 'none' || 'check' }}"
-            ),
+            ],
         }
         for name, job in workflow["jobs"].items():
-            [setup] = [
-                step
+            setups = [
+                step.get("with", {}).get("r", "none")
                 for step in job["steps"]
                 if step.get("uses") == "./.github/actions/setup"
             ]
             with self.subTest(job=name):
-                self.assertEqual(
-                    setup.get("with", {}).get("r", "none"),
-                    installs.get(name, "none"),
-                )
+                self.assertEqual(setups, installs.get(name, ["none"]))
         self.assertIn(
             "make test-r", [step.get("run") for step in workflow["jobs"]["r"]["steps"]]
         )

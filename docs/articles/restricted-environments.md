@@ -22,13 +22,13 @@ runner: `ubuntu-24.04` is Linux x86_64, `ubuntu-24.04-arm` Linux aarch64,
 
 | Route | The machine needs | Qualified by |
 | --- | --- | --- |
-| Python wheel, from PyPI, a mirror or the release assets | CPython 3.12 or later on Linux x86_64 or aarch64 with glibc 2.28 or later, on macOS arm64 or on Windows x64 | `native-qualify (<os>, <python>, wheel)` on every platform with CPython 3.12 to 3.15, and `native-glibc (<os>)` on AlmaLinux 8, whose glibc is 2.28, for both Linux architectures |
+| Python wheel, from PyPI, a mirror or the release assets | CPython 3.12 or later on Linux x86_64 or aarch64 with glibc 2.28 or later, on macOS arm64 or on Windows x64 | `native-qualify (<os>, <python>, wheel)` on every platform with CPython 3.12 to 3.15; `native-glibc (<os>)` on AlmaLinux 8, whose glibc is 2.28, for both Linux architectures; and, for a wheel [carried in](#from-files-carried-in) with its dependencies, `native-offline-wheel (<os>, <python>)` on every platform with CPython 3.12 and 3.15, which installs it and its locked dependencies from one directory with no network, then runs its selftest |
 | Python source archive, from PyPI, a mirror or the release assets, built with no network | CPython 3.12 or later, Cargo and rustc 1.82 or later and a C compiler, with maturin 1.9.6 and yamaa's dependencies installed first | `native-offline-source (<os>, python)` on every platform |
 | R source package, from the release assets, built with no network | R 4.4.0 or later, Cargo and rustc 1.82 or later, a C compiler and GNU make; on Windows, Rtools45 and Rust's `x86_64-pc-windows-gnu` target | `native-offline-source (<os>, r)` on every platform with R 4.6.1, and `native-cran (<os>, R 4.4)`, which builds it with Rust 1.82 behind a proxy that refuses every connection |
 | R binary package, from the release assets | R-release or R-oldrel, today R 4.6 or R 4.5, on Windows x64 or on macOS arm64 from macOS 11; no Rust or Rtools | `native-r-binary-install (<os>, R <version>)` on Windows x64 and macOS arm64 with R 4.6.1 and R 4.5.3 |
 | [Offline Rust toolchain route](#the-offline-rust-toolchain-route), for either source archive on Linux | Linux x86_64 or aarch64, Rust's standalone installer carried in, and what the source archive needs besides Rust | `native-offline-toolchain (<os>, python)` and `native-offline-toolchain (<os>, r)` on both Linux architectures, with Rust 1.82.0 |
 | R from CRAN or a CRAN mirror, from 1.0.0 | R 4.4.0 or later; on Windows and macOS, CRAN's binary package for R-release or R-oldrel; elsewhere, what the R source package needs | CRAN's binary builders, from the release's R source package, on which `native-cran` runs CRAN's incoming checks |
-| Command-line binary, from the release assets | Linux x86_64 or aarch64, whatever its C library, since the binary is static; Windows x64; or macOS arm64 from macOS 11; no Python, R or Rust | `native-cli-install (<os>, <target>)` on every platform, which unpacks the archive that `native-cli (<os>, <target>)` built and runs `yamaa selftest` from it |
+| Command-line binary, from the release assets | Linux x86_64 or aarch64, whatever its C library, since the binary is static; Windows x64; or macOS arm64 from macOS 11; no Python, R or Rust | `native-cli-install (<os>, <target>)` on every platform, which unpacks the archive that `native-cli (<os>, <target>)` built and runs `yamaa selftest` and the conformance corpus from it |
 
 The floors are CPython 3.12 (#3030 D56, confirming D13) and R 4.4.0. A source
 build needs Rust 1.82, the minimum that the Rust workspace declares; a
@@ -214,11 +214,12 @@ Run the selftest on the restricted machine after installing. It runs the cases
 that the package carries through the installed engine and compares each result
 with its independently authored expected files, writing no file and using no
 network. Keep its printed report as the installation and operational
-qualification record of that machine. The `native-offline-source`,
-`native-offline-toolchain` and `native-r-binary-install` jobs run the same
-selftest after installing with no network, and fail unless it reports
-`succeeded`; the `native-cli-install` jobs run `yamaa selftest` from each
-unpacked command-line archive, and fail unless it succeeds.
+qualification record of that machine. The `native-offline-wheel`,
+`native-offline-source`, `native-offline-toolchain` and
+`native-r-binary-install` jobs run the same selftest after installing with
+no network, and fail unless it reports `succeeded`; the `native-cli-install`
+jobs run `yamaa selftest` from each unpacked command-line archive, and fail
+unless it succeeds.
 [Check an installation](api.md#check-an-installation) describes the result.
 
 === "R"

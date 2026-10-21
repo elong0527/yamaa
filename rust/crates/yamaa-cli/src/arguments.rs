@@ -214,6 +214,14 @@ impl Call {
     pub(crate) fn has(&self, flag: &str) -> bool {
         self.flags.iter().any(|(name, _)| *name == flag)
     }
+
+    /// The whole number given to the count `flag`, when the flag was given:
+    /// its value was checked to be decimal digits that fit in 64 bits.
+    pub(crate) fn count(&self, flag: &str) -> Option<u64> {
+        self.value(flag)
+            .and_then(OsStr::to_str)
+            .and_then(|text| text.parse().ok())
+    }
 }
 
 /// A usage error: why the command line is refused, with exit status 2.
@@ -443,6 +451,16 @@ mod tests {
         assert_eq!(lint.arguments, [OsString::from("a.yaml"), "b.yaml".into()]);
         let odm = call(&["read-odm", "s.xml", "o.csv", "--max-xml-depth", "64"]);
         assert_eq!(odm.value("--max-xml-depth"), Some(OsStr::new("64")));
+        assert_eq!(odm.count("--max-xml-depth"), Some(64));
+        assert_eq!(odm.count("--max-archive-members"), None);
+        let largest = call(&[
+            "read-odm",
+            "s.xml",
+            "o.csv",
+            "--max-expanded-bytes",
+            "18446744073709551615",
+        ]);
+        assert_eq!(largest.count("--max-expanded-bytes"), Some(u64::MAX));
     }
 
     #[test]

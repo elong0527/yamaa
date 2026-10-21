@@ -57,6 +57,9 @@ struct Checks<'a> {
     spec: &'a Spec,
     prepared: &'a PreparedSpecification,
     declared: types::DeclaredTypes<'a>,
+    /// The intermediates whose key types fail, which binding does not bind,
+    /// once [`Self::intermediates`] has checked them.
+    refused: BTreeSet<usize>,
 }
 
 /// How a check types a field of a record: by its owner and field name.
@@ -90,24 +93,23 @@ impl Donor<'_> {
 pub(in crate::specification) fn findings(
     prepared: &PreparedSpecification,
 ) -> Result<Vec<BindFinding>, BindError> {
-    let checks = Checks {
+    let mut checks = Checks {
         spec: prepared.tree.spec(),
         prepared,
         declared: prepared.declared_types(),
+        refused: BTreeSet::new(),
     };
     let mut findings = Vec::new();
     if let Some(filter) = checks.spec.rows.filter {
         checks.grammar(filter, &mut findings)?;
     }
-    let refused = checks.intermediates(&mut findings)?;
+    checks.refused = checks.intermediates(&mut findings)?;
     let bound = match &prepared.rows {
         rows::Rows::Implicit(_) => Bound::Implicit(checks.base(&mut findings)?),
-        rows::Rows::Templates(rows) => {
-            Bound::Templates(checks.rows(rows, &refused, &mut findings)?)
-        }
+        rows::Rows::Templates(rows) => Bound::Templates(checks.rows(rows, &mut findings)?),
     };
     checks.ranges(&mut findings)?;
-    checks.scopes(&bound, &refused, &mut findings);
+    checks.scopes(&bound, &mut findings);
     Ok(findings)
 }
 
@@ -121,6 +123,7 @@ pub(in crate::specification) fn written_filter_types(
         spec: prepared.tree.spec(),
         prepared,
         declared: prepared.declared_types(),
+        refused: BTreeSet::new(),
     }
     .written_filter_types()
 }
@@ -376,12 +379,10 @@ impl Checks<'_> {
         let spec = self.spec;
         for e in positions(spec, root) {
             match &spec.expr(e).kind {
-                ExprKind::Source(_) => {
-                    self.source(e, scope, findings)?;
-                }
+                ExprKind::Source(_) => self.selection(e, scope, false, findings)?,
                 ExprKind::FirstAvailable { sources, .. } => {
                     for &source in sources {
-                        self.source(source, scope, findings)?;
+                        self.selection(source, scope, e != root, findings)?;
                     }
                 }
                 ExprKind::Scalar {
@@ -391,7 +392,7 @@ impl Checks<'_> {
                 } => {
                     for operand in operands {
                         let start = findings.len();
-                        self.source(operand.expr, scope, findings)?;
+                        self.selection(operand.expr, scope, false, findings)?;
                         if findings.len() == start && scope.is_some() {
                             self.mapping_type(e, operand.expr, findings)?;
                         }
@@ -413,6 +414,63 @@ impl Checks<'_> {
                 }
                 _ => {}
             }
+        }
+        Ok(())
+    }
+
+    /// A source operand's record selection ([`Self::source`]); then, without
+    /// row templates, `require_match` and `between` on a read that binds and
+    /// is no implicit join ([`join_options`]). Whatever its filter reports,
+    /// the implicit template binds a field of the base, a column, or a field
+    /// of a lookup whose key types do not fail, and on the 0.5 surface a
+    /// bare name its absence answers (D67). A `first_available` source of a
+    /// `case` result (`branch`) binds as a row template's does, only with no
+    /// finding of its own.
+    fn selection(
+        &self,
+        e: ExprId,
+        scope: Option<Scope<'_>>,
+        branch: bool,
+        findings: &mut Vec<BindFinding>,
+    ) -> Result<(), BindError> {
+        let spec = self.spec;
+        let start = findings.len();
+        let (false, Some(scope), ExprKind::Source(source)) =
+            (self.source(e, scope, findings)?, scope, &spec.expr(e).kind)
+        else {
+            return Ok(());
+        };
+        if branch {
+            super::boundaries::Reads::column(
+                spec,
+                self.prepared,
+                scope.drivers,
+                &[],
+                &self.refused,
+            )
+            .source(e, start, findings);
+            return Ok(());
+        }
+        let variable = name(spec, source.variable).unwrap_or_default();
+        let binds = match variable.split_once('.') {
+            Some((owner, _)) => match spec
+                .intermediates
+                .iter()
+                .position(|item| item.id.name == owner)
+            {
+                Some(index) => !self.refused.contains(&index),
+                None => scope.drivers.contains(&owner),
+            },
+            None => {
+                spec.columns
+                    .iter()
+                    .any(|column| column.name.name == variable)
+                    || (source.absent.is_some()
+                        && spec.header.surface.absent_answers_unknown_variable())
+            }
+        };
+        if binds {
+            join_options(spec, e, findings);
         }
         Ok(())
     }
@@ -462,10 +520,11 @@ impl Checks<'_> {
 
     /// One derivation of a row template or the column phase, node by node
     /// in binding's order (`BindContext::bind`): a structured source's
-    /// declaration and selection before its variable, a window's grouping
-    /// and defects before its reads, a mapping's source type once its source
-    /// binds, an aggregate's header alone, and each other read where binding
-    /// binds it ([`super::boundaries`]). The authored defects precede it.
+    /// declaration and selection before its variable, and its join options
+    /// after it, a window's grouping and defects before its reads, a
+    /// mapping's source type and a placeholder's type once their read binds,
+    /// an aggregate's header alone, and each other read where binding binds
+    /// it ([`super::boundaries`]). The authored defects precede it.
     fn walk(
         &self,
         reads: &super::boundaries::Reads<'_>,
@@ -485,22 +544,23 @@ impl Checks<'_> {
             _ => Vec::new(),
         };
         // A source operand: a structured binding unless its declaration or
-        // selection stops binding before its variable, or a name.
-        let source = |e: ExprId, findings: &mut Vec<BindFinding>| -> Result<(), BindError> {
-            match &spec.expr(e).kind {
+        // selection stops binding before its variable, or a name. True when
+        // it binds.
+        let source = |e: ExprId, findings: &mut Vec<BindFinding>| -> Result<bool, BindError> {
+            Ok(match &spec.expr(e).kind {
                 ExprKind::Source(_) => {
-                    if !self.source(e, Some(scope), findings)? {
-                        reads.source(e, findings);
-                    }
+                    let start = findings.len();
+                    !self.source(e, Some(scope), findings)? && reads.source(e, start, findings)
                 }
                 ExprKind::Ref(read) => reads.read(&path(spec, e), read.as_str(), findings),
-                _ => {}
-            }
-            Ok(())
+                _ => true,
+            })
         };
         match &spec.expr(e).kind {
             ExprKind::Literal(_) | ExprKind::Unsupported(_) => {}
-            ExprKind::Ref(_) | ExprKind::Source(_) => source(e, findings)?,
+            ExprKind::Ref(_) | ExprKind::Source(_) => {
+                source(e, findings)?;
+            }
             ExprKind::Formula(formula) => {
                 if let Ok(compiled) = &formula.compiled {
                     for (at, read) in names(e) {
@@ -532,23 +592,34 @@ impl Checks<'_> {
                 ..
             } => {
                 for operand in operands {
-                    let start = findings.len();
-                    source(operand.expr, findings)?;
-                    if findings.len() == start {
+                    if source(operand.expr, findings)? {
                         self.mapping_type(e, operand.expr, findings)?;
                     }
                 }
             }
-            // Each placeholder is read at the template's text.
+            // Each placeholder is read at the template's text, then typed
+            // once it binds (TEXT-1).
             ExprKind::Scalar {
                 op: ScalarOp::StrTemplate { .. },
                 operands,
                 ..
             } => {
                 let at = format!("{}.template", path(spec, e));
-                for operand in operands {
-                    if let Some(read) = name(spec, operand.expr) {
-                        reads.read(&at, read, findings);
+                let template = str_template::from_tree(spec, e).map_err(|_| BindError::Internal)?;
+                for (index, operand) in operands.iter().enumerate() {
+                    let Some(read) = name(spec, operand.expr) else {
+                        continue;
+                    };
+                    if let Some(kind) = reads
+                        .read(&at, read, findings)
+                        .then(|| self.placeholder(read))
+                        .flatten()
+                    {
+                        findings.extend(
+                            template
+                                .input_diagnostic(index, type_name(kind))
+                                .map(BindFinding::TextTemplate),
+                        );
                     }
                 }
             }
@@ -601,6 +672,17 @@ impl Checks<'_> {
             ));
         }
         Ok(())
+    }
+
+    /// The type of a `str_template` placeholder that binding refuses as no
+    /// `str` (TEXT-1): a column's declared type, or a stored field's. A
+    /// lookup's field is checked against the values it reads.
+    fn placeholder(&self, name: &str) -> Option<ColumnType> {
+        name.split_once('.')
+            .is_none_or(|(owner, _)| !self.prepared.intermediates.contains(owner))
+            .then(|| self.declared.name(name).column_type())
+            .flatten()
+            .filter(|&kind| kind != ColumnType::Str)
     }
 
     /// What binding decides of an aggregate from its declarations before it
@@ -1834,10 +1916,10 @@ impl Checks<'_> {
     fn rows(
         &self,
         rows: &rows::Templates,
-        refused: &BTreeSet<usize>,
         findings: &mut Vec<BindFinding>,
     ) -> Result<TemplatesBound, BindError> {
         let spec = self.spec;
+        let refused = &self.refused;
         let primary = self.prepared.source().name.as_str();
         let phases = rows.phases();
         let columns = rows.column_phase();
@@ -2047,14 +2129,14 @@ impl Checks<'_> {
     /// ([`super::scopes`]): each matched aggregate's key values for the rows
     /// that evaluate it, then each lookup the rows read, over the reads that
     /// bound. A dataset verification reads its lookups for every row.
-    fn scopes(&self, bound: &Bound, refused: &BTreeSet<usize>, findings: &mut Vec<BindFinding>) {
+    fn scopes(&self, bound: &Bound, findings: &mut Vec<BindFinding>) {
         use super::scopes::{Reading, Scopes};
         let spec = self.spec;
         let prepared = self.prepared;
         let scopes = Scopes {
             spec,
             prepared,
-            refused,
+            refused: &self.refused,
         };
         let verified = relation_predicates::verification_predicates(&prepared.verifications.checks)
             .flat_map(crate::bound_expression::BoundPredicate::bindings)
@@ -2485,6 +2567,34 @@ fn group_key(variable: &str, driver: &str, phase: Phase<'_>) -> bool {
                 .filter(|&&(owner, _)| owner == dataset)
                 .peekable();
             own.peek().is_some() && own.all(|(_, group)| group.contains(&variable))
+        }
+    }
+}
+
+/// `require_match` asserts what only an implicit join can miss, and
+/// `between` narrows what only an implicit join matches: on a structured
+/// source that reads a lookup, the rows' driver or a column, binding refuses
+/// each once that read binds, `require_match` first (LOOKUP-24, LOOKUP-9).
+pub(super) fn join_options(spec: &Spec, e: ExprId, findings: &mut Vec<BindFinding>) {
+    let ExprKind::Source(source) = &spec.expr(e).kind else {
+        return;
+    };
+    let at = path(spec, e);
+    let variable = name(spec, source.variable).unwrap_or_default();
+    for (refused, code, field) in [
+        (
+            source.require_match,
+            C::SourceRequireMatchScope,
+            "require_match",
+        ),
+        (source.between.is_some(), C::SourceRangeScope, "between"),
+    ] {
+        if refused {
+            findings.push(BindFinding::Source(source_expressions::SourceFinding::new(
+                code,
+                &format!("{at}.{field}"),
+                &[("identifier", variable)],
+            )));
         }
     }
 }

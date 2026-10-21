@@ -109,6 +109,10 @@
   .Call(wrap__lint, paths, fix)
 }
 
+.native_schema <- function(file_type) {
+  .Call(wrap__schema, file_type)
+}
+
 .native_selftest <- function(version) {
   .Call(wrap__selftest, version)
 }

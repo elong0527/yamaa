@@ -18,7 +18,8 @@ use yamaa_core::diagnostic::Diagnostic;
 
 use crate::api::{Failure, Run, Status};
 use crate::diagnostic::Severity;
-use crate::engine::{Build, DefineBuild};
+use crate::engine::Build;
+use crate::internal::EngineShared;
 use crate::text::Action;
 
 /// Whether any of `issues` fails a result: an error-severity issue does.
@@ -80,6 +81,75 @@ impl Member {
             Work::Built(run) => Some(run),
             _ => None,
         }
+    }
+}
+
+/// One submission section's composition with its rendered artifacts, a
+/// member of a [`crate::Submission`]. Only the save of the submission that
+/// holds it writes, through the resolver.
+pub(crate) struct DefineBuild {
+    inner: yamaa_adapters::file_define::Define,
+    /// The issues of the composition as it was made: a later save's refusal
+    /// joins its issues, never these.
+    composed: Vec<Diagnostic>,
+}
+
+impl DefineBuild {
+    /// Compose `section` of the project file `project` through the engine's
+    /// resolver, with `created` as its creation time when given. The caller
+    /// has found that the project declares `section` (PROJECT-14).
+    pub(crate) fn compose(
+        shared: &EngineShared,
+        project: &str,
+        section: yamaa_core::project_environment::Submission,
+        created: Option<&str>,
+        installed: &str,
+    ) -> Self {
+        let inner = yamaa_adapters::file_define::Define::prepare(
+            project,
+            section,
+            created,
+            installed,
+            shared.language,
+            crate::internal::resolver_bridge(shared),
+        );
+        let composed = inner.issues().to_vec();
+        Self { inner, composed }
+    }
+
+    /// The composition's issues, with those of a save that stopped at it.
+    pub(crate) fn issues(&self) -> Vec<Diagnostic> {
+        self.inner.issues().to_vec()
+    }
+
+    /// The composition's issues as it was made, before any save.
+    pub(crate) fn composed(&self) -> &[Diagnostic] {
+        &self.composed
+    }
+
+    /// The transport files of a section that composed: every artifact but
+    /// its define.xml, which comes last (JSON-14).
+    pub(crate) fn transports(&self) -> usize {
+        self.inner.artifacts().len().saturating_sub(1)
+    }
+
+    /// The files a save of this composition writes, in publication order:
+    /// each transport file, then define.xml (JSON-14). `None` when the
+    /// composition, or an earlier save of it, failed.
+    pub(crate) fn plan(&self) -> Option<Vec<publication::File<'_>>> {
+        self.inner.plan()
+    }
+
+    /// Record what a save did with this composition's files; a stop fails the
+    /// composition, and its issues then say why.
+    pub(crate) fn record(&mut self, committed: usize, stopped: Option<(usize, Cause)>) {
+        self.inner.record(committed, stopped);
+    }
+
+    /// Record a save stopped at this composition for `issues`, before any of
+    /// its files was written.
+    pub(crate) fn refuse(&mut self, issues: Vec<Diagnostic>) {
+        self.inner.refuse_save(issues);
     }
 }
 
