@@ -23,7 +23,7 @@ use yamaa_core::schema::{
 };
 
 use super::checks::{Departure, Rewrite};
-use super::document::{Document, Value};
+use super::document::{Document, Style, Value};
 
 /// The handlers whose omission answers with the missing value (COLUMN-10),
 /// by the class or operation that declares them, so YAML null restates them.
@@ -189,6 +189,7 @@ impl<'a> Read<'a> {
             let Some((key, mapping)) = self.keys[value] else {
                 continue;
             };
+            let declares = |name: &str| self.document.member(Some(mapping), name);
             let restates = match self.default(*descriptor) {
                 Some((module, default)) => same(self.values, site.node, module, default),
                 None => {
@@ -196,7 +197,18 @@ impl<'a> Read<'a> {
                         && HANDLERS.contains(&(owner.as_str(), field.as_str()))
                         && !(owner == "flag_class"
                             && field == "missing"
-                            && self.document.member(Some(mapping), "false_value").is_some())
+                            && declares("false_value").is_some())
+                        // An absence answer beside `require_match: true`
+                        // conflicts with it, which validation refuses
+                        // (LOOKUP-24).
+                        && !(field == "absent"
+                            && declares("require_match").is_some_and(|flag| {
+                                matches!(
+                                    &self.document.node(flag).value,
+                                    Value::Scalar { text, style: Style::Plain }
+                                        if super::authoring::plain_true(text)
+                                )
+                            }))
                 }
             };
             if !restates {

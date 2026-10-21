@@ -246,9 +246,11 @@ restate their default. So does any field that writes the default its schema
 declares, such as an input's `relative_to: declaring`, a section's
 `context: Submission` or a codelist's `data_type: text`. Each is reported as
 `restated_default` at its key, and `fix` removes it. A handler whose omission
-fails, such as `unmapped`, declares an answer when it is `null`, and a flag's
+fails, such as `unmapped`, declares an answer when it is `null`, a flag's
 `missing` beside a declared `false_value` is required
-([EXPR-8](../../rules/expressions.md#expr-8)); neither is reported. A file that
+([EXPR-8](../../rules/expressions.md#expr-8)), and an `absent` beside
+`require_match: true` conflicts with it
+([LOOKUP-24](../../rules/lookup.md#lookup-24)); none is reported. A file that
 declares `parent` is not read for restated defaults: a value a layer writes may
 replace one it inherits.
 

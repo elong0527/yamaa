@@ -171,6 +171,11 @@ pub(super) fn plain_text(text: &str) -> bool {
     matches!(resolve(text), Data::Text(_))
 }
 
+/// Whether a plain scalar reads as the Boolean true.
+pub(super) fn plain_true(text: &str) -> bool {
+    matches!(resolve(text), Data::Boolean(true))
+}
+
 /// A plain scalar's value under the reference reader's YAML 1.2 resolution.
 fn resolve(text: &str) -> Data {
     if let Some(digits) = text.strip_prefix("0x") {

@@ -1863,6 +1863,13 @@ fn a_restated_default_needs_its_meaning_proved() {
             "columns.AGE.derivation.flag.false_value".to_owned()
         )]
     );
+    // An absence answer beside `require_match: true` conflicts with it,
+    // which validation refuses (LOOKUP-24).
+    let conflicting = SPELLED.replace(
+        "    keep: first\n",
+        "    keep: first\n    absent: null\n    require_match: true\n",
+    );
+    assert!(!names(&conflicting).contains(&"restated_default"));
     // A layer may replace an inherited value, so it is not read.
     let layer = SPELLED.replace("domain: ADSL\n", "parent: base.yaml\ndomain: ADSL\n");
     let restated = layer.replace("    keep: first\n", "    keep: first\n    absent: null\n");
