@@ -38,9 +38,19 @@ open gates live in GitHub issues and pull requests, not here.
   1.82 or later, the offline toolchain route, which carries Rust in from its
   standalone installers without rustup or a network
   ([Installing in a restricted environment](articles/restricted-environments.md#the-offline-rust-toolchain-route)).
+- The `yamaa` command line as standalone binaries, which need no Python, R
+  or Rust (#3030 D12, D49): for Linux x86_64 and aarch64, built for the
+  `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` targets and
+  linked statically with the musl C library, so they run on any Linux of
+  their architecture; for Windows x64, built for `x86_64-pc-windows-msvc`
+  with the C runtime linked statically; and for macOS arm64, built for
+  `aarch64-apple-darwin`, on macOS 11 or later. Each is a GitHub release
+  asset, `yamaa-<version>-<target>.zip`, with no installer, and ships
+  unsigned, as [command-line binaries](#command-line-binaries) describes.
 - Other runtimes and architectures, macOS x86_64 among them (#3030 D49;
-  CRAN may still build the R package there), free-threaded Python and musl
-  are not supported. R is distributed as a GitHub source tarball and binary
+  CRAN may still build the R package there), free-threaded Python, and the
+  Python and R packages on musl systems such as Alpine Linux, are not
+  supported. R is distributed as a GitHub source tarball and binary
   packages, and from 1.0.0 on CRAN, as [CRAN submission](#cran-submission)
   describes.
 
@@ -109,6 +119,26 @@ The job's log keeps the selftest's report, and the job fails unless it
 reports `succeeded`. The cohort comparison reads each binary's reports
 beside those of its platform's wheel: on Windows the wheel is built with
 MSVC and the binary with Rtools' GNU toolchain.
+
+The native run builds the command-line binaries that a release publishes,
+each for its Rust target on a runner of its platform: its `native-cli` jobs.
+Each builds the `yamaa` executable of `rust/crates/yamaa-cli` with the pinned
+toolchain and the `dist` profile, release without the symbol table, as the
+wheels are built. The Linux targets link the musl C library that Rust
+bundles, the runner's `musl-gcc` compiles the bundled ReadStat and zstd C
+sources, and the job requires `file` to call the binary static and `readelf`
+to find no program interpreter and no shared library. On Windows
+`-C target-feature=+crt-static` links the C runtime statically, and
+`dumpbin` must list no C runtime DLL. On macOS `MACOSX_DEPLOYMENT_TARGET` is
+11.0, which the job compares with the minimum macOS that the binary
+declares, and every library that the binary loads must be the system's.
+Each job archives its binary with the command line's notices and checks the
+archive with `tools/packaging/cli_archive.py` and
+`tools.packaging.check_package_notices`. Its `native-cli-install` jobs then
+unpack each archive on a fresh runner of its platform, with no checkout,
+Rust or Python, and run `yamaa --version`, whose first line must name the
+archive's version, and `yamaa selftest`, which must succeed; the log keeps
+both reports.
 
 The native run also runs CRAN's incoming checks on the R source archive that a
 release publishes, the bytes of its `native-r-ubuntu-24.04` artifact: its
@@ -372,9 +402,10 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs, the offline toolchain route and the R binary installs among
-them, the R binary builds, shared Rust/math, complete cohort comparisons,
-strict R package checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
+source installs, the offline toolchain route, the R binary installs and the
+unpacked command-line archives among them, the R binary and command-line
+builds, shared Rust/math, complete cohort comparisons, strict R package
+checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
 does a lightweight tag or a missing, repeated or malformed trailer, and a named
@@ -398,6 +429,10 @@ equal to it:
 | R binary package for macOS arm64, R 4.5 | `yamaa_<R version>-4.5.tgz` | `native-r-binary-macos-15-4.5.3` |
 | R binary package for Windows x64, R 4.6 | `yamaa_<R version>-4.6.zip` | `native-r-binary-windows-2025-4.6.1` |
 | R binary package for Windows x64, R 4.5 | `yamaa_<R version>-4.5.zip` | `native-r-binary-windows-2025-4.5.3` |
+| Command-line binary for Linux x86_64 | `yamaa-<Cargo version>-x86_64-unknown-linux-musl.zip` | `native-cli-x86_64-unknown-linux-musl` |
+| Command-line binary for macOS arm64 | `yamaa-<Cargo version>-aarch64-apple-darwin.zip` | `native-cli-aarch64-apple-darwin` |
+| Command-line binary for Windows x64 | `yamaa-<Cargo version>-x86_64-pc-windows-msvc.zip` | `native-cli-x86_64-pc-windows-msvc` |
+| Command-line binary for Linux aarch64 | `yamaa-<Cargo version>-aarch64-unknown-linux-musl.zip` | `native-cli-aarch64-unknown-linux-musl` |
 
 `R CMD INSTALL --build` names a binary package `yamaa_<R version>.zip` on
 Windows and `yamaa_<R version>.tgz` on macOS. The two R series' binaries of
@@ -406,6 +441,15 @@ hyphen. `install.packages(path, repos = NULL)` takes the package name from
 what comes before the underscore, and the version from the package itself,
 so it installs these files as they are. The selector also requires each
 binary's `Built` field to name the R version and platform of its lane.
+
+A command-line archive's name gives the engine's version, in the Cargo
+spelling that `yamaa --version` prints, so a candidate's reads
+`1.0.0-rc.1`, and the Rust target of its binary. The archive holds one
+directory of the same name, with the `yamaa` executable, `yamaa.exe` on
+Windows, and the package notices. The selector requires exactly those files:
+the executable with Unix mode 0755 and a header that names its target's
+format and architecture, so that `unzip` gives an executable that runs, and
+the notices with mode 0644, unchanged.
 
 Each native artifact holds exactly the assets listed for it, so a release
 publishes every asset that the native run built, or nothing: a missing,
@@ -508,6 +552,33 @@ install reliably, so its release body gives
 GitHub release assets only, with no PyPI upload (#2848). The GitHub release
 assets remain the standalone download route for every package.
 
+### Command-line binaries
+
+The command-line binaries reach users through the GitHub release alone, and
+have no installer. A user unzips the archive of their platform and runs the
+`yamaa` executable in its directory, or puts that directory on the `PATH`.
+`yamaa --version` names the engine, and `yamaa selftest` runs the selftest
+cases as the hosts' `selftest()` does.
+
+1.0.0 ships the binaries unsigned and without notarization (#3030 D52), and
+each system says so the first time:
+
+- On macOS, a file downloaded with a browser carries the quarantine
+  attribute, which Archive Utility passes on to the files that it unpacks,
+  and Gatekeeper refuses to run a quarantined binary that is not notarized,
+  saying that Apple could not verify it. Clearing the attribute once, in the
+  archive's directory, lets the binary run:
+  `xattr -d com.apple.quarantine yamaa`. An archive downloaded with `curl` and
+  unpacked with `unzip` carries no attribute.
+- On Windows, a file downloaded with a browser carries the mark of the web,
+  which Explorer passes on to the files that it extracts, and SmartScreen can
+  stop an unsigned executable that carries it with "Windows protected your
+  PC": **More info**, then **Run anyway**, starts it. `Unblock-File` in
+  PowerShell removes the mark, from the archive before extracting it or from
+  `yamaa.exe`. Where application control admits only signed executables, the
+  binary needs an administrator's approval, while the Python and R packages
+  load inside interpreters that are already allowed.
+
 ## CRAN submission
 
 CRAN receives 1.0.0, never a candidate (#3030 D1). Before submitting, the
@@ -550,7 +621,8 @@ engine crates `yamaa-core`, `yamaa-adapters` and `yamaa` with that host's
 binding crate; the canonical workspace manifest with `crates/*` as its
 members, which in the bundle are exactly those crates, and with the profiles
 that the host builds with, so that the R bundle's leaves out
-`[profile.dist]`, which only the wheels select; a lock trimmed from
+`[profile.dist]`, which only the wheels and the command-line binaries
+select; a lock trimmed from
 the canonical `rust/Cargo.lock`; the vendored YAML parser, without its tests,
 and the ReadStat sources; and the crates.io crates of that lock, as
 `cargo vendor --locked --versioned-dirs` writes them, apart from the files
@@ -670,25 +742,28 @@ reads, which neither route carries.
 Every package carries the project license and the third-party notices: each
 wheel in its `.dist-info/licenses/` directory, the Python source archive at its
 root, the R source package in `inst/`, which R installs at the package
-root, and each R binary package at that root. `LICENSE.txt` is the project's
-MIT license. `LICENSE-THIRD-PARTY.txt` lists the third-party crates that its
-host's binding crate links: its normal dependency closure on each supported
-target, without procedural macros. Crates that only build scripts or
-procedural macros use, and crates of other platforms, are not linked and are
-not listed; the source packages carry their license files with their vendored
-sources. Each entry names the one license that yamaa relies on, never the
-choice that the crate offers, and reproduces the license, copyright and
-NOTICE texts that the crate ships for it (#3364). The Python packages' copy
-covers the Python binding's crates, and the R package's copy the R binding's,
-all of which the R source package bundles. It also gives the standard
-library's licensing from the notice that the Rust project ships with the
-pinned toolchain, `share/doc/rust/COPYRIGHT-library.html`, because the native
-extension links that library: the licensing statement, the in-tree licenses
-and copyright holders, and of the notice's out-of-tree crates those that the
-standard library links on the supported targets. No package notice names a
-GNU license; the only GPL wording that remains is the clause of the LLVM
-exception to Apache-2.0, a permissive license, which names GPLv2.
-`LICENSE-READSTAT.txt`,
+root, each R binary package at that root, and each command-line archive
+beside the executable. `LICENSE.txt` is the project's MIT license.
+`LICENSE-THIRD-PARTY.txt` lists the third-party crates that its host's crate
+links: its normal dependency closure on each supported target, without
+procedural macros. Crates that only build scripts or procedural macros use,
+and crates of other platforms, are not linked and are not listed; the source
+packages carry their license files with their vendored sources. Each entry
+names the one license that yamaa relies on, never the choice that the crate
+offers, and reproduces the license, copyright and NOTICE texts that the crate
+ships for it (#3364). The Python packages' copy covers the Python binding's
+crates, the R package's copy the R binding's, all of which the R source package
+bundles, and the command line's copy, `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt`,
+the crates of `yamaa-cli`. It also gives the standard library's licensing from
+the notice that the Rust project ships with the pinned toolchain,
+`share/doc/rust/COPYRIGHT-library.html`, because the native code links that
+library: the licensing statement, the in-tree licenses and copyright holders,
+and of the notice's out-of-tree crates those that the standard library links
+on the supported targets. No package notice names a GNU license; the only GPL
+wording that remains is the clause of the LLVM exception to Apache-2.0, a
+permissive license, which names GPLv2. The command line keeps only that file
+and its component inventory beside its crate; its archives carry the Python
+packages' copies of the other notices. `LICENSE-READSTAT.txt`,
 `LICENSE-UNICODE.txt` and `LICENSE-YAML.txt` cover the vendored ReadStat
 sources, the Unicode data in yamaa's own tables and the vendored YAML parser.
 The R package keeps its `MIT + file LICENSE` declaration, and its `Copyright`
@@ -701,29 +776,30 @@ relied on under MIT, with Unicode-3.0 for the Unicode tables in `core`.
 notices from `rust/Cargo.lock` and the standard library section from the
 toolchain that `rust/rust-toolchain.toml` pins, and it derives that
 expression from the Python binding's linked crates. The repository check
-fails when a binding gains or loses a linked crate without a matching notice
-entry in its host's copy, when `rustc` in `rust/` is not the pinned
-toolchain, when the committed section differs from that toolchain's notice,
-and when a notice would name a GNU license. Staging the R source package
-fails while its notices name a crate that it does not bundle. Native
-qualification and the release selector require every wheel, source package
-and R binary package to carry its own host's notices unchanged, and refuse a
-package with any text that names a GNU license, the files inside the R
-source package's `vendor.tar.xz` included. The only exception is the
-unchanged upstream files of the vendored crates that
+fails when a host gains or loses a linked crate without a matching notice
+entry in its host's copy, when `rustc` in `rust/` is not the pinned toolchain,
+when the committed section differs from that toolchain's notice, and when a
+notice would name a GNU license. Staging the R source package fails while its
+notices name a crate that it does not bundle. Native qualification and the
+release selector require every wheel, source package, R binary package and
+command-line archive to carry its own host's notices unchanged, and refuse a
+package with any text that names a GNU license, the files inside the R source
+package's `vendor.tar.xz` included. The only exception is the unchanged
+upstream files of the vendored crates that
 `tools/packaging/check_package_notices.py` lists with its reasons: zstd's
 dual-licensed C sources, `r-efi`, and README or changelog prose.
 
 Every package also carries `COMPONENTS.tsv` beside the notices, the component
 inventory of its host: the wheels and the Python source archive carry the
-Python inventory, and the R source and binary packages the R inventory,
-which R installs with the notices. It lists every package of the host's
+Python inventory, the R source and binary packages the R inventory, which R
+installs with the notices, and the command-line archives the command line's,
+`rust/crates/yamaa-cli/COMPONENTS.tsv`. It lists every package of the host's
 trimmed lock, including the crates that only build scripts and procedural macros use and
 those that no supported target compiles, and the C code that those crates
 compile from sources that they carry: ReadStat in `yamaa-adapters` and the
-zstd library that `zstd-sys` bundles. The wheels' inventory also lists
-`rust-std`, the Rust standard library of the pinned toolchain that builds
-them, which they link. A source archive links the standard library of
+zstd library that `zstd-sys` bundles. The inventory of the wheels and of
+the command-line binaries also lists `rust-std`, the Rust standard library
+of the pinned toolchain that builds them, which they link. A source archive links the standard library of
 whatever toolchain builds it, so the Python source archive carries the
 wheels' inventory without that row, and the R source package's inventory has
 none. Instead, the R package's `configure`, which already runs
@@ -743,7 +819,7 @@ the release's tag; and its purpose, from `tools/packaging/crate_purposes.toml`
 for a crate or from `tools/packaging/generate_component_inventory.py` for the
 C code and the standard library. It records no digests. Packages that pip or
 R install beside yamaa, such as Polars, are not among its components.
-`tools.packaging.generate_component_inventory` writes both inventories, and
+`tools.packaging.generate_component_inventory` writes the three inventories, and
 the repository check and native qualification fail while one differs from
 what its host's trimmed lock, the crates' manifests, the purposes, the
 vendored sources' provenance and the pinned toolchain give. The package

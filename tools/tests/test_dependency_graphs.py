@@ -330,7 +330,7 @@ class DependencyGraphsTests(unittest.TestCase):
             NOTICES,
             tuple(
                 (directory / notice_generator.NOTICES).relative_to(ROOT).as_posix()
-                for directory in (notice_generator.PYTHON, notice_generator.R_INST)
+                for directory in notice_generator.copies().values()
             ),
         )
         with tempfile.TemporaryDirectory() as temporary:
