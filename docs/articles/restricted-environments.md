@@ -77,10 +77,11 @@ add them to a local repository that the mirror hosts, or carry them in.
 When no mirror has the version you need, the assets of its
 [GitHub release](https://github.com/elong0527/yamaa/releases) are the
 fallback: the wheels, the Python source archive, the R source package, the R
-binary packages and the command-line archives. They are the files that PyPI
-serves, and a final release's R source package is the file that CRAN
-receives. Download them on a connected machine and carry them in; installing
-them needs no network.
+binary packages and the command-line archives. The wheels and the Python
+source archive are the files that PyPI serves, a final release's R source
+package is the file that CRAN receives, and the R binary packages and the
+command-line archives are published only there. Download them on a connected
+machine and carry them in; installing them needs no network.
 
 A wheel needs its dependencies beside it. On a connected machine with the same
 operating system, architecture and Python version, collect yamaa and its
