@@ -471,6 +471,8 @@ conditions! {
     VerificationNotMissingRedundant => ("validation", "redundant_declaration", Some("CHECK-5")),
     VerificationAllowedValuesFailed => ("verification", "allowed_values_failed", Some("CHECK-6")),
     SubmissionUnknownDocument => ("validation", "unknown_document", Some("DEFINE-8")),
+    // A dataset's `submission.standard` naming no guide of its section (D16).
+    SubmissionUnknownStandard => ("validation", "unknown_standard", Some("DEFINE-8")),
     SubmissionReservedMetadata => ("validation", "reserved_metadata_key", Some("SUB-2")),
     SubmissionMetadataMissing => ("validation", "submission_metadata_missing", Some("DEFINE-7")),
     SubmissionOriginMissing => ("validation", "origin_missing", Some("SUB-14")),
@@ -505,9 +507,13 @@ conditions! {
     // A 1.0 specification without the `model` its submission metadata or a
     // section's listing requires (D25).
     SubmissionModelRequired => ("validation", "missing_required_field", Some("SUB-3")),
-    // A 1.0 section's guide, or a listed specification's `model`, outside the
-    // section's model: the 1.0 name of `unknown_standard_family` (D58).
+    // A listed specification's `model` outside the section's model: the 1.0
+    // name of `unknown_standard_family` (D58).
     SubmissionModelMismatch => ("validation", "standard_model_mismatch", Some("SUB-3")),
+    // A 1.0 section's guide outside the section's model, and a guide name an
+    // earlier entry of its `standards` takes (D16).
+    SectionStandardModel => ("validation", "standard_model_mismatch", Some("DEFINE-6")),
+    SectionStandardDuplicate => ("validation", "duplicate_identifier", Some("DEFINE-6")),
     SubmissionDefineExtension => ("validation", "value_not_permitted", Some("DEFINE-2")),
     SubmissionDefineName => ("validation", "value_not_permitted", Some("DEFINE-2")),
     SubmissionSourceVersion => ("validation", "source_system_incomplete", Some("DEFINE-12")),

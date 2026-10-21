@@ -14,8 +14,8 @@ document. A domain build never generates a Define-XML document.
 
 A study document is composed from one selected `sdtm`, `adam` or `send` section
 of an admitted project file ([PROJECT-1](project.md#project-1)). The project
-supplies `study` and shared `codelists`; the selected section supplies one
-implementation guide, supporting documents, an ordered `specs` list and one
+supplies `study` and shared `codelists`; the selected section supplies its
+implementation guides, supporting documents, an ordered `specs` list and one
 `define` target. Each section produces exactly one Define-XML document. The
 selected project section is the only place the composition is declared.
 
@@ -147,20 +147,39 @@ specification or resolving to the same artifact path fail with
 
 <a id="define-6"></a>
 
-### DEFINE-6. The section's implementation guide binds every dataset and belongs to the section's family
+### DEFINE-6. The section's implementation guides belong to its model, and each dataset is bound to the one it selects
 
-The first entry of the selected section's `standards` binds every represented
-dataset to the same implementation guide of type `IG`, and its name must
-belong to the selected section's family. The `sdtm`, `adam` and `send` sections produce separate
-documents, and each document carries the controlled-terminology standards cited
-by its bound codelists' sources.
+The selected section's `standards` lists one or more implementation guides
+of type `IG` with distinct names, each belonging to the selected section's
+model. Each represented dataset is bound to the guide its specification's
+`submission.standard` names, or to the first when it names none
+([DEFINE-8](#define-8)). The `sdtm`, `adam` and `send` sections produce
+separate documents, and each document carries the controlled-terminology
+standards cited by its bound codelists' sources.
 
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guide_by_its_place_in_standards`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+Fails: `standard_model_mismatch`, `duplicate_identifier`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-section-standard-model`, `negative-section-standard-repeated`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guides_by_their_place_in_standards`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_requires_a_1_0_section_s_standards_by_their_1_0_name`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardModel`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SectionStandardDuplicate`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `rust/crates/yamaa-core/tests/schema_submission.rs::every_shipped_guide_spelling_is_closed_metadata_not_family_composition`.
+
+Composition checks every entry of the list. A guide outside the section's
+model fails with `standard_model_mismatch` at `<section>.standards[<i>].name`,
+naming the guide in `value`, the section in `section` and its model in
+`model`. A name an earlier entry takes fails with `duplicate_identifier` at
+the later entry's `name`, naming it in `identifier`. A section without
+`standards`, or with an empty list, fails under [DEFINE-28](#define-28).
+
+The document lists every guide of the section in declaration order, whether
+or not a dataset binds it, before the terminology standards, and each
+`ItemGroupDef` names its dataset's bound guide in `def:StandardOID`
+([DEFINE-15](#define-15)). Names are unique within a section, so a guide's
+generated identifier stays `STD.<name>` ([DEFINE-9](#define-9)). A guide's
+`status`, `Draft`, `Provisional` or `Final`, is its `Status`
+([DEFINE-13](#define-13)).
 
 [SUB-3](submission.md#sub-3) checks the bound guide against the model the
-specification declares, which a 1.0 section's listing makes the section's. A
-project file that declares `schema_version` writes this guide as `standard`,
-reported at `<section>.standard.name`.
+specification declares, which a 1.0 section's listing makes the section's,
+so a guide this rule admits belongs to it. A project file that declares
+`schema_version` writes one guide, as `standard`, and SUB-3 refuses one
+outside the section's family at `<section>.standard.name`.
 
 <a id="define-7"></a>
 
@@ -185,18 +204,28 @@ a gap in the document, not an omitted row. The failure reports
 
 Composition resolves the names [Submission metadata](submission.md) and
 [Controlled terminology](terminology.md) leave unresolved: a column's
-`codelist` and every document reference. A name matching no declaration fails.
-Resolution also determines each dataset's family from the standard
-[DEFINE-6](#define-6) binds and the table of [SUB-3](submission.md#sub-3), and
-every family-dependent rule of [Submission metadata](submission.md) is applied
-here.
+`codelist`, every document reference, and the standard a dataset's
+`submission.standard` selects from the section's `standards`, the first entry
+when it is omitted. A name matching no declaration fails. Composition also
+checks that the selected standard is an implementation guide of the model the
+specification declares ([SUB-3](submission.md#sub-3)).
 
 Fails: `unknown_standard`, `unknown_codelist`, `unknown_document`.
-Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path`.
+Evidence: `sdtm-dm-metadata`, `schema-section-standards`, `negative-unknown-standard`, `rust/crates/yamaa/tests/language_header.rs::a_dataset_binds_the_section_standard_it_selects`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownStandard`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionUnknownDocument`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::per_value_codelist_unknown_and_type_failures_retain_the_authored_row_path`.
 
-A `standard`, `codelist` or document reference naming no declaration fails with
-`unknown_standard`, `unknown_codelist` or `unknown_document`, reporting the
-referencing position.
+A `submission.standard`, `codelist` or document reference naming no
+declaration fails with `unknown_standard`, `unknown_codelist` or
+`unknown_document`, reporting the referencing position. Guide names compare
+exactly. `unknown_standard` is reported at
+`<section>.specs[<n>].submission.standard`, naming the selected name in
+`value`, the section in `section` and the names of its `standards`, in
+declaration order, in `standards`. Names are unique within a section
+([DEFINE-6](#define-6)), so a selection is never ambiguous. A specification
+checked or run alone selects nothing, so its `submission.standard` is
+resolved only here, and a specification that declares `schema_version`
+declares none. The rules that depend on the model are checked on the
+specification alone ([SUB-23](submission.md#sub-23)), and again here under
+the section's model.
 
 ## Identifiers
 
@@ -232,8 +261,8 @@ Evidence: `sdtm-dm-metadata`, `adam-adlb-metadata`, `rust/crates/yamaa-adapters/
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
 
-In the `def:Standard` rows, `standard` is the selected section's `standard`
-for the implementation guide ([DEFINE-6](#define-6)), and for a terminology
+In the `def:Standard` rows, `standard` is an entry of the selected section's
+`standards` for an implementation guide ([DEFINE-6](#define-6)), and for a terminology
 standard the `standard` of a codelist source whose codelists the document binds
 ([CT-2](terminology.md#ct-2)). Sources that declare the same `name`,
 `publishing_set` and `version` cite one terminology standard and share its
@@ -425,7 +454,7 @@ Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-adapters/tests/file_resources.r
 | `IsReferenceData` | `Yes` when `submission.reference_data`, else `No` |
 | `def:Structure` | `submission.structure` |
 | `def:ArchiveLocationID` | the dataset's generated leaf identifier, when it has a leaf |
-| `def:StandardOID` | the generated identifier of the standard [DEFINE-6](#define-6) binds |
+| `def:StandardOID` | the generated identifier of the guide [DEFINE-6](#define-6) binds the dataset to |
 | `def:CommentOID` | generated, when `submission.comment` is declared |
 | `def:HasNoData` | `Yes` when `submission.has_no_data`, else omitted |
 | `Description` | `submission.label` |
@@ -785,8 +814,10 @@ Evidence: `rust/crates/yamaa-adapters/tests/file_resources.rs::define_reports_ev
 
 A project can therefore list its specifications and run them before its
 submission metadata is ready ([PROJECT-3](project.md#project-3)). An empty
-`standards` list leaves the section without a guide, as an omitted one does. A project
-file that declares `schema_version` writes the section's one guide as
-`standard`, reported at `sdtm.standard`. A project submission refuses a
-selected section that the project does not declare before any Define-XML
-generation, with `unknown_section` ([PROJECT-14](project.md#project-14)).
+`standards` list leaves the section without the guide
+[DEFINE-6](#define-6) requires, and fails at `<section>.standards` as an
+omitted one does. A project file that declares `schema_version` writes the
+section's one guide as `standard`, reported at `sdtm.standard`. A project
+submission refuses a selected section that the project does not declare
+before any Define-XML generation, with `unknown_section`
+([PROJECT-14](project.md#project-14)).

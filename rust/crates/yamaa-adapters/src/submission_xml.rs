@@ -337,7 +337,8 @@ fn push_item_groups(metadata: &mut Element, study: &Study, language: &str) {
                 "def:ArchiveLocationID",
                 dataset.href().map(|_| format!("LF.{id}")),
             )
-            .attr("def:StandardOID", format!("STD.{}", study.guide()))
+            // The guide the dataset selects, or the section's first (DEFINE-6).
+            .attr("def:StandardOID", format!("STD.{}", dataset.standard()))
             .optional(
                 "def:CommentOID",
                 sub.comment.as_ref().map(|_| format!("COM.{id}")),

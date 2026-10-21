@@ -205,7 +205,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("unknown_reference", "{column} reads {dependency}, which no input or earlier column declares"),
     ("unknown_section", "the project declares no section {section}"),
     ("unknown_specification_name", "the project has no specification named {name}"),
-    ("unknown_standard", "a standard reference names no declared standard"),
+    ("unknown_standard", "section {section} declares no standard {value}"),
     ("unknown_standard_family", "the implementation guide {detail} does not belong to the section's family"),
     ("unknown_window", "window {window} is not declared"),
     ("unlinked_producer", "input {dataset} reads {path}, the artifact of another specification, without a schema link"),

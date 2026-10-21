@@ -553,7 +553,8 @@ conditions:
   sqrt_of_negative:
     phases: [derivation]
     message: "{expr} takes the square root of a negative value"
-  # SUB-3 on a 1.0 project: the 1.0 name of unknown_standard_family (D58)
+  # SUB-3 and DEFINE-6 on a 1.0 project: the 1.0 name of
+  # unknown_standard_family (D58)
   standard_model_mismatch:
     phases: [validation]
     message: "{value} is outside the {model} model of section {section}"
@@ -636,9 +637,10 @@ conditions:
   unknown_specification_name:
     phases: [validation]
     message: "the project has no specification named {name}"
+  # DEFINE-8
   unknown_standard:
     phases: [validation]
-    message: "a standard reference names no declared standard"
+    message: "section {section} declares no standard {value}"
   unknown_standard_family:
     phases: [validation]
     message: "the implementation guide {detail} does not belong to the section's family"

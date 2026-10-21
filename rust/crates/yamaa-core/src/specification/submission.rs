@@ -79,7 +79,10 @@ fn reserved(
     let governed = if column.is_some() {
         crate::specification_submission_document::COLUMN_METADATA_FIELDS
     } else {
-        crate::specification_submission_document::DATASET_METADATA_FIELDS
+        crate::specification_submission_document::dataset_metadata_fields(matches!(
+            spec.header.surface,
+            ast::Surface::V1 { .. }
+        ))
     };
     for (key, _) in metadata {
         if governed.iter().any(|field| field.name() == key.name) {

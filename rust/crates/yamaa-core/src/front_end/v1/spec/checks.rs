@@ -17,8 +17,6 @@ use crate::specification::UnsupportedFeature;
 /// More than one origin on a column or a value-level entry (P-ORIGIN-1),
 /// refused until P1-13 builds them.
 pub const MULTIPLE_ORIGINS: &str = "multiple_origins";
-/// A dataset's `submission.standard` (P-STD-1), refused until P1-13.
-pub const SUBMISSION_STANDARD: &str = "submission_standard";
 /// A value-level `where` comparator, NE or NOTIN (P-VLM-1), refused until
 /// P1-14.
 pub const VALUE_LEVEL_COMPARATOR: &str = "value_level_comparator";
@@ -34,8 +32,8 @@ fn unsupported(operation: &str, path: String) -> UnsupportedFeature {
 }
 
 /// What a lowered 1.0 specification writes that the engine does not build
-/// yet, in written order: an ODM XML input; more than one origin; a
-/// value-level comparator; and a dataset's `standard`.
+/// yet, in written order: an ODM XML input; more than one origin; and a
+/// value-level comparator.
 pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
     let mut found = Vec::new();
     for input in &spec.inputs {
@@ -67,9 +65,6 @@ pub fn unbuilt(spec: &Spec) -> Vec<UnsupportedFeature> {
             }
             origins(&entry.metadata, spec.cite(entry.meta), &mut found);
         }
-    }
-    if let Some(standard) = spec.submission.as_ref().and_then(|s| s.standard.as_ref()) {
-        found.push(unsupported(SUBMISSION_STANDARD, spec.cite(standard.meta)));
     }
     found
 }

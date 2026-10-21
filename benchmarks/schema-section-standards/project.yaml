@@ -1,0 +1,21 @@
+# Fixed creation time is supplied by the submission call in benchmark.yaml.
+yamaa: "1.0"
+type: project
+study:
+  id: DEV01
+  name: DEV01
+  description: Example study of an implanted glucose sensor
+  protocol_name: DEV-01
+sdtm:
+  standards:
+    - name: SDTMIG
+      version: "3.4"
+      status: Final
+    - name: SDTMIG-MD
+      version: "1.1"
+      status: Final
+  specs:
+    - spec_dm.yaml
+    - spec_di.yaml
+  define: define.xml
+  source_system_version: "1.0"

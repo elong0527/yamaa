@@ -22,10 +22,26 @@ vocabulary!(FieldName {
     InventoryVocabulary => "inventory_vocabulary", Origin => "origin", Method => "method", Source => "source",
     Description => "description", Documents => "documents", Expression => "expression", Text => "text",
     Context => "context", Code => "code", Document => "document", Pages => "pages", Refs => "refs", Title => "title",
-    ValueLevel => "value_level", Where => "where", Origins => "origins"
+    ValueLevel => "value_level", Where => "where", Origins => "origins", Standard => "standard"
 });
 /// Governed fields share one vocabulary in declaration and execution admission.
+/// These are the dataset fields a 1.0 specification declares, `standard`
+/// among them (P-STD-1).
 pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
+    FieldName::HasNoData,
+    FieldName::Label,
+    FieldName::Class,
+    FieldName::Subclass,
+    FieldName::Structure,
+    FieldName::Repeating,
+    FieldName::ReferenceData,
+    FieldName::Domain,
+    FieldName::Standard,
+    FieldName::Comment,
+];
+/// The dataset fields a 0.5 specification declares: every one but
+/// `standard`, which 1.0 adds.
+pub const DATASET_METADATA_FIELDS_V0_5: &[FieldName] = &[
     FieldName::HasNoData,
     FieldName::Label,
     FieldName::Class,
@@ -36,6 +52,16 @@ pub const DATASET_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Domain,
     FieldName::Comment,
 ];
+/// The governed dataset fields a specification declares, which its root
+/// `metadata` map must not carry (SUB-2): a 1.0 specification's, or a 0.5
+/// one's.
+pub fn dataset_metadata_fields(v1: bool) -> &'static [FieldName] {
+    if v1 {
+        DATASET_METADATA_FIELDS
+    } else {
+        DATASET_METADATA_FIELDS_V0_5
+    }
+}
 pub const COLUMN_METADATA_FIELDS: &[FieldName] = &[
     FieldName::Core,
     FieldName::Mandatory,
@@ -353,6 +379,9 @@ pub struct Dataset {
     pub repeating: Field<bool>,
     pub reference_data: Field<bool>,
     pub domain: Option<Field<String>>,
+    /// The name of the section standard that binds the dataset; the
+    /// section's first when omitted (P-STD-1, DEFINE-8). No 0.5 form.
+    pub standard: Option<Field<String>>,
     pub comment: Option<Comment>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

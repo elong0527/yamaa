@@ -46,10 +46,13 @@ rejects every dataset metadata field name, and a column's `metadata` rejects
 every column metadata field name.
 
 Fails: `reserved_metadata_key`.
-Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/project_execution.rs::submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause`.
+Evidence: `schema-column-composition`, `rust/crates/yamaa-adapters/tests/project_domain_submission.rs::metadata_admission_has_exact_causes_before_study_access`, `rust/crates/yamaa-core/tests/project_execution.rs::submission_claims_are_admitted_and_reserved_metadata_has_a_registered_cause`, `rust/crates/yamaa/tests/language_header.rs::a_1_0_root_metadata_reserves_standard`.
 
 A study moves governed facts from the map to submission metadata. A reserved
-key fails validation with `reserved_metadata_key`, reporting the key.
+key fails validation with `reserved_metadata_key`, reporting the key. A
+dataset's `standard` is a dataset metadata field of the 1.0 surface only, so
+a specification that declares `schema_version` may carry it in its root
+`metadata`.
 
 ## Models
 
@@ -67,7 +70,7 @@ lists for that model; a guide of another model, or a standard of type `CT`,
 fails.
 
 Fails: `missing_required_field`, `standard_model_mismatch`, `unknown_standard_family`.
-Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/src/front_end/v1/project.rs::define_names_a_1_0_section_s_guide_by_its_place_in_standards`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionModelMismatch`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
+Evidence: `sdtm-dm-metadata`, `negative-submission-model-missing`, `negative-section-model-mismatch`, `rust/crates/yamaa/tests/language_header.rs::submission_metadata_needs_a_model`, `rust/crates/yamaa/tests/language_header.rs::a_section_lists_only_specifications_of_its_model`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionModelMismatch`, `rust/crates/yamaa-core/tests/support/diagnostic/submission.rs::SubmissionStandardFamily`, `python/tests/installed/installed_public_define.py::test_missing_artifact_only_when_requested_and_semantic_failure_zero_writes`.
 
 | Model | Standard names |
 |---|---|
@@ -91,14 +94,17 @@ one that declares another model with `standard_model_mismatch`, each at
 and its model in `model`, and the mismatch names the declared model in
 `value`. Neither dataset composes further.
 
-The table is closed, and `BIMO` is excluded. The guide composition binds is
-the first entry of the section's `standards`; one outside the section's
-model fails with `standard_model_mismatch` at
-`<section>.standards[0].name`, naming the guide in `value`, the section in
-`section` and its model in `model`. A dataset must not be bound to a
-standard of type `CT`: controlled terminology qualifies a codelist and not a
-dataset, and [Controlled terminology](terminology.md) owns that binding.
-[DEFINE-6](define-xml.md#define-6) owns the binding that fails.
+The table is closed, and `BIMO` is excluded. The guide composition binds a
+dataset to is the entry of the section's `standards` that its
+`submission.standard` names, or the first
+([DEFINE-8](define-xml.md#define-8)). Every entry belongs to the section's
+model ([DEFINE-6](define-xml.md#define-6)), and the section lists only
+specifications of that model, so a guide outside the specification's model
+fails where the section lists it, with `standard_model_mismatch` at
+`<section>.standards[<i>].name`, cited to DEFINE-6. A dataset must not be
+bound to a standard of type `CT`: controlled terminology qualifies a codelist
+and not a dataset, and [Controlled terminology](terminology.md) owns that
+binding.
 
 A specification that declares `schema_version` declares no model: a document
 that composes it gives it its section's model. A project file that declares
@@ -134,7 +140,9 @@ the dataset carries reference data rather than subject data. A
 reporting the dataset.
 
 `has_no_data` is carried for submission composition. It does not suppress
-domain execution or replace row-count checks.
+domain execution or replace row-count checks. `standard` names the guide of
+the composing section that binds the dataset, and composition resolves it
+([DEFINE-8](define-xml.md#define-8)).
 
 <a id="sub-5"></a>
 
