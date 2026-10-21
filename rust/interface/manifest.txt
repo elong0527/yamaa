@@ -3,6 +3,9 @@
 # The frozen sections, one element per line: values, tables, records, public
 # and cli, without the private native sections. The stability check of
 # docs/design/interface-1.0/stability.md compares them with the latest release.
+values.status.succeeded
+values.status.failed
+values.status.skipped
 values.phase.validation
 values.phase.planning
 values.phase.ingest
@@ -98,6 +101,15 @@ tables.odm_items.columns[26]: Value: optional<str>
 tables.odm_items.columns[27]: ValuePresent: str
 tables.odm_items.columns[28]: IsNull: str
 tables.odm_items.columns[29]: SourceOrdinal: int
+tables.selftest_cases.columns[0]: case: str
+tables.selftest_cases.columns[1]: status: str, values status
+tables.selftest_cases.columns[2]: message: optional<str>
+records.info.fields[0]: version: str
+records.info.fields[1]: language_versions: list<str>
+records.info.fields[2]: features: list<str>
+records.info.fields[3]: host: str
+records.info.fields[4]: host_version: optional<str>
+records.info.fields[5]: platform: str
 public.types.path: python str or os.PathLike, unannotated; r character(1)
 public.types.path_list: python a path or a list of paths, unannotated; r character()
 public.types.text: python str; r character(1)
@@ -109,6 +121,8 @@ public.types.paths_written: python list[str], absolute with forward slashes, in 
 public.types.tree: python dict; r named list
 public.types.table: python polars.DataFrame; r data.frame
 public.types.optional_table: python polars.DataFrame | None; r data.frame or NULL
+public.types.status: python str, one of values.status; r character(1), one of values.status
+public.types.info: python dict, keys in records.info order; r named list, names in records.info order
 public.types.nothing: python None; r NULL, invisibly
 public.functions.spec: python yamaa.spec; r yamaa_spec; returns Spec
 public.functions.spec.args[0]: path: path
@@ -123,6 +137,7 @@ public.functions.read_odm.args[4]: max_xml_depth: count = 64; keyword-only
 public.functions.lint: python yamaa.lint; r yamaa_lint; returns table; table lint; raises refusal
 public.functions.lint.args[0]: paths: path_list
 public.functions.lint.args[1]: fix: flag = false
+public.functions.selftest: python yamaa.selftest; r yamaa_selftest; returns SelfTest
 public.classes.Check: python yamaa.Check; r yamaa_check
 public.classes.Check.issues: field; returns table; table issues
 public.classes.Run: python yamaa.Run; r yamaa_run
@@ -159,15 +174,24 @@ public.classes.Project.run.args[0]: section: optional_text = None
 public.classes.Project.submission: method; returns Submission; raises refusal
 public.classes.Project.submission.args[0]: section: optional_text = None
 public.classes.Project.submission.args[1]: created: optional_text = None; keyword-only
+public.classes.SelfTest: python yamaa.SelfTest; r yamaa_selftest
+public.classes.SelfTest.status: property; returns status
+public.classes.SelfTest.cases: property; returns table; table selftest_cases
+public.classes.SelfTest.info: property; returns info; record info
+public.classes.SelfTest.summary: printing; python __repr__; r print, format
 public.errors.refusal: python yamaa.Error(Exception) with issues: table, paths: paths_written; r yamaa_error, error, condition with message: text, call: NULL, issues: table, paths: paths_written
 public.python.exports.Error
 public.python.exports.__version__
 public.python.exports.lint
 public.python.exports.project
 public.python.exports.read_odm
+public.python.exports.selftest
 public.python.exports.spec
 public.r.exports.yamaa_spec
 public.r.exports.yamaa_project
 public.r.exports.yamaa_read_odm
 public.r.exports.yamaa_lint
+public.r.exports.yamaa_selftest
 public.r.s3methods.yamaa_project_run.[[
+public.r.s3methods.yamaa_selftest.print
+public.r.s3methods.yamaa_selftest.format

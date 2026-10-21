@@ -52,8 +52,12 @@ _PY_ANNOTATION = {
     "tree": "dict",
     "table": "_pl.DataFrame",
     "optional_table": "_pl.DataFrame | None",
+    "status": "str",
+    "info": "dict",
     "nothing": "None",
 }
+# Tokens whose value is one of the `records`; a member returning one names it.
+_RECORD_TOKENS = {"info"}
 _ARGUMENT_TOKENS = {"path", "path_list", "text", "optional_text", "count", "flag"}
 _DEFAULTS = {
     "optional_text": {"None"},
@@ -72,8 +76,12 @@ _R_ARGUMENT = {
 _NATIVE_PY = {"text": "str", "bool": "bool", "index": "int", "i32": "int"}
 _PY_DEFAULT = {"None": "None", "false": "False", "true": "True"}
 _R_DEFAULT = {"None": "NULL", "false": "FALSE", "true": "TRUE"}
-_KINDS = {"property", "method", "field", "index", "protocol", "private"}
+_KINDS = {"property", "method", "field", "index", "protocol", "private", "printing"}
 _PROTOCOLS = {"__contains__", "__iter__"}
+# How a printing member is spelled: Python's repr() and str() return the text
+# its operation renders, and R's format() returns those lines and print()
+# writes them, returning the object invisibly (D37).
+_PRINTING = {"python": "__repr__", "r": ["print", "format"]}
 _MEMBER_KEYS = {
     "name",
     "kind",
@@ -81,6 +89,7 @@ _MEMBER_KEYS = {
     "keyword_only",
     "returns",
     "table",
+    "record",
     "raises",
     "calls",
     "python",
@@ -311,6 +320,10 @@ class Public:
                 raise ValueError(
                     f"{what} names an undeclared table: {entry['table']!r}"
                 )
+        if ("record" in entry) != (returns in _RECORD_TOKENS):
+            raise ValueError(f"{what} names a record exactly when it returns one")
+        if "record" in entry and entry["record"] not in self.definition["records"]:
+            raise ValueError(f"{what} names an undeclared record: {entry['record']!r}")
         if "raises" in entry and entry["raises"] not in self.errors:
             raise ValueError(f"{what} raises an undeclared error: {entry['raises']!r}")
         if "doc" in entry:
@@ -420,6 +433,28 @@ class Public:
             if "doc" in member:
                 _doc(member["doc"], f"{what}.doc")
             return
+        if kind == "printing":
+            if (
+                any(
+                    member.get(host) != spelling for host, spelling in _PRINTING.items()
+                )
+                or set(member) - {"name", "kind", "python", "r", "calls", "doc"}
+                or "calls" not in member
+            ):
+                raise ValueError(
+                    f"{what} must be spelled __repr__ and [print, format] and call "
+                    "the operation that renders its text"
+                )
+            if "handle" not in cls["holds"].values():
+                raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
+            if member["calls"] not in self.operations:
+                raise ValueError(
+                    f"{what} calls an unknown operation: {member['calls']!r}"
+                )
+            self._python_target(member["calls"], class_name, what)
+            if "doc" in member:
+                _doc(member["doc"], f"{what}.doc")
+            return
         if "returns" not in member:
             raise ValueError(f"{what} must declare what it returns")
         self._validate_result(member, what, defined)
@@ -436,7 +471,9 @@ class Public:
             if "names" not in {m["name"] for m in cls["members"]}:
                 raise ValueError(f"{what} needs a names member")
         elif spelled:
-            raise ValueError(f"{what} spells a host name, which only index does")
+            raise ValueError(
+                f"{what} spells a host name, which only index and printing do"
+            )
         if kind in {"index", "private"} and "handle" not in cls["holds"].values():
             raise ValueError(f"{what} reaches a handle, which {class_name} lacks")
         if kind == "field":
@@ -705,6 +742,11 @@ class Public:
                     *_py_lines(made, "        ", "return "),
                 ]
             )
+        if kind == "printing":
+            # repr() returns the rendered text, and str() falls back to it.
+            call, _ = self._py_call(member, name, what)
+            header = _py_def(member["python"], "self", "str", "    ")
+            return header + doc + _py_lines(call, "        ", "return ")
         call, native = self._py_call(member, name, what)
         result = self._py_result(member, call, native, name, what)
         annotation = self._py_annotation(member["returns"])
@@ -947,7 +989,7 @@ class Public:
             lines.append("  plans <- NULL")
         lines.append("  object <- new.env(parent = emptyenv())")
         kinds = {member["kind"] for member in cls["members"]}
-        if handle and kinds & {"index", "private"}:
+        if handle and kinds & {"index", "private", "printing"}:
             lines.append(f"  object$.handle <- {handle}")
         for member in cls["members"]:
             lines += self._r_member(name, member, handle)
@@ -1020,6 +1062,22 @@ class Public:
                     *_r_lines(call, "  "),
                     "}",
                 ]
+            elif member["kind"] == "printing":
+                # format() returns the lines Rust renders; print() writes them,
+                # each ended by a line feed, and returns the object invisibly.
+                call, _ = self._r_call(member, name, what, handle="native")
+                lines += [
+                    "",
+                    f"print.{cls['r']} <- function(x, ...) {{",
+                    '  cat(format(x), sep = "\\n")',
+                    "  invisible(x)",
+                    "}",
+                    "",
+                    f"format.{cls['r']} <- function(x, ...) {{",
+                    '  native <- get(".handle", envir = x, inherits = FALSE)',
+                    *_r_lines(call, "  "),
+                    "}",
+                ]
         return lines
 
     def _r_function(self, function):
@@ -1049,6 +1107,10 @@ class Public:
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f'S3method("{member["r"]}", {cls["r"]})')
+                elif member["kind"] == "printing":
+                    lines += [
+                        f"S3method({generic}, {cls['r']})" for generic in member["r"]
+                    ]
         return "\n".join(lines) + "\n"
 
     # --- Manifest ----------------------------------------------------------------
@@ -1057,6 +1119,8 @@ class Public:
         facts = [f"returns {entry['returns']}"]
         if "table" in entry:
             facts.append(f"table {entry['table']}")
+        if "record" in entry:
+            facts.append(f"record {entry['record']}")
         if "raises" in entry:
             facts.append(f"raises {entry['raises']}")
         return facts
@@ -1088,11 +1152,12 @@ class Public:
                 if member["kind"] == "private":
                     continue
                 facts = [member["kind"]]
-                facts += [
-                    f"{host} {member[host]}"
-                    for host in ("python", "r")
-                    if host in member
-                ]
+                for host in ("python", "r"):
+                    spelling = member.get(host)
+                    if isinstance(spelling, list):
+                        spelling = ", ".join(spelling)
+                    if spelling is not None:
+                        facts.append(f"{host} {spelling}")
                 if "returns" in member:
                     facts += self._result_facts(member)
                 lines.append(f"{prefix}.{member['name']}: {'; '.join(facts)}")
@@ -1113,6 +1178,11 @@ class Public:
             for member in cls["members"]:
                 if member["kind"] == "index":
                     lines.append(f"public.r.s3methods.{cls['r']}.{member['r']}")
+                elif member["kind"] == "printing":
+                    lines += [
+                        f"public.r.s3methods.{cls['r']}.{generic}"
+                        for generic in member["r"]
+                    ]
         return lines
 
 

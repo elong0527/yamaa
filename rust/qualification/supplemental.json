@@ -1039,7 +1039,9 @@
         "python/tests/installed/installed_plan_reuse.py",
         "R/yamaa/tests/plan_reuse.R",
         "python/tests/installed/installed_lint.py",
-        "R/yamaa/tests/lint.R"
+        "R/yamaa/tests/lint.R",
+        "python/tests/installed/installed_selftest.py",
+        "R/yamaa/tests/selftest.R"
       ]
     },
     {

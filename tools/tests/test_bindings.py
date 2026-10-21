@@ -296,8 +296,8 @@ class BindingsTests(unittest.TestCase):
         cases = [
             ("format_version: 2", "format_version: 1", "format_version"),
             ("\ncli: {}\n", "\ncli: {}\nstatus: draft\n", "unknown top-level keys"),
-            ("\nrecords: {}\n", "\n", "missing top-level keys"),
-            ("\nrecords: {}\n", "\nrecords: {1: x}\n", "keys must be text"),
+            ("\ncli: {}\n", "\n", "missing top-level keys"),
+            ("\ncli: {}\n", "\ncli: {1: x}\n", "keys must be text"),
             ("\ncli: {}\n", "\ncli: {exit_status: {0: done}}\n", "cli is missing"),
         ]
         for old, new, message in cases:
