@@ -332,7 +332,13 @@ those of its sections in that order. Saving publishes the sections in that
 order; the first section whose publication fails stops the save.
 
 Fails: `nothing_to_save`.
-Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_later_section_whose_target_cannot_be_written_saves_nothing`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+Evidence: `rust/crates/yamaa/tests/project_operations.rs::a_submission_composes_the_selected_section`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_without_a_section_composes_each_section_that_names_define_in_order`, `rust/crates/yamaa/tests/project_operations.rs::two_sections_that_write_one_file_save_neither`, `rust/crates/yamaa/tests/project_operations.rs::a_later_section_whose_target_cannot_be_written_saves_nothing`, `rust/crates/yamaa/tests/project_operations.rs::a_save_that_would_write_nothing_fails`, `rust/crates/yamaa/tests/project_operations.rs::a_submission_gives_every_section_one_creation_time_and_records_it`, `python/tests/installed/installed_public_define.py::test_every_declared_define_section_is_composed_without_a_section`.
+
+Every section composes with one creation time: the `created` the submission is
+given or, when it is omitted, the current UTC time, read once before the
+project file is read. So every document and transport file of the submission
+carries the same time ([DEFINE-3](define-xml.md#define-3)), and the result
+records it as `created`.
 
 Saving first admits and compares the targets of every section it publishes: a
 target that cannot be written, or two sections that name one file, fail the

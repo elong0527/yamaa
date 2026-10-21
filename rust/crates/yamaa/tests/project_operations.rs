@@ -1235,6 +1235,7 @@ fn a_submission_composes_the_selected_section() {
         rows(&submission.issues())
     );
     assert_eq!(submission.status(), Status::Succeeded);
+    assert_eq!(submission.created(), "2026-09-11T00:00:00");
     // Transport files come before the document (JSON-14).
     assert_eq!(
         submission.save().unwrap(),
@@ -1302,6 +1303,110 @@ fn a_submission_without_a_section_composes_each_section_that_names_define_in_ord
     assert!(!study.exists("adam-define.xml"));
 }
 
+/// SDTM's section metadata copied as an ADaM section that lists no
+/// specification and writes its own define target, `adam-define.xml`.
+fn adam_section(project: &str) -> String {
+    project[project.find("sdtm:\n").unwrap()..]
+        .replacen("sdtm:", "adam:", 1)
+        .replace(
+            "name: SDTMIG\n    version: '3.4'",
+            "name: ADaMIG\n    version: '1.3'",
+        )
+        .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
+        .replace("  datasets: json\n", "")
+        .replace("define: define.xml", "define: adam-define.xml")
+}
+
+/// Without `created`, a submission reads the clock once and gives every
+/// section that time, which `created()` reports (D69, D129): each section's
+/// define.xml and transport file carry it.
+#[test]
+fn a_submission_gives_every_section_one_creation_time_and_records_it() {
+    let study = define_study();
+    let project = std::fs::read_to_string(study.0.join("project.yaml")).unwrap();
+    study.write(
+        "project.yaml",
+        format!("{project}{}", adam_section(&project)),
+    );
+    let mut submission = engine()
+        .project_submission(
+            &study.project(),
+            None,
+            None,
+            "0.4.0",
+            &CancellationToken::new(),
+        )
+        .unwrap();
+    assert_eq!(
+        submission.issues().rows(),
+        0,
+        "{:?}",
+        rows(&submission.issues())
+    );
+    let created = submission.created().to_owned();
+    // A whole-second civil datetime (DEFINE-3).
+    let shape = created
+        .chars()
+        .map(|c| if c.is_ascii_digit() { 'd' } else { c })
+        .collect::<String>();
+    assert_eq!(shape, "dddd-dd-ddTdd:dd:dd", "{created}");
+    assert_eq!(
+        submission.save().unwrap(),
+        [
+            study.path("dm.json"),
+            study.path("define.xml"),
+            study.path("adam-define.xml")
+        ]
+    );
+    for define in ["define.xml", "adam-define.xml"] {
+        let text = study.read(define).unwrap();
+        assert!(
+            text.contains(&format!("CreationDateTime=\"{created}\"")),
+            "{define} carries {created}"
+        );
+    }
+    assert!(study
+        .read("dm.json")
+        .unwrap()
+        .contains(&format!("\"datasetJSONCreationDateTime\": \"{created}\"")));
+}
+
+/// `created()` records the time a submission used even when nothing
+/// composed: the argument as given, text DEFINE-3 refuses included, or the
+/// time read for a project that cannot be read.
+#[test]
+fn a_submission_records_its_creation_time_whatever_it_composed() {
+    let study = define_study();
+    let engine = engine();
+    let token = CancellationToken::new();
+    let refused = engine
+        .project_submission(
+            &study.project(),
+            Some("sdtm"),
+            Some("2026-09-11"),
+            "0.4.0",
+            &token,
+        )
+        .unwrap();
+    assert_eq!(refused.created(), "2026-09-11");
+    let issues = rows(&refused.issues());
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].condition, "value_not_permitted");
+    assert_eq!(issues[0].rule.as_deref(), Some("DEFINE-3"));
+    assert_eq!(issues[0].spec_paths, ["created"]);
+
+    let missing = study.path("missing.yaml");
+    let unread = engine
+        .project_submission(&missing, None, Some("2026-09-11T00:00:00"), "0.4.0", &token)
+        .unwrap();
+    assert_eq!(unread.status(), Status::Failed);
+    assert_eq!(unread.created(), "2026-09-11T00:00:00");
+    let unread = engine
+        .project_submission(&missing, None, None, "0.4.0", &token)
+        .unwrap();
+    assert_eq!(unread.created().len(), "2026-09-11T00:00:00".len());
+}
+
 #[test]
 fn two_sections_that_write_one_file_save_neither() {
     let study = define_study();
@@ -1350,16 +1455,10 @@ fn a_later_section_whose_target_cannot_be_written_saves_nothing() {
     let token = CancellationToken::new();
     let project = std::fs::read_to_string(study.0.join("project.yaml")).unwrap();
     // ADaM copies SDTM's section metadata with a define target of its own.
-    let adam = project[project.find("sdtm:\n").unwrap()..]
-        .replacen("sdtm:", "adam:", 1)
-        .replace(
-            "name: SDTMIG\n    version: '3.4'",
-            "name: ADaMIG\n    version: '1.3'",
-        )
-        .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
-        .replace("  datasets: json\n", "")
-        .replace("define: define.xml", "define: adam-define.xml");
-    study.write("project.yaml", format!("{project}{adam}"));
+    study.write(
+        "project.yaml",
+        format!("{project}{}", adam_section(&project)),
+    );
     let mut submission = engine
         .project_submission(
             &study.project(),

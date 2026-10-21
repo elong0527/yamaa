@@ -587,7 +587,7 @@ cli:
         - {name: --fix, meaning: apply the proved layout fixes in place}
       operations: [lint]
       text: "one `file:line:column: finding message` line per finding, then `N lint findings in M of K files`, with `; fixed F files` under --fix"
-      json_keys: [command, status, findings, paths]
+      json_keys: "[command, status, findings, paths]; on refusal [command, status, findings, issues, paths]"
     - name: schema
       synopsis: yamaa schema TYPE
       args: [{name: TYPE, values: file_type}]

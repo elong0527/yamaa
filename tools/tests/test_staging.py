@@ -14,6 +14,7 @@ from unittest import mock
 
 from tools.commands import installed
 from tools.packaging import check_cargo_lock
+from tools.packaging import generate_selftest_cases as selftest_cases
 from tools.staging import engine_bundle, vendor_crates
 from tools.staging import stage_grammar_inputs as grammar
 from tools.staging import stage_r_package as staging
@@ -76,7 +77,7 @@ class StagingTests(unittest.TestCase):
             # selftest cases that it embeds, with the bytes of benchmarks/
             # (#3030 D108).
             self.assertEqual(list(embedded.rglob("tests")), [])
-            for relative, source in engine_bundle.selftest_cases.case_files():
+            for relative, source in selftest_cases.case_files():
                 self.assertEqual(
                     (embedded / "crates/yamaa/selftest" / relative).read_bytes(),
                     source.read_bytes(),

@@ -211,8 +211,9 @@ impl Run {
 
     /// The printed text (D37, P-PRINT-1): `yamaa run of <subject>: <status>,
     /// <size>, <n> issues`, then the first issue. The subject is a project
-    /// run member's name, or the dataset name once read, or else the path as
-    /// given; the size is `<r> rows x <c> columns`, or `no output`.
+    /// run member's name as [`ProjectRun::members`] gives it, or the dataset
+    /// name once read, or else the path as given; the size is `<r> rows x
+    /// <c> columns`, or `no output`.
     pub fn summary(&self) -> Summary {
         let head = Head {
             kind: "run",
@@ -331,7 +332,13 @@ impl Plans {
 /// One member of a producer graph: the specification to build, with its
 /// project, and what decides whether it builds.
 struct Node<'a> {
+    /// The specification's name in its project, when it has one.
     name: Option<String>,
+    /// What a project run names the member by: its listed name, or the path
+    /// the project file lists when the listing could not be read. A
+    /// specification run has none and names its dataset or the path as
+    /// given.
+    label: Option<String>,
     identity: Option<String>,
     request: Request<'a>,
     /// What the request resolves to now, for a kept plan.
@@ -389,9 +396,9 @@ impl Engine {
             // A user interrupt in project code stops the graph here, so no
             // later member builds or calls project code.
             let interrupted = build.interrupt().is_some();
-            // A project run names each member by its listed name.
-            let build = match &node.name {
-                Some(name) => build.with_subject(name),
+            // A project run names each member by its label.
+            let build = match &node.label {
+                Some(label) => build.with_subject(label),
                 None => build,
             };
             members.push(Member {
@@ -463,6 +470,7 @@ impl Engine {
         plans.retain(|kept| identity.as_ref() == Some(kept));
         let node = Node {
             name: None,
+            label: None,
             identity: None,
             request,
             plan: identity,
@@ -554,12 +562,28 @@ pub struct ProjectRun {
 }
 
 impl ProjectRun {
-    /// The names of the run's specifications, in run order.
+    /// The names of the run's specifications, in run order. A listing that
+    /// could not be read has no name and is left out;
+    /// [`ProjectRun::members`] includes it.
     pub fn names(&self) -> Vec<String> {
         self.outcome
             .members
             .iter()
             .filter_map(|member| member.name.clone())
+            .collect()
+    }
+
+    /// Every member of the run in run order, each with the name its member
+    /// line prints: the specification's listed name or, for a listing that
+    /// could not be read, which has none, its path as the project file
+    /// writes it (D130). Only a listed name selects a member with
+    /// [`ProjectRun::member`].
+    pub fn members(&self) -> Vec<(&str, &Run)> {
+        self.outcome
+            .members
+            .iter()
+            .filter_map(Member::run)
+            .map(|run| (run.build.subject(), run))
             .collect()
     }
 
@@ -599,22 +623,18 @@ impl ProjectRun {
 
     /// The printed text (D37, P-PRINT-1): `yamaa project run of <path>[,
     /// section <s>]: <status>, <k> specifications, <n> issues`, then one line
-    /// per specification in run order, then the first issue. A member line
-    /// gives the name, the status, the size and the issue count, and a
+    /// per member of [`ProjectRun::members`], then the first issue. A member
+    /// line gives the name, the status, the size and the issue count, and a
     /// member's own summary is its run's, [`Run::summary`].
     pub fn summary(&self) -> Summary {
         let members = self
-            .outcome
-            .members
-            .iter()
-            .filter_map(|member| {
-                let run = member.run()?;
-                Some(MemberLine {
-                    name: run.build.subject().to_owned(),
-                    status: run.status(),
-                    size: text::output_size(run.output()),
-                    issues: member.issues().len(),
-                })
+            .members()
+            .into_iter()
+            .map(|(name, run)| MemberLine {
+                name: name.to_owned(),
+                status: run.status(),
+                size: text::output_size(run.output()),
+                issues: run.build.report().len(),
             })
             .collect::<Vec<_>>();
         let head = Head {
@@ -673,6 +693,8 @@ impl ProjectRun {
 pub struct Submission {
     outcome: Outcome,
     subject: String,
+    /// The creation time every section was composed with.
+    created: String,
 }
 
 impl Submission {
@@ -716,6 +738,18 @@ impl Submission {
     /// project finding refused the submission.
     pub fn status(&self) -> Status {
         self.outcome.status()
+    }
+
+    /// The creation time the documents carry, as ISO 8601 text (D69, #3030
+    /// section 2.8): the `created` argument as given or, when it was
+    /// omitted, the UTC time the submission read once and gave every
+    /// section, written `YYYY-MM-DDTHH:MM:SS` (D129). It is recorded even
+    /// when nothing composed: an argument DEFINE-3 refuses is kept as given,
+    /// and each section fails with `value_not_permitted` at `created`. It is
+    /// empty only when the argument was omitted and the system clock gave
+    /// no time the calendar admits, which each section reports the same way.
+    pub fn created(&self) -> &str {
+        &self.created
     }
 
     /// Save the submission as one save (PROJECT-13, JSON-14, D38, D74) and
@@ -883,6 +917,7 @@ impl Engine {
                 let listed = &read.listed()[step.listed()];
                 Node {
                     name: listed.name().map(str::to_owned),
+                    label: Some(listed.name().unwrap_or(listed.written()).to_owned()),
                     identity: Some(listed.identity().to_owned()),
                     request: Request::new(listed.path()).with_environment(project),
                     plan: identities[step.listed()].clone(),
@@ -907,6 +942,9 @@ impl Engine {
     /// One define.xml per section, selected or all declared, plus
     /// Dataset-JSON where the section sets `datasets: json`. Without a
     /// section, every declared section that names `define` is composed.
+    /// Every section is composed with one creation time,
+    /// [`Submission::created`]: `created` as given, or else the current UTC
+    /// time, read once before the project file (D129).
     /// Project problems come back as issues; only an unknown section and
     /// cancellation fail the call. Once the project file is read, a section
     /// it does not declare, or any other text, fails with `unknown_section`
@@ -922,23 +960,38 @@ impl Engine {
         if token.is_cancelled() {
             return Err(Error::Cancelled);
         }
-        let subject = project_subject(project, section);
+        // One creation time for every section (D129). A clock that gives no
+        // time leaves each section to read it and refuse it (DEFINE-3).
+        let created = created
+            .map(str::to_owned)
+            .or_else(yamaa_adapters::file_define::current_time);
+        let outcome =
+            self.compose_sections(project, section, created.as_deref(), installed, token)?;
+        Ok(Submission {
+            outcome,
+            subject: project_subject(project, section),
+            created: created.unwrap_or_default(),
+        })
+    }
+
+    /// What [`Engine::project_submission`] composes, every section with
+    /// `created`.
+    fn compose_sections(
+        &self,
+        project: &str,
+        section: Option<&str>,
+        created: Option<&str>,
+        installed: &str,
+        token: &CancellationToken,
+    ) -> Result<Outcome, Error> {
         let read = match crate::internal::read_project(self.shared(), project) {
             Ok(read) => read,
-            Err(issues) => {
-                return Ok(Submission {
-                    outcome: Outcome::refused(issues),
-                    subject,
-                })
-            }
+            Err(issues) => return Ok(Outcome::refused(issues)),
         };
         let selected = select(&read, section)?;
         let duplicates = read.duplicates();
         if !duplicates.is_empty() {
-            return Ok(Submission {
-                outcome: Outcome::refused(duplicates),
-                subject,
-            });
+            return Ok(Outcome::refused(duplicates));
         }
         let sections = match selected {
             Some(section) => vec![section],
@@ -957,12 +1010,9 @@ impl Engine {
                 work: Work::Composed(Box::new(self.define(&request, token)?)),
             });
         }
-        Ok(Submission {
-            outcome: Outcome {
-                members,
-                issues: Vec::new(),
-            },
-            subject,
+        Ok(Outcome {
+            members,
+            issues: Vec::new(),
         })
     }
 }

@@ -86,7 +86,9 @@ Rules:
    otherwise, with forward slashes; missing parts are dropped.
 4. A project run lists its members between the two lines, in run order: two
    spaces, the name padded to the longest name, the status padded to 9
-   characters, then the size and issue count.
+   characters, then the size and issue count. A member whose listing could
+   not be read has no name; its line names it by the path the project file
+   lists, as written, and so does the command line's `members` (D130).
 5. ASCII and LF only; no colour; nothing depends on the terminal width.
 
 ```text
@@ -240,7 +242,7 @@ platform: linux-x86_64
 | `p.names` (D45) | the listed spec names in run order, read without data; refuses when the project cannot be read or lists a name twice | mirrors `ProjectRun.names` |
 | `save()` paths (D38) | absolute, forward slashes, in publication order: a run's report before its primary file (OUTPUT-10), a section's transport files before its define.xml (JSON-14) | one spelling in every host (I8) |
 | `Error.paths` (new, Q11) | `yamaa.Error.paths` and the R condition's `paths`: the files written before the refusal, possibly none | a failed run's `save()` writes the report, then refuses (OUTPUT-10, PROJECT-12) |
-| `Submission.created` (new, Q11) | the ISO 8601 creation time the documents carry | section 2.8 says the result records the time it used |
+| `Submission.created` (new, Q11) | the ISO 8601 creation time the documents carry: the argument as given, or the UTC time read once for every section when it was omitted (D129) | section 2.8 says the result records the time it used |
 | `schema(file_type)` | the JSON Schema as canonical JSON text | the same bytes as `yamaa schema TYPE`; R needs no JSON library |
 | `selftest()` | a SelfTest result with `status`, `cases` (`case`, `status`, `message`) and `info` | #3062 owns the case set |
 | Check | a native handle with `status`, `issues` and its summary | status and printing come from Rust |

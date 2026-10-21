@@ -1,6 +1,12 @@
-"""Exercise the workflow's path decision against real Git histories."""
+"""Exercise the workflow's path decisions against real Git histories.
+
+The equivalence and conversion jobs decide by the same diff whether a pull
+request runs their gate: every change but documentation runs both (D124 on
+#3030). Each job holds its own copy of the step, so every case runs on both.
+"""
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -10,8 +16,97 @@ import yaml
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 
+# Changes to the engine, the hosts, the benchmarks, the repository tools, the
+# build or either gate's own inputs: each runs both gates.
+GATE_INPUTS = (
+    "rust/crates/example/src/lib.rs",
+    "rust/crates/yamaa-core/src/front_end/v1/spec/checks.rs",
+    "rust/crates/yamaa-core/src/specification/phases.rs",
+    "yaml/schema.yaml",
+    "yaml/v1/schema_spec.yaml",
+    "benchmarks/example/spec.yaml",
+    "benchmarks/example/expected/data.csv",
+    "python/src/yamaa/__init__.py",
+    "python/tests/installed/example.py",
+    "python/tests/installed/conversion_define.py",
+    "python/tests/installed/public_conformance.py",
+    "python/pyproject.toml",
+    "python/uv.lock",
+    "python/README.md",
+    "rust/README.md",
+    "R/yamaa/DESCRIPTION",
+    "tools/migrate/example.py",
+    "tools/migrate/excepted.py",
+    "tools/conformance/example.py",
+    "tools/conformance/public_conformance.py",
+    "tools/surface.py",
+    "tools/commands/equivalence.py",
+    "tools/commands/conversion.py",
+    "tools/commands/r_tests.py",
+    "tools/commands/check_r.py",
+    "tools/commands/python_tests.py",
+    "tools/commands/setup.py",
+    "tools/staging/stage_r_package.py",
+    "tools/staging/engine_bundle.py",
+    "tools/packaging/check_cargo_lock.py",
+    "tools/ci/toolchain.py",
+    "tools/benchmark.py",
+    "tools/paths.py",
+    "pyproject.toml",
+    "Makefile",
+    ".gitattributes",
+    ".cargo/config.toml",
+    ".cargo/config",
+    "R/.gitattributes",
+    "new-build-input/settings.toml",
+    "docs/tools/generator.py",
+    ".github/workflows/ci.yml",
+    ".github/actions/setup/action.yml",
+)
+# Changes confined to documentation: neither gate runs.
+DOCUMENTATION = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "AGENTS.md",
+    "docs/release.md",
+    "docs/articles/api.md",
+)
 
-class EquivalenceWorkflowTests(unittest.TestCase):
+
+def workflow():
+    return yaml.load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
+        Loader=UniqueKeyLoader,
+    )
+
+
+def paths_step(job):
+    """The step that decides whether a job's gate runs."""
+    [step] = [
+        step for step in workflow()["jobs"][job]["steps"] if step.get("id") == "paths"
+    ]
+    return step
+
+
+def diff_command(job):
+    """The `git diff` whose output decides whether a job's gate runs."""
+    [command] = re.findall(
+        r"^changed=\$\(git diff .*?\)$",
+        paths_step(job)["run"],
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    return command
+
+
+class PathDecision:
+    """The cases each gate's path decision passes. A subclass names its job
+    and what its decision outputs beside `run`, on a pull request and on a
+    dispatch."""
+
+    job = ""
+    pull_request_outputs = {}
+    dispatch_outputs = {}
+
     def decide(
         self,
         path,
@@ -20,15 +115,8 @@ class EquivalenceWorkflowTests(unittest.TestCase):
         base_path=None,
         merge=False,
         rename_from=None,
-        job="equivalence",
     ):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )
-        [step] = [
-            step for step in workflow["jobs"][job]["steps"] if step.get("id") == "paths"
-        ]
+        step = paths_step(self.job)
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
 
@@ -98,151 +186,96 @@ class EquivalenceWorkflowTests(unittest.TestCase):
                 text=True,
                 check=True,
             )
-            return output.read_text(encoding="utf-8").strip(), result.stdout
+            lines = output.read_text(encoding="utf-8").splitlines()
+            return dict(line.split("=", 1) for line in lines), result.stdout
 
-    def test_engine_and_gate_inputs_run_equivalence(self):
-        for path in (
-            "rust/crates/example/src/lib.rs",
-            "yaml/schema.yaml",
-            "benchmarks/example/expected/data.csv",
-            "python/src/yamaa/__init__.py",
-            "python/tests/installed/example.py",
-            "python/pyproject.toml",
-            "python/uv.lock",
-            "python/README.md",
-            "rust/README.md",
-            "R/yamaa/DESCRIPTION",
-            "tools/migrate/example.py",
-            "tools/conformance/example.py",
-            "tools/commands/equivalence.py",
-            "tools/commands/r_tests.py",
-            "tools/commands/check_r.py",
-            "tools/commands/python_tests.py",
-            "tools/commands/setup.py",
-            "tools/staging/stage_r_package.py",
-            "tools/staging/engine_bundle.py",
-            "tools/packaging/check_cargo_lock.py",
-            "tools/ci/toolchain.py",
-            "tools/benchmark.py",
-            "tools/paths.py",
-            "pyproject.toml",
-            "Makefile",
-            ".gitattributes",
-            ".cargo/config.toml",
-            ".cargo/config",
-            "R/.gitattributes",
-            "new-build-input/settings.toml",
-            "docs/tools/generator.py",
-            ".github/workflows/ci.yml",
-            ".github/actions/setup/action.yml",
-        ):
+    def on_pull_request(self, run):
+        """The whole decision for a pull request whose gate runs or not."""
+        return {"run": run} | self.pull_request_outputs
+
+    def test_engine_and_gate_inputs_run_the_gate(self):
+        for path in GATE_INPUTS:
             with self.subTest(path=path):
-                self.assertEqual(self.decide(path)[0], "run=true")
+                self.assertEqual(self.decide(path)[0], self.on_pull_request("true"))
 
     def test_docs_only_diff_skips_with_a_notice(self):
-        for path in (
-            "README.md",
-            "CONTRIBUTING.md",
-            "AGENTS.md",
-            "docs/release.md",
-            "docs/articles/api.md",
-        ):
+        for path in DOCUMENTATION:
             with self.subTest(path=path):
                 decision, notice = self.decide(path)
-                self.assertEqual(decision, "run=false")
+                self.assertEqual(decision, self.on_pull_request("false"))
                 self.assertIn("::notice::", notice)
-                self.assertIn("equivalence gate did not run", notice)
+                self.assertIn(
+                    "The diff changes only documentation, so the "
+                    f"{self.job} gate did not run.",
+                    notice,
+                )
 
     def test_changes_only_on_the_base_do_not_trigger_the_gate(self):
         self.assertEqual(
             self.decide("CONTRIBUTING.md", base_path="rust/src/lib.rs")[0],
-            "run=false",
+            self.on_pull_request("false"),
         )
 
     def test_mixed_documentation_and_build_changes_run_the_gate(self):
         self.assertEqual(
-            self.decide(("docs/release.md", ".cargo/config.toml"))[0], "run=true"
+            self.decide(("docs/release.md", ".cargo/config.toml"))[0],
+            self.on_pull_request("true"),
         )
 
     def test_moving_code_into_documentation_still_runs_the_gate(self):
         self.assertEqual(
             self.decide("docs/former-code.md", rename_from="tools/gate.py")[0],
-            "run=true",
+            self.on_pull_request("true"),
         )
 
     def test_dispatch_runs_even_without_engine_changes(self):
         self.assertEqual(
-            self.decide("CONTRIBUTING.md", event="workflow_dispatch")[0], "run=true"
+            self.decide("CONTRIBUTING.md", event="workflow_dispatch")[0],
+            {"run": "true"} | self.dispatch_outputs,
         )
 
     def test_a_synthetic_merge_cannot_pass_as_exact_head_evidence(self):
         with self.assertRaises(subprocess.CalledProcessError) as stopped:
             self.decide("python/pyproject.toml", merge=True)
         self.assertIn("::error::", stopped.exception.stdout)
-        self.assertIn("pull-request head", stopped.exception.stdout)
-
-
-class ConversionWorkflowTests(unittest.TestCase):
-    """The conversion job runs on Python for a pull request whose diff reaches
-    the 1.0 front end, the converter, the 1.0 schemas or the gate, including
-    the conformance planner and runner it drives, and on both hosts on
-    dispatch or its weekly schedule."""
-
-    def decide(self, path, **arguments):
-        decision, notice = EquivalenceWorkflowTests.decide(
-            self, path, job="conversion", **arguments
+        self.assertIn(
+            f"The {self.job} gate must run on the pull-request head.",
+            stopped.exception.stdout,
         )
-        return dict(line.split("=", 1) for line in decision.splitlines()), notice
 
-    def test_the_gate_s_inputs_run_it_on_python(self):
-        for path in (
-            "rust/crates/yamaa-core/src/front_end/v1/spec/checks.rs",
-            "tools/migrate/excepted.py",
-            "yaml/v1/schema_spec.yaml",
-            "tools/commands/conversion.py",
-            "tools/conformance/public_conformance.py",
-            "tools/surface.py",
-            "python/tests/installed/conversion_define.py",
-            "python/tests/installed/public_conformance.py",
-        ):
-            with self.subTest(path=path):
-                self.assertEqual(
-                    self.decide(path)[0], {"run": "true", "hosts": "python"}
-                )
 
-    def test_other_changes_pass_with_a_notice(self):
-        for path in (
-            "rust/crates/yamaa-core/src/specification/mod.rs",
-            "yaml/schema.yaml",
-            "benchmarks/example/expected/data.csv",
-            "README.md",
-        ):
-            with self.subTest(path=path):
-                decision, notice = self.decide(path)
-                self.assertEqual(decision, {"hosts": "python", "run": "false"})
-                self.assertIn("conversion gate did not run", notice)
+class EquivalenceWorkflowTests(PathDecision, unittest.TestCase):
+    job = "equivalence"
 
-    def test_dispatch_and_the_schedule_run_both_hosts(self):
-        for event in ("workflow_dispatch", "schedule"):
-            with self.subTest(event=event):
-                self.assertEqual(
-                    self.decide("README.md", event=event)[0],
-                    {"run": "true", "hosts": "python,r"},
-                )
+
+class ConversionWorkflowTests(PathDecision, unittest.TestCase):
+    """The conversion job runs on Python for each pull request that runs the
+    equivalence job (D124), and on both hosts on dispatch or its weekly
+    schedule."""
+
+    job = "conversion"
+    pull_request_outputs = {"hosts": "python"}
+    dispatch_outputs = {"hosts": "python,r"}
+
+    def test_the_two_gates_read_the_same_diff(self):
+        self.assertEqual(diff_command("conversion"), diff_command("equivalence"))
+
+    def test_the_weekly_schedule_runs_both_hosts(self):
+        self.assertEqual(
+            self.decide("README.md", event="schedule")[0],
+            {"run": "true", "hosts": "python,r"},
+        )
 
     def test_the_weekly_schedule_alone_runs_the_job(self):
-        workflow = yaml.load(
-            (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"),
-            Loader=UniqueKeyLoader,
-        )
-        triggers = workflow.get("on", workflow.get(True))
+        parsed = workflow()
+        triggers = parsed.get("on", parsed.get(True))
         schedules = [entry["cron"] for entry in triggers["schedule"]]
         self.assertIn("23 4 * * 1", schedules)
         self.assertIn(
             "github.event.schedule == '23 4 * * 1'",
-            workflow["jobs"]["conversion"]["if"],
+            parsed["jobs"]["conversion"]["if"],
         )
-        self.assertNotIn("schedule", workflow["jobs"]["equivalence"]["if"])
+        self.assertNotIn("schedule", parsed["jobs"]["equivalence"]["if"])
 
 
 if __name__ == "__main__":
