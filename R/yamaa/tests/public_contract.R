@@ -27,7 +27,8 @@ namespace <- asNamespace("yamaa")
 stopifnot(identical(as.character(packageVersion("yamaa")), "0.5.0"),
   identical(yamaa:::.core_version(), as.character(packageVersion("yamaa"))),
   identical(sort(getNamespaceExports("yamaa")),
-    c("yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_selftest", "yamaa_spec")),
+    c("yamaa_lint", "yamaa_project", "yamaa_read_odm", "yamaa_schema", "yamaa_selftest",
+      "yamaa_spec")),
   identical(getNamespaceInfo("yamaa", "S3methods")[, 3L],
     c("[[.yamaa_project_run", "print.yamaa_selftest", "format.yamaa_selftest")))
 for (name in c("yamaa_domain", "yamaa_check", "yamaa_define", "yamaa_resolve_specification",

@@ -2,10 +2,13 @@
 
 Authored report truth, complete installed observations and saved bytes remain
 independent inputs. No candidate engine or reference evaluator is imported.
+The command line's run of the same cases joins the comparison with what it
+saved: its outcomes and saved files must equal both installed hosts'.
 """
 
 import json
 import shutil
+from pathlib import PurePosixPath
 
 from tools.conformance import report_values as reports
 from tools.paths import ROOT
@@ -279,4 +282,167 @@ def compare_owners(
         output / "complete-comparisons.json",
         [verdict.model_dump(mode="json") for verdict in comparisons],
     )
+    return result
+
+
+CLI_PROTOCOL = "installed-cli-saved-outputs/1"
+HOSTS = ("python", "r")
+
+
+def cli_run(directory, revision, owners):
+    """The command line's conformance run, bound to the installed owners.
+
+    It names this revision and the owners' Actions run, its binary prints the
+    owners' core version, and its own comparison with the expected files
+    passed every benchmark that the command line runs.
+    """
+    run = read(directory / "observed" / "run.json")
+    inventory = read(directory / "inventory.json")
+    if run.get("runtime") != "cli" or run.get("source_revision") != revision:
+        raise ValueError("stale or foreign command-line evidence")
+    if (
+        inventory.get("runtime") != "cli"
+        or inventory.get("source_revision") != revision
+        or inventory.get("gate", {}).get("failing") != []
+    ):
+        raise ValueError("command-line conformance did not pass on this revision")
+    version = (run.get("version") or "").split("\n", 1)[0]
+    for host, owner in owners.items():
+        if version != "yamaa " + owner["installation"]["core_version"]:
+            raise ValueError(f"the command line's engine differs from the {host} core")
+        if run.get("evidence") != owner["evidence"]["run"]:
+            raise ValueError(f"the command line and the {host} owner ran apart")
+    return run
+
+
+def cli_saved(directory, destination, name, record):
+    """One case's command-line outcome and the files its runs saved, in
+    publication order, each retained under `destination` with its bytes."""
+    if record.get("error") or not record.get("calls"):
+        raise ValueError(f"no command-line run of {name}: {record.get('error')}")
+    outcome, saved = "success", []
+    for call in record["calls"]:
+        document = call["document"]
+        if document is None:
+            raise ValueError(f"the command line did not run {name}")
+        if (call["exit_status"], document["status"]) != (0, "succeeded"):
+            outcome = "failure"
+        for path in document["paths"]:
+            relative = PurePosixPath(path)
+            if relative.is_absolute() or ".." in relative.parts or "\\" in path:
+                raise ValueError(f"{name}: a saved path is outside its case: {path}")
+            source = directory / "observed" / "work" / name / path
+            retained = destination / name / path
+            retained.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, retained)
+            payload = retained.read_bytes()
+            if payload != source.read_bytes():
+                raise ValueError("retaining a command-line saved file changed bytes")
+            saved.append((path, payload))
+    return outcome, saved
+
+
+def saved_output_findings(report, outcome, saved):
+    """What differs between one installed host's complete report and the
+    command line's run of the same case: the outcome, then the saved
+    artifacts in publication order, each CSV byte for byte and each Parquet
+    file logically (PARQUET-4). The command line's run stands where committed
+    truth stands in the hosts' comparisons, so each finding's expected value
+    is the command line's and its actual value the host's."""
+    findings = []
+    if report.outcome != outcome:
+        findings.append(
+            reports.ComparisonFinding(
+                kind="outcome",
+                detail=f"{report.example}: outcomes differ",
+                expected=outcome,
+                actual=report.outcome,
+            )
+        )
+    produced = [f"{item.name}.{item.profile}" for item in report.artifacts]
+    names = [PurePosixPath(path).name for path, _ in saved]
+    if produced != names:
+        findings.append(
+            reports.ComparisonFinding(
+                kind="artifacts",
+                detail=f"{report.example}: saved artifacts differ",
+                expected=names,
+                actual=produced,
+            )
+        )
+        return findings
+    for artifact, (_, payload) in zip(report.artifacts, saved):
+        findings.extend(reports._artifact_findings(artifact, payload))
+    return findings
+
+
+def compare_cli_outputs(cli_evidence, output, revision):
+    """Compare the command line's saved outputs with the installed hosts'.
+
+    `output` holds what compare_owners retained: both installed owners'
+    evidence and their complete reports of every cohort case. The command
+    line ran the same cases, written as 1.0 (#3030 D122), so its spec paths
+    are the 1.0 files' and its issues are not compared here; its outcome and
+    its saved files are, with both hosts' reports. Its own inventory proved
+    its runs against the expected files.
+    """
+    owners = {host: read(output / f"{host}-installed-evidence.json") for host in HOSTS}
+    run = cli_run(cli_evidence, revision, owners)
+    destination = output / "cli"
+    destination.mkdir()
+    shutil.copyfile(cli_evidence / "observed" / "run.json", destination / "run.json")
+    shutil.copyfile(cli_evidence / "inventory.json", destination / "inventory.json")
+    rows = []
+    for name in COHORT:
+        record = read(cli_evidence / "observed" / "records" / f"{name}.json")
+        if record.get("excluded"):
+            rows.extend(
+                {
+                    "example": name,
+                    "compared_with": host,
+                    "result": "excluded",
+                    "reason": record["excluded"],
+                    "findings": [],
+                }
+                for host in HOSTS
+            )
+            continue
+        outcome, saved = cli_saved(cli_evidence, destination / "saved", name, record)
+        for host in HOSTS:
+            relative = f"reports/{host}/{name}.{host}.rust.json"
+            findings = saved_output_findings(
+                reports.read_report(output / relative), outcome, saved
+            )
+            rows.append(
+                {
+                    "example": name,
+                    "compared_with": host,
+                    "report": relative,
+                    "outcome": outcome,
+                    "saved": [f"cli/saved/{name}/{path}" for path, _ in saved],
+                    "result": "mismatch" if findings else "pass",
+                    "findings": [item.model_dump(mode="json") for item in findings],
+                }
+            )
+    result = {
+        "protocol": CLI_PROTOCOL,
+        "source_revision": revision,
+        "cli": {key: run.get(key) for key in ("version", "evidence")},
+        "coverage": rows,
+        "summary": {
+            host: sum(
+                row["compared_with"] == host and row["result"] == "pass" for row in rows
+            )
+            for host in HOSTS
+        },
+    }
+    write(destination / "coverage.json", result)
+    differing = sorted(
+        {row["example"] for row in rows if row["result"] not in ("pass", "excluded")}
+    )
+    if differing:
+        raise ValueError(
+            "the command line's saved outputs differ from the installed hosts': "
+            + ", ".join(differing)
+        )
     return result

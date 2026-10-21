@@ -5586,6 +5586,62 @@
         "readstat",
         "yaml"
       ]
+    },
+    "schema": {
+      "file_types": [
+        "spec",
+        "project",
+        "codelists",
+        "function"
+      ],
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "keys": [
+        "$defs",
+        "$ref",
+        "$schema",
+        "description",
+        "title"
+      ],
+      "documents": [
+        {
+          "file_type": "spec",
+          "title": "yamaa 1.0 spec file",
+          "ref": "#/$defs/layer"
+        },
+        {
+          "file_type": "project",
+          "title": "yamaa 1.0 project file",
+          "ref": "#/$defs/project_class"
+        },
+        {
+          "file_type": "codelists",
+          "title": "yamaa 1.0 codelists file",
+          "ref": "#/$defs/codelist_file_class"
+        },
+        {
+          "file_type": "function",
+          "title": "yamaa 1.0 function file",
+          "ref": "#/$defs/function_definition_class"
+        }
+      ],
+      "refusals": [
+        {
+          "file_type": "specs",
+          "message": "cannot give the schema of specs: a specs file is given where a spec, project, codelists, function file is expected [unexpected_file_type, SCHEMA-2]",
+          "condition": "unexpected_file_type",
+          "rule": "SCHEMA-2",
+          "issue_message": "a specs file is given where a spec, project, codelists, function file is expected",
+          "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"function\"],\"type\":\"specs\"}"
+        },
+        {
+          "file_type": "Spec",
+          "message": "cannot give the schema of Spec: a Spec file is given where a spec, project, codelists, function file is expected [unexpected_file_type, SCHEMA-2]",
+          "condition": "unexpected_file_type",
+          "rule": "SCHEMA-2",
+          "issue_message": "a Spec file is given where a spec, project, codelists, function file is expected",
+          "context": "{\"expected\":[\"spec\",\"project\",\"codelists\",\"function\"],\"type\":\"Spec\"}"
+        }
+      ]
     }
   }
 }

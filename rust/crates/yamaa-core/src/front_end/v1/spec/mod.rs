@@ -16,10 +16,11 @@
 //!   `window.order_by` to the order its `tie_break` gave;
 //! - an input's `key` lowers as declared, which its implicit joins and
 //!   keyless qualified aggregates match on (D23, D63);
-//! - `model`, a dataset's `standard`, several origins and a value-level
-//!   comparator are stored for the pull requests that check or build them
-//!   (P1-10, P1-13, P1-14); until then the switch refuses what is not built
-//!   (P1-9).
+//! - `model` lowers as declared, which [`checks`] requires beside submission
+//!   metadata and the submission rules read (SUB-3, SUB-23);
+//! - a dataset's `standard`, several origins and a value-level comparator
+//!   are stored for the pull requests that build them (P1-13, P1-14); until
+//!   then the switch refuses what is not built (P1-9).
 //!
 //! Every node carries the position of the deepest node its layer wrote
 //! (P-ISSUE-1), and paths render in the 1.0 notation (P-CLR-2).

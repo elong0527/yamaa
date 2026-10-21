@@ -2168,12 +2168,15 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ${{ matrix.os }}
     # Each command-line archive, unpacked as a user unpacks it, on a fresh
-    # runner of its platform with no checkout, Rust or Python set up: unzip
-    # on Linux and macOS, which restores the executable's mode, and
-    # PowerShell's Expand-Archive on Windows. The binary prints its version,
-    # whose first line must name the archive's version, and then runs its
-    # selftest, which must succeed. The log keeps both reports.
-    timeout-minutes: 10
+    # runner of its platform: unzip on Linux and macOS, which restores the
+    # executable's mode, and PowerShell's Expand-Archive on Windows. Before
+    # the job sets up anything else, the binary prints its version, whose
+    # first line must name the archive's version, and then runs its selftest,
+    # which must succeed. The log keeps both reports. Then a checkout and
+    # Python, but no Rust, give the repository's tools, which run the
+    # conformance corpus through the binary (#3060). The cohort comparison
+    # reads its records and saved files.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -2221,10 +2224,52 @@ jobs:
             exit 1
           fi
           "${binary}" selftest
+      # The corpus's bytes and its one symbolic link stay exact on Windows,
+      # as in every lane that runs it.
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m pip install py-yaml12==0.2.0 pyyaml==6.0.3 pyarrow==25.0.1
+      # The binary reads only 1.x files (#3030 D122, D125), so the converter
+      # writes every benchmark as 1.0 and excludes each one that the 1.0
+      # conversion gate excepts. The command line's runner then makes each
+      # call that the plan gives the command line through the unpacked
+      # binary, and the comparator judges the records against the expected
+      # files: the step fails on any difference.
+      - name: Report command-line public benchmark conformance
+        id: cli_conformance
+        working-directory: ${{ runner.temp }}
+        run: |
+          archives=(cli/yamaa-*.zip)
+          binary="unpacked/$(basename "${archives[0]}" .zip)/yamaa"
+          if [ "${RUNNER_OS}" = Windows ]; then binary="${binary}.exe"; fi
+          python -I -m tools.commands.cli_conformance --binary "${binary}" \
+            --output public-conformance-cli \
+            --evidence "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Preserve command-line public benchmark inventory and saved artifacts
+        if: ${{ always() && (steps.cli_conformance.outcome == 'success' || steps.cli_conformance.outcome == 'failure') }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: public-conformance-cli-${{ matrix.target }}
+          path: |
+            ${{ runner.temp }}/public-conformance-cli/inventory.json
+            ${{ runner.temp }}/public-conformance-cli/observed
+          if-no-files-found: error
 
   public-cohort:
     name: public-cohort-complete-runs
-    needs: [qualify, r, r-binary-install]
+    needs: [qualify, r, r-binary-install, cli-install]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -2259,6 +2304,10 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: native-r-binary-qualification-*
+          path: ${{ runner.temp }}/cohort-input
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: public-conformance-cli-*
           path: ${{ runner.temp }}/cohort-input
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
