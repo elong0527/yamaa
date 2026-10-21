@@ -690,7 +690,7 @@ qualify_resolve <- function() {
   unlink(entry)
   error <- refusal(spec$resolve())
   stopifnot(identical(conditionMessage(error), error_text("resolve", entry)),
-    identical(error$issues$condition, "engine_rejected"))
+    identical(error$issues$condition, "resource_path_missing"))
 
   # The project supplies the function and names itself; the same file alone
   # names an unknown function. No callable is activated.
