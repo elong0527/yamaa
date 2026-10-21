@@ -451,12 +451,15 @@ fn row_count(
 /// Every column's verifications: its declared checks, then those its
 /// terminology, value-level entries, `mandatory` and submission metadata
 /// imply. Their findings join `findings` in that order, with the dataset
-/// `unique` that restates the keys between `mandatory` and submission.
+/// `unique` that restates the keys between `mandatory` and submission. A
+/// `projectless` 1.x specification's terminology is each codelist and
+/// inventory vocabulary it binds, which fails instead (CT-13).
 pub(super) fn prepare_columns(
     spec: &ast::Spec,
     output: &TableSchema,
     catalogue: Option<&crate::project_terminology::Catalogue>,
     inventory: &[String],
+    projectless: bool,
     findings: &mut Vec<PreflightFinding>,
 ) -> Result<Vec<Verifications>, PrepareError> {
     let mut groups = (0..spec.columns.len())
@@ -468,6 +471,8 @@ pub(super) fn prepare_columns(
             Err(PrepareError::Invalid(errors)) => findings.extend(errors),
             Err(error) => return Err(error),
         }
+    } else if projectless {
+        findings.extend(terminology::unbound(spec));
     }
     value_level::admit(spec, output, catalogue, &mut groups, findings)?;
     mandatory::admit(spec, output, &mut groups, findings);

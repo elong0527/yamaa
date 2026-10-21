@@ -1,0 +1,9 @@
+phase: validation
+condition: project_binding_missing
+spec_paths:
+  - columns.SEX.submission.codelist
+rule: CT-13
+context:
+  binding: codelist
+  column: SEX
+  codelist: SEX

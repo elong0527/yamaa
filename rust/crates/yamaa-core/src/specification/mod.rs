@@ -698,15 +698,8 @@ impl PreparedSpecification {
         environment: Option<&crate::project_environment::ExecutionEnvironment>,
         links: crate::producer_contract::Links<'_>,
     ) -> Result<Self, PrepareError> {
-        // A 1.0 specification compiled without its project fails validation
-        // when it binds a codelist or calls a project function (D32); until
-        // P1-11 builds that, each such binding is refused (D76).
-        if environment.is_none() {
-            let bindings = crate::front_end::v1::spec::checks::project_bindings(&tree);
-            if !bindings.is_empty() {
-                return Err(PrepareError::Unsupported(bindings));
-            }
-        }
+        // Without an environment, each binding only a project supplies fails
+        // validation (CT-13), with the specification's other findings.
         Self::prepare_lowered(
             tree,
             document,
@@ -778,6 +771,16 @@ impl PreparedSpecification {
         undeclared: Option<crate::project_environment::Undeclared>,
     ) -> Result<Self, PrepareError> {
         let spec = &tree;
+        // A 1.x specification prepared without a project file, which is when
+        // `prepare_tree_linked` gives none of a project's functions, codelists
+        // or inventory, binds nothing a project supplies: each codelist,
+        // inventory vocabulary and project function it names fails validation
+        // as `project_binding_missing` (CT-13). A 0.5 specification keeps its
+        // 0.5.0 meaning (#3030 D75).
+        let projectless = matches!(spec.header.surface, ast::Surface::V1 { .. })
+            && functions.is_none()
+            && catalogue.is_none()
+            && inventory.is_none();
         match_values::declaration_admission(spec)?;
         let mut findings = checks::root::findings(spec);
         findings.extend(checks::odm::context_findings(spec)?);
@@ -803,7 +806,7 @@ impl PreparedSpecification {
         // environment document, and unknown calls retain ordinary static causes.
         // A project without an environment for the host names that cause instead.
         let functions = functions.unwrap_or(&[]);
-        let project = match functions::prepare(spec, functions, undeclared) {
+        let project = match functions::prepare(spec, functions, undeclared, projectless) {
             Ok(project) => Some(project),
             Err(PrepareError::Invalid(errors)) => {
                 findings.extend(errors);
@@ -812,8 +815,14 @@ impl PreparedSpecification {
             Err(error) => return Err(error),
         };
         let inventory = inventory.map_or(&[][..], |inventory| inventory.names());
-        let column_verifications =
-            verifications::prepare_columns(spec, &output, catalogue, inventory, &mut findings)?;
+        let column_verifications = verifications::prepare_columns(
+            spec,
+            &output,
+            catalogue,
+            inventory,
+            projectless,
+            &mut findings,
+        )?;
         // Operand types before capture: each link's producer types its input.
         let declared = types::DeclaredTypes::new(
             spec,
