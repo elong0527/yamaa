@@ -72,6 +72,7 @@ pub mod file_workflow;
 pub mod host_resources;
 pub mod publication;
 pub mod resolved_artifact;
+pub mod table_artifact;
 
 pub mod project_source;
 

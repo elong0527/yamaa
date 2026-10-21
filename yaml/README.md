@@ -105,11 +105,13 @@ specification file may be one layer of an inheritance chain, so the spec JSON
 Schema checks what one layer may write
 ([LAYER-4](../rules/inheritance.md#layer-4)), and its `$defs/root_class`
 checks a complete specification. After changing a file in `v1/`, regenerate
-them and the copy of `v1/` the engine embeds, which `make quick` also compares:
+them, the copy of `v1/` the engine embeds and the field orders the lint reads
+from the specification classes, which `make quick` also compares:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_json_schema --write
 uv run --project python --no-sync python -m tools.packaging.generate_shipped_schema --write
+uv run --project python --no-sync python -m tools.packaging.generate_style_orders --write
 ```
 
 ## Execution overview
@@ -182,9 +184,9 @@ rule, grammar, or fixture:
   `python -m tools.validation.check_cdisc_vocabulary` keeps each list that
   names a Define-XML enumeration equal to that enumeration in the Define-XML
   schema bundled with the engine, and each schema type or field equal to its
-  list; a Rust test compares the engine's lists of dataset classes and
-  subclasses, standard names, origin types and sources, and roles with the
-  file. A vocabulary only grows: no value is removed in 1.x.
+  list; Rust tests compare the engine's own lists with the file for every
+  vocabulary but the where comparators, for which the engine keeps no list.
+  A vocabulary only grows: no value is removed in 1.x.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

@@ -3,6 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
+use yamaa_core::language::FileType;
+
 use super::checks::{check, suppressed};
 use super::document::{Document, Value};
 use super::{fields, fix, Error, Finding, Linted};
@@ -82,9 +84,10 @@ pub(super) fn lint(paths: &[String], fix: bool) -> Result<Vec<Linted>, Error> {
 
 /// A named file is always linted. A directory names the `.yaml` files beneath
 /// it, outside hidden directories, in sorted path order, that are
-/// specifications: a root mapping holding `schema_version` and only root
-/// fields, so a study document, a project environment and a project
-/// configuration are left out.
+/// specifications: a root that declares the 1.x header and `type: spec`, or a
+/// root mapping holding `schema_version` and only 0.5 root fields, so a study
+/// document, a project environment, a project configuration and a 1.x file of
+/// another type are left out.
 fn expand(path: &Path) -> Result<Vec<File>, Error> {
     if !path.is_dir() {
         return Ok(vec![File::new(path.to_path_buf())]);
@@ -181,18 +184,23 @@ fn is_specification(path: &Path) -> Result<bool, Error> {
     else {
         return Ok(false);
     };
-    let mut schema_version = false;
+    let mut names = Vec::with_capacity(pairs.len());
     for &(key, _) in pairs {
         // A key that is not text is never a root field.
         let Some(name) = document.scalar(key) else {
             return Ok(false);
         };
-        if !fields::ROOT_CLASS.contains(&name) {
-            return Ok(false);
-        }
-        schema_version |= name == "schema_version";
+        names.push(name);
     }
-    Ok(schema_version)
+    let declares = |name| names.contains(&name);
+    if declares("yamaa") && !declares("schema_version") {
+        // A 1.x document declares its own type (SCHEMA-2).
+        let declared = document
+            .member(document.root, "type")
+            .and_then(|value| document.scalar(value));
+        return Ok(declared == Some(FileType::Spec.name()));
+    }
+    Ok(declares("schema_version") && names.iter().all(|name| fields::LEGACY.root.contains(name)))
 }
 
 /// Capture a file once through the local file resolver: its parent is

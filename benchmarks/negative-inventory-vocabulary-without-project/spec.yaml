@@ -1,0 +1,53 @@
+yamaa: "1.0"
+
+type: spec
+
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: input/ae.csv
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, SRCDOM, SRCSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # A source domain must name a dataset of the study, which the study's
+  # project file lists.
+  - name: SRCDOM
+    type: str
+    label: Source Data
+    derivation: AE.DOMAIN
+    submission:
+      core: Perm
+      length: 2
+      inventory_vocabulary: true
+      origins:
+        - type: Predecessor
+          description: AE.DOMAIN
+
+  - name: SRCSEQ
+    type: int
+    label: Source Sequence Number
+    derivation: AE.AESEQ

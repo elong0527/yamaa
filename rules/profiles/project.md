@@ -6,7 +6,8 @@ locks, terminology and submission sections, and lists the specifications of
 each section. Checking, running and packaging a project operate on the
 specifications its sections list. A specification built without a project
 file is unaffected, except that it has no project functions, no terminology
-and no dataset inventory.
+and no dataset inventory, so each binding that needs one fails
+([CT-13](terminology.md#ct-13)).
 
 ## The project file
 
@@ -34,9 +35,10 @@ of a codelist file, which declares `type: codelists`
 against the project schema fails, before any activation or study read, with
 the conditions of [SCHEMA-12](../reference/schema-language.md#schema-12) and
 [SCHEMA-13](../reference/schema-language.md#schema-13) at its own paths; the
-project file has no condition of its own. Without a project file, a function
-call names no declared function ([FUNC-4](functions.md#func-4)) and a codelist
-binding names no declared codelist ([CT-1](terminology.md#ct-1)).
+project file has no condition of its own. A specification checked or run
+without a project file fails validation at each function call, codelist
+binding and inventory vocabulary it declares, all of which only a project file
+supplies ([CT-13](terminology.md#ct-13)).
 
 A project file that declares `schema_version` declares `environments`,
 `codelists`, `study` and the sections instead, and is read under the rules at
@@ -45,7 +47,9 @@ against `schema_project.yaml` fails with `project_environment_invalid`
 ([FUNC-2](functions.md#func-2)). Until that path goes, a project file that
 cannot be read, and so declares neither, fails with
 `project_environment_missing` ([FUNC-1](functions.md#func-1)), before any
-activation or study read.
+activation or study read. A specification that declares `schema_version`,
+checked or run without a project file, reads no codelist binding and names no
+declared function in a call ([FUNC-4](functions.md#func-4)).
 
 <a id="project-2"></a>
 
