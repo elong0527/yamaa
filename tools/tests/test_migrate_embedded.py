@@ -180,22 +180,90 @@ class RustTests(unittest.TestCase):
 
 class GuardTests(unittest.TestCase):
     def test_source_line_endings_survive_conversion_and_write_back(self):
+        rust = rust_string(SPEC)
+        python = sources.PythonStyle().encode(SPEC)
+        r = sources.RStyle().encode(SPEC)
+        encoded = json.dumps(SPEC)
+        cases = (
+            (
+                "t.rs",
+                ["// keep", "fn t() {", f"    let spec = {rust};", "}", ""],
+                rust,
+                rust_string(CONVERTED),
+            ),
+            (
+                "t.py",
+                ["# keep", "def t():", f"    spec = {python}", ""],
+                python,
+                sources.PythonStyle().encode(CONVERTED),
+            ),
+            (
+                "t.R",
+                ["# keep", "f <- function() {", f"  spec <- {r}", "}", ""],
+                r,
+                sources.RStyle().encode(CONVERTED),
+            ),
+            (
+                "t.json",
+                ["{", f'  "spec": {encoded}', "}", ""],
+                encoded,
+                json.dumps(CONVERTED),
+            ),
+            (
+                "t.tsv",
+                ["case\tspec", f"one\t{encoded}", ""],
+                encoded,
+                json.dumps(CONVERTED),
+            ),
+        )
+        for ending in ("\r\n", "\r"):
+            multiline = '"""' + SPEC.replace("\n", ending) + '"""'
+            multiline_case = (
+                "multiline.py",
+                ["# keep", "def t():", f"    spec = {multiline}", ""],
+                multiline,
+                sources.PythonStyle(quote='"""').encode(CONVERTED),
+            )
+            for name, lines, before, after in (*cases, multiline_case):
+                source = ending.join(lines)
+                expected = source.replace(before, after)
+                with (
+                    self.subTest(name=name, ending=repr(ending)),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    root = Path(directory)
+                    path = root / name
+                    path.write_bytes(source.encode("utf-8"))
+                    if name == "t.tsv":
+                        self.assertEqual(
+                            {
+                                group.scope
+                                for group in fixtures.tsv_extraction(source).groups
+                            },
+                            {(1,)},
+                        )
+                    result = embedded.convert_embedded([path], base=root)
+                    write(result, root / "out", [path])
+                    self.assertEqual(
+                        (root / "out" / name).read_bytes(), expected.encode("utf-8")
+                    )
+
+    def test_manual_notes_follow_source_line_endings(self):
         for ending in ("\r\n", "\r"):
             source = ending.join(
-                ["fn t() {", f"    let spec = {rust_string(SPEC)};", "}", ""]
+                [
+                    "// keep",
+                    "fn t() {",
+                    f"    let spec = concat!({rust_string(SPEC)});",
+                    "}",
+                    "",
+                ]
             )
-            expected = source.replace(rust_string(SPEC), rust_string(CONVERTED))
-            with (
-                self.subTest(ending=repr(ending)),
-                tempfile.TemporaryDirectory() as directory,
-            ):
-                root = Path(directory)
-                path = root / "t.rs"
-                path.write_bytes(source.encode("utf-8"))
-                result = embedded.convert_embedded([path], base=root)
-                write(result, root / "out", [path])
+            with self.subTest(ending=repr(ending)):
+                converted, result = run("t.rs", source)
+                self.assertEqual(converted, source)
                 self.assertEqual(
-                    (root / "out/t.rs").read_bytes(), expected.encode("utf-8")
+                    [note.line for note in notes(result, "interpolated")], [3]
                 )
 
     def test_an_unsupported_source_reports_a_cli_error(self):

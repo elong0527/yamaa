@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 # Where an interpolated template holds a value that is not a literal.
 HOLE = "{...}"
 HOLE_WORD = "HOLE"
+LINE_BREAK = re.compile(r"\r\n|\r|\n")
 
 # A file name a call writes a literal to, or reads an input from.
 PATH_LIKE = re.compile(r"[\w.\-/]*\.(?:ya?ml|csv)")
@@ -118,7 +119,7 @@ class Extraction:
     groups: list = field(default_factory=list)
 
     def __post_init__(self):
-        self.starts = [0] + [match.end() for match in re.finditer("\n", self.text)]
+        self.starts = [0] + [match.end() for match in LINE_BREAK.finditer(self.text)]
 
     def ordered(self):
         """This extraction with its groups in source order."""
@@ -643,8 +644,8 @@ def rust_tokens(text):
             position += 1
             continue
         if text.startswith("//", position):
-            stop = text.find("\n", position)
-            position = size if stop < 0 else stop
+            stop = LINE_BREAK.search(text, position)
+            position = size if stop is None else stop.start()
             continue
         if text.startswith("/*", position):
             position = _rust_block_comment(text, position)
@@ -889,7 +890,9 @@ def _python_piece(first, last, token_text):
     if isinstance(value, bytes):
         value = value.decode("latin-1")
     # Offsets are approximate: a triple-quoted token's lines map to its lines.
-    breaks = [first] + [first + match.end() for match in re.finditer("\n", token_text)]
+    breaks = [first] + [
+        first + match.end() for match in LINE_BREAK.finditer(token_text)
+    ]
     offsets, line = [], 0
     for character in value:
         offsets.append(breaks[min(line, len(breaks) - 1)] if len(quote) == 3 else first)
@@ -926,7 +929,9 @@ def python_extraction(text):
     extraction = Extraction(text)
     try:
         tree = ast.parse(text)
-        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+        tokens = list(
+            tokenize.generate_tokens(io.StringIO(text, newline=None).readline)
+        )
     except (SyntaxError, tokenize.TokenError, ValueError):
         return extraction.ordered()
     lines = text.splitlines(keepends=True)
@@ -938,11 +943,11 @@ def python_extraction(text):
             column = len(line.encode("utf-8")[:column].decode("utf-8", "replace"))
         return starts[row - 1] + column
 
-    strings = [
-        (offset(*token.start), offset(*token.end), token.string)
-        for token in tokens
-        if token.type == tokenize.STRING
-    ]
+    strings = []
+    for token in tokens:
+        if token.type == tokenize.STRING:
+            first, last = offset(*token.start), offset(*token.end)
+            strings.append((first, last, text[first:last]))
     string_starts = [item[0] for item in strings]
     parents, scopes, assignments = {}, {}, {}
     for node in ast.walk(tree):
@@ -1190,8 +1195,8 @@ def r_tokens(text):
             position += 1
             continue
         if character == "#":
-            stop = text.find("\n", position)
-            position = size if stop < 0 else stop
+            stop = LINE_BREAK.search(text, position)
+            position = size if stop is None else stop.start()
             continue
         if character in "\"'":
             token = _r_string(text, position)

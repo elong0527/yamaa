@@ -109,7 +109,7 @@ def scan(text, start=0, end=None):
 
 def _base(text, offset):
     """The indent of the line holding `offset`."""
-    line = text.rfind("\n", 0, offset) + 1
+    line = max(text.rfind("\n", 0, offset), text.rfind("\r", 0, offset)) + 1
     return len(text[line:offset]) - len(text[line:offset].lstrip(" "))
 
 
@@ -151,17 +151,15 @@ def json_extraction(text):
 def tsv_extraction(text):
     """The strings and specification objects of each JSON cell of a TSV file."""
     extraction = Extraction(text)
-    position = 0
-    for row, line in enumerate(text.split("\n")):
-        cell_start = position
-        for cell in line.rstrip("\r").split("\t"):
+    for row, match in enumerate(re.finditer(r"([^\r\n]*)(?:\r\n|\r|\n|$)", text)):
+        cell_start = match.start()
+        for cell in match[1].split("\t"):
             stripped = cell.strip()
             if stripped[:1] in ("{", "[", '"'):
                 node = scan(text, cell_start, cell_start + len(cell))
                 if node is not None:
                     _collect(text, node, (row,), extraction.groups)
             cell_start += len(cell) + 1
-        position += len(line) + 1
     return extraction.ordered()
 
 
