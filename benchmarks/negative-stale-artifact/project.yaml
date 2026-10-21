@@ -12,5 +12,5 @@ sdtm:
       version: "3.4"
       status: Final
   specs:
-    - spec.yaml
+    - spec_dm.yaml
   define: define.xml

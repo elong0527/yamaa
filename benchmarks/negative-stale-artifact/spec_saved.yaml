@@ -3,7 +3,7 @@ yamaa: "1.0"
 type: spec
 
 # DM as it stood when it was last built and saved: it wrote the dataset as
-# dm_v1.csv, before spec.yaml renamed the output and added the submission
+# dm_v1.csv, before spec_dm.yaml renamed the output and added the submission
 # metadata. The run report it saved, dm-report.csv, records that run.
 model: SDTM
 domain: DM
