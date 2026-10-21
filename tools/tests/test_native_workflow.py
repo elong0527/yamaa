@@ -94,12 +94,21 @@ def native_run_jobs():
     jobs = {}
     for job_id, job in workflow["jobs"].items():
         matrix = job.get("strategy", {}).get("matrix", {})
-        if {"include", "exclude"} & set(matrix) or not all(
-            isinstance(values, list) for values in matrix.values()
+        if not all(isinstance(values, list) for values in matrix.values()) or (
+            {"include", "exclude"} & set(matrix) and set(matrix) != {"include"}
         ):
-            raise AssertionError(f"{job_id}: this test expands only plain matrices")
-        for values in itertools.product(*matrix.values()):
-            lane = dict(zip(matrix, values, strict=True))
+            raise AssertionError(
+                f"{job_id}: this test expands only plain matrices and lists of "
+                "included lanes"
+            )
+        if "include" in matrix:
+            lanes = [dict(lane) for lane in matrix["include"]]
+        else:
+            lanes = [
+                dict(zip(matrix, values, strict=True))
+                for values in itertools.product(*matrix.values())
+            ]
+        for lane in lanes:
             context = {"matrix": lane, "env": dict(workflow.get("env", {}))}
             context["env"].update(
                 {
@@ -868,6 +877,176 @@ class NativeWorkflowContract(unittest.TestCase):
                         step.get("name") == "Check the R source package as CRAN does"
                     )
                     self.assertEqual(proxy & names, proxy if checks else set())
+
+    def cli_lanes(self):
+        """List each command-line lane's platform and Rust target."""
+        return [
+            (lane["os"], lane["target"]) for lane in self.coverage["cli"]["include"]
+        ]
+
+    def test_each_cli_job_pairs_a_platform_with_its_rust_target(self):
+        # #3030 D12, D49: static musl binaries for Linux x86_64 and aarch64,
+        # the latter on an arm64 runner, the static C runtime for Windows x64,
+        # and macOS arm64.
+        self.assertEqual(
+            sorted(self.cli_lanes()),
+            [
+                ("macos-15", "aarch64-apple-darwin"),
+                ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
+                ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
+                ("windows-2025", "x86_64-pc-windows-msvc"),
+            ],
+        )
+        for prefix in ("native-cli", "native-cli-install"):
+            names = [name for name in self.jobs if name.startswith(f"{prefix} (")]
+            self.assertEqual(
+                names,
+                [
+                    f"{prefix} ({platform}, {target})"
+                    for platform, target in self.cli_lanes()
+                ],
+            )
+            for name in names:
+                with self.subTest(job=name):
+                    job = self.jobs[name]
+                    self.assertEqual(
+                        expand(job["job"]["runs-on"], job["context"]),
+                        job["context"]["matrix"]["os"],
+                    )
+
+    def test_each_cli_binary_builds_with_the_dist_profile_for_its_target(self):
+        # The wheels' profile, release without the symbol table; never the R
+        # build's, which keeps the symbols. The toolchain is the pinned one,
+        # installed as the other native jobs install it.
+        build = (
+            "cargo build --locked --profile dist --package yamaa-cli --bin yamaa "
+            '--target "${TARGET}"'
+        )
+        for platform, target in self.cli_lanes():
+            job = f"native-cli ({platform}, {target})"
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            context = self.jobs[job]["context"]
+            tools, binary = (
+                steps["Install build tools"],
+                steps["Build the command-line binary"],
+            )
+            with self.subTest(job=job):
+                self.assertIn("python -m tools.ci.toolchain --install", tools["run"])
+                self.assertIn('rustup target add "${TARGET}"', tools["run"])
+                self.assertEqual(binary["working-directory"], "rust")
+                self.assertEqual(binary["run"].count(build), 1)
+                self.assertNotIn("--release", binary["run"])
+                for step in (tools, binary, steps["Check the command-line binary"]):
+                    self.assertEqual(expand(step["env"]["TARGET"], context), target)
+                # Only the Windows target links the C runtime statically; the
+                # musl targets are static already.
+                self.assertEqual(
+                    binary["env"]["CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"],
+                    "-C target-feature=+crt-static",
+                )
+                self.assertNotIn("RUSTFLAGS", context["env"])
+                # The Linux targets compile the bundled C sources with musl-gcc.
+                self.assertIn(
+                    "sudo apt-get install --yes --no-install-recommends musl-tools",
+                    tools["run"],
+                )
+                self.assertIn('export "CC_${TARGET//-/_}=musl-gcc"', binary["run"])
+
+    def test_each_cli_binary_is_checked_static_or_for_its_minimum_macos(self):
+        configure = (ROOT / "R/yamaa/tools/configure.R").read_text(encoding="utf-8")
+        [floor] = re.findall(
+            r'Sys\.getenv\("MACOSX_DEPLOYMENT_TARGET", "([0-9.]+)"\)', configure
+        )
+        for platform, target in self.cli_lanes():
+            job = f"native-cli ({platform}, {target})"
+            steps = {step.get("name"): step for step in self.jobs[job]["definitions"]}
+            check = steps["Check the command-line binary"]["run"]
+            linux, _, rest = check.partition('elif [ "${RUNNER_OS}" = macOS ]; then')
+            macos, _, windows = rest.partition("else")
+            with self.subTest(job=job):
+                # file and readelf: static, with no interpreter or library.
+                self.assertIn('if [ "${RUNNER_OS}" = Linux ]; then', linux)
+                self.assertIn("grep -E 'static-pie linked|statically linked'", linux)
+                self.assertIn("grep INTERP; then exit 1; fi", linux)
+                self.assertIn("grep NEEDED; then exit 1; fi", linux)
+                # The minimum macOS that the binary declares, at most the
+                # floor of the wheels and the R binaries (#3320).
+                self.assertEqual(
+                    self.jobs[job]["context"]["env"]["MACOSX_DEPLOYMENT_TARGET"], floor
+                )
+                self.assertIn("""awk '$1 == "minos" { print $2 }'""", macos)
+                self.assertIn("sys.exit(minos > target)", macos)
+                self.assertIn('"${minos}" "${MACOSX_DEPLOYMENT_TARGET}"', macos)
+                # No C runtime DLL.
+                self.assertIn("-dependents", windows)
+                self.assertIn("vcruntime|msvcp|ucrtbase|api-ms-win-crt", windows)
+
+    def test_each_cli_archive_is_checked_against_the_committed_notices(self):
+        for platform, target in self.cli_lanes():
+            job = f"native-cli ({platform}, {target})"
+            steps = [step.get("name") for step in self.jobs[job]["definitions"]]
+            runs = {
+                step.get("name"): step.get("run", "")
+                for step in self.jobs[job]["definitions"]
+            }
+            archive = runs["Archive the command-line binary"]
+            check = runs["Check the command-line archive"].splitlines()
+            with self.subTest(job=job):
+                self.assertIn(
+                    'python -m tools.packaging.cli_archive write "${TARGET}" '
+                    '"${binary}" "${RUNNER_TEMP}/cli"',
+                    archive,
+                )
+                # The generators prove the committed copies current first.
+                self.assertEqual(
+                    check,
+                    [
+                        "python -m tools.packaging.generate_third_party_notices",
+                        "python -m tools.packaging.generate_component_inventory",
+                        'python -m tools.packaging.cli_archive check "${RUNNER_TEMP}"/cli/*.zip',
+                        'python -m tools.packaging.check_package_notices "${RUNNER_TEMP}"/cli/*.zip',
+                    ],
+                )
+                self.assertLess(
+                    steps.index("Check the command-line binary"),
+                    steps.index("Archive the command-line binary"),
+                )
+                self.assertLess(
+                    steps.index("Check the command-line archive"),
+                    steps.index("Preserve the command-line archive"),
+                )
+
+    def test_each_cli_archive_runs_its_selftest_unpacked_on_a_fresh_runner(self):
+        # Nothing from the build: no checkout, no Rust and no Python.
+        required = release.required_jobs(self.coverage)
+        for platform, target in self.cli_lanes():
+            job = f"native-cli-install ({platform}, {target})"
+            definitions = self.jobs[job]["definitions"]
+            steps = {step.get("name"): step for step in definitions}
+            with self.subTest(job=job):
+                self.assertEqual(self.jobs[job]["job"]["needs"], "cli")
+                self.assertEqual(self.jobs[job]["downloads"], [f"native-cli-{target}"])
+                self.assertEqual(
+                    [step.get("uses", "").split("@")[0] for step in definitions],
+                    ["actions/download-artifact", "", ""],
+                )
+                self.assertEqual(
+                    required[job],
+                    (
+                        "Unpack the command-line archive",
+                        "Run the command-line selftest",
+                    ),
+                )
+                unpack = steps["Unpack the command-line archive"]["run"]
+                self.assertIn('unzip "${archives[0]}" -d unpacked', unpack)
+                self.assertIn("Expand-Archive -LiteralPath", unpack)
+                run = steps["Run the command-line selftest"]["run"]
+                self.assertIn('"${binary}" --version | tee cli-version.txt', run)
+                self.assertIn('if [ "${first}" != "yamaa ${version}" ]; then', run)
+                self.assertTrue(run.rstrip().endswith('"${binary}" selftest'))
+                for step in definitions:
+                    self.assertNotIn("tools.ci.toolchain", step.get("run", ""))
+                    self.assertNotIn("python", step.get("run", ""))
 
 
 if __name__ == "__main__":

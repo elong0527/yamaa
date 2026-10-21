@@ -6,6 +6,7 @@ import io
 import os
 import re
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
@@ -20,8 +21,8 @@ import yaml
 from tools.ci import publish_release as publisher
 from tools.ci import release_assets, toolchain
 from tools.ci import select_release_artifacts as release
+from tools.packaging import cli_archive, release_identity
 from tools.packaging import generate_component_inventory as inventory
-from tools.packaging import release_identity
 from tools.packaging.release_identity import Identity
 from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
@@ -158,6 +159,7 @@ def example_name(asset, identity):
     return (
         asset.file.replace("<Python version>", identity.python)
         .replace("<R version>", identity.r)
+        .replace("<Cargo version>", identity.cargo)
         .replace("*", "2_39")
     )
 
@@ -187,6 +189,42 @@ def r_binary(path, members):
         tar(path, members)
 
 
+def executable(target, marker=b""):
+    """An executable fixture whose header names the format and architecture
+    of the target's, followed by bytes that no other fixture has."""
+    kind, architecture = cli_archive.expected_format(target)
+    machine = {name: code for code, name in cli_archive.MACHINES[kind].items()}[
+        architecture
+    ]
+    if kind == "ELF":
+        header = b"\x7fELF\x02\x01" + bytes(12) + struct.pack("<H", machine)
+    elif kind == "Mach-O":
+        header = b"\xcf\xfa\xed\xfe" + struct.pack("<I", machine)
+    else:
+        header = b"MZ" + bytes(58) + struct.pack("<I", 64) + b"PE\0\0"
+        header += struct.pack("<H", machine)
+    return header + b"independent native fixture\0" + marker
+
+
+def cli_zip(path, members):
+    """Write a command-line archive whose members map to (payload, mode)."""
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, (payload, mode) in members.items():
+            cli_archive.add(archive, name, payload, mode, (2026, 1, 1, 0, 0, 0))
+
+
+def cli_members(identity, target, notices, marker=b""):
+    """The members of a target's command-line archive, with their modes."""
+    program, members = cli_archive.layout(identity, target)
+    return {
+        program: (executable(target, marker), cli_archive.EXECUTABLE_MODE),
+        **{
+            member: (notices[notice], cli_archive.NOTICE_MODE)
+            for notice, member in members.items()
+        },
+    }
+
+
 def downloads(root, identity=IDENTITY):
     """Write each release artifact as the native run uploads it."""
     licenses = {name: (ROOT / "python" / name).read_bytes() for name in NOTICES}
@@ -209,6 +247,15 @@ def downloads(root, identity=IDENTITY):
             inventory.NAME: inventory.installed_inventory(
                 r_inventory, toolchain.channel()
             ).encode()
+        },
+    )
+    # A command-line archive carries the command line's own notices and
+    # inventory, and the Python packages' copies of the shared notices.
+    cli_licenses = dict(
+        licenses,
+        **{
+            name: (ROOT / "rust/crates/yamaa-cli" / name).read_bytes()
+            for name in ("LICENSE-THIRD-PARTY.txt", inventory.NAME)
         },
     )
     python, r = identity.python, identity.r
@@ -239,6 +286,12 @@ def downloads(root, identity=IDENTITY):
                         for name, payload in sdist_licenses.items()
                     },
                 },
+            )
+        elif asset.kind == "cli":
+            target = asset.artifact.removeprefix("native-cli-")
+            cli_zip(
+                path,
+                cli_members(identity, target, cli_licenses, asset.artifact.encode()),
             )
         elif asset.kind == "r-binary":
             # R installs the notices of inst/ at the package root.
@@ -756,6 +809,90 @@ class DownloadedPackages(unittest.TestCase):
         tar(r_source, members)
         with self.assertRaisesRegex(ValueError, "is a built package"):
             self.select()
+
+    def test_command_line_archives_carry_their_executable_and_notices(self):
+        """Each archive holds its target's executable and the command line's
+        notices, each with its mode, and nothing else."""
+        assets = [asset for asset in ASSETS if asset.kind == "cli"]
+        self.assertEqual(len(assets), len(MATRIX.coverage()["cli"]["include"]))
+        python_inventory = (ROOT / "python" / inventory.NAME).read_bytes()
+        for asset in assets:
+            path = self.directory / asset.artifact / example_name(asset, IDENTITY)
+            target = asset.artifact.removeprefix("native-cli-")
+            other = next(
+                lane["target"]
+                for lane in MATRIX.coverage()["cli"]["include"]
+                if lane["target"] != target
+            )
+            original = path.read_bytes()
+            with zipfile.ZipFile(path) as archive:
+                members = {
+                    entry.filename: (
+                        archive.read(entry.filename),
+                        entry.external_attr >> 16,
+                    )
+                    for entry in archive.infolist()
+                }
+            program, notices = cli_archive.layout(IDENTITY, target)
+            directory = program.rpartition("/")[0]
+            for defect, replaced, error in (
+                (
+                    "another target's executable",
+                    dict(
+                        members,
+                        **{program: (executable(other), cli_archive.EXECUTABLE_MODE)},
+                    ),
+                    f"is not the yamaa executable for {target}",
+                ),
+                (
+                    "an executable without its mode",
+                    dict(
+                        members,
+                        **{program: (members[program][0], cli_archive.NOTICE_MODE)},
+                    ),
+                    "must be a regular file with Unix mode 755",
+                ),
+                (
+                    "a missing notice",
+                    {
+                        name: value
+                        for name, value in members.items()
+                        if name != notices["LICENSE-YAML.txt"]
+                    },
+                    "must hold exactly",
+                ),
+                (
+                    "another file",
+                    dict(
+                        members,
+                        **{f"{directory}/README": (b"x\n", cli_archive.NOTICE_MODE)},
+                    ),
+                    "must hold exactly",
+                ),
+                (
+                    "the wheels' inventory",
+                    dict(
+                        members,
+                        **{
+                            notices[inventory.NAME]: (
+                                python_inventory,
+                                cli_archive.NOTICE_MODE,
+                            )
+                        },
+                    ),
+                    f"required notice differs or is missing: {notices[inventory.NAME]}",
+                ),
+            ):
+                cli_zip(path, replaced)
+                try:
+                    with (
+                        self.subTest(asset=asset.title, defect=defect),
+                        self.assertRaisesRegex(ValueError, error),
+                    ):
+                        self.select()
+                finally:
+                    path.write_bytes(original)
+        self.assertEqual(len(self.select()), len(ASSETS))
 
     def read(self, path):
         """Read every regular member of a package archive."""
@@ -1836,7 +1973,24 @@ class ReleaseAssetDeclaration(unittest.TestCase):
         series = MATRIX.r_series(MATRIX.R_RELEASE)
         older = MATRIX.r_series(MATRIX.R_OLDREL)
         candidate = Identity("1.0.0", 1)
+        cli = next(
+            asset
+            for asset in ASSETS
+            if asset.file.endswith("-x86_64-unknown-linux-musl.zip")
+        )
         for asset, accepted, refused in [
+            (
+                cli,
+                # The engine's version, which `yamaa --version` prints.
+                ["yamaa-1.0.0-rc.1-x86_64-unknown-linux-musl.zip"],
+                [
+                    "yamaa-1.0.0rc1-x86_64-unknown-linux-musl.zip",
+                    "yamaa-1.0.0-x86_64-unknown-linux-musl.zip",
+                    "yamaa-1.0.0-rc.1-aarch64-unknown-linux-musl.zip",
+                    "yamaa-1.0.0-rc.1-x86_64-unknown-linux-gnu.zip",
+                    "yamaa-1.0.0-rc.1-x86_64-unknown-linux-musl.tar.gz",
+                ],
+            ),
             (
                 r_binary,
                 [f"yamaa_1.0.0-{series}.zip"],
@@ -1880,7 +2034,10 @@ class ReleaseAssetDeclaration(unittest.TestCase):
         binaries = len(coverage["r_binary"]["os"]) * len(coverage["r_binary"]["r"])
         self.assertEqual(
             len(release_assets.artifacts(ASSETS)),
-            len(coverage["build"]["include"]) + 1 + binaries,
+            len(coverage["build"]["include"])
+            + 1
+            + binaries
+            + len(coverage["cli"]["include"]),
         )
         clash = release_assets.Asset("wheel", "clash", "x", ASSETS[0].artifact, "other")
         with self.assertRaisesRegex(ValueError, "two producing jobs"):
@@ -1915,6 +2072,37 @@ class ReleaseAssetDeclaration(unittest.TestCase):
         # Only R binary packages declare a build.
         self.assertEqual(
             {asset.kind for asset in ASSETS if asset.built is not None}, {"r-binary"}
+        )
+
+    def test_one_command_line_archive_per_target(self):
+        # #3030 D12, D49: static musl binaries for Linux x86_64 and aarch64,
+        # the static C runtime for Windows x64, and macOS arm64.
+        lanes = MATRIX.coverage()["cli"]["include"]
+        self.assertEqual(
+            sorted((lane["os"], lane["target"]) for lane in lanes),
+            [
+                ("macos-15", "aarch64-apple-darwin"),
+                ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
+                ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
+                ("windows-2025", "x86_64-pc-windows-msvc"),
+            ],
+        )
+        self.assertEqual(
+            [
+                (asset.title, asset.file, asset.artifact, asset.producer)
+                for asset in ASSETS
+                if asset.kind == "cli"
+            ],
+            [
+                (
+                    "Command-line binary for "
+                    + release_assets.CLI_PLATFORMS[lane["os"]],
+                    f"yamaa-<Cargo version>-{lane['target']}.zip",
+                    f"native-cli-{lane['target']}",
+                    f"native-cli ({lane['os']}, {lane['target']})",
+                )
+                for lane in lanes
+            ],
         )
 
     def test_install_packages_reads_each_r_binary_name_as_the_package(self):

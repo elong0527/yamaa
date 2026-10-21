@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from tools.ci import native, release_assets
-from tools.packaging import check_package_notices, release_identity
+from tools.packaging import check_package_notices, cli_archive, release_identity
 from tools.packaging.check_shared_release_versions import violations
 from tools.paths import ROOT
 
@@ -322,6 +322,20 @@ def required_jobs(coverage):
                 "Report installed R public benchmark conformance",
                 "Run installed R supplemental suites outside checkout",
             )
+    # Each command-line archive that a release publishes, built on a runner
+    # of its target's platform, then unpacked on a fresh one, where the binary
+    # prints its version and passes its selftest.
+    for lane in coverage["cli"]["include"]:
+        label = f"({lane['os']}, {lane['target']})"
+        jobs[f"native-cli {label}"] = (
+            "Build the command-line binary",
+            "Check the command-line binary",
+            "Check the command-line archive",
+        )
+        jobs[f"native-cli-install {label}"] = (
+            "Unpack the command-line archive",
+            "Run the command-line selftest",
+        )
     return jobs
 
 
@@ -415,8 +429,9 @@ def package_version(payload, version):
 
 def archive_payloads(path):
     wanted = {"METADATA", "PKG-INFO", "DESCRIPTION"}
-    # A wheel and a Windows R binary package are ZIP archives; the source
-    # archives and a macOS R binary package are gzipped tar archives.
+    # A wheel, a Windows R binary package and a command-line archive are ZIP
+    # archives; the source archives and a macOS R binary package are gzipped
+    # tar archives.
     if path.suffix in {".whl", ".zip"}:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -469,6 +484,10 @@ def check_package(asset, path, identity, root):
                 len(built) == 1 and built[0].startswith(asset.built),
                 f"R binary package was not built with {asset.built}",
             )
+    elif asset.kind == "cli":
+        # Exactly the executable of the archive's target and the notices, each
+        # with its mode.
+        cli_archive.check(path, root)
     else:
         raise ValueError(f"{asset.title}: no content check for {asset.kind} assets")
     # Each package carries the project license and every notice at its own

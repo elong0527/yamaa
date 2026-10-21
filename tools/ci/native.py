@@ -55,6 +55,18 @@ R_OLDREL = "4.5.3"
 # conformance corpus and the installed R suites.
 R_BINARY_PLATFORMS = ("macos-15", "windows-2025")
 R_BINARY_VERSIONS = (R_RELEASE, R_OLDREL)
+# The command-line binaries that a release publishes (#3030 D12, D49): the
+# yamaa executable of rust/crates/yamaa-cli, built for each target on a runner
+# of its own platform, statically with musl on Linux and with the static C
+# runtime on Windows, and archived with its notices. Each archive is then
+# unpacked on a fresh runner of its platform, where the binary runs its
+# selftest.
+CLI_TARGETS = {
+    "ubuntu-24.04": "x86_64-unknown-linux-musl",
+    "macos-15": "aarch64-apple-darwin",
+    "windows-2025": "x86_64-pc-windows-msvc",
+    "ubuntu-24.04-arm": "aarch64-unknown-linux-musl",
+}
 
 
 def r_series(version):
@@ -96,6 +108,12 @@ def coverage():
             "host": list(OFFLINE_SOURCE_HOSTS),
         },
         "r_binary": {"os": list(R_BINARY_PLATFORMS), "r": list(R_BINARY_VERSIONS)},
+        "cli": {
+            "include": [
+                {"os": platform, "target": target}
+                for platform, target in CLI_TARGETS.items()
+            ]
+        },
     }
 
 

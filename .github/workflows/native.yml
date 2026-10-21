@@ -1609,6 +1609,212 @@ jobs:
           path: ${{ runner.temp }}/qualification
           if-no-files-found: error
 
+  cli:
+    name: native-cli (${{ matrix.os }}, ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    # The command-line binaries that a release publishes (#3030 D12, D49): the
+    # yamaa executable of rust/crates/yamaa-cli, built for each target on a
+    # runner of its platform with the dist profile, release without the
+    # symbol table, as the wheels are. The Linux binaries are static: they
+    # link the musl C library that the Rust target bundles, and the runner's
+    # musl-gcc compiles the bundled ReadStat and zstd C sources. The Windows
+    # binary links the C runtime statically, and the macOS binary runs on
+    # macOS 11 or later. Each is archived with the command line's notices.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 45 || 30 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    env:
+      # The oldest macOS that the macOS binary runs on, the arm64 floor that
+      # the wheels and the R binaries keep. rustc, and the C compiler that cc
+      # runs, take the minimum macOS from it; the other targets ignore it.
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      # The binary embeds the selftest cases, and the archive check compares
+      # the notices with the checkout, so their bytes stay exact.
+      - name: Preserve fixture bytes and symlinks on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install repository tools
+        run: |
+          python -m pip install --no-deps -e .
+          python -m tools.ci.toolchain
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rust
+          key: ${{ github.workflow }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Ubuntu's musl-tools gives the Linux targets their C compiler, musl-gcc.
+      # The inventory check stages each host's engine bundle, which reads the
+      # selftest list with PyYAML.
+      - name: Install build tools
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          python -m tools.ci.toolchain --install
+          rustup target add "${TARGET}"
+          python -m pip install pyyaml==6.0.3
+          if [ "${RUNNER_OS}" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends musl-tools
+            musl-gcc --version
+          fi
+      # cc compiles the C sources with the compiler and archiver that
+      # CC_<target> and AR_<target> name, and on Windows with /MT once the
+      # target's flags select the static C runtime. Because --target names
+      # the target, those flags reach its crates but no build script or
+      # procedural macro.
+      - name: Build the command-line binary
+        working-directory: rust
+        env:
+          TARGET: ${{ matrix.target }}
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static
+        run: |
+          if [ "${RUNNER_OS}" = Linux ]; then
+            export "CC_${TARGET//-/_}=musl-gcc" "AR_${TARGET//-/_}=ar"
+          fi
+          cargo build --locked --profile dist --package yamaa-cli --bin yamaa --target "${TARGET}"
+      # A Linux binary is static when file says so and it names no program
+      # interpreter and no shared library. macOS refuses a binary whose
+      # minimum macOS is newer than the running system, and no lane runs an
+      # older macOS, so the check reads the minimum that the binary declares,
+      # the minos of its LC_BUILD_VERSION, which may not exceed the deployment
+      # target, and requires every library that it loads to be the system's.
+      # On Windows, dumpbin lists the DLLs that the binary loads, which may
+      # not include the C runtime's.
+      - name: Check the command-line binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          binary="rust/target/${TARGET}/dist/yamaa"
+          if [ "${RUNNER_OS}" = Windows ]; then binary="${binary}.exe"; fi
+          ls -l "${binary}"
+          if [ "${RUNNER_OS}" = Linux ]; then
+            file "${binary}"
+            file --brief "${binary}" | grep -E 'static-pie linked|statically linked'
+            if readelf --program-headers --wide "${binary}" | grep INTERP; then exit 1; fi
+            if readelf --dynamic "${binary}" | grep NEEDED; then exit 1; fi
+            ldd "${binary}" || true
+          elif [ "${RUNNER_OS}" = macOS ]; then
+            file "${binary}"
+            otool -l "${binary}" | grep -A 4 LC_BUILD_VERSION
+            minos=$(otool -l "${binary}" | awk '$1 == "minos" { print $2 }')
+            echo "yamaa needs macOS ${minos} or later; the deployment target is ${MACOSX_DEPLOYMENT_TARGET}"
+            python -c 'import sys; minos, target = (tuple(map(int, value.split("."))) for value in sys.argv[1:]); sys.exit(minos > target)' \
+              "${minos}" "${MACOSX_DEPLOYMENT_TARGET}"
+            otool -L "${binary}"
+            if otool -L "${binary}" | tail -n +2 | grep -v -E '^[[:space:]]+(/usr/lib/|/System/Library/)'; then exit 1; fi
+          else
+            vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+            mapfile -t found < <("${vswhere}" -latest -products '*' -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | tr -d '\r')
+            test "${#found[@]}" -gt 0
+            dependents=$("$(cygpath -u "${found[-1]}")" -nologo -dependents "${binary}")
+            printf '%s\n' "${dependents}"
+            if grep -i -E 'vcruntime|msvcp|ucrtbase|api-ms-win-crt' <<< "${dependents}"; then exit 1; fi
+          fi
+      - name: Archive the command-line binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          binary="rust/target/${TARGET}/dist/yamaa"
+          if [ "${RUNNER_OS}" = Windows ]; then binary="${binary}.exe"; fi
+          python -m tools.packaging.cli_archive write "${TARGET}" "${binary}" "${RUNNER_TEMP}/cli"
+      # The notice check compares the archive with the committed notices and
+      # component inventories, so the generators first prove those copies
+      # current.
+      - name: Check the command-line archive
+        run: |
+          python -m tools.packaging.generate_third_party_notices
+          python -m tools.packaging.generate_component_inventory
+          python -m tools.packaging.cli_archive check "${RUNNER_TEMP}"/cli/*.zip
+          python -m tools.packaging.check_package_notices "${RUNNER_TEMP}"/cli/*.zip
+      - name: Preserve the command-line archive
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: native-cli-${{ matrix.target }}
+          path: ${{ runner.temp }}/cli
+          if-no-files-found: error
+
+  cli-install:
+    name: native-cli-install (${{ matrix.os }}, ${{ matrix.target }})
+    needs: cli
+    # Each archive that built is unpacked and run even when another target's
+    # build failed; a target whose build failed has no archive to download.
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    # Each command-line archive, unpacked as a user unpacks it, on a fresh
+    # runner of its platform with no checkout, Rust or Python set up: unzip
+    # on Linux and macOS, which restores the executable's mode, and
+    # PowerShell's Expand-Archive on Windows. The binary prints its version,
+    # whose first line must name the archive's version, and then runs its
+    # selftest, which must succeed. The log keeps both reports.
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    steps:
+      - name: Download the command-line archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-cli-${{ matrix.target }}
+          path: ${{ runner.temp }}/cli
+      - name: Unpack the command-line archive
+        working-directory: ${{ runner.temp }}
+        run: |
+          archives=(cli/yamaa-*.zip)
+          test "${#archives[@]}" -eq 1
+          if [ "${RUNNER_OS}" = Windows ]; then
+            pwsh -NoProfile -Command "Expand-Archive -LiteralPath '${archives[0]}' -DestinationPath unpacked"
+          else
+            unzip "${archives[0]}" -d unpacked
+          fi
+          ls -lR unpacked
+      - name: Run the command-line selftest
+        working-directory: ${{ runner.temp }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          archives=(cli/yamaa-*.zip)
+          name=$(basename "${archives[0]}" .zip)
+          version=${name#yamaa-}
+          version=${version%"-${TARGET}"}
+          binary="unpacked/${name}/yamaa"
+          if [ "${RUNNER_OS}" = Windows ]; then binary="${binary}.exe"; fi
+          "${binary}" --version | tee cli-version.txt
+          first=$(head -n 1 cli-version.txt)
+          if [ "${first}" != "yamaa ${version}" ]; then
+            echo "yamaa --version prints '${first}', but the archive names ${version}"
+            exit 1
+          fi
+          "${binary}" selftest
+
   public-cohort:
     name: public-cohort-complete-runs
     needs: [qualify, r, r-binary-install]

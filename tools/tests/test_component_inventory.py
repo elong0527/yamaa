@@ -97,6 +97,7 @@ class Checkout(unittest.TestCase):
             WORKSPACE=self.checkout.workspace,
             PYTHON=self.root / "python",
             R_INST=self.root / "R/yamaa/inst",
+            CLI=self.root / "rust/crates/yamaa-cli",
         )
         patches.start()
         self.addCleanup(patches.stop)
@@ -311,13 +312,19 @@ class ComponentsTest(Checkout):
 class CheckTest(Checkout):
     def setUp(self):
         super().setUp()
+        # The command line's inventory names the standard library that its
+        # binaries link, as the wheels' does.
+        linked = inventory.components(
+            self.checkout.kept(), self.checkout.metadata(), PURPOSES, "1.99.1"
+        )
         self.generated = {
             "python": inventory.render(self.rows()),
             "r": inventory.render([row for row in self.rows() if row.name != "pyo3"]),
+            "cli": inventory.render([row for row in linked if row.name != "pyo3"]),
         }
         self.paths = inventory.committed()
         for host, path in self.paths.items():
-            path.parent.mkdir(parents=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(self.generated[host], encoding="utf-8")
         self.project = {"license-files": ["LICENSE.txt", "COMPONENTS.tsv"]}
 
@@ -327,6 +334,7 @@ class CheckTest(Checkout):
             {
                 "python": self.root / "python/COMPONENTS.tsv",
                 "r": self.root / "R/yamaa/inst/COMPONENTS.tsv",
+                "cli": self.root / "rust/crates/yamaa-cli/COMPONENTS.tsv",
             },
         )
         self.assertEqual(inventory.check(self.generated, self.paths, self.project), [])
@@ -442,6 +450,8 @@ class CheckTest(Checkout):
             [
                 "python/COMPONENTS.tsv: the 7 components of the python bundle",
                 "R/yamaa/inst/COMPONENTS.tsv: the 6 components of the r bundle",
+                "rust/crates/yamaa-cli/COMPONENTS.tsv: the 7 components of the cli "
+                "bundle",
             ],
         )
         self.paths["python"].write_text("name\tversion\n", encoding="utf-8")
@@ -475,10 +485,14 @@ class CheckTest(Checkout):
 class GraphTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("cargo"), "cargo is unavailable")
     def test_each_host_lists_its_bundle_and_the_vendored_c_code(self):
-        generated = inventory.generate(["python", "r"])
-        for host, binding, other in (
-            ("python", "yamaa-python", "yamaa-r"),
-            ("r", "yamaa-r", "yamaa-python"),
+        # The wheels and the command-line binaries are built with the pinned
+        # toolchain (#3120); the R source package is not.
+        self.assertEqual(inventory.BINARY_HOSTS, {"python", "cli"})
+        generated = inventory.generate(["python", "r", "cli"])
+        for host, binding, others in (
+            ("python", "yamaa-python", ("yamaa-r", "yamaa-cli")),
+            ("r", "yamaa-r", ("yamaa-python", "yamaa-cli")),
+            ("cli", "yamaa-cli", ("yamaa-python", "yamaa-r")),
         ):
             with self.subTest(host=host):
                 lines = generated[host].splitlines()
@@ -489,7 +503,8 @@ class GraphTest(unittest.TestCase):
                     rows.setdefault(name, []).append((version, license_, source))
                 for name in ("yamaa-core", "yamaa-adapters", "yamaa", binding, "cc"):
                     self.assertIn(name, rows)
-                self.assertNotIn(other, rows)
+                for other in others:
+                    self.assertNotIn(other, rows)
                 self.assertEqual(rows["cc"][0][2], "crates.io")
                 ((_, _, parser),) = rows["yamaa-saphyr-parser"]
                 self.assertTrue(
@@ -507,9 +522,10 @@ class GraphTest(unittest.TestCase):
                 ((zstd, _, bundled),) = rows["libzstd"]
                 self.assertEqual(zstd_sys.partition("+zstd.")[2], zstd)
                 self.assertEqual(bundled, f"bundled in zstd-sys {zstd_sys}")
-                # The wheels link the pinned toolchain's standard library; the
-                # R source package links whichever toolchain builds it.
-                if host == "python":
+                # The wheels and the command-line binaries link the pinned
+                # toolchain's standard library; the R source package links
+                # whichever toolchain builds it.
+                if host in inventory.BINARY_HOSTS:
                     release = inventory.toolchain.channel()
                     self.assertEqual(
                         rows["rust-std"],

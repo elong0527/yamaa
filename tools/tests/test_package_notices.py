@@ -58,9 +58,27 @@ class PackageNotices(unittest.TestCase):
             self.r_notices,
             **{"COMPONENTS.tsv": self.installed_inventory("1.99.1")},
         )
+        # The command line keeps only its own notices and inventory beside
+        # its crate, an inventory that names the standard library that its
+        # binaries link; its archives carry the Python packages' copies of the
+        # others.
+        self.cli_notices = dict(
+            project,
+            **{
+                "LICENSE-THIRD-PARTY.txt": b"Crate: arrow 55.2.0\n",
+                "COMPONENTS.tsv": b"name\narrow\t55.2.0\nrust-std\t1.99.1\n",
+            },
+        )
         for directory, notices in (
             ("python", self.notices),
             ("R/yamaa/inst", self.r_notices),
+            (
+                "rust/crates/yamaa-cli",
+                {
+                    name: self.cli_notices[name]
+                    for name in ("LICENSE-THIRD-PARTY.txt", "COMPONENTS.tsv")
+                },
+            ),
         ):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
             for name, payload in notices.items():
@@ -97,6 +115,14 @@ class PackageNotices(unittest.TestCase):
                 archive.writestr(member, payload)
         return path
 
+    def cli(self, notices, version="0.4.0", target="x86_64-unknown-linux-musl"):
+        """Write a command-line archive: one directory with the notices."""
+        path = self.root / f"yamaa-{version}-{target}.zip"
+        with zipfile.ZipFile(path, "w") as archive:
+            for name, payload in notices.items():
+                archive.writestr(f"yamaa-{version}-{target}/{name}", payload)
+        return path
+
     def test_each_package_kind_carries_the_notices_at_its_own_location(self):
         wheel = self.wheel(self.notices)
         sdist = self.tar(
@@ -119,9 +145,44 @@ class PackageNotices(unittest.TestCase):
             )
             for name in ("yamaa_0.4.0-4.6.zip", "yamaa_0.4.0-4.5.tgz")
         ]
-        for path in (wheel, sdist, r_source, *r_binaries):
+        # A command-line archive holds them in its one directory, beside the
+        # executable; its name adds the target.
+        archives = [
+            self.cli(self.cli_notices, target=target)
+            for target in ("x86_64-pc-windows-msvc", "aarch64-apple-darwin")
+        ]
+        for path in (wheel, sdist, r_source, *r_binaries, *archives):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
+
+    def test_command_line_archives_carry_their_own_and_the_shared_notices(self):
+        # The command line's own notices and inventory, not a host's; the
+        # shared notices are the Python packages' copies.
+        member = "yamaa-0.4.0-x86_64-unknown-linux-musl/{}"
+        for notice in ("LICENSE-THIRD-PARTY.txt", "COMPONENTS.tsv"):
+            for other in (self.notices, self.r_notices):
+                archive = self.cli(dict(self.cli_notices, **{notice: other[notice]}))
+                with (
+                    self.subTest(notice=notice),
+                    self.assertRaisesRegex(
+                        ValueError, f"differs or is missing: {member.format(notice)}"
+                    ),
+                ):
+                    packages.check_archive(archive, self.root)
+        archive = self.cli(dict(self.cli_notices, **{"LICENSE.txt": b"edited\n"}))
+        with self.assertRaisesRegex(
+            ValueError, f"differs or is missing: {member.format('LICENSE.txt')}"
+        ):
+            packages.check_archive(archive, self.root)
+        (self.root / "python/LICENSE.txt").write_bytes(b"edited\n")
+        self.assertEqual(len(packages.check_archive(archive, self.root)), 3)
+        # Notices outside the archive's directory are not its notices.
+        path = self.root / "yamaa-0.4.0-x86_64-unknown-linux-musl.zip"
+        with zipfile.ZipFile(path, "w") as flat:
+            for name, payload in self.cli_notices.items():
+                flat.writestr(name, payload)
+        with self.assertRaisesRegex(ValueError, "differs or is missing"):
+            packages.check_archive(path, self.root)
 
     def test_each_package_carries_its_own_hosts_notices_and_inventory(self):
         # An R source archive with a Python notice, or a wheel with an R one,
@@ -302,7 +363,9 @@ class PackageNotices(unittest.TestCase):
             "yamaa_1.0.0-4.6.tgz",
             {f"yamaa/{name}": data for name, data in self.r_binary_notices.items()},
         )
-        for path in (wheel, sdist, r_source, r_binary):
+        # The command line's archives carry the engine's Cargo version.
+        cli = self.cli(self.cli_notices, version="1.0.0-rc.1")
+        for path in (wheel, sdist, r_source, r_binary, cli):
             with self.subTest(archive=path.name):
                 self.assertEqual(len(packages.check_archive(path, self.root)), 3)
         for name in (
@@ -311,6 +374,9 @@ class PackageNotices(unittest.TestCase):
             "yamaa_1.0.0rc1-4.6.tgz",
             "yamaa_1.0.0.zip",
             "yamaa_1.0.0-4.6.tar.gz",
+            "yamaa-1.0.0rc1-x86_64-unknown-linux-musl.zip",
+            "yamaa-1.0.0-x86_64-unknown-linux-musl.zip",
+            "yamaa-1.0.0-rc.1-x86_64-unknown-linux-gnu.zip",
         ):
             other = self.tar(name, {})
             with (

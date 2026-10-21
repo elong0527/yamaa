@@ -2,18 +2,24 @@
 
 The python/pyproject.toml license files are the package notices. A wheel holds
 them in its .dist-info/licenses directory, the Python source archive at its
-root, the R source archive in inst/, from which R installs them, and an R
-binary package at the root of the installed package. Each copy must equal its
-host's copy in the checkout byte for byte: python/ for the Python packages and
-R/yamaa/inst/ for the R packages. The two hosts' copies are the same, apart
-from LICENSE-THIRD-PARTY.txt and COMPONENTS.tsv, which list each host's own
-crates and components: tools/packaging/generate_third_party_notices.py and
-tools/packaging/generate_component_inventory.py write them. The Python source
-archive's COMPONENTS.tsv is the wheels' without its rust-std row, the Rust
-standard library that the wheels link (source_inventory in the latter). An R
-binary package's is the R source package's followed by the one rust-std row
-that the package's configure step appends when R installs it, for the pinned
-toolchain that builds the release binaries (installed_inventory).
+root, the R source archive in inst/, from which R installs them, an R binary
+package at the root of the installed package, and a command-line archive in
+its one directory, beside the executable. Each copy must equal its host's copy
+in the checkout byte for byte: python/ for the Python packages, R/yamaa/inst/
+for the R packages and rust/crates/yamaa-cli/ for the command-line archives.
+The hosts' copies are the same, apart from LICENSE-THIRD-PARTY.txt and
+COMPONENTS.tsv, which list each host's own crates and components:
+tools/packaging/generate_third_party_notices.py and
+tools/packaging/generate_component_inventory.py write them. The command line
+keeps only those two beside its crate, and its archives carry the Python
+packages' copies of the others. The Python source archive's COMPONENTS.tsv is
+the wheels' without its rust-std row, the Rust standard library that the
+wheels link (source_inventory in the latter). An R binary package's is the R
+source package's followed by the one rust-std row that the package's
+configure step appends when R installs it, for the pinned toolchain that
+builds the release binaries (installed_inventory). A command-line archive's
+is the command line's committed inventory, which names that toolchain's
+standard library, as the wheels' does.
 """
 
 import argparse
@@ -23,10 +29,20 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-from tools.ci import toolchain
+from tools.ci import native, toolchain
 from tools.packaging import generate_component_inventory as inventory
+from tools.packaging import generate_third_party_notices as third_party
 from tools.packaging import release_identity
 from tools.paths import ROOT
+
+# The host whose checkout copies of the package notices each form carries.
+HOSTS = {
+    "wheel": "python",
+    "sdist": "python",
+    "r-source": "r",
+    "r-binary": "r",
+    "cli": "cli",
+}
 
 
 def package_notices(root=ROOT):
@@ -38,15 +54,18 @@ def package_notices(root=ROOT):
 
 
 def notice_members(name, identity, notices):
-    """Map each notice to its member in a wheel, Python sdist or R package.
+    """Map each notice to its member in a wheel, Python sdist, R package or
+    command-line archive.
 
-    Also returns the package's form, "wheel", "sdist", "r-source" or
-    "r-binary", and the checkout directory that holds the host's copies. The
-    Python packages carry the Python version and the R packages the R
-    version, which differ for a release candidate. An R binary package's name
-    adds the R series that it was built for, as in yamaa_1.0.0-4.6.zip.
+    Also returns the package's form, "wheel", "sdist", "r-source", "r-binary"
+    or "cli". The Python packages carry the Python version, the R packages the
+    R version and the command-line archives the Cargo version, which differ
+    for a release candidate. An R binary package's name adds the R series that
+    it was built for, as in yamaa_1.0.0-4.6.zip, and a command-line archive's
+    the target of its executable, as in yamaa-1.0.0-aarch64-apple-darwin.zip.
     """
-    python, r = identity.python, identity.r
+    python, r, cargo = identity.python, identity.r, identity.cargo
+    archives = {f"yamaa-{cargo}-{target}.zip" for target in native.CLI_TARGETS.values()}
     if name.startswith(f"yamaa-{python}-") and name.endswith(".whl"):
         form, directory = "wheel", f"yamaa-{python}.dist-info/licenses"
     elif name == f"yamaa-{python}.tar.gz":
@@ -55,12 +74,25 @@ def notice_members(name, identity, notices):
         form, directory = "r-source", "yamaa/inst"
     elif re.fullmatch(rf"yamaa_{re.escape(r)}-[0-9]+\.[0-9]+\.(zip|tgz)", name):
         form, directory = "r-binary", "yamaa"
+    elif name in archives:
+        form, directory = "cli", name.removesuffix(".zip")
     else:
         raise ValueError(
-            f"{name}: not a yamaa {identity} wheel, source archive or R binary package"
+            f"{name}: not a yamaa {identity} wheel, source archive, R binary "
+            "package or command-line archive"
         )
-    copies = "python" if form in {"wheel", "sdist"} else "R/yamaa/inst"
-    return form, copies, {notice: f"{directory}/{notice}" for notice in notices}
+    return form, {notice: f"{directory}/{notice}" for notice in notices}
+
+
+def checkout_copy(form, notice):
+    """The checkout file, below the root, that a package of `form` carries as
+    `notice`: its host's copy, or for a command-line archive the Python
+    packages' copy of a notice that the hosts share."""
+    host = HOSTS[form]
+    if host == "cli" and notice not in third_party.HOST_NOTICES:
+        host = "python"
+    directory = third_party.copies()[host].relative_to(third_party.ROOT)
+    return f"{directory.as_posix()}/{notice}"
 
 
 def packaged_inventory(form, committed, root=ROOT):
@@ -80,8 +112,9 @@ def packaged_inventory(form, committed, root=ROOT):
 
 def read_members(path, wanted):
     """Read the wanted regular members of an archive; refuse duplicate names."""
-    # A wheel and a Windows R binary package are ZIP archives; the source
-    # archives and a macOS R binary package are gzipped tar archives.
+    # A wheel, a Windows R binary package and a command-line archive are ZIP
+    # archives; the source archives and a macOS R binary package are gzipped
+    # tar archives.
     if path.suffix in {".whl", ".zip"}:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -102,10 +135,10 @@ def read_members(path, wanted):
 def check_archive(path, root=ROOT):
     """Raise ValueError unless the package carries every notice unchanged."""
     identity, notices = package_notices(root)
-    form, copies, members = notice_members(path.name, identity, notices)
+    form, members = notice_members(path.name, identity, notices)
     payloads = read_members(path, set(members.values()))
     for notice, member in members.items():
-        expected = (root / copies / notice).read_bytes()
+        expected = (root / checkout_copy(form, notice)).read_bytes()
         if notice == inventory.NAME:
             expected = packaged_inventory(form, expected, root)
         if payloads.get(member) != expected:
