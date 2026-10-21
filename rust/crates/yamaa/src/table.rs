@@ -11,10 +11,16 @@
 //!
 //! Host frames cross into the engine only as opaque [`InputFrame`] handles;
 //! hosts never decode engine tables except through [`Table`].
+//!
+//! [`Engine::save_table`] saves a table to a file its caller names, under
+//! the profiles of a run's output.
 
 use std::sync::Arc;
 
+use crate::api::Failure;
+use crate::engine::Engine;
 use crate::error::TableError;
+use crate::text::Action;
 
 pub use arrow_array::ffi_stream::FFI_ArrowArrayStream;
 pub use arrow_array::{
@@ -73,6 +79,85 @@ impl Table {
     /// Export one stream with an independent cursor and shared buffers.
     pub fn stream(&self) -> FFI_ArrowArrayStream {
         self.inner.stream()
+    }
+}
+
+impl Engine {
+    /// Save `table` to the file `out` names and return the one path written,
+    /// as the command line's `yamaa read-odm SOURCE OUT` saves the item table
+    /// [`Engine::read_odm`] returns.
+    ///
+    /// The case-insensitive extension of `out` selects the `csv` or
+    /// `parquet` profile from OUTPUT-5's closed mapping, and the encoders of
+    /// a run's output write the table, so the file holds the bytes a run
+    /// saves for the same table. Any other extension, or none, fails as
+    /// `unknown_artifact_profile` (OUTPUT-5) before anything is written.
+    ///
+    /// The file is saved through the engine's resolver by the publisher
+    /// every `save()` uses, as a save of one file (OUTPUT-8, #3030 D99): its
+    /// target is opened, the file is staged beside it, then committed.
+    /// Without a resolver, `out` is a local path: its parent directory is
+    /// selected once, and its last segment is the caller's own file name
+    /// (FILE-7, FILE-8). The path returned is absolute, with forward
+    /// slashes, or the reference a caller's resolver gave its target (D38).
+    ///
+    /// A target that cannot be written fails as a run's does, as
+    /// `engine_rejected` in the `output` stage with the save's code, such as
+    /// `invalid_target` for a missing directory, a directory or a link. A
+    /// table with a column of a type neither profile writes, such as the list
+    /// columns of an issues table, fails as `engine_rejected` with the code
+    /// `output_schema`, naming the column. A refusal names the call as
+    /// `cannot save <out>` (D39) and writes nothing (#3030 D134).
+    ///
+    /// # Example
+    ///
+    /// The item table of an ODM file a memory resolver serves, saved back
+    /// through that resolver. Lanes without the `odm` feature cannot read it.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use yamaa::{Engine, EngineOptions, Error, MemoryResolver, OdmOptions};
+    ///
+    /// let resolver = Arc::new(MemoryResolver::new());
+    /// resolver.insert("/", "odm.xml", "odm:1", Arc::from(
+    ///     &br#"<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">
+    ///   <ClinicalData StudyOID="S" MetaDataVersionOID="M">
+    ///     <SubjectData SubjectKey="01"><StudyEventData StudyEventOID="E">
+    ///       <FormData FormOID="F"><ItemGroupData ItemGroupOID="G">
+    ///         <ItemData ItemOID="AGE" Value="42"/>
+    ///       </ItemGroupData></FormData>
+    ///     </StudyEventData></SubjectData>
+    ///   </ClinicalData>
+    /// </ODM>"#[..],
+    /// ));
+    /// let engine = Engine::new(
+    ///     EngineOptions::neutral("doctest".into(), "0".into()).with_resolver(resolver.clone()),
+    /// );
+    /// match engine.read_odm("odm.xml", &OdmOptions::new()) {
+    ///     Ok(table) => {
+    ///         let paths = engine.save_table(&table, "items.csv").unwrap();
+    ///         assert_eq!(paths, ["memory:/items.csv"]);
+    ///         let saved = resolver.published("memory:/items.csv").unwrap();
+    ///         assert!(saved.starts_with(b"ODMVersion,FileOID,StudyOID,"));
+    ///         let refused = engine.save_table(&table, "items.txt").unwrap_err();
+    ///         assert_eq!(
+    ///             refused.message,
+    ///             "cannot save items.txt: the extension of items.txt is not one of \
+    ///              .csv, .parquet [unknown_artifact_profile, OUTPUT-5]"
+    ///         );
+    ///         assert!(resolver.published("memory:/items.txt").is_none());
+    ///     }
+    ///     Err(error) => assert!(matches!(error, Error::Unavailable { feature: "odm" })),
+    /// }
+    /// ```
+    pub fn save_table(&self, table: &Table, out: &str) -> Result<Vec<String>, Failure> {
+        yamaa_adapters::table_artifact::save(
+            table.public(),
+            out,
+            crate::internal::resolver_bridge(self.shared()),
+        )
+        .map_err(|issues| Failure::from_issues(Action::Save(out), &issues))
     }
 }
 

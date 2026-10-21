@@ -39,9 +39,26 @@ pub fn import_stream(
 /// explicit preserving conversion by the caller before exporting.
 pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ArrowTable, TableError> {
     let reader = StreamReader::try_new(stream).map_err(TableError::Arrow)?;
-    let logical = yamaa_core::table::TableSchema::new(
-        reader
-            .schema()
+    let logical = public_schema(&reader.schema())?;
+    read_stream(reader, logical)
+}
+
+/// The engine's snapshot of public batches, such as a table the engine
+/// returned, typed as [`import_public_stream`] types a host's stream: a
+/// column of any other Arrow type fails as [`TableError::ArrayType`].
+pub fn import_public_batches(
+    schema: SchemaRef,
+    batches: Vec<RecordBatch>,
+) -> Result<ArrowTable, TableError> {
+    let logical = public_schema(&schema)?;
+    import_batches(logical, schema, batches)
+}
+
+/// The logical column type of each public Arrow field: text, `Int64`,
+/// `Float64`, `Date32` and zone-free `TimestampSecond`.
+fn public_schema(schema: &Schema) -> Result<TableSchema, TableError> {
+    TableSchema::new(
+        schema
             .fields()
             .iter()
             .enumerate()
@@ -61,8 +78,7 @@ pub fn import_public_stream(stream: FFI_ArrowArrayStream) -> Result<ArrowTable, 
             })
             .collect::<Result<Vec<_>, _>>()?,
     )
-    .map_err(|_| TableError::SchemaMismatch { batch: 0 })?;
-    read_stream(reader, logical)
+    .map_err(|_| TableError::SchemaMismatch { batch: 0 })
 }
 
 fn read_stream(mut reader: StreamReader, logical: TableSchema) -> Result<ArrowTable, TableError> {

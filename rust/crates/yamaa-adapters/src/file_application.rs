@@ -213,17 +213,36 @@ pub struct Admitted {
     written: Vec<String>,
 }
 fn publication_at(
-    mut issues: Failure,
+    issues: Failure,
     field: &str,
     path: &str,
     attempt: &PublicationAttempt,
 ) -> Failure {
+    publication_stop(
+        issues,
+        Some(format!("output.{field}")),
+        path,
+        attempt.entered,
+        attempt.completed,
+    )
+}
+/// `issues` of a save that stopped at the file `path` names, after it
+/// entered `entered` files and completed `completed`: each names the file as
+/// written and the attempt, at `spec_path` when a specification declares the
+/// file.
+pub(crate) fn publication_stop(
+    mut issues: Failure,
+    spec_path: Option<String>,
+    path: &str,
+    entered: usize,
+    completed: usize,
+) -> Failure {
     for issue in &mut issues {
-        issue.spec_paths = vec![format!("output.{field}")];
+        issue.spec_paths = spec_path.iter().cloned().collect();
         for (key, value) in [
             ("path", Value::String(path.into())),
-            ("entered", Value::from(attempt.entered)),
-            ("completed", Value::from(attempt.completed)),
+            ("entered", Value::from(entered)),
+            ("completed", Value::from(completed)),
         ] {
             issue.context.insert(key.into(), value);
         }
