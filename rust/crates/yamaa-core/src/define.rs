@@ -743,6 +743,20 @@ fn created_time(
             "UTC clock before epoch",
         )
     })?;
+    utc_time(seconds).ok_or_else(|| {
+        Finding::cause(
+            ConditionCode::DefineCreatedInvalid,
+            "created",
+            "UTC clock outside supported calendar",
+        )
+    })
+}
+
+/// The creation time a composition records for a UTC clock reading of
+/// `seconds` after the epoch when `created` is omitted (DEFINE-3): the
+/// whole-second civil datetime `YYYY-MM-DDTHH:MM:SS`, or `None` past the
+/// year 9999.
+pub fn utc_time(seconds: u64) -> Option<String> {
     // Gregorian civil date from elapsed UTC days; clock admission is host-free.
     let z = seconds / 86400 + 719468;
     let era = z / 146097;
@@ -755,13 +769,9 @@ fn created_time(
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     year += u64::from(month <= 2);
     if year > 9999 {
-        return Err(Finding::cause(
-            ConditionCode::DefineCreatedInvalid,
-            "created",
-            "UTC clock outside supported calendar",
-        ));
+        return None;
     }
-    Ok(format!(
+    Some(format!(
         "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}",
         seconds % 86400 / 3600,
         seconds % 3600 / 60,

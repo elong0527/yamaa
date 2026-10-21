@@ -206,6 +206,66 @@ fn a_project_run_lists_its_members_between_the_two_lines() {
     assert_eq!(lines, [FORWARD, SKIPPED]);
 }
 
+/// A listing that could not be read has no name, so the run names its member
+/// by the path the project file lists, as written (D130): in its member line,
+/// in `members()` and in its own summary. Only a listed name selects it.
+#[test]
+fn a_member_whose_listing_was_not_read_is_named_by_the_path_listed() {
+    let study = study();
+    // The second file is missing; the third path has an empty segment, so
+    // the listing itself cannot be located.
+    study.write(
+        "project.yaml",
+        "schema_version: '1.0'\nadam:\n  specs: [adam/adsl.yaml, adam/missing.yaml, adam//adae.yaml]\n",
+    );
+    let project = study.path("project.yaml");
+    let runs = engine()
+        .project_run(&project, Some("adam"), &CancellationToken::new())
+        .unwrap();
+    assert_eq!(runs.names(), ["ADSL"]);
+    let members = runs
+        .members()
+        .into_iter()
+        .map(|(name, run)| (name, run.status(), run.diagnostics().len()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        members,
+        [
+            ("ADSL", Status::Succeeded, 0),
+            ("adam/missing.yaml", Status::Failed, 1),
+            ("adam//adae.yaml", Status::Failed, 1),
+        ]
+    );
+    // A listed name reaches the same run either way.
+    assert!(std::ptr::eq(
+        runs.members()[0].1,
+        runs.member("ADSL").unwrap()
+    ));
+    let summary = runs.summary();
+    assert_eq!(
+        summary.line,
+        format!("yamaa project run of {project}, section adam: failed, 3 specifications, 2 issues")
+    );
+    assert_eq!(
+        summary.members,
+        [
+            "  ADSL               succeeded  2 rows x 2 columns, 0 issues",
+            "  adam/missing.yaml  failed     no output, 1 issue",
+            "  adam//adae.yaml    failed     no output, 1 issue",
+        ]
+    );
+    let (_, missing) = runs.members()[1];
+    assert_eq!(
+        missing.summary().line,
+        "yamaa run of adam/missing.yaml: failed, no output, 1 issue"
+    );
+    let failure = runs.member("adam/missing.yaml").err().unwrap();
+    assert_eq!(
+        failure.message,
+        "cannot select adam/missing.yaml: the project has no specification named adam/missing.yaml [unknown_specification_name, PROJECT-6]"
+    );
+}
+
 #[test]
 fn a_project_run_without_a_section_names_only_the_path() {
     let study = study();

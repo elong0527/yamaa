@@ -972,6 +972,21 @@ mod service {
             }
         }
 
+        /// The time a composition records for one clock reading, which a
+        /// submission takes once for all its sections (D129).
+        #[test]
+        fn a_clock_reading_is_one_whole_second_civil_time_through_the_year_9999() {
+            for (seconds, expected) in [
+                (0, Some("1970-01-01T00:00:00")),
+                (951782400, Some("2000-02-29T00:00:00")),
+                (253402300799, Some("9999-12-31T23:59:59")),
+                (253402300800, None),
+                (u64::MAX, None),
+            ] {
+                assert_eq!(define::utc_time(seconds).as_deref(), expected, "{seconds}");
+            }
+        }
+
         #[test]
         fn resource_observations_keep_original_normative_and_implementation_wire_owners() {
             use define::ResourceObservation as R;
