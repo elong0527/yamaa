@@ -780,17 +780,26 @@ fn memory_route_representative() {
 }
 
 /// The plan passes a case's root project to every call, so the study-level
-/// cases build on the project route with their codelists and functions, and
-/// a case with only another project file passes none.
+/// cases build on the project route with their codelists and functions; a
+/// case whose project file has another name declares the call that passes
+/// it.
 #[test]
 fn memory_route_plan_passes_the_root_project() {
     let cases = benchmark_cases();
-    for (name, project) in [
-        ("sdtm-ae-coding", Some("project.yaml")),
-        ("sdtm-dm-metadata", Some("project.yaml")),
-        ("sdtm-vs-epoch-from-subject-elements", Some("project.yaml")),
-        ("schema-functions", Some("project.yaml")),
-        ("sdtm-lb-metadata", None),
+    for (name, specification, project) in [
+        ("sdtm-ae-coding", "spec.yaml", "project.yaml"),
+        ("sdtm-dm-metadata", "spec.yaml", "project.yaml"),
+        (
+            "sdtm-vs-epoch-from-subject-elements",
+            "spec.yaml",
+            "project.yaml",
+        ),
+        ("schema-functions", "spec.yaml", "project.yaml"),
+        (
+            "sdtm-lb-metadata",
+            "submission-spec.yaml",
+            "submission-project.yaml",
+        ),
     ] {
         let (_, case) = cases
             .iter()
@@ -798,8 +807,8 @@ fn memory_route_plan_passes_the_root_project() {
             .unwrap_or_else(|| panic!("planned case {name} not found"));
         let calls = plan_entries(case);
         assert_eq!(calls.len(), 1, "{name}");
-        assert_eq!(calls[0].specification, "spec.yaml", "{name}");
-        assert_eq!(calls[0].project.as_deref(), project, "{name}");
+        assert_eq!(calls[0].specification, specification, "{name}");
+        assert_eq!(calls[0].project.as_deref(), Some(project), "{name}");
     }
 }
 

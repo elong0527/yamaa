@@ -240,6 +240,19 @@ class PublicConformance(unittest.TestCase):
         )
         self.assertEqual(judge.declared_paths("spec.yaml", {}), [])
 
+    def test_the_python_runner_names_a_listed_layer_by_the_domain_it_inherits(self):
+        domain_of = installed_runner().domain_of
+        (self.case / "spec_child.yaml").write_text(
+            'schema_version: "1.0"\nparent: spec.yaml\n'
+        )
+        self.assertEqual(domain_of(self.case / "spec.yaml"), "TEST")
+        self.assertEqual(domain_of(self.case / "spec_child.yaml"), "TEST")
+        # The layer nearest the entry that writes the domain supplies it.
+        (self.case / "spec_child.yaml").write_text(
+            'schema_version: "1.0"\nparent: spec.yaml\ndomain: CHILD\n'
+        )
+        self.assertEqual(domain_of(self.case / "spec_child.yaml"), "CHILD")
+
     def test_the_python_runner_records_saved_paths_below_the_case_root(self):
         relative = installed_runner().relative
         case = (self.observed / "work/simple").resolve()
@@ -898,6 +911,26 @@ class PublicConformance(unittest.TestCase):
         # A specification that names no domain gives its call no command line.
         (self.case / "spec.yaml").write_text(SPEC.replace("domain: TEST\n", ""))
         self.assertIsNone(self.command_line()["calls"][0]["arguments"])
+        # A layer the project lists is named by the domain it inherits.
+        (self.case / "spec.yaml").write_text(SPEC)
+        (self.case / "spec_child.yaml").write_text(
+            'schema_version: "1.0"\nparent: spec.yaml\n'
+        )
+        (self.case / "project.yaml").write_text(
+            'schema_version: "1.0"\nsdtm:\n  specs: [spec_child.yaml]\n'
+        )
+        (self.case / "benchmark.yaml").write_text(
+            METADATA
+            + "entries:\n"
+            + "".join(
+                f"  {host}:\n  - specification: spec_child.yaml\n"
+                for host in ("python", "r")
+            )
+        )
+        self.assertEqual(
+            self.command_line()["calls"][0]["arguments"],
+            ["run", "project.yaml", "--spec", "TEST"],
+        )
 
     def test_command_line_excludes_benchmarks_whose_project_supplies_functions(self):
         project = self.case / "project.yaml"
@@ -1209,8 +1242,16 @@ class PublicConformance(unittest.TestCase):
             names["sdtm-dm-metadata"]["entries"]["python"][0]["environment"],
             "project.yaml",
         )
-        self.assertIsNone(
-            names["sdtm-lb-metadata"]["entries"]["python"][0]["environment"]
+        # The case runs its completed submission layer with the project
+        # that declares the codelists it binds (CT-13).
+        self.assertEqual(
+            names["sdtm-lb-metadata"]["entries"]["python"],
+            [
+                {
+                    "specification": "submission-spec.yaml",
+                    "environment": "submission-project.yaml",
+                }
+            ],
         )
         self.assertIsNone(names["schema-inheritance-project-root"]["excluded"])
         self.assertEqual({n for n, e in names.items() if e["excluded"]}, set())

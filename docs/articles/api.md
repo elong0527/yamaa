@@ -263,6 +263,10 @@ language.
 `yamaa_project()` and `yamaa.project()` read nothing until you call a method.
 `spec(name)` returns one of the project's specifications by its `domain` name,
 with the project's codelists and the functions of your language's environment.
+Open a specification this way when it binds a codelist or an inventory
+vocabulary, or calls a project function: a 1.0 specification that does so,
+checked or run without its project, fails before any data is read with
+`project_binding_missing` at each such binding.
 
 === "R"
 

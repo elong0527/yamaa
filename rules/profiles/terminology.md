@@ -5,7 +5,9 @@ project file declares `codelists` and to the specifications that bind them
 through `submission.codelist`. A codelist is declared once in the project file,
 every binding names it, and a binding enforces the items its list declares. A
 build whose project declares no codelists is unaffected, except for a column
-that declares `inventory_vocabulary` under [CT-11](#ct-11).
+that declares `inventory_vocabulary` under [CT-11](#ct-11). A specification
+checked or run without a project file that binds a codelist or declares an
+inventory vocabulary fails under [CT-13](#ct-13).
 
 ## Declaring codelists
 
@@ -17,10 +19,11 @@ A domain-build codelist is declared once in a project codelist source and
 carries an `id` that is unique across all captured sources. A column names that
 `id` through `submission.codelist`, and columns share one codelist statement.
 `name` is the codelist's human-readable name and is unique across all project
-codelist sources. A duplicate codelist `id` or `name`, or a
-binding naming no declared codelist, fails validation.
+codelist sources. A duplicate codelist `id` or `name`, or a binding naming no
+codelist its project file declares, fails validation, and so does any binding
+checked or run without a project file ([CT-13](#ct-13)).
 
-Fails: `duplicate_define_identifier`, `unknown_codelist`.
+Fails: `duplicate_define_identifier`, `unknown_codelist`, `project_binding_missing`.
 Evidence: `sdtm-dm-metadata`, `rust/crates/yamaa-core/tests/project_execution.rs::global_duplicates_across_sources_have_no_override`, `rust/crates/yamaa-core/tests/project_execution.rs::compiler_projects_unknown_type_and_redundant_sets_as_static_preflight_causes`.
 
 `id` and `name` are separate: `id` is what a specification writes, and `name`
@@ -29,7 +32,13 @@ a codelist the project file declares; this profile owns that object, the
 values a binding enforces, and the redundancy of an `allowed_values`
 verification beside it. A duplicate `id` or `name` fails with
 `duplicate_define_identifier`. A binding naming no declared codelist fails with
-`unknown_codelist`, reporting the column and the identifier.
+`unknown_codelist`, reporting the column and the identifier. A specification
+checked or run without a project file declares no codelist, so each binding
+fails with `project_binding_missing` instead ([CT-13](#ct-13)).
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a build without a project file does not read a
+codelist binding.
 
 <a id="ct-2"></a>
 
@@ -163,6 +172,53 @@ context.
 
 ## Bindings
 
+<a id="ct-13"></a>
+
+### CT-13. A project binding needs a project file, and a specification checked or run without one fails validation
+
+A specification that binds a codelist, declares an `inventory_vocabulary` or
+calls a project function names something only a project file supplies.
+Checked or run without a project file, it fails validation with
+`project_binding_missing` at each such binding, before any input is read.
+With a project file, a binding to an item the project does not declare fails
+as [CT-1](#ct-1) and the [project-function rules](functions.md) state.
+
+Fails: `project_binding_missing`.
+Evidence: `negative-codelist-without-project`, `negative-inventory-vocabulary-without-project`, `rust/crates/yamaa/tests/project_binding.rs::each_binding_of_a_specification_without_its_project_fails_before_any_input_is_read`, `rust/crates/yamaa/tests/project_binding.rs::with_its_project_a_binding_names_what_the_project_declares`, `rust/crates/yamaa/tests/project_binding.rs::a_0_5_specification_keeps_its_0_5_meaning`, `rust/crates/yamaa-core/tests/support/diagnostic/front_end.rs::project_binding_reached`.
+
+The bindings are those of the resolved specification: the `codelist` of a
+column or of a value-level entry ([SUB-12](submission.md#sub-12)), an
+`inventory_vocabulary: true` on a column or an entry ([CT-11](#ct-11)), where
+an entry's `false` binds nothing, and each `function` call a derivation
+evaluates ([FUNC-1](functions.md#func-1)). A check and a run fail alike, and
+the run reads no input.
+
+Each binding is reported once, at the field that binds it, with `binding`
+naming that field: a codelist at its `codelist`, with the `column` and the
+`codelist`; an inventory vocabulary at its `inventory_vocabulary`, with the
+`column`; a call at its `name`, with the `function`. They are reported with
+the specification's other validation findings: the calls where
+[FUNC-4](functions.md#func-4) reports an undeclared function, then each
+column's codelists and inventory vocabularies, in column order, the column's
+own before its entries'.
+
+Nothing that needs the bound item is checked without it: no codelist's items,
+data type or restatement ([CT-7](#ct-7), [CT-8](#ct-8), [CT-9](#ct-9)), no
+where value against its where column's codelists
+([SUB-12](submission.md#sub-12)), no dataset inventory ([CT-11](#ct-11)) and
+no call against its function's signature ([FUNC-5](functions.md#func-5)).
+The same specification checked or run with its project file checks each of
+them, so it passes validation alone only when it binds nothing a project
+supplies. A project file that declares no codelists or no functions supplies
+none: a binding then fails as [CT-1](#ct-1) or
+[FUNC-4](functions.md#func-4) states.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a build without a project file reads no codelist
+binding, fails each present value of an inventory vocabulary, which admits no
+name without one ([CT-11](#ct-11)), and names no declared function in a call
+([FUNC-4](functions.md#func-4)).
+
 <a id="ct-7"></a>
 
 ### CT-7. A bound codelist that lists items is the column's value set, and an external dictionary enforces nothing
@@ -233,8 +289,13 @@ Evidence: `negative-allowed-values-beside-codelist`, `rust/crates/yamaa-adapters
 The failure reports the verification's path and, in `stated_by`, the binding's
 path, with the column and the codelist. A binding's items are known where a
 project supplies the codelists: a domain build with a project and a composed
-document check the redundancy, and a build without one does not read the
-binding. Not every constrained column carries published terminology.
+document check the redundancy, and a specification checked or run without a
+project file fails at the binding instead ([CT-13](#ct-13)). Not every
+constrained column carries published terminology.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a build without a project file does not read the
+binding.
 
 ## Documents and inventories
 
@@ -270,9 +331,15 @@ enumerate; that distinguishes this vocabulary from a codelist, whose values
 [CT-3](#ct-3) requires be listed or deferred to a dictionary. The inventory is
 the `domain` of every specification the `sdtm`, `adam` and `send` sections of
 the project file list, so an ADaM `SRCDOM` may name the SDTM `AE` domain the
-`sdtm` section lists. A domain build reads it from the project it is given and
-admits no name without one; composition reads the other sections'
-specifications for it, and Dataset-JSON's recheck of published values uses
-the same inventory. A column that also prohibits absence resolves `mandatory`
-to true ([SUB-11](submission.md#sub-11)). The ADaM `SRCDOM` column, whose
-values name the source SDTM domain or ADaM dataset, binds this vocabulary.
+`sdtm` section lists. A domain build reads it from the project it is given; a
+specification checked or run without a project file fails validation at each
+`inventory_vocabulary` it declares ([CT-13](#ct-13)). Composition reads the
+other sections' specifications for it, and Dataset-JSON's recheck of
+published values uses the same inventory. A column that also prohibits
+absence resolves `mandatory` to true ([SUB-11](submission.md#sub-11)). The
+ADaM `SRCDOM` column, whose values name the source SDTM domain or ADaM
+dataset, binds this vocabulary.
+
+A file that declares `schema_version` is read under the rules at the
+`yamaa-v0.5.0` tag, where a domain build without a project file admits no
+name, so each present value fails.

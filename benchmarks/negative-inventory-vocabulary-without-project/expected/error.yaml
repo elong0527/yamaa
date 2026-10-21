@@ -1,0 +1,8 @@
+phase: validation
+condition: project_binding_missing
+spec_paths:
+  - columns.SRCDOM.submission.inventory_vocabulary
+rule: CT-13
+context:
+  binding: inventory_vocabulary
+  column: SRCDOM
