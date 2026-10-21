@@ -187,6 +187,38 @@ class DiagnosticGuardTests(unittest.TestCase):
             all("new diagnostic literal site outside core" in e for e in errors)
         )
 
+    def test_a_lint_finding_spelled_as_a_condition_stays_in_the_lint_module(self):
+        # The lint's closed list names a finding that shares a registered
+        # condition's spelling, as `redundant_long_form` does.
+        self.write(
+            str(guard.LINT_SOURCE),
+            'pub const FINDINGS: [&str; 2] = [\n    "field_order",\n    "invalid_value",\n];\n',
+        )
+        self.write(
+            "rust/crates/yamaa-adapters/src/lint/checks.rs",
+            'const FINDING: &str = "invalid_value";\n',
+        )
+        self.assertEqual(self.errors(), [])
+        # Outside the lint module the spelling is a diagnostic literal, and a
+        # condition the list does not name stays refused within it.
+        self.write(
+            "rust/crates/yamaa-adapters/src/report.rs",
+            'const CONDITION: &str = "invalid_value";\n',
+        )
+        self.write(
+            "rust/crates/yamaa-adapters/src/lint/fix.rs",
+            'const CONDITION: &str = "engine_rejected";\n',
+        )
+        self.assertEqual(
+            self.errors(),
+            [
+                "rust/crates/yamaa-adapters/src/lint/fix.rs:1: new diagnostic literal "
+                "site outside core: engine_rejected",
+                "rust/crates/yamaa-adapters/src/report.rs:1: new diagnostic literal "
+                "site outside core: invalid_value",
+            ],
+        )
+
     def test_escaped_and_raw_json_diagnostics_cannot_create_new_host_sites(self):
         sources = [
             r'const ERROR: &str = "{\"condition\":\"invalid_value\",\"rule\":\"VALUE-1\"}";',
