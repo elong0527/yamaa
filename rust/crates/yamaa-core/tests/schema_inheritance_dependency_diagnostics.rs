@@ -1,6 +1,4 @@
 //! Schema contracts.
-#[allow(dead_code)]
-mod support;
 mod schema {
     mod inheritance_dependency_diagnostics {
         use yamaa_core::json::Value as JsonValue;
