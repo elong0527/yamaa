@@ -64,7 +64,7 @@ class IssueLocations(unittest.TestCase):
                 root = Path(temporary).resolve()
                 for name, text in case["files"].items():
                     (root / name).write_bytes(text.encode("utf-8"))
-                row = issues(case["call"], root).to_dicts()[0]
+                row = issues(case["call"], root).to_pylist()[0]
                 expected = case["issue"]
                 self.assertEqual(row["condition"], expected["condition"])
                 path = expected["spec_path"]

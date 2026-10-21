@@ -5,7 +5,7 @@ use pyo3::{exceptions::PyException, prelude::*, types::PyDict};
 use std::sync::{Arc, Mutex};
 use yamaa::{Action, CancellationToken, Engine, EngineOptions, Error, Failure, HostLanguage};
 
-use crate::arrow_bridge::ArrowTable;
+use crate::arrow_bridge::Table;
 
 pyo3::create_exception!(yamaa, _Error, PyException);
 
@@ -15,7 +15,7 @@ fn raise(py: Python<'_>, failure: Failure) -> PyErr {
     let error = _Error::new_err(failure.message);
     let value = error.value(py);
     match value
-        .setattr("issues", ArrowTable::from(&failure.issues))
+        .setattr("issues", Table::from(&failure.issues))
         .and_then(|()| value.setattr("paths", failure.paths))
     {
         Ok(()) => error,
@@ -72,17 +72,17 @@ impl Run {
 
 #[pymethods]
 impl Run {
-    fn output(&self) -> PyResult<Option<ArrowTable>> {
+    fn output(&self) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.output().map(ArrowTable::from))
+        Ok(guard.output().map(Table::from))
     }
-    fn issues(&self) -> PyResult<ArrowTable> {
+    fn issues(&self) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(ArrowTable::from(&guard.issues()))
+        Ok(Table::from(&guard.issues()))
     }
-    fn report(&self) -> PyResult<Option<ArrowTable>> {
+    fn report(&self) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| poisoned())?;
-        Ok(guard.report().map(ArrowTable::from))
+        Ok(guard.report().map(Table::from))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self.inner.try_lock().map_err(|_| poisoned())?.save();
@@ -98,15 +98,11 @@ impl Run {
 
 #[pyfunction]
 #[pyo3(signature=(specification, project=None))]
-pub fn _spec_check(
-    py: Python<'_>,
-    specification: &str,
-    project: Option<&str>,
-) -> PyResult<ArrowTable> {
+pub fn _spec_check(py: Python<'_>, specification: &str, project: Option<&str>) -> PyResult<Table> {
     let token = CancellationToken::new();
     engine(py)
         .spec_check(specification, project, &token)
-        .map(|check| ArrowTable::from(&check.issues()))
+        .map(|check| Table::from(&check.issues()))
         .map_err(|error| raise_error(py, Action::Read(specification), error))
 }
 
@@ -167,7 +163,7 @@ pub fn _read_odm(
     max_archive_members: usize,
     max_expanded_bytes: usize,
     max_xml_depth: usize,
-) -> PyResult<ArrowTable> {
+) -> PyResult<Table> {
     // The shared option validation refuses limits below its minimums, so
     // every host reports the same refusal.
     let mut options = yamaa::OdmOptions::new()
@@ -178,7 +174,7 @@ pub fn _read_odm(
         options = options.with_archive_member(member);
     }
     yamaa::read_odm(std::path::Path::new(source), &options)
-        .map(|table| ArrowTable::from(&table))
+        .map(|table| Table::from(&table))
         .map_err(|error| raise_error(py, Action::Read(source), error))
 }
 
@@ -186,9 +182,9 @@ pub fn _read_odm(
 /// is true; a file that cannot be read or admitted raises `_Error`.
 #[pyfunction]
 #[pyo3(signature=(paths, fix=false))]
-pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<ArrowTable> {
+pub fn _lint(py: Python<'_>, paths: Vec<String>, fix: bool) -> PyResult<Table> {
     yamaa::lint(&paths, fix)
-        .map(|lint| ArrowTable::from(&lint.table()))
+        .map(|lint| Table::from(&lint.table()))
         .map_err(|failure| raise(py, failure))
 }
 
@@ -212,8 +208,8 @@ impl SelfTest {
     fn status(&self) -> &'static str {
         self.inner.status().as_str()
     }
-    fn cases(&self) -> ArrowTable {
-        ArrowTable::from(&self.inner.table())
+    fn cases(&self) -> Table {
+        Table::from(&self.inner.table())
     }
     /// The engine information, keyed in the facade's field order.
     fn info<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
@@ -267,28 +263,28 @@ impl ProjectRun {
             .map_err(|_| project_poisoned())?
             .names())
     }
-    fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
+    fn output(&self, py: Python<'_>, name: &str) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
-        Ok(run.output().map(ArrowTable::from))
+        Ok(run.output().map(Table::from))
     }
-    fn member_issues(&self, py: Python<'_>, name: &str) -> PyResult<ArrowTable> {
+    fn member_issues(&self, py: Python<'_>, name: &str) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
-        Ok(ArrowTable::from(&run.issues()))
+        Ok(Table::from(&run.issues()))
     }
-    fn member_report(&self, py: Python<'_>, name: &str) -> PyResult<Option<ArrowTable>> {
+    fn member_report(&self, py: Python<'_>, name: &str) -> PyResult<Option<Table>> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
         let run = guard.member(name).map_err(|failure| raise(py, failure))?;
-        Ok(run.report().map(ArrowTable::from))
+        Ok(run.report().map(Table::from))
     }
-    fn issues(&self) -> PyResult<ArrowTable> {
+    fn issues(&self) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
-        Ok(ArrowTable::from(&guard.issues()))
+        Ok(Table::from(&guard.issues()))
     }
-    fn report(&self) -> PyResult<ArrowTable> {
+    fn report(&self) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
-        Ok(ArrowTable::from(&guard.report()))
+        Ok(Table::from(&guard.report()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
@@ -307,9 +303,9 @@ pub struct Submission {
 
 #[pymethods]
 impl Submission {
-    fn issues(&self) -> PyResult<ArrowTable> {
+    fn issues(&self) -> PyResult<Table> {
         let guard = self.inner.try_lock().map_err(|_| project_poisoned())?;
-        Ok(ArrowTable::from(&guard.issues()))
+        Ok(Table::from(&guard.issues()))
     }
     fn save(&self, py: Python<'_>) -> PyResult<Vec<String>> {
         let saved = self
@@ -329,10 +325,10 @@ pub fn _project_spec(py: Python<'_>, project: &str, name: &str) -> PyResult<Stri
 }
 
 #[pyfunction]
-pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<ArrowTable> {
+pub fn _project_check(py: Python<'_>, project: &str) -> PyResult<Table> {
     engine(py)
         .project_check(project, &CancellationToken::new())
-        .map(|check| ArrowTable::from(&check.issues()))
+        .map(|check| Table::from(&check.issues()))
         .map_err(|error| raise_error(py, Action::Read(project), error))
 }
 

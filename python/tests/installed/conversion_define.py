@@ -36,7 +36,7 @@ def judge(case, fixtures, output):
     result = yamaa.project(directory / case["project"]).submission(
         case["standard"], created=case["created"]
     )
-    issues = result.issues.to_dicts()
+    issues = result.issues.to_pylist()
     want = case["error"]
     if want is not None:
         if not issues:
