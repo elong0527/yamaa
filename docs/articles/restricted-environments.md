@@ -218,8 +218,8 @@ qualification record of that machine. The `native-offline-wheel`,
 `native-offline-source`, `native-offline-toolchain` and
 `native-r-binary-install` jobs run the same selftest after installing with
 no network, and fail unless it reports `succeeded`; the `native-cli-install`
-jobs run `yamaa selftest` from each unpacked command-line archive, and fail
-unless it succeeds.
+jobs unpack each command-line archive and run `yamaa selftest` from it with
+no network, and fail unless it succeeds.
 [Check an installation](api.md#check-an-installation) describes the result.
 
 === "R"
