@@ -88,20 +88,26 @@ Every package ships the third-party notices of its host's crate,
 `R/yamaa/inst/LICENSE-THIRD-PARTY.txt` for the R package and
 `rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt` for the command-line archives,
 generated from `rust/Cargo.lock` and from the standard library notice of the
-toolchain that `rust/rust-toolchain.toml` pins. After changing the lock or the pinned
-toolchain, regenerate them and commit the results. The generator runs `rustc`
-in `rust/`, where rustup selects the pinned toolchain:
+toolchain that `rust/rust-toolchain.toml` pins. They list only the crates that
+the host links on the supported targets, each with the one license that yamaa
+relies on, and no notice names a GNU license (#3364). After changing the lock
+or the pinned toolchain, regenerate them and commit the results. The generator
+runs `rustc` in `rust/`, where rustup selects the pinned toolchain:
 
 ```sh
 uv run --project python --no-sync python -m tools.packaging.generate_third_party_notices --write
 ```
 
-`make check-repository` fails while a locked crate has no matching notice entry
+`make check-repository` fails while a linked crate has no matching notice entry
 or the Python License-Expression misses a license that a linked crate is relied
 on under. The generator reads only the crate packages Cargo has unpacked. It
 stops instead of guessing when a crate needs a license outside its reviewed
-list or ships an unclassified license file; review the crate and extend the
-tables in `tools/packaging/generate_third_party_notices.py`.
+list, ships an unclassified license file, or would bring in a text that names a
+GNU license; review the crate and extend the tables in
+`tools/packaging/generate_third_party_notices.py`. A toolchain update also
+needs `LIBRARY_LINKED` there reviewed: the standard library crates that the
+supported targets link, from `library/std/Cargo.toml` and `library/Cargo.lock`
+of that toolchain's `rust-src` component.
 
 Every crate of each host's trimmed lock has a purpose in
 `tools/packaging/crate_purposes.toml`: the source archives ship them all,
@@ -120,11 +126,12 @@ Every package also ships `COMPONENTS.tsv` beside the notices: an inventory,
 without digests, of the components that its host's packages are built from.
 `tools.packaging.generate_component_inventory` writes `python/COMPONENTS.tsv`,
 `R/yamaa/inst/COMPONENTS.tsv` and `rust/crates/yamaa-cli/COMPONENTS.tsv` from
-each host's trimmed lock, the crates' declared licenses, those purposes and
-the provenance that the vendored YAML parser, ReadStat and zstd record. The
-Python one, which the wheels carry, and the command line's also name the
-standard library of the pinned toolchain; the Python source archive carries
-the Python one without that row. The R one names none: the R package's
+each host's trimmed lock, the license that yamaa relies on of those that each
+crate declares, those purposes and the provenance that the vendored YAML
+parser, ReadStat and zstd record. The Python one, which the wheels carry, and
+the command line's also name the standard library of the pinned toolchain;
+the Python source archive carries the Python one without that row. The R one
+names none: the R package's
 `configure` appends the row of the `rustc` that builds the installation to
 the copy that R installs. `make check-repository` fails while one differs
 from what they give. After changing the lock, a purpose, a vendored

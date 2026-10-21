@@ -22,15 +22,27 @@ PURPOSES = {
 }
 
 
+BSD = (
+    "Copyright (c) Meta Platforms, Inc.\n\nRedistribution and use in source and "
+    "binary forms are permitted.\nNeither the name of Facebook.\n"
+)
+# License texts with the phrases that the notices recognize them by.
+TEXTS = {
+    "MIT": "Permission is hereby granted, free of charge, to any person obtaining "
+    "a copy\n",
+    "Apache-2.0": "TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n",
+}
+
+
 class Workspace:
     """A checkout with crate packages as `cargo metadata` describes them."""
 
     def __init__(self, root):
         self.root = root
         self.workspace = root / "rust"
-        self.packages = []
+        self.packages, self.members = [], []
 
-    def crate(self, name, version, license, directory=None, **fields):
+    def crate(self, name, version, license, directory=None, member=False, **fields):
         if directory is None:
             source = notices.CRATES_IO
             directory = self.root / "registry" / f"{name}-{version}"
@@ -39,6 +51,7 @@ class Workspace:
             directory = self.workspace / directory
         directory.mkdir(parents=True, exist_ok=True)
         package = {
+            "id": f"{name}@{version}",
             "name": name,
             "version": version,
             "license": license,
@@ -48,20 +61,26 @@ class Workspace:
             **fields,
         }
         self.packages.append(package)
+        if member:
+            self.members.append(package["id"])
         return directory
 
     def kept(self):
         return {(p["name"], p["version"], p["source"]) for p in self.packages}
 
     def metadata(self):
-        return {"packages": self.packages}
+        return {"packages": self.packages, "workspace_members": self.members}
 
 
 def workspace(root):
     """The engine crates, the vendored parser and ReadStat, pyo3 and zstd-sys."""
     checkout = Workspace(root)
-    checkout.crate("yamaa-core", "0.5.0", "MIT AND Unicode-3.0", "crates/yamaa-core")
-    adapters = checkout.crate("yamaa-adapters", "0.5.0", "MIT", "crates/yamaa-adapters")
+    checkout.crate(
+        "yamaa-core", "0.5.0", "MIT AND Unicode-3.0", "crates/yamaa-core", True
+    )
+    adapters = checkout.crate(
+        "yamaa-adapters", "0.5.0", "MIT", "crates/yamaa-adapters", True
+    )
     (adapters / "vendor/readstat").mkdir(parents=True)
     (adapters / "vendor/readstat/README.md").write_text(
         "# ReadStat source integration\n\nThis directory vendors the MIT-licensed "
@@ -80,8 +99,15 @@ def workspace(root):
         "# saphyr-parser 0.2.1\n\nSource: the crates.io release.\nThe upstream "
         f"release commit is\n`{PARSER_COMMIT}`.\n"
     )
+    # The notices' reviewed texts of the parser and zstd-sys must exist.
+    for relative, license in notices.EXTRA_FILES["yamaa-saphyr-parser"].items():
+        (parser / relative).parent.mkdir(exist_ok=True)
+        (parser / relative).write_text(TEXTS[license])
     checkout.crate("pyo3", "0.27.2", "MIT/Apache-2.0")
-    checkout.crate("zstd-sys", "2.1.2+zstd.1.5.7", "BSD-3-Clause")
+    zstd = checkout.crate("zstd-sys", "2.1.2+zstd.1.5.7", "BSD-3-Clause")
+    (zstd / "zstd").mkdir()
+    (zstd / "zstd/LICENSE").write_text(BSD)
+    (zstd / "zstd/COPYING").write_text("GNU GENERAL PUBLIC LICENSE\nVersion 2\n")
     return checkout
 
 
@@ -123,12 +149,11 @@ class ComponentsTest(Checkout):
                 "zstd-sys",
             ],
         )
-        # Cargo's legacy separator becomes an SPDX OR.
+        # Each row names the one license that yamaa relies on, never the
+        # choice that the manifest declares.
         self.assertEqual(
             rows["pyo3"],
-            inventory.Component(
-                "pyo3", "0.27.2", "MIT OR Apache-2.0", "crates.io", PURPOSES["pyo3"]
-            ),
+            inventory.Component("pyo3", "0.27.2", "MIT", "crates.io", PURPOSES["pyo3"]),
         )
         self.assertEqual(rows["yamaa-core"].source, "rust/crates/yamaa-core")
         self.assertEqual(rows["yamaa-core"].license, "MIT AND Unicode-3.0")
@@ -147,11 +172,7 @@ class ComponentsTest(Checkout):
         zstd = rows["libzstd"]
         self.assertEqual(
             (zstd.version, zstd.license, zstd.source),
-            (
-                "1.5.7",
-                "BSD-3-Clause OR GPL-2.0-only",
-                "bundled in zstd-sys 2.1.2+zstd.1.5.7",
-            ),
+            ("1.5.7", "BSD-3-Clause", "bundled in zstd-sys 2.1.2+zstd.1.5.7"),
         )
 
     def test_the_inventory_is_a_header_and_one_tab_separated_row_each(self):
@@ -160,8 +181,7 @@ class ComponentsTest(Checkout):
         self.assertEqual(lines[0], "name\tversion\tlicense\tsource\tpurpose")
         self.assertEqual(lines[-1], "")
         self.assertIn(
-            "pyo3\t0.27.2\tMIT OR Apache-2.0\tcrates.io\t"
-            "the Python binding's interface to CPython",
+            "pyo3\t0.27.2\tMIT\tcrates.io\tthe Python binding's interface to CPython",
             lines,
         )
         self.assertTrue(all(line.count("\t") == 4 for line in lines[:-1]))
@@ -176,27 +196,35 @@ class ComponentsTest(Checkout):
                 self.assertRaisesRegex(ValueError, "cc 1.2.0: the purpose must be"),
             ):
                 inventory.render([row])
+        # No row may name a GNU license.
+        row = inventory.Component("gnu", "1.0.0", "GPL-2.0-only", "crates.io", "x")
+        with self.assertRaisesRegex(ValueError, r"names a GNU license \(GPL\)"):
+            inventory.render([row])
 
-    def test_licenses_are_spdx_expressions(self):
-        for declared, expression in (
-            ("MIT OR Apache-2.0", "MIT OR Apache-2.0"),
-            ("BSD-3-Clause/MIT", "BSD-3-Clause OR MIT"),
-            ("(MIT/Apache-2.0) AND Unicode-3.0", "(MIT OR Apache-2.0) AND Unicode-3.0"),
+    def test_licenses_are_the_ones_that_yamaa_relies_on(self):
+        pyo3 = next(p for p in self.checkout.packages if p["name"] == "pyo3")
+        for declared, relied in (
+            ("MIT OR Apache-2.0", "MIT"),
+            ("MIT OR Apache-2.0 OR LGPL-2.1-or-later", "MIT"),
+            ("BSD-3-Clause/MIT", "MIT"),
+            ("BSD-3-Clause AND (MIT/Apache-2.0)", "MIT AND BSD-3-Clause"),
         ):
+            pyo3["license"] = declared
             with self.subTest(declared=declared):
                 self.assertEqual(
-                    inventory.license_expression(declared, "crate 1.0.0"), expression
+                    {row.name: row.license for row in self.rows()}["pyo3"], relied
                 )
         for declared, message in (
             (None, "declares no license"),
-            (" ", "declares no license"),
             ("MIT OR", "malformed license expression"),
+            ("GPL-3.0-only", "review the license"),
         ):
+            pyo3["license"] = declared
             with (
                 self.subTest(declared=declared),
                 self.assertRaisesRegex(ValueError, message),
             ):
-                inventory.license_expression(declared, "crate 1.0.0")
+                self.rows()
 
     def test_a_crate_without_a_purpose_or_provenance_stops_generation(self):
         missing = {name: text for name, text in PURPOSES.items() if name != "pyo3"}
@@ -228,7 +256,7 @@ class ComponentsTest(Checkout):
             (
                 "rust-std",
                 "1.99.1",
-                "MIT OR Apache-2.0",
+                "MIT",
                 "https://github.com/rust-lang/rust at 1.99.1",
             ),
         )
@@ -273,7 +301,7 @@ class ComponentsTest(Checkout):
             [
                 "rust-std",
                 "1.99.1",
-                "MIT OR Apache-2.0",
+                "MIT",
                 "https://github.com/rust-lang/rust at 1.99.1",
                 inventory.INSTALLED_PURPOSE + "\n",
             ],
@@ -344,8 +372,7 @@ class CheckTest(Checkout):
         # Python one misses a crate that its bundle gained.
         self.paths["r"].write_text(self.generated["python"], encoding="utf-8")
         python = self.generated["python"].replace(
-            "pyo3\t0.27.2\tMIT OR Apache-2.0\tcrates.io\t"
-            "the Python binding's interface to CPython\n",
+            "pyo3\t0.27.2\tMIT\tcrates.io\tthe Python binding's interface to CPython\n",
             "",
         )
         self.paths["python"].write_text(python, encoding="utf-8")
@@ -383,8 +410,7 @@ class CheckTest(Checkout):
         # A merge left its conflict markers around the pyo3 row of the Python
         # inventory, and a tab split the yamaa-core purpose of the R one.
         row = (
-            "pyo3\t0.27.2\tMIT OR Apache-2.0\tcrates.io\t"
-            "the Python binding's interface to CPython\n"
+            "pyo3\t0.27.2\tMIT\tcrates.io\tthe Python binding's interface to CPython\n"
         )
         conflicted = (
             f"<<<<<<< HEAD\n{row}=======\n{row.replace('CPython', 'Python')}"
@@ -532,7 +558,7 @@ class GraphTest(unittest.TestCase):
                         [
                             (
                                 release,
-                                "MIT OR Apache-2.0",
+                                "MIT",
                                 f"https://github.com/rust-lang/rust at {release}",
                             )
                         ],

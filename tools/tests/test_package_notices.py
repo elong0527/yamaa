@@ -245,7 +245,7 @@ class PackageNotices(unittest.TestCase):
         committed = self.r_notices["COMPONENTS.tsv"]
         row = self.installed_inventory("1.99.1")[len(committed) :]
         self.assertEqual(row.count(b"\n"), 1)
-        self.assertTrue(row.startswith(b"rust-std\t1.99.1\tMIT OR Apache-2.0\t"))
+        self.assertTrue(row.startswith(b"rust-std\t1.99.1\tMIT\t"))
         for case, payload in (
             ("no row", committed),
             ("two rows", committed + row + row),
@@ -341,6 +341,97 @@ class PackageNotices(unittest.TestCase):
         other = self.tar("yamaa-0.4.1.tar.gz", {})
         with self.assertRaisesRegex(ValueError, "not a yamaa 0.4.0"):
             packages.check_archive(other, self.root)
+
+    def vendor_archive(self, members):
+        """The xz-compressed tar archive of vendored crates in an R package."""
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w:xz") as archive:
+            for member, payload in members.items():
+                entry = tarfile.TarInfo(member)
+                entry.size = len(payload)
+                archive.addfile(entry, io.BytesIO(payload))
+        return data.getvalue()
+
+    def test_no_text_names_a_gnu_license_outside_the_reviewed_vendored_crates(self):
+        gpl = b"GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n"
+        llvm = (
+            b"In addition, if you combine or link compiled forms of this Software "
+            b'with\nsoftware that is licensed under the GPLv2 ("Combined Software") '
+            b"and if a\ncourt of competent jurisdiction determines that the patent "
+            b"provision (Section\n3), the indemnity provision (Section 9) or other "
+            b"Section of the License\nconflicts with the conditions of the GPLv2, "
+            b"you may retroactively and\nprospectively choose to deem waived or "
+            b"otherwise exclude such Section(s) of\nthe License, but only in their "
+            b"entirety and only with respect to the Combined\nSoftware.\n"
+        )
+        vendored = {
+            # zstd's own sources and r-efi's notice, as cargo vendor writes them.
+            "vendor/zstd-sys-2.1.2+zstd.1.5.7/zstd/COPYING": gpl,
+            "vendor/r-efi-5.3.0/AUTHORS": b"the GNU Lesser General Public License\n",
+            # The LLVM exception names GPLv2 but grants no GNU license.
+            "vendor/rustix-1.1.5/LICENSE-Apache-2.0_WITH_LLVM-exception": llvm,
+            "vendor/windows-sys-0.61.2/src/lib.rs": b"pub lgpl: LOGPALETTE,\n",
+        }
+        members = {f"yamaa/inst/{name}": data for name, data in self.r_notices.items()}
+        members["yamaa/src/rust/vendor.tar.xz"] = self.vendor_archive(vendored)
+        # Compiled code holds no license text to read.
+        members["yamaa/src/yamaa.so"] = b"\xff\xfeGPLv3\x00"
+        r_source = self.tar("yamaa_0.4.0.tar.gz", members)
+        self.assertEqual(len(packages.check_archive(r_source, self.root)), 3)
+        # Any other crate, and any text of yamaa's own, must name none.
+        members["yamaa/src/rust/vendor.tar.xz"] = self.vendor_archive(
+            dict(vendored, **{"vendor/other-1.0.0/README.md": b"GPL-3.0-only\n"})
+        )
+        members["yamaa/src/rust/vendor/saphyr-parser/README.md"] = b"See the LGPL.\n"
+        r_source = self.tar("yamaa_0.4.0.tar.gz", members)
+        with self.assertRaises(ValueError) as raised:
+            packages.check_archive(r_source, self.root)
+        self.assertEqual(
+            str(raised.exception).splitlines(),
+            [
+                "yamaa_0.4.0.tar.gz: yamaa/src/rust/vendor.tar.xz!vendor/"
+                "other-1.0.0/README.md names a GNU license (GPL)",
+                "yamaa_0.4.0.tar.gz: yamaa/src/rust/vendor/saphyr-parser/README.md "
+                "names a GNU license (LGPL)",
+            ],
+        )
+        # The Python source archive carries its vendored crates unpacked.
+        sdist = self.tar(
+            "yamaa-0.4.0.tar.gz",
+            {
+                **{
+                    f"yamaa-0.4.0/{name}": data
+                    for name, data in self.sdist_notices.items()
+                },
+                "yamaa-0.4.0/vendor/zstd-sys-2.1.2+zstd.1.5.7/zstd/COPYING": gpl,
+            },
+        )
+        self.assertEqual(len(packages.check_archive(sdist, self.root)), 3)
+        wheel = self.wheel(
+            dict(self.notices, **{"LICENSE-THIRD-PARTY.txt": b"Crate: r-efi\nLGPL\n"})
+        )
+        (self.root / "python/LICENSE-THIRD-PARTY.txt").write_bytes(
+            b"Crate: r-efi\nLGPL\n"
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "yamaa-0.4.0.dist-info/licenses/LICENSE-THIRD-PARTY.txt names a GNU "
+            r"license \(LGPL\)",
+        ):
+            packages.check_archive(wheel, self.root)
+
+        # Command-line archives also reject a forbidden license even when
+        # their notice agrees with the checkout's own copy.
+        forbidden = b"Crate: r-efi\nLGPL\n"
+        cli = self.cli(dict(self.cli_notices, **{"LICENSE-THIRD-PARTY.txt": forbidden}))
+        (self.root / "rust/crates/yamaa-cli/LICENSE-THIRD-PARTY.txt").write_bytes(
+            forbidden
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            r"LICENSE-THIRD-PARTY.txt names a GNU license \(LGPL\)",
+        ):
+            packages.check_archive(cli, self.root)
 
     def test_a_candidate_names_python_packages_and_the_r_archive_differently(self):
         # #3030 D53: the R package keeps the final version through candidates.
