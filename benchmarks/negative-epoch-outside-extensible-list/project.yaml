@@ -13,6 +13,7 @@ codelists:
           - {value: SCREENING}
           - {value: TREATMENT}
           - {value: FOLLOW-UP}
+
 sdtm:
   specs:
   - spec.yaml

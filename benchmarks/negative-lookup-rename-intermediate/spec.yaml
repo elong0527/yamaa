@@ -19,7 +19,6 @@ intermediates:
   - id: CODED
     dataset: CODING
     key: [STUDYID, USUBJID, CMSEQ]
-    absent: null
 
   - id: WHODRUG_LOOKUP
     dataset: WHODRUG
