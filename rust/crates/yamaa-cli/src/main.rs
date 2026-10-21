@@ -10,19 +10,20 @@
 //!   printed its text;
 //! - 1 when the command completed with findings: a `failed` or `skipped`
 //!   status, remaining lint findings, or a refusal, such as an unknown
-//!   section (D98), which the facade explains with its issues;
+//!   section (D98) or a PATH whose type cannot be read (D125), which the
+//!   facade explains with its issues;
 //! - 2 when the command could not run as asked (D68): a usage error, an
-//!   argument the facade cannot take, or a failed write to standard output,
-//!   and, for now, a command not implemented yet (D96).
+//!   argument the facade cannot take, a PATH whose type the command does not
+//!   take, or a failed write to standard output, and, for now, a command not
+//!   implemented yet (D96).
 //!
 //! No configuration file, environment variable or colour changes what it
 //! does. Ctrl+C ends the process by the signal and publishes nothing (D46).
 //!
-//! What each command prints is in [`commands`]. `read-odm`, `schema` and
-//! `selftest`, and `check`, `run` and `resolve` of a PATH given neither
-//! `--spec` nor `--section`, check their arguments and then refuse as not
-//! implemented yet; see [`commands`] for why. Each drops the refusal when it
-//! lands.
+//! What each command prints, and how it dispatches on its PATH's `type:`
+//! header (D122), is in [`commands`]. `read-odm`, `schema` and `selftest`
+//! check their arguments and then refuse as not implemented yet; see
+//! [`commands`] for why. Each drops the refusal when it lands.
 #![forbid(unsafe_code)]
 
 mod arguments;
@@ -166,9 +167,9 @@ fn help() -> String {
         text.push('\n');
     }
     text.push_str(
-        "\nNot implemented yet: read-odm, schema and selftest, and check, run and\n\
-         resolve of a PATH given neither --spec nor --section. Each checks its\n\
-         arguments, then exits with status 2.\n\n\
+        "\nPATH names a spec or a project, as its type: header declares; --spec,\n\
+         --section and submission take a project. Not implemented yet: read-odm,\n\
+         schema and selftest. Each checks its arguments, then exits with status 2.\n\n\
          exit status: 0 succeeded, 1 completed with findings, 2 could not run as asked\n",
     );
     text

@@ -1,5 +1,6 @@
 //! The `yamaa` binary as a user runs it: what it prints, on which stream, and
-//! its exit status (#3030 section 2.8, D12, D41, D68, D96 to D99, D103).
+//! its exit status (#3030 section 2.8, D12, D41, D68, D96 to D99, D103, D122,
+//! D125).
 //!
 //! What the command line composes is written out here: the summary and
 //! member lines, the order of the lines, the written paths, the JSON keys and
@@ -7,6 +8,9 @@
 //! each test takes them from the facade, run from the binary's own directory
 //! with the same absolute paths; issue locations (#3262) and message text
 //! can then change without an edit here.
+//!
+//! The command line reads only 1.x files (D122), so the studies here are
+//! written as 1.0.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -82,11 +86,10 @@ struct Study(PathBuf);
 /// DM builds; ADAE fails its own check: ASTDY reads TRTSDT, which is
 /// declared after it (COLUMN-5); ADTTE reads ADAE through its `schema` link,
 /// so it is skipped when ADAE fails (PROJECT-11).
-const DM: &str = "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE], report: ../out/dm-report.csv}\n";
-const ADAE: &str = "schema_version: '1.0'\ndomain: ADAE\nkeys: [USUBJID]\ninput: {AE: {path: ../raw/ae.csv, types: {TRTSDT: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: ASTDY, type: int, label: Study Day, derivation: {compute: {expr: TRTSDT + 1}}}\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\noutput: {path: ../out/adae.csv, columns: [USUBJID, ASTDY, TRTSDT], report: ../out/adae-report.csv}\n";
-const ADTTE: &str = "schema_version: '1.0'\ndomain: ADTTE\nkeys: [USUBJID]\ninput: {ADAE: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADAE.USUBJID}\noutput: {path: ../out/adtte.csv, columns: [USUBJID]}\n";
-const PROJECT: &str =
-    "schema_version: '1.0'\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adae.yaml, adam/adtte.yaml]\n";
+const DM: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: SDTM\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: {path: ../raw/dm.csv, types: {AGE: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n  - {name: AGE, type: int, label: Age, derivation: RAW.AGE}\noutput: {path: ../out/dm.csv, columns: [USUBJID, AGE], report: ../out/dm-report.csv}\n";
+const ADAE: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADAE\nkeys: [USUBJID]\ninput: {AE: {path: ../raw/ae.csv, types: {TRTSDT: int}}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: AE.USUBJID}\n  - {name: ASTDY, type: int, label: Study Day, derivation: TRTSDT + 1}\n  - {name: TRTSDT, type: int, label: Start, derivation: AE.TRTSDT}\noutput: {path: ../out/adae.csv, columns: [USUBJID, ASTDY, TRTSDT], report: ../out/adae-report.csv}\n";
+const ADTTE: &str = "yamaa: \"1.0\"\ntype: spec\nmodel: ADaM\ndomain: ADTTE\nkeys: [USUBJID]\ninput: {ADAE: {path: ../out/adae.csv, schema: adae.yaml}}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: ADAE.USUBJID}\noutput: {path: ../out/adtte.csv, columns: [USUBJID]}\n";
+const PROJECT: &str = "yamaa: \"1.0\"\ntype: project\nsdtm:\n  specs: [sdtm/dm.yaml]\nadam:\n  specs: [adam/adae.yaml, adam/adtte.yaml]\n";
 
 impl Study {
     fn empty() -> Self {
@@ -321,25 +324,12 @@ fn a_usage_error_exits_with_status_2_and_writes_only_to_standard_error() {
 }
 
 /// What the command line cannot run yet checks its arguments, then refuses
-/// with exit status 2 and writes nothing (D96): a PATH given neither
-/// `--spec` nor `--section`, whose `type:` header the facade does not read
-/// yet, and `read-odm`, `schema` and `selftest`.
+/// with exit status 2 and writes nothing (D96): `read-odm`, `schema` and
+/// `selftest`.
 #[test]
-fn the_forms_not_implemented_yet_check_their_arguments_then_refuse() {
+fn the_commands_not_implemented_yet_check_their_arguments_then_refuse() {
     let study = Study::new();
     let cases: &[(&[&str], &str)] = &[
-        (&["check", "sdtm/dm.yaml"], "check without --spec"),
-        (&["check", "project.yaml"], "check without --spec"),
-        (
-            &["--format", "json", "check", "project.yaml"],
-            "check without --spec",
-        ),
-        (&["run", "sdtm/dm.yaml"], "run without --spec or --section"),
-        (
-            &["run", "project.yaml", "--format", "json"],
-            "run without --spec or --section",
-        ),
-        (&["resolve", "sdtm/dm.yaml"], "resolve without --spec"),
         (&["read-odm", "study.xml", "items.parquet"], "read-odm"),
         (
             &[
@@ -376,6 +366,384 @@ fn the_forms_not_implemented_yet_check_their_arguments_then_refuse() {
     // Nothing ran, so nothing was written, OUT included.
     assert!(study.files("out").is_empty());
     assert!(!study.exists("items.parquet") && !study.exists("items.csv"));
+}
+
+/// A PATH that declares `type: spec` is checked, run and resolved alone, as
+/// `s.check()`, `s.run()` then `save()`, and `s.resolve()` (D122): here DM,
+/// which needs nothing from the project that lists it. From the study's own
+/// directory, a check names the path as given.
+#[test]
+fn a_spec_path_is_checked_run_and_resolved_alone() {
+    let study = Study::new();
+    assert_eq!(
+        outcome(&yamaa_in(&study.0, &["check", "sdtm/dm.yaml"])),
+        printed(
+            0,
+            "yamaa check of sdtm/dm.yaml: succeeded, 0 issues\n".to_owned()
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa_in(
+            &study.0,
+            &["--format", "json", "check", "sdtm/dm.yaml"]
+        )),
+        printed(
+            0,
+            "{\"command\":\"check\",\"issues\":[],\"path\":\"sdtm/dm.yaml\",\"spec\":null,\
+             \"status\":\"succeeded\"}\n"
+                .to_owned()
+        )
+    );
+    assert!(study.files("out").is_empty());
+    let (report, dm) = (study.path("out/dm-report.csv"), study.path("out/dm.csv"));
+    assert_eq!(
+        outcome(&yamaa_in(&study.0, &["run", "sdtm/dm.yaml"])),
+        printed(
+            0,
+            format!("yamaa run of DM: succeeded, 2 rows x 2 columns, 0 issues\n{report}\n{dm}\n")
+        )
+    );
+    assert_eq!(study.files("out"), ["dm-report.csv", "dm.csv"]);
+    assert_eq!(
+        outcome(&yamaa_in(
+            &study.0,
+            &["run", "sdtm/dm.yaml", "--format", "json"]
+        )),
+        printed(
+            0,
+            format!(
+                "{{\"command\":\"run\",\"issues\":[],\"members\":[],\"path\":\"sdtm/dm.yaml\",\
+                 \"paths\":[\"{report}\",\"{dm}\"],\"section\":null,\"spec\":null,\
+                 \"status\":\"succeeded\"}}\n"
+            )
+        )
+    );
+    let spec = study.path("sdtm/dm.yaml");
+    let resolved = engine().spec_resolve(&spec, None).unwrap().to_json();
+    for format in ["text", "json"] {
+        assert_eq!(
+            outcome(&yamaa(&["resolve", &spec, "--format", format])),
+            printed(0, format!("{resolved}\n")),
+            "{format}"
+        );
+    }
+}
+
+/// A PATH that declares `type: project` is checked and run whole, as
+/// `p.check()` and `p.run()` then `save()` (D122). The check reports ADAE's
+/// finding. The run builds every section in order: DM succeeds, ADAE fails
+/// and ADTTE, which reads it, is skipped, so the save writes only the
+/// reports of the two that ran (PROJECT-12).
+#[test]
+fn a_project_path_is_checked_and_run_whole() {
+    let study = Study::new();
+    let project = study.path("project.yaml");
+    let engine = engine();
+    let token = CancellationToken::new();
+    let found = engine
+        .project_check(&project, &token)
+        .unwrap()
+        .diagnostics();
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        outcome(&yamaa(&["check", &project])),
+        printed(
+            1,
+            format!(
+                "yamaa check of {project}: failed, 1 issue\n{}",
+                lines(&found)
+            )
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa(&["check", &project, "--format", "json"])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"check\",\"issues\":{},\"path\":\"{project}\",\"spec\":null,\
+                 \"status\":\"failed\"}}\n",
+                json(&found)
+            )
+        )
+    );
+    assert!(study.files("out").is_empty());
+    let issues = engine
+        .project_run(&project, None, &token)
+        .unwrap()
+        .diagnostics();
+    assert_eq!(issues.len(), 2);
+    let (dm, adae) = (
+        study.path("out/dm-report.csv"),
+        study.path("out/adae-report.csv"),
+    );
+    assert_eq!(
+        outcome(&yamaa(&["run", &project])),
+        printed(
+            1,
+            format!(
+                "yamaa project run of {project}: failed, 3 specifications, 2 issues\n\
+                 \x20 DM     succeeded  2 rows x 2 columns, 0 issues\n\
+                 \x20 ADAE   failed     no output, 1 issue\n\
+                 \x20 ADTTE  skipped    no output, 1 issue\n\
+                 {}{dm}\n{adae}\n",
+                lines(&issues)
+            )
+        )
+    );
+    assert_eq!(study.files("out"), ["adae-report.csv", "dm-report.csv"]);
+    assert_eq!(
+        outcome(&yamaa(&["--format", "json", "run", &project])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"run\",\"issues\":{},\"members\":[\
+                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}},\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADAE\",\"rows\":null,\"status\":\"failed\"}},\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"ADTTE\",\"rows\":null,\"status\":\"skipped\"}}],\
+                 \"path\":\"{project}\",\"paths\":[\"{dm}\",\"{adae}\"],\"section\":null,\"spec\":null,\
+                 \"status\":\"failed\"}}\n",
+                json(&issues)
+            )
+        )
+    );
+}
+
+/// A PATH whose declared type the command does not take is a usage error: it
+/// exits 2, prints nothing on standard output in either format and writes
+/// nothing (D68; `api.md`, "The command line"). That is a codelists or
+/// function file for any command; a spec given `--spec` or `--section`, or
+/// given to `submission`; and a project given to `resolve` without
+/// `--spec`, since a project has no resolved form of its own. The facade
+/// reads only a file's header to type it, so these files need no body.
+#[test]
+fn a_path_whose_type_the_command_does_not_take_exits_with_status_2() {
+    let study = Study::new();
+    study.write("ct.yaml", "yamaa: \"1.0\"\ntype: codelists\n");
+    study.write("shout.yaml", "yamaa: \"1.0\"\ntype: function\n");
+    let cases: &[(&[&str], &str)] = &[
+        (
+            &["check", "ct.yaml"],
+            "check: ct.yaml declares type codelists, which check does not take",
+        ),
+        (
+            &["run", "ct.yaml", "--section", "sdtm"],
+            "run: ct.yaml declares type codelists, which run does not take",
+        ),
+        (
+            &["--format", "json", "resolve", "shout.yaml"],
+            "resolve: shout.yaml declares type function, which resolve does not take",
+        ),
+        (
+            &["submission", "shout.yaml"],
+            "submission: shout.yaml declares type function, which submission does not take",
+        ),
+        (
+            &["check", "sdtm/dm.yaml", "--spec", "DM"],
+            "check: sdtm/dm.yaml declares type spec, which check does not take with --spec",
+        ),
+        (
+            &["run", "sdtm/dm.yaml", "--spec", "DM"],
+            "run: sdtm/dm.yaml declares type spec, which run does not take with --spec",
+        ),
+        (
+            &[
+                "run",
+                "sdtm/dm.yaml",
+                "--section",
+                "sdtm",
+                "--format",
+                "json",
+            ],
+            "run: sdtm/dm.yaml declares type spec, which run does not take with --section",
+        ),
+        (
+            &["resolve", "sdtm/dm.yaml", "--spec", "DM"],
+            "resolve: sdtm/dm.yaml declares type spec, which resolve does not take with --spec",
+        ),
+        (
+            &["submission", "sdtm/dm.yaml", "--section", "sdtm"],
+            "submission: sdtm/dm.yaml declares type spec, which submission does not take",
+        ),
+        (
+            &["resolve", "project.yaml"],
+            "resolve: project.yaml declares type project, which resolve does not take \
+             without --spec",
+        ),
+    ];
+    for (arguments, message) in cases {
+        assert_eq!(
+            outcome(&yamaa_in(&study.0, arguments)),
+            (Some(2), String::new(), format!("yamaa: {message}\n{HINT}")),
+            "{arguments:?}"
+        );
+    }
+    assert!(study.files("out").is_empty());
+}
+
+/// The facade's refusal to read the type of the file at `path`, after
+/// checking that it names the call as `cannot read <path>` (D39, D125) and
+/// holds one issue, `condition`.
+fn unread(path: &str, condition: &str) -> yamaa::Failure {
+    let refused = engine().file_type(path).unwrap_err();
+    assert!(
+        refused
+            .message
+            .starts_with(&format!("cannot read {path}: ")),
+        "{}",
+        refused.message
+    );
+    let [issue] = refused.diagnostics.as_slice() else {
+        panic!("one issue: {:?}", refused.diagnostics);
+    };
+    assert_eq!(issue.code.as_str(), condition, "{path}");
+    refused
+}
+
+/// A file written in language version 0.5, which declares `schema_version`,
+/// declares no type: whatever the command and its flags, the call is refused
+/// as `unsupported_language_version` at `schema_version`, naming 0.5, and
+/// exits 1 as a file problem the facade reports (D68, D122, D125).
+#[test]
+fn a_file_written_in_language_version_0_5_is_refused_with_exit_status_1() {
+    let study = Study::new();
+    study.write(
+        "old/dm.yaml",
+        "schema_version: '1.0'\ndomain: DM\nkeys: [USUBJID]\ninput: {RAW: ../raw/dm.csv}\noutput: {path: ../out/dm.csv, columns: [USUBJID]}\ncolumns:\n  - {name: USUBJID, type: str, label: Subject, derivation: RAW.USUBJID}\n",
+    );
+    study.write(
+        "old/project.yaml",
+        "schema_version: '1.0'\nsdtm:\n  specs: [dm.yaml]\n",
+    );
+    let (spec, project) = (study.path("old/dm.yaml"), study.path("old/project.yaml"));
+    let refused = unread(&spec, "unsupported_language_version");
+    assert_eq!(
+        refused.diagnostics[0].context.get("version"),
+        Some(&ContextValue::Text("0.5".to_owned()))
+    );
+    for arguments in [&["check", &spec][..], &["run", &spec], &["resolve", &spec]] {
+        assert_eq!(
+            outcome(&yamaa(arguments)),
+            printed(1, format!("{}\n", refused.message)),
+            "{arguments:?}"
+        );
+    }
+    assert_eq!(
+        outcome(&yamaa(&["--format", "json", "run", &spec])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"run\",\"issues\":{},\"members\":[],\"path\":\"{spec}\",\
+                 \"paths\":[],\"section\":null,\"spec\":null,\"status\":\"failed\"}}\n",
+                json(&refused.diagnostics)
+            )
+        )
+    );
+    // A project's flags change nothing: its type is read first.
+    let refused = unread(&project, "unsupported_language_version");
+    for arguments in [
+        &["check", &project, "--spec", "DM"][..],
+        &["run", &project, "--section", "sdtm"],
+        &["submission", &project],
+        &["resolve", &project, "--spec", "DM"],
+    ] {
+        assert_eq!(
+            outcome(&yamaa(arguments)),
+            printed(1, format!("{}\n", refused.message)),
+            "{arguments:?}"
+        );
+    }
+    assert_eq!(
+        outcome(&yamaa(&[
+            "check", &project, "--spec", "DM", "--format", "json"
+        ])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"check\",\"issues\":{},\"path\":\"{project}\",\"spec\":\"DM\",\
+                 \"status\":\"failed\"}}\n",
+                json(&refused.diagnostics)
+            )
+        )
+    );
+    assert!(study.files("out").is_empty());
+}
+
+/// A `type` naming none of the four file types is refused as
+/// `unexpected_file_type` at `type`, and exits 1 (D125).
+#[test]
+fn a_type_naming_no_file_type_is_refused_with_exit_status_1() {
+    let study = Study::empty();
+    study.write(
+        "dm.yaml",
+        "yamaa: \"1.0\"\ntype: specification\ndomain: DM\n",
+    );
+    let path = study.path("dm.yaml");
+    let refused = unread(&path, "unexpected_file_type");
+    for command in ["check", "run", "submission", "resolve"] {
+        assert_eq!(
+            outcome(&yamaa(&[command, &path])),
+            printed(1, format!("{}\n", refused.message)),
+            "{command}"
+        );
+    }
+    assert_eq!(
+        outcome(&yamaa(&["resolve", &path, "--format", "json"])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"resolve\",\"issues\":{},\"path\":\"{path}\",\"spec\":null,\
+                 \"status\":\"failed\"}}\n",
+                json(&refused.diagnostics)
+            )
+        )
+    );
+}
+
+/// A PATH that reaches no regular file, or reaches a link, is refused as any
+/// read refuses it, naming the path as given, and exits 1 as a file problem
+/// the facade reports (FILE-7, FILE-8, FILE-11, D68, D125): here a file that
+/// does not exist, a directory and, on Unix, a symbolic link.
+#[test]
+fn a_path_that_cannot_be_read_is_refused_with_exit_status_1() {
+    let study = Study::new();
+    let mut cases = vec![
+        (study.path("missing.yaml"), "resource_path_missing"),
+        (study.path("sdtm"), "resource_path_not_regular_file"),
+    ];
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(study.0.join("project.yaml"), study.0.join("link.yaml"))
+            .unwrap();
+        cases.push((study.path("link.yaml"), "resource_path_symlink"));
+    }
+    for (path, condition) in cases {
+        let refused = unread(&path, condition);
+        for arguments in [
+            &["check", &path][..],
+            &["run", &path, "--spec", "DM"],
+            &["submission", &path],
+            &["resolve", &path],
+        ] {
+            assert_eq!(
+                outcome(&yamaa(arguments)),
+                printed(1, format!("{}\n", refused.message)),
+                "{arguments:?}"
+            );
+        }
+        assert_eq!(
+            outcome(&yamaa(&["--format", "json", "submission", &path])),
+            printed(
+                1,
+                format!(
+                    "{{\"command\":\"submission\",\"created\":null,\"issues\":{},\
+                     \"path\":\"{path}\",\"paths\":[],\"section\":null,\"status\":\"failed\"}}\n",
+                    json(&refused.diagnostics)
+                )
+            ),
+            "{path}"
+        );
+    }
+    assert!(study.files("out").is_empty());
 }
 
 /// From the study's own directory, with the PATH as a user types it: the
@@ -515,6 +883,55 @@ fn a_section_run_prints_its_members_every_issue_and_the_files_it_saved() {
             )
         )
     );
+}
+
+/// A listing that cannot be read has no listed name, so its member is named
+/// by the listing's path as the project file writes it, in its member line
+/// and in the JSON `members` alike (D130). DM still runs, and the failed
+/// run saves only DM's report (PROJECT-12).
+#[test]
+fn a_member_whose_listing_cannot_be_read_is_named_by_its_path() {
+    let study = Study::new();
+    study.write(
+        "project.yaml",
+        PROJECT.replace("[sdtm/dm.yaml]", "[sdtm/dm.yaml, sdtm/missing.yaml]"),
+    );
+    let project = study.path("project.yaml");
+    let issues = engine()
+        .project_run(&project, Some("sdtm"), &CancellationToken::new())
+        .unwrap()
+        .diagnostics();
+    assert_eq!(issues.len(), 1);
+    let report = study.path("out/dm-report.csv");
+    assert_eq!(
+        outcome(&yamaa(&["run", &project, "--section", "sdtm"])),
+        printed(
+            1,
+            format!(
+                "yamaa project run of {project}, section sdtm: failed, 2 specifications, 1 issue\n\
+                 \x20 DM                 succeeded  2 rows x 2 columns, 0 issues\n\
+                 \x20 sdtm/missing.yaml  failed     no output, 1 issue\n\
+                 {}{report}\n",
+                lines(&issues)
+            )
+        )
+    );
+    assert_eq!(
+        outcome(&yamaa(&["--format", "json", "run", &project, "--section", "sdtm"])),
+        printed(
+            1,
+            format!(
+                "{{\"command\":\"run\",\"issues\":{},\"members\":[\
+                 {{\"columns\":2,\"issue_count\":0,\"name\":\"DM\",\"rows\":2,\"status\":\"succeeded\"}},\
+                 {{\"columns\":null,\"issue_count\":1,\"name\":\"sdtm/missing.yaml\",\"rows\":null,\
+                 \"status\":\"failed\"}}],\
+                 \"path\":\"{project}\",\"paths\":[\"{report}\"],\"section\":\"sdtm\",\"spec\":null,\
+                 \"status\":\"failed\"}}\n",
+                json(&issues)
+            )
+        )
+    );
+    assert_eq!(study.files("out"), ["dm-report.csv"]);
 }
 
 /// The status describes the run, not its save (P-STATUS-1): a scope with
@@ -753,8 +1170,8 @@ fn a_refused_call_prints_its_error_text_and_exits_1() {
         (
             "submission",
             format!(
-                "{{\"command\":\"submission\",\"issues\":{issues},\"path\":\"{project}\",\
-                 \"paths\":[],\"section\":\"sdtn\",\"status\":\"failed\"}}"
+                "{{\"command\":\"submission\",\"created\":null,\"issues\":{issues},\
+                 \"path\":\"{project}\",\"paths\":[],\"section\":\"sdtn\",\"status\":\"failed\"}}"
             ),
         ),
     ] {
@@ -823,14 +1240,24 @@ fn define_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../benchmarks/sdtm-dm-metadata")
 }
 
-/// A copy of that benchmark's inputs with its DM dataset saved, which a
-/// submission reads.
+/// That benchmark's specification and project written as 1.0, which the
+/// command line reads (D122): the converted example the converter must
+/// reproduce (`tools/tests/test_migrate.py`). The benchmark itself is 0.5
+/// until the corpus moves to 1.0 (#3030 P2-5 to P2-8).
+fn define_example() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../docs/design/interface-1.0/examples/sdtm-dm-metadata")
+}
+
+/// A copy of that benchmark's inputs, written as 1.0, with its DM dataset
+/// saved, which a submission reads.
 fn define_study() -> Study {
     let study = Study::empty();
-    let fixture = define_fixture();
-    for name in ["spec.yaml", "project.yaml", "input/dm_raw.csv"] {
-        study.write(name, std::fs::read(fixture.join(name)).unwrap());
+    for name in ["spec.yaml", "project.yaml"] {
+        study.write(name, std::fs::read(define_example().join(name)).unwrap());
     }
+    let input = "input/dm_raw.csv";
+    study.write(input, std::fs::read(define_fixture().join(input)).unwrap());
     assert_eq!(
         outcome(&yamaa(&[
             "run",
@@ -846,7 +1273,8 @@ fn define_study() -> Study {
 
 /// A submission saves each section's transport files, then its define.xml
 /// (JSON-14), and prints them in that order; with the creation time given,
-/// they hold the bytes the benchmark's authors wrote.
+/// they hold the bytes the benchmark's authors wrote, and the time is not
+/// printed again, though its JSON `created` holds it (D129).
 #[test]
 fn a_submission_prints_its_summary_and_the_files_in_publication_order() {
     let study = define_study();
@@ -883,41 +1311,98 @@ fn a_submission_prints_its_summary_and_the_files_in_publication_order() {
         printed(
             0,
             format!(
-                "{{\"command\":\"submission\",\"issues\":[],\"path\":\"{project}\",\
-                 \"paths\":[\"{transport}\",\"{define}\"],\"section\":\"sdtm\",\
-                 \"status\":\"succeeded\"}}\n"
+                "{{\"command\":\"submission\",\"created\":\"2026-09-11T00:00:00\",\"issues\":[],\
+                 \"path\":\"{project}\",\"paths\":[\"{transport}\",\"{define}\"],\
+                 \"section\":\"sdtm\",\"status\":\"succeeded\"}}\n"
             )
         )
     );
 }
 
+/// SDTM's section metadata copied as an ADaM section that lists no
+/// specification and writes its own define target, `adam-define.xml`, as
+/// the facade's own test of D129 makes it.
+fn adam_section(project: &str) -> String {
+    project[project.find("sdtm:\n").unwrap()..]
+        .replacen("sdtm:", "adam:", 1)
+        .replace(
+            "name: SDTMIG\n    version: '3.4'",
+            "name: ADaMIG\n    version: '1.3'",
+        )
+        .replace("  specs:\n  - spec.yaml\n", "  specs: []\n")
+        .replace("  transport: dataset_json\n", "")
+        .replace("define: define.xml", "define: adam-define.xml")
+}
+
+/// The one creation time every document of the study's last submission
+/// carries: both define.xml files' `CreationDateTime` and the transport
+/// file's `datasetJSONCreationDateTime` (D129).
+fn carried(study: &Study) -> String {
+    let read = |name: &str| std::fs::read_to_string(study.0.join(name)).unwrap();
+    let define = read("define.xml");
+    let start = define.find("CreationDateTime=\"").unwrap() + "CreationDateTime=\"".len();
+    let time = define[start..].split('"').next().unwrap().to_owned();
+    for (name, carries) in [
+        ("define.xml", format!("CreationDateTime=\"{time}\"")),
+        ("adam-define.xml", format!("CreationDateTime=\"{time}\"")),
+        (
+            "dm.json",
+            format!("\"datasetJSONCreationDateTime\": \"{time}\""),
+        ),
+    ] {
+        assert!(read(name).contains(&carries), "{name} carries {time}");
+    }
+    time
+}
+
 /// Without `--section`, a submission composes each section that names its
-/// define.xml, and its summary and JSON name no section; without
-/// `--created`, the documents carry the time the submission used, so only
-/// the files are checked here, not their bytes.
+/// define.xml, and its summary and JSON name no section. Without
+/// `--created`, it reads the clock once and gives every section that time
+/// (D129): it prints the time after its summary line, its JSON `created`
+/// holds it, and every document of both sections carries it.
 #[test]
-fn a_submission_without_a_section_or_a_time_composes_every_declared_section() {
+fn a_submission_without_a_section_or_a_time_composes_every_section_at_one_time() {
     let study = define_study();
+    let project = std::fs::read_to_string(study.0.join("project.yaml")).unwrap();
+    study.write(
+        "project.yaml",
+        format!("{project}{}", adam_section(&project)),
+    );
     let project = study.path("project.yaml");
-    let (transport, define) = (study.path("dm.json"), study.path("define.xml"));
+    let written = format!(
+        "{}\n{}\n{}\n",
+        study.path("dm.json"),
+        study.path("define.xml"),
+        study.path("adam-define.xml")
+    );
+    let (status, stdout, stderr) = outcome(&yamaa(&["submission", &project]));
+    let time = carried(&study);
+    // A whole-second civil datetime (DEFINE-3).
+    let shape = time
+        .chars()
+        .map(|c| if c.is_ascii_digit() { 'd' } else { c })
+        .collect::<String>();
+    assert_eq!(shape, "dddd-dd-ddTdd:dd:dd", "{time}");
     assert_eq!(
-        outcome(&yamaa(&["submission", &project])),
+        (status, stdout, stderr),
         printed(
             0,
             format!(
-                "yamaa submission of {project}: succeeded, 1 define.xml and 1 transport file, \
-                 0 issues\n{transport}\n{define}\n"
+                "yamaa submission of {project}: succeeded, 2 define.xml and 1 transport file, \
+                 0 issues\ncreated: {time}\n{written}"
             )
         )
     );
-    assert!(study.exists("dm.json") && study.exists("define.xml"));
+    let (status, stdout, stderr) = outcome(&yamaa(&["submission", &project, "--format", "json"]));
+    let time = carried(&study);
+    let paths = written.trim_end().replace('\n', "\",\"");
     assert_eq!(
-        outcome(&yamaa(&["submission", &project, "--format", "json"])),
+        (status, stdout, stderr),
         printed(
             0,
             format!(
-                "{{\"command\":\"submission\",\"issues\":[],\"path\":\"{project}\",\
-                 \"paths\":[\"{transport}\",\"{define}\"],\"section\":null,\
+                "{{\"command\":\"submission\",\"created\":\"{time}\",\"issues\":[],\
+                 \"path\":\"{project}\",\"paths\":[\"{paths}\"],\"section\":null,\
                  \"status\":\"succeeded\"}}\n"
             )
         )
@@ -1087,8 +1572,8 @@ fn the_engine_reads_no_host_lock_and_refuses_a_run_that_calls_a_function() {
 }
 
 /// The facade takes paths and names as UTF-8 text, so a PATH or a value
-/// that is not is an argument the command line cannot pass on (D68). A form
-/// not implemented yet reads no PATH, so it still refuses as not implemented.
+/// that is not is an argument the command line cannot pass on (D68), before
+/// it reads the PATH's type.
 #[cfg(unix)]
 #[test]
 fn a_value_that_is_not_utf8_exits_with_status_2() {
@@ -1133,7 +1618,7 @@ fn a_value_that_is_not_utf8_exits_with_status_2() {
         (
             Some(2),
             String::new(),
-            "yamaa: check without --spec is not implemented yet\n".to_owned()
+            format!("yamaa: check: PATH is not UTF-8: project-\u{fffd}.yaml\n{HINT}")
         )
     );
 }
