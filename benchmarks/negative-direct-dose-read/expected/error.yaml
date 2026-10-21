@@ -1,7 +1,7 @@
 phase: validation
 condition: qualified_identifier
 spec_paths:
-  - columns.DOSEDBL.derivation.compute.expr
+  - columns.DOSEDBL.derivation
 rule: FORMULA-9
 context:
   expr: "EX.EXDOSE * 2"
