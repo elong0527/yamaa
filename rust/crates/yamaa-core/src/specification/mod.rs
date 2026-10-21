@@ -303,6 +303,9 @@ pub struct SourceDeclaration {
     pub types: Vec<(String, ColumnType)>,
     pub profile: SourceProfile,
     pub encoding: Option<String>,
+    /// The input declares that its csv source begins with one UTF-8
+    /// byte-order mark, which is skipped (CSV-10).
+    pub byte_order_mark: bool,
     pub empty_string_present: bool,
     pub ordinal: Option<String>,
 }
@@ -522,6 +525,7 @@ fn build_sources(
             // Unsupported formats never produce an accepted plan.
             profile: SourceProfile::from_path(path).unwrap_or(SourceProfile::Csv),
             encoding: input.source.encoding.as_ref().map(|text| text.text.clone()),
+            byte_order_mark: input.source.byte_order_mark,
             empty_string_present: input.source.empty_string == ast::EmptyString::Present,
             ordinal: input.source.ordinal.as_ref().map(|name| name.name.clone()),
         });

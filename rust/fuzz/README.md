@@ -9,7 +9,7 @@ point the hosts use, and that entry point applies the fixed `Limits` itself.
 | `parquet` | A Parquet file | The shared source decode, as an ordinary and an ODM input: framing, footer and page admission, then the native decoder. |
 | `sas7bdat` | A SAS7BDAT file | The shared source decode through the vendored ReadStat reader: undeclared, as ODM, and with numeric fields declared `int`, `date` and `datetime`. |
 | `xport` | A SAS transport file | As `sas7bdat`, after the transport member admission. |
-| `csv` | A CSV file | The shared source decode: undeclared, as ODM, and with every field declared each typed column type. |
+| `csv` | A CSV file | The shared source decode: undeclared, as ODM, with a declared byte-order mark, and with every field declared each typed column type. The mark followed by the input must read as the input alone, unless the input starts with a mark. |
 | `specification` | A YAML specification | Preparation and compilation as a host check runs them. The engine admits the shipped schema closure once per process. |
 | `dataset_json` | A published CSV artifact | The Dataset-JSON writer over the artifact, admitted as a submission build reads it. The output must parse as JSON holding every cell. |
 | `odm_xml` | An ODM XML file, or a plain or gzip TAR archive holding one | The ODM XML reader that `read_odm` calls in both hosts, with its default options. |

@@ -136,6 +136,22 @@ pub fn project_bindings(spec: &Spec) -> Vec<UnsupportedFeature> {
 /// The findings of a lowered 1.0 specification, in written order.
 pub fn findings(spec: &Spec) -> Vec<SchemaDiagnostic> {
     let mut findings = Vec::new();
+    // Only the csv profile reads a byte-order mark (CSV-10). An input of
+    // another profile declares none, whatever the value written; an input
+    // whose extension selects no profile leaves its fault to
+    // `source_profile_unknown` (INPUT-1).
+    for input in &spec.inputs {
+        let profile = input.source.profile;
+        if input.source.written.contains("byte_order_mark")
+            && profile.is_some_and(|profile| profile != Profile::Csv)
+        {
+            findings.push(SchemaDiagnostic {
+                path: format!("{}.byte_order_mark", spec.cite(input.meta)),
+                code: ConditionCode::CsvByteOrderMarkProfile,
+                context: vec![("dataset", C::Text(input.name.name.clone()))],
+            });
+        }
+    }
     // An intermediate states its own `key`, unless it drives a row template,
     // which declares none (LOOKUP-3, ROW-2; D23, D63). The record is the
     // schema's own for a missing required field.

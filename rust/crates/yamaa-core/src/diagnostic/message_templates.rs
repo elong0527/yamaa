@@ -146,7 +146,7 @@ pub(super) const TEMPLATES: &[(&str, &str)] = &[
     ("runtime_artifact_mismatch", "the installed package {package} does not match the lock"),
     ("sas_name_too_long", "{name} does not match the SAS name pattern {pattern}"),
     ("schema_version_mismatch", "the version at {spec_path} does not match the version expected there"),
-    ("source_byte_order_mark", "{path} starts with a byte order mark"),
+    ("source_byte_order_mark", "{path} must start with exactly one byte order mark when its input declares one, and none otherwise"),
     ("source_carriage_return", "record {record} of {path} holds a carriage return"),
     ("source_encoding_required", "input {dataset} must declare its encoding"),
     ("source_field_name_duplicate", "{path} names field {field} more than once"),
