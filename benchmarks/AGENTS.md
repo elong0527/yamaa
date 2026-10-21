@@ -174,6 +174,7 @@ functions:
 environments:
   r:
     lock: r/renv.lock
+
 adam:
   specs:
   - spec.yaml

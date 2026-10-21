@@ -171,7 +171,10 @@ class PublicEnvironment(unittest.TestCase):
         case = self.study("negative-function-contract")
         source = case / "spec.yaml"
         source.write_text(
-            source.read_text().replace("args: {}", "args: {x: SOURCE.VALUE}")
+            source.read_text().replace(
+                "        name: project_value\n",
+                "        name: project_value\n        args: {x: SOURCE.VALUE}\n",
+            )
         )
         return case
 

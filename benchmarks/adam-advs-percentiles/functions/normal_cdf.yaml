@@ -10,6 +10,7 @@ comparison_decimals: 20
 implementations:
   python: yamaa_benchmarks.normal_cdf
   r: yamaabenchmarks::normal_cdf
+
 tests:
 - id: centre
   covers:
@@ -18,6 +19,7 @@ tests:
   args:
     q: 0.0
   result: 0.5
+
 - id: lower-tail-boundary
   covers:
   - boundary
@@ -25,6 +27,7 @@ tests:
   args:
     q: -8.0
   result: 6.22096057427178e-16
+
 - id: displayed-lower-tail
   covers:
   - boundary
@@ -32,6 +35,7 @@ tests:
   args:
     q: -3.0
   result: 0.0013498980316300957
+
 - id: missing-short-circuits
   covers:
   - short-circuit-missing:q

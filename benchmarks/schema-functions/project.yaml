@@ -7,6 +7,7 @@ environments:
     lock: python/uv.lock
   r:
     lock: r/renv.lock
+
 adam:
   specs:
   - spec.yaml

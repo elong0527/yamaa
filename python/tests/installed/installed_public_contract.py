@@ -492,7 +492,8 @@ class PublicContract(unittest.TestCase):
         source = case / "spec.yaml"
         source.write_text(
             source.read_text(encoding="utf-8").replace(
-                "args: {}", "args: {x: SOURCE.VALUE}"
+                "        name: project_value\n",
+                "        name: project_value\n        args: {x: SOURCE.VALUE}\n",
             ),
             encoding="utf-8",
         )

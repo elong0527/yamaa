@@ -319,7 +319,8 @@ qualify_callbacks <- function() {
   case <- path("negative-function-contract")
   entry <- file.path(case, "spec.yaml")
   source <- readBin(entry, "raw", n = file.info(entry)$size)
-  writeBin(charToRaw(sub("args: {}", "args: {x: SOURCE.VALUE}", rawToChar(source), fixed = TRUE)), entry)
+  writeBin(charToRaw(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
+    rawToChar(source), fixed = TRUE)), entry)
   project <- yamaa_project(file.path(case, "project.yaml"))
   entries <- list(spec = function() project$spec("TEST")$run(), project = function() project$run())
   # Each activation stage returns the original interrupt object itself.
@@ -418,7 +419,8 @@ qualify_project_run_members <- function() {
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
-  writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readLines(entry), fixed = TRUE), entry)
+  writeLines(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
+    readLines(entry), fixed = TRUE), entry)
   project <- yamaa_project(file.path(case, "project.yaml"))
   runs <- project$run()
   stopifnot(identical(runs$names, "TEST"), nrow(check_issues(runs$issues)) == 0L)
@@ -480,7 +482,8 @@ qualify_every_save_rewrites <- function() {
   stopifnot(file.copy(original, root, recursive = TRUE))
   case <- file.path(root, "negative-function-contract")
   entry <- file.path(case, "spec.yaml")
-  writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readLines(entry), fixed = TRUE), entry)
+  writeLines(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
+    readLines(entry), fixed = TRUE), entry)
   runs <- yamaa_project(file.path(case, "project.yaml"))$run()
   stopifnot(nrow(check_issues(runs$issues)) == 0L)
   unlink(file.path(case, "input"), recursive = TRUE); unlink(entry)

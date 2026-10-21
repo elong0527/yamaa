@@ -249,7 +249,8 @@ refuse_activation({
 stopifnot(is.null(result$output), is.null(result$report),
   inherits(tryCatch(result$save(), error = identity), "yamaa_error"))
 # A valid static call still reads no study data and runs no activation.
-writeLines(sub("args: {}", "args: {x: SOURCE.VALUE}", readtext("spec.yaml"), fixed = TRUE), "spec.yaml")
+writeLines(sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}",
+  readtext("spec.yaml"), fixed = TRUE), "spec.yaml")
 stopifnot(nrow(refuse_activation(project$spec("TEST")$check())$issues) == 0L)
 # Version disagreement precedes binding, tests and even a missing study input.
 lock <- "r/renv.lock"
@@ -328,7 +329,7 @@ writeLines(c(readtext("project.yaml"), "codelists:", "  - codelists:", "      - 
 invisible(file.copy(file.path(root, name, "input"), case, recursive = TRUE))
 text <- readtext(file.path(root, name, "spec.yaml"))
 text <- sub("label: Identifier", "label: Identifier\n    submission: {codelist: IDENTIFIERS, origins: [{type: Assigned}]}", text, fixed = TRUE)
-text <- sub("args: {}", "args: {x: SOURCE.VALUE}", text, fixed = TRUE)
+text <- sub("name: project_value", "name: project_value\n        args: {x: SOURCE.VALUE}", text, fixed = TRUE)
 writeLines(text, "spec.yaml")
 stopifnot(nrow(project$spec("TEST")$check()$issues) == 0L)
 result <- project$spec("TEST")$run()

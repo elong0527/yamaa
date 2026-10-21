@@ -9,6 +9,7 @@ returns: float
 implementations:
   python: yamaa_benchmarks.project_value
   r: yamaabenchmarks::project_value
+
 tests:
 - id: ordinary
   covers:
@@ -17,6 +18,7 @@ tests:
   args:
     x: 1.5
   result: 1.5
+
 - id: zero-boundary
   covers:
   - boundary
@@ -24,6 +26,7 @@ tests:
   args:
     x: 0.0
   result: 0.0
+
 - id: missing-short-circuits
   covers:
   - short-circuit-missing:x

@@ -42,7 +42,6 @@ columns:
     derivation:
       flag:
         condition: "EX.EXDOSE > PLANNED.PLANDOSE"
-        true_value: "Y"
         false_value: "N"
         missing: null
 

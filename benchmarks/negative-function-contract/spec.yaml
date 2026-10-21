@@ -26,4 +26,3 @@ columns:
     derivation:
       function:
         name: project_value
-        args: {}
