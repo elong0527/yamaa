@@ -7,17 +7,20 @@ Derive ADaM datasets from SDTM with one specification per output dataset. The
 - create exactly one spec per output dataset (e.g. `adsl.yaml`); keep temporary
   values and ordered calculation steps as derivations in that spec, not as
   `adsl-s1.yaml`, `adsl-final.yaml`, or other staged dataset files
-- establish dependency to avoid duplicate logic (e.g. the rest of the ADaM specs should depend on adsl.yaml)
-- keep orchestration small: list every spec in the study's `project.yaml` and
-  build them with one project run, `project.run("adam")`, not one call per
-  dataset; see the [R and Python API](api.md#project-execution)
+- establish dependency to avoid duplicate logic: the rest of the ADaM specs
+  link `adsl.yaml` through `schema` and copy its variables
+  ([section 3](#3-derivation-order-and-dependency-handling))
+- keep orchestration small: list every spec in the `adam` section of the
+  study's `project.yaml` and build them with one project run,
+  `project.run("adam")` or `yamaa run project.yaml --section adam`, not one
+  call per dataset; see the [R and Python API](api.md#project-execution)
 - keep study-owned orchestration and comparison code beside the study
 - verify equivalence of all data with a tolerance at 1e-10.
 - Equivalence means 100% of columns and 100% of cells match, with zero validation issues.
 - Keep comparison separate from study orchestration. Report matched and total
   columns and cells per dataset, and exit nonzero on any mismatch.
 - Always verify the derivation against the latest yamaa repo before declaring equivalence.
-  
+
 The original pilot source code may be read to understand intent, but
 the yamaa spec must be built as a robust and succinct yamaa spec.
 
@@ -30,6 +33,9 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
 
 ## 2. Spec authoring conventions
 
+- **Every spec declares its model.** Each spec starts with `yamaa: "1.0"` and
+  `type: spec` and declares `model: ADaM`. The project's `adam` section lists
+  only ADaM specs, and names the implementation guide in `standards`.
 - **Uniform derivations belong at column level.** A derivation identical
   across every row template (group-key echoes like `STUDYID`/`USUBJID`,
   literals like `DOMAIN`, `PARAMCD` assignments) goes in
@@ -38,10 +44,10 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   derivation, a read through a named intermediate, or a driver read when
   templates build from different datasets is row-phase dependent
   and stays in its row template.
-- **Read the input dataset directly.** A named intermediate with no
-  `filter`, selection, custom key, or handler that changes behavior reads
-  what the implicit join already reads; qualify the input dataset where it
-  is read instead of aliasing it. 
+- **Read the input dataset directly.** A named intermediate whose `key`
+  restates its input's `key`, with no `filter`, selection or handler that
+  changes behavior, reads what the implicit join already reads; qualify the
+  input dataset where it is read instead of aliasing it.
 - **Declaration order is load-bearing.** A column must be declared after any
   column its derivation references.
 - **Ordered window chains stay in the dataset spec.** A later window derivation
@@ -50,16 +56,20 @@ the yamaa spec must be built as a robust and succinct yamaa spec.
   ordered derivation chain in one row template; it does not require staging
   files.
 - **ADSL is derived once and consumed downstream.** Subject-level variables
-  are derived only in the ADSL spec; the other specs read them from the
-  derived `adsl-yamaa.parquet` predecessor.
-- **Every column declares `label:`** 
+  are derived only in the ADSL spec. The other specs read them from the
+  derived `adsl-yamaa.parquet` predecessor: the input links it to `adsl.yaml`
+  through `schema` and declares its join `key`, and a `copy` entry takes the
+  variables, each with the type, label and Predecessor origin `adsl.yaml`
+  declares.
+- **Every column declares `label:`**, unless a `copy` entry takes it from the
+  producer.
 - **Write each spec in the specification style.** Field order, blank lines,
-  line width, the canonical `{literal: X}` and bare-string source
-  spellings, and the three authoring lints (uniform derivations, redundant
-  intermediates, missing output-column labels) are fixed by the
-  [style guide](style.md).
+  line width, and the three authoring lints (uniform row-template
+  derivations, redundant intermediates, missing output-column labels) are
+  fixed by the [style guide](style.md).
   Run `yamaa.lint("<spec>.yaml", fix=True)` (`yamaa_lint("<spec>.yaml", fix = TRUE)`
-  in R) with the pinned yamaa, then correct the findings it still returns.
+  in R, `yamaa lint --fix <spec>.yaml` on the command line) with the pinned
+  yamaa, then correct the findings it still returns.
 - **Output naming.** Every spec's `output.path` is `adam/<ds>-yamaa.parquet`
   (e.g. `adam/adsl-yamaa.parquet`).
 
@@ -74,6 +84,72 @@ links that predecessor's spec through `schema`:
 3. **Other ADaM** - each from SDTM, the derived
    `adsl-yamaa.parquet`, and any derived predecessors it needs (e.g. ADTTE reads
    the derived ADAE; ADLBC reads the derived ADSL).
+
+This ADAE spec reads ADSL as a predecessor. Its `ADSL` input names the file
+the ADSL spec writes and, through `schema`, the spec itself; `key` states how
+an ADSL record joins an adverse event; and one `copy` entry takes four
+subject-level variables:
+
+```yaml
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  AE: data/sdtm/ae.parquet
+  ADSL:
+    path: adam/adsl-yamaa.parquet
+    schema: adsl.yaml
+    key: [STUDYID, USUBJID]
+base: AE
+
+output:
+  path: adam/adae-yamaa.parquet
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AGE, SEX, TRT01A, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # Each copied column takes its type and label from adsl.yaml, and its
+  # Predecessor origin names ADSL.<column>.
+  - copy:
+      dataset: ADSL
+      columns: [AGE, SEX, TRT01A, TRTSDT]
+```
+
+A copied column is an ordinary column of ADAE: a later column may read it,
+such as a study day that reads `TRTSDT`, and it is published only when
+`output.columns` lists it. The link reads only what `adsl.yaml` declares about
+its output; it never runs ADSL. The project lists both specs, and its run
+builds ADSL first because ADAE links it:
+
+```yaml
+yamaa: "1.0"
+type: project
+adam:
+  specs: [adsl.yaml, adae.yaml]
+  standards:
+    - {name: ADaMIG, version: "1.3", status: Final}
+```
 
 ## 4. When one specification is blocked
 

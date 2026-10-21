@@ -61,7 +61,11 @@ from tools.paths import ROOT
 from tools.validation._repository_yaml import UniqueKeyLoader
 from tools.validation.interface_manifests import ManifestError, Tree, git
 
-COMPARERS = ("tools.validation.interface_lines",)
+COMPARERS = (
+    "tools.validation.interface_lines",
+    "tools.validation.interface_schemas",
+    "tools.validation.interface_sources",
+)
 EXCEPTIONS = "tools/validation/interface_exceptions.yaml"
 EXCEPTION_FIELDS = ("manifest", "element", "rule", "issue")
 RULE = re.compile(r"[A-Z]+-[1-9][0-9]*")
