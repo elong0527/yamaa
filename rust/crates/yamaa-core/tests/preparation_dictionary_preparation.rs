@@ -1,6 +1,4 @@
 //! Preparation contracts.
-#[allow(dead_code)]
-mod support;
 mod preparation {
     mod dictionary_preparation {
         //! Independent logical arenas and opaque effects exercise capture ownership.

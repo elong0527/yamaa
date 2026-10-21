@@ -1,17 +1,6 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
 
-/// The host that each runtime name in these tests stands for.
-fn host(runtime: &str) -> yamaa_core::project_function::Language {
-    match runtime {
-        "python" => yamaa_core::project_function::Language::Python,
-        "r" => yamaa_core::project_function::Language::R,
-        other => panic!("no host for test runtime {other}"),
-    }
-}
-
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod declarative_self {
         //! Independent SELF witnesses preserve phase context, donor order and complete outputs.
@@ -1590,12 +1579,12 @@ rows:
                     environment: None,
                 };
                 let checked = file_application::check(
-                    crate::host(runtime),
+                    crate::support::host(runtime),
                     request(),
                     identity(runtime, &specification),
                 );
                 let built = match file_application::domain(
-                    crate::host(runtime),
+                    crate::support::host(runtime),
                     request(),
                     identity(runtime, &specification),
                 ) {
@@ -1682,13 +1671,13 @@ rows:
                         environment: None,
                     };
                     assert!(file_application::check(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, &specification)
                     )
                     .is_empty());
                     let mut domain = file_application::domain(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, &specification),
                     )
@@ -1725,13 +1714,13 @@ rows:
                         environment: None,
                     };
                     assert!(file_application::check(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, &specification)
                     )
                     .is_empty());
                     let domain = file_application::domain(
-                        crate::host(runtime),
+                        crate::support::host(runtime),
                         request(),
                         identity(runtime, &specification),
                     )

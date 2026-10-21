@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! File contracts.
-#[allow(dead_code)]
-mod support;
 mod file {
     mod file_project {
         use crate::support::project_schemas as schemas;

@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Execution contracts.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod retired_odm_context {
         //! Original retired ODM-context operands through the shared public file engine.
@@ -521,7 +519,7 @@ mod execution {
                     .join("../../../benchmarks")
                     .join(name);
                 let path = std::env::temp_dir().join(format!(
-                    "yamaa-scalar-{}-{}",
+                    "yamaa-retired-odm-scalar-{}-{}",
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
@@ -1962,7 +1960,7 @@ rows:
         impl Fixture {
             fn new() -> Self {
                 let path = std::env::temp_dir().join(format!(
-                    "yamaa-temporal-{}-{}",
+                    "yamaa-retired-odm-temporal-{}-{}",
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));

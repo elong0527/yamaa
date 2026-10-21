@@ -1,6 +1,4 @@
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod project_compiled_rows {
         //! Execute compiler-selected row/default calls without a host-authored plan.

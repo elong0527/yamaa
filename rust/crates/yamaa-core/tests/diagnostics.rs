@@ -1,6 +1,4 @@
 //! Canonical diagnostic vocabulary and complete native assertion families.
-#[allow(dead_code)]
-mod support;
 mod diagnostics {
     mod diagnostic {
         use crate::support::diagnostic::*;

@@ -2,8 +2,7 @@
 //! The resolved plan graph (#2840) of authored benchmark specifications, on
 //! the rows and the no-rows binding routes, and the bind rejection that a
 //! failed resolution check produces.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use std::path::{Path, PathBuf};
 use support::specification_run::{compile, prepare, schema, try_prepare};
 use yamaa_core::{

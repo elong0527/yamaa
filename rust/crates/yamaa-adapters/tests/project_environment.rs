@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Project contracts.
-#[allow(dead_code)]
-mod support;
 mod project {
     mod project_environment_projection {
         //! Complete retained-attempt witnesses; expected reports are authored independently.

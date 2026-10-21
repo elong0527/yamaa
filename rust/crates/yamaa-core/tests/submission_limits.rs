@@ -1,6 +1,5 @@
 //! Submission resource refusals retain typed facts before accessing held cells.
-#[allow(dead_code)]
-mod support;
+use crate::support;
 use support::diagnostic::submission::*;
 use yamaa_core::limits::Limits;
 

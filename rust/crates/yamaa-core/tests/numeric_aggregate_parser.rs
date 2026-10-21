@@ -1,7 +1,5 @@
 //! Expression contracts: one grammar in its three contexts, its evaluation,
 //! and the function signatures and portable patterns it relies on.
-#[allow(dead_code)]
-mod support;
 mod numeric {
     mod aggregate_grammar {
         use yamaa_core::expression::{

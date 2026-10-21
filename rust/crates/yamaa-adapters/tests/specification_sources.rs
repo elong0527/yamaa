@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Native specification run assertions.
-#[allow(dead_code)]
-mod support;
 mod execution {
     mod specification_run {
         use crate::support::specification_run::*;

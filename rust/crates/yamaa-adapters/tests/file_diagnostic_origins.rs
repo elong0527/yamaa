@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! File contracts.
-#[allow(dead_code)]
-mod support;
 mod file {
     mod diagnostic_origins {
         //! Native index paths resolve only through the exact held composed member IDs.

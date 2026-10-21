@@ -1,7 +1,5 @@
 #![cfg(feature = "yaml")]
 //! Scalar contracts.
-#[allow(dead_code)]
-mod support;
 mod scalar {
     mod declarative_rounding {
         use std::{
