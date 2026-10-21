@@ -2,7 +2,8 @@
 
 A specification is the YAML file that derives one output dataset. These rules
 fix its root fields, the identifiers it declares, which of its columns must be
-derived and where, and the bytes its source may hold.
+derived and where, the columns it copies from a producer, and the bytes its
+source may hold.
 
 ## Root fields and identifiers
 
@@ -168,6 +169,89 @@ the dependency graph. Column verifications may be declared on an internal
 column and run normally. Dataset verifications may reference an internal
 column; they then assert a property of the derivation rather than of the
 artifact.
+
+<a id="spec-9"></a>
+
+### SPEC-9. A `copy` entry declares the listed columns of a schema-linked input under their names, with the producer's type and label
+
+A `columns` entry `copy: {dataset: D, columns: [...]}` declares one column per
+listed name, and each name must be an output column of the producer that input
+`D` links through `schema` ([INPUT-10](inputs.md#input-10)). Each copied column
+reads the same-named column of `D` unchanged and takes the producer's `type`,
+`label` and content metadata; its submission origin is `Predecessor`, and an
+optional `submission` adds only `core`, `mandatory` and `role`. The entry
+expands to ordinary columns in the resolved specification, and a copied column
+is published only when `output.columns` lists it.
+
+Fails: `unknown_field`, `duplicate_identifier`, `prohibited_construct`, `producer_workflow_cycle`.
+Evidence: `schema-copy-producer-columns`, `negative-copy-unknown-column`, `negative-copy-duplicate-column`, `negative-copy-unlinked-input`, `rust/crates/yamaa/tests/copy_entry.rs`, `rust/crates/yamaa-core/tests/support/diagnostic/copy_entry.rs`.
+
+```yaml
+input:
+  AE: input/ae.csv
+  ADSL: {path: adsl.csv, schema: spec_adsl.yaml, key: [STUDYID, USUBJID]}
+columns:
+  - copy:
+      dataset: ADSL
+      columns: [AGE, SEX, TRTSDT]
+      submission: {core: Perm}
+```
+
+Each layer's entries expand before the layers compose
+([LAYER-5](inheritance.md#layer-5)): a listed name `X` becomes the column `X`
+with the producer's `type` and `label` and the derivation `D.X`, a bare
+reference. The input, its `schema` link and the base the link resolves from
+are the ones the resolved specification keeps, whichever layer writes them.
+The resolved specification is therefore the one the columns written out give:
+a later layer overrides a copied column by name, and `clear` addresses one of
+its fields, as for any column ([LAYER-9](inheritance.md#layer-9)). A renamed
+copy is an ordinary column ([SUB-20](profiles/submission.md#sub-20)).
+
+A copied column that `output.columns` lists carries submission metadata when
+the specification declares its `model`: the entry's `core`, `mandatory` and
+`role`, the producer's content metadata, and one `Predecessor` origin whose
+`description` is `<producer domain>.X`. A copied column that `output.columns`
+does not list is internal ([SPEC-7](#spec-7)) and carries none
+([SUB-1](profiles/submission.md#sub-1)). An entry that writes `submission`
+gives its columns submission metadata in either case, so an internal one then
+fails under SUB-1, and a specification without `model` under
+[SUB-3](profiles/submission.md#sub-3).
+
+The producer's content metadata is `data_type`, `length`, `significant_digits`,
+`display_format` and `codelist` where it declares them, a `str` column's
+`length` derived from its `max_length` verification where none is declared
+([SUB-8](profiles/submission.md#sub-8)). A `date` or `datetime` column takes no
+`data_type`, `length` or `display_format`: it is submitted as the consumer's
+model requires ([SUB-6](profiles/submission.md#sub-6),
+[SUB-25](profiles/submission.md#sub-25)). A copied `codelist` is a binding of
+the consumer's project ([CT-13](profiles/terminology.md#ct-13)). The entry's
+`submission` admits only `core`, `mandatory` and `role`, so `comment`,
+`method`, `value_level`, `origins` and every other field fail as
+`unknown_field` ([SCHEMA-13](reference/schema-language.md#schema-13)).
+
+The producer is read as its link reads it: a producer that cannot be read
+fails at `input.<D>.schema` as the link does, a link to the consuming
+specification fails under [INPUT-10](inputs.md#input-10), and a producer whose
+own columns copy reads its producers in turn. A copy whose producers lead back
+to a specification being resolved fails as `producer_workflow_cycle` at the
+`input.<D>.schema` of the link that closes the cycle, its `cycle` naming the
+specifications from the first one entered back to itself. A copy from an input
+that does not drive the rows is an implicit join and needs the input's `key`
+([LOOKUP-1](lookup.md#lookup-1)), and a copy through an input whose name is not
+the producer's `domain` reads another dataset than its origin names, which
+SUB-20 refuses.
+
+An entry has no name, so a path names it by its position, `columns[<i>]`. A
+`dataset` that names no declared input fails as `unknown_field` with
+`identifier`, and one that names an input without `schema` as
+`prohibited_construct` with `dataset`, each at `columns[<i>].copy.dataset`. A
+listed name that is not an output column of the producer fails as
+`unknown_field` at `columns[<i>].copy.columns[<k>]`, with `identifier`
+`D.X`. A name an entry lists that another column of the same layer declares,
+or another entry lists, fails as `duplicate_identifier`
+([SPEC-2](#spec-2)) at the later of the two, with `identifier`. These
+refusals come before the layers compose, so each is reported in the layer
+that writes the entry.
 
 ## Language source
 
