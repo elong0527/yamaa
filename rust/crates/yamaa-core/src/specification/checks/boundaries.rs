@@ -17,20 +17,25 @@
 //!   and a read of a 1.0 row driver, which declares no key, as a lookup of
 //!   rows it does not drive (LOOKUP-3);
 //! - a read of another 1.0 input that declares no `key` through its implicit
-//!   join, which has nothing to match on (LOOKUP-5, D111). A column that
-//!   holds an aggregate binds once over the whole dataset, and when a row
-//!   template's driver differs from the primary input those rows share no
-//!   record, so the primary is read through its join too;
+//!   join, which has nothing to match on (LOOKUP-5, D111), or whose declared
+//!   key column the read cannot pair: one the input does not store as far
+//!   as a linked producer says, one no column is, in a row template one its
+//!   driver does not store or a grouped template does not group by, and a
+//!   pair whose declared types cannot compare (LOOKUP-5, ROW-5, LOOKUP-9;
+//!   D111 item 2). A column that holds an aggregate binds once over the
+//!   whole dataset, and when a row template's driver differs from the
+//!   primary input those rows share no record, so the primary is read
+//!   through its join too;
 //! - `require_match` or `between` on a structured source that reads anything
 //!   but another input through its implicit join (LOOKUP-24, LOOKUP-9);
 //! - a row filter's read of a column its template does not derive, a
 //!   grouped filter's qualified read, and an ungrouped filter's read of a
 //!   window result, directly or through a lookup's match (ROW-6).
 //!
-//! Binding keeps what the declarations alone cannot decide: a field the
-//! input does not store, a lookup whose keys are inferred from the captured
-//! schemas or that another lookup's derivations read, and the output keys a
-//! 0.5 implicit join matches on.
+//! Binding keeps what the declarations alone cannot decide: a field an
+//! input no producer links does not store, a lookup whose keys are inferred
+//! from the captured schemas or that another lookup's derivations read, and
+//! the output keys a 0.5 implicit join matches on.
 
 use super::*;
 use crate::ast::Scope;
@@ -43,6 +48,8 @@ use std::{cell::Cell, collections::BTreeSet};
 pub(super) struct Reads<'a> {
     spec: &'a Spec,
     prepared: &'a PreparedSpecification,
+    /// The names typed from the declarations, which type a join's key.
+    declared: &'a types::DeclaredTypes<'a>,
     /// The driver of each binding the derivation gets: a row template's own,
     /// or in the column phase each binding's. Its groups, lookups and nested
     /// scopes follow it.
@@ -72,6 +79,7 @@ impl<'a> Reads<'a> {
     pub(super) fn row(
         spec: &'a Spec,
         prepared: &'a PreparedSpecification,
+        declared: &'a types::DeclaredTypes<'a>,
         template: &'a rows::TemplatePhase<'a>,
         refused: &'a BTreeSet<usize>,
     ) -> Self {
@@ -79,6 +87,7 @@ impl<'a> Reads<'a> {
         Self {
             spec,
             prepared,
+            declared,
             drivers: std::slice::from_ref(&template.driver),
             owned: true,
             phase: scope.phase,
@@ -94,6 +103,7 @@ impl<'a> Reads<'a> {
     pub(super) fn column(
         spec: &'a Spec,
         prepared: &'a PreparedSpecification,
+        declared: &'a types::DeclaredTypes<'a>,
         drivers: &'a [&'a str],
         owned: bool,
         groups: &'a [(&'a str, &'a [&'a str])],
@@ -102,6 +112,7 @@ impl<'a> Reads<'a> {
         Self {
             spec,
             prepared,
+            declared,
             drivers,
             owned,
             phase: Phase::Column { groups },
@@ -173,14 +184,36 @@ impl<'a> Reads<'a> {
 
     /// A read at `path` of the input `owner` through its implicit join. On a
     /// 1.0 tree the join matches on the input's declared `key`, so an input
-    /// that declares none fails at each read (LOOKUP-5, D111); the output
-    /// keys a 0.5 join matches on, only its captured schema decides. True
-    /// when it binds, as far as the declarations decide.
+    /// that declares none fails at each read (LOOKUP-5, D111), and so does
+    /// one whose key column binding cannot pair ([`super::declared_key`]): in
+    /// a row template with its driver's field, in the column phase with an
+    /// output column. The output keys a 0.5 join matches on, only its
+    /// captured schema decides. True when it binds, as far as the
+    /// declarations decide.
     fn join(&self, path: &str, owner: &str, findings: &mut Vec<BindFinding>) -> bool {
-        if !super::keyless(self.spec, owner) {
-            return true;
+        if super::keyless(self.spec, owner) {
+            findings.push(super::undeclared_key(path, owner));
+            return false;
         }
-        findings.push(super::undeclared_key(path, owner));
+        let pairing = match (self.phase, self.row, self.drivers) {
+            (Phase::Row { group_by }, Some((row, _)), [driver]) => super::Pairing::Row {
+                driver,
+                row,
+                group_by,
+            },
+            _ => super::Pairing::Column,
+        };
+        let Some(finding) = super::declared_key(
+            self.spec,
+            self.prepared,
+            self.declared,
+            path,
+            owner,
+            pairing,
+        ) else {
+            return true;
+        };
+        findings.push(finding);
         false
     }
 

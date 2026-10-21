@@ -191,6 +191,175 @@ pub(super) fn undeclared_key(path: &str, dataset: &str) -> BindFinding {
     ))
 }
 
+/// What a 1.0 implicit join pairs each column of its input's declared `key`
+/// with (LOOKUP-1, LOOKUP-2).
+#[derive(Clone, Copy)]
+pub(super) enum Pairing<'a> {
+    /// During row construction, the same-named field of the driver's record,
+    /// read in the row template's scope.
+    Row {
+        driver: &'a str,
+        row: &'a str,
+        group_by: Option<&'a [&'a str]>,
+    },
+    /// Otherwise, the current row's same-named column.
+    Column,
+}
+
+/// Whether the input `owner` stores `field`, as far as the declarations
+/// decide: a linked artifact stores exactly its producer's output columns
+/// (INPUT-10, INPUT-11) and a generated ordinal (INPUT-3). No declaration
+/// lists another input's fields, so each named one counts as stored.
+pub(super) fn stores(prepared: &PreparedSpecification, owner: &str, field: &str) -> bool {
+    let Some(index) = prepared
+        .sources
+        .iter()
+        .position(|source| source.name == owner)
+    else {
+        return true;
+    };
+    prepared.sources[index].ordinal.as_deref() == Some(field)
+        || prepared
+            .source_contract(index)
+            .is_none_or(|contract| contract.fields().iter().any(|stored| stored.name == field))
+}
+
+/// The declared type of the input `owner`'s field `field`: a generated
+/// ordinal's `int` (INPUT-3), or as `declared` types any other.
+pub(super) fn stored_type(
+    prepared: &PreparedSpecification,
+    declared: &types::DeclaredTypes<'_>,
+    owner: &str,
+    field: &str,
+) -> crate::result_type::ResultType {
+    if prepared
+        .sources
+        .iter()
+        .any(|source| source.name == owner && source.ordinal.as_deref() == Some(field))
+    {
+        return crate::result_type::ResultType::column(ColumnType::Int);
+    }
+    declared.name(&format!("{owner}.{field}"))
+}
+
+/// What binding decides at `path` of the declared `key` of the 1.0 input
+/// `owner` that an implicit join there matches on (D111 item 2), for each
+/// column in declared order (`key_relation::declared`,
+/// `Catalog::joined_read`): the input does not store it, as far as
+/// [`stores`] decides (`unknown_field`, LOOKUP-5, identifier
+/// `<input>.<column>`); the specification declares no column of it
+/// (LOOKUP-5, identifier `<column>`); during row construction, the driver
+/// does not store its same-named field, or a grouped template does not
+/// group by it (ROW-5); and the pair's declared types cannot compare
+/// (`incompatible_input_type`, LOOKUP-9). The first such finding, at which
+/// binding stops.
+pub(super) fn declared_key(
+    spec: &Spec,
+    prepared: &PreparedSpecification,
+    declared: &types::DeclaredTypes<'_>,
+    path: &str,
+    owner: &str,
+    pairing: Pairing<'_>,
+) -> Option<BindFinding> {
+    use crate::diagnostic::lookup::{self, Owner};
+    use crate::result_type::ResultType;
+    if spec.header.surface.infers_join_keys() {
+        return None;
+    }
+    let source = |diagnostic| {
+        Some(BindFinding::Source(
+            source_expressions::SourceFinding::from_diagnostic(diagnostic),
+        ))
+    };
+    for column in spec.input_key(owner)? {
+        let field = column.name.as_str();
+        if !stores(prepared, owner, field) {
+            return source(lookup::donor_key_reference(
+                path,
+                Owner::Unnamed,
+                &format!("{owner}.{field}"),
+            ));
+        }
+        let Some(output) = spec.columns.iter().find(|column| column.name.name == field) else {
+            return source(lookup::match_value_reference(path, Owner::Unnamed, field));
+        };
+        let expected = match pairing {
+            Pairing::Row {
+                driver,
+                row,
+                group_by,
+            } => {
+                let identifier = format!("{driver}.{field}");
+                let finding = if !stores(prepared, driver, field) {
+                    Some(crate::reference_scope::Finding::UnknownField)
+                } else {
+                    crate::reference_scope::group_finding(
+                        &identifier,
+                        crate::reference_scope::Phase::Row { group_by },
+                    )
+                };
+                if let Some(finding) = finding {
+                    return Some(BindFinding::QualifiedReference {
+                        path: path.into(),
+                        name: identifier,
+                        row: Some(row.into()),
+                        finding,
+                    });
+                }
+                driver_type(spec, prepared, declared, driver, field)
+            }
+            Pairing::Column => ResultType::column(output.kind),
+        };
+        let (Some(expected), Some(actual)) = (
+            expected.column_type(),
+            stored_type(prepared, declared, owner, field).column_type(),
+        ) else {
+            continue;
+        };
+        if !ResultType::column(expected).comparable(actual.into()) {
+            return source(lookup::key_type(
+                path,
+                Owner::Unnamed,
+                field,
+                ResultType::column(expected),
+                ResultType::column(actual),
+            ));
+        }
+    }
+    None
+}
+
+/// The declared type of the field `field` of a row template's driver: an
+/// input's stored field, or that of the input a driver lookup reads, unless
+/// the lookup derives it or leaves it out.
+fn driver_type(
+    spec: &Spec,
+    prepared: &PreparedSpecification,
+    declared: &types::DeclaredTypes<'_>,
+    driver: &str,
+    field: &str,
+) -> crate::result_type::ResultType {
+    let Some(item) = spec
+        .intermediates
+        .iter()
+        .find(|item| item.id.name == driver)
+    else {
+        return stored_type(prepared, declared, driver, field);
+    };
+    let derived = item
+        .bindings
+        .iter()
+        .any(|binding| binding.name.name == field);
+    let listed = item
+        .columns
+        .as_ref()
+        .is_none_or(|columns| columns.iter().any(|column| column.name == field));
+    if derived || !listed {
+        return crate::result_type::ResultType::UNKNOWN;
+    }
+    stored_type(prepared, declared, &item.dataset.name, field)
+}
+
 /// The name a reference reads.
 pub(super) fn name(spec: &Spec, e: ExprId) -> Option<&str> {
     match &spec.expr(e).kind {

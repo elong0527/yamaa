@@ -12,7 +12,8 @@
 //! donor's records ([`super::donors`]). A read of another 1.0 input that
 //! declares no `key`, through its implicit join or by a qualified aggregate
 //! without `key`, fails at the read in either construction, whatever the
-//! input stores (D111).
+//! input stores (D111), and so does one whose declared key column the read
+//! cannot pair (D111 item 2, [`super::declared_key`]).
 //!
 //! Binding also decides from the declarations alone whether a key reads
 //! other records than its own ([`key_record`]); it calls the same check.
@@ -482,8 +483,9 @@ impl Checks<'_> {
     /// Without row templates, a read at `path` of another input through its
     /// implicit join, which on a 1.0 tree matches on the input's declared
     /// `key`: an input that declares none fails at the read, whatever it
-    /// stores (LOOKUP-5, D111). True when the read binds, as far as this
-    /// decides.
+    /// stores (LOOKUP-5, D111), and so does one whose key column the current
+    /// row cannot pair ([`declared_key`]). True when the read binds, as far
+    /// as this decides.
     fn join(
         &self,
         scope: Scope<'_>,
@@ -500,11 +502,25 @@ impl Checks<'_> {
                 .sources
                 .iter()
                 .any(|input| input.name == owner)
-            || !keyless(self.spec, owner)
         {
             return true;
         }
-        findings.push(undeclared_key(path, owner));
+        let refused = if keyless(self.spec, owner) {
+            Some(undeclared_key(path, owner))
+        } else {
+            declared_key(
+                self.spec,
+                self.prepared,
+                &self.declared,
+                path,
+                owner,
+                Pairing::Column,
+            )
+        };
+        let Some(finding) = refused else {
+            return true;
+        };
+        findings.push(finding);
         false
     }
 
@@ -565,6 +581,7 @@ impl Checks<'_> {
             super::boundaries::Reads::column(
                 spec,
                 self.prepared,
+                &self.declared,
                 scope.drivers,
                 true,
                 &[],
@@ -642,7 +659,8 @@ impl Checks<'_> {
         }
         // Without `key` of its own a column aggregate matches the relation it
         // reduces on that input's declared `key` (D63), which a 1.0 input
-        // that declares none does not give (LOOKUP-5, D111).
+        // that declares none does not give (LOOKUP-5, D111), and whose
+        // columns pair with the current row's (D111 item 2).
         if let (Some(scope), Some(relation), Some(JoinKey::FromInput)) =
             (scope, relation, &aggregate.key)
         {
@@ -652,11 +670,14 @@ impl Checks<'_> {
                     .sources
                     .iter()
                     .any(|input| input.name == relation)
-                && keyless(spec, relation)
             {
-                findings.push(BindFinding::AggregateDiagnostic(
-                    lookup::undeclared_input_key(&path(spec, e), relation, true),
-                ));
+                if keyless(spec, relation) {
+                    findings.push(BindFinding::AggregateDiagnostic(
+                        lookup::undeclared_input_key(&path(spec, e), relation, true),
+                    ));
+                } else {
+                    self.aggregate_key(aggregate, relation, findings);
+                }
             }
         }
         if scope.is_some() && findings.len() != start {
@@ -703,6 +724,96 @@ impl Checks<'_> {
             self.donor_walk(&reads, donor, binding.derivation.expr, findings)?;
         }
         Ok(())
+    }
+
+    /// A qualified column aggregate without `key` of its own pairs each
+    /// column of its input's declared `key` with the current row's
+    /// same-named column (D63, D111 item 2). Binding checks every column, in
+    /// declared order, and reports each refusal at the aggregate's key path
+    /// (`aggregates::bound_relation`): a column the input does not store, as
+    /// far as [`stores`] decides (`unknown_field`, LOOKUP-5, identifier
+    /// `<input>.<column>`); else one the specification declares no column of
+    /// (LOOKUP-5, identifier `<column>`), or a pair whose declared types
+    /// cannot compare (`incompatible_input_type`, LOOKUP-9).
+    fn aggregate_key(
+        &self,
+        aggregate: &ast::Aggregate,
+        relation: &str,
+        findings: &mut Vec<BindFinding>,
+    ) {
+        let spec = self.spec;
+        let ExprKind::Formula(ast::Formula {
+            compiled: Ok(compiled),
+            text,
+            ..
+        }) = &spec.expr(aggregate.expr).kind
+        else {
+            return;
+        };
+        // A reduction that names no field of its relation takes its pairing's
+        // path from a filter that reads the relation.
+        let derived = aggregate.bindings.iter().any(|binding| {
+            spec.reads(binding.derivation.expr, ast::Scope::Row)
+                .iter()
+                .any(|read| {
+                    read.name
+                        .owner()
+                        .is_some_and(|owner| !self.prepared.intermediates.contains(owner))
+                })
+        });
+        let expression = render(spec, text.meta);
+        let at = if compiled.identifiers().any(|name| name.contains('.'))
+            || derived
+            || !aggregate.group_by.is_empty()
+        {
+            expression
+        } else {
+            aggregate
+                .filter
+                .and_then(|filter| match &spec.expr(filter).kind {
+                    ExprKind::Formula(ast::Formula {
+                        compiled: Ok(plan),
+                        text,
+                        ..
+                    }) if plan.identifiers().any(|name| {
+                        name.split_once('.')
+                            .is_some_and(|(owner, _)| owner == relation)
+                    }) =>
+                    {
+                        Some(render(spec, text.meta))
+                    }
+                    _ => None,
+                })
+                .unwrap_or(expression)
+        };
+        for column in spec.input_key(relation).unwrap_or_default() {
+            let field = column.name.as_str();
+            let diagnostic = if !stores(self.prepared, relation, field) {
+                lookup::donor_key_reference(&at, Owner::Unnamed, &format!("{relation}.{field}"))
+            } else if let Some(output) =
+                spec.columns.iter().find(|column| column.name.name == field)
+            {
+                let Some(actual) =
+                    stored_type(self.prepared, &self.declared, relation, field).column_type()
+                else {
+                    continue;
+                };
+                let expected = ResultType::column(output.kind);
+                if expected.comparable(actual.into()) {
+                    continue;
+                }
+                lookup::key_type(
+                    &at,
+                    Owner::Unnamed,
+                    field,
+                    expected,
+                    ResultType::column(actual),
+                )
+            } else {
+                lookup::match_value_reference(&at, Owner::Unnamed, field)
+            };
+            findings.push(BindFinding::AggregateDiagnostic(diagnostic));
+        }
     }
 
     /// One derivation of a row template or the column phase, node by node
@@ -2327,7 +2438,13 @@ impl Checks<'_> {
         let mut graphs = Vec::new();
         for (index, template) in phases.iter().enumerate() {
             let declared = &spec.rows.templates[index];
-            let reads = super::boundaries::Reads::row(spec, self.prepared, template, refused);
+            let reads = super::boundaries::Reads::row(
+                spec,
+                self.prepared,
+                &self.declared,
+                template,
+                refused,
+            );
             let filter = declared
                 .filter
                 .map(|filter| (filter, format!("{}.filter", render(spec, declared.meta))));
@@ -2418,6 +2535,7 @@ impl Checks<'_> {
                 let reads = super::boundaries::Reads::column(
                     spec,
                     self.prepared,
+                    &self.declared,
                     drivers,
                     *owned,
                     &column_groups,

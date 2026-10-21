@@ -186,7 +186,10 @@ fn a_read_of_an_input_without_key_has_no_applicable_keys() {
 }
 
 /// Every declared column is one the input stores and a column of the
-/// current row; the first that is not fails at the read (LOOKUP-5).
+/// current row; the first that is not fails at the read (LOOKUP-5). A check
+/// decides from the declarations that no column is the key's (D111 item 2).
+/// Whether an input no producer links stores the column, only its captured
+/// schema decides, so a check names the column alone there.
 #[test]
 fn every_declared_key_column_is_stored_and_has_a_current_row_value() {
     for (key, code, identifier) in [
@@ -194,10 +197,15 @@ fn every_declared_key_column_is_stored_and_has_a_current_row_value() {
         ("DOSE", Code::LookupMatchValueReference, "DOSE"),
     ] {
         let tree = spec(Some(&[key]), vec![column("AGE", "int", "DM.AGE")], vec![]);
-        let [diagnostic] = refused(&prepare(tree).unwrap()).try_into().unwrap();
+        let prepared = prepare(tree).unwrap();
+        let [diagnostic] = refused(&prepared).try_into().unwrap();
         assert_eq!(diagnostic.code, code, "{key}");
         assert_eq!(diagnostic.spec_paths, ["columns.AGE.derivation.source"]);
         assert_eq!(diagnostic.context, context(&[("identifier", identifier)]));
+        let [checked] = prepared.check_declaration_diagnostics().try_into().unwrap();
+        assert_eq!(checked.code, Code::LookupMatchValueReference, "{key}");
+        assert_eq!(checked.spec_paths, diagnostic.spec_paths);
+        assert_eq!(checked.context, context(&[("identifier", key)]));
     }
 }
 
