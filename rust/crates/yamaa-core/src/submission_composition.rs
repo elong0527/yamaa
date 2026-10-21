@@ -231,6 +231,14 @@ pub fn family_name(family: Submission) -> &'static str {
         Submission::Send => "send",
     }
 }
+/// The model whose specifications a section lists (SUB-3).
+pub fn section_model(family: Submission) -> ast::ModelKind {
+    match family {
+        Submission::Sdtm => ast::ModelKind::Sdtm,
+        Submission::Adam => ast::ModelKind::Adam,
+        Submission::Send => ast::ModelKind::Send,
+    }
+}
 /// A dataset name `SASDatasetName` and a transport member carry:
 /// `^[A-Z][A-Z0-9]{0,7}$` (DEFINE-22).
 pub fn dataset_name(name: &str) -> bool {
@@ -384,26 +392,6 @@ fn comment_references(
 }
 /// SUB-15: the origin type and source pairs each family admits. `send` takes
 /// any source the `sdtm` table admits for the type, or none.
-fn origin_admits(
-    family: Submission,
-    kind: spec::OriginType,
-    source: Option<spec::OriginSource>,
-) -> bool {
-    use spec::{OriginSource as S, OriginType as T};
-    match family {
-        Submission::Sdtm => match kind {
-            T::Collected => matches!(source, Some(S::Subject | S::Investigator | S::Vendor)),
-            T::Assigned | T::Derived => matches!(source, Some(S::Vendor | S::Sponsor)),
-            T::Protocol => source == Some(S::Sponsor),
-            T::Other => source.is_some(),
-            T::Predecessor | T::NotAvailable => source.is_none(),
-        },
-        Submission::Send => source.is_none() || origin_admits(Submission::Sdtm, kind, source),
-        Submission::Adam => {
-            source.is_none() && matches!(kind, T::Derived | T::Assigned | T::Predecessor | T::Other)
-        }
-    }
-}
 /// The column of `tree` that `name` declares.
 fn tree_column<'t>(tree: &'t ast::Spec, name: &str) -> Option<&'t ast::Column> {
     tree.columns.iter().find(|column| column.name.name == name)
@@ -628,13 +616,12 @@ impl ColumnAdmission<'_> {
         }
         let core = metadata.core.as_ref().map(|c| c.value);
         let mandatory = self.mandatory(name, metadata);
-        if core.is_none()
-            || (section.family == Submission::Adam
-                && (core == Some(spec::Core::Expected) || metadata.mandatory.is_none()))
+        let model = section_model(section.family);
+        if core.is_none_or(|core| !core.admitted_by(model))
+            || (section.family == Submission::Adam && metadata.mandatory.is_none())
             || (section.family != Submission::Adam
-                && (core == Some(spec::Core::Conditional)
-                    || (core == Some(spec::Core::Required)
-                        && metadata.mandatory.as_ref().is_some_and(|m| !m.value))))
+                && core == Some(spec::Core::Required)
+                && metadata.mandatory.as_ref().is_some_and(|m| !m.value))
         {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionCoreMandatory,
@@ -650,7 +637,11 @@ impl ColumnAdmission<'_> {
             ));
         }
         let source = origin.source.as_ref().map(|s| s.value);
-        if !origin_admits(section.family, origin.kind.value, source) {
+        if !origin
+            .kind
+            .value
+            .admits_source(section_model(section.family), source)
+        {
             findings.push(Finding::cause(
                 ConditionCode::SubmissionOriginSource,
                 &format!("{column_path}.origin"),
@@ -1379,6 +1370,41 @@ fn predecessor_labels(
     }
 }
 
+/// SUB-3's finding for a 1.x specification a section lists at `path`, unless
+/// it declares the section's model: `missing_required_field` without
+/// `model`, and `standard_model_mismatch` for another model, naming the
+/// section and its model.
+fn listed_model(tree: &ast::Spec, family: Submission, path: &str) -> Option<Finding> {
+    let model = section_model(family);
+    let text = |value: &str| crate::json::Value::String(value.into());
+    let (code, context) = match &tree.model {
+        None => (
+            ConditionCode::SubmissionModelRequired,
+            vec![
+                ("field", text("model")),
+                ("section", text(family_name(family))),
+            ],
+        ),
+        Some(declared) if declared.kind != model => (
+            ConditionCode::SubmissionModelMismatch,
+            vec![
+                ("value", text(declared.kind.name())),
+                ("model", text(model.name())),
+                ("section", text(family_name(family))),
+            ],
+        ),
+        Some(_) => return None,
+    };
+    Some(Finding {
+        code,
+        path: format!("{path}.model"),
+        context: context
+            .into_iter()
+            .map(|(key, value)| (key.into(), value))
+            .collect(),
+    })
+}
+
 /// Compose every captured dataset in order, collecting codelist bindings.
 /// `study` holds every specification any submission section lists.
 #[allow(clippy::too_many_arguments)]
@@ -1400,20 +1426,14 @@ fn compose_datasets(
     for (index, input) in inputs.iter().enumerate() {
         let doc = input.document;
         let path = format!("{family}.specs[{index}]");
-        // A listed 1.0 specification's `model` names its section's model
-        // (SUB-3), which P1-10 checks; until then one that omits `model` or
-        // names another is refused (#3030 D76).
+        // A section lists only 1.x specifications that declare its model
+        // (SUB-3, D25). A missing `model` or another model fails at the
+        // listed specification's `model`, and its dataset composes no
+        // further, since every rule after this one reads the model. A 0.5
+        // specification declares none, and its section gives its family.
         if !matches!(input.tree.header.surface, ast::Surface::V0_5) {
-            let model = match section.family {
-                Submission::Sdtm => ast::ModelKind::Sdtm,
-                Submission::Adam => ast::ModelKind::Adam,
-                Submission::Send => ast::ModelKind::Send,
-            };
-            if input.tree.model.as_ref().map(|declared| declared.kind) != Some(model) {
-                findings.push(Finding::unsupported(
-                    &path,
-                    crate::front_end::v1::spec::checks::MODEL_CHECK,
-                ));
+            if let Some(finding) = listed_model(input.tree, section.family, &path) {
+                findings.push(finding);
                 continue;
             }
         }
@@ -1804,15 +1824,15 @@ pub fn compose(
         .collect();
     let family = family_name(section.family);
     let prefix = family.to_string();
-    let mut fail = |code, suffix: &str, detail: &str| {
-        findings.push(Finding::cause(code, &format!("{prefix}.{suffix}"), detail));
+    let cause = |code, suffix: &str, detail: &str| {
+        Finding::cause(code, &format!("{prefix}.{suffix}"), detail)
     };
     if inputs.len() != section.specs.len() {
-        fail(
+        findings.push(cause(
             ConditionCode::SubmissionMetadataMissing,
             "specs",
             "incomplete captured dataset set",
-        );
+        ));
     }
     let guide = guide_declaration.name.text.as_str();
     let compatible = match section.family {
@@ -1821,47 +1841,66 @@ pub fn compose(
         Submission::Send => guide.starts_with("SENDIG"),
     };
     if !compatible {
-        // The guide composition binds: 0.5's one `standard`, or the first of
-        // a 1.0 section's `standards` (D16).
-        let path = match surface {
-            ast::Surface::V0_5 => "standard.name",
-            ast::Surface::V1 { .. } => "standards[0].name",
-        };
-        fail(ConditionCode::SubmissionStandardFamily, path, guide);
+        // The guide composition binds: 0.5's one `standard`, outside the
+        // section's family, or the first of a 1.0 section's `standards`
+        // (D16), outside the section's model (SUB-3, D58).
+        match surface {
+            ast::Surface::V0_5 => findings.push(cause(
+                ConditionCode::SubmissionStandardFamily,
+                "standard.name",
+                guide,
+            )),
+            ast::Surface::V1 { .. } => {
+                let text = |value: &str| crate::json::Value::String(value.into());
+                findings.push(Finding {
+                    code: ConditionCode::SubmissionModelMismatch,
+                    path: format!("{prefix}.standards[0].name"),
+                    context: [
+                        ("value".to_string(), text(guide)),
+                        (
+                            "model".to_string(),
+                            text(section_model(section.family).name()),
+                        ),
+                        ("section".to_string(), text(family)),
+                    ]
+                    .into(),
+                });
+            }
+        }
     }
     if !define.text.to_ascii_lowercase().ends_with(".xml") {
-        fail(
+        findings.push(cause(
             ConditionCode::SubmissionDefineExtension,
             "define",
             "expected .xml extension",
-        );
+        ));
     } else if section.transport.is_some() && define.text.rsplit('/').next() != Some("define.xml") {
         // DEFINE-2: the transport files sit beside a document named define.xml.
-        fail(
+        findings.push(cause(
             ConditionCode::SubmissionDefineName,
             "define",
             "a transport requires the document file name define.xml",
-        );
+        ));
     }
     let source_version = match source_version(section, installed) {
         Some(version) => version.into(),
         None => {
-            fail(
+            findings.push(cause(
                 ConditionCode::SubmissionSourceVersion,
                 "source_system_version",
                 "empty generator version",
-            );
+            ));
             String::new()
         }
     };
     let mut known = BTreeSet::new();
     for document in &section.documents {
         if !known.insert(document.id.name.as_str()) {
-            fail(
+            findings.push(cause(
                 ConditionCode::SubmissionDuplicateIdentifier,
                 "documents",
                 &document.id.name,
-            );
+            ));
         }
     }
     let acrfs: Vec<_> = section
@@ -1870,11 +1909,11 @@ pub fn compose(
         .filter(|d| d.kind == ast::DocumentKind::AnnotatedCrf)
         .collect();
     if acrfs.len() > 1 {
-        fail(
+        findings.push(cause(
             ConditionCode::SubmissionAnnotatedCrfMultiplicity,
             "documents",
             "multiple annotated CRFs",
-        );
+        ));
     }
     let mut bound = BTreeSet::new();
     let datasets = compose_datasets(

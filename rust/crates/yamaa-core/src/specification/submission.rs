@@ -1,13 +1,15 @@
-//! Family-independent submission admission and completed-column length binding,
-//! read from the typed tree. Standard, document and terminology composition
-//! remains the Define use case.
+//! Submission admission on the specification alone and completed-column
+//! length binding, read from the typed tree: every rule that needs no project
+//! file, including those that read the model a 1.0 specification declares
+//! (SUB-23). Standard, document and terminology composition remains the
+//! Define use case.
 use super::*;
 use crate::json::Value as V;
 use crate::{
-    ast::{self, ColumnCheckKind, Constant, Literal, SubmissionMetadata},
+    ast::{self, ColumnCheckKind, Constant, Literal, ModelKind, SubmissionMetadata},
     dataset::{Check, InventoryScope, RowScope, Verification, WhereClause},
     diagnostic::{ConditionCode as C, Diagnostic},
-    specification_submission_document::OriginType,
+    specification_submission_document::{Core, DatasetClass, OriginSource, OriginType},
     submission_origin::{self as origin, Reads},
     submission_values as values,
     value::Value,
@@ -194,7 +196,12 @@ fn admit_counts(
     let kind = column.kind.name();
     let resolved = data_type(kind, effective.data_type);
     let maxima = maxima(column);
-    if !crate::specification_submission_document::admits_data_type_names(kind, resolved) {
+    // A date or datetime admits its own type and `integer` until the model
+    // says which one it is submitted as (SUB-6, SUB-25); a type its column
+    // never admits fails either way.
+    let model = spec.model.as_ref().map(|model| model.kind);
+    let admitted = crate::specification_submission_document::admits_data_type_names(kind, resolved);
+    if !admitted {
         result.push(finding(
             C::SubmissionDataType,
             path,
@@ -204,6 +211,23 @@ fn admit_counts(
                 ("data_type", s(resolved)),
             ],
         ));
+    } else if let (Some(model), Some(declared)) = (model, effective.data_type) {
+        if !crate::specification_submission_document::admits_model_data_type_names(
+            kind,
+            &declared.text,
+            model == ModelKind::Adam,
+        ) {
+            result.push(finding(
+                C::SubmissionDataType,
+                path,
+                &[
+                    ("column", s(name)),
+                    ("declared_type", s(kind)),
+                    ("data_type", s(&declared.text)),
+                    ("model", s(model.name())),
+                ],
+            ));
+        }
     }
     for (field, count) in [
         ("length", effective.length),
@@ -264,6 +288,144 @@ fn admit_counts(
             path,
             &[("column", s(name)), ("field", s("significant_digits"))],
         ));
+    }
+}
+
+/// The dataset rules that read the model a specification declares, checked
+/// on the specification alone (SUB-23): the class belongs to the model
+/// (SUB-10), and an ADaM dataset declares no `domain` (SUB-5).
+fn admit_dataset_model(
+    spec: &ast::Spec,
+    dataset: &ast::DatasetSubmission,
+    model: ModelKind,
+    result: &mut Vec<PreflightFinding>,
+) {
+    if model == ModelKind::Adam {
+        if let Some(domain) = &dataset.domain {
+            result.push(finding(
+                C::SubmissionAdamField,
+                &spec.cite(domain.meta),
+                &[("value", s(&domain.name)), ("model", s(model.name()))],
+            ));
+        }
+    }
+    if DatasetClass::tabulation_name(&dataset.class.text) == (model == ModelKind::Adam) {
+        result.push(finding(
+            C::SubmissionClassFamily,
+            &spec.cite(dataset.class.meta),
+            &[
+                ("value", s(&dataset.class.text)),
+                ("model", s(model.name())),
+            ],
+        ));
+    }
+}
+
+/// The rules that read the model a specification declares, over one
+/// column's or value-level entry's own declarations `own`, checked on the
+/// specification alone (SUB-23): a core designation the model publishes
+/// (SUB-10), `Req` never relaxed by `mandatory: false` under SDTM or SEND, no
+/// `role` under ADaM (SUB-9), a SAS numeric date's display format under ADaM
+/// (SUB-25), and origin pairs the model admits (SUB-15). `path` is the
+/// column's `submission` or the entry. `entry` names an entry, whose merged
+/// `core` and `mandatory` the effective arguments give; it reports only what
+/// it declares itself, since the column reports what it inherits.
+#[allow(clippy::too_many_arguments)]
+fn admit_column_model(
+    spec: &ast::Spec,
+    column: &ast::Column,
+    own: &SubmissionMetadata,
+    effective_core: Option<&ast::Text>,
+    effective_mandatory: Option<bool>,
+    entry: Option<&str>,
+    path: &str,
+    model: ModelKind,
+    result: &mut Vec<PreflightFinding>,
+) {
+    let name = column.name.name.as_str();
+    let context = |fields: &[(&'static str, V)]| -> Vec<(&'static str, V)> {
+        let mut context = vec![("column", s(name))];
+        if let Some(entry) = entry {
+            context.push(("entry", s(entry)));
+        }
+        context.extend(fields.iter().cloned());
+        context
+    };
+    if let Some(core) = &own.core {
+        if Core::from_name(&core.text).is_some_and(|value| !value.admitted_by(model)) {
+            result.push(finding(
+                C::SubmissionCoreMandatory,
+                &spec.cite(core.meta),
+                &context(&[
+                    ("reason", s("core_not_admitted")),
+                    ("core", s(&core.text)),
+                    ("model", s(model.name())),
+                ]),
+            ));
+        }
+    }
+    let required = effective_core.is_some_and(|core| core.text == Core::Required.name());
+    if model != ModelKind::Adam
+        && required
+        && effective_mandatory == Some(false)
+        && (own.core.is_some() || own.mandatory.is_some())
+    {
+        let at = if own.mandatory.is_some() {
+            format!("{path}.mandatory")
+        } else {
+            format!("{path}.core")
+        };
+        result.push(finding(
+            C::SubmissionCoreMandatory,
+            &at,
+            &context(&[
+                ("reason", s("required_not_mandatory")),
+                ("model", s(model.name())),
+            ]),
+        ));
+    }
+    if model == ModelKind::Adam {
+        if let Some(role) = &own.role {
+            result.push(finding(
+                C::SubmissionAdamField,
+                &spec.cite(role.meta),
+                &context(&[("value", s(&role.text)), ("model", s(model.name()))]),
+            ));
+        }
+    }
+    let fixed = crate::specification_submission_document::numeric_date_format_name(
+        column.kind.name(),
+        model == ModelKind::Adam,
+    );
+    if let (Some(fixed), Some(declared)) = (fixed, &own.display_format) {
+        if declared.text != fixed {
+            result.push(finding(
+                C::SubmissionDisplayFormatConflict,
+                &spec.cite(declared.meta),
+                &context(&[("value", s(&declared.text)), ("permitted", s(fixed))]),
+            ));
+        }
+    }
+    for declared in &own.origins {
+        let Some(kind) = OriginType::from_name(&declared.kind.text) else {
+            continue;
+        };
+        let source = declared.source.as_ref();
+        if !kind.admits_source(
+            model,
+            source.and_then(|source| OriginSource::from_name(&source.text)),
+        ) {
+            let mut fields = vec![("origin_type", s(&declared.kind.text))];
+            if let Some(source) = source {
+                fields.push(("origin_source", s(&source.text)));
+            }
+            fields.push(("model", s(model.name())));
+            result.push(finding(
+                C::SubmissionOriginSource,
+                &spec.cite(declared.meta),
+                &context(&fields),
+            ));
+        }
     }
 }
 
@@ -336,6 +498,19 @@ fn admit_entries(
                 Effective::of(own).over(Effective::of(base)),
                 result,
             );
+            if let Some(model) = spec.model.as_ref().map(|model| model.kind) {
+                admit_column_model(
+                    spec,
+                    column,
+                    own,
+                    own.core.as_ref().or(base.core.as_ref()),
+                    own.mandatory.or(base.mandatory),
+                    Some(&entry.id.name),
+                    &path,
+                    model,
+                    result,
+                );
+            }
             // An explicit verification binds the entire column once. Only
             // authored entry lengths without such a verification introduce a
             // scoped check.
@@ -505,6 +680,7 @@ pub(super) fn admit(
         .map(|column| column.name.as_str())
         .collect::<BTreeSet<_>>();
     let reads = Reads::of_spec(spec);
+    let model = spec.model.as_ref().map(|model| model.kind);
     reserved(spec, &spec.metadata, None, result);
     if let Some(dataset) = &spec.submission {
         if dataset.reference_data && dataset.repeating {
@@ -516,6 +692,9 @@ pub(super) fn admit(
                     ("repeating", V::Bool(true)),
                 ],
             ));
+        }
+        if let Some(model) = model {
+            admit_dataset_model(spec, dataset, model, result);
         }
     }
     for (index, column) in spec.columns.iter().enumerate() {
@@ -540,6 +719,34 @@ pub(super) fn admit(
                 &path,
                 &[("column", s(name)), ("reason", s("core_missing"))],
             ));
+        }
+        if let Some(model) = model {
+            // ADaM's `core` never derives `mandatory`, so a dataset whose
+            // metadata a document can compose declares it (SUB-10), as it
+            // declares `core`.
+            if spec.submission.is_some() && model == ModelKind::Adam && metadata.mandatory.is_none()
+            {
+                result.push(finding(
+                    C::SubmissionCoreMandatory,
+                    &path,
+                    &[
+                        ("column", s(name)),
+                        ("reason", s("mandatory_missing")),
+                        ("model", s(model.name())),
+                    ],
+                ));
+            }
+            admit_column_model(
+                spec,
+                column,
+                metadata,
+                metadata.core.as_ref(),
+                metadata.mandatory,
+                None,
+                &path,
+                model,
+                result,
+            );
         }
         if let Some(value) = authored_length(column, metadata.length.as_ref()) {
             // A bound beyond the native text capacity cannot be exceeded;

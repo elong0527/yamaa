@@ -338,12 +338,6 @@ fn each_1_0_feature_not_built_yet_is_refused_as_unsupported_operation() {
         refusals(&study, "spec.yaml", None),
         [refusal("odm_xml_input", "input.RAW.path")]
     );
-    // Submission metadata without the model it needs (P1-10).
-    study.write("spec.yaml", &spec(submission).replace("model: SDTM\n", ""));
-    assert_eq!(
-        refusals(&study, "spec.yaml", None),
-        [refusal("model_check", "model")]
-    );
     // A codelist or a project function a specification run without its
     // project binds (P1-11).
     study.write(
@@ -414,19 +408,119 @@ fn a_1_0_project_composes_its_submission() {
     let define = String::from_utf8(study.read("define.xml")).unwrap();
     assert!(define.contains("Name=\"DM\""), "{define}");
     assert!(define.contains("Origin Type=\"Protocol\""), "{define}");
-    // A listed 1.0 specification whose model is not its section's is
-    // refused until P1-10 checks it.
-    study.write(
-        "dm.yaml",
-        &String::from_utf8(study.read("dm.yaml"))
+}
+
+/// SUB-3 (D25): a specification that declares submission metadata names its
+/// model, before any input is read, whether it is checked alone or listed.
+#[test]
+fn submission_metadata_needs_a_model() {
+    let study = define_study();
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    study.write("dm.yaml", &dm.replace("model: SDTM\n", ""));
+    let engine = engine();
+    let token = CancellationToken::new();
+    let issues = rows(
+        &engine
+            .spec_check(&study.path("dm.yaml"), None, &token)
             .unwrap()
-            .replace("model: SDTM", "model: ADaM"),
+            .issues(),
     );
-    let issues = rows(&submit().issues());
-    let [(condition, _, paths, context)] = issues.as_slice() else {
+    let [(condition, rule, paths, context)] = issues.as_slice() else {
         panic!("one issue: {issues:?}")
     };
-    assert_eq!(condition, "unsupported_operation");
-    assert_eq!(paths, &["sdtm.specs[0]"]);
-    assert_eq!(context["operation"], Value::String("model_check".into()));
+    assert_eq!(condition, "missing_required_field");
+    assert_eq!(rule.as_deref(), Some("SUB-3"));
+    assert_eq!(paths, &["model"]);
+    assert_eq!(context["field"], Value::String("model".into()));
+    assert_eq!(context["class"], Value::String("root_class".into()));
+    // Listed, the specification reports the same issue when its section
+    // composes it, as it reports any other fault of its own.
+    let listed = rows(
+        &engine
+            .project_submission(
+                &study.path("project.yaml"),
+                Some("sdtm"),
+                Some("2026-09-11T00:00:00"),
+                "0.4.0",
+                &token,
+            )
+            .unwrap()
+            .issues(),
+    );
+    assert_eq!(listed, issues);
+    // A specification without submission metadata follows no model.
+    study.write("spec.yaml", SPEC);
+    assert_eq!(
+        rows(
+            &engine
+                .spec_check(&study.path("spec.yaml"), None, &token)
+                .unwrap()
+                .issues()
+        ),
+        []
+    );
+}
+
+/// SUB-3 (D25, D58): a section lists only specifications of its model, and
+/// the guide it binds belongs to that model. Each fault fails before any
+/// published dataset is read.
+#[test]
+fn a_section_lists_only_specifications_of_its_model() {
+    let study = define_study();
+    let project = study.path("project.yaml");
+    let engine = engine();
+    let token = CancellationToken::new();
+    let submit = || {
+        rows(
+            &engine
+                .project_submission(
+                    &project,
+                    Some("sdtm"),
+                    Some("2026-09-11T00:00:00"),
+                    "0.4.0",
+                    &token,
+                )
+                .unwrap()
+                .issues(),
+        )
+    };
+    let one = |issues: Vec<(String, Option<String>, Vec<String>, Value)>| {
+        let [issue] = <[_; 1]>::try_from(issues).unwrap_or_else(|issues| panic!("{issues:?}"));
+        issue
+    };
+    let dm = String::from_utf8(study.read("dm.yaml")).unwrap();
+    // A specification of another model, at its `model`.
+    study.write("dm.yaml", &dm.replace("model: SDTM", "model: ADaM"));
+    let (condition, rule, paths, context) = one(submit());
+    assert_eq!(condition, "standard_model_mismatch");
+    assert_eq!(rule.as_deref(), Some("SUB-3"));
+    assert_eq!(paths, ["sdtm.specs[0].model"]);
+    assert_eq!(context["value"], Value::String("ADaM".into()));
+    assert_eq!(context["model"], Value::String("SDTM".into()));
+    assert_eq!(context["section"], Value::String("sdtm".into()));
+    // A listed specification without `model` or submission metadata.
+    study.write("dm.yaml", SPEC);
+    let (condition, rule, paths, context) = one(submit());
+    assert_eq!(condition, "missing_required_field");
+    assert_eq!(rule.as_deref(), Some("SUB-3"));
+    assert_eq!(paths, ["sdtm.specs[0].model"]);
+    assert_eq!(context["field"], Value::String("model".into()));
+    assert_eq!(context["section"], Value::String("sdtm".into()));
+    // A guide of another model, at the section's first standard.
+    study.write("dm.yaml", &dm);
+    let declared = String::from_utf8(study.read("project.yaml")).unwrap();
+    study.write(
+        "project.yaml",
+        &declared.replace(
+            "{name: SDTMIG, version: \"3.4\"",
+            "{name: ADaMIG, version: \"1.3\"",
+        ),
+    );
+    let (condition, rule, paths, context) = one(submit());
+    assert_eq!(condition, "standard_model_mismatch");
+    assert_eq!(rule.as_deref(), Some("SUB-3"));
+    assert_eq!(paths, ["sdtm.standards[0].name"]);
+    assert_eq!(context["value"], Value::String("ADaMIG".into()));
+    assert_eq!(context["model"], Value::String("SDTM".into()));
+    assert_eq!(context["section"], Value::String("sdtm".into()));
 }

@@ -154,6 +154,22 @@ pub fn admits_data_type_names(column: &str, data_type: &str) -> bool {
     let data_type = DataType::VALUES.iter().find(|(name, _)| *name == data_type);
     matches!((column, data_type), (Some((_, column)), Some((_, data_type))) if column.admits_data_type(*data_type))
 }
+/// [`admits_data_type_names`] once a specification declares its model: a date
+/// or datetime admits exactly the one type the model submits it as (SUB-6,
+/// SUB-25).
+pub fn admits_model_data_type_names(column: &str, data_type: &str, adam: bool) -> bool {
+    let column = ColumnType::VALUES.iter().find(|(name, _)| *name == column);
+    let data_type = DataType::VALUES.iter().find(|(name, _)| *name == data_type);
+    matches!((column, data_type), (Some((_, column)), Some((_, data_type))) if column.admits_family_data_type(*data_type, adam))
+}
+/// The display format a column of type `column` is submitted with under
+/// ADaM, a SAS numeric date's, or None when it keeps its own (SUB-25).
+pub fn numeric_date_format_name(column: &str, adam: bool) -> Option<&'static str> {
+    ColumnType::VALUES
+        .iter()
+        .find(|(name, _)| *name == column)
+        .and_then(|(_, column)| column.numeric_date_format(adam))
+}
 vocabulary!(DatasetClass {
     AdamOther => "ADAM OTHER", BasicData => "BASIC DATA STRUCTURE", DeviceLevel => "DEVICE LEVEL ANALYSIS DATASET",
     Events => "EVENTS", Findings => "FINDINGS", FindingsAbout => "FINDINGS ABOUT", Interventions => "INTERVENTIONS",
@@ -192,6 +208,15 @@ impl Core {
             .find(|(text, _)| *text == name)
             .map(|(_, core)| *core)
     }
+    /// Whether `model` publishes this designation (SUB-10): `Req`, `Exp` and
+    /// `Perm` for SDTM and SEND, and `Req`, `Cond` and `Perm` for ADaM.
+    pub fn admitted_by(self, model: crate::ast::ModelKind) -> bool {
+        match self {
+            Self::Expected => model != crate::ast::ModelKind::Adam,
+            Self::Conditional => model == crate::ast::ModelKind::Adam,
+            Self::Required | Self::Permissible => true,
+        }
+    }
 }
 impl OriginType {
     /// Read a written origin type.
@@ -204,6 +229,39 @@ impl OriginType {
     /// Every origin type, in the vocabulary's published order.
     pub fn all() -> impl Iterator<Item = Self> {
         Self::VALUES.iter().map(|(_, kind)| *kind)
+    }
+    /// Whether `model` admits this type with `source` (SUB-15): SDTM by its
+    /// table of pairs, SEND without a source or with a pair SDTM admits, and
+    /// ADaM four types whose source is derived, never declared.
+    pub fn admits_source(self, model: crate::ast::ModelKind, source: Option<OriginSource>) -> bool {
+        use crate::ast::ModelKind as M;
+        use OriginSource as S;
+        match model {
+            M::Sdtm => match self {
+                Self::Collected => matches!(source, Some(S::Subject | S::Investigator | S::Vendor)),
+                Self::Assigned | Self::Derived => matches!(source, Some(S::Vendor | S::Sponsor)),
+                Self::Protocol => source == Some(S::Sponsor),
+                Self::Other => source.is_some(),
+                Self::Predecessor | Self::NotAvailable => source.is_none(),
+            },
+            M::Send => source.is_none() || self.admits_source(M::Sdtm, source),
+            M::Adam => {
+                source.is_none()
+                    && matches!(
+                        self,
+                        Self::Derived | Self::Assigned | Self::Predecessor | Self::Other
+                    )
+            }
+        }
+    }
+}
+impl OriginSource {
+    /// Read a written origin source.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::VALUES
+            .iter()
+            .find(|(text, _)| *text == name)
+            .map(|(_, source)| *source)
     }
 }
 /// The one `mandatory` resolution shared by the domain build and composition: a
