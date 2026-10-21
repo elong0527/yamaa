@@ -47,9 +47,10 @@ AUTHORS_PREAMBLE = (
     f"{VENDOR_SCRIPT} wrote the archive. The other crates "
     "are in the directory their entry names. Each crate keeps its own license "
     "and copyright files beside its sources, and LICENSE-THIRD-PARTY.txt "
-    "reproduces those texts for every crate.",
-    "Each entry gives the authors, license and repository that the crate's "
-    "manifest declares. The yamaa authors are in DESCRIPTION.",
+    "reproduces those texts for every crate that the installed package links.",
+    "Each entry gives the authors and repository that the crate's manifest "
+    "declares, and the one license that yamaa relies on of those that it "
+    "offers. The yamaa authors are in DESCRIPTION.",
 )
 # The trees of inputs that the R suites read from their working directory:
 # R CMD check runs each suite in a copy of the package's tests directory, and
@@ -180,7 +181,7 @@ def authors_text(metadata, crates, listed, locked):
     packages of the bundle's trimmed lock and `listed` the (name, version)
     pairs that the package's LICENSE-THIRD-PARTY.txt covers. The vendored
     crates must be exactly the crates.io crates of that lock, and the notices
-    must have an entry for exactly the bundled crates.
+    may name only bundled crates: those that the R binding links.
     """
     members = set(metadata["workspace_members"])
     bundled = [
@@ -218,8 +219,6 @@ def authors_text(metadata, crates, listed, locked):
         lines += notices.paragraph(paragraph)
     for package in bundled:
         label = (package["name"], package["version"])
-        if label not in listed:
-            raise ValueError(f"{' '.join(label)}: LICENSE-THIRD-PARTY.txt has no entry")
         lines.append(f"Crate: {' '.join(label)}")
         if package["source"] is None:
             lines.append(f"    Directory: src/{notices.source_label(package)}")
@@ -227,12 +226,12 @@ def authors_text(metadata, crates, listed, locked):
             lines += notices.wrapped("Authors:", package["authors"], indent="    ")
         else:
             lines.append("    Authors: none declared")
-        lines.append(f"    License: {package['license'] or 'none declared'}")
+        lines.append(f"    License: {notices.relied_on(package, metadata)}")
         lines.append(f"    Repository: {package['repository'] or 'none declared'}")
         if vendored.get(label):
             lines += notices.wrapped("Left out:", vendored[label], indent="    ")
         lines.append("")
-    return "\n".join(lines)
+    return notices.refuse_gnu("\n".join(lines), AUTHORS)
 
 
 def r_callables(case: Path) -> list[Path]:

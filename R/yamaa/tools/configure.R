@@ -25,7 +25,7 @@ INVENTORY <- file.path("inst", "COMPONENTS.tsv")
 # tools/packaging/generate_component_inventory.py writes the same row, and
 # the release checks compare the R binary packages' inventories with it.
 STANDARD_LIBRARY <- "rust-std"
-STANDARD_LIBRARY_LICENSE <- "MIT OR Apache-2.0"
+STANDARD_LIBRARY_LICENSE <- "MIT"
 RUST_REPOSITORY <- "https://github.com/rust-lang/rust"
 STANDARD_LIBRARY_PURPOSE <- paste(
   "the Rust standard library (core, alloc and std) of the toolchain that",
