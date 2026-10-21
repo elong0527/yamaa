@@ -13,7 +13,7 @@ mod project {
             specification_source::{Error, Source},
         };
         use yamaa_core::{
-            project_environment::{Finding, LockKind},
+            project_environment::{Finding, LockKind, Undeclared},
             project_function::Language,
             value::Value,
         };
@@ -262,9 +262,9 @@ mod project {
                 assert_eq!(owned.origins().functions, ["first", "inline"]);
                 assert_eq!(owned.origins().codelists, [0]);
                 assert_eq!(owned.captures().len(), 2);
-                assert_eq!(owned.environment().host(), Language::Python);
+                assert_eq!(owned.environment().host(), Some(Language::Python));
                 assert_eq!(owned.environment().language(), Some(Language::Python));
-                assert_eq!(owned.environment().undeclared_language(), None);
+                assert_eq!(owned.environment().undeclared(), None);
                 assert_eq!(port.trace.len(), captured);
             }
             // The environment file declares the lock and functions; the project
@@ -335,7 +335,7 @@ mod project {
                     lock_kind
                 );
                 let owned = prepared.into_owned();
-                assert_eq!(owned.environment().host(), host);
+                assert_eq!(owned.environment().host(), Some(host));
                 for function in owned.environment().functions() {
                     assert_eq!(function.call(), call);
                 }
@@ -372,8 +372,8 @@ mod project {
                 assert_eq!(owned.environment().language(), None);
                 // A call to a project function now names the absent environment.
                 assert_eq!(
-                    owned.environment().undeclared_language(),
-                    Some(Language::Python)
+                    owned.environment().undeclared(),
+                    Some(Undeclared::Language(Language::Python))
                 );
             }
         }
@@ -474,7 +474,7 @@ mod project {
                 PYTHON
             );
             assert!(rejected.captures.is_empty());
-            assert_eq!(rejected.host, Language::Python);
+            assert_eq!(rejected.host, Some(Language::Python));
             assert_eq!(rejected.draft.language, Some(Language::Python));
             assert!(rejected.draft.lock.is_none());
             assert_eq!(rejected.draft.functions.as_deref(), Some([].as_slice()));
@@ -602,7 +602,7 @@ mod project {
                 }])
             );
             assert!(rejected.sources.is_empty());
-            assert_eq!(rejected.host, Language::Python);
+            assert_eq!(rejected.host, Some(Language::Python));
             assert_eq!(rejected.draft.language, Some(Language::Python));
             assert_eq!(
                 rejected.draft.lock.as_ref().unwrap().written,
@@ -1115,7 +1115,7 @@ mod project {
         #[test]
         fn real_decoder_builds_reactivate_cached_sources_and_retain_original_non_send_errors() {
             let environment = Environment::admit(
-                Language::Python,
+                Some(Language::Python),
                 Draft {
                     surface: yamaa_core::ast::Surface::V0_5,
                     language: Some(Language::Python),

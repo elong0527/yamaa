@@ -51,7 +51,7 @@ pub enum Failure<E> {
     #[error("project activation function language mismatch: function={function:?}, declared={declared:?}, selected={selected:?}")]
     FunctionLanguageMismatch {
         function: usize,
-        declared: Language,
+        declared: Option<Language>,
         selected: Language,
     },
     #[error("project activation duplicate selection: function={function:?}")]
@@ -283,7 +283,7 @@ fn activate_observed<P: ActivationPort>(
     let mut names = BTreeSet::new();
     let mut plans = Vec::with_capacity(functions.len());
     for (function, definition) in functions.iter().enumerate() {
-        if definition.language() != language {
+        if definition.language() != Some(language) {
             return Err(Failure::FunctionLanguageMismatch {
                 function,
                 declared: definition.language(),

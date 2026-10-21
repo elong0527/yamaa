@@ -102,7 +102,7 @@ pub fn spec(
 }
 pub fn environment(extensible: bool) -> ExecutionEnvironment {
     Environment::admit(
-        Language::Python,
+        Some(Language::Python),
         Draft {
             surface: yamaa_core::ast::Surface::V0_5,
             language: None,

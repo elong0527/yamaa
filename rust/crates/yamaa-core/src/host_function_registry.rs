@@ -251,7 +251,7 @@ pub fn activate_registered<'a, P: BatchFunctionPort>(
     let mut names = std::collections::BTreeSet::new();
     let mut plans = Vec::with_capacity(functions.len());
     for (function, definition) in functions.iter().enumerate() {
-        if definition.language() != language {
+        if definition.language() != Some(language) {
             return Err(Failure::FunctionLanguageMismatch { function });
         }
         if !names.insert(definition.name()) {

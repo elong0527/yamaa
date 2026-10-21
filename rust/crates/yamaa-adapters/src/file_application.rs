@@ -559,9 +559,11 @@ fn result<E>(
     Ok(Domain::new(result, prepared, run))
 }
 
-/// Prepare one request through `resolver`, or the local file resolver.
+/// Prepare one request through `resolver`, or the local file resolver, for
+/// the host language `host`, or for an engine that claims none, which reads
+/// no project's `environments` entry (#3030 section 2.10).
 pub fn select(
-    host: Language,
+    host: Option<Language>,
     request: Request<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<FileSpecification, crate::file_workflow::SelectionError> {
@@ -572,12 +574,12 @@ pub fn select(
 }
 
 pub fn check(host: Language, request: Request<'_>, identity: Identity<'_>) -> Failure {
-    check_with_resolver(host, request, identity, None)
+    check_with_resolver(Some(host), request, identity, None)
 }
 /// The static check of one request: preparation findings, or the compiled
 /// specification's own findings. No study input is read.
 pub fn check_with_resolver(
-    host: Language,
+    host: Option<Language>,
     request: Request<'_>,
     _identity: Identity<'_>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
@@ -605,7 +607,7 @@ fn domain_observed(
     domain_entry::domain(
         scope,
         || {
-            select(host, request, None)
+            select(Some(host), request, None)
                 .map_err(|error| crate::project_application::selection_failure(&error))
         },
         |prepared| {

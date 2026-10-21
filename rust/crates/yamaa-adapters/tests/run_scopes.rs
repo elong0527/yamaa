@@ -103,7 +103,7 @@ impl Route {
                 specification: "spec.yaml",
                 environment: (self == Route::Project).then_some("environment.yaml"),
             },
-            Language::Python,
+            Some(Language::Python),
             resolver,
         )
         .unwrap_or_else(|error| panic!("compile refused: {error:?}"));

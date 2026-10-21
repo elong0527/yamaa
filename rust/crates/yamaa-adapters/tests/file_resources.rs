@@ -722,7 +722,7 @@ mod file {
                     "sdtm",
                     Some(created),
                     "0.3.0",
-                    Language::Python,
+                    Some(Language::Python),
                     None,
                 )
             }
@@ -1030,7 +1030,7 @@ mod file {
                         "sdtm",
                         Some("2026-09-11T00:00:00"),
                         "0.3.0",
-                        host,
+                        Some(host),
                         None,
                     );
                     let actual: Vec<_> = run.issues().iter().map(|issue| yamaa_adapters::json!({
@@ -1271,7 +1271,7 @@ mod file {
                 "SDTM",
                 None,
                 "0.3.0",
-                Language::Python,
+                Some(Language::Python),
                 None,
             );
             assert!(run.issues().iter().any(|i| i.spec_paths == ["standard"]));
@@ -1608,7 +1608,7 @@ mod file {
                     "send",
                     Some("2026-09-11T00:00:00"),
                     "0.3.0",
-                    Language::Python,
+                    Some(Language::Python),
                     None,
                 )
             };
@@ -1667,7 +1667,7 @@ mod file {
                 "adam",
                 Some("2026-09-30T00:00:00"),
                 "0.3.0",
-                Language::Python,
+                Some(Language::Python),
                 None,
             );
             (temp, run)

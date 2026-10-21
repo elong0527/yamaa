@@ -139,8 +139,9 @@ impl PreparedRun {
     /// admission precedes obtaining a study-data snapshot. A specification
     /// without a project never reads its environment's host language.
     pub fn prepare(document: PreparedDocument) -> Result<Self, Error> {
-        let environment =
-            OwnedEnvironment::without_environment(yamaa_core::project_function::Language::Python);
+        let environment = OwnedEnvironment::without_environment(Some(
+            yamaa_core::project_function::Language::Python,
+        ));
         Self::prepare_with_environment(document, environment)
             .map_err(|rejected| Error::Prepare(rejected.rejection.error))
     }

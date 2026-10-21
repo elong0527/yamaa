@@ -64,7 +64,7 @@ mod file {
                     Resources::for_entry(study.0.to_str().unwrap()).unwrap(),
                     "spec.yaml",
                     None,
-                    Language::Python,
+                    Some(Language::Python),
                     shipped_schema::capture().unwrap(),
                     shipped_schema::capture_project().unwrap(),
                 )
@@ -135,7 +135,7 @@ mod file {
                 Resources::for_entry(study.0.to_str().unwrap()).unwrap(),
                 "spec.yaml",
                 None,
-                Language::Python,
+                Some(Language::Python),
                 shipped_schema::capture().unwrap(),
                 shipped_schema::capture_project().unwrap(),
             )
@@ -1279,7 +1279,7 @@ mod file {
                 resources,
                 "root.yaml",
                 None,
-                Language::Python,
+                Some(Language::Python),
                 shipped_schema::capture().unwrap(),
                 shipped_schema::capture_project().unwrap(),
             )

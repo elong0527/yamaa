@@ -31,7 +31,7 @@ impl From<model::Error> for Error {
 pub fn resolve(
     specification: &str,
     environment: Option<&str>,
-    host: Language,
+    host: Option<Language>,
     resolver: Option<std::sync::Arc<dyn crate::host_resources::Resolver>>,
 ) -> Result<ResolvedArtifact, crate::file_application::Failure> {
     let request = yamaa_core::build::Request {

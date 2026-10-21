@@ -421,8 +421,8 @@ mod declaration {
                 let [bmi] = execution.functions() else {
                     panic!("one project function")
                 };
-                assert_eq!(bmi.language(), host);
-                assert!(bmi.implemented());
+                assert_eq!(bmi.language(), Some(host));
+                assert_eq!(bmi.missing_implementation(), None);
                 assert_eq!(
                     bmi.call(),
                     match host {

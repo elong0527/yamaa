@@ -17,6 +17,12 @@ pub enum Cause {
     /// The called function's file names no callable for the host language
     /// (FUNC-1).
     MissingImplementation(crate::project_function::Language),
+    /// The engine claims no host language, such as the command line's, so it
+    /// reads no 0.5 environment file and knows no function a 0.5 project
+    /// declares: the call is refused as `unsupported_operation` with
+    /// operation `environment`, as a run of a 1.0 project's call is
+    /// (#3030 section 2.10, D110, D123).
+    NoHostLanguage,
     UnknownReference(String),
     RowPhase {
         identifier: String,
@@ -79,6 +85,10 @@ impl FunctionFinding {
             Cause::MissingImplementation(language) => {
                 context.insert("language".into(), text(language.key()));
                 (C::FunctionImplementationMissing, None)
+            }
+            Cause::NoHostLanguage => {
+                context.insert("operation".into(), text("environment"));
+                (C::ApplicationUnsupported, None)
             }
             Cause::UnknownArgument => (C::InvalidFunctionArgument, Some("unknown_argument")),
             Cause::DuplicateArgument => (C::InvalidFunctionArgument, Some("duplicate_argument")),
@@ -288,12 +298,14 @@ fn decode(
 pub(super) fn prepare(
     spec: &ast::Spec,
     functions: &[Function],
-    undeclared: Option<crate::project_function::Language>,
+    undeclared: Option<crate::project_environment::Undeclared>,
 ) -> Result<Prepared, PrepareError> {
+    use crate::project_environment::Undeclared;
     // Without a host environment no call names a declared function; the absent
     // environment, not the function name, is the cause each call reports.
     let unknown = || match undeclared {
-        Some(language) => Cause::UndeclaredEnvironment(language),
+        Some(Undeclared::Language(language)) => Cause::UndeclaredEnvironment(language),
+        Some(Undeclared::NoHostLanguage) => Cause::NoHostLanguage,
         None => Cause::UnknownFunction,
     };
     let mut function_index = BTreeMap::new();
@@ -309,31 +321,32 @@ pub(super) fn prepare(
     let mut findings = Vec::new();
     for (request, Request { call, path, .. }) in requests.iter().enumerate() {
         match decode(spec, *call, path) {
-            // A 1.0 function file may name no callable for the host: the
-            // call fails here, before any data is read, and no other finding
-            // of it is reported (FUNC-1).
-            Ok(decoded)
-                if function_index
-                    .get(decoded.name.as_str())
-                    .is_some_and(|function| !function.implemented()) =>
-            {
-                let function = function_index[decoded.name.as_str()];
-                findings.push((
-                    request,
-                    invalid(FunctionFinding {
-                        path: format!("{path}.name"),
-                        function: decoded.name,
-                        argument: None,
-                        cause: Cause::MissingImplementation(function.language()),
-                    }),
-                ));
-            }
             Ok(decoded) => {
-                origins.push((request, *call, path.clone(), decoded.name.clone()));
-                calls.push(LocatedCall {
-                    path: path.clone(),
-                    call: decoded,
-                });
+                // A 1.0 function file may name no callable for the host: the
+                // call fails here, before any data is read, and no other
+                // finding of it is reported (FUNC-1). An engine that claims no
+                // host language misses no callable; it compiles the call, and
+                // a run of it is refused instead (D110).
+                let missing = function_index
+                    .get(decoded.name.as_str())
+                    .and_then(|function| function.missing_implementation());
+                if let Some(language) = missing {
+                    findings.push((
+                        request,
+                        invalid(FunctionFinding {
+                            path: format!("{path}.name"),
+                            function: decoded.name,
+                            argument: None,
+                            cause: Cause::MissingImplementation(language),
+                        }),
+                    ));
+                } else {
+                    origins.push((request, *call, path.clone(), decoded.name.clone()));
+                    calls.push(LocatedCall {
+                        path: path.clone(),
+                        call: decoded,
+                    });
+                }
             }
             Err(errors) => {
                 let function = match &spec.expr(*call).kind {
