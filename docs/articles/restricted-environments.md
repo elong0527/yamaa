@@ -134,9 +134,14 @@ name.
 
 1. On a connected machine, download from static.rust-lang.org the installer
     archive for the restricted machine's target, its signature and the Rust
-    signing key. The target is `x86_64-unknown-linux-gnu` or
-    `aarch64-unknown-linux-gnu`: `uname -m` on the restricted machine prints
-    its first part.
+    signing key. From this repository, download the reviewed copy of that key
+    that native qualification verifies the installer against,
+    [`tools/ci/keys/rust-key.gpg.ascii`](../../tools/ci/keys/rust-key.gpg.ascii)
+    (#3030 D135), as `yamaa-rust-key.gpg.ascii`, from the tag of the release
+    that you install: `yamaa-v<version>`, such as `yamaa-v1.0.0`, or
+    `yamaa-v1.0.0-rc.1` for a candidate. The target is
+    `x86_64-unknown-linux-gnu` or `aarch64-unknown-linux-gnu`: `uname -m` on
+    the restricted machine prints its first part.
 
     ```sh
     target=x86_64-unknown-linux-gnu
@@ -144,23 +149,28 @@ name.
     curl --proto '=https' --tlsv1.2 -fLO "https://static.rust-lang.org/dist/${installer}"
     curl --proto '=https' --tlsv1.2 -fLO "https://static.rust-lang.org/dist/${installer}.asc"
     curl --proto '=https' --tlsv1.2 -fLO https://static.rust-lang.org/rust-key.gpg.ascii
+    curl --proto '=https' --tlsv1.2 -fL -o yamaa-rust-key.gpg.ascii \
+      "https://raw.githubusercontent.com/elong0527/yamaa/yamaa-v<version>/tools/ci/keys/rust-key.gpg.ascii"
     ```
 
 2. The Rust project signs its
     [standalone installers](https://forge.rust-lang.org/infra/other-installation-methods.html#standalone-installers)
-    with the Rust signing key. Check the signature with GnuPG, in a keyring of
-    its own that holds only that key. Native qualification checks the
-    signature against the reviewed copy of the key that this repository keeps,
-    `tools/ci/keys/rust-key.gpg.ascii`: comparing the downloaded key with that
-    copy guards against a download host that serves a forged key with a forged
-    archive. Use the archive only if gpg reports a good signature from "Rust
-    Language (Tag and Release Signing Key)".
+    with the Rust signing key. `cmp` compares the two copies of the key byte
+    for byte and prints nothing when they are identical. They come from two
+    hosts, so a forged key served by either one shows up as a difference. Only
+    when they match do the commands go on: they import the reviewed copy,
+    `yamaa-rust-key.gpg.ascii`, into a keyring of its own, and GnuPG checks
+    the signature there, with automatic key retrieval off. If `cmp` reports a
+    difference, stop, and use neither the key nor the archive. Use the archive
+    only if gpg reports a good signature from "Rust Language (Tag and Release
+    Signing Key)".
 
     ```sh
     export GNUPGHOME="$PWD/gnupg"
     mkdir -m 700 "$GNUPGHOME"
-    gpg --batch --import rust-key.gpg.ascii
-    gpg --batch --no-auto-key-retrieve --verify "${installer}.asc" "${installer}"
+    cmp rust-key.gpg.ascii yamaa-rust-key.gpg.ascii &&
+      gpg --batch --import yamaa-rust-key.gpg.ascii &&
+      gpg --batch --no-auto-key-retrieve --verify "${installer}.asc" "${installer}"
     ```
 
 3. Carry the archive in, unpack it and run its own `install.sh`. It installs
