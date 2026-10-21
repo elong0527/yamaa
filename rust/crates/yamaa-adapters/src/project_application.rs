@@ -73,7 +73,8 @@ fn project_failure(error: &file_project::Error) -> Failure {
             file_application::resource_failure(Stage::Environment, error)
         }
         file_project::Error::Document(error) => match error {
-            crate::file_preparation::Error::Resource(error) => {
+            crate::file_preparation::Error::Entry(error)
+            | crate::file_preparation::Error::Resource(error) => {
                 file_application::resource_failure(Stage::Prepare, error)
             }
             crate::file_preparation::Error::ResourceFinding { diagnostic, .. }
@@ -199,20 +200,20 @@ pub fn selection_failure(error: &crate::file_workflow::SelectionError) -> Failur
 fn workflow_failure(error: &crate::file_workflow::Error) -> Failure {
     use crate::file_workflow::Error as W;
     match error {
-        W::Configuration(crate::file_configuration::Error::Path(error)) => {
-            file_application::resource_failure(Stage::Prepare, error)
-        }
+        W::Caller { path, error } => vec![file_application::caller_read_failure(path, error)],
         W::Schema(_) => file_application::rejected(Stage::Prepare, Fault::ShippedSchema),
         W::Environment(environment) => project_failure(environment.error()),
         W::Entry(entry) => entry_failure(entry.error()),
     }
 }
 /// Entry failures that the static projection does not own keep their typed
-/// cause: resource and limit facts, or the named boundary.
+/// cause: the caller's own path, resource and limit facts, or the named
+/// boundary.
 fn entry_failure(error: &crate::file_entry::Error) -> Failure {
     use crate::{file_entry::Error as E, file_preparation::Error as D};
     match error {
-        E::Document(D::Resource(error)) => {
+        E::Caller { path, error } => vec![file_application::caller_read_failure(path, error)],
+        E::Document(D::Entry(error) | D::Resource(error)) => {
             file_application::resource_failure(Stage::Prepare, error)
         }
         E::Snapshot { identity, error } => {
@@ -307,19 +308,8 @@ fn environment_issues<'a>(
         D::Error::Resource(_) => IssueError::Original(owner),
         _ => invalid(),
     };
-    if let file_project::Error::Resource(resource) = cause {
-        use yamaa_core::project_environment_diagnostics::ReadFailure;
-        let crate::file_workflow::Error::Environment(environment) = owner else {
-            return Err(invalid());
-        };
-        let path = environment.environment().ok_or_else(invalid)?;
-        let failure = match resource {
-            crate::file_resources::Error::Missing => ReadFailure::Missing,
-            crate::file_resources::Error::Unreadable => ReadFailure::Unreadable,
-            _ => return D::root_resource(resource, path).map_err(projection),
-        };
-        return Ok(vec![failure.diagnostic(path)]);
-    }
+    // A project file that cannot be read is the caller's own path, which
+    // the workflow reports before any environment is captured (#3321).
     let file_project::Error::Environment(cause) = cause else {
         return Err(IssueError::Original(owner));
     };

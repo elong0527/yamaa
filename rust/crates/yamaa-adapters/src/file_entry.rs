@@ -11,6 +11,12 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum Error {
+    /// The entry, the caller's own path given as `path`, could not be
+    /// resolved or captured (FILE-7, FILE-8, FILE-11).
+    Caller {
+        path: String,
+        error: ResourceError,
+    },
     Snapshot {
         identity: String,
         error: ResourceError,
@@ -110,9 +116,12 @@ impl CapturedEntry {
 
 /// Capture the entry, its inventory metadata and every producing specification
 /// its `schema` links name, then verify all held snapshots. No activation,
-/// study, runtime or publisher port is accepted or exposed.
+/// study, runtime or publisher port is accepted or exposed. `written` names
+/// the entry to `resources`; `given` is the path the caller passed, which an
+/// entry that cannot be read names.
 pub(crate) fn capture(
     mut resources: Resources,
+    given: &str,
     written: &str,
     mut environment: OwnedEnvironment,
     schema: Arc<CapturedSchema>,
@@ -128,7 +137,13 @@ pub(crate) fn capture(
                 &written,
                 Some(Arc::clone(&schema)),
             )
-            .map_err(Error::Document)?,
+            .map_err(|error| match error {
+                file_preparation::Error::Entry(error) => Error::Caller {
+                    path: given.to_owned(),
+                    error,
+                },
+                error => Error::Document(error),
+            })?,
         );
         let root = document.as_ref().expect("captured entry");
         crate::file_inventory::prepare(

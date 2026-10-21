@@ -293,14 +293,20 @@ impl Ports for NativePorts {
         utc_seconds()
     }
     fn capture_environment(&mut self, written: &str) -> Result<Self::Environment, Failure> {
+        // A project file that cannot be read is the caller's own path, named
+        // as given (FILE-7, FILE-8, FILE-11).
+        let unreadable = |error: &file_resources::Error| {
+            Failure::Diagnostic(vec![crate::file_application::caller_read_failure(
+                written, error,
+            )])
+        };
         let (resources, entry) = match &self.resolver {
             Some(resolver) => (
                 Resources::with_resolver(std::sync::Arc::clone(resolver), written),
                 written.to_owned(),
             ),
-            None => file_configuration::resources(written).map_err(|error| {
-                Failure::Project(project_application::Error::Configuration(error))
-            })?,
+            None => file_configuration::resources(written)
+                .map_err(|file_configuration::Error::Path(error)| unreadable(&error))?,
         };
         self.resources = Some(resources);
         self.environment_written = written.into();
@@ -308,8 +314,12 @@ impl Ports for NativePorts {
             .map_err(|error| Failure::Project(project_application::Error::Schema(error)))?;
         let host = self.host;
         let environment =
-            file_project::capture_environment(self.resources_mut(), &entry, host, schema)
-                .map_err(|error| Failure::Project(project_application::Error::Project(error)))?;
+            file_project::capture_environment(self.resources_mut(), &entry, host, schema).map_err(
+                |error| match error {
+                    file_project::Error::Resource(error) => unreadable(&error),
+                    error => Failure::Project(project_application::Error::Project(error)),
+                },
+            )?;
         let environment = std::sync::Arc::new(environment);
         self.environment = Some(std::sync::Arc::clone(&environment));
         Ok(environment)

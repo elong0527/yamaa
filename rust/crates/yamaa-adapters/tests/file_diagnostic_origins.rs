@@ -322,17 +322,17 @@ mod file {
                 },
                 identity(&path),
             );
+            // The project file is read first: the caller's own path, named
+            // as given (FILE-7, #3321).
             assert_eq!(issues.len(), 1);
             assert_eq!(issues[0].phase(), "validation");
-            assert_eq!(issues[0].condition(), "project_environment_missing");
+            assert_eq!(issues[0].condition(), "resource_path_missing");
             assert_eq!(
                 yamaa_core::json::Value::Object(issues[0].context.clone()),
-                yamaa_adapters::json!({
-                    "cause": "missing", "path": project,
-                })
+                yamaa_adapters::json!({"path": project})
             );
-            assert_eq!(issues[0].spec_paths, ["environment"]);
-            assert_eq!(issues[0].rule(), Some("FUNC-1"));
+            assert!(issues[0].spec_paths.is_empty());
+            assert_eq!(issues[0].rule(), Some("FILE-7"));
             fs::write(
                 study.0.join("spec.yaml"),
                 VALID.replace("input: {SRC: input.csv}", "input: {SRC: input.unknown}"),
@@ -606,7 +606,7 @@ mod file {
                 file_configuration::resources(&study.text("entry/link.yaml")).unwrap();
             assert!(matches!(
                 FileSpecification::prepare(resources, &entry),
-                Err(yamaa_adapters::file_preparation::Error::Resource(
+                Err(yamaa_adapters::file_preparation::Error::Entry(
                     Error::Symlink
                 ))
             ));

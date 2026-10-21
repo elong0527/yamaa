@@ -10,6 +10,9 @@ use yamaa_core::project_activation::ActivationPort;
 
 #[derive(Debug)]
 pub enum Error {
+    /// The caller's own entry, the file a preparation without a declaring
+    /// file starts from, could not be resolved or captured.
+    Entry(ResourceError),
     Resource(ResourceError),
     Inventory(yamaa_core::submission_inventory::MetadataError),
     Preparation(InheritanceError<ResourceError>),
@@ -276,7 +279,10 @@ pub(crate) fn prepare_document_from(
         written,
     )
     .map_err(|error| match error {
-        Failure::Resource(error) => Error::Resource(error),
+        // Only an entry no file declares is the caller's own; a producer a
+        // `schema` link names was resolved from its declaring file first.
+        Failure::Entry(error) if declaring.is_none() => Error::Entry(error),
+        Failure::Entry(error) | Failure::Resource(error) => Error::Resource(error),
         Failure::Preparation(error) => Error::Preparation(error),
         Failure::ResourceFinding { error, diagnostic } => {
             Error::ResourceFinding { error, diagnostic }

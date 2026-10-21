@@ -18,7 +18,18 @@ that writes it, including an inherited layer, a producing specification and a
 project file. No project configuration is discovered, and a project file does
 not select a specification's resource locations.
 
-Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`.
+Evidence: `schema-inheritance-project-root`, `rust/crates/yamaa-adapters/tests/file_resources.rs::inherited_parent_keeps_its_own_input_and_output_locations_without_configuration`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::project_configuration_is_ignored_and_missing_input_has_no_fallback`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`.
+
+A caller's path argument, the entry or the project file, is resolved as the
+host resolves a path, except that the file it names must be a regular file
+and must not be a symbolic link. One that reaches no entry fails with
+`resource_path_missing`, and one that reaches a directory or another entry
+that is not a regular file fails with `resource_path_not_regular_file`
+([FILE-7](#file-7)); one that is a link, a junction or another reparse point
+fails with `resource_path_symlink` ([FILE-8](#file-8)). Each failure names the
+path as the caller gave it, at no field ([FILE-11](#file-11)), on every route
+that reads the path and through whatever resolver serves it. Any other
+failure to read the path is the engine's refusal, `engine_rejected`.
 
 A dataset or output declaration may explicitly select its entry file with
 `relative_to: entry` under [FILE-2](#file-2). Composition retains the original
@@ -167,7 +178,7 @@ that reaches a directory, FIFO, socket, device or any other non-regular file
 is rejected.
 
 Fails: `resource_path_missing`, `resource_path_not_regular_file`.
-Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_the_kind_of_the_entry_that_stops_them`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`.
+Evidence: `negative-path-missing`, `negative-path-directory`, `rust/crates/yamaa-adapters/tests/file_resources.rs::absent_artifact_location_has_no_fallback_and_nonregular_input_is_terminal`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_the_kind_of_the_entry_that_stops_them`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::a_project_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition`.
 
 The caller's entry parent, and the parent of the project file the caller
 passes, are each canonicalized and opened once; aliases the caller used for a
@@ -200,7 +211,7 @@ declared paths do not select exempt directories. A path outside those parents
 retains the no-link check on every component below its filesystem root.
 
 Fails: `resource_path_symlink`.
-Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_symbolic_link_in_a_listed_path_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::dictionary_symlink_failure_names_authored_field_without_host_identity`.
+Evidence: `negative-path-symlink`, `rust/crates/yamaa-adapters/tests/file_resources.rs::outside_parent_and_file_links_remain_terminal`, `rust/crates/yamaa-adapters/tests/file_resources.rs::retired_python_junctions_reject_descent_and_keep_caller_selected_root_authority`, `rust/crates/yamaa-adapters/src/file_resolver.rs::walks_report_junctions_and_reparse_points_as_links`, `rust/crates/yamaa-adapters/tests/network_shares.rs::links_on_a_network_share_stay_refused`, `rust/crates/yamaa/tests/resolver_kinds.rs::every_reported_kind_raises_its_file_rule_condition`, `rust/crates/yamaa-adapters/tests/declaration_project_files.rs::a_symbolic_link_in_a_listed_path_fails_as_any_file_a_run_reads`, `rust/crates/yamaa-adapters/tests/host_resources.rs::a_linked_parent_is_refused_at_parent_on_every_route`, `rust/crates/yamaa-adapters/tests/file_diagnostic_origins.rs::dictionary_symlink_failure_names_authored_field_without_host_identity`, `rust/crates/yamaa/tests/caller_paths.rs::a_specification_path_that_reaches_no_regular_file_fails_with_its_file_rule_on_every_route`, `rust/crates/yamaa/tests/caller_paths.rs::every_kind_a_caller_resolver_reports_for_a_caller_path_raises_its_file_rule_condition`.
 
 Each walk verifies the retained directory and file entries, and a name
 substitution cannot redirect a read or publication silently.
@@ -279,7 +290,9 @@ Evidence: `negative-path-symlink`, `rust/crates/yamaa-core/tests/source_csv_prec
 
 An absolute written path supplied by the specification may be repeated.
 Resolved paths retained as provenance are not substituted for the authored
-path in these diagnostics.
+path in these diagnostics. A path the caller passes, the entry or the project
+file, has no declaring field: its failure names the path as the caller gave
+it, at no field ([FILE-1](#file-1)).
 
 The written-form conditions are decided in the order the written-form rules
 state them: the form of [FILE-4](#file-4), then a URI scheme, a `\`, and an

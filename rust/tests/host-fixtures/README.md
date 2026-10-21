@@ -33,7 +33,7 @@ the held bytes.
 | public-define | Existing Define input/XML/JSON owners, creation time, issue columns, column schemas, numeric metadata variants and spec/project text mutations |
 | public-contract | Shared YAML, issue and report columns, argument/member/read-only view names and defaults, shared messages (D39's error text, written from `docs/design/interface-1.0/api.md` and the templates of `yaml/conditions.yaml`; `{path}` stands for the specification or project path the test gave), typed plain values and the failed run's report bytes; distinct host i64 vectors |
 | public-grammar | Shared condition families; existing `grammar-original/cases.tsv` decisions |
-| diagnostic-parity | Refusal cases with their complete expected issue rows |
+| diagnostic-parity | Refusal cases with their complete expected issue rows; `{path}` in a row's message and context stands for the specification path the test gave |
 | read-odm | The two reader documents (the adapters' `odm` fixtures), all 30 columns and cells, archive member selection, and each refusal's one issue row and error text (`{source}` stands for the source path the test gave) |
 | parquet-containment | A Parquet file that makes the native decoder panic, its issue row, and a readable file with its saved CSV |
 | plan-reuse | One specification run A, B, A on one object with exact output CSV and issue rows; a changed specification's output; a changed function default's output |
@@ -61,7 +61,9 @@ specification paths, context, source span and operand route. Both public
 contract suites require their rows to equal this truth field for field, so the
 two hosts equal each other. The context is the canonical JSON text both hosts
 return (sorted keys, no whitespace, exact integer tokens), compared as text, so
-no JSON reader chooses a host number type. Together the cases cover every
+no JSON reader chooses a host number type. A case whose specification is
+absent names the path the test gave, so its rows write `{path}`, which each
+suite replaces, as JSON text in the context. Together the cases cover every
 value shape a context holds: integers at and beyond 2^53, the signed 64-bit
 bounds and a wider literal, fractional and whole floats, null, non-ASCII text,
 text holding NUL (escaped), nested and empty objects and arrays, absent and

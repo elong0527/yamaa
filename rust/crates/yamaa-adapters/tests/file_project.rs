@@ -1646,36 +1646,28 @@ mod file {
                 if let Some(bytes) = entry_bytes {
                     study.write("root.yaml", bytes);
                 }
-                let file_workflow::SelectionError::Preparation(Error::Environment(owner)) =
-                    file_workflow::select(&entry, &project, Language::Python)
-                        .err()
-                        .unwrap()
+                // The project file is the caller's own path: it is refused
+                // before anything is captured, the entry included (#3321).
+                let rejection = file_workflow::select(&entry, &project, Language::Python)
+                    .err()
+                    .unwrap();
+                let file_workflow::SelectionError::Preparation(Error::Caller { path, error }) =
+                    &rejection
                 else {
-                    panic!("original unavailable project owner")
+                    panic!("original unavailable project path")
                 };
-                assert!(matches!(
-                    owner.error(),
-                    yamaa_adapters::file_project::Error::Resource(
-                        yamaa_adapters::file_resources::Error::Missing
-                    )
-                ));
-                assert_eq!(owner.capture_reads(), 0);
-                assert_eq!(owner.captured_sources().count(), 0);
-                let rejection = Error::Environment(owner);
-                let rows = preparation_issues(&rejection).unwrap();
+                assert_eq!(path, &project);
+                assert_eq!(*error, yamaa_adapters::file_resources::Error::Missing);
+                assert_eq!(rejection.retained_sources().len(), 0);
+                let rows = yamaa_adapters::project_application::selection_failure(&rejection);
                 assert_eq!(rows.len(), 1);
-                assert_eq!(rows[0].condition(), "project_environment_missing");
-                assert_eq!(rows[0].rule(), Some("FUNC-1"));
-                assert_eq!(rows[0].spec_paths, ["environment"]);
+                assert_eq!(rows[0].condition(), "resource_path_missing");
+                assert_eq!(rows[0].rule(), Some("FILE-7"));
+                assert!(rows[0].spec_paths.is_empty());
                 assert_eq!(
                     yamaa_core::json::Value::Object(rows[0].context.clone()),
-                    yamaa_adapters::json!({"cause":"missing", "path":project})
+                    yamaa_adapters::json!({"path": project})
                 );
-                let Error::Environment(owner) = &rejection else {
-                    unreachable!()
-                };
-                assert_eq!(owner.capture_reads(), 0);
-                assert_eq!(owner.captured_sources().count(), 0);
             }
             fs::remove_file(study.0.join("root.yaml")).unwrap();
             // A valid project whose only environment entry names another host's
@@ -1690,13 +1682,14 @@ mod file {
             else {
                 panic!("valid project precedes missing entry")
             };
+            // The missing entry is the caller's own path, named as given; the
+            // captured project stays held.
             assert!(matches!(
                 owner.error(),
-                yamaa_adapters::file_entry::Error::Document(
-                    yamaa_adapters::file_preparation::Error::Resource(
-                        yamaa_adapters::file_resources::Error::Missing
-                    )
-                )
+                yamaa_adapters::file_entry::Error::Caller {
+                    path,
+                    error: yamaa_adapters::file_resources::Error::Missing,
+                } if *path == entry
             ));
             assert_eq!(owner.capture_reads(), 1);
             let sources = owner.captured_sources().collect::<Vec<_>>();
@@ -2433,12 +2426,16 @@ mod file {
                 &path,
                 Language::Python,
             );
+            // A project path is the caller's own: FILE-7 at no field, named as
+            // given (#3321).
             assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0].condition(), "project_environment_invalid");
-            assert_eq!(rows[0].spec_paths, ["environment"]);
-            let context = yamaa_core::json::Value::Object(rows[0].context.clone());
-            assert_eq!(context["path"], path);
-            assert_eq!(context["cause"], "not_regular_file");
+            assert_eq!(rows[0].condition(), "resource_path_not_regular_file");
+            assert_eq!(rows[0].rule(), Some("FILE-7"));
+            assert!(rows[0].spec_paths.is_empty());
+            assert_eq!(
+                yamaa_core::json::Value::Object(rows[0].context.clone()),
+                yamaa_adapters::json!({"path": path})
+            );
         }
 
         #[test]
@@ -3506,20 +3503,18 @@ mod file {
             )
             .unwrap();
             assert_eq!(project.capture_reads(), 2); // project + root; no configuration
-            let Err(SelectionError::Preparation(Error::Environment(owner))) =
-                file_workflow::select(&study.path("root.yaml"), "", Language::Python)
-            else {
+                                                    // An empty project path is refused lexically, as the caller's own
+                                                    // path, before anything is captured.
+            let refused = file_workflow::select(&study.path("root.yaml"), "", Language::Python)
+                .err()
+                .unwrap();
+            let SelectionError::Preparation(Error::Caller { path, error }) = &refused else {
                 panic!("original lexical environment refusal");
             };
-            assert_eq!(owner.capture_reads(), 0);
-            assert!(matches!(
-                owner.error(),
-                yamaa_adapters::file_project::Error::Resource(
-                    yamaa_adapters::file_resources::Error::InvalidPath
-                )
-            ));
+            assert_eq!(path, "");
+            assert_eq!(*error, yamaa_adapters::file_resources::Error::InvalidPath);
             fs::remove_dir_all(&study.0).unwrap();
-            assert_eq!(owner.retained_sources().len(), 0);
+            assert_eq!(refused.retained_sources().len(), 0);
             assert_eq!(
                 project.run().captured_environment().root().source().bytes,
                 b"schema_version: '1.0'\n"

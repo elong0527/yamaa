@@ -392,7 +392,7 @@ conditions:
     message: "the environment file cannot be admitted"
   project_environment_missing:
     phases: [validation]
-    message: "{spec_path} needs an environment file for this host that is not declared or cannot be read"
+    message: "{spec_path} needs an environment file for this host that the project does not declare"
   publication_failed:
     phases: [output]
     message: "the file of {spec_path} could not be published"

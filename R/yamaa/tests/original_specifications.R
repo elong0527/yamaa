@@ -294,16 +294,15 @@ absent <- yamaa_project("absent-project.yaml")
 refused <- absent$run()
 stopifnot(identical(refused$names,character()),identical(names(refused$report),report_columns),
   nrow(refused$report)==0L,identical(refused$issues$phase,"validation"),
-  identical(refused$issues$condition,"project_environment_missing"),
-  identical(refused$issues$rule,"FUNC-1"),identical(refused$issues$spec_paths,list("environment")),
-  identical(refused$issues$context,paste0('{"cause":"missing","path":',
-    json_text(file.path(normalizePath(getwd(),winslash="/"),"absent-project.yaml")),'}')),
+  identical(refused$issues$condition,"resource_path_missing"),
+  identical(refused$issues$rule,"FILE-7"),identical(refused$issues$spec_paths,list(character())),
+  identical(refused$issues$context,'{"path":"absent-project.yaml"}'),
   identical(refused$issues,absent$check()$issues),
   save_refused(refused))
+# The caller's own path, named as given at no field (FILE-7).
 unread <- tryCatch(absent$spec("TEST"),error=identity)
 stopifnot(inherits(unread,"yamaa_error"),identical(conditionMessage(unread),paste0("cannot select TEST: ",
-    "environment needs an environment file for this host that is not declared or cannot be read ",
-    "[project_environment_missing, FUNC-1]")),
+    "absent-project.yaml does not exist [resource_path_missing, FILE-7]")),
   identical(unread$issues,refused$issues))
 # Argument mistakes are ordinary errors, never yamaa_error.
 argument <- tryCatch(yamaa_spec(NULL)$run(),error=identity)

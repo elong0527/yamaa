@@ -2211,17 +2211,15 @@ columns:
         import yamaa
 
         project = yamaa.project("absent-project.yaml")
+        # The caller's own path, named as given at no field (FILE-7).
         expected = [
             {
                 "phase": "validation",
-                "condition": "project_environment_missing",
-                "rule": "FUNC-1",
-                "spec_paths": ["environment"],
+                "condition": "resource_path_missing",
+                "rule": "FILE-7",
+                "spec_paths": [],
                 "context": json.dumps(
-                    {
-                        "cause": "missing",
-                        "path": Path("absent-project.yaml").resolve().as_posix(),
-                    },
+                    {"path": "absent-project.yaml"},
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),

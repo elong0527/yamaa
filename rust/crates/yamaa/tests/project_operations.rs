@@ -363,14 +363,11 @@ fn a_section_the_project_does_not_declare_refuses_the_call() {
     // own findings as the result's issues, and no section is checked.
     let absent = study.path("absent.yaml");
     let run = engine.project_run(&absent, Some("adm"), &token).unwrap();
-    assert_eq!(conditions(&run.issues()), ["project_environment_missing"]);
+    assert_eq!(conditions(&run.issues()), ["resource_path_missing"]);
     let submission = engine
         .project_submission(&absent, Some("adm"), None, "0.4.0", &token)
         .unwrap();
-    assert_eq!(
-        conditions(&submission.issues()),
-        ["project_environment_missing"]
-    );
+    assert_eq!(conditions(&submission.issues()), ["resource_path_missing"]);
 }
 
 /// Counts its calls and interrupts every one, as a user's Ctrl-C would.

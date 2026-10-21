@@ -299,11 +299,11 @@ class PublicContract(unittest.TestCase):
         absent = self.root / "absent.yaml"
         spec = yamaa.spec(absent)
         checked = self.issues(spec.check())
-        self.assertEqual(checked["condition"].to_list(), ["engine_rejected"])
-        self.assertEqual(
-            json.loads(checked["context"][0]),
-            {"code": "resource_missing", "stage": "prepare"},
-        )
+        # The caller's own path, named as given at no field (FILE-7).
+        self.assertEqual(checked["condition"].to_list(), ["resource_path_missing"])
+        self.assertEqual(checked["rule"].to_list(), ["FILE-7"])
+        self.assertEqual(checked["spec_paths"].to_list(), [[]])
+        self.assertEqual(json.loads(checked["context"][0]), {"path": os.fspath(absent)})
         run = spec.run()
         self.assertIsNone(run.output)
         self.assertIsNone(run.report)
@@ -775,11 +775,15 @@ class PublicContract(unittest.TestCase):
         absent = self.root / "absent-project.yaml"
         project = yamaa.project(absent)
         error = self.refusal(lambda: project.spec("TEST"))
-        self.assertEqual(str(error), error_text("unread_project"))
+        self.assertEqual(str(error), error_text("unread_project", absent))
         unread = error.issues.to_dicts()
+        # The caller's own path, named as given at no field (FILE-7).
         self.assertEqual(
-            [(row["condition"], row["spec_paths"]) for row in unread],
-            [("project_environment_missing", ["environment"])],
+            [
+                (row["condition"], row["spec_paths"], json.loads(row["context"]))
+                for row in unread
+            ],
+            [("resource_path_missing", [], {"path": os.fspath(absent)})],
         )
         checked = self.issues(project.check())
         self.assertEqual(checked.to_dicts(), unread)
@@ -906,7 +910,20 @@ class PublicContract(unittest.TestCase):
                         fixture_bytes(case["input_csv"])
                     )
                 call = getattr(yamaa.spec(spec), case["call"])
-                self.assertEqual(self.issues(call()).to_dicts(), case["issues"])
+                # `{path}` stands for the specification path given, as JSON
+                # text in the context.
+                given = os.fspath(spec)
+                expected = [
+                    {
+                        **row,
+                        "message": row["message"].replace("{path}", given),
+                        "context": row["context"].replace(
+                            "{path}", json.dumps(given, ensure_ascii=False)[1:-1]
+                        ),
+                    }
+                    for row in case["issues"]
+                ]
+                self.assertEqual(self.issues(call()).to_dicts(), expected)
 
 
 def fixture_bytes(value):
@@ -1127,7 +1144,7 @@ class Resolve(unittest.TestCase):
             handle.resolve()
         self.assertEqual(str(caught.exception), error_text("resolve", spec))
         self.assertEqual(
-            caught.exception.issues["condition"].to_list(), ["engine_rejected"]
+            caught.exception.issues["condition"].to_list(), ["resource_path_missing"]
         )
 
 
