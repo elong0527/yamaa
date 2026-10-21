@@ -211,12 +211,26 @@ fn versioned_failure_ref<'a, T>(
             source,
             document,
             findings,
+        }
+        | V::Copy {
+            source,
+            document,
+            findings,
         } => normalized(
             schema,
             Some(document),
             NormalizationError::Invalid(findings.clone()),
             &[("source", &source.identity), ("entry", entry)],
         ),
+        // A copy entry's producer that was not read reports what its link
+        // would (INPUT-10): findings at the link, or the producer's own.
+        V::Producer(failure) => match failure {
+            crate::document::ProducerFailure::Findings(findings) => {
+                Rejection::Invalid(findings.clone())
+            }
+            crate::document::ProducerFailure::Preparation(error) => return failure_ref(error),
+            crate::document::ProducerFailure::Host(error) => return Err(error),
+        },
         V::Unsupported(features) => Rejection::Unsupported(
             features
                 .iter()

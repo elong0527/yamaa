@@ -184,6 +184,85 @@ mod project {
             }
         }
 
+        /// A copy entry takes the producer's domain and each column's declared
+        /// content metadata; a `str` column's length derives from its
+        /// `max_length` verification where no length is declared (SPEC-9,
+        /// SUB-8).
+        #[test]
+        fn the_contract_names_the_domain_and_each_column_s_declared_content() {
+            let column = |name: &str, kind: &str, extra: Vec<(&str, Tree)>| {
+                let mut fields = vec![
+                    ("name", Tree::text(name)),
+                    ("type", Tree::text(kind)),
+                    ("label", Tree::text(name)),
+                ];
+                fields.extend(extra);
+                Tree::map(fields)
+            };
+            let tree = Tree::map(vec![
+                ("domain", Tree::text("ADSL")),
+                (
+                    "columns",
+                    Tree::List(vec![
+                        column(
+                            "AGE",
+                            "int",
+                            vec![(
+                                "submission",
+                                Tree::map(vec![
+                                    ("length", Tree::integer(8)),
+                                    ("display_format", Tree::text("3.")),
+                                ]),
+                            )],
+                        ),
+                        column(
+                            "SEX",
+                            "str",
+                            vec![
+                                (
+                                    "submission",
+                                    Tree::map(vec![("codelist", Tree::text("SEX"))]),
+                                ),
+                                (
+                                    "verifications",
+                                    Tree::List(vec![Tree::map(vec![(
+                                        "max_length",
+                                        Tree::map(vec![("max", Tree::integer(1))]),
+                                    )])]),
+                                ),
+                            ],
+                        ),
+                        column("TRTSDT", "date", vec![]),
+                    ]),
+                ),
+                (
+                    "output",
+                    Tree::map(vec![(
+                        "columns",
+                        Tree::List(vec![
+                            Tree::text("AGE"),
+                            Tree::text("SEX"),
+                            Tree::text("TRTSDT"),
+                        ]),
+                    )]),
+                ),
+            ]);
+            let mut nodes = Vec::new();
+            let root = tree.append(&mut nodes);
+            let contract = yamaa_core::producer_contract::prepare_document(
+                &Document::new(nodes, root).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(contract.domain(), "ADSL");
+            let content = |index: usize| contract.fields()[index].content.clone();
+            assert_eq!(content(0).length.as_deref(), Some("8"));
+            assert_eq!(content(0).display_format.as_deref(), Some("3."));
+            assert_eq!(content(0).codelist, None);
+            assert_eq!(content(1).length.as_deref(), Some("1"));
+            assert_eq!(content(1).codelist.as_deref(), Some("SEX"));
+            assert_eq!(content(2), Default::default());
+        }
+
         #[test]
         fn every_declared_logical_type_survives_without_value_inference() {
             let fields = [

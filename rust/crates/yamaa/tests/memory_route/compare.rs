@@ -145,54 +145,83 @@ pub struct OutputDecl {
 /// Independent declared types and output declarations of one entry
 /// specification, composed over its `parent` chain exactly like the
 /// conformance runner's `declarations` (types and output paths, never
-/// derivations).
+/// derivations). A copy entry declares each column it lists with the type its
+/// producer declares: the specification the input's final `schema` link names,
+/// from the base its final `relative_to` selects (SPEC-9).
 pub fn declarations_for(
     case: &Path,
     specification: &str,
 ) -> Result<(BTreeMap<String, String>, OutputDecl), String> {
-    fn go(
-        path: &Path,
-        active: &mut Vec<PathBuf>,
-    ) -> Result<(BTreeMap<String, String>, OutputDecl), String> {
-        let canonical = path
-            .canonicalize()
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        if active.contains(&canonical) {
-            return Err(format!("cyclic declarations at {}", path.display()));
-        }
-        active.push(canonical);
-        let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let doc = yaml_json(&bytes);
-        let mut types = BTreeMap::new();
-        let mut output = OutputDecl {
-            path: None,
-            report: None,
-            decimals: None,
-        };
-        if let Some(parent) = doc.get("parent").and_then(Json::as_str) {
-            let parent_path = path
+    declarations(&case.join(specification), &mut Vec::new())
+}
+
+/// The layers of the chain whose entry is `path`, root ancestor first, each
+/// pushed onto `active`.
+fn chain(path: &Path, active: &mut Vec<PathBuf>) -> Result<Vec<(PathBuf, Json)>, String> {
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    if active.contains(&canonical) {
+        return Err(format!("cyclic declarations at {}", path.display()));
+    }
+    active.push(canonical);
+    let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let doc = yaml_json(&bytes);
+    let mut layers = match doc.get("parent").and_then(Json::as_str) {
+        Some(parent) => chain(
+            &path
                 .parent()
                 .expect("specification has a directory")
-                .join(parent);
-            let (inherited_types, inherited_output) = go(&parent_path, active)?;
-            types.extend(inherited_types);
-            if inherited_output.path.is_some() {
-                output.path = inherited_output.path;
-            }
-            if inherited_output.report.is_some() {
-                output.report = inherited_output.report;
-            }
-            if inherited_output.decimals.is_some() {
-                output.decimals = inherited_output.decimals;
+                .join(parent),
+            active,
+        )?,
+        None => Vec::new(),
+    };
+    layers.push((path.to_path_buf(), doc));
+    Ok(layers)
+}
+
+fn declarations(
+    path: &Path,
+    active: &mut Vec<PathBuf>,
+) -> Result<(BTreeMap<String, String>, OutputDecl), String> {
+    let depth = active.len();
+    let layers = chain(path, active)?;
+    let mut output = OutputDecl {
+        path: None,
+        report: None,
+        decimals: None,
+    };
+    // Each input's `schema` link, as its declaring directory and spelling,
+    // and whether it resolves from the entry, composed over every layer
+    // before any copy is typed.
+    let mut links: BTreeMap<String, (Option<(PathBuf, String)>, bool)> = BTreeMap::new();
+    for (layer, doc) in &layers {
+        if let Some(Json::Array(clears)) = doc.get("clear") {
+            for clear in clears.iter().filter_map(Json::as_str) {
+                if let ["input", name, field] = clear.split('.').collect::<Vec<_>>()[..] {
+                    if let Some(link) = links.get_mut(name) {
+                        match field {
+                            "schema" => link.0 = None,
+                            "relative_to" => link.1 = false,
+                            _ => {}
+                        }
+                    }
+                }
             }
         }
-        if let Some(Json::Array(columns)) = doc.get("columns") {
-            for column in columns {
-                if let (Some(name), Some(kind)) = (
-                    column.get("name").and_then(Json::as_str),
-                    column.get("type").and_then(Json::as_str),
-                ) {
-                    types.insert(name.to_string(), kind.to_string());
+        if let Some(Json::Object(inputs)) = doc.get("input") {
+            for (name, declaration) in inputs {
+                if !declaration.is_object() {
+                    continue;
+                }
+                let link = links.entry(name.clone()).or_default();
+                if let Some(schema) = declaration.get("schema").and_then(Json::as_str) {
+                    let base = layer.parent().expect("specification has a directory");
+                    link.0 = Some((base.to_path_buf(), schema.to_owned()));
+                }
+                if let Some(base) = declaration.get("relative_to").and_then(Json::as_str) {
+                    link.1 = base == "entry";
                 }
             }
         }
@@ -208,10 +237,46 @@ pub fn declarations_for(
                 output.decimals = u32::try_from(number).ok();
             }
         }
-        active.pop();
-        Ok((types, output))
     }
-    go(&case.join(specification), &mut Vec::new())
+    let mut types = BTreeMap::new();
+    for (_, doc) in &layers {
+        let Some(Json::Array(columns)) = doc.get("columns") else {
+            continue;
+        };
+        for column in columns {
+            if let (Some(name), Some(kind)) = (
+                column.get("name").and_then(Json::as_str),
+                column.get("type").and_then(Json::as_str),
+            ) {
+                types.insert(name.to_string(), kind.to_string());
+            }
+            let Some(copy) = column.get("copy") else {
+                continue;
+            };
+            let link = copy
+                .get("dataset")
+                .and_then(Json::as_str)
+                .and_then(|dataset| links.get(dataset));
+            let Some((Some((base, written)), from_entry)) = link else {
+                continue;
+            };
+            let base = if *from_entry {
+                path.parent().expect("specification has a directory")
+            } else {
+                base.as_path()
+            };
+            let (copied, _) = declarations(&base.join(written), active)?;
+            if let Some(Json::Array(names)) = copy.get("columns") {
+                for name in names.iter().filter_map(Json::as_str) {
+                    if let Some(kind) = copied.get(name) {
+                        types.insert(name.to_string(), kind.clone());
+                    }
+                }
+            }
+        }
+    }
+    active.truncate(depth);
+    Ok((types, output))
 }
 
 /// Days from civil date (Howard Hinnant's algorithm), the proleptic

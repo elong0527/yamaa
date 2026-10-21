@@ -1,6 +1,7 @@
 //! Native assertion helpers for independently authored diagnostic contracts.
 pub mod aggregate;
 pub mod binding;
+pub mod copy_entry;
 pub mod csv;
 pub mod dataset;
 pub mod declarative_flags;

@@ -1,0 +1,46 @@
+yamaa: "1.0"
+type: spec
+model: ADaM
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
+
+input:
+  AE: input/ae.csv
+  # ADSL is the artifact spec_adsl.yaml saves before this entry is built; each
+  # event reads its subject's record by the subject-level key.
+  ADSL:
+    path: adsl.csv
+    schema: spec_adsl.yaml
+    key: [STUDYID, USUBJID]
+
+base: AE
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AGE, SEX, ARM, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: AE.AETERM
+
+  # Each subject-level column keeps the name, type and label ADSL gives it.
+  - copy:
+      dataset: ADSL
+      columns: [AGE, SEX, ARM, TRTSDT]

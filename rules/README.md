@@ -111,7 +111,7 @@ the conditions that path still raises.
 
 | File | Prefix | Covers |
 | --- | --- | --- |
-| [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal columns, and ASCII source. |
+| [Specification structure](specification.md) | SPEC | Declare root fields, unique identifiers, column derivation coverage, internal and copied columns, and ASCII source. |
 | [Inheritance](inheritance.md) | LAYER | Resolve inherited layers into one minimal, ordered specification. |
 | [Name binding](names.md) | NAME | Resolve input datasets, qualified and bare names, driver reads, and ODM item reads. |
 | [Values](values.md) | VALUE | Define column types, missing values, numbers, text, dates and datetimes, conversion, and order. |

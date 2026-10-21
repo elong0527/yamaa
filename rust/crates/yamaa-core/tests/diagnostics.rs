@@ -433,6 +433,7 @@ mod diagnostics {
             reached.extend(intermediate_ranges::reached());
             reached.extend(intermediate_ranges::match_phase_reached());
             reached.extend(producer::reached());
+            reached.extend(copy_entry::reached());
             reached.extend(preflight::output_reached());
             reached.extend(grammar::reached());
             reached.extend(inheritance::reached());
