@@ -437,12 +437,14 @@ Prefer `assertEqual` on the whole list or dictionary and
 or a bare `assertRaises`.
 
 The installed suites under `python/tests/installed/` are named
-`installed_<area>.py` and use `unittest.TestCase` with an
-`if __name__ == "__main__": unittest.main()` entry point. The installed
-runner stages and executes each file directly with Python, so plain pytest
-functions and fixtures do not run there. These suites run outside the
-checkout against an installed package: they import `yamaa` and the staged
-`host_fixtures` reader and nothing from `tools/`.
+`installed_<area>.py`. The runner stages and executes each file directly
+with Python, so its entry point must run its checks. Existing unittest
+suites use `unittest.TestCase` and call `unittest.main()` under
+`if __name__ == "__main__":`; `installed_public_grammar.py` instead calls
+its own `main()` with plain assertions. Preserve each suite's pattern:
+pytest-only functions and fixtures are not executed by this runner. These
+suites run outside the checkout against an installed package: they import
+`yamaa` and the staged `host_fixtures` reader and nothing from `tools/`.
 
 ### R
 
