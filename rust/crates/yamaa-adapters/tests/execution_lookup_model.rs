@@ -648,8 +648,11 @@ fn an_aggregate_range_value_reads_the_driver_of_every_template_row() {
     assert_eq!(failure["context"]["identifier"], "CLINIC.DAY");
 }
 
-/// A row template's range value has a match value's availability (LOOKUP-2):
-/// a column only the column phase derives is not yet a value of the row.
+/// A row template's range value has a match value's availability (LOOKUP-2)
+/// and is a read of the template's derivation (SPEC-6): a row-local default
+/// it names completes in the template's row phase, but a column only the
+/// column phase derives, such as an aggregate, is not yet a value of the row.
+/// `check` and the run agree on both.
 #[test]
 fn a_row_template_range_value_cannot_read_a_column_phase_column() {
     let rows = "rows:\n\
@@ -663,23 +666,45 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
         \x20       source:\n\
         \x20         variable: PERIODS.APERIOD\n\
         \x20         between: {value: ASTDT, lower: APERSDT, upper: APEREDT}\n";
-    let specification = format!(
-        "schema_version: \"1.0\"\n\
-         domain: OUT\n\
-         keys: [STUDYID, USUBJID, AESEQ]\n\
-         input:\n\
-         \x20 AE: {{path: ae.csv, types: {{AESEQ: int, ASTDT: date}}}}\n\
-         \x20 PERIODS: {{path: periods.csv, types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
-         output: {{path: out.csv, columns: [STUDYID, USUBJID, AESEQ, APERIOD]}}\n\
-         columns:\n\
-         \x20 - {{name: STUDYID, type: str}}\n\
-         \x20 - {{name: USUBJID, type: str}}\n\
-         \x20 - {{name: AESEQ, type: int}}\n\
-         \x20 - {{name: ASTDT, type: date, derivation: AE.ASTDT}}\n\
-         \x20 - {{name: APERIOD, type: int}}\n\
-         {rows}"
+    let specification = |start: &str| {
+        format!(
+            "schema_version: \"1.0\"\n\
+             domain: OUT\n\
+             keys: [STUDYID, USUBJID, AESEQ]\n\
+             input:\n\
+             \x20 AE: {{path: ae.csv, types: {{AESEQ: int, ASTDT: date}}}}\n\
+             \x20 PERIODS: {{path: periods.csv, types: {{APERIOD: int, APERSDT: date, APEREDT: date}}}}\n\
+             output: {{path: out.csv, columns: [STUDYID, USUBJID, AESEQ, APERIOD]}}\n\
+             columns:\n\
+             \x20 - {{name: STUDYID, type: str}}\n\
+             \x20 - {{name: USUBJID, type: str}}\n\
+             \x20 - {{name: AESEQ, type: int}}\n\
+             \x20 - {{name: ASTDT, type: date, derivation: {start}}}\n\
+             \x20 - {{name: APERIOD, type: int}}\n\
+             {rows}"
+        )
+    };
+    let inputs = [("ae.csv", AE), ("periods.csv", PERIODS)];
+    // ASTDT's row-local default completes in the row phase of `events`, so
+    // each event takes the period holding its start date. The first day of
+    // S-1's second period is in that period; no period holds an event before
+    // S-1's first period, one without a start date, or one whose period has
+    // no last day.
+    let fixture = Fixture::new(&specification("AE.ASTDT"), &inputs);
+    assert_eq!(agreeing(&fixture), Vec::<Value>::new());
+    let (csv, _) = fixture.saved();
+    assert_eq!(
+        csv,
+        "STUDYID,USUBJID,AESEQ,APERIOD\n\
+         S,S-1,1,1\n\
+         S,S-1,2,2\n\
+         S,S-1,3,2\n\
+         S,S-1,4,\n\
+         S,S-2,1,\n\
+         S,S-2,2,\n"
     );
-    let fixture = Fixture::new(&specification, &[("ae.csv", AE), ("periods.csv", PERIODS)]);
+    // An aggregate is not row local, so it completes only in the column phase.
+    let fixture = Fixture::new(&specification("{aggregate: \"MIN(AE.ASTDT)\"}"), &inputs);
     let failure = fixture.failure();
     assert_eq!(
         (
@@ -691,11 +716,19 @@ fn a_row_template_range_value_cannot_read_a_column_phase_column() {
         "{failure:?}"
     );
     assert_eq!(
-        failure["spec_paths"],
-        yamaa_adapters::json!(["rows[0].derivations.APERIOD.source.between.value"])
+        agreeing(&fixture),
+        [yamaa_adapters::json!({
+            "phase": "validation",
+            "condition": "phase_boundary",
+            "spec_paths": ["rows[0].derivations.APERIOD.source.between.value"],
+            "context": {
+                "identifier": "ASTDT",
+                "row": "events",
+                "available_phase": "column_derivation",
+                "required_phase": "row_construction",
+            },
+        })]
     );
-    assert_eq!(failure["context"]["identifier"], "ASTDT");
-    assert_eq!(failure["context"]["row"], "events");
 }
 
 /// A range value may name a column a named intermediate selects for the row

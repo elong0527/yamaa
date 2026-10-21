@@ -130,6 +130,13 @@ class BundleArchiveTests(unittest.TestCase):
             self.ENGINE + self.BINDINGS["python"] + self.BINDINGS["r"]
         )
         (self.workspace / "Cargo.lock").write_text(self.canonical)
+        # One selftest case, whose files each bundle stages in the facade.
+        case = self.root / "benchmarks/case-one"
+        (case / "expected").mkdir(parents=True)
+        (case / "spec.yaml").write_text("domain: TEST\n")
+        (case / "expected/out.csv").write_text("A\n1\n")
+        (case / "README.md").write_text("prose\n")
+        (self.root / "benchmarks/selftest.yaml").write_text("cases: [case-one]\n")
         self.path = self.root / "source.tar.gz"
 
     def vendored(self, crates, unlisted=()):
@@ -197,6 +204,14 @@ class BundleArchiveTests(unittest.TestCase):
                 self.assertEqual(
                     entries[layout.config], engine_bundle.CARGO_CONFIG.encode()
                 )
+                # Every archive carries the selftest cases in the facade crate,
+                # with the checkout's bytes, and not their prose.
+                staged = layout.workspace + "crates/yamaa/selftest/case-one/"
+                self.assertEqual(
+                    sorted(name for name in entries if name.startswith(staged)),
+                    [staged + "expected/out.csv", staged + "spec.yaml"],
+                )
+                self.assertEqual(entries[staged + "expected/out.csv"], b"A\n1\n")
 
     def test_no_toolchain_file_anywhere(self):
         for host, name in (
@@ -240,7 +255,17 @@ class BundleArchiveTests(unittest.TestCase):
                 "checkout at rust/crates",
             ),
             ("rust/crates/yamaa/public-api.txt", b"api\n", "checkout at rust/crates"),
+            (
+                "rust/crates/yamaa/selftest/case-one/README.md",
+                b"prose\n",
+                "checkout at rust/crates/yamaa/selftest",
+            ),
             ("rust/crates/yamaa-core/src/lib.rs", b"changed\n", "differs from the"),
+            (
+                "rust/crates/yamaa/selftest/case-one/expected/out.csv",
+                b"A\n2\n",
+                "selftest/case-one/expected/out.csv differs from the checkout",
+            ),
             (".cargo/config.toml", b"[net]\noffline = false\n", "differs from the"),
             (
                 "rust/Cargo.lock",
@@ -254,6 +279,10 @@ class BundleArchiveTests(unittest.TestCase):
                 self.check(dict(entries, **{name: payload}))
         for missing, message in (
             ("rust/crates/yamaa-python/src/lib.rs", "checkout at rust/crates"),
+            (
+                "rust/crates/yamaa/selftest/case-one/expected/out.csv",
+                "checkout at rust/crates/yamaa/selftest/case-one/expected/out.csv",
+            ),
             ("vendor/pyo3-0.27.2/src/lib.rs", "files its .cargo-checksum"),
             ("vendor/pyo3-0.27.2/.cargo-checksum.json", "pyo3-0.27.2 has no"),
         ):
@@ -289,6 +318,11 @@ class BundleArchiveTests(unittest.TestCase):
                 "checkout at src/rust/target",
             ),
             ("src/rust/crates/yamaa-r/src/lib.rs", b"changed\n", "differs from the"),
+            (
+                "src/rust/crates/yamaa/selftest/case-one/spec.yaml",
+                b"domain: CHANGED\n",
+                "selftest/case-one/spec.yaml differs from the checkout",
+            ),
             ("src/rust/vendor-config.toml", b"[source]\n", "differs from the"),
             # The Python bundle's manifest, with the wheels' stripping profile.
             (
@@ -306,6 +340,10 @@ class BundleArchiveTests(unittest.TestCase):
                 self.check(dict(entries, **{name: payload}))
         for missing, message in (
             ("src/rust/crates/yamaa-r/src/lib.rs", "checkout at src/rust/crates"),
+            (
+                "src/rust/crates/yamaa/selftest/case-one/expected/out.csv",
+                "checkout at src/rust/crates/yamaa/selftest/case-one/expected",
+            ),
             ("src/rust/vendor-config.toml", "checkout at src/rust/vendor-config"),
             ("src/rust/vendor.tar.xz", "the bundle is missing src/rust/vendor.tar.xz"),
         ):

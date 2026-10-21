@@ -36,8 +36,9 @@ pub struct Summary {
     /// The summary line, such as `yamaa run of ADAE: succeeded, 1234 rows x 7
     /// columns, 0 issues`.
     pub line: String,
-    /// A project run's member lines, in run order; empty for any other
-    /// result.
+    /// The lines between the summary line and the first issue: a project
+    /// run's member lines, in run order, or a selftest's `first failure:`,
+    /// `not covered:` and information lines; empty for any other result.
     pub members: Vec<String>,
     /// `first issue: <issue line>`, when the result has an issue.
     pub first_issue: Option<String>,

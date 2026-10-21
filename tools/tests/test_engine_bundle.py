@@ -8,10 +8,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+from tools.packaging import generate_selftest_cases as selftest_cases
 from tools.paths import ROOT, WORKSPACE
 from tools.staging import engine_bundle as bundle
 
 REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
+# Where each bundle stages the selftest cases that the facade embeds.
+SELFTEST = "crates/yamaa/selftest/"
 
 
 def lock(*packages, version=4):
@@ -138,6 +142,37 @@ class SourceTests(unittest.TestCase):
                 ):
                     self.assertIn(required, relatives)
                 self.assertFalse(any(other in relative for relative in relatives))
+
+    def test_each_bundle_stages_the_selftest_cases_in_the_facade(self):
+        # The facade's build embeds them from there (#3030 D108): each file
+        # of each listed case but its README and benchmark.yaml, from
+        # benchmarks/, so that no copy of an expected file is committed.
+        staged = [
+            (SELFTEST + relative, path)
+            for relative, path in selftest_cases.case_files()
+        ]
+        names = yaml.safe_load(
+            (ROOT / "benchmarks/selftest.yaml").read_text(encoding="utf-8")
+        )["cases"]
+        self.assertEqual(
+            sorted({relative.split("/")[3] for relative, _ in staged}), sorted(names)
+        )
+        for relative, path in staged:
+            self.assertTrue(path.is_relative_to(ROOT / "benchmarks"), relative)
+            self.assertNotIn(path.name, ("README.md", "benchmark.yaml"))
+        self.assertTrue(
+            any(relative.endswith("/expected/error.yaml") for relative, _ in staged)
+        )
+        for host in ("python", "r"):
+            with self.subTest(host=host):
+                self.assertEqual(
+                    [
+                        item
+                        for item in bundle.sources(host)
+                        if item[0].startswith(SELFTEST)
+                    ],
+                    staged,
+                )
 
     def test_each_manifest_names_its_crates_and_keeps_its_hosts_profiles(self):
         for host in ("python", "r"):
@@ -387,6 +422,14 @@ class StagingTests(unittest.TestCase):
                     )
                     self.assertEqual(list(destination.rglob("tests")), [])
                     self.assertEqual(list(destination.rglob("rust-toolchain*")), [])
+                    # The facade's build reads the selftest cases from its
+                    # own crate, never from a benchmarks/ beside the bundle.
+                    for relative, path in selftest_cases.case_files():
+                        self.assertEqual(
+                            (destination / SELFTEST / relative).read_bytes(),
+                            path.read_bytes(),
+                        )
+                    self.assertFalse((destination.parent / "benchmarks").exists())
 
     def test_an_existing_destination_is_preserved(self):
         with tempfile.TemporaryDirectory() as directory:

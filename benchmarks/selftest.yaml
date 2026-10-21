@@ -3,7 +3,10 @@
 # each result with the case's independently authored expected bytes. Each
 # case adds to every package's size, so the list keeps the fewest cases that
 # cover the adapters, plus one negative case for the issue path.
-# tools/validation/check_selftest_cases.py checks it.
+# tools/validation/check_selftest_cases.py checks it. The facade embeds the
+# cases' files when it builds (D108), from the table that
+# `tools/packaging/generate_selftest_cases.py --write` writes from this list;
+# rerun it when the list, or the files of a listed case, change.
 cases:
   - adam-adae-analysis-time
   - adam-adsl-xpt
