@@ -5,8 +5,9 @@ HELP = """yamaa repository commands (run from the repository root)
   setup             Build the installed dev-profile Python extension and locked tools.
                     Needs uv, the pinned Rust toolchain and a platform C compiler.
                     Under rustup it also adds Clippy and rustfmt to that toolchain.
-  quick             Before a push: check-lint, then check-repository. Runs no test
-                    suite and needs no R.
+  quick             check-lint, then check-repository. Runs no test suite and needs
+                    no R. Before a push, run it only for a change to generated files,
+                    rule cards, schemas, docs generators or Python.
   check             Run the five PR checks below, in the same order locally.
   check-lint        Ruff, cargo fmt, Clippy over the workspace except the R binding
                     and over the fuzz targets. Needs Clippy and rustfmt added to the
@@ -37,12 +38,14 @@ HELP = """yamaa repository commands (run from the repository root)
   docs              Generate dashboards and build the strict site.
 
 Run setup first, and again after changing rust/ or python/src/ before running
-Python tests: they import the installed package. Pull request CI runs check; run
-quick and the tests nearest the change, and reproduce a red CI job with its
-own target. Native installation qualification is a separate full matrix in
-.github/workflows/native.yml, on dispatch or qualification/issue-* pushes.
-The tools package is installed editable so python -m tools.<module> also works
-from a separate working directory. See CONTRIBUTING.md and docs/release.md.
+Python tests: they import the installed package. Pull request CI runs check, so
+before a push run the tests nearest the change and, after a Rust change,
+cargo fmt and Clippy on the touched crates (D148 on #3030). Reproduce a red CI
+job with its own target. Native installation qualification is a separate full
+matrix in .github/workflows/native.yml, on dispatch or qualification/issue-*
+pushes. The tools package is installed editable so python -m tools.<module>
+also works from a separate working directory. See CONTRIBUTING.md and
+docs/release.md.
 """
 
 if __name__ == "__main__":
