@@ -97,6 +97,23 @@ network: the job's log keeps the report as installation qualification
 evidence, and the job fails unless the selftest reports `succeeded`. The
 package then runs the conformance corpus, also without a network.
 
+The native run also installs each wheel that a release publishes as a
+restricted machine installs
+[files carried in](articles/restricted-environments.md#from-files-carried-in):
+its `native-offline-wheel` jobs, on every platform with CPython 3.12 and
+3.15. The wheels are abi3, so the oldest and the newest supported CPython
+bound the supported interpreters that each wheel serves. While the network
+is up, pip downloads the wheel's runtime dependencies, at the versions that
+`python/uv.lock` pins and as wheels alone, into one directory with the
+wheel. Then, with the network disabled, pip installs the wheel from that
+directory alone, with `--no-index --find-links`, into a new virtual
+environment, which builds nothing. The installed package must import with
+the wheel's version, and it then runs its selftest: the job's log keeps the
+report, and the job fails unless it reports `succeeded`. On Linux the
+installation and the selftest run in containers without a network, from the
+manylinux_2_28 image with its CPython of the lane's version, and on macOS
+and Windows behind the same refusing proxy.
+
 The native run also proves the offline toolchain route (#3030 D54) on Linux
 x86_64 and aarch64: its `native-offline-toolchain` jobs. While the network is
 up, each downloads the standalone installer archive of the minimum Rust for
@@ -429,9 +446,9 @@ run of the same commit cannot replace the run the release was reviewed against.
 The named run must be a completed successful native run of the peeled tag
 commit: a scheduled main run, a main dispatch, or a same-repository
 `qualification/issue-*` push. It requires all installed lanes, the offline
-source installs, the offline toolchain route, the R binary installs and the
-unpacked command-line archives among them, the R binary and command-line
-builds, shared Rust/math, complete cohort comparisons, strict R package
+wheel and source installs, the offline toolchain route, the R binary
+installs and the unpacked command-line archives among them, the R binary and
+command-line builds, shared Rust/math, complete cohort comparisons, strict R package
 checks and CRAN's incoming checks to have passed. Branch dispatches cannot release. A tag other than the one the release
 identity names fails before any request: a candidate tag on a final release, a
 final release tag on a candidate, or another version or candidate number. So
