@@ -346,16 +346,17 @@ def saved_output_findings(report, outcome, saved):
     """What differs between one installed host's complete report and the
     command line's run of the same case: the outcome, then the saved
     artifacts in publication order, each CSV byte for byte and each Parquet
-    file logically (PARQUET-4). An artifact finding's expected value is the
-    command line's and its actual value the host's."""
+    file logically (PARQUET-4). The command line's run stands where committed
+    truth stands in the hosts' comparisons, so each finding's expected value
+    is the command line's and its actual value the host's."""
     findings = []
     if report.outcome != outcome:
         findings.append(
             reports.ComparisonFinding(
                 kind="outcome",
                 detail=f"{report.example}: outcomes differ",
-                expected=report.outcome,
-                actual=outcome,
+                expected=outcome,
+                actual=report.outcome,
             )
         )
     produced = [f"{item.name}.{item.profile}" for item in report.artifacts]
@@ -365,8 +366,8 @@ def saved_output_findings(report, outcome, saved):
             reports.ComparisonFinding(
                 kind="artifacts",
                 detail=f"{report.example}: saved artifacts differ",
-                expected=produced,
-                actual=names,
+                expected=names,
+                actual=produced,
             )
         )
         return findings
