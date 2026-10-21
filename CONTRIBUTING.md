@@ -121,7 +121,9 @@ and `R/yamaa/inst/COMPONENTS.tsv` from each host's trimmed lock, the crates'
 declared licenses, those purposes and the provenance that the vendored YAML
 parser, ReadStat and zstd record. The Python one, which the wheels carry, also
 names the standard library of the pinned toolchain; the Python source archive
-carries it without that row. `make check-repository` fails while either
+carries it without that row. The R one names none: the R package's
+`configure` appends the row of the `rustc` that builds the installation to
+the copy that R installs. `make check-repository` fails while either
 differs from what they give. After changing the lock, a purpose, a vendored
 component or the pinned toolchain, regenerate both and commit the results:
 

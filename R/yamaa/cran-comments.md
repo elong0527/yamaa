@@ -76,6 +76,10 @@ The package follows "Using Rust in CRAN packages":
   reproduces the license, copyright and NOTICE texts of every bundled crate.
   `inst/COMPONENTS.tsv` lists every bundled component, the ReadStat and zstd
   C sources included, with its version, license, source and purpose.
+  `configure` appends one row to the copy that R installs, for the Rust
+  standard library that rustc links into the package, with the version that
+  rustc reports; `cleanup` removes it, so the archive carries the file
+  unchanged.
 - The archive contains no binary executable code. `wit-bindgen`, a crate
   that only WebAssembly targets build, ships prebuilt WebAssembly objects;
   they are left out, and their C sources remain.

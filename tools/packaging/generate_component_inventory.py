@@ -6,7 +6,10 @@ root and the R source package in inst/, from which R installs it at the
 package root. The wheels carry the Python inventory, python/COMPONENTS.tsv,
 and the Python source archive the same inventory without its rust-std row
 (source_inventory); the R source package carries the R inventory,
-R/yamaa/inst/COMPONENTS.tsv.
+R/yamaa/inst/COMPONENTS.tsv. The R package's configure step,
+R/yamaa/tools/configure.R, appends a rust-std row for the rustc that compiles
+the installation to the copy that R installs, so an installed R package and an
+R binary package carry the R inventory with that row (installed_inventory).
 
 A host's inventory lists the components that its packages are built from:
 
@@ -22,13 +25,16 @@ A host's inventory lists the components that its packages are built from:
   packages that the pinned toolchain builds, the Rust standard library of
   that toolchain, which those packages link. A source archive links the
   standard library of whatever toolchain builds it, so its inventory has no
-  such row.
+  such row; the R package's configure step adds the row of the toolchain that
+  builds it when R installs it.
 
 It is tab-separated UTF-8 text with LF line endings: a header row, then one
-row per component, sorted by name and version, with these columns:
+row per component, sorted by name and version (the row that the R package's
+configure step appends follows them), with these columns:
 
 - name and version: the locked crate's, the C code's upstream release, or
-  rust-std and the Rust release that rust/rust-toolchain.toml pins;
+  rust-std and the Rust release that rust/rust-toolchain.toml pins, or for
+  the row that configure appends, the release that rustc reports;
 - license: the SPDX expression that the crate's manifest declares, with
   Cargo's legacy `/` written as OR, or the C code's or the standard library's
   upstream license;
@@ -38,8 +44,8 @@ row per component, sorted by name and version, with these columns:
   bundled C code, the crate that bundles it; for the standard library, the
   Rust repository at the release's tag;
 - purpose: the crate's purpose in tools/packaging/crate_purposes.toml, or the
-  C code's in VENDORED below, or the standard library's in
-  standard_library().
+  C code's in VENDORED below, or the standard library's, WHEEL_PURPOSE or,
+  for the row that configure appends, INSTALLED_PURPOSE.
 
 No column holds a digest: a component is named by its name, version, license,
 source and purpose (AGENTS.md, no content hashing).
@@ -73,11 +79,27 @@ REGISTRY = "crates.io"
 # The hosts whose committed inventory is that of binary packages that the
 # pinned toolchain builds: the Python wheels. Their inventory names that
 # toolchain's standard library, which they link; the R source package's names
-# none, and the Python source archive's leaves it out (source_inventory).
+# none, and the Python source archive's leaves it out (source_inventory). The
+# R package's configure step appends the row to the copy that R installs
+# (installed_inventory).
 BINARY_HOSTS = frozenset({"python"})
 # The standard library's row: rustup's name for the component that holds it.
 STANDARD_LIBRARY = "rust-std"
+STANDARD_LIBRARY_LICENSE = "MIT OR Apache-2.0"
 RUST_REPOSITORY = "https://github.com/rust-lang/rust"
+# The row's purpose in the wheels' inventory, and in an installed R package's.
+# R/yamaa/tools/configure.R writes the second as STANDARD_LIBRARY_PURPOSE, and
+# tools/tests/test_r_configure.py keeps the two texts equal.
+WHEEL_PURPOSE = (
+    "the Rust standard library (core, alloc and std) of the pinned toolchain "
+    "that builds this package, statically linked into its native code; "
+    "LICENSE-THIRD-PARTY.txt reproduces its notice"
+)
+INSTALLED_PURPOSE = (
+    "the Rust standard library (core, alloc and std) of the toolchain that "
+    "compiled this package, statically linked into its native code; configure "
+    "adds this row at installation with the version that rustc reports"
+)
 # A vendored crate's PROVENANCE.md names the upstream commit it was taken from.
 UPSTREAM_COMMIT = re.compile(r"The upstream release commit is `([0-9a-f]{40})`\.")
 # The README of the vendored ReadStat sources names their upstream release,
@@ -175,9 +197,10 @@ VENDORED = (
 )
 
 
-def standard_library(release):
+def standard_library(release, purpose=WHEEL_PURPOSE):
     """The row of the Rust standard library of the pinned toolchain, whose
-    release rust/rust-toolchain.toml names."""
+    release rust/rust-toolchain.toml names, with the wheels' purpose unless
+    another is given."""
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", release):
         raise ValueError(
             f"rust/rust-toolchain.toml pins {release!r}, not a Rust release such "
@@ -186,11 +209,9 @@ def standard_library(release):
     return Component(
         STANDARD_LIBRARY,
         release,
-        "MIT OR Apache-2.0",
+        STANDARD_LIBRARY_LICENSE,
         f"{RUST_REPOSITORY} at {release}",
-        "the Rust standard library (core, alloc and std) of the pinned toolchain "
-        "that builds this package, statically linked into its native code; "
-        "LICENSE-THIRD-PARTY.txt reproduces its notice",
+        purpose,
     )
 
 
@@ -279,19 +300,21 @@ def components(kept, metadata, crate_purposes, release=None):
     )
 
 
+def row_line(row):
+    """One component's line of the inventory, without its line ending."""
+    fields = (row.name, row.version, row.license, row.source, row.purpose)
+    for column, field in zip(COLUMNS, fields):
+        if not field or re.search(r"[\t\r\n]", field):
+            raise ValueError(
+                f"{row.name} {row.version}: the {column} must be one line "
+                "of text, without tabs"
+            )
+    return "\t".join(fields)
+
+
 def render(rows):
     """The inventory's text: a header row, then one row per component."""
-    lines = ["\t".join(COLUMNS)]
-    for row in rows:
-        fields = (row.name, row.version, row.license, row.source, row.purpose)
-        for column, field in zip(COLUMNS, fields):
-            if not field or re.search(r"[\t\r\n]", field):
-                raise ValueError(
-                    f"{row.name} {row.version}: the {column} must be one line "
-                    "of text, without tabs"
-                )
-        lines.append("\t".join(fields))
-    return "\n".join(lines) + "\n"
+    return "\n".join(["\t".join(COLUMNS), *map(row_line, rows)]) + "\n"
 
 
 def generate(hosts):
@@ -322,6 +345,20 @@ def source_inventory(text):
             "row, which the Python source archive leaves out"
         )
     return "".join(rows)
+
+
+def installed_inventory(text, release):
+    """The inventory of an installed R package, and so of an R binary package:
+    the R source package's, the text of R/yamaa/inst/COMPONENTS.tsv, followed
+    by the one rust-std row that R/yamaa/tools/configure.R appends for the
+    rustc that compiles the installation, here of the Rust release `release`.
+    """
+    if any(line.partition("\t")[0] == STANDARD_LIBRARY for line in text.splitlines()):
+        raise ValueError(
+            f"R/yamaa/inst/{NAME}: the R source package's inventory must hold no "
+            f"{STANDARD_LIBRARY} row, which configure appends at installation"
+        )
+    return text + row_line(standard_library(release, INSTALLED_PURPOSE)) + "\n"
 
 
 def committed():

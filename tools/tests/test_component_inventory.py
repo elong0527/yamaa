@@ -260,6 +260,36 @@ class ComponentsTest(Checkout):
             ):
                 inventory.source_inventory(text)
 
+    def test_an_installed_r_package_appends_the_standard_library_row(self):
+        # The R package's configure step appends one rust-std row, for the
+        # rustc that compiles the installation, to the inventory that R
+        # installs; the R source package's own inventory names none.
+        source = inventory.render(self.rows())
+        installed = inventory.installed_inventory(source, "1.99.1")
+        self.assertTrue(installed.startswith(source))
+        self.assertEqual(
+            installed[len(source) :].split("\t"),
+            [
+                "rust-std",
+                "1.99.1",
+                "MIT OR Apache-2.0",
+                "https://github.com/rust-lang/rust at 1.99.1",
+                inventory.INSTALLED_PURPOSE + "\n",
+            ],
+        )
+        self.assertIn(
+            "toolchain that compiled this package", inventory.INSTALLED_PURPOSE
+        )
+        for text, release, error in (
+            (installed, "1.99.1", "the R source package's inventory must hold no"),
+            (source, "stable", "pins 'stable', not a Rust release"),
+        ):
+            with (
+                self.subTest(release=release),
+                self.assertRaisesRegex(ValueError, error),
+            ):
+                inventory.installed_inventory(text, release)
+
     def test_unsupported_sources_and_names_stop_generation(self):
         zstd = next(p for p in self.checkout.packages if p["name"] == "zstd-sys")
         zstd["version"] = "2.1.2"

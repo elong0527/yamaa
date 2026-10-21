@@ -580,9 +580,12 @@ versions in the installation log before compilation starts, and otherwise
 stops with installation advice. On Windows it also requires the GNU target.
 It writes `src/Makevars` or `src/Makevars.win` from their `.in` templates with
 the paths it checked, the target directory, and on macOS the deployment
-target. The Makevars unpack the archive below `src/rust/target`, give Cargo a
-home there whose configuration, `src/rust/vendor-config.toml`, replaces
-crates.io with the unpacked crates, and run
+target. It also appends a row for the Rust standard library, with the version
+that `rustc` reports, to the component inventory that R installs (below), and
+`cleanup` removes that row with the Makevars. The Makevars unpack the archive
+below `src/rust/target`, give Cargo a home there whose configuration,
+`src/rust/vendor-config.toml`, replaces crates.io with the unpacked crates,
+and run
 `cargo build --locked --offline -j 2` with
 `MAKEFLAGS` cleared: Cargo otherwise joins the jobserver of a parallel make
 (GNU make 4.4 passes it to every command) and runs as many jobs as make
@@ -673,9 +676,14 @@ zstd library that `zstd-sys` bundles. The wheels' inventory also lists
 `rust-std`, the Rust standard library of the pinned toolchain that builds
 them, which they link. A source archive links the standard library of
 whatever toolchain builds it, so the Python source archive carries the
-wheels' inventory without that row, and the R inventory has none: the R
-binary packages, which link the pinned toolchain's standard library, carry
-the source package's inventory as R installs it. Each
+wheels' inventory without that row, and the R source package's inventory has
+none. Instead, the R package's `configure`, which already runs
+`rustc --version`, appends one `rust-std` row with the version that it
+reports to the copy in `inst/` that R installs, after the other rows, and
+`cleanup` removes it, so that `R CMD build` ships the inventory as committed.
+Every R installation therefore names the standard library that it linked: an
+installation from source names the toolchain that built it, and the R binary
+packages, which the pinned toolchain builds, name that one. Each
 inventory is tab-separated text with a header row and one row per component,
 giving its name and version; its license, the SPDX expression that a crate's
 manifest declares, with Cargo's legacy `/` written as `OR`, or the upstream
@@ -691,7 +699,9 @@ the repository check and native qualification fail while one differs from
 what its host's trimmed lock, the crates' manifests, the purposes, the
 vendored sources' provenance and the pinned toolchain give. The package
 notice checks require each package to carry its own host's inventory
-unchanged, the Python source archive's without the standard library row.
+unchanged, apart from the standard library row: the Python source archive's
+leaves it out, and an R binary package's adds exactly the one that
+`configure` appends for the pinned toolchain.
 
 Native qualification exercises the static source bridge on every supported
 platform and compares both installed hosts with independently authored binary
